@@ -1165,7 +1165,8 @@
     "TO_DATE": "Hasta",
     "VIEW": "Ver cita",
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
-    "YES_CANCEL": "Sí, Cancelar"
+    "YES_CANCEL": "Sí, Cancelar",
+    "RESTORE_TO_SCHEDULED": "Restaurar a programada"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -2016,6 +2017,15 @@
     "PHARMACY_CLAIMS": "Reclamaciones de farmacia",
     "PHARMACY_CLAIMS_DESC": "Reclamaciones de este hospital"
   },
+  "DELIVERY": {
+    "CREDENTIALS_NOT_DELIVERED": "Las credenciales de acceso de un solo uso no pudieron enviarse al paciente.",
+    "EMAIL_FAILED": "La cuenta se creó, pero el correo de activación no pudo entregarse. Use «Reenviar código» cuando se resuelva el problema.",
+    "EMAIL_NOT_CONFIGURED": "El envío de correo no está configurado en este servidor — el código de activación no se envió por correo.",
+    "NOTHING_TO_SEND": "No se envió ninguna notificación — no hay nada pendiente de envío para esta asignación.",
+    "SMS_FAILED": "El SMS de activación no pudo entregarse.",
+    "SMS_NOT_CONFIGURED": "El envío de SMS está deshabilitado en este servidor — no se envió ningún SMS de activación.",
+    "WELCOME_EMAIL_FAILED": "El correo de bienvenida con las credenciales no pudo entregarse."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personal Activo",
     "APPOINTMENTS": "Citas",
@@ -2188,7 +2198,14 @@
     "NOTE_COSIGN_PENDING": "En espera de la contrafirma del médico adjunto",
     "COSIGN_NOTE": "Contrafirmar la nota",
     "NOTE_COSIGNING": "Contrafirmando…",
-    "NOTE_COSIGNED_AT": "Contrafirmada"
+    "NOTE_COSIGNED_AT": "Contrafirmada",
+    "DEPT_CHOOSE": "Seleccione un departamento…",
+    "DEPT_LOADING": "Cargando departamentos…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Seleccione primero un hospital",
+    "DEPT_NONE": "No hay departamentos activos",
+    "DEPT_NONE_HINT": "Este hospital no tiene departamentos activos. Un administrador debe crear uno antes de poder registrar un encuentro.",
+    "DEPT_LOAD_FAILED": "Departamentos no disponibles",
+    "DEPT_LOAD_FAILED_HINT": "No se pudo cargar la lista de departamentos. Esto no significa que no haya ninguno — vuelva a intentarlo."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -2950,6 +2967,7 @@
     "ASSIGNMENTS": "Asignaciones",
     "GOVERNANCE": "Gobernanza",
     "PATIENT_EDUCATION": "Educación del Paciente",
+    "REGISTRIES": "Registros de enfermedades",
     "MEDICATION_HISTORY": "Historial de Medicamentos",
     "PROCEDURE_ORDERS": "Órdenes de Procedimiento",
     "REGISTRATIONS": "Registros",
@@ -2969,7 +2987,27 @@
     "ON_CALL": "Guardias",
     "SLOT_ADMIN": "Administración de espacios",
     "TRANSFUSIONS": "Banco de sangre",
-    "BED_BOARD": "Tablero de camas"
+    "BED_BOARD": "Tablero de camas",
+    "GROUP": {
+      "MY_DAY": "Mi jornada",
+      "PATIENTS_FLOW": "Pacientes y flujo",
+      "CARE": "Atención",
+      "PHARMACY": "Medicamentos y farmacia",
+      "DIAGNOSTICS": "Diagnóstico",
+      "BILLING": "Facturación",
+      "INSIGHTS": "Análisis",
+      "ADMINISTRATION": "Administración",
+      "PLATFORM": "Plataforma",
+      "MY_CARE": "Mi atención",
+      "MY_HEALTH": "Mi salud",
+      "MY_RECORDS": "Mi expediente",
+      "MY_BILLING": "Facturación",
+      "OTHER": "Más"
+    },
+    "SEARCH_LABEL": "Buscar módulos",
+    "SEARCH_PLACEHOLDER": "Buscar módulos...",
+    "SEARCH_CLEAR": "Borrar la búsqueda",
+    "SEARCH_NO_RESULTS": "Ningún módulo coincide con «{{query}}»."
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",
@@ -4001,7 +4039,8 @@
     "SHARING": {
       "TITLE": "Uso compartido y privacidad",
       "CONSENTS_TAB": "Consentimientos de uso compartido",
-      "ACCESS_LOG_TAB": "Quién consultó mi expediente",
+      "ACCESS_LOG_TAB": "Divulgaciones del expediente",
+      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas y la información enviada a su aseguradora. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
       "LOADING_CONSENTS": "Cargando consentimientos…",
       "NO_CONSENTS_TITLE": "Sin consentimientos activos",
       "NO_CONSENTS_DESC": "Todavía no ha compartido su expediente con ningún otro hospital.",
@@ -4029,8 +4068,22 @@
       "CONSENT_REVOKED": "Consentimiento revocado con éxito",
       "CONSENT_REVOKE_FAILED": "Error al revocar el consentimiento",
       "LOADING_LOG": "Cargando registro de accesos…",
-      "NO_ACCESS_TITLE": "Sin registros de acceso",
-      "NO_ACCESS_DESC": "Nadie ha accedido a su expediente todavía, o el registro de accesos acaba de comenzar."
+      "NO_ACCESS_TITLE": "Sin divulgaciones registradas",
+      "NO_ACCESS_DESC": "No se ha registrado ninguna divulgación de su expediente en este período.",
+      "LOG_FAILED_TITLE": "No se pudo cargar su registro de accesos",
+      "LOG_FAILED_DESC": "No fue posible obtener el registro en este momento. Esto no significa que nadie haya consultado su historial — vuelva a intentarlo.",
+      "LOG_RETRY": "Reintentar",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Acceso de emergencia",
+        "TREATMENT_ACCESS": "Consultado para su atención",
+        "SHARED_WITH_PROVIDER": "Compartido con otro hospital",
+        "INSURANCE": "Enviado a su aseguradora",
+        "COPY_RELEASED": "Se entregó una copia",
+        "IDENTITY_CHANGE": "Historiales fusionados",
+        "UNKNOWN": "Acceso registrado"
+      },
+      "SUMMARY_EMERGENCY": "accesos de emergencia a su historial",
+      "SUMMARY_EXTERNAL": "veces que su historial salió de su equipo asistencial"
     },
     "FAMILY": {
       "TITLE": "Acceso familiar y de representantes",
@@ -5100,6 +5153,7 @@
     "RECALL_TYPE_OTHER": "Otro",
     "RECALL_SOURCE_CHECKOUT": "Fin de visita",
     "RECALL_SOURCE_MANUAL": "Manual",
+    "RECALL_SOURCE_PROGRAM_RULE": "Regla de programa",
     "LOAD_SLOTS_FAILED": "Error al cargar los huecos disponibles",
     "SELECT_SLOT": "Seleccionar un hueco",
     "SELECT_SLOT_FIRST": "Seleccione primero un hueco",
@@ -5113,7 +5167,13 @@
     "OFFER_DECLINED": "Oferta rechazada — vuelve a la lista de espera",
     "ACCEPT_OFFER_FAILED": "Error al aceptar la oferta",
     "DECLINE_OFFER_FAILED": "Error al rechazar la oferta",
-    "DEPARTMENT": "Servicio"
+    "DEPARTMENT": "Servicio",
+    "PENDING": "Pendiente",
+    "RESCHEDULED": "Reprogramada",
+    "FAILED": "Fallida",
+    "UNKNOWN": "Desconocido",
+    "CHECK_IN_SUCCESS": "Paciente registrado",
+    "CHECK_IN_FAILED": "Error al registrar la llegada"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -6786,7 +6846,16 @@
     "STATUS_COMPLETED": "Completada",
     "STATUS_NOT_DONE": "No realizada",
     "STATUS_REFUSED": "Rechazada",
-    "STATUS_ENTERED_IN_ERROR": "Registrada por error"
+    "STATUS_ENTERED_IN_ERROR": "Registrada por error",
+    "LANGUAGE_UNSPECIFIED": "Sin especificar",
+    "LANGUAGES": {
+      "fr": "Francés",
+      "en": "Inglés",
+      "es": "Español",
+      "bm": "Bambara",
+      "dyu": "Dioula",
+      "mos": "Mooré"
+    }
   },
   "MATERNITY": {
     "LABOR_TAB": "Parto",
@@ -8344,6 +8413,64 @@
     "TOAST": {
       "RENEWED": "Renovación registrada",
       "RENEW_FAILED": "No se ha podido registrar la renovación"
-    }
+    },
+    "EXPIRY_HINT": "Dejar vacío si la cualificación no caduca (un diploma).",
+    "NO_EXPIRY": "No caduca"
+  },
+  "REGISTRIES": {
+    "TITLE": "Registros de enfermedades",
+    "SUBTITLE": "Quién está inscrito en cada programa de atención y quién tiene una visita atrasada.",
+    "ENROLL": "Inscribir paciente",
+    "ENROLL_TITLE": "Inscribir en el programa",
+    "PROGRAM": {
+      "HIV": "VIH",
+      "TB": "Tuberculosis",
+      "MALARIA": "Malaria",
+      "HYPERTENSION": "Hipertensión",
+      "DIABETES": "Diabetes",
+      "ANC": "Atención prenatal"
+    },
+    "STATUS": {
+      "ACTIVE": "Activo",
+      "COMPLETED": "Completado",
+      "TRANSFERRED_OUT": "Transferido",
+      "LOST_TO_FOLLOW_UP": "Perdido en seguimiento",
+      "WITHDRAWN": "Retirado",
+      "DECEASED": "Fallecido"
+    },
+    "OVERDUE_COUNT": "{{count}} con visita atrasada",
+    "OVERDUE_DAYS": "{{days}} d de retraso",
+    "EVERY_N_DAYS": "Cada {{days}} días",
+    "COL_PATIENT": "Paciente",
+    "COL_ENROLLED": "Inscrito",
+    "COL_CADENCE": "Ritmo de visitas",
+    "COL_LAST_VISIT": "Última visita",
+    "COL_NEXT_VISIT": "Próxima esperada",
+    "COL_STATUS": "Estado",
+    "NO_VISIT_YET": "Sin visitas todavía",
+    "EMPTY": "Nadie en esta cohorte.",
+    "LOAD_FAILED": "No se pudo cargar el registro. Esto no es un registro vacío.",
+    "PATIENT": "Paciente",
+    "PATIENT_SEARCH_PLACEHOLDER": "Buscar por nombre…",
+    "ENROLLED_ON": "Fecha de inscripción",
+    "ENROLLED_ON_HINT": "Dejar vacío para hoy. Una fecha pasada retoma un registro en papel.",
+    "CADENCE": "Días entre visitas",
+    "CADENCE_HINT": "Según el protocolo del programa — no hay valor predeterminado.",
+    "NOTES": "Notas",
+    "ENROLL_FIELDS_REQUIRED": "Seleccione un paciente e introduzca el ritmo de visitas (1–365 días).",
+    "ENROLLED": "Paciente inscrito.",
+    "ENROLL_FAILED": "No se pudo guardar la inscripción.",
+    "RECORD_VISIT": "Registrar visita",
+    "VISIT_RECORDED": "Visita registrada.",
+    "CHANGE_STATUS": "Cambiar estado",
+    "NEW_STATUS": "Nuevo estado",
+    "CLOSURE_REASON": "Motivo",
+    "CLOSURE_REASON_PLACEHOLDER": "El resultado que informa el programa — p. ej. buscado dos veces por teléfono, no encontrado.",
+    "REOPEN_HINT": "Reabrir borra el motivo de cierre. Use las notas para el contexto.",
+    "REASON_REQUIRED": "Cerrar una inscripción requiere un motivo.",
+    "STATUS_UPDATED": "Estado actualizado.",
+    "ACTION_FAILED": "No se pudo completar la acción.",
+    "COUNTS_UNAVAILABLE": "Recuentos no disponibles — se muestran los últimos valores conocidos.",
+    "SHOWING_FIRST": "Mostrando las primeras {{shown}} inscripciones de {{total}}."
   }
 }

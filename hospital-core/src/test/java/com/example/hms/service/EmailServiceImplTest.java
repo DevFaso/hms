@@ -18,6 +18,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -44,6 +46,57 @@ class EmailServiceImplTest {
      */
     private void stubMailSender() {
         doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+    }
+
+    // =========================================================================
+    // deliversRealEmail — the delivery report's NOT_CONFIGURED vs FAILED split
+    // =========================================================================
+
+    @Nested
+    @DisplayName("deliversRealEmail")
+    class DeliversRealEmail {
+
+        private void configure(String host, String user, String pass, String auth) {
+            ReflectionTestUtils.setField(emailService, "configuredMailHost", host);
+            ReflectionTestUtils.setField(emailService, "configuredMailUsername", user);
+            ReflectionTestUtils.setField(emailService, "configuredMailPassword", pass);
+            ReflectionTestUtils.setField(emailService, "smtpAuthProperty", auth);
+        }
+
+        @Test
+        @DisplayName("mirrors StartupSubsystemLogger: host required; auth=false relay OK; auth needs BOTH creds")
+        void mirrorsTheDeploymentsOwnSmtpReadinessRules() {
+            configure("", "user@x", "secret", "true");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail())
+                .as("no host, no transport").isFalse();
+
+            configure("smtp.gmail.com", "", "", "true");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail())
+                .as("dev-outage shape: MAIL_USER/MAIL_PASS unset").isFalse();
+
+            configure("smtp.gmail.com", "noreply@e-keneya.com", "", "true");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail())
+                .as("missing MAIL_PASS alone must still read NOT_CONFIGURED, not FAILED")
+                .isFalse();
+
+            configure("smtp.gmail.com", "noreply@e-keneya.com", "secret", "true");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail()).isTrue();
+
+            configure("relay.internal", "", "", "false");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail())
+                .as("an unauthenticated relay needs no credentials")
+                .isTrue();
+        }
+
+        @Test
+        @DisplayName("interface default assumes a real transport")
+        void interfaceDefaultsTrue() {
+            // The contract for implementations that never report transport
+            // state: assume real, never NOT_CONFIGURED.
+            EmailService defaults = mock(EmailService.class,
+                withSettings().defaultAnswer(org.mockito.Answers.CALLS_REAL_METHODS));
+            org.assertj.core.api.Assertions.assertThat(defaults.deliversRealEmail()).isTrue();
+        }
     }
 
     // =========================================================================

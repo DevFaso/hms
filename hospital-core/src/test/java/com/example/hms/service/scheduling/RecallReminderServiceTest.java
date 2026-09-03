@@ -30,6 +30,7 @@ class RecallReminderServiceTest {
     @Mock private PatientRecallRepository recallRepository;
     @Mock private PatientOutreachNotifier outreachNotifier;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     private RecallReminderService service;
 
@@ -38,9 +39,14 @@ class RecallReminderServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RecallReminderService(recallRepository, outreachNotifier, messageSource);
+        service = new RecallReminderService(
+            recallRepository, outreachNotifier, messageSource, patientLocaleResolver);
         ReflectionTestUtils.setField(service, "leadDays", 14L);
         ReflectionTestUtils.setField(service, "outreachLocale", "fr");
+        org.mockito.Mockito.lenient()
+            .when(patientLocaleResolver.resolve(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> invocation.getArgument(1));
 
         patient = new Patient();
         patient.setId(UUID.randomUUID());

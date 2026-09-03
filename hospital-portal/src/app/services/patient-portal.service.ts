@@ -508,14 +508,47 @@ export interface PortalConsentRequest {
   consentExpiration: string;
 }
 
+/**
+ * What the backend actually sends on `/me/patient/access-log`.
+ *
+ * These field names were previously invented rather than read off
+ * `AccessLogEntryDTO` — `accessedBy`, `accessType`, `accessedAt` and the
+ * rest matched nothing on the wire, so every row in the "Who viewed my
+ * records" tab rendered blank. The only spec covering the tab stubbed an
+ * empty array, so no test ever rendered a row. Tier 2 item 39.
+ */
+export type DisclosureCategory =
+  | 'EMERGENCY_ACCESS'
+  | 'TREATMENT_ACCESS'
+  | 'SHARED_WITH_PROVIDER'
+  | 'INSURANCE'
+  | 'COPY_RELEASED'
+  | 'IDENTITY_CHANGE';
+
 export interface AccessLogEntry {
   id: string;
-  accessedBy: string;
-  accessedByRole: string;
-  accessType: string;
-  resourceAccessed: string;
-  accessedAt: string;
-  ipAddress: string;
+  actor: string;
+  actorRole: string | null;
+  hospitalName: string | null;
+  eventType: string;
+  entityType: string | null;
+  resourceId: string | null;
+  description: string | null;
+  status: string | null;
+  timestamp: string;
+  category: DisclosureCategory | null;
+  externalDisclosure: boolean;
+}
+
+export interface DisclosureAccounting {
+  from: string | null;
+  to: string | null;
+  countsByCategory: Partial<Record<DisclosureCategory, number>>;
+  totalEvents: number;
+  externalDisclosures: number;
+  entries: AccessLogEntry[];
+  totalPages: number;
+  page: number;
 }
 
 export interface MedicationRefill {
@@ -1091,14 +1124,41 @@ export class PatientPortalService {
 
   // ── Access Log ─────────────────────────────────────────────────────
 
+  /**
+   * No `catchError(() => of([]))` here, deliberately, and unlike most calls
+   * in this service. An empty access log renders as "Nobody has accessed
+   * your records yet" — swallowing a 500 into that turns an outage into an
+   * affirmative and false statement about who has read the patient's chart.
+   * The component distinguishes failure from empty. Tier 2 item 39.
+   */
   getMyAccessLog(): Observable<AccessLogEntry[]> {
     return this.http
       .get<ApiWrapper<PageWrapper<AccessLogEntry>>>(`${this.base}/access-log`, {
         params: { page: 0, size: 50 },
       })
+      .pipe(map((r) => r.data?.content ?? []));
+  }
+
+  /**
+   * The same events as {@link getMyAccessLog} plus per-category counts across
+   * the whole history. The counts are what make the list usable: routine
+   * chart opens outnumber everything else, so a flat date-sorted list buries
+   * the emergency override or the release to another hospital that the
+   * patient came to find.
+   */
+  getMyDisclosures(): Observable<DisclosureAccounting> {
+    return this.http
+      .get<ApiWrapper<DisclosureAccounting>>(`${this.base}/disclosures`, {
+        params: { page: 0, size: 50 },
+      })
       .pipe(
-        map((r) => r.data?.content ?? []),
-        catchError(() => of([])),
+        map((r) => {
+          const d = r.data;
+          if (!d) {
+            throw new Error('empty disclosure accounting response');
+          }
+          return d;
+        }),
       );
   }
 

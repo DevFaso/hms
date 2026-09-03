@@ -41,6 +41,7 @@ class AppointmentReminderServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private SmsService smsService;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     private AppointmentReminderService service;
 
@@ -51,9 +52,18 @@ class AppointmentReminderServiceTest {
     @BeforeEach
     void setUp() {
         service = new AppointmentReminderService(
-            appointmentRepository, preferenceRepository, notificationService, smsService, messageSource);
+            appointmentRepository, preferenceRepository, notificationService, smsService,
+            messageSource, patientLocaleResolver);
         ReflectionTestUtils.setField(service, "leadHours", 24L);
         ReflectionTestUtils.setField(service, "reminderLocale", "fr");
+        // These tests are about the sweep, not the language. Pass the caller's
+        // own fallback straight back so they behave exactly as they did before
+        // the resolver existed; the language decision is asserted separately
+        // below and in PatientLocaleResolverTest.
+        org.mockito.Mockito.lenient()
+            .when(patientLocaleResolver.resolve(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> invocation.getArgument(1));
 
         portalUser = new User();
         portalUser.setId(UUID.randomUUID());
@@ -108,6 +118,37 @@ class AppointmentReminderServiceTest {
         verify(smsService).send(eq("+22670707070"), contains("Rappel"));
         assertThat(appointment.getReminderSentAt()).isNotNull();
         verify(appointmentRepository).save(appointment);
+    }
+
+    @Test
+    void rendersTheReminderInThePatientsOwnLanguage() {
+        // The point of the change. Before this, every reminder rendered in one
+        // system-wide configured locale, so a patient who had told the desk
+        // they read English was texted in French and nothing reported it.
+        //
+        // Asserted on the locale handed to MessageSource rather than on the
+        // rendered string, because the string comes from the bundle and this
+        // is about which bundle gets asked.
+        Locale english = Locale.forLanguageTag("en");
+        org.mockito.Mockito.reset(patientLocaleResolver);
+        when(patientLocaleResolver.resolve(eq(patient), any())).thenReturn(english);
+        feed(appointment);
+
+        service.sendDueReminders();
+
+        verify(messageSource).getMessage(eq("sms.appointment.reminder"), any(), eq(english));
+    }
+
+    @Test
+    void fallsBackToTheConfiguredLocaleWhenThePatientStatedNothing() {
+        // Almost every patient today. Behaviour here must be exactly what it
+        // was before the resolver existed.
+        feed(appointment);
+
+        service.sendDueReminders();
+
+        verify(messageSource).getMessage(
+            eq("sms.appointment.reminder"), any(), eq(Locale.forLanguageTag("fr")));
     }
 
     @Test

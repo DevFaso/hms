@@ -9,6 +9,7 @@ import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.ProgramEnrollment;
 import com.example.hms.model.Staff;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,7 +57,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital", "department", "preferredProvider", "encounter", "linkedAppointment"})
+@ToString(exclude = {"patient", "hospital", "department", "preferredProvider", "encounter", "linkedAppointment", "programEnrollment"})
 public class PatientRecall extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -84,6 +85,16 @@ public class PatientRecall extends BaseEntity {
     @JoinColumn(name = "encounter_id",
         foreignKey = @ForeignKey(name = "fk_recall_encounter"))
     private Encounter encounter;
+
+    /**
+     * The overdue programme enrolment this recall traces, when the care-gap
+     * sweep created it (Tier 2 item 36); null for clinician-created recalls.
+     * V147's partial unique index holds one recall per (enrolment, due date).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "program_enrollment_id",
+        foreignKey = @ForeignKey(name = "fk_recall_program_enrollment"))
+    private ProgramEnrollment programEnrollment;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "recall_type", nullable = false, length = 30)

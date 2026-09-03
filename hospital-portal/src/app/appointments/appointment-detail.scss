@@ -68,6 +68,14 @@
     color: #15803d;
     border: 1px solid #bbf7d0;
   }
+  // Teal rather than another blue: checked-in is the one state that means
+  // "this patient is physically here", and it should not read at a glance as
+  // just another shade of scheduled.
+  &.status-checked-in {
+    background: #ecfeff;
+    color: #0e7490;
+    border: 1px solid #a5f3fc;
+  }
   &.status-in-progress {
     background: #fffbeb;
     color: #b45309;

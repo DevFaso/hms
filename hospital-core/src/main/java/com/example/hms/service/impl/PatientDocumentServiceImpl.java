@@ -43,7 +43,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final PatientDocumentMapper documentMapper;
 
     @Override
-    @Transactional
+    // rollbackFor is load-bearing, not decoration. Spring rolls back on
+    // RuntimeException and Error only, so without this an IOException thrown
+    // part-way through — the storage write failing after the row is
+    // persisted, which is exactly how an upload fails — would COMMIT the
+    // document row and leave a chart pointing at a file that does not exist.
+    @Transactional(rollbackFor = IOException.class)
     public PatientDocumentResponseDTO uploadDocument(Authentication auth,
                                                      MultipartFile file,
                                                      PatientDocumentRequestDTO request) throws IOException {

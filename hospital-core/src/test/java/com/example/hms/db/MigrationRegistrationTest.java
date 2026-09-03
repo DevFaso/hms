@@ -40,9 +40,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MigrationRegistrationTest {
 
-    /** Matches the {@code path=} of every {@code <sqlFile>} in the changelog. */
+    /**
+     * Matches the {@code path=} of every {@code <sqlFile>} in the changelog.
+     *
+     * <p>The previous form was {@code <sqlFile\s+[^>]*path\s*=\s*"([^"]+)"}.
+     * There {@code \s+} and {@code [^>]*} can both match the same run of
+     * whitespace, so on a tag that starts to match and then fails the engine
+     * re-partitions that run every possible way before giving up — the
+     * super-linear backtracking Sonar flagged. Making the middle reluctant and
+     * anchoring on {@code path="} removes the overlap. The changelog never
+     * writes spaces around the equals, so nothing that used to match stops.
+     */
     private static final Pattern SQL_FILE_PATH =
-        Pattern.compile("<sqlFile\\s+[^>]*path\\s*=\\s*\"([^\"]+)\"", Pattern.DOTALL);
+        Pattern.compile("<sqlFile\\b[^>]*?path=\"([^\"]+)\"", Pattern.DOTALL);
 
     /**
      * The versioned migrations — {@code V1__…} through {@code V121__…}, plus the

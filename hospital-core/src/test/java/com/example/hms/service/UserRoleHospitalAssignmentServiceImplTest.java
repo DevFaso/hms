@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -118,6 +120,83 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(assignmentRepository).findByAssignmentCode(VALID_CODE);
     }
 
+    @Test
+    void verifyAssignmentByCode_verifiedButInactive_finishesTheActivation() {
+        // The wedged state an older registrar confirm left behind:
+        // confirmationVerifiedAt stamped, nothing activated. The idempotent
+        // branch must NOT swallow this - the assignee still holds the code,
+        // so verification completes the activation instead of locking the
+        // account out forever.
+        assignee.setActive(false);
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(1));
+        assignment.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignee.isActive()).isTrue();
+    }
+
+    @Test
+    void confirmAssignment_byRegistrar_activatesBothTheAssignmentAndTheUser() {
+        // Registrar confirmation presents the same code the assignee
+        // received, so it must complete verification outright: stamping only
+        // confirmationVerifiedAt used to trip verifyAssignmentByCode's
+        // already-verified branch, and the assignee could then never
+        // activate through the advertised path.
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        assignee.setActive(false);
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken("registrar", "n/a", java.util.List.of()));
+        try {
+            when(assignmentRepository.findById(assignment.getId()))
+                .thenReturn(Optional.of(assignment));
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "registrar", "registrar", null))
+                .thenReturn(Optional.of(registrar));
+            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.confirmAssignment(assignment.getId(), VALID_PIN);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignee.isActive()).isTrue();
+        verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void verifyAssignmentByCode_activatesBothTheAssignmentAndTheUser() {
+        // Since option A (2026-09-02), admin-registered accounts - staff AND
+        // patients - start inactive, and this call is the ONE thing that
+        // makes them usable. If it stopped activating either row, every new
+        // registration would be locked out with a green 200 behind it.
+        assignee.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignee.isActive()).isTrue();
+        verify(userRepository).save(assignee);
+    }
+
     // -----------------------------------------------------------------------
     // 2. Wrong / incorrect confirmation PIN → BusinessException
     // -----------------------------------------------------------------------
@@ -185,6 +264,119 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         // Plaintext must be cleared from the entity before the final save
         assertThat(assignment.getTempPlainPassword()).isNull();
+    }
+
+    // ---- Delivery report: the registrar must learn when nothing was sent ----
+
+    @Test
+    void sendNotifications_reportsDeadTransportsInsteadOfSilence() {
+        // The dev-outage shape: MAIL_USER unset (SMTP send throws, mock
+        // reports deliversRealEmail=false) and the mock SMS channel. The
+        // report must say NOT_CONFIGURED / MOCKED — before this existed the
+        // API returned a green 200 over a swallowed WARN log.
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        doThrow(new RuntimeException("SMTP auth failed"))
+            .when(emailService).sendRoleAssignmentConfirmationEmail(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            var report = com.example.hms.utility.ActivationDeliveryTracker.close();
+            assertThat(report)
+                .extracting(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getChannel,
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getOutcome)
+                .containsExactlyInAnyOrder(
+                    org.assertj.core.groups.Tuple.tuple("EMAIL", "NOT_CONFIGURED"),
+                    org.assertj.core.groups.Tuple.tuple("SMS", "MOCKED"));
+            assertThat(report)
+                .as("targets are masked, never the raw address/number")
+                .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getTarget)
+                .containsExactlyInAnyOrder("j***@hospital.com", "+226*****56");
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_reportsFailedWhenARealTransportRefused() {
+        // Same throw, but the transport IS configured — the report must say
+        // FAILED (retry material) rather than NOT_CONFIGURED (ops material).
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(emailService.deliversRealEmail()).thenReturn(true);
+        doThrow(new RuntimeException("mailbox unavailable"))
+            .when(emailService).sendRoleAssignmentConfirmationEmail(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.getOutcome()).isEqualTo("FAILED");
+                    // The raw exception text must never reach the response:
+                    // validateAddresses embeds the FULL unmasked address in
+                    // its message, so detail is a fixed operator hint.
+                    assertThat(r.getDetail()).doesNotContain("mailbox unavailable");
+                });
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_assigneeSmsStillGoesOutWhenAnFyiSmsThrows() {
+        // The registrar/hospital FYI messages are couriers of convenience;
+        // a throwing FYI send used to abort the whole SMS block before the
+        // one activation SMS that matters was even attempted.
+        assignee.setPhoneNumber("+22670123456");
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setPhoneNumber("+22699999999");
+        assignment.setRegisteredBy(registrar);
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        // One doAnswer, not doThrow(eq(...)): under STRICT_STUBS a call with
+        // non-matching args to a stubbed method throws PotentialStubbingProblem,
+        // which the production catch would record as a FAILED assignee send.
+        doAnswer(inv -> {
+            if ("+22699999999".equals(inv.getArgument(0))) {
+                throw new RuntimeException("gateway down");
+            }
+            return null;
+        }).when(smsService).send(any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "SMS".equals(r.getChannel())
+                    && "ACTIVATION".equals(r.getPurpose()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("MOCKED"));
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_recordsNothingWhenNoControllerArmedTheTracker() {
+        // Bulk import and background flows never arm collection; a pooled
+        // thread must not accumulate outcomes for a later request to drain.
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId());
+
+        assertThat(com.example.hms.utility.ActivationDeliveryTracker.close()).isEmpty();
     }
 
     // ---- Tenant isolation: GET /assignments listing ----

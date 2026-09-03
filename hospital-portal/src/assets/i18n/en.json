@@ -1165,7 +1165,8 @@
     "TO_DATE": "To Date",
     "VIEW": "View appointment",
     "VIEW_MANAGE_SUBTITLE": "View and manage appointment details",
-    "YES_CANCEL": "Yes, Cancel"
+    "YES_CANCEL": "Yes, Cancel",
+    "RESTORE_TO_SCHEDULED": "Restore to Scheduled"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Appointment calendar",
@@ -2016,6 +2017,15 @@
     "PHARMACY_CLAIMS": "Pharmacy Claims",
     "PHARMACY_CLAIMS_DESC": "Claims at this hospital"
   },
+  "DELIVERY": {
+    "CREDENTIALS_NOT_DELIVERED": "The one-time login credentials could not be sent to the patient.",
+    "EMAIL_FAILED": "The account was created, but the activation email could not be delivered. Use “Resend code” once the problem is fixed.",
+    "EMAIL_NOT_CONFIGURED": "Email sending is not configured on this server — the activation code was not emailed.",
+    "NOTHING_TO_SEND": "No notification was sent — this assignment has nothing pending to deliver.",
+    "SMS_FAILED": "The activation SMS could not be delivered.",
+    "SMS_NOT_CONFIGURED": "SMS sending is disabled on this server — no activation SMS was sent.",
+    "WELCOME_EMAIL_FAILED": "The welcome email with login details could not be delivered."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Active Staff",
     "APPOINTMENTS": "Appointments",
@@ -2188,7 +2198,14 @@
     "NOTE_COSIGN_PENDING": "Awaiting attending co-signature",
     "COSIGN_NOTE": "Co-sign note",
     "NOTE_COSIGNING": "Co-signing…",
-    "NOTE_COSIGNED_AT": "Co-signed"
+    "NOTE_COSIGNED_AT": "Co-signed",
+    "DEPT_CHOOSE": "Select a department…",
+    "DEPT_LOADING": "Loading departments…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Select a hospital first",
+    "DEPT_NONE": "No active departments",
+    "DEPT_NONE_HINT": "This hospital has no active departments. An administrator must add one before an encounter can be created.",
+    "DEPT_LOAD_FAILED": "Departments unavailable",
+    "DEPT_LOAD_FAILED_HINT": "The department list could not be loaded. This does not mean there are none — please retry."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -2950,6 +2967,7 @@
     "ASSIGNMENTS": "Assignments",
     "GOVERNANCE": "Governance",
     "PATIENT_EDUCATION": "Patient Education",
+    "REGISTRIES": "Disease Registries",
     "MEDICATION_HISTORY": "Medication History",
     "PROCEDURE_ORDERS": "Procedure Orders",
     "REGISTRATIONS": "Registrations",
@@ -2969,7 +2987,27 @@
     "ON_CALL": "On-Call",
     "SLOT_ADMIN": "Slot Administration",
     "TRANSFUSIONS": "Blood Bank",
-    "BED_BOARD": "Bed Board"
+    "BED_BOARD": "Bed Board",
+    "GROUP": {
+      "MY_DAY": "My Day",
+      "PATIENTS_FLOW": "Patients & Flow",
+      "CARE": "Care",
+      "PHARMACY": "Medications & Pharmacy",
+      "DIAGNOSTICS": "Diagnostics",
+      "BILLING": "Billing",
+      "INSIGHTS": "Insights",
+      "ADMINISTRATION": "Administration",
+      "PLATFORM": "Platform",
+      "MY_CARE": "My Care",
+      "MY_HEALTH": "My Health",
+      "MY_RECORDS": "My Records",
+      "MY_BILLING": "Billing",
+      "OTHER": "More"
+    },
+    "SEARCH_LABEL": "Search modules",
+    "SEARCH_PLACEHOLDER": "Search modules...",
+    "SEARCH_CLEAR": "Clear search",
+    "SEARCH_NO_RESULTS": "No module matches \"{{query}}\"."
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -4001,7 +4039,8 @@
     "SHARING": {
       "TITLE": "Record Sharing & Privacy",
       "CONSENTS_TAB": "Sharing Consents",
-      "ACCESS_LOG_TAB": "Who Viewed My Records",
+      "ACCESS_LOG_TAB": "Record Disclosures",
+      "ACCESS_LOG_SCOPE_NOTE": "This page lists who opened your record and where it was sent: views by the team treating you, emergency access, sharing with another hospital, copies released, and information sent to your insurer. Someone who returns to your record several times during one visit appears once.",
       "LOADING_CONSENTS": "Loading consents…",
       "NO_CONSENTS_TITLE": "No Active Consents",
       "NO_CONSENTS_DESC": "You haven't shared your records with any other hospital yet.",
@@ -4029,8 +4068,22 @@
       "CONSENT_REVOKED": "Consent revoked successfully",
       "CONSENT_REVOKE_FAILED": "Failed to revoke consent",
       "LOADING_LOG": "Loading access log…",
-      "NO_ACCESS_TITLE": "No Access Records",
-      "NO_ACCESS_DESC": "Nobody has accessed your records yet, or access logging has just started."
+      "NO_ACCESS_TITLE": "No Disclosures Recorded",
+      "NO_ACCESS_DESC": "No disclosures of your record have been recorded for this period.",
+      "LOG_FAILED_TITLE": "Couldn't load your access log",
+      "LOG_FAILED_DESC": "We couldn't reach the record right now. This does not mean nobody has viewed your records — please try again.",
+      "LOG_RETRY": "Try again",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Emergency access",
+        "TREATMENT_ACCESS": "Viewed for your care",
+        "SHARED_WITH_PROVIDER": "Shared with another hospital",
+        "INSURANCE": "Sent to your insurer",
+        "COPY_RELEASED": "A copy was released",
+        "IDENTITY_CHANGE": "Records merged",
+        "UNKNOWN": "Access recorded"
+      },
+      "SUMMARY_EMERGENCY": "emergency accesses to your record",
+      "SUMMARY_EXTERNAL": "times your record went outside your care team"
     },
     "FAMILY": {
       "TITLE": "Family & Proxy Access",
@@ -5100,6 +5153,7 @@
     "RECALL_TYPE_OTHER": "Other",
     "RECALL_SOURCE_CHECKOUT": "Checkout",
     "RECALL_SOURCE_MANUAL": "Manual",
+    "RECALL_SOURCE_PROGRAM_RULE": "Programme rule",
     "LOAD_SLOTS_FAILED": "Failed to load open slots",
     "SELECT_SLOT": "Select a slot",
     "SELECT_SLOT_FIRST": "Select a slot first",
@@ -5113,7 +5167,13 @@
     "OFFER_DECLINED": "Offer declined — entry returned to waiting",
     "ACCEPT_OFFER_FAILED": "Failed to accept the offer",
     "DECLINE_OFFER_FAILED": "Failed to decline the offer",
-    "DEPARTMENT": "Department"
+    "DEPARTMENT": "Department",
+    "PENDING": "Pending",
+    "RESCHEDULED": "Rescheduled",
+    "FAILED": "Failed",
+    "UNKNOWN": "Unknown",
+    "CHECK_IN_SUCCESS": "Patient checked in",
+    "CHECK_IN_FAILED": "Check-in failed"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -6786,7 +6846,16 @@
     "STATUS_COMPLETED": "Completed",
     "STATUS_NOT_DONE": "Not done",
     "STATUS_REFUSED": "Refused",
-    "STATUS_ENTERED_IN_ERROR": "Entered in error"
+    "STATUS_ENTERED_IN_ERROR": "Entered in error",
+    "LANGUAGE_UNSPECIFIED": "Not specified",
+    "LANGUAGES": {
+      "fr": "French",
+      "en": "English",
+      "es": "Spanish",
+      "bm": "Bambara",
+      "dyu": "Dioula",
+      "mos": "Mooré"
+    }
   },
   "MATERNITY": {
     "LABOR_TAB": "Labor & Delivery",
@@ -8344,6 +8413,64 @@
     "TOAST": {
       "RENEWED": "Credential renewal recorded",
       "RENEW_FAILED": "Could not record the renewal"
-    }
+    },
+    "EXPIRY_HINT": "Leave empty if the qualification does not expire (a diploma).",
+    "NO_EXPIRY": "Does not expire"
+  },
+  "REGISTRIES": {
+    "TITLE": "Disease Registries",
+    "SUBTITLE": "Who is enrolled in each care programme, and who is overdue for a visit.",
+    "ENROLL": "Enrol patient",
+    "ENROLL_TITLE": "Enrol in programme",
+    "PROGRAM": {
+      "HIV": "HIV",
+      "TB": "Tuberculosis",
+      "MALARIA": "Malaria",
+      "HYPERTENSION": "Hypertension",
+      "DIABETES": "Diabetes",
+      "ANC": "Antenatal care"
+    },
+    "STATUS": {
+      "ACTIVE": "Active",
+      "COMPLETED": "Completed",
+      "TRANSFERRED_OUT": "Transferred out",
+      "LOST_TO_FOLLOW_UP": "Lost to follow-up",
+      "WITHDRAWN": "Withdrawn",
+      "DECEASED": "Deceased"
+    },
+    "OVERDUE_COUNT": "{{count}} overdue for a visit",
+    "OVERDUE_DAYS": "{{days}} d overdue",
+    "EVERY_N_DAYS": "Every {{days}} days",
+    "COL_PATIENT": "Patient",
+    "COL_ENROLLED": "Enrolled",
+    "COL_CADENCE": "Visit cadence",
+    "COL_LAST_VISIT": "Last visit",
+    "COL_NEXT_VISIT": "Next expected",
+    "COL_STATUS": "Status",
+    "NO_VISIT_YET": "No visit yet",
+    "EMPTY": "Nobody in this cohort.",
+    "LOAD_FAILED": "The registry could not be loaded. This is not an empty registry.",
+    "PATIENT": "Patient",
+    "PATIENT_SEARCH_PLACEHOLDER": "Search by name…",
+    "ENROLLED_ON": "Enrolment date",
+    "ENROLLED_ON_HINT": "Leave empty for today. Use a past date to backfill a paper register.",
+    "CADENCE": "Days between visits",
+    "CADENCE_HINT": "Per the programme protocol — there is no default.",
+    "NOTES": "Notes",
+    "ENROLL_FIELDS_REQUIRED": "Select a patient and enter the visit cadence (1–365 days).",
+    "ENROLLED": "Patient enrolled.",
+    "ENROLL_FAILED": "The enrolment could not be saved.",
+    "RECORD_VISIT": "Record visit",
+    "VISIT_RECORDED": "Visit recorded.",
+    "CHANGE_STATUS": "Change status",
+    "NEW_STATUS": "New status",
+    "CLOSURE_REASON": "Reason",
+    "CLOSURE_REASON_PLACEHOLDER": "The outcome the programme reports — e.g. traced twice by phone, not found.",
+    "REOPEN_HINT": "Re-opening clears the closure outcome. Use the enrolment notes for context.",
+    "REASON_REQUIRED": "Closing an enrolment needs a reason.",
+    "STATUS_UPDATED": "Status updated.",
+    "ACTION_FAILED": "The action could not be completed.",
+    "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
+    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
   }
 }

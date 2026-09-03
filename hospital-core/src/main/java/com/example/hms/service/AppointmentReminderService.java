@@ -12,6 +12,7 @@ import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.NotificationPreferenceRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +58,7 @@ public class AppointmentReminderService {
     private final NotificationService notificationService;
     private final SmsService smsService;
     private final MessageSource messageSource;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     /** Hours ahead of the start time in which a reminder becomes due. */
     @Value("${hms.appointments.reminder.lead-hours:24}")
@@ -74,9 +76,11 @@ public class AppointmentReminderService {
         NotificationPreferenceRepository preferenceRepository,
         NotificationService notificationService,
         SmsService smsService,
-        MessageSource messageSource
+        MessageSource messageSource,
+        PatientLocaleResolver patientLocaleResolver
     ) {
         this.appointmentRepository = appointmentRepository;
+        this.patientLocaleResolver = patientLocaleResolver;
         this.preferenceRepository = preferenceRepository;
         this.notificationService = notificationService;
         this.smsService = smsService;
@@ -127,7 +131,10 @@ public class AppointmentReminderService {
         }
         Hospital hospital = appointment.getHospital();
         String hospitalName = hospital != null && hospital.getName() != null ? hospital.getName() : "";
-        Locale locale = Locale.forLanguageTag(reminderLocale);
+        // The configured locale is now the fallback, not the answer. A patient
+        // who stated a language we can render gets it; everyone else is
+        // unchanged.
+        Locale locale = patientLocaleResolver.resolve(patient, Locale.forLanguageTag(reminderLocale));
         String message = messageSource.getMessage(
             "sms.appointment.reminder",
             new Object[]{

@@ -2097,4 +2097,149 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V141 - patient key on the audit ledger. The patient portal
+         already shipped a "who viewed my records" tab; it queried
+         (target_entity_type='PATIENT', target_resource_id=patientId),
+         which is a convention only three of the six patient-related
+         emitters follow. Break-the-glass keys on the SESSION id and
+         eligibility checks on the CHECK id, so emergency access to a
+         chart - the one category the page exists for - never appeared
+         on it, and neither did disclosures to an insurance scheme.
+         Adds the column the query should have had, backfills the three
+         shapes whose patient is derivable, and leaves the rest NULL
+         rather than implying completeness. No FK: audit rows must
+         outlive purged patients. DO block, so splitStatements="false".
+         ================================================================= -->
+    <changeSet id="V141-audit-patient-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V141__audit_patient_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V142 - unstrand RESCHEDULED appointments. The reschedule modal
+         saved the new date together with status RESCHEDULED, which every
+         consumer treats as terminal: no action buttons on the detail
+         page, no check-in icon in the reception queue, and
+         checkInPatient rejects it outright. The result was an
+         appointment with a correct date and time, a patient expected to
+         arrive, and no way to check them in. Moves today-and-later rows
+         to SCHEDULED, which the transition map always allowed and
+         nothing ever performed. Past-dated rows are left alone - those
+         are history, not a queue. Plain UPDATE, no DO block.
+         ================================================================= -->
+    <changeSet id="V142-unstrand-rescheduled-appointments" author="hms-team" runOnChange="false">
+        <sqlFile path="V142__unstrand_rescheduled_appointments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V143 - drop the orphan created_by_staff_id column from
+         clinical.nurse_handoffs. No migration in this repo ever created
+         it and no entity maps it; it survived the aborted first V108
+         deploy that V110's header describes, and V110's repair was
+         additive so it never looked for extra columns. Being unmapped
+         and NOT NULL, it passed ddl-auto=validate (which only checks
+         mapped->exists) and failed every INSERT instead, so creating a
+         handoff had never once worked. Nothing to preserve: NOT NULL
+         plus never-written means the column is empty everywhere.
+         IF EXISTS, so healthy databases no-op.
+         ================================================================= -->
+    <changeSet id="V143-nurse-handoffs-drop-orphan-staff-column" author="hms-team" runOnChange="false">
+        <sqlFile path="V143__nurse_handoffs_drop_orphan_staff_column.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V144 - point_of_care on lab test definitions. A nurse could
+         create, edit AND release any lab result; release is what makes a
+         result authoritative on the chart, so a nurse's entry sat on the
+         same footing as the laboratory's for a panel the nurse never ran.
+         Removing nurses outright is wrong - they legitimately run
+         glucometer, dipstick and rapid tests at the bedside, and blocking
+         those just means the reading goes unrecorded. The distinction is
+         WHICH TEST, not who, and nothing expressed it. Deliberately NOT
+         seeded: which tests are point-of-care is a per-hospital clinical
+         catalogue decision. The column starts false everywhere, so entry
+         enforcement stays OFF until a hospital has marked its own tests
+         and sets hms.lab.point-of-care-enforcement.enabled - a ward must
+         not lose the ability to chart a bedside reading on the day this
+         deploys. The release gate does not wait on any of that; it closes
+         unconditionally.
+         ================================================================= -->
+    <changeSet id="V144-lab-test-definition-point-of-care" author="hms-team" runOnChange="false">
+        <sqlFile path="V144__lab_test_definition_point_of_care.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V145 - a credential does not have to expire. V140 modelled
+         credentialing on a renewable licence and made expiry_date NOT NULL
+         on the strength of it. Clinicians in this deployment are
+         credentialed on their diploma, which has no expiry, so the
+         constraint made the credentialing screen unable to record the one
+         thing it exists for - an administrator had to invent a date. Only
+         the expiry becomes optional; the history table, which answers "was
+         this clinician qualified on the day they prescribed that", is
+         untouched and matters the same either way. Plain ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V145-credential-expiry-optional" author="hms-team" runOnChange="false">
+        <sqlFile path="V145__credential_expiry_optional.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V146 - disease registries / programme cohorts (Tier 2 item 35).
+         The six programmes national reporting asks about (HIV, TB, malaria,
+         hypertension, diabetes, ANC) had no registry - "who is in the
+         programme" lived on paper. One ACTIVE enrolment per (patient,
+         hospital, program) via a PARTIAL unique index so closed episodes
+         accumulate as history; next_expected_visit is the column item 36's
+         defaulter tracing will read. visit_cadence_days has no default on
+         purpose - a cadence is clinical protocol, typed in by the
+         clinician, never fabricated by the schema. Plain DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V146-program-enrollments" author="hms-team" runOnChange="false">
+        <sqlFile path="V146__program_enrollments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V147 - care-gap worklist + defaulter tracing (Tier 2 item 36).
+         A care gap is structurally a recall with a rule behind it instead
+         of a clinician, so tracing rides the entire existing recall
+         pipeline; this adds only the enrolment link plus the partial
+         unique index that makes the dedupe rule (one tracing recall per
+         missed expected-visit date) a database fact rather than an
+         application promise. Contains a DO $$ block (guarded FK add), so
+         stripComments=false and splitStatements behaviour as V128.
+         ================================================================= -->
+    <changeSet id="V147-care-gap-recalls" author="hms-team" runOnChange="false">
+        <sqlFile path="V147__care_gap_recalls.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V148 - read-path indexes for the FHIR Appointment + Slot
+         providers (Tier 2 item 43). New composite read shapes; with
+         ddl-auto=validate an entity @Index creates nothing in production,
+         so the migration is the only thing that does. V121's partial
+         open-slot index cannot serve the all-status inventory window.
+         Plain CREATE INDEX, no DO block.
+         ================================================================= -->
+    <changeSet id="V148-fhir-scheduling-read-indexes" author="hms-team" runOnChange="false">
+        <sqlFile path="V148__fhir_scheduling_read_indexes.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

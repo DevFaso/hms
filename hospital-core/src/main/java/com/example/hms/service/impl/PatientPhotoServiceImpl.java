@@ -61,7 +61,22 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         validate(file);
 
         String extension = extensionOf(file.getOriginalFilename());
-        String filename = patientId + "_photo_" + System.currentTimeMillis() + extension;
+        // A random suffix, not a timestamp. This was
+        // System.currentTimeMillis(), which collides whenever a photo is
+        // replaced inside the same millisecond as the one before it -- a
+        // double-clicked upload is enough. The new name then equalled the old,
+        // so the copy below wrote the file and deleteQuietly(previousPath)
+        // deleted the very file it had just written, leaving photoFilePath
+        // pointing at nothing.
+        //
+        // Uniqueness is the whole guarantee, deliberately with nothing behind
+        // it. A defensive comparison of the new name against the previous one
+        // was written first and then removed: it can only fire on a UUID
+        // collision, so it is a branch no test can reach, and an untestable
+        // branch guarding an impossible case is worse than the invariant
+        // stated plainly here and pinned by
+        // rapidReplacementsNeverCollideAndNeverLoseTheStoredFile.
+        String filename = patientId + "_photo_" + UUID.randomUUID() + extension;
         try {
             Files.createDirectories(photoDir);
             Path target = photoDir.resolve(filename).normalize();

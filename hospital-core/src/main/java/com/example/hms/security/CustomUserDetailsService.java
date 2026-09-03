@@ -47,21 +47,35 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
                     return new UsernameNotFoundException("User not found.");
                 });
 
+        var assignments = userRoleHospitalAssignmentRepository.findByUser(user);
+
         // Hospital-scoped roles from user_role_hospital_assignment (active only)
-        Set<String> scopedRoles = userRoleHospitalAssignmentRepository.findByUser(user).stream()
+        Set<String> scopedRoles = assignments.stream()
             .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
             .map(assignment -> assignment.getRole().getCode())
             .collect(Collectors.toSet());
 
-        // Global roles from user_roles (fallback for users without hospital assignments)
+        // Every role that has ANY assignment row is governed by those rows.
+        Set<String> assignmentGovernedRoles = assignments.stream()
+            .map(assignment -> assignment.getRole() != null ? assignment.getRole().getCode() : null)
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toSet());
+
+        // Global roles from user_roles — a fallback ONLY for roles with no
+        // assignment row at all (legacy data predating hospital scoping).
+        // assignRole syncs every new role into user_roles immediately, so an
+        // unfiltered fallback would resurrect roles whose assignments are
+        // still INACTIVE: verifying one assignment (which activates the user)
+        // would silently grant every sibling unverified role.
         Set<String> globalRoles = user.getUserRoles().stream()
             .map(UserRole::getRole)
             .filter(role -> role != null && role.getCode() != null)
             .map(Role::getCode)
+            .filter(code -> !assignmentGovernedRoles.contains(code))
             .collect(Collectors.toSet());
 
-        // Merge both sources — hospital-scoped assignments take priority but global roles
-        // ensure users always have their base role even without an active hospital assignment
+        // Merge both sources — active hospital-scoped assignments plus the
+        // legacy-only fallback above.
         Set<SimpleGrantedAuthority> authorities = Stream.concat(scopedRoles.stream(), globalRoles.stream())
             .distinct()
             .map(SimpleGrantedAuthority::new)

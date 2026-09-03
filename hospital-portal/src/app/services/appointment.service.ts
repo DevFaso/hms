@@ -2,9 +2,19 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+/**
+ * Mirrors the backend {@code AppointmentStatus} enum. Every value the API can
+ * send belongs here — a missing one does not make the value stop arriving, it
+ * just stops TypeScript from knowing about it, so `status === 'X'` reads as a
+ * type error and a `Record<AppointmentStatus, …>` silently has no entry for it.
+ *
+ * CHECKED_IN was missing while the backend has been setting it since check-in
+ * shipped.
+ */
 export type AppointmentStatus =
   | 'SCHEDULED'
   | 'CONFIRMED'
+  | 'CHECKED_IN'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'

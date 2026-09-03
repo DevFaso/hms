@@ -169,6 +169,95 @@ class AuditEventLogServiceImplTest {
         assertThat(captured.getActorLabel()).isEqualTo("SYSTEM");
     }
 
+    // ─── Patient key (V141 / Tier 2 item 39) ──────────────────────────
+
+    @Test
+    @DisplayName("logEvent takes an explicit patientId over the entityType convention")
+    void logEvent_explicitPatientId_wins() {
+        // The whole point of the column: an emitter whose entityType is not
+        // PATIENT can still put the row on the patient's disclosure list.
+        // Break-the-glass and eligibility are exactly this shape, and before
+        // V141 neither reached the patient.
+        UUID patientId = UUID.randomUUID();
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.BREAK_GLASS_ACCESS)
+            .eventDescription("emergency access")
+            .entityType("BREAK_GLASS_SESSION")
+            .resourceId(UUID.randomUUID().toString())
+            .patientId(patientId)
+            .build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(captor.capture());
+        assertThat(captor.getValue().getPatientId()).isEqualTo(patientId);
+    }
+
+    @Test
+    @DisplayName("logEvent derives the patient key from the entityType=PATIENT convention")
+    void logEvent_derivesPatientIdFromConvention() {
+        // Emitters that already followed the old convention keep working
+        // untouched. Requiring every one of them to change would have been a
+        // wider diff with more places to get it wrong, and the convention is
+        // unambiguous where it is followed.
+        UUID patientId = UUID.randomUUID();
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.PATIENT_ACCESS)
+            .eventDescription("chart opened")
+            .entityType("PATIENT")
+            .resourceId(patientId.toString())
+            .build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(captor.capture());
+        assertThat(captor.getValue().getPatientId()).isEqualTo(patientId);
+    }
+
+    @Test
+    @DisplayName("logEvent leaves the patient key null rather than failing on a non-UUID resource id")
+    void logEvent_nonUuidResourceId_leavesPatientKeyNull() {
+        // doLogEvent substitutes the literal "Unknown Resource" for a blank
+        // resource id, so an unguarded UUID.fromString here would throw and
+        // lose the audit row entirely. Losing the row is far worse than
+        // losing the key.
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.PATIENT_ACCESS)
+            .eventDescription("chart opened")
+            .entityType("PATIENT")
+            .resourceId("not-a-uuid")
+            .build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(captor.capture());
+        assertThat(captor.getValue().getPatientId()).isNull();
+        // And crucially the row still persists. Before this was guarded, the
+        // parse threw inside resolvePatientResourceName, logEvent swallowed
+        // it, and the audit event vanished with no trace anywhere.
+        assertThat(captor.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_ACCESS);
+        assertThat(captor.getValue().getResourceName()).isEqualTo("not-a-uuid");
+    }
+
+    @Test
+    @DisplayName("logEvent sets no patient key for events that concern no patient")
+    void logEvent_nonPatientEvent_hasNoPatientKey() {
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(buildSystemBootstrapRequest());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(captor.capture());
+        assertThat(captor.getValue().getPatientId()).isNull();
+    }
+
     // ─── Successful persistence ───────────────────────────────────────
 
     @Test

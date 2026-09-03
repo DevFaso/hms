@@ -95,7 +95,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     @Query(value = """
         SELECT u FROM User u
-        WHERE u.isDeleted = false
+        WHERE ((:onlyDeleted = true AND u.isDeleted = true)
+           OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
@@ -122,7 +123,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         """,
         countQuery = """
         SELECT COUNT(u) FROM User u
-        WHERE u.isDeleted = false
+        WHERE ((:onlyDeleted = true AND u.isDeleted = true)
+           OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
@@ -150,11 +152,27 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Page<User> searchUsers(@Param("name") String name,
                            @Param("role") String role,
                            @Param("email") String email,
+                           @Param("includeDeleted") boolean includeDeleted,
+                           @Param("onlyDeleted") boolean onlyDeleted,
                            Pageable pageable);
 
 
-    @Query("select u from User u where u.isDeleted = false")
-    Page<User> findAllPaged(Pageable pageable);
+    /**
+     * The admin list. {@code includeDeleted=true} surfaces soft-deleted rows
+     * — the portal has had a Deleted filter and a Restore button since the
+     * users screen shipped, and both were unreachable because this query
+     * always filtered them out: a deleted user still holds their unique
+     * email (uq_user_email has no isDeleted carve-out), so "already
+     * registered" pointed at a row nobody could see or restore.
+     */
+    @Query("""
+        select u from User u
+        where (:onlyDeleted = true and u.isDeleted = true)
+           or (:onlyDeleted = false and (:includeDeleted = true or u.isDeleted = false))
+    """)
+    Page<User> findAllPaged(@Param("includeDeleted") boolean includeDeleted,
+                            @Param("onlyDeleted") boolean onlyDeleted,
+                            Pageable pageable);
 
   List<User> findByIsDeletedFalse();
 

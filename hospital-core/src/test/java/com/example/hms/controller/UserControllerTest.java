@@ -25,6 +25,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,6 +59,46 @@ class UserControllerTest {
     // -------------------------------------------------------------------------
     // adminRegister — SUPER_ADMIN without hospitalId must succeed (201)
     // -------------------------------------------------------------------------
+
+    @Test
+    void adminRegister_surfacesActivationDeliveryReportToTheRegistrar() throws Exception {
+        // The send paths record outcomes while the controller has the tracker
+        // armed (the AFTER_COMMIT listener runs on this same thread); the
+        // drained report must ride the 201 body so a dead transport is no
+        // longer a green success. The stub records mid-call exactly like the
+        // real send path does.
+        AdminSignupRequest req = new AdminSignupRequest();
+        req.setUsername("newstaff");
+        req.setEmail("staff@example.com");
+        req.setPassword("Password1!");
+        req.setFirstName("New");
+        req.setLastName("Staff");
+        req.setPhoneNumber("+22670000002");
+        req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        when(userService.createUserWithRolesAndHospital(any())).thenAnswer(inv -> {
+            com.example.hms.utility.ActivationDeliveryTracker.report(
+                com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                    .channel("EMAIL").purpose("ACTIVATION").outcome("NOT_CONFIGURED")
+                    .target("s***@example.com").build());
+            return response;
+        });
+
+        mockMvc.perform(post("/users/admin-register")
+                .with(SecurityMockMvcRequestPostProcessors.authentication(
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "tiego", "pw",
+                        AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+            .andExpect(status().isCreated())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.activationDelivery[0].outcome").value("NOT_CONFIGURED"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.activationDelivery[0].channel").value("EMAIL"));
+    }
 
     @Test
     void adminRegister_superAdmin_withoutHospital_returns201() throws Exception {
@@ -164,6 +205,69 @@ class UserControllerTest {
                 .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
                     .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
             .andExpect(status().isNoContent());
+    }
+
+    // -------------------------------------------------------------------------
+    // includeDeleted — visibility follows restore rights
+    // -------------------------------------------------------------------------
+
+    private void authenticateAs(String username, String... authorities) {
+        // Directly on the holder: the slice runs with addFilters=false, so
+        // neither request.getUserPrincipal() nor the request-post-processor
+        // route reaches the controller. Same thread, so this is what
+        // canSeeDeleted() reads.
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    username, "n/a", AuthorityUtils.createAuthorityList(authorities)));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurityContext() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void includeDeleted_isHonouredForSuperAdmin() throws Exception {
+        when(userService.getAllUsers(0, 10, true, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("superadmin", "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, true, false);
+    }
+
+    @Test
+    void onlyDeleted_pagesTheGhostWorklistForSuperAdmin() throws Exception {
+        when(userService.getAllUsers(0, 10, false, true))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("superadmin", "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("onlyDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, false, true);
+    }
+
+    @Test
+    void includeDeleted_isSilentlyIgnoredForHospitalAdmin() throws Exception {
+        // The user directory is global, so honouring this for a
+        // hospital-scoped admin would let one tenant enumerate another
+        // tenant's deleted identities. Silently the live view - the
+        // parameter is a capability, not a promise.
+        when(userService.getAllUsers(0, 10, false, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true").param("onlyDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, false, false);
     }
 
     @Test

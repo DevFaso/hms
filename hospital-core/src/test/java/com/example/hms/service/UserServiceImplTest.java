@@ -288,6 +288,73 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an admin-registered staff account starts INACTIVE - the emailed code gates something real")
+        void staffStartInactiveUntilVerified() {
+            // Option A (2026-09-02). Until then staff were activated up
+            // front while the system still mailed them a verification code
+            // that gated nothing. Login is refused while inactive
+            // (CustomUserDetails.isEnabled); verifyAssignmentByCode() and
+            // the registrar's confirmAssignment() are the activation paths
+            // for user and assignment alike. Registration runs to
+            // COMPLETION here so a regression that force-activates the
+            // assignment downstream cannot hide behind an early exception.
+            when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
+            when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            when(roleRepository.findByCode("ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.of(superAdminRole));
+            when(passwordEncoder.encode(any())).thenReturn("encoded");
+
+            UserRoleHospitalAssignment createdAssignment = new UserRoleHospitalAssignment();
+            createdAssignment.setId(UUID.randomUUID());
+            createdAssignment.setRole(superAdminRole);
+            createdAssignment.setActive(false);
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
+                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                .thenReturn(Optional.of(createdAssignment));
+            when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
+                .thenAnswer(inv -> {
+                    User reloaded = new User();
+                    reloaded.setId(inv.getArgument(0));
+                    return Optional.of(reloaded);
+                });
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+
+            AdminSignupRequest req = buildRequest("newstaff", "staff@hospital.com", "+1234567899");
+            // SUPER_ADMIN: the one staff role registrable without a hospital
+            // context, which keeps this fixture out of JWT-resolution stubs.
+            req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(req);
+            assertThat(result).as("registration must run to completion").isNotNull();
+
+            org.mockito.ArgumentCaptor<User> userCaptor =
+                org.mockito.ArgumentCaptor.forClass(User.class);
+            verify(userRepository).saveAndFlush(userCaptor.capture());
+            assertThat(userCaptor.getValue().isActive())
+                .as("staff must start inactive until the emailed code is verified")
+                .isFalse();
+
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO>
+                assignCaptor = org.mockito.ArgumentCaptor.forClass(
+                    com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO.class);
+            verify(assignmentService).assignRole(assignCaptor.capture());
+            assertThat(assignCaptor.getValue().getActive())
+                .as("the assignment request must also start inactive")
+                .isFalse();
+
+            // The old pre-approval override force-activated the reloaded
+            // assignment and saved it; that save must never come back.
+            assertThat(createdAssignment.getActive()).isFalse();
+            verify(assignmentRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
         @DisplayName("staff/admin accounts still require an email (phone-first applies to patients only)")
         void rejectsStaffWithoutEmail() {
             AdminSignupRequest req = buildRequest("newuser", null, "+1234567890");
@@ -296,10 +363,24 @@ class UserServiceImplTest {
                 .hasMessageContaining("Email is required");
         }
 
+        private User liveHolder() {
+            User holder = new User();
+            holder.setId(UUID.randomUUID());
+            holder.setDeleted(false);
+            return holder;
+        }
+
+        private User deletedHolder() {
+            User holder = new User();
+            holder.setId(UUID.randomUUID());
+            holder.setDeleted(true);
+            return holder;
+        }
+
         @Test
         @DisplayName("throws ConflictException with 'username' field when username already exists")
         void rejectsDuplicateUsername() {
-            when(userRepository.existsByUsername("johndoe")).thenReturn(Boolean.TRUE);
+            when(userRepository.findByUsername("johndoe")).thenReturn(Optional.of(liveHolder()));
 
             AdminSignupRequest req = buildRequest("johndoe", "new@hospital.com", "+1234567890");
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
@@ -310,21 +391,42 @@ class UserServiceImplTest {
         @Test
         @DisplayName("throws ConflictException with 'email' field when email already exists")
         void rejectsDuplicateEmail() {
-            when(userRepository.existsByUsername("newuser")).thenReturn(Boolean.FALSE);
-            when(userRepository.existsByEmail("existing@hospital.com")).thenReturn(Boolean.TRUE);
+            when(userRepository.findByUsername("newuser")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("existing@hospital.com"))
+                .thenReturn(Optional.of(liveHolder()));
 
             AdminSignupRequest req = buildRequest("newuser", "existing@hospital.com", "+1234567890");
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("email:");
+                .hasMessageContaining("email:")
+                .hasMessageContaining("already registered");
+        }
+
+        @Test
+        @DisplayName("an email held by a soft-deleted account says so instead of pointing at nothing")
+        void deletedGhostEmailSaysSo() {
+            // The defect this pins: the identifier was held by a row the user
+            // list filtered out, so "already registered" was a dead end the
+            // administrator could not investigate, let alone act on.
+            when(userRepository.findByUsername("newuser")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("ghost@hospital.com"))
+                .thenReturn(Optional.of(deletedHolder()));
+
+            AdminSignupRequest req = buildRequest("newuser", "ghost@hospital.com", "+1234567890");
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("email:")
+                .hasMessageContaining("deleted account")
+                .hasMessageContaining("Deleted filter");
         }
 
         @Test
         @DisplayName("throws ConflictException with 'phone' field when phone already exists")
         void rejectsDuplicatePhone() {
-            when(userRepository.existsByUsername("newuser")).thenReturn(Boolean.FALSE);
-            when(userRepository.existsByEmail("new@hospital.com")).thenReturn(Boolean.FALSE);
-            when(userRepository.existsByPhoneNumber("+1234567890")).thenReturn(true);
+            when(userRepository.findByUsername("newuser")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("new@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567890"))
+                .thenReturn(Optional.of(liveHolder()));
 
             AdminSignupRequest req = buildRequest("newuser", "new@hospital.com", "+1234567890");
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
@@ -335,29 +437,28 @@ class UserServiceImplTest {
         @Test
         @DisplayName("username check is skipped when username is null")
         void skipsUsernameCheckWhenNull() {
-            // null username → should not call existsByUsername, should fail later on missing roles/etc.
-            when(userRepository.existsByEmail("new@hospital.com")).thenReturn(Boolean.FALSE);
-            when(userRepository.existsByPhoneNumber("+1234567890")).thenReturn(false);
+            when(userRepository.findByEmail("new@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567890")).thenReturn(Optional.empty());
 
             AdminSignupRequest req = buildRequest(null, "new@hospital.com", "+1234567890");
             // Expect some downstream exception — but NOT a ConflictException
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isNotInstanceOf(ConflictException.class);
-            verify(userRepository, never()).existsByUsername(any());
+            verify(userRepository, never()).findByUsername(any());
         }
 
         @Test
         @DisplayName("phone check is skipped when phone is blank")
         void skipsPhoneCheckWhenBlank() {
-            when(userRepository.existsByUsername("newuser")).thenReturn(Boolean.FALSE);
-            when(userRepository.existsByEmail("new@hospital.com")).thenReturn(Boolean.FALSE);
-            // existsByPhoneNumber should NOT be called — blank phone is skipped
+            when(userRepository.findByUsername("newuser")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("new@hospital.com")).thenReturn(Optional.empty());
+            // findByPhoneNumber should NOT be called — blank phone is skipped
 
             AdminSignupRequest req = buildRequest("newuser", "new@hospital.com", "");
             // Will fail downstream (roles), but NOT with a phone ConflictException
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isNotInstanceOf(ConflictException.class);
-            verify(userRepository, never()).existsByPhoneNumber(any());
+            verify(userRepository, never()).findByPhoneNumber(any());
         }
 
         @Test

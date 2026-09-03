@@ -271,4 +271,108 @@ class AppointmentStatusTransitionTest {
         // The appointment owns its slot (P3 #22): cancelling frees the time.
         verify(slotInventoryService).releaseForAppointment(appointmentId);
     }
+
+    // ── The check-in / reschedule lifecycle holes ──
+
+    /** Stub the save + map pair every happy-path transition needs. */
+    private void stubSaveAndMap() {
+        AppointmentResponseDTO dto = AppointmentResponseDTO.builder().id(appointmentId).build();
+        when(appointmentRepository.save(any())).thenReturn(appointment);
+        when(appointmentMapper.toAppointmentResponseDTO(appointment)).thenReturn(dto);
+    }
+
+    private void givenAppointment(AppointmentStatus status, LocalDate date) {
+        appointment.setStatus(status);
+        appointment.setAppointmentDate(date);
+        appointment.setStartTime(LocalTime.of(9, 0));
+        appointment.setEndTime(LocalTime.of(10, 0));
+    }
+
+    @Test
+    void checkedInAppointmentCanBeCompleted() {
+        // CHECKED_IN had NO entry in the transition map at all.
+        // ReceptionServiceImpl.checkInPatient sets the status directly on the
+        // entity, bypassing the map, so check-in itself worked — but
+        // getOrDefault then returned an empty set and EVERY later action was
+        // refused. A checked-in appointment could never be completed. It sat
+        // CHECKED_IN forever while the encounter carried the visit on alone.
+        givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b");
+
+        verify(appointmentRepository).save(appointment);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
+            .isEqualTo(AppointmentStatus.COMPLETED);
+    }
+
+    @Test
+    void checkedInAppointmentCanBeMarkedNoShow() {
+        // The patient checked in and then left before being seen. Rare, but
+        // the front desk has to be able to record it.
+        givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
+            .isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
+    void confirmedAppointmentCanReturnToScheduled() {
+        // Rescheduling a CONFIRMED appointment has to land somewhere the front
+        // desk can act on, and CONFIRMED no longer tells the truth: the
+        // patient agreed to a DIFFERENT time. SCHEDULED says "new time, not
+        // yet confirmed", which is exactly the situation.
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().plusDays(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
+            .isEqualTo(AppointmentStatus.SCHEDULED);
+    }
+
+    @Test
+    void rescheduledAppointmentCanBePutBackIntoPlay() {
+        // The escape hatch for rows written before reschedule started landing
+        // on SCHEDULED. The transition map always permitted
+        // RESCHEDULED -> SCHEDULED; there was simply no action that performed
+        // it, so those appointments had a date, a time, an expected patient,
+        // and nothing anyone could do with them.
+        givenAppointment(AppointmentStatus.RESCHEDULED, LocalDate.now());
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
+            .isEqualTo(AppointmentStatus.SCHEDULED);
+    }
+
+    @Test
+    void completedAppointmentCannotBeReopened() {
+        // The widened map must not have opened terminal states. COMPLETED
+        // still goes nowhere.
+        givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Cannot transition from COMPLETED to SCHEDULED");
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelledAppointmentCannotBeRevived() {
+        givenAppointment(AppointmentStatus.CANCELLED, LocalDate.now().plusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Cannot transition from CANCELLED to SCHEDULED");
+
+        verify(appointmentRepository, never()).save(any());
+    }
 }

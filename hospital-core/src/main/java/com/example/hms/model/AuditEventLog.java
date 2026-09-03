@@ -39,7 +39,8 @@ import java.util.UUID;
         @Index(name = "idx_audit_user_time", columnList = "user_id, event_timestamp"),
         @Index(name = "idx_audit_assignment", columnList = "assignment_id"),
         @Index(name = "idx_audit_type_time", columnList = "event_type, event_timestamp"),
-        @Index(name = "idx_audit_entity", columnList = "target_entity_type, target_resource_id")
+        @Index(name = "idx_audit_entity", columnList = "target_entity_type, target_resource_id"),
+        @Index(name = "idx_audit_patient_time", columnList = "patient_id, event_timestamp")
     }
 )
 @Getter
@@ -137,6 +138,28 @@ public class AuditEventLog extends BaseEntity {
     @Size(max = 255)
     @Column(name = "impersonator_username", length = 255)
     private String impersonatorUsername;
+
+    /**
+     * Patient this event concerns, or null when it concerns none (logins,
+     * role grants, stock receipts). Added by V141 for Tier 2 item 39.
+     *
+     * <p>Deliberately a bare UUID and <b>not</b> a {@code @ManyToOne}: an
+     * audit row has to outlive the patient row it describes. Tenant purge
+     * deletes patients, and a trail that gets cascaded away with its
+     * subject — or that blocks the purge — is not a trail. Same call
+     * {@link #resourceId} already makes.
+     *
+     * <p>Before this column the only patient linkage was the convention
+     * {@code entityType = "PATIENT"} + {@code resourceId = patientId},
+     * which three of the six patient-related emitters did not follow —
+     * break-the-glass keyed on the session id, eligibility on the check
+     * id. Anything querying by that convention silently missed them.
+     * {@code AuditEventLogServiceImpl} still derives this from the old
+     * convention when an emitter does not set it, so following either is
+     * correct; not following one is what was broken.
+     */
+    @Column(name = "patient_id")
+    private UUID patientId;
 
     @PrePersist
     @PreUpdate

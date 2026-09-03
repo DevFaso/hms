@@ -1,7 +1,12 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StaffService, StaffResponse } from '../services/staff.service';
+import { AuthService } from '../auth/auth.service';
+import {
+  CredentialRenewalComponent,
+  CredentialRenewalTarget,
+} from '../dashboard/credential-renewal/credential-renewal.component';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
@@ -16,7 +21,7 @@ type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
   templateUrl: './staff-detail.html',
   styleUrl: './staff-detail.scss',
 })
@@ -25,6 +30,7 @@ export class StaffDetailComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
 
   staff = signal<StaffResponse | null>(null);
   loading = signal(true);
@@ -38,6 +44,53 @@ export class StaffDetailComponent implements OnInit {
 
   // Week navigation for shifts
   weekOffset = signal(0);
+
+  /* -- Credentialing (Tier 2 item 40) ---------------------------------
+   *
+   * This screen is the general entry point, and the reason it has to exist
+   * is that the other one cannot reach the people who need it. The dashboard
+   * opens the same dialog from a licence-expiry alert, and that list comes
+   * from a query requiring `licenseExpiryDate IS NOT NULL` within a cutoff.
+   * Clinicians here are credentialed on a diploma, which has no expiry, so
+   * they are never in it -- and a diploma recorded through the dialog drops
+   * the practitioner out of it for good. Without this button the no-expiry
+   * workflow V145 opened up would have had nowhere to be used from.
+   */
+
+  /**
+   * Matches the @PreAuthorize on CredentialingController, NOT this route's
+   * guard, which also admits receptionists, lab managers and quality
+   * managers. Showing them the button would only buy them a 403.
+   */
+  readonly canRecordCredentials = computed(() =>
+    this.auth.hasAnyRole(['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN']),
+  );
+
+  /** Null keeps the renewal dialog closed. */
+  readonly credentialTarget = signal<CredentialRenewalTarget | null>(null);
+
+  openCredentialing(): void {
+    const s = this.staff();
+    if (!s) return;
+    this.credentialTarget.set({
+      staffId: s.id,
+      staffName: s.name,
+      licenseNumber: s.licenseNumber ?? null,
+      licenseExpiryDate: s.licenseExpiryDate ?? null,
+    });
+  }
+
+  closeCredentialing(): void {
+    this.credentialTarget.set(null);
+  }
+
+  onCredentialRecorded(): void {
+    // Refetch rather than patch: the expiry shown on this page is the field
+    // the recording just overwrote, and a null is as much a result as a date.
+    this.closeCredentialing();
+    const s = this.staff();
+    if (s) this.loadStaff(s.id);
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');

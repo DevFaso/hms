@@ -22,6 +22,8 @@ export interface StaffResponse {
   employmentType?: string;
   specialization?: string;
   licenseNumber?: string;
+  /** Absent for a qualification that does not expire — a diploma. */
+  licenseExpiryDate?: string;
   startDate?: string;
   endDate?: string;
   active: boolean;

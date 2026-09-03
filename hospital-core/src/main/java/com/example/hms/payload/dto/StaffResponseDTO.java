@@ -37,6 +37,16 @@ public class StaffResponseDTO {
     private EmploymentType employmentType;
     private Specialization specialization;
     private String licenseNumber;
+    /**
+     * The licence expiry, or null for a qualification that does not expire.
+     *
+     * <p>Null is the normal case here: clinicians are credentialed on a
+     * diploma. It is exposed so the staff screen can offer credentialing to
+     * exactly the people the expiry-alert list can never contain — that list
+     * requires a non-null expiry, so before V145 the credentialing form had no
+     * way to be opened for a diploma holder.
+     */
+    private LocalDate licenseExpiryDate;
     private LocalDate startDate;
     private LocalDate endDate;
     private boolean active;

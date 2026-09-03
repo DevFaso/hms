@@ -64,6 +64,18 @@ export class MedicalHistoryTabComponent implements OnInit {
   socialLoading = signal(false);
   showSocialModal = signal(false);
   socialSaving = signal(false);
+  /**
+   * Values offered for the patient's preferred language.
+   *
+   * <p>Stored as the IETF tag so the backend can act on it: PatientLanguage
+   * routes reminders by exactly these. Bambara, Dioula and Moore are offered
+   * without a message bundle behind them — recording the need is the only way
+   * anyone finds out a bundle is worth commissioning, and the backend falls
+   * back to the hospital's configured language for them rather than dropping
+   * the message.
+   */
+  readonly preferredLanguages: string[] = ['fr', 'en', 'es', 'bm', 'dyu', 'mos'];
+
   socialForm: SocialHistoryRequest = this.emptySocialForm();
 
   /* ── Family ── */

@@ -105,6 +105,9 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     List<LabResult> findByLabOrder_Id(UUID labOrderId);
 
+    /** FHIR DiagnosticReport search (Tier 2 item 42): one query for a whole page of orders. */
+    List<LabResult> findByLabOrder_IdIn(Collection<UUID> labOrderIds);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",

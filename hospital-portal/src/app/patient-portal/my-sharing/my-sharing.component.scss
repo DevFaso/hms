@@ -161,3 +161,131 @@
     transform: translateY(0);
   }
 }
+
+// ── Access-log rows (Tier 2 item 39) ─────────────────────────
+//
+// Routine chart opens outnumber everything else here by a wide margin, so
+// the two rows a patient actually came to find — an emergency override, a
+// release to another hospital — have to survive being scrolled past. The
+// stripe does that work; the icon and the category word carry the meaning
+// for anyone who cannot see the colour.
+
+.pli-icon {
+  background: #f1f5f9;
+
+  .material-symbols-outlined {
+    color: #64748b;
+  }
+}
+
+.pli-category {
+  font-weight: 600;
+  color: #334155;
+}
+
+.portal-list-item.pli-external {
+  border-left: 3px solid #b45309;
+
+  .pli-icon {
+    background: #fef3c7;
+
+    .material-symbols-outlined {
+      color: #92400e;
+    }
+  }
+
+  .pli-category {
+    color: #92400e;
+  }
+}
+
+// Emergency access is not an external disclosure — it is the treating team
+// reading the chart without a consent — but it is the single row a patient
+// is most likely to be looking for, so it gets the stronger treatment of
+// the two rather than sharing the external one.
+.portal-list-item.pli-emergency {
+  border-left: 3px solid #b91c1c;
+
+  .pli-icon {
+    background: #fee2e2;
+
+    .material-symbols-outlined {
+      color: #991b1b;
+    }
+  }
+
+  .pli-category {
+    color: #991b1b;
+  }
+}
+
+// ── Access-log scope note ────────────────────────────────────
+//
+// Deliberately quiet: this is a clarification, not a warning. Styling it
+// as an alert would imply something went wrong with the patient's record,
+// when the point is only to say what the list below does and does not
+// cover. Colours are literal here to match the rest of this file, which
+// predates the token sweep; #475569 on #f8fafc is ~7:1.
+
+.access-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+}
+
+// ── Access-log summary band ──────────────────────────────────
+//
+// Shown only when there is something to show. A row of zeroes would be
+// noise on the overwhelming majority of accounts, and worse, it would
+// train people to skip past the band on the one visit it matters.
+
+.access-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.as-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.as-count {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.as-label {
+  font-size: 13px;
+}
+
+.as-emergency {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.as-external {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}

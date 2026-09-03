@@ -136,10 +136,29 @@
 
   <!-- ACCESS LOG TAB -->
   @if (activeTab() === 'access-log') {
+    <!--
+      Shown above every state, including the empty one. What this page can
+      report is narrower than "who viewed my records" implies: routine chart
+      reads emit no audit event, so listing only disclosures without saying so
+      reads as "nobody else looked".
+    -->
+    <p class="access-scope-note">
+      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      {{ 'PORTAL.SHARING.ACCESS_LOG_SCOPE_NOTE' | translate }}
+    </p>
     @if (loadingLog()) {
       <div class="portal-loading">
         <div class="portal-spinner"></div>
         <span>{{ 'PORTAL.SHARING.LOADING_LOG' | translate }}</span>
+      </div>
+    } @else if (logFailed()) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">error</span>
+        <h3>{{ 'PORTAL.SHARING.LOG_FAILED_TITLE' | translate }}</h3>
+        <p>{{ 'PORTAL.SHARING.LOG_FAILED_DESC' | translate }}</p>
+        <button type="button" class="portal-btn" (click)="retryAccessLog()">
+          {{ 'PORTAL.SHARING.LOG_RETRY' | translate }}
+        </button>
       </div>
     } @else if (!accessLog().length) {
       <div class="portal-empty">
@@ -148,21 +167,69 @@
         <p>{{ 'PORTAL.SHARING.NO_ACCESS_DESC' | translate }}</p>
       </div>
     } @else {
+      @if (emergencyCount() || externalCount()) {
+        <div class="access-summary">
+          @if (emergencyCount()) {
+            <div class="as-stat as-emergency">
+              <span class="as-count">{{ emergencyCount() }}</span>
+              <span class="as-label">{{
+                'PORTAL.SHARING.SUMMARY_EMERGENCY' | translate: { count: emergencyCount() }
+              }}</span>
+            </div>
+          }
+          @if (externalCount()) {
+            <div class="as-stat as-external">
+              <span class="as-count">{{ externalCount() }}</span>
+              <span class="as-label">{{
+                'PORTAL.SHARING.SUMMARY_EXTERNAL' | translate: { count: externalCount() }
+              }}</span>
+            </div>
+          }
+        </div>
+      }
       <div class="portal-list" style="margin-top: 16px">
         @for (entry of accessLog(); track entry.id) {
-          <div class="portal-list-item">
-            <div class="pli-icon" style="background: #f1f5f9">
-              <span class="material-symbols-outlined" style="color: #64748b">visibility</span>
+          <div
+            class="portal-list-item"
+            [class.pli-external]="entry.externalDisclosure"
+            [class.pli-emergency]="entry.category === 'EMERGENCY_ACCESS'"
+          >
+            <div class="pli-icon">
+              <span class="material-symbols-outlined">
+                @switch (entry.category) {
+                  @case ('EMERGENCY_ACCESS') {
+                    emergency
+                  }
+                  @case ('SHARED_WITH_PROVIDER') {
+                    share
+                  }
+                  @case ('INSURANCE') {
+                    account_balance
+                  }
+                  @case ('COPY_RELEASED') {
+                    download
+                  }
+                  @case ('IDENTITY_CHANGE') {
+                    merge
+                  }
+                  @default {
+                    visibility
+                  }
+                }
+              </span>
             </div>
             <div class="pli-body">
-              <span class="pli-title">{{ entry.accessedBy }}</span>
-              <span class="pli-sub"
-                >{{ entry.accessedByRole | enumLabel: 'role' }} ·
-                {{ entry.accessType | enumLabel: 'accessType' }}</span
-              >
-              <span class="pli-meta"
-                >{{ entry.resourceAccessed }} · {{ entry.accessedAt | date: 'medium' }}</span
-              >
+              <span class="pli-title">{{ entry.actor }}</span>
+              <span class="pli-sub">
+                <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
+                @if (entry.actorRole) {
+                  · {{ entry.actorRole }}
+                }
+                @if (entry.hospitalName) {
+                  · {{ entry.hospitalName }}
+                }
+              </span>
+              <span class="pli-meta">{{ entry.timestamp | date: 'medium' }}</span>
             </div>
           </div>
         }

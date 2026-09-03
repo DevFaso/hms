@@ -287,14 +287,26 @@ public class UserServiceImpl implements UserService {
                 throw new IllegalArgumentException("Email is required for staff and admin accounts.");
             }
             // Non-patient roles: strict global uniqueness.
-            if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
-                throw new ConflictException("username:Username '" + username + "' is already taken.");
+            // Each identifier can be held by a SOFT-DELETED account: the row
+            // keeps its unique email/username/phone, so "already registered"
+            // used to point at a user nobody could see - the list filtered
+            // deleted rows out while these checks counted them. The message
+            // now says which case it is, and the deleted view + Restore
+            // button in the user list are the way out.
+            if (username != null) {
+                userRepository.findByUsername(username).ifPresent(existing -> {
+                    throw conflictFor("username", "Username '" + username + "'", existing);
+                });
             }
-            if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
-                throw new ConflictException("email:Email '" + email + "' is already registered.");
+            if (email != null) {
+                userRepository.findByEmail(email).ifPresent(existing -> {
+                    throw conflictFor("email", "Email '" + email + "'", existing);
+                });
             }
-            if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
-                throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
+            if (phone != null && !phone.isBlank()) {
+                userRepository.findByPhoneNumber(phone).ifPresent(existing -> {
+                    throw conflictFor("phone", "Phone number '" + phone + "'", existing);
+                });
             }
         }
 
@@ -384,8 +396,28 @@ public class UserServiceImpl implements UserService {
                     user.getUsername(), request.getPassword(),
                     roleName, hospitalName);
                 log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+                com.example.hms.utility.ActivationDeliveryTracker.report(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                        .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
+                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                        .build());
             } catch (Exception e) {
                 log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+                // Fixed detail: exception messages can embed the raw address
+                // (EmailServiceImpl.validateAddresses does) and this DTO
+                // leaves the server; the transport error stays in the log.
+                com.example.hms.utility.ActivationDeliveryTracker.report(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                        .outcome(emailService.deliversRealEmail()
+                            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
+                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                        .detail("send failed — transport error in server logs")
+                        .build());
             }
         }
 
@@ -424,6 +456,24 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /**
+     * The identifier is taken either by a live account or by a soft-deleted
+     * one. Only one of those is visible in the default user list, so the
+     * message must say which - "already registered" against an invisible
+     * row is a dead end the administrator cannot act on.
+     */
+    private static ConflictException conflictFor(String field, String identifier, User existing) {
+        if (existing.isDeleted()) {
+            return new ConflictException(field + ":" + identifier
+                + " belongs to a deleted account. Use the user list's Deleted filter to "
+                + "restore it, or register with a different " + field + ".");
+        }
+        // "taken" for usernames, "registered" for contact identifiers - the
+        // wording each field always had.
+        String suffix = "username".equals(field) ? " is already taken." : " is already registered.";
+        return new ConflictException(field + ":" + identifier + suffix);
+    }
+
     /** Record audit + emit creation event only for brand-new users. */
     private void auditIfNewUser(boolean newUserCreated, User user,
                                 List<UserRoleHospitalAssignment> assignments) {
@@ -459,13 +509,10 @@ public class UserServiceImpl implements UserService {
         for (Role r : roles) {
             addUserRoleIfAbsent(user.getId(), r.getId());
 
-            boolean isPatientRole = ROLE_PATIENT.equalsIgnoreCase(r.getCode())
-                    || "PATIENT".equalsIgnoreCase(r.getName());
+            log.info("[ASSIGN] {} -> user={} hospitalId={} (inactive until code verification)",
+                    r.getCode(), user.getUsername(), staffContextHospitalId);
 
-            log.info("[ASSIGN] {} -> user={} hospitalId={} active={}",
-                    r.getCode(), user.getUsername(), staffContextHospitalId, !isPatientRole);
-
-            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, !isPatientRole));
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId));
         }
         return result;
     }
@@ -568,15 +615,21 @@ public class UserServiceImpl implements UserService {
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
+        // EVERY admin-registered account starts inactive - staff exactly like
+        // patients. Product decision 2026-09-02 (option A): the emailed
+        // confirmation code must gate something real. Until now staff were
+        // activated up front while the system still mailed them a
+        // verification code that gated nothing - activation theater. Login
+        // is refused while inactive (CustomUserDetails.isEnabled), and
+        // verifyAssignmentByCode() (assignee) and confirmAssignment()
+        // (registrar presenting the same code) both activate the assignment
+        // AND the user once someone proves possession of the emailed code.
+        // The bootstrap first-super-admin path is separate and untouched.
+        u.setActive(false);
         if (isPatient) {
-            // Patient accounts start inactive — must verify email first
-            u.setActive(false);
+            // Patients additionally keep the legacy email-link token.
             u.setActivationToken(UUID.randomUUID().toString());
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
-        } else {
-            // Admin-registered staff/admin accounts are immediately active.
-            // The admin vouches for them and sends credentials via welcome email.
-            u.setActive(true);
         }
 
         if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
@@ -802,33 +855,27 @@ public class UserServiceImpl implements UserService {
         return "Unknown User";
     }
 
-    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId, boolean active) {
+    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId) {
         UUID roleId = role.getId();
 
         // avoid duplicates
         if (!assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
+            // active=false for everyone: enforceRoleScopeConstraints holds
+            // staff inactive until the emailed code is verified, and the
+            // pre-approval override that used to force staff assignments
+            // active here was exactly what made the verification email
+            // theater (option A decision, 2026-09-02).
             assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
                     .userId(userId)
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
-                    .active(active) // 👈 PATIENT => false
+                    .active(false)
                     .build());
         }
 
-        // fetch the assignment we now expect to exist
-        UserRoleHospitalAssignment assignment = assignmentRepository
+        return assignmentRepository
                 .findFirstByUserIdAndHospitalIdAndRoleId(userId, hospitalId, roleId)
                 .orElseThrow(() -> new IllegalStateException("Assignment was not persisted as expected"));
-
-        // Admin-register creates assignments that should be immediately active.
-        // enforceRoleScopeConstraints may have forced active=false for the
-        // email-confirmation workflow, but admin-created users are pre-approved.
-        if (active && !Boolean.TRUE.equals(assignment.getActive())) {
-            assignment.setActive(true);
-            assignmentRepository.save(assignment);
-        }
-
-        return assignment;
     }
 
     private UUID extractHospitalIdFromJwt() {
@@ -917,17 +964,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserSummaryDTO> getAllUsers(int page, int size) {
+    public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
+                                            boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(pageable);
+        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size) {
+    public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
+                                            boolean includeDeleted, boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(name, role, email, pageable);
+        Page<User> users = userRepository.searchUsers(
+            name, role, email, includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 

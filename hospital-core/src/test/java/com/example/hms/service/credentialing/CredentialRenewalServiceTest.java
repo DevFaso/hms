@@ -120,6 +120,52 @@ class CredentialRenewalServiceTest {
     }
 
     @Test
+    void recordsAQualificationThatDoesNotExpire() {
+        // How clinicians are actually credentialed in this deployment: on a
+        // diploma, which has no expiry. Until V145 expiryDate was mandatory,
+        // so filing one meant inventing a date that does not exist -- the
+        // screen could not record the thing it is for.
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        callerIsAdmin();
+        when(renewalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordRenewal(staff.getId(), null, "DIP-2019-4471",
+            "Universite Joseph Ki-Zerbo", "Diploma seen, original sighted.");
+
+        // Null is a positive statement -- "does not expire" -- so it clears
+        // any date on file rather than leaving a stale one behind.
+        assertThat(staff.getLicenseExpiryDate()).isNull();
+        assertThat(staff.getLicenseNumber()).isEqualTo("DIP-2019-4471");
+        assertThat(staff.getLicenseVerifiedAt()).isEqualTo(NOW);
+        assertThat(staff.getLicenseVerifiedBy()).isSameAs(admin);
+
+        // And the history still records who attested to it and when, which is
+        // the half of V140 that matters just as much for a diploma.
+        StaffCredentialRenewal saved = captureSavedRenewal();
+        assertThat(saved.getExpiryDate()).isNull();
+        assertThat(saved.getLicenseNumber()).isEqualTo("DIP-2019-4471");
+        assertThat(saved.getRecordedBy()).isSameAs(admin);
+    }
+
+    @Test
+    void aNonExpiringCredentialLeavesNothingForTheExpirySweepToFind() {
+        // The sweep selects on "licenseExpiryDate IS NOT NULL", so clearing
+        // the date is what takes this person out of the alert ladder. If a
+        // null were ever stored as a far-future date instead, they would sit
+        // in the query forever waiting to become urgent.
+        staff.setLicenseExpiryDate(NEW_EXPIRY);
+        staff.setLicenseAlertStage(LicenseAlertStage.WARNING);
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        callerIsAdmin();
+        when(renewalRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordRenewal(staff.getId(), null, null, null, null);
+
+        assertThat(staff.getLicenseExpiryDate()).isNull();
+        assertThat(staff.getLicenseAlertStage()).isNull();
+    }
+
+    @Test
     void thePreviousValuesAreCapturedBeforeTheStaffRowIsMutated() {
         // The whole reason the history table exists. Reading them back after
         // the update would record the new values twice and the history would
@@ -196,19 +242,6 @@ class CredentialRenewalServiceTest {
 
         verify(renewalRepository, never()).save(any());
         assertThat(staff.getLicenseExpiryDate()).isEqualTo(OLD_EXPIRY);
-    }
-
-    @Test
-    void aRenewalWithoutANewExpiryIsRefused() {
-        // A renewal with no end date is not a renewal, it is a deletion of
-        // the expiry rule.
-        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-
-        assertThatThrownBy(() -> service.recordRenewal(staff.getId(), null, null, null, null))
-            .isInstanceOf(BusinessException.class);
-
-        verify(renewalRepository, never()).save(any());
     }
 
     @Test

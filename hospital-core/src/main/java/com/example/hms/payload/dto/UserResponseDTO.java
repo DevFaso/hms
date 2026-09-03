@@ -22,6 +22,13 @@ import java.util.UUID;
 @Schema(name = "UserResponseDTO", description = "Hydrated user payload with roles and profile pointers")
 public class UserResponseDTO {
 
+    /**
+     * Delivery outcome of the activation email/SMS for THIS registration,
+     * attached by the controller after the post-commit send ran. Null on
+     * reads and on flows that don't send anything.
+     */
+    private java.util.List<NotificationDeliveryStatusDTO> activationDelivery;
+
     @Schema(description = "User ID")
     private UUID id;
 

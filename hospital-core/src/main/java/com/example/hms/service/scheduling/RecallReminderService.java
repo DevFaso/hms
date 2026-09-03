@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
+import com.example.hms.service.i18n.PatientLocaleResolver;
+
 /**
  * Recall notice sweep (P3 #22), the V112 reminder idiom: select PENDING
  * recalls coming due within the lead window that carry no {@code notifiedAt}
@@ -29,6 +31,7 @@ public class RecallReminderService {
     private final PatientRecallRepository recallRepository;
     private final PatientOutreachNotifier outreachNotifier;
     private final MessageSource messageSource;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     /** Days before the due date at which the notice goes out. */
     @Value("${hms.recalls.notice.lead-days:14}")
@@ -40,10 +43,12 @@ public class RecallReminderService {
 
     public RecallReminderService(PatientRecallRepository recallRepository,
                                  PatientOutreachNotifier outreachNotifier,
-                                 MessageSource messageSource) {
+                                 MessageSource messageSource,
+                                 PatientLocaleResolver patientLocaleResolver) {
         this.recallRepository = recallRepository;
         this.outreachNotifier = outreachNotifier;
         this.messageSource = messageSource;
+        this.patientLocaleResolver = patientLocaleResolver;
     }
 
     /** @return number of recalls for which at least one channel dispatched */
@@ -74,8 +79,12 @@ public class RecallReminderService {
         String hospitalName = hospital != null && hospital.getName() != null ? hospital.getName() : "";
         // Deliberately no clinical reason in the body: SMS is an untrusted
         // channel, so the notice says only that a visit is due and where.
+        // Configured locale is the fallback; the patient's stated language
+        // wins when we have a bundle for it.
+        Locale locale = patientLocaleResolver.resolve(
+            recall.getPatient(), Locale.forLanguageTag(outreachLocale));
         String message = messageSource.getMessage("sms.recall.due",
-            new Object[]{hospitalName}, Locale.forLanguageTag(outreachLocale));
+            new Object[]{hospitalName}, locale);
         return outreachNotifier.notifyPatient(recall.getPatient(), message);
     }
 }

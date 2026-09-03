@@ -16,6 +16,12 @@ import java.util.UUID;
 @NoArgsConstructor @AllArgsConstructor @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserRoleHospitalAssignmentResponseDTO {
+
+    /**
+     * Delivery outcome of the re-sent activation notifications (regenerate
+     * with resendNotifications=true). Null when nothing was sent.
+     */
+    private java.util.List<NotificationDeliveryStatusDTO> activationDelivery;
     private UUID id;
     private String assignmentCode;
 

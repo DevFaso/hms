@@ -32,7 +32,8 @@ class UserRepositorySearchQueryTest {
     @Test
     void searchUsersQueryExplicitlyCastsParametersToString() throws NoSuchMethodException {
         Method searchUsers = UserRepository.class.getDeclaredMethod(
-                "searchUsers", String.class, String.class, String.class, Pageable.class);
+                "searchUsers", String.class, String.class, String.class,
+                boolean.class, boolean.class, Pageable.class);
         Query query = searchUsers.getAnnotation(Query.class);
 
         assertThat(query).as("@Query annotation must be present on searchUsers").isNotNull();

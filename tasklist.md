@@ -1386,10 +1386,63 @@ that exists rather than inventing one.
   appears in 4. Language is operational here, not decorative: the UI is EN/FR/ES
   while patients speak Bambara, Dioula and Mooré, and the SMS channel picks a
   locale per message.
-- [ ] 39. **Release of information + disclosure accounting.** Break-the-glass
-  already audits every read with a per-read counter; disclosure accounting is
-  the patient-facing report over that existing ledger, plus a request workflow.
-  Verified zero code for both.
+- [x] 39. **Disclosure accounting.**
+  ✅ DONE 2026-08-26 (**PR #528** `feature/disclosure-accounting`, V141).
+  The entry said "the patient-facing report over that existing ledger" and
+  "verified zero code". Both were wrong, and in the direction that matters:
+  **the report already shipped and was already reachable** —
+  `/me/patient/access-log` → `my-sharing` → "Who Viewed My Records", behind
+  a `ROLE_PATIENT` guard. It was broken in four separate ways at once, and
+  each one on its own would have been enough to make it untrustworthy.
+  ⚠ **THE LEDGER COULD NOT BE QUERIED BY PATIENT.** The list asked for
+  `(entityType='PATIENT', resourceId=patientId)` — a *convention*, which
+  only three of the six emitters that write patient-related audit rows
+  follow. Break-the-glass keys on the **session id**; eligibility checks key
+  on the **check id**. So the page a patient opens to find out who read
+  their chart **omitted every emergency override** — the one category it
+  exists for — and every disclosure to an insurer, with nothing saying the
+  list was partial. V141 adds the `patient_id` column the query should
+  always have had, and backfills the three derivable shapes (including
+  historic break-glass, by joining the session table). No FK: an audit row
+  must outlive a purged patient.
+  ⚠ **THE RELEASE AUDIT NAMED THE PATIENT AS THE DISCLOSER.**
+  `PatientRecordSharingServiceImpl` built its `RECORD_SHARE` row with
+  `.user(patient.getUser())` and had no view of the security context at all,
+  so the patient's own portal told them *they* had shared their chart with
+  another hospital. Where the patient has no portal account — the common
+  case here — `getUser()` is null, `deriveActorFields()` stamps
+  `actorType=SYSTEM`, and a cross-hospital release of a full chart recorded
+  **no human at all**. Now resolved from `RoleValidator`; null stays null
+  rather than being substituted, because naming the wrong person is worse
+  than naming nobody — only one of the two is legible as a gap.
+  ⚠ **EVERY ROW RENDERED BLANK.** The Angular `AccessLogEntry` interface
+  (`accessedBy`, `accessType`, `accessedAt`…) shared **not one field name**
+  with the `AccessLogEntryDTO` on the wire (`actor`, `eventType`,
+  `timestamp`…), and the DTO never set `id`, so `track entry.id` tracked
+  `undefined`. The sole spec stubbed `getMyAccessLog: () => of([])` — it
+  only ever exercised the empty state, which is precisely why this survived.
+  ⚠ **AND THE AUDIT SERVICE SILENTLY DROPPED WRITES.** Pre-existing, found
+  by the new tests: `resolvePatientResourceName` called a bare
+  `UUID.fromString(resourceId)`, so a `PATIENT`-typed event whose resource id
+  wasn't a UUID threw — and `logEvent` catches and swallows, so **the audit
+  row vanished entirely**. An audit trail that discards the writes it cannot
+  label is the worst failure mode it has. Now guarded: lose the key, never
+  the row.
+  `DisclosureCategory` is a **whitelist, not a fallthrough** —
+  `accountableEventTypes()` is what the query filters on, so keying a new
+  event type by patient cannot publish it to patients without someone
+  deciding to; a test pins the switch and the whitelist together in both
+  directions. It takes the **entity type as well as the event type**, because
+  `PATIENT_ACCESS` means a clinician opening the chart in one emitter and a
+  disclosure to an insurance scheme in another, and those must not share a
+  label. The portal's `catchError(() => of([]))` is gone: an outage used to
+  render as *"Nobody has accessed your records yet"*, an affirmatively false
+  statement about a privacy-critical fact.
+- [ ] 39b. **Release of information — request workflow.** The other half of
+  the original #39. A patient or an authorised third party formally requests
+  a copy of the record; staff triage, fulfil or deny, and the fulfilment is
+  itself a disclosure that lands in the #39 accounting. Nothing exists for
+  the request side; the accounting it would feed now does.
 - [x] 40. **Provider credentialing renewal.**
   ✅ DONE 2026-08-26 (**PR #525** `feature/provider-credentialing`, V140).
   The gap was worse than "nothing verifies": `license_number` and
@@ -1469,9 +1522,13 @@ that exists rather than inventing one.
 
 ## E7 — Engagement
 
-- [ ] 46. **Day-of self check-in / kiosk.** E-check-in with dynamic
-  questionnaires covers BEFORE the visit; arrival at the desk has no
-  self-service path. Verified zero code (`SelfCheckIn`, `Kiosk`).
+- [ ] 46. **Day-of self check-in / kiosk.** ⏸ **DEFERRED by the user
+  2026-08-27 — not needed for now.** Not a non-goal: the reasoning below still
+  holds and it can be picked up when arrival volume asks for it. Do not
+  propose it as pickable work in the meantime.
+  E-check-in with dynamic questionnaires covers BEFORE the visit; arrival at
+  the desk has no self-service path. Verified zero code (`SelfCheckIn`,
+  `Kiosk`).
 - [ ] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
   entirely absent (no PHQ-9, no GAD-7 anywhere). The one that belongs in this
   product first is the **Edinburgh Postnatal Depression Scale** in the
@@ -1567,5 +1624,17 @@ every breadth item on this page, and #26 is the same defect class the
 the emergencies belonging to the specialty this product is deepest in. Then
 E2 as one batch (#30–#32, all three touch the same board). E3 is now closed —
 the #33 decision was made (scoped to controlled + co-sign-required, not
-universal) and both #33 and #34 shipped. **E4–E7 (#35–#47) are the remaining
-Tier 2 work, all pick-by-demand.**
+universal) and both #33 and #34 shipped. **E4–E7 are the remaining Tier 2
+work, all pick-by-demand: E4 (#35–#37), E5 (#38 demographics depth, #39b ROI
+request workflow — #39 and #40 shipped), E6 (#42–#45), E7 (#46, #47); #41
+shipped.**
+
+One pattern is now consistent enough across #33, #40, #41 and #39 to plan
+around: **the entry describing an item as absent has been wrong every time,
+and the code that existed was reachable and broken rather than missing.**
+#40's alert had been graded on a dashboard since V1 with no delivery; #41's
+merge guards were no-ops on the thread that would call them; #39's report was
+live in the patient portal and omitted the one category it existed for.
+Budget the first pass of any remaining item for *finding out what already
+ships*, not for building — and check the shipped surface before trusting a
+"verified zero code" note.

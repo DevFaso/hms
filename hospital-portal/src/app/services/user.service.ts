@@ -24,6 +24,8 @@ export interface UserSummaryPage {
   number: number;
 }
 
+import { NotificationDeliveryStatus } from '../shared/delivery-warnings';
+
 export interface UserDetail {
   id: string;
   username: string;
@@ -36,6 +38,8 @@ export interface UserDetail {
   roles: string[];
   createdAt: string;
   updatedAt: string;
+  /** Present on admin-register responses: did the activation message go anywhere? */
+  activationDelivery?: NotificationDeliveryStatus[];
 }
 
 export interface AdminRegisterRequest {
@@ -61,8 +65,23 @@ export interface AdminRegisterRequest {
 export class UserService {
   private readonly http = inject(HttpClient);
 
-  list(page = 0, size = 20): Observable<UserSummaryPage> {
-    const params = new HttpParams().set('page', String(page)).set('size', String(size));
+  /**
+   * includeDeleted also returns soft-deleted accounts so the Deleted filter
+   * and Restore button have rows to act on. The server honours it only for
+   * SUPER_ADMIN / HOSPITAL_ADMIN; other callers silently get the live view.
+   */
+  list(
+    page = 0,
+    size = 20,
+    includeDeleted = false,
+    onlyDeleted = false,
+  ): Observable<UserSummaryPage> {
+    let params = new HttpParams().set('page', String(page)).set('size', String(size));
+    if (includeDeleted) params = params.set('includeDeleted', 'true');
+    // onlyDeleted pages the ghost worklist server-side: a mixed page filtered
+    // client-side can show "no matches" while deleted users sit on later
+    // pages, which is exactly how the invisible-ghost bug looked to admins.
+    if (onlyDeleted) params = params.set('onlyDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users', { params });
   }
 
@@ -73,12 +92,20 @@ export class UserService {
   search(
     page = 0,
     size = 20,
-    filters: { name?: string; role?: string; email?: string } = {},
+    filters: {
+      name?: string;
+      role?: string;
+      email?: string;
+      includeDeleted?: boolean;
+      onlyDeleted?: boolean;
+    } = {},
   ): Observable<UserSummaryPage> {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
     if (filters.name) params = params.set('name', filters.name);
     if (filters.role) params = params.set('role', filters.role);
     if (filters.email) params = params.set('email', filters.email);
+    if (filters.includeDeleted) params = params.set('includeDeleted', 'true');
+    if (filters.onlyDeleted) params = params.set('onlyDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users/search', { params });
   }
 

@@ -112,6 +112,28 @@ class UserRoleHospitalAssignmentControllerTest {
     }
 
     @Test
+    void resendNotificationReturnsTheDeliveryReport() throws Exception {
+        // The endpoint used to return 204 while every delivery failure
+        // vanished into a WARN log; the report is now the response body, so
+        // the admin can see a dead transport at the moment of the resend.
+        java.util.UUID assignmentId = java.util.UUID.randomUUID();
+        org.mockito.Mockito.doAnswer(inv -> {
+            com.example.hms.utility.ActivationDeliveryTracker.report(
+                com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                    .channel("SMS").purpose("ACTIVATION").outcome("MOCKED")
+                    .target("+226*****56").build());
+            return null;
+        }).when(assignmentService).sendNotifications(assignmentId);
+
+        mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$[0].channel").value("SMS"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$[0].outcome").value("MOCKED"));
+    }
+
+    @Test
     void regenerateAssignmentCodeReturnsUpdatedAssignment() throws Exception {
         UUID assignmentId = UUID.randomUUID();
 

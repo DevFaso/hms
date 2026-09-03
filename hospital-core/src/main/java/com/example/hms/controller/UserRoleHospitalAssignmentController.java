@@ -95,16 +95,35 @@ public class UserRoleHospitalAssignmentController {
             @Parameter(description = "Send notification emails/SMS after regeneration", example = "true")
             @RequestParam(defaultValue = "true") boolean resendNotifications) {
         log.info("🔁 Regenerating assignment code for assignment '{}' (resendNotifications={})", assignmentId, resendNotifications);
-        return ResponseEntity.ok(assignmentService.regenerateAssignmentCode(assignmentId, resendNotifications));
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            UserRoleHospitalAssignmentResponseDTO dto =
+                assignmentService.regenerateAssignmentCode(assignmentId, resendNotifications);
+            // The resend runs AFTER_COMMIT on this thread; drain its outcomes
+            // so the admin sees whether the new code actually went anywhere.
+            dto.setActivationDelivery(com.example.hms.utility.ActivationDeliveryTracker.close());
+            return ResponseEntity.ok(dto);
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
     }
 
-    @Operation(summary = "Resend the onboarding email + SMS for an existing assignment")
+    @Operation(summary = "Resend the onboarding email + SMS for an existing assignment",
+        description = "Returns the per-channel delivery report so the caller can tell a real "
+            + "send from a deployment with no mail/SMS transport — the send paths themselves "
+            + "never throw for delivery failures.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping("/{assignmentId}/resend-notification")
-    public ResponseEntity<Void> resendNotification(@PathVariable UUID assignmentId) {
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.NotificationDeliveryStatusDTO>>
+            resendNotification(@PathVariable UUID assignmentId) {
         log.info("📧 Resending notifications for assignment '{}'", assignmentId);
-        assignmentService.sendNotifications(assignmentId);
-        return ResponseEntity.noContent().build();
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            assignmentService.sendNotifications(assignmentId);
+            return ResponseEntity.ok(com.example.hms.utility.ActivationDeliveryTracker.close());
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
     }
 
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")

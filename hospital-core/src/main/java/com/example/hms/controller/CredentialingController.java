@@ -42,10 +42,14 @@ public class CredentialingController {
     @PostMapping("/{staffId}/credentials/renew")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Record a credential renewal",
-        description = "Moves the practitioner's licence expiry forward and appends a history "
-            + "row. Server identity and server clock; a practitioner cannot record their own "
-            + "renewal; 404-not-403 across hospitals. Records only — an expired licence still "
-            + "does not block clinical work.")
+        description = "Sets the practitioner's licence expiry to the supplied date and appends a "
+            + "history row. The expiry is optional and is applied exactly as sent, including "
+            + "null: a null CLEARS any expiry on file and takes the practitioner out of the "
+            + "expiry sweep, which is how a diploma — the usual credential here — is recorded. "
+            + "It is not 'no change'; omit the whole call for that. The previous expiry is "
+            + "preserved on the history row either way. Server identity and server clock; a "
+            + "practitioner cannot record their own renewal; 404-not-403 across hospitals. "
+            + "Records only — an expired licence still does not block clinical work.")
     public ResponseEntity<CredentialRenewalResponseDTO> renew(
         @PathVariable UUID staffId,
         @Valid @RequestBody CredentialRenewalRequestDTO request) {

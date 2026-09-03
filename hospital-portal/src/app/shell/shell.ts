@@ -31,6 +31,7 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
 import { DowntimeBannerComponent } from '../downtime/downtime-banner';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
+import { NAV_GROUP_IDS, navGroupForRoute, navGroupTranslationKey } from './nav-groups';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
@@ -511,6 +512,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.PATIENT_EDUCATION',
         route: '/patient-education',
         roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+      },
+      {
+        // Tier 2 item 35. Mirrors the RoleGuard on /registries, which
+        // mirrors the controller @PreAuthorize - the clinical write set.
+        icon: 'diversity_3',
+        label: 'Disease Registries',
+        translationKey: 'NAV.REGISTRIES',
+        route: '/registries',
+        roles: [
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'pregnant_woman',
@@ -1324,6 +1340,100 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
+  // ── Grouping and search ────────────────────────────────────────────────
+
+  /** What the user has typed into the module search box. */
+  navSearch = signal('');
+
+  /**
+   * The nav as rendered: ordered groups, each holding its items.
+   *
+   * <p>Every entry carries `flatIndex`, its position in `navItems()`. Reorder
+   * — drag and Alt+Arrow alike — still operates on that flat array, because it
+   * is what {@link NavOrderService} persists and what `applyOrder` replays.
+   * Handing the template's group-relative `$index` to those handlers would
+   * scramble the saved order the first time anyone dragged anything.
+   *
+   * <p>A group with no visible items is not rendered, so a heading never
+   * stands over an empty space for a role that holds none of its modules.
+   */
+  navGroups = computed(() => {
+    const query = this.navSearch().trim().toLowerCase();
+    // Read so the list re-translates when the language changes; without it the
+    // matched labels go stale against the rendered ones.
+    this.currentLang();
+
+    const entries = this.navItems()
+      .map((item, flatIndex) => ({ item, flatIndex }))
+      .filter(({ item }) => !query || this.navItemMatches(item, query));
+
+    return NAV_GROUP_IDS.map((id) => ({
+      id,
+      translationKey: navGroupTranslationKey(id),
+      entries: entries.filter(({ item }) => navGroupForRoute(item.route) === id),
+    })).filter((group) => group.entries.length > 0);
+  });
+
+  /** True when a search is active but nothing matched. */
+  navSearchEmpty = computed(
+    () => this.navSearch().trim().length > 0 && this.navGroups().length === 0,
+  );
+
+  /**
+   * Matches on the translated label, and on the untranslated one too.
+   *
+   * <p>The second half is not redundant. These are English route names that
+   * staff use verbally regardless of interface language — someone running the
+   * portal in French still says "eMAR" and "MTM" — and the route itself is
+   * matched for the same reason.
+   */
+  private navItemMatches(item: NavItem, query: string): boolean {
+    const translated = item.translationKey
+      ? this.translate.instant(item.translationKey)
+      : item.label;
+    return (
+      String(translated).toLowerCase().includes(query) ||
+      item.label.toLowerCase().includes(query) ||
+      item.route.toLowerCase().includes(query)
+    );
+  }
+
+  clearNavSearch(): void {
+    this.navSearch.set('');
+  }
+
+  onNavSearchInput(event: Event): void {
+    this.navSearch.set((event.target as HTMLInputElement).value);
+  }
+
+  /**
+   * The flat index of the neighbouring item inside the same group, or null at
+   * the group's edge.
+   *
+   * <p>Reorder is deliberately confined to a group. A move across the boundary
+   * could not do what it appears to — the group comes from the route, not from
+   * position, so the item would land visually where it started and the user
+   * would be left pressing a key that does nothing.
+   */
+  private neighbourInGroup(flatIndex: number, direction: -1 | 1): number | null {
+    const items = this.navItems();
+    const current = items[flatIndex];
+    if (!current) return null;
+    const group = navGroupForRoute(current.route);
+
+    for (let i = flatIndex + direction; i >= 0 && i < items.length; i += direction) {
+      if (navGroupForRoute(items[i].route) === group) return i;
+    }
+    return null;
+  }
+
+  /** Whether two flat positions sit in the same group — the drop guard. */
+  private sameGroup(a: number, b: number): boolean {
+    const items = this.navItems();
+    if (!items[a] || !items[b]) return false;
+    return navGroupForRoute(items[a].route) === navGroupForRoute(items[b].route);
+  }
+
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
@@ -1447,6 +1557,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.resetDrag();
       return;
     }
+    // Refused across groups, for the same reason Alt+Arrow stops at the
+    // boundary: the group is decided by the route, so the item would return to
+    // where it was and the drag would read as a bug rather than a rule.
+    if (!this.sameGroup(fromIndex, dropIndex)) {
+      this.resetDrag();
+      return;
+    }
     this.moveNavItem(fromIndex, dropIndex);
     this.resetDrag();
   }
@@ -1494,14 +1611,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   onNavKeydown(event: KeyboardEvent, index: number): void {
     if (!event.altKey) return;
-    let toIndex: number | null = null;
-    if (event.key === 'ArrowUp') toIndex = index - 1;
-    else if (event.key === 'ArrowDown') toIndex = index + 1;
-    if (toIndex === null) return;
+    let direction: -1 | 1 | null = null;
+    if (event.key === 'ArrowUp') direction = -1;
+    else if (event.key === 'ArrowDown') direction = 1;
+    if (direction === null) return;
 
-    const items = this.navItems();
-    if (toIndex < 0 || toIndex >= items.length) {
-      // Clamp at the ends. preventDefault still — we don't want the
+    // Confined to the item's own group. Crossing the boundary would move the
+    // item in the flat array without moving it on screen — the group comes
+    // from the route, not from position — so the key would look broken.
+    const toIndex = this.neighbourInGroup(index, direction);
+    if (toIndex === null) {
+      // Clamp at the group's edge. preventDefault still — we don't want the
       // browser scrolling the viewport while the user holds Alt+Arrow.
       event.preventDefault();
       return;

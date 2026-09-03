@@ -16,7 +16,7 @@ export interface CredentialRenewal {
   previousLicenseNumber: string | null;
   previousExpiryDate: string | null;
   licenseNumber: string | null;
-  expiryDate: string;
+  expiryDate: string | null;
   issuingAuthority: string | null;
   note: string | null;
   recordedByUserId: string | null;
@@ -25,8 +25,17 @@ export interface CredentialRenewal {
 }
 
 export interface CredentialRenewalRequest {
-  /** Required — a renewal with no end date is a deletion of the expiry rule. */
-  expiryDate: string;
+  /**
+   * Always sent, and applied by the server exactly as sent.
+   *
+   * <p>A date sets the licence expiry to it. Null records a qualification
+   * that does not expire — a diploma, which is how clinicians are
+   * credentialed here — and clears any expiry already on file, taking the
+   * practitioner out of the expiry sweep. Null is a statement, not an
+   * omission: there is no "leave the expiry alone" value, so do not send this
+   * call at all if that is what you meant.
+   */
+  expiryDate: string | null;
   /** Omit to keep the number already on file; most renewals reissue the same one. */
   licenseNumber?: string;
   issuingAuthority?: string;

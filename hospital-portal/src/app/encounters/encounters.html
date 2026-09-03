@@ -643,15 +643,38 @@
             <input id="enc-date" type="date" [(ngModel)]="form.encounterDate" required />
           </div>
           <div class="field">
-            <label for="enc-deptId">{{ 'STAFF.DEPARTMENT' | translate }}</label>
-            <select id="enc-deptId" [(ngModel)]="form.departmentId">
-              <option value="">
-                {{ form.hospitalId ? 'Any department' : 'Select hospital first' }}
+            <!--
+              Required, with the asterisk and the `required` attribute, because
+              EncounterRequestDTO.departmentId is @NotNull. It used to render
+              as optional with an "Any department" empty option, so submitting
+              produced a 400 the form never surfaced.
+            -->
+            <label for="enc-deptId">{{ 'STAFF.DEPARTMENT' | translate }} *</label>
+            <select id="enc-deptId" [(ngModel)]="form.departmentId" required>
+              <option value="" disabled>
+                @if (!form.hospitalId) {
+                  {{ 'ENCOUNTERS.DEPT_SELECT_HOSPITAL_FIRST' | translate }}
+                } @else if (departmentsLoading()) {
+                  {{ 'ENCOUNTERS.DEPT_LOADING' | translate }}
+                } @else if (departmentsFailed()) {
+                  {{ 'ENCOUNTERS.DEPT_LOAD_FAILED' | translate }}
+                } @else if (!departments().length) {
+                  {{ 'ENCOUNTERS.DEPT_NONE' | translate }}
+                } @else {
+                  {{ 'ENCOUNTERS.DEPT_CHOOSE' | translate }}
+                }
               </option>
               @for (d of departments(); track d.id) {
                 <option [value]="d.id">{{ d.name }}</option>
               }
             </select>
+            @if (departmentsFailed()) {
+              <small class="field-error">{{
+                'ENCOUNTERS.DEPT_LOAD_FAILED_HINT' | translate
+              }}</small>
+            } @else if (form.hospitalId && !departmentsLoading() && !departments().length) {
+              <small class="field-error">{{ 'ENCOUNTERS.DEPT_NONE_HINT' | translate }}</small>
+            }
           </div>
         </div>
         <div class="field">
@@ -672,7 +695,12 @@
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="
-            saving() || !form.patientId || !form.staffId || !form.hospitalId || !form.encounterDate
+            saving() ||
+            !form.patientId ||
+            !form.staffId ||
+            !form.hospitalId ||
+            !form.encounterDate ||
+            !form.departmentId
           "
         >
           {{

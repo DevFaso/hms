@@ -53,6 +53,12 @@ class FhirCapabilityStatementIT {
                 "\"type\":\"Observation\"",
                 "\"type\":\"Condition\"",
                 "\"type\":\"MedicationRequest\"",
-                "\"type\":\"Immunization\"");
+                "\"type\":\"Immunization\"",
+                // Tier 2 item 42
+                "\"type\":\"ServiceRequest\"",
+                "\"type\":\"DiagnosticReport\"",
+                // Tier 2 item 43
+                "\"type\":\"Appointment\"",
+                "\"type\":\"Slot\"");
     }
 }

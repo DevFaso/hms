@@ -1165,7 +1165,8 @@
     "TO_DATE": "Date de Fin",
     "VIEW": "Voir le rendez-vous",
     "VIEW_MANAGE_SUBTITLE": "Voir et gérer les détails du rendez-vous",
-    "YES_CANCEL": "Oui, Annuler"
+    "YES_CANCEL": "Oui, Annuler",
+    "RESTORE_TO_SCHEDULED": "Rétablir en programmé"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",
@@ -2016,6 +2017,15 @@
     "PHARMACY_CLAIMS": "Demandes de remboursement",
     "PHARMACY_CLAIMS_DESC": "Demandes pour cet hôpital"
   },
+  "DELIVERY": {
+    "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
+    "EMAIL_FAILED": "Le compte a été créé, mais l'e-mail d'activation n'a pas pu être envoyé. Utilisez « Renvoyer le code » une fois le problème résolu.",
+    "EMAIL_NOT_CONFIGURED": "L'envoi d'e-mails n'est pas configuré sur ce serveur — le code d'activation n'a pas été envoyé par e-mail.",
+    "NOTHING_TO_SEND": "Aucune notification n'a été envoyée — rien n'est en attente d'envoi pour cette affectation.",
+    "SMS_FAILED": "Le SMS d'activation n'a pas pu être envoyé.",
+    "SMS_NOT_CONFIGURED": "L'envoi de SMS est désactivé sur ce serveur — aucun SMS d'activation n'a été envoyé.",
+    "WELCOME_EMAIL_FAILED": "L'e-mail de bienvenue contenant les identifiants n'a pas pu être envoyé."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personnel Actif",
     "APPOINTMENTS": "Rendez-vous",
@@ -2188,7 +2198,14 @@
     "NOTE_COSIGN_PENDING": "En attente de la contre-signature du médecin responsable",
     "COSIGN_NOTE": "Contresigner la note",
     "NOTE_COSIGNING": "Contre-signature…",
-    "NOTE_COSIGNED_AT": "Contresignée"
+    "NOTE_COSIGNED_AT": "Contresignée",
+    "DEPT_CHOOSE": "Sélectionner un département…",
+    "DEPT_LOADING": "Chargement des départements…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Sélectionnez d'abord un hôpital",
+    "DEPT_NONE": "Aucun département actif",
+    "DEPT_NONE_HINT": "Cet hôpital n'a aucun département actif. Un administrateur doit en ajouter un avant de pouvoir créer une consultation.",
+    "DEPT_LOAD_FAILED": "Départements indisponibles",
+    "DEPT_LOAD_FAILED_HINT": "La liste des départements n'a pas pu être chargée. Cela ne signifie pas qu'il n'y en a aucun — veuillez réessayer."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -2950,6 +2967,7 @@
     "ASSIGNMENTS": "Affectations",
     "GOVERNANCE": "Gouvernance",
     "PATIENT_EDUCATION": "Éducation des Patients",
+    "REGISTRIES": "Registres de maladies",
     "MEDICATION_HISTORY": "Historique Médicamenteux",
     "PROCEDURE_ORDERS": "Ordres de Procédure",
     "REGISTRATIONS": "Enregistrements",
@@ -2969,7 +2987,27 @@
     "ON_CALL": "Gardes",
     "SLOT_ADMIN": "Administration des créneaux",
     "TRANSFUSIONS": "Banque de sang",
-    "BED_BOARD": "Tableau des lits"
+    "BED_BOARD": "Tableau des lits",
+    "GROUP": {
+      "MY_DAY": "Ma journée",
+      "PATIENTS_FLOW": "Patients et flux",
+      "CARE": "Soins",
+      "PHARMACY": "Médicaments et pharmacie",
+      "DIAGNOSTICS": "Diagnostics",
+      "BILLING": "Facturation",
+      "INSIGHTS": "Analyses",
+      "ADMINISTRATION": "Administration",
+      "PLATFORM": "Plateforme",
+      "MY_CARE": "Mes soins",
+      "MY_HEALTH": "Ma santé",
+      "MY_RECORDS": "Mon dossier",
+      "MY_BILLING": "Facturation",
+      "OTHER": "Autres"
+    },
+    "SEARCH_LABEL": "Rechercher un module",
+    "SEARCH_PLACEHOLDER": "Rechercher un module...",
+    "SEARCH_CLEAR": "Effacer la recherche",
+    "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} »."
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -4001,7 +4039,8 @@
     "SHARING": {
       "TITLE": "Partage et confidentialité",
       "CONSENTS_TAB": "Consentements de partage",
-      "ACCESS_LOG_TAB": "Qui a consulté mon dossier",
+      "ACCESS_LOG_TAB": "Divulgations du dossier",
+      "ACCESS_LOG_SCOPE_NOTE": "Cette page indique qui a ouvert votre dossier et où il a été transmis : les consultations par l'équipe qui vous soigne, les accès d'urgence, le partage avec un autre hôpital, les copies délivrées et les informations transmises à votre assureur. Une personne qui revient plusieurs fois à votre dossier au cours d'une même visite n'apparaît qu'une fois.",
       "LOADING_CONSENTS": "Chargement des consentements…",
       "NO_CONSENTS_TITLE": "Aucun consentement actif",
       "NO_CONSENTS_DESC": "Vous n'avez partagé votre dossier avec aucun autre hôpital.",
@@ -4029,8 +4068,22 @@
       "CONSENT_REVOKED": "Consentement révoqué avec succès",
       "CONSENT_REVOKE_FAILED": "Échec de la révocation du consentement",
       "LOADING_LOG": "Chargement du journal d'accès…",
-      "NO_ACCESS_TITLE": "Aucun enregistrement d'accès",
-      "NO_ACCESS_DESC": "Personne n'a encore accédé à votre dossier, ou la journalisation vient de débuter."
+      "NO_ACCESS_TITLE": "Aucune divulgation enregistrée",
+      "NO_ACCESS_DESC": "Aucune divulgation de votre dossier n'a été enregistrée pour cette période.",
+      "LOG_FAILED_TITLE": "Impossible de charger votre journal d'accès",
+      "LOG_FAILED_DESC": "Le relevé n'a pas pu être récupéré pour le moment. Cela ne signifie pas que personne n'a consulté votre dossier — veuillez réessayer.",
+      "LOG_RETRY": "Réessayer",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Accès d'urgence",
+        "TREATMENT_ACCESS": "Consulté pour vos soins",
+        "SHARED_WITH_PROVIDER": "Partagé avec un autre hôpital",
+        "INSURANCE": "Transmis à votre assurance",
+        "COPY_RELEASED": "Une copie a été délivrée",
+        "IDENTITY_CHANGE": "Dossiers fusionnés",
+        "UNKNOWN": "Accès enregistré"
+      },
+      "SUMMARY_EMERGENCY": "accès d'urgence à votre dossier",
+      "SUMMARY_EXTERNAL": "fois où votre dossier est sorti de votre équipe soignante"
     },
     "FAMILY": {
       "TITLE": "Accès famille et mandataire",
@@ -5100,6 +5153,7 @@
     "RECALL_TYPE_OTHER": "Autre",
     "RECALL_SOURCE_CHECKOUT": "Fin de visite",
     "RECALL_SOURCE_MANUAL": "Manuel",
+    "RECALL_SOURCE_PROGRAM_RULE": "Règle de programme",
     "LOAD_SLOTS_FAILED": "Échec du chargement des créneaux disponibles",
     "SELECT_SLOT": "Sélectionner un créneau",
     "SELECT_SLOT_FIRST": "Sélectionnez d'abord un créneau",
@@ -5113,7 +5167,13 @@
     "OFFER_DECLINED": "Offre refusée — retour en liste d'attente",
     "ACCEPT_OFFER_FAILED": "Échec de l'acceptation de l'offre",
     "DECLINE_OFFER_FAILED": "Échec du refus de l'offre",
-    "DEPARTMENT": "Service"
+    "DEPARTMENT": "Service",
+    "PENDING": "En attente",
+    "RESCHEDULED": "Reprogrammé",
+    "FAILED": "Échec",
+    "UNKNOWN": "Inconnu",
+    "CHECK_IN_SUCCESS": "Patient enregistré",
+    "CHECK_IN_FAILED": "Échec de l'enregistrement"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -6786,7 +6846,16 @@
     "STATUS_COMPLETED": "Complétée",
     "STATUS_NOT_DONE": "Non faite",
     "STATUS_REFUSED": "Refusée",
-    "STATUS_ENTERED_IN_ERROR": "Saisie par erreur"
+    "STATUS_ENTERED_IN_ERROR": "Saisie par erreur",
+    "LANGUAGE_UNSPECIFIED": "Non précisé",
+    "LANGUAGES": {
+      "fr": "Français",
+      "en": "Anglais",
+      "es": "Espagnol",
+      "bm": "Bambara",
+      "dyu": "Dioula",
+      "mos": "Mooré"
+    }
   },
   "MATERNITY": {
     "LABOR_TAB": "Travail et accouchement",
@@ -8344,6 +8413,64 @@
     "TOAST": {
       "RENEWED": "Renouvellement enregistré",
       "RENEW_FAILED": "Impossible d'enregistrer le renouvellement"
-    }
+    },
+    "EXPIRY_HINT": "Laisser vide si la qualification n'expire pas (un diplôme).",
+    "NO_EXPIRY": "N'expire pas"
+  },
+  "REGISTRIES": {
+    "TITLE": "Registres de maladies",
+    "SUBTITLE": "Qui est inscrit dans chaque programme de soins, et qui est en retard pour une visite.",
+    "ENROLL": "Inscrire un patient",
+    "ENROLL_TITLE": "Inscrire au programme",
+    "PROGRAM": {
+      "HIV": "VIH",
+      "TB": "Tuberculose",
+      "MALARIA": "Paludisme",
+      "HYPERTENSION": "Hypertension",
+      "DIABETES": "Diabète",
+      "ANC": "Soins prénatals"
+    },
+    "STATUS": {
+      "ACTIVE": "Actif",
+      "COMPLETED": "Terminé",
+      "TRANSFERRED_OUT": "Transféré",
+      "LOST_TO_FOLLOW_UP": "Perdu de vue",
+      "WITHDRAWN": "Retiré",
+      "DECEASED": "Décédé"
+    },
+    "OVERDUE_COUNT": "{{count}} en retard de visite",
+    "OVERDUE_DAYS": "{{days}} j de retard",
+    "EVERY_N_DAYS": "Tous les {{days}} jours",
+    "COL_PATIENT": "Patient",
+    "COL_ENROLLED": "Inscrit le",
+    "COL_CADENCE": "Rythme des visites",
+    "COL_LAST_VISIT": "Dernière visite",
+    "COL_NEXT_VISIT": "Prochaine attendue",
+    "COL_STATUS": "Statut",
+    "NO_VISIT_YET": "Aucune visite encore",
+    "EMPTY": "Personne dans cette cohorte.",
+    "LOAD_FAILED": "Le registre n'a pas pu être chargé. Ce n'est pas un registre vide.",
+    "PATIENT": "Patient",
+    "PATIENT_SEARCH_PLACEHOLDER": "Rechercher par nom…",
+    "ENROLLED_ON": "Date d'inscription",
+    "ENROLLED_ON_HINT": "Laisser vide pour aujourd'hui. Une date passée reprend un registre papier.",
+    "CADENCE": "Jours entre les visites",
+    "CADENCE_HINT": "Selon le protocole du programme — il n'y a pas de valeur par défaut.",
+    "NOTES": "Notes",
+    "ENROLL_FIELDS_REQUIRED": "Sélectionnez un patient et saisissez le rythme des visites (1–365 jours).",
+    "ENROLLED": "Patient inscrit.",
+    "ENROLL_FAILED": "L'inscription n'a pas pu être enregistrée.",
+    "RECORD_VISIT": "Enregistrer une visite",
+    "VISIT_RECORDED": "Visite enregistrée.",
+    "CHANGE_STATUS": "Changer le statut",
+    "NEW_STATUS": "Nouveau statut",
+    "CLOSURE_REASON": "Motif",
+    "CLOSURE_REASON_PLACEHOLDER": "Le résultat que le programme rapporte — ex. recherché deux fois par téléphone, introuvable.",
+    "REOPEN_HINT": "La réouverture efface le motif de clôture. Utilisez les notes pour le contexte.",
+    "REASON_REQUIRED": "La clôture d'une inscription exige un motif.",
+    "STATUS_UPDATED": "Statut mis à jour.",
+    "ACTION_FAILED": "L'action n'a pas pu être effectuée.",
+    "COUNTS_UNAVAILABLE": "Comptes indisponibles — dernières valeurs connues affichées.",
+    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}."
   }
 }

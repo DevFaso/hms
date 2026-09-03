@@ -21,6 +21,23 @@ public class EmailServiceImpl implements EmailService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
+    // SMTP readiness inputs, mirroring StartupSubsystemLogger.announceMail():
+    // host required; auth=false permits a username-less relay; auth=true
+    // requires BOTH username and password. Used only to label delivery-report
+    // outcomes (NOT_CONFIGURED vs FAILED); sends are still attempted.
+    @Value("${spring.mail.host:}")
+    private String configuredMailHost;
+
+    @Value("${spring.mail.username:}")
+    private String configuredMailUsername;
+
+    @Value("${spring.mail.password:}")
+    private String configuredMailPassword;
+
+    /** Spring Boot's default when the property is unset is auth ON. */
+    @Value("${spring.mail.properties.mail.smtp.auth:true}")
+    private String smtpAuthProperty;
+
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
     private static final String GENERIC_GREETING = "there";
     /** Opening wrapper for the body column of every templated email. */
@@ -99,6 +116,20 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private final JavaMailSender mailSender;
+
+    @Override
+    public boolean deliversRealEmail() {
+        if (configuredMailHost == null || configuredMailHost.isBlank()) {
+            return false;
+        }
+        boolean authEnabled = !"false".equalsIgnoreCase(smtpAuthProperty);
+        if (!authEnabled) {
+            // Unauthenticated relay — credentials are not required.
+            return true;
+        }
+        return configuredMailUsername != null && !configuredMailUsername.isBlank()
+            && configuredMailPassword != null && !configuredMailPassword.isBlank();
+    }
 
     @Override
     public void sendAppointmentConfirmationEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone, String rescheduleLink, String cancelLink) {

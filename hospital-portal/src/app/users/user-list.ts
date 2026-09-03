@@ -7,6 +7,7 @@ import { UserService, UserSummary, AdminRegisterRequest } from '../services/user
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { deliveryWarningKeys } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
@@ -164,12 +165,21 @@ export class UserListComponent implements OnInit, OnDestroy {
     const term = this.searchTerm.trim();
     const hasServerFilter = !!this.roleFilter || !!term;
 
+    // Deleted rows are requested on this screen because it is the admin
+    // surface the Restore button lives on - without them the Deleted filter
+    // was a dead control while a ghost account could hold a unique email.
+    // The Deleted view itself pages SERVER-side (onlyDeleted): filtering a
+    // mixed 20-row page client-side could show "no matches" while the ghost
+    // sat on a later page - the invisible-ghost bug wearing a new hat.
+    const deletedView = this.statusFilter === 'deleted';
     const request$ = hasServerFilter
       ? this.userService.search(page, 20, {
           ...(this.roleFilter ? { role: this.roleFilter } : {}),
           ...(term ? { name: term } : {}),
+          includeDeleted: true,
+          ...(deletedView ? { onlyDeleted: true } : {}),
         })
-      : this.userService.list(page, 20);
+      : this.userService.list(page, 20, true, deletedView);
 
     request$.subscribe({
       next: (res) => {
@@ -237,9 +247,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       result = result.filter((u) => u.active && !u.deleted);
     } else if (this.statusFilter === 'inactive') {
       result = result.filter((u) => !u.active && !u.deleted);
-    } else if (this.statusFilter === 'deleted') {
-      result = result.filter((u) => u.deleted);
     }
+    // 'deleted' needs no client-side filtering: the page itself is the
+    // server-side ghost worklist (onlyDeleted).
+
     this.filtered.set(result);
   }
 
@@ -251,7 +262,10 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   /** Called when the status filter dropdown changes — client-side only re-filter. */
   onStatusFilterChange(): void {
-    this.applyFilter();
+    // The Deleted view is a different server-side query, so entering or
+    // leaving it restarts at page 0; active/inactive remain client-side
+    // refinements of the loaded page.
+    this.loadUsers(0);
   }
 
   /** Called when the search input changes — debounced 300 ms before reloading from backend. */
@@ -380,10 +394,18 @@ export class UserListComponent implements OnInit, OnDestroy {
       : this.userService.adminRegister(payload as AdminRegisterRequest);
 
     op.subscribe({
-      next: () => {
+      next: (saved) => {
         this.toast.success(
           this.translate.instant(existing ? 'USERS.TOAST.UPDATED' : 'USERS.TOAST.CREATED'),
         );
+        // The account exists either way — but a dead mail/SMS transport used
+        // to hide behind this very success toast. Warn the registrar so they
+        // know to use "Resend code" once the transport is fixed.
+        if (!existing) {
+          for (const key of deliveryWarningKeys(saved.activationDelivery)) {
+            this.toast.warning(this.translate.instant(key));
+          }
+        }
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
