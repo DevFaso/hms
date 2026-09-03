@@ -45,8 +45,12 @@ class KeycloakHospitalContextFilterTest {
     // IdleSessionGateTest + JwtAuthenticationFilter integration tests.
     private final IdleSessionTracker disabledTracker = mock(IdleSessionTracker.class);
     private final IdleSessionGate idleSessionGate = new IdleSessionGate(disabledTracker, "");
+    // Mockito's default Optional.empty() = "no local row", which matches the
+    // pre-gate behaviour every existing test in this class was written for.
+    private final com.example.hms.repository.UserRepository userRepository =
+            mock(com.example.hms.repository.UserRepository.class);
     private final KeycloakHospitalContextFilter filter =
-            new KeycloakHospitalContextFilter(resolver, idleSessionGate);
+            new KeycloakHospitalContextFilter(resolver, idleSessionGate, userRepository);
 
     @AfterEach
     void cleanup() {
@@ -172,6 +176,37 @@ class KeycloakHospitalContextFilterTest {
 
         assertThat(HospitalContextHolder.getContext())
                 .as("context must be cleared even when downstream throws")
+                .isEmpty();
+    }
+
+    @Test
+    void refusesKeycloakTokenWhenLocalAccountIsInactive() throws Exception {
+        // Option A: accounts start inactive until the emailed code is
+        // verified. The legacy path enforces that via
+        // CustomUserDetails.isEnabled(); this pins that a valid Keycloak
+        // token cannot outrun the local verification state.
+        com.example.hms.model.User localUser = new com.example.hms.model.User();
+        localUser.setActive(false);
+        org.mockito.Mockito.when(userRepository.findByUsernameIgnoreCase("dr.alice"))
+                .thenReturn(java.util.Optional.of(localUser));
+
+        UUID hospital = UUID.randomUUID();
+        Jwt jwt = jwt(Map.of(
+                "preferred_username", "dr.alice",
+                "hospital_id", hospital.toString(),
+                "role_assignments", List.of("DOCTOR@" + hospital)));
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+                jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR")), "dr.alice"));
+
+        FilterChain chain = mock(FilterChain.class);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(new MockHttpServletRequest(), response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        verify(chain, times(0)).doFilter(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        assertThat(HospitalContextHolder.getContext())
+                .as("no hospital context may be populated for a refused request")
                 .isEmpty();
     }
 

@@ -601,9 +601,10 @@ public class UserServiceImpl implements UserService {
         // activated up front while the system still mailed them a
         // verification code that gated nothing - activation theater. Login
         // is refused while inactive (CustomUserDetails.isEnabled), and
-        // verifyAssignmentByCode() activates BOTH the assignment and the
-        // user once the assignee proves they own the mailbox. The bootstrap
-        // first-super-admin path is separate and untouched.
+        // verifyAssignmentByCode() (assignee) and confirmAssignment()
+        // (registrar presenting the same code) both activate the assignment
+        // AND the user once someone proves possession of the emailed code.
+        // The bootstrap first-super-admin path is separate and untouched.
         u.setActive(false);
         if (isPatient) {
             // Patients additionally keep the legacy email-link token.
