@@ -8,6 +8,8 @@ import { PanelComponent } from './panel';
 import { PanelAssignment, PanelPage, PanelService } from '../services/panel.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
+import { HospitalService } from '../services/hospital.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -41,9 +43,11 @@ describe('PanelComponent', () => {
   let panelService: jasmine.SpyObj<PanelService>;
   let toast: jasmine.SpyObj<ToastService>;
   let adminRoles: boolean;
+  let scopedHospitalId: string | null;
 
   beforeEach(async () => {
     adminRoles = true;
+    scopedHospitalId = 'h1';
     panelService = jasmine.createSpyObj<PanelService>('PanelService', [
       'myPanel',
       'providerPanel',
@@ -64,6 +68,13 @@ describe('PanelComponent', () => {
       'warning',
     ]);
 
+    const hospitalSpy = jasmine.createSpyObj('HospitalService', [
+      'list',
+      'getMyHospitalAsResponse',
+    ]);
+    hospitalSpy.list.and.returnValue(of([]));
+    const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
+
     await TestBed.configureTestingModule({
       imports: [PanelComponent, TranslateModule.forRoot()],
       providers: [
@@ -74,11 +85,17 @@ describe('PanelComponent', () => {
           provide: PatientService,
           useValue: { search: () => of([]), lookup: () => of([]), list: () => of([]) },
         },
+        { provide: HospitalService, useValue: hospitalSpy },
+        { provide: HospitalScopeUrlService, useValue: scopeUrlSpy },
         {
           provide: RoleContextService,
           useValue: {
-            effectiveHospitalIdForRequest: () => 'h1',
+            effectiveHospitalIdForRequest: () => scopedHospitalId,
             activeHospitalId: 'h1',
+            isSuperAdmin: () => false,
+            globalView: () => scopedHospitalId === null,
+            selectedHospitalId: () => scopedHospitalId,
+            permittedHospitalIds: ['h1'],
             hasAnyActiveRole: () => adminRoles,
           },
         },
@@ -109,6 +126,29 @@ describe('PanelComponent', () => {
     fixture.detectChanges();
     expect(component.overviewFailed()).toBeTrue();
     expect(component.overviewRows().length).toBe(0);
+  });
+
+  it('a super-admin in GLOBAL view gets the pick-a-hospital state — no requests, no false hints', () => {
+    scopedHospitalId = null;
+    fixture.detectChanges();
+    expect(panelService.myPanel).not.toHaveBeenCalled();
+    expect(panelService.overview).not.toHaveBeenCalled();
+    expect(component.noStaffProfile()).toBeFalse();
+    expect(component.scopeReady()).toBeFalse();
+  });
+
+  it('the overview drilldown passes the row role so the cohort matches the count', () => {
+    panelService.providerPanel.and.returnValue(of(page([assignment({ panelRole: 'CHW' })])));
+    fixture.detectChanges();
+
+    component.openDrilldown({
+      providerStaffId: 's1',
+      providerName: 'Dr. Diallo',
+      panelRole: 'CHW',
+      activeCount: 3,
+    });
+
+    expect(panelService.providerPanel).toHaveBeenCalledWith('s1', 'CHW', 0, 200);
   });
 
   it('empanelment submits patient + staff + role and refreshes the panel', () => {

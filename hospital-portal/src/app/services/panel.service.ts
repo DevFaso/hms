@@ -64,8 +64,15 @@ export class PanelService {
     return this.http.get<PanelPage>('/panels/my', { params });
   }
 
-  providerPanel(staffId: string, page = 0, size = 50): Observable<PanelPage> {
-    const params = new HttpParams().set('page', String(page)).set('size', String(size));
+  /** `role` narrows to one panel role — the overview counts are per (provider, role). */
+  providerPanel(
+    staffId: string,
+    role: PanelRole | null,
+    page = 0,
+    size = 50,
+  ): Observable<PanelPage> {
+    let params = new HttpParams().set('page', String(page)).set('size', String(size));
+    if (role) params = params.set('role', role);
     return this.http.get<PanelPage>(`/panels/providers/${staffId}`, { params });
   }
 

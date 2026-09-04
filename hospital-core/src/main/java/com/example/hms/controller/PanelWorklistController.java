@@ -48,12 +48,15 @@ public class PanelWorklistController {
 
     @GetMapping("/providers/{staffId}")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
-    @Operation(summary = "One provider's live panel (admin)")
+    @Operation(summary = "One provider's live panel (admin)",
+        description = "Optional role narrows to one panel role — the overview counts are per "
+            + "(provider, role), so its drilldown passes the role to match.")
     public ResponseEntity<Page<PanelAssignmentResponseDTO>> providerPanel(
         @PathVariable UUID staffId,
+        @RequestParam(required = false) com.example.hms.enums.PanelRole role,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size) {
-        return ResponseEntity.ok(panelService.providerPanel(staffId, page, size));
+        return ResponseEntity.ok(panelService.providerPanel(staffId, role, page, size));
     }
 
     @GetMapping("/overview")

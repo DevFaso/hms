@@ -26,6 +26,8 @@ import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,35 +72,70 @@ public class PanelService {
         Patient patient = requirePatientInTenant(patientId, hospitalId);
         Staff provider = requireStaffInTenant(request.getProviderStaffId(), hospitalId);
 
-        LocalDate assignedOn = request.getAssignedOn() != null
-            ? request.getAssignedOn() : LocalDate.now(clock);
+        LocalDate today = LocalDate.now(clock);
+        LocalDate assignedOn = request.getAssignedOn() != null ? request.getAssignedOn() : today;
+        if (assignedOn.isAfter(today)) {
+            throw new BusinessException("The empanelment date cannot be in the future.");
+        }
 
         // Supersede, never refuse: the new owner is the fact being recorded,
-        // and the ended row keeps the old one.
-        panelRepository.findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
+        // and the ended row keeps the old one. The previous row ends on the
+        // TAKEOVER date, not "today" — a backfilled reassignment must not
+        // leave an overlap the history cannot answer.
+        PanelAssignment previous = panelRepository
+            .findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
                 patientId, hospitalId, request.getPanelRole(), PanelAssignmentStatus.ACTIVE)
-            .ifPresent(previous -> {
-                previous.setStatus(PanelAssignmentStatus.ENDED);
-                previous.setEndedOn(LocalDate.now(clock));
-                previous.setEndReason("Superseded by reassignment");
-                panelRepository.save(previous);
-            });
+            .orElse(null);
+        if (previous != null) {
+            if (previous.getAssignedOn() != null && assignedOn.isBefore(previous.getAssignedOn())) {
+                throw new BusinessException(
+                    "The empanelment date is before the current owner's start ("
+                        + previous.getAssignedOn() + ") — end that assignment first if the "
+                        + "history really needs rewriting.");
+            }
+            previous.setStatus(PanelAssignmentStatus.ENDED);
+            previous.setEndedOn(assignedOn);
+            previous.setEndReason("Superseded by reassignment");
+        }
 
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
-        PanelAssignment saved = panelRepository.save(PanelAssignment.builder()
-            .patient(patient)
-            .hospital(hospital)
-            .providerStaff(provider)
-            .panelRole(request.getPanelRole())
-            .status(PanelAssignmentStatus.ACTIVE)
-            .assignedOn(assignedOn)
-            .assignedBy(resolveCurrentStaff(hospitalId))
-            .build());
+        PanelAssignment saved;
+        // Concurrency story: @Version on the row plus V149's partial unique
+        // index are the real guards; two concurrent assigns cannot both win.
+        // This catch turns the loser's flush failure into a clean retryable
+        // refusal instead of a 500 (flushes forced so it surfaces HERE, not
+        // at commit outside the method).
+        try {
+            if (previous != null) {
+                panelRepository.saveAndFlush(previous);
+            }
+            saved = panelRepository.saveAndFlush(PanelAssignment.builder()
+                .patient(patient)
+                .hospital(hospital)
+                .providerStaff(provider)
+                .panelRole(request.getPanelRole())
+                .status(PanelAssignmentStatus.ACTIVE)
+                .assignedOn(assignedOn)
+                .assignedBy(resolveCurrentStaff(hospitalId))
+                .build());
+        } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
+            throw new BusinessException(
+                "Another empanelment change for this patient landed at the same time — "
+                    + "reload and retry.");
+        }
 
         log.info("Empanelment: patient {} -> staff {} as {} at hospital {}",
             patientId, provider.getId(), request.getPanelRole(), hospitalId);
         emitAudit(AuditEventType.PANEL_ASSIGNED, saved,
             "Empaneled as " + saved.getPanelRole() + " (from " + assignedOn + ")");
+        if (previous != null) {
+            // The superseded row changed state too; its transition gets its
+            // own actor-attributed trail entry, emitted only after the
+            // replacement was durably recorded.
+            emitAudit(AuditEventType.PANEL_ENDED, previous,
+                previous.getPanelRole() + " empanelment superseded by reassignment (ended "
+                    + previous.getEndedOn() + ")");
+        }
         return mapper.toDto(saved);
     }
 
@@ -113,7 +150,16 @@ public class PanelService {
         assignment.setStatus(PanelAssignmentStatus.ENDED);
         assignment.setEndedOn(LocalDate.now(clock));
         assignment.setEndReason(request.getReason().strip());
-        PanelAssignment saved = panelRepository.save(assignment);
+        PanelAssignment saved;
+        try {
+            // Flush inside the method so a concurrent end surfaces as the
+            // @Version conflict here — end-once means the second caller gets
+            // a refusal, not a silent overwrite of the first reason.
+            saved = panelRepository.saveAndFlush(assignment);
+        } catch (OptimisticLockingFailureException e) {
+            throw new BusinessException(
+                "The empanelment was changed at the same time by someone else — reload and retry.");
+        }
 
         log.info("Empanelment {} ended (patient {}, {})",
             assignmentId, patientId, assignment.getPanelRole());
@@ -145,11 +191,20 @@ public class PanelService {
         return providerPanelPage(self.getId(), hospitalId, page, size);
     }
 
+    /** {@code role} narrows the page to one panel role — the overview drills into a (provider, role) pair. */
     @Transactional(readOnly = true)
-    public Page<PanelAssignmentResponseDTO> providerPanel(UUID staffId, int page, int size) {
+    public Page<PanelAssignmentResponseDTO> providerPanel(UUID staffId, PanelRole role,
+                                                          int page, int size) {
         UUID hospitalId = requireHospital();
-        requireStaffInTenant(staffId, hospitalId);
-        return providerPanelPage(staffId, hospitalId, page, size);
+        requireProviderRowInTenant(staffId, hospitalId);
+        if (role == null) {
+            return providerPanelPage(staffId, hospitalId, page, size);
+        }
+        return panelRepository
+            .findByProviderStaff_IdAndHospital_IdAndPanelRoleAndStatusOrderByAssignedOnDesc(
+                staffId, hospitalId, role, PanelAssignmentStatus.ACTIVE,
+                PageRequest.of(Math.max(page, 0), clampPageSize(size)))
+            .map(mapper::toDto);
     }
 
     @Transactional(readOnly = true)
@@ -169,12 +224,15 @@ public class PanelService {
 
     private Page<PanelAssignmentResponseDTO> providerPanelPage(UUID staffId, UUID hospitalId,
                                                                int page, int size) {
-        int boundedSize = Math.min(Math.max(size, 1), MAX_PANEL_PAGE);
         return panelRepository
             .findByProviderStaff_IdAndHospital_IdAndStatusOrderByAssignedOnDesc(
                 staffId, hospitalId, PanelAssignmentStatus.ACTIVE,
-                PageRequest.of(Math.max(page, 0), boundedSize))
+                PageRequest.of(Math.max(page, 0), clampPageSize(size)))
             .map(mapper::toDto);
+    }
+
+    private static int clampPageSize(int size) {
+        return Math.clamp(size, 1, MAX_PANEL_PAGE);
     }
 
     private UUID requireHospital() {
@@ -192,8 +250,25 @@ public class PanelService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
     }
 
+    /**
+     * A panel OWNER must be a live staff row at the hospital — the portal's
+     * dropdown happens to list only active staff, but the API boundary must
+     * not accept a deactivated profile as the responsible clinician.
+     */
     private Staff requireStaffInTenant(UUID staffId, UUID hospitalId) {
         return staffRepository.findById(staffId)
+            .filter(Staff::isActive)
+            .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+    }
+
+    /**
+     * Read-side variant: viewing a panel does not require the provider to
+     * still be active — an admin reassigning a departed provider's panel
+     * must be able to SEE it.
+     */
+    private void requireProviderRowInTenant(UUID staffId, UUID hospitalId) {
+        staffRepository.findById(staffId)
             .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
     }
@@ -220,7 +295,7 @@ public class PanelService {
             auditService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(type)
                 .status(AuditStatus.SUCCESS)
-                .entityType("PanelAssignment")
+                .entityType("PANEL_ASSIGNMENT")
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
                 .userId(roleValidator.getCurrentUserId())
                 .userName(SecurityUtils.getCurrentUsername())

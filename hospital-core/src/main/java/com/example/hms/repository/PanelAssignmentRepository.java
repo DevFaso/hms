@@ -32,6 +32,12 @@ public interface PanelAssignmentRepository extends JpaRepository<PanelAssignment
     Page<PanelAssignment> findByProviderStaff_IdAndHospital_IdAndStatusOrderByAssignedOnDesc(
             UUID providerStaffId, UUID hospitalId, PanelAssignmentStatus status, Pageable pageable);
 
+    /** Role-filtered worklist: the overview drills into one (provider, role) pair. */
+    @EntityGraph(attributePaths = {"patient", "providerStaff"})
+    Page<PanelAssignment> findByProviderStaff_IdAndHospital_IdAndPanelRoleAndStatusOrderByAssignedOnDesc(
+            UUID providerStaffId, UUID hospitalId, PanelRole panelRole,
+            PanelAssignmentStatus status, Pageable pageable);
+
     /**
      * Admin overview: every provider with at least one ACTIVE assignment and
      * their live panel size, biggest panels first.

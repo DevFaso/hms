@@ -91,6 +91,15 @@ public class PanelAssignment extends BaseEntity {
     @Column(name = "ended_on")
     private LocalDate endedOn;
 
+    /**
+     * Optimistic lock. Two concurrent end/supersede transitions on the same
+     * row must not both succeed — the second flush fails and the service
+     * translates it into a clean "reload and retry" refusal.
+     */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     /** Patient-specific narrative, so encrypted at rest; TEXT because AES-GCM+Base64 outgrows the plaintext cap. */
     @Size(max = 500)
     @Column(name = "end_reason", columnDefinition = "TEXT")

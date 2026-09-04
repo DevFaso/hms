@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS clinical.panel_assignments (
     -- "provider left"), so the app encrypts it (EncryptedStringConverter)
     -- and the AES-GCM + Base64 payload outgrows the plaintext cap.
     end_reason            TEXT,
+    -- Optimistic lock: two concurrent supersedes/ends must not both report
+    -- success; the loser gets a clean retry, not a silent overwrite.
+    version               BIGINT       NOT NULL DEFAULT 0,
     created_by            VARCHAR(255),
     created_at            TIMESTAMP    NOT NULL DEFAULT now(),
     updated_at            TIMESTAMP    NOT NULL DEFAULT now(),
