@@ -26,7 +26,7 @@ import lombok.ToString;
  * the patient-update paths whenever the address actually changes — never
  * for the initial fill-in of a blank address.
  *
- * <p>Address lines are encrypted at rest exactly like their source columns
+ * <p>The address line is encrypted at rest exactly like its source column
  * on {@link Patient}.
  */
 @Entity
@@ -49,32 +49,19 @@ public class PatientAddressHistory extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_addr_hist_patient"))
     private Patient patient;
 
-    /** The composed mailing address, as it stood. */
+    /**
+     * The composed mailing address as it stood — the line a clinician
+     * reads. Deliberately NOT a column-for-column clone of the source: a
+     * superseded address has no structured query surface, so the snapshot
+     * carries the composed line plus city/country for coarse filtering.
+     */
     @Column(name = "address", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)
     private String address;
 
-    @Size(max = 255)
-    @Column(name = "address_line1", columnDefinition = "TEXT")
-    @Convert(converter = EncryptedStringConverter.class)
-    private String addressLine1;
-
-    @Size(max = 255)
-    @Column(name = "address_line2", columnDefinition = "TEXT")
-    @Convert(converter = EncryptedStringConverter.class)
-    private String addressLine2;
-
     @Size(max = 100)
     @Column(name = "city", length = 100)
     private String city;
-
-    @Size(max = 100)
-    @Column(name = "state", length = 100)
-    private String state;
-
-    @Size(max = 100)
-    @Column(name = "zip_code", length = 100)
-    private String zipCode;
 
     @Size(max = 100)
     @Column(name = "country", length = 100)

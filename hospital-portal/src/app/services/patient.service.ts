@@ -4,12 +4,9 @@ import { Observable } from 'rxjs';
 
 export interface PatientAddressHistoryEntry {
   id: string;
+  /** The composed address line as it stood. */
   address?: string;
-  addressLine1?: string;
-  addressLine2?: string;
   city?: string;
-  state?: string;
-  zipCode?: string;
   country?: string;
   /** When this address stopped being current. */
   replacedAt: string;

@@ -85,7 +85,7 @@ class PatientAddressHistoryHookTest {
             ArgumentCaptor.forClass(PatientAddressHistory.class);
         verify(addressHistoryRepository).save(captor.capture());
         PatientAddressHistory history = captor.getValue();
-        assertThat(history.getAddressLine1()).isEqualTo("Secteur 4, Rue 12");
+        assertThat(history.getAddress()).contains("Secteur 4, Rue 12");
         assertThat(history.getCity()).isEqualTo("Bobo-Dioulasso");
         assertThat(history.getPatient()).isSameAs(patient);
         // The CURRENT address on the patient is the new one.

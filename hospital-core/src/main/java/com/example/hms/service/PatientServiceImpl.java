@@ -2549,11 +2549,7 @@ public class PatientServiceImpl implements PatientService {
             .map(h -> com.example.hms.payload.dto.PatientAddressHistoryDTO.builder()
                 .id(h.getId())
                 .address(h.getAddress())
-                .addressLine1(h.getAddressLine1())
-                .addressLine2(h.getAddressLine2())
                 .city(h.getCity())
-                .state(h.getState())
-                .zipCode(h.getZipCode())
                 .country(h.getCountry())
                 .replacedAt(h.getCreatedAt())
                 .build())
@@ -2607,14 +2603,17 @@ public class PatientServiceImpl implements PatientService {
         if (before.isBlank() || before.sameLocationAs(AddressSnapshot.of(patient))) {
             return;
         }
+        // The snapshot stores the composed line a clinician reads. The stored
+        // patient.address can lag the parts (the full-form path sets it from
+        // the DTO, which may omit it), so compose from the parts when blank.
+        String composed = before.address() != null && !before.address().isBlank()
+            ? before.address()
+            : buildMailingAddress(before.line1(), before.line2(), before.city(),
+                before.state(), before.zip(), before.country());
         addressHistoryRepository.save(com.example.hms.model.PatientAddressHistory.builder()
             .patient(patient)
-            .address(before.address())
-            .addressLine1(before.line1())
-            .addressLine2(before.line2())
+            .address(composed)
             .city(before.city())
-            .state(before.state())
-            .zipCode(before.zip())
             .country(before.country())
             .build());
         log.info("Address history recorded for patient {} — previous address superseded.",

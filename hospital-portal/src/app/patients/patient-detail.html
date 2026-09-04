@@ -324,7 +324,7 @@
               <ul>
                 @for (entry of addressHistory(); track entry.id) {
                   <li>
-                    <span class="value">{{ entry.address ?? entry.addressLine1 ?? '—' }}</span>
+                    <span class="value">{{ entry.address ?? entry.city ?? '—' }}</span>
                     <span class="until">
                       {{
                         'PATIENTS.ADDRESS_UNTIL'
