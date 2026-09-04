@@ -1,0 +1,293 @@
+<div class="panel-page">
+  <header class="page-header">
+    <h1>{{ 'PANEL.TITLE' | translate }}</h1>
+    <div class="header-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
+      @if (scopeReady()) {
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="open-assign"
+          (click)="openAssign($event)"
+        >
+          <span class="material-symbols-outlined">person_add</span>
+          {{ 'PANEL.ASSIGN' | translate }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (!scopeReady()) {
+    <!-- Super-admin global view: every panel read is hospital-pinned
+         server-side, so there is nothing to ask until the chip pins one. -->
+    <section class="card">
+      <p class="hint">{{ 'PANEL.PICK_HOSPITAL' | translate }}</p>
+    </section>
+  } @else {
+    <!-- ── My panel ─────────────────────────────────────────────────── -->
+    <section class="card">
+      <h2>{{ 'PANEL.MY_PANEL' | translate }}</h2>
+      @if (noStaffProfile()) {
+        <p class="hint">{{ 'PANEL.NO_STAFF_PROFILE' | translate }}</p>
+      } @else if (myPanelLoading()) {
+        <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (myPanelRows().length === 0) {
+        <p class="hint">{{ 'PANEL.EMPTY' | translate }}</p>
+      } @else {
+        <p class="count-line">
+          {{ 'PANEL.COUNT' | translate: { count: myPanelTotal() } }}
+        </p>
+        @if (myPanelTruncated()) {
+          <p class="hint">
+            {{
+              'PANEL.SHOWING_FIRST'
+                | translate: { shown: myPanelRows().length, total: myPanelTotal() }
+            }}
+          </p>
+        }
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'PANEL.PATIENT' | translate }}</th>
+                <th>{{ 'PANEL.ROLE' | translate }}</th>
+                <th>{{ 'PANEL.SINCE' | translate }}</th>
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of myPanelRows(); track row.id) {
+                <tr>
+                  <td>
+                    <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                  </td>
+                  <td>{{ roleKey(row.panelRole) | translate }}</td>
+                  <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
+                  <td>
+                    <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
+                      {{ 'PANEL.END' | translate }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <!-- ── Admin overview ───────────────────────────────────────────── -->
+    @if (isAdmin()) {
+      <section class="card">
+        <h2>{{ 'PANEL.OVERVIEW' | translate }}</h2>
+        @if (overviewFailed()) {
+          <p class="hint error-hint">{{ 'PANEL.OVERVIEW_UNAVAILABLE' | translate }}</p>
+        } @else if (overviewRows().length === 0) {
+          <p class="hint">{{ 'PANEL.OVERVIEW_EMPTY' | translate }}</p>
+        } @else {
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ 'PANEL.PROVIDER' | translate }}</th>
+                  <th>{{ 'PANEL.ROLE' | translate }}</th>
+                  <th class="num">{{ 'PANEL.ACTIVE_COUNT' | translate }}</th>
+                  <th>
+                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of overviewRows(); track row.providerStaffId + row.panelRole) {
+                  <tr>
+                    <td>{{ row.providerName }}</td>
+                    <td>{{ roleKey(row.panelRole) | translate }}</td>
+                    <td class="num">{{ row.activeCount }}</td>
+                    <td>
+                      <!-- A real button, not a clickable row: assistive tech
+                           gets an action with a name, Space activates it. -->
+                      <button type="button" class="btn-link" (click)="openDrilldown(row)">
+                        {{ 'PANEL.VIEW' | translate }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (drilldownProvider(); as drill) {
+          <h3>
+            {{ 'PANEL.DRILLDOWN' | translate: { name: drill.providerName } }} —
+            {{ roleKey(drill.panelRole) | translate }}
+          </h3>
+          @if (drilldownTruncated()) {
+            <p class="hint">
+              {{
+                'PANEL.SHOWING_FIRST'
+                  | translate: { shown: drilldownRows().length, total: drilldownTotal() }
+              }}
+            </p>
+          }
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ 'PANEL.PATIENT' | translate }}</th>
+                  <th>{{ 'PANEL.SINCE' | translate }}</th>
+                  <th>
+                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of drilldownRows(); track row.id) {
+                  <tr>
+                    <td>
+                      <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                    </td>
+                    <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
+                    <td>
+                      <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
+                        {{ 'PANEL.END' | translate }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  }
+</div>
+
+<!-- ── Empanelment modal (registries dialog pattern) ─────────────────── -->
+@if (showAssign()) {
+  <div class="modal-backdrop" (click)="closeAssign()" aria-hidden="true"></div>
+  <div
+    #assignDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="'PANEL.ASSIGN' | translate"
+    (keydown.escape)="closeAssign()"
+    (keydown.tab)="trapTab($any($event), assignDialog)"
+    data-testid="assign-modal"
+  >
+    <h2>{{ 'PANEL.ASSIGN' | translate }}</h2>
+    <p class="hint">{{ 'PANEL.ASSIGN_HINT' | translate }}</p>
+
+    <label class="field" for="panel-patient-picker">
+      <span>{{ 'PANEL.PATIENT' | translate }} *</span>
+    </label>
+    <app-patient-picker
+      inputId="panel-patient-picker"
+      [hospitalId]="pickerHospitalId()"
+      [selected]="selectedPatient()"
+      (selectedChange)="onPatientSelected($event)"
+    />
+
+    <label class="field">
+      <span>{{ 'PANEL.STAFF_FILTER' | translate }}</span>
+      <input
+        type="text"
+        name="panelStaffFilter"
+        [ngModel]="staffFilter()"
+        (ngModelChange)="staffFilter.set($event)"
+        [attr.placeholder]="'PANEL.STAFF_FILTER_PLACEHOLDER' | translate"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'PANEL.PROVIDER' | translate }} *</span>
+      <select name="panelStaff" [ngModel]="formStaffId()" (ngModelChange)="formStaffId.set($event)">
+        <option value="">{{ 'PANEL.PROVIDER_PLACEHOLDER' | translate }}</option>
+        @for (s of filteredStaff(); track s.id) {
+          <option [value]="s.id">{{ s.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>{{ 'PANEL.ROLE' | translate }} *</span>
+      <select name="panelRole" [ngModel]="formRole()" (ngModelChange)="formRole.set($event)">
+        @for (r of roles; track r) {
+          <option [value]="r">{{ roleKey(r) | translate }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>{{ 'PANEL.SINCE' | translate }}</span>
+      <input
+        type="date"
+        name="panelAssignedOn"
+        [ngModel]="formAssignedOn()"
+        (ngModelChange)="formAssignedOn.set($event)"
+      />
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeAssign()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="submit-assign"
+        [disabled]="!selectedPatient() || !formStaffId() || saving()"
+        (click)="submitAssign()"
+      >
+        {{ 'PANEL.ASSIGN_CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── End modal (registries dialog pattern) ─────────────────────────── -->
+@if (ending(); as row) {
+  <div class="modal-backdrop" (click)="closeEnd()" aria-hidden="true"></div>
+  <div
+    #endDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="'PANEL.END' | translate"
+    (keydown.escape)="closeEnd()"
+    (keydown.tab)="trapTab($any($event), endDialog)"
+    data-testid="end-modal"
+  >
+    <h2>{{ 'PANEL.END_TITLE' | translate: { name: row.patientName } }}</h2>
+    <p class="hint">{{ 'PANEL.END_HINT' | translate }}</p>
+    <label class="field">
+      <span>{{ 'PANEL.END_REASON' | translate }} *</span>
+      <textarea
+        name="panelEndReason"
+        rows="3"
+        maxlength="500"
+        [ngModel]="endReason()"
+        (ngModelChange)="endReason.set($event)"
+      ></textarea>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeEnd()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary danger"
+        [disabled]="!endReason().trim() || saving()"
+        (click)="submitEnd()"
+      >
+        {{ 'PANEL.END_CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}

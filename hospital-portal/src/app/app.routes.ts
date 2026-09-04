@@ -348,6 +348,24 @@ export const routes: Routes = [
         loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
       },
 
+      // Panel management / empanelment (Tier 2 item 37). Role set mirrors
+      // the @PreAuthorize on PatientPanelController / PanelWorklistController
+      // exactly - the same clinical write set as /registries.
+      {
+        path: 'panels',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./panel/panel').then((m) => m.PanelComponent),
+      },
+
       // Staff
       {
         path: 'staff',
