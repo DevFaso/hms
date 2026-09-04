@@ -20,8 +20,12 @@
 --   DROP TABLE clinical.patient_address_history;
 -- =============================================================================
 
+-- TEXT, not VARCHAR(100): self-reported free text is patient-specific
+-- narrative, so the app encrypts it (EncryptedStringConverter) and the
+-- AES-GCM + Base64 payload outgrows the 100-character plaintext cap the
+-- DTOs enforce.
 ALTER TABLE clinical.patients
-    ADD COLUMN IF NOT EXISTS ethnicity VARCHAR(100);
+    ADD COLUMN IF NOT EXISTS ethnicity TEXT;
 
 COMMENT ON COLUMN clinical.patients.ethnicity IS
     'Self-reported, free text, optional (Tier 2 item 38). Deliberately not '
@@ -43,7 +47,9 @@ CREATE TABLE IF NOT EXISTS clinical.patient_address_history (
     updated_at     TIMESTAMP    NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_patient_address_history PRIMARY KEY (id),
-    CONSTRAINT fk_addr_hist_patient FOREIGN KEY (patient_id) REFERENCES clinical.patients(id)
+    -- CASCADE: history rows are patient-owned; without it the documented
+    -- deletePatient path fails on the first patient who ever moved.
+    CONSTRAINT fk_addr_hist_patient FOREIGN KEY (patient_id) REFERENCES clinical.patients(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_addr_hist_patient

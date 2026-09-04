@@ -53,6 +53,7 @@ public class PatientRequestDTO {
     private String country;
 
     /** Self-reported free text — optional (Tier 2 item 38). */
+    @Size(max = 100, message = "Ethnicity cannot exceed 100 characters.")
     private String ethnicity;
 
     @NotBlank(message = "Primary phone number is required.")
