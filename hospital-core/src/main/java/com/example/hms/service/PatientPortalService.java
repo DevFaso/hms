@@ -58,6 +58,14 @@ public interface PatientPortalService {
     PatientProfileDTO getMyProfile(Authentication auth);
     PatientProfileDTO updateMyProfile(Authentication auth, PatientProfileUpdateDTO dto);
 
+    /** File a release-of-information request as the patient (Tier 2 item 39b). */
+    com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
+            Authentication auth, com.example.hms.payload.dto.roi.RoiRequestCreateDTO dto);
+
+    /** The patient's own ROI requests across hospitals, newest first. */
+    java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
+            Authentication auth);
+
     // ── Health summary (aggregated dashboard) ────────────────────────────
     HealthSummaryDTO getHealthSummary(Authentication auth, Locale locale);
 

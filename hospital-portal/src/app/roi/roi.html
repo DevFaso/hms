@@ -1,0 +1,292 @@
+<div class="roi-page">
+  <header class="page-header">
+    <h1>{{ 'ROI.TITLE' | translate }}</h1>
+    <div class="header-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
+      @if (scopeReady()) {
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="open-intake"
+          (click)="openIntake($event)"
+        >
+          <span class="material-symbols-outlined">post_add</span>
+          {{ 'ROI.LOG_REQUEST' | translate }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (!scopeReady()) {
+    <section class="card">
+      <p class="hint">{{ 'ROI.PICK_HOSPITAL' | translate }}</p>
+    </section>
+  } @else {
+    <div class="tabs" role="tablist">
+      @for (s of statuses; track s) {
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          [class.active]="activeStatus() === s"
+          [attr.aria-selected]="activeStatus() === s"
+          (click)="setStatus(s)"
+        >
+          {{ statusKey(s) | translate }}
+        </button>
+      }
+    </div>
+
+    <section class="card">
+      @if (loadFailed()) {
+        <p class="hint error-hint">{{ 'ROI.LOAD_FAILED' | translate }}</p>
+      } @else if (loading()) {
+        <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (rows().length === 0) {
+        <p class="hint">{{ 'ROI.EMPTY' | translate }}</p>
+      } @else {
+        @if (truncated()) {
+          <p class="hint">
+            {{ 'ROI.SHOWING_FIRST' | translate: { shown: rows().length, total: total() } }}
+          </p>
+        }
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'ROI.PATIENT' | translate }}</th>
+                <th>{{ 'ROI.REQUESTER' | translate }}</th>
+                <th>{{ 'ROI.SCOPE' | translate }}</th>
+                <th>{{ 'ROI.REQUESTED_ON' | translate }}</th>
+                @if (activeStatus() !== 'PENDING') {
+                  <th>{{ 'ROI.DECIDED' | translate }}</th>
+                }
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.id) {
+                <tr>
+                  <td>
+                    <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                  </td>
+                  <td>
+                    {{ requesterKey(row.requesterType) | translate }}
+                    @if (row.requesterName) {
+                      — {{ row.requesterName }}
+                    }
+                  </td>
+                  <td class="scope-cell">{{ row.scopeDescription }}</td>
+                  <td>{{ row.requestedOn | date: 'mediumDate' }}</td>
+                  @if (activeStatus() !== 'PENDING') {
+                    <td>
+                      {{ row.decidedAt | date: 'mediumDate' }}
+                      @if (row.decidedByName) {
+                        · {{ row.decidedByName }}
+                      }
+                    </td>
+                  }
+                  <td class="actions-cell">
+                    @if (row.status === 'PENDING') {
+                      @if (canDecide()) {
+                        <button
+                          type="button"
+                          class="btn-link"
+                          data-testid="fulfil-btn"
+                          (click)="openDecision(row, 'fulfil', $event)"
+                        >
+                          {{ 'ROI.FULFIL' | translate }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-link danger"
+                          (click)="openDecision(row, 'deny', $event)"
+                        >
+                          {{ 'ROI.DENY' | translate }}
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="openDecision(row, 'cancel', $event)"
+                      >
+                        {{ 'ROI.CANCEL' | translate }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>
+
+<!-- ── Intake modal (registries dialog pattern) ──────────────────────── -->
+@if (showIntake()) {
+  <div class="modal-backdrop" (click)="closeIntake()" aria-hidden="true"></div>
+  <div
+    #intakeDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="'ROI.LOG_REQUEST' | translate"
+    (keydown.escape)="closeIntake()"
+    (keydown.tab)="trapTab($any($event), intakeDialog)"
+    data-testid="intake-modal"
+  >
+    <h2>{{ 'ROI.LOG_REQUEST' | translate }}</h2>
+    <p class="hint">{{ 'ROI.LOG_HINT' | translate }}</p>
+
+    <label class="field" for="roi-patient-picker">
+      <span>{{ 'ROI.PATIENT' | translate }} *</span>
+    </label>
+    <app-patient-picker
+      inputId="roi-patient-picker"
+      [hospitalId]="pickerHospitalId()"
+      [selected]="selectedPatient()"
+      (selectedChange)="onPatientSelected($event)"
+    />
+
+    <label class="field">
+      <span>{{ 'ROI.REQUESTER_TYPE' | translate }} *</span>
+      <select
+        name="roiRequesterType"
+        [ngModel]="formRequesterType()"
+        (ngModelChange)="formRequesterType.set($event)"
+      >
+        @for (t of requesterTypes; track t) {
+          <option [value]="t">{{ requesterKey(t) | translate }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>{{ 'ROI.REQUESTER_NAME' | translate }}</span>
+      <input
+        type="text"
+        name="roiRequesterName"
+        maxlength="200"
+        [ngModel]="formRequesterName()"
+        (ngModelChange)="formRequesterName.set($event)"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'ROI.REQUESTER_CONTACT' | translate }}</span>
+      <input
+        type="text"
+        name="roiRequesterContact"
+        maxlength="500"
+        [ngModel]="formRequesterContact()"
+        (ngModelChange)="formRequesterContact.set($event)"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'ROI.PURPOSE' | translate }} *</span>
+      <textarea
+        name="roiPurpose"
+        rows="2"
+        maxlength="500"
+        [ngModel]="formPurpose()"
+        (ngModelChange)="formPurpose.set($event)"
+      ></textarea>
+    </label>
+
+    <label class="field">
+      <span>{{ 'ROI.SCOPE' | translate }} *</span>
+      <input
+        type="text"
+        name="roiScope"
+        maxlength="500"
+        [ngModel]="formScope()"
+        (ngModelChange)="formScope.set($event)"
+        [attr.placeholder]="'ROI.SCOPE_PLACEHOLDER' | translate"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'ROI.REQUESTED_ON' | translate }}</span>
+      <input
+        type="date"
+        name="roiRequestedOn"
+        [ngModel]="formRequestedOn()"
+        (ngModelChange)="formRequestedOn.set($event)"
+      />
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeIntake()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="submit-intake"
+        [disabled]="!intakeValid() || saving()"
+        (click)="submitIntake()"
+      >
+        {{ 'ROI.LOG_CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── Decision modal ────────────────────────────────────────────────── -->
+@if (deciding(); as d) {
+  <div class="modal-backdrop" (click)="closeDecision()" aria-hidden="true"></div>
+  <div
+    #decisionDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="'ROI.' + d.kind.toUpperCase() | translate"
+    (keydown.escape)="closeDecision()"
+    (keydown.tab)="trapTab($any($event), decisionDialog)"
+    data-testid="decision-modal"
+  >
+    <h2>{{ 'ROI.' + d.kind.toUpperCase() | translate }} — {{ d.row.patientName }}</h2>
+    @if (d.kind === 'fulfil') {
+      <p class="hint">{{ 'ROI.FULFIL_HINT' | translate }}</p>
+    } @else if (d.kind === 'deny') {
+      <p class="hint">{{ 'ROI.DENY_HINT' | translate }}</p>
+    }
+    <label class="field">
+      <span>
+        {{ 'ROI.DECISION_NOTE' | translate }}
+        @if (d.kind === 'deny') {
+          *
+        }
+      </span>
+      <textarea
+        name="roiDecisionNote"
+        rows="3"
+        maxlength="500"
+        [ngModel]="decisionNote()"
+        (ngModelChange)="decisionNote.set($event)"
+      ></textarea>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeDecision()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        [class.danger]="d.kind === 'deny'"
+        data-testid="submit-decision"
+        [disabled]="!decisionValid() || saving()"
+        (click)="submitDecision()"
+      >
+        {{ 'ROI.' + d.kind.toUpperCase() | translate }}
+      </button>
+    </div>
+  </div>
+}

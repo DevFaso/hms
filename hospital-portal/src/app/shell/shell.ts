@@ -543,6 +543,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        // Tier 2 item 39b. Same mirroring rule; RECEPTIONIST included -
+        // the desk is where paper requests arrive.
+        icon: 'outgoing_mail',
+        label: 'Release of Information',
+        translationKey: 'NAV.ROI',
+        route: '/roi',
+        roles: [
+          'ROLE_RECEPTIONIST',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'pregnant_woman',
         label: 'Maternity',
         translationKey: 'NAV.MATERNITY',

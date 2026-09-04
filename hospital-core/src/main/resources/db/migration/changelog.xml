@@ -2268,4 +2268,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V151 - release-of-information requests (Tier 2 item 39b): the
+         request side of the V141 disclosure accounting. Encrypted
+         requester/purpose/scope/decision narrative, optimistic-lock
+         version column, worklist index. Idempotent per the
+         mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V151-roi-requests" author="hms-team" runOnChange="false">
+        <sqlFile path="V151__roi_requests.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

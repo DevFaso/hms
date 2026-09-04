@@ -1449,11 +1449,23 @@ that exists rather than inventing one.
   label. The portal's `catchError(() => of([]))` is gone: an outage used to
   render as *"Nobody has accessed your records yet"*, an affirmatively false
   statement about a privacy-critical fact.
-- [ ] 39b. **Release of information — request workflow.** The other half of
-  the original #39. A patient or an authorised third party formally requests
-  a copy of the record; staff triage, fulfil or deny, and the fulfilment is
-  itself a disclosure that lands in the #39 accounting. Nothing exists for
-  the request side; the accounting it would feed now does.
+- [x] 39b. **Release of information — request workflow.**
+  ✅ DONE 2026-09-04 (`feat/roi-requests`, V151). The other half of the
+  original #39, wired into it by construction: fulfilment emits a
+  PATIENT_EXPORT audit row keyed by patient, which the V141 whitelist
+  classifies as COPY_RELEASED — every fulfilled request lands on the
+  patient's own "Who Viewed My Records" with no further wiring; denials
+  stay off it (nothing was disclosed). `clinical.roi_requests` (encrypted
+  requester/purpose/scope/decision narrative; @Version per the #549
+  concurrency lesson; NO delete cascade — a request is a record of an
+  exchange with an outside party and must survive scrutiny). Intake under
+  /patients/{id}/roi-requests (the desk logs paper requests; RECEPTIONIST
+  in), triage worklist + fulfil/deny/cancel under /roi-requests (decisions
+  tightened to DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN; deny REQUIRES the
+  reason — it is the outcome the requester is told). Patients file and
+  track their own via /me/patient/roi-requests. Portal /roi page:
+  status-tabbed queue oldest-first, intake on the shared picker, scope
+  chip for super-admins.
 - [x] 40. **Provider credentialing renewal.**
   ✅ DONE 2026-08-26 (**PR #525** `feature/provider-credentialing`, V140).
   The gap was worse than "nothing verifies": `license_number` and
