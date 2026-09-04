@@ -2242,4 +2242,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V149 - panel management / empanelment (Tier 2 item 37). New
+         clinical.panel_assignments table: one ACTIVE panel owner
+         (primary provider or CHW) per patient/hospital/role, enforced by
+         a partial unique index; ENDED rows keep the reassignment
+         history. Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V149-panel-assignments" author="hms-team" runOnChange="false">
+        <sqlFile path="V149__panel_assignments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

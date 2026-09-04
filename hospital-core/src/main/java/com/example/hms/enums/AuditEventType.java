@@ -156,6 +156,11 @@ public enum AuditEventType {
     // lesson in the pr-review-response skill.
     TENANT_SCHEMA_PROVISIONED,
 
+    // Panel management / empanelment (Tier 2 item 37). Past-tense per the
+    // naming convention above.
+    PANEL_ASSIGNED,
+    PANEL_ENDED,
+
     OTHER
 }
 

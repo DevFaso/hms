@@ -86,6 +86,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/emar': 'CARE',
   '/patient-education': 'CARE',
   '/registries': 'CARE',
+  '/panels': 'CARE',
   '/consent-management': 'CARE',
 
   // ── MEDICATIONS & PHARMACY ───────────────────────────────────────────
