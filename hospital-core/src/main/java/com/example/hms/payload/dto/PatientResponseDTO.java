@@ -34,6 +34,9 @@ public class PatientResponseDTO {
     private String zipCode;
     private String postalCode;
     private String country;
+
+    /** Self-reported free text — optional (Tier 2 item 38). */
+    private String ethnicity;
     private String phoneNumberPrimary;
     private String phoneNumberSecondary;
     private String email;

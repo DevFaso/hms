@@ -45,6 +45,9 @@ public class PatientProfileUpdateRequestDTO {
     @Size(max = 100)
     private String country;
 
+    /** Self-reported free text — optional (Tier 2 item 38). */
+    private String ethnicity;
+
     @Size(max = 100)
     private String emergencyContactName;
 

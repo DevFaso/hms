@@ -210,6 +210,7 @@ public class PatientServiceImpl implements PatientService {
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
     private final PhoneVerificationService phoneVerificationService;
     private final PatientMapper patientMapper;
     private final MessageSource messageSource;
@@ -372,7 +373,9 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
 
+        AddressSnapshot before = AddressSnapshot.of(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
+        recordAddressChangeIfAny(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
 
         return buildPatientDto(updatedPatient, dto.getHospitalId());
@@ -394,8 +397,10 @@ public class PatientServiceImpl implements PatientService {
         }
 
         boolean updated = false;
+        AddressSnapshot before = AddressSnapshot.of(patient);
 
         updated |= applyNullable(request.getPhoneNumberPrimary(), patient::setPhoneNumberPrimary);
+        updated |= applyNullable(request.getEthnicity(), patient::setEthnicity);
         updated |= applyNullable(request.getPhoneNumberSecondary(), patient::setPhoneNumberSecondary);
         updated |= applyNullable(request.getEmail(), patient::setEmail);
 
@@ -417,6 +422,7 @@ public class PatientServiceImpl implements PatientService {
                 patient.getZipCode(),
                 patient.getCountry()
             ));
+            recordAddressChangeIfAny(patient, before);
         }
 
         updated |= applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
@@ -2528,6 +2534,91 @@ public class PatientServiceImpl implements PatientService {
         String normalized = trimToNull(value);
         setter.accept(normalized);
         return true;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.PatientAddressHistoryDTO> getAddressHistory(
+            UUID patientId, UUID hospitalId) {
+        // Same tenancy stance as the other per-patient reads: the patient
+        // must be registered at the caller's resolved hospital.
+        patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+        ensurePatientRegistered(patientId, hospitalId);
+        return addressHistoryRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
+            .map(h -> com.example.hms.payload.dto.PatientAddressHistoryDTO.builder()
+                .id(h.getId())
+                .address(h.getAddress())
+                .addressLine1(h.getAddressLine1())
+                .addressLine2(h.getAddressLine2())
+                .city(h.getCity())
+                .state(h.getState())
+                .zipCode(h.getZipCode())
+                .country(h.getCountry())
+                .replacedAt(h.getCreatedAt())
+                .build())
+            .toList();
+    }
+
+    /**
+     * The address as it stood before a mutation — so the update paths can
+     * tell a real move from a no-op or a first fill-in (Tier 2 item 38).
+     */
+    record AddressSnapshot(String address, String line1, String line2, String city,
+                           String state, String zip, String country) {
+
+        static AddressSnapshot of(Patient p) {
+            return new AddressSnapshot(p.getAddress(), p.getAddressLine1(), p.getAddressLine2(),
+                p.getCity(), p.getState(), p.getZipCode(), p.getCountry());
+        }
+
+        boolean isBlank() {
+            return isBlank(address) && isBlank(line1) && isBlank(line2)
+                && isBlank(city) && isBlank(state) && isBlank(zip) && isBlank(country);
+        }
+
+        /**
+         * Identity is the COMPONENT fields only: the composed {@code address}
+         * string is derived formatting, and buildMailingAddress may compose
+         * it differently from what was stored — a re-statement of the same
+         * components must not read as a move.
+         */
+        boolean sameLocationAs(AddressSnapshot other) {
+            return java.util.Objects.equals(line1, other.line1)
+                && java.util.Objects.equals(line2, other.line2)
+                && java.util.Objects.equals(city, other.city)
+                && java.util.Objects.equals(state, other.state)
+                && java.util.Objects.equals(zip, other.zip)
+                && java.util.Objects.equals(country, other.country);
+        }
+
+        private static boolean isBlank(String v) {
+            return v == null || v.isBlank();
+        }
+    }
+
+    /**
+     * Writes one history row holding the OLD address when the patient's
+     * address actually changed. The initial fill-in of a blank address is
+     * not a move and records nothing; an update that re-states the same
+     * address records nothing.
+     */
+    private void recordAddressChangeIfAny(Patient patient, AddressSnapshot before) {
+        if (before.isBlank() || before.sameLocationAs(AddressSnapshot.of(patient))) {
+            return;
+        }
+        addressHistoryRepository.save(com.example.hms.model.PatientAddressHistory.builder()
+            .patient(patient)
+            .address(before.address())
+            .addressLine1(before.line1())
+            .addressLine2(before.line2())
+            .city(before.city())
+            .state(before.state())
+            .zipCode(before.zip())
+            .country(before.country())
+            .build());
+        log.info("Address history recorded for patient {} — previous address superseded.",
+            patient.getId());
     }
 
     private String buildMailingAddress(String line1, String line2, String city, String state, String postalCode, String country) {

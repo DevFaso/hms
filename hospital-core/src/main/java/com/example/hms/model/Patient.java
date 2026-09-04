@@ -105,6 +105,13 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Size(max = 100) @Column(name = "country", length = 100)
     private String country;
 
+    /**
+     * Self-reported, free text, optional (Tier 2 item 38). Deliberately not
+     * an enum — the patient's own words, never a schema-invented taxonomy.
+     */
+    @Size(max = 100) @Column(name = "ethnicity", length = 100)
+    private String ethnicity;
+
     @NotBlank @Size(max = 100)
     @Column(name = "phone_number_primary", length = 100, nullable = false, unique = true)
     private String phoneNumberPrimary;
