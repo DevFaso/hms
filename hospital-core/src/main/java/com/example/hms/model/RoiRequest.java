@@ -26,6 +26,7 @@ import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * One release-of-information request (Tier 2 item 39b): a patient or an
@@ -36,8 +37,16 @@ import java.time.LocalDateTime;
  * COPY_RELEASED, so every fulfilled request appears on the patient's own
  * "Who Viewed My Records" report with no further wiring.
  *
+ * <p>{@code patientId} is a bare lookup key with NO foreign key — the V141
+ * call, for the V141 reason: this row is a legal record of an exchange with
+ * an outside party and must outlive the patient row it describes. A
+ * cascade would delete the record with its subject; a RESTRICT FK would
+ * block the purge path instead. {@code patientName} is the encrypted
+ * snapshot taken at intake so the row stays legible after a purge.
+ *
  * <p>Requester identity, purpose, scope and the decision note are
- * patient-specific narrative — encrypted at rest.
+ * patient-specific narrative — encrypted at rest, and excluded from
+ * {@code toString()} so no log line prints them decrypted.
  */
 @Entity
 @Table(
@@ -54,13 +63,19 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital", "decidedBy"})
+@ToString(exclude = {"hospital", "decidedBy", "patientName", "requesterName",
+    "requesterContact", "purpose", "scopeDescription", "decisionNote"})
 public class RoiRequest extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "patient_id", nullable = false,
-        foreignKey = @ForeignKey(name = "fk_roi_patient"))
-    private Patient patient;
+    /** Lookup key, not a relationship — no FK, survives patient purge (V141 pattern). */
+    @Column(name = "patient_id", nullable = false)
+    private UUID patientId;
+
+    /** The patient's name as of intake — the row's own legibility after a purge. Encrypted. */
+    @Size(max = 200)
+    @Column(name = "patient_name", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String patientName;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "hospital_id", nullable = false,

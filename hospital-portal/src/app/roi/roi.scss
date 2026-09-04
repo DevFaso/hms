@@ -229,6 +229,31 @@ table {
   }
 }
 
+/* The complete request in the decision dialog — full text, no ellipsis. */
+.decision-details {
+  margin: 0.875rem 0 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+
+  dt {
+    font-weight: 600;
+    color: #64748b;
+    margin: 0;
+  }
+
+  dd {
+    margin: 0.125rem 0 0;
+    color: #0f172a;
+    overflow-wrap: break-word;
+  }
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

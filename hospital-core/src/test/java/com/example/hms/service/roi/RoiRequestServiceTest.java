@@ -5,14 +5,17 @@ import com.example.hms.enums.RoiRequestStatus;
 import com.example.hms.enums.RoiRequesterType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.mapper.RoiRequestMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.RoiRequest;
 import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.roi.RoiDecisionDTO;
 import com.example.hms.payload.dto.roi.RoiRequestCreateDTO;
+import com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoiRequestRepository;
 import com.example.hms.repository.PatientRepository;
@@ -56,10 +59,13 @@ import static org.mockito.Mockito.when;
 /**
  * The contracts worth defending (Tier 2 item 39b): fulfilment emits BOTH
  * its own trail entry AND the PATIENT_EXPORT disclosure row keyed by
- * patient — the row item 39's report shows as COPY_RELEASED; denial needs
- * a reason; a decided request refuses a second decision; foreign and
- * nonexistent rows collapse to the identical not-found; concurrent
- * decisions get a clean retryable refusal.
+ * patient — the row item 39's report shows as COPY_RELEASED — and is
+ * REFUSED when the disclosure row cannot persist; audit descriptions
+ * carry no request narrative (event_description is plaintext); denial
+ * needs a reason; a third-party intake needs the requester's name; a
+ * decided request refuses a second decision; foreign and nonexistent
+ * rows collapse to the identical not-found; concurrent decisions get a
+ * clean retryable refusal.
  */
 @ExtendWith(MockitoExtension.class)
 class RoiRequestServiceTest {
@@ -84,8 +90,10 @@ class RoiRequestServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        // The real mapper: the entity→DTO contract is part of what these
+        // tests defend, and a lenient mock could hide a dropped field.
         service = new RoiRequestService(roiRepository, patientRepository, hospitalRepository,
-            staffRepository, roleValidator, auditService, clock);
+            staffRepository, roleValidator, auditService, new RoiRequestMapper(), clock);
 
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
@@ -110,6 +118,10 @@ class RoiRequestServiceTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
     }
 
+    private void auditSinkUp() {
+        when(auditService.logEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().build());
+    }
+
     private RoiRequestCreateDTO createDto() {
         return RoiRequestCreateDTO.builder()
             .requesterType(RoiRequesterType.THIRD_PARTY)
@@ -120,9 +132,18 @@ class RoiRequestServiceTest {
             .build();
     }
 
+    private RoiSelfRequestCreateDTO selfDto() {
+        return RoiSelfRequestCreateDTO.builder()
+            .requesterContact("awa@example.bf")
+            .purpose("My own copy")
+            .scopeDescription("Full record")
+            .build();
+    }
+
     private RoiRequest pendingRequest() {
         RoiRequest request = RoiRequest.builder()
-            .patient(patient)
+            .patientId(patientId)
+            .patientName("Awa Traore")
             .hospital(hospital)
             .requesterType(RoiRequesterType.THIRD_PARTY)
             .requesterName("Cabinet Ouédraogo")
@@ -138,7 +159,7 @@ class RoiRequestServiceTest {
     // ── intake ──────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("create logs a PENDING row dated today and audits ROI_REQUESTED")
+    @DisplayName("create logs a PENDING row dated today, snapshots the patient name, audits ROI_REQUESTED narrative-free")
     void createLogsPendingRow() {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
@@ -150,10 +171,32 @@ class RoiRequestServiceTest {
         assertThat(dto.getStatus()).isEqualTo(RoiRequestStatus.PENDING);
         assertThat(dto.getRequestedOn()).isEqualTo(TODAY);
         assertThat(dto.getRequesterName()).isEqualTo("Cabinet Ouédraogo");
+        // The snapshot that keeps the legal record legible after a purge.
+        assertThat(dto.getPatientName()).isEqualTo(patient.getFullName());
         ArgumentCaptor<AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ROI_REQUESTED);
+        // event_description is a PLAINTEXT column - no encrypted narrative
+        // may be copied into it.
+        assertThat(audit.getValue().getEventDescription())
+            .doesNotContain("Full record")
+            .doesNotContain("Cabinet Ouédraogo")
+            .doesNotContain("Insurance claim");
+    }
+
+    @Test
+    @DisplayName("a third-party intake without the requester's name is refused")
+    void thirdPartyIntakeNeedsAName() {
+        asClinicianAtHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        RoiRequestCreateDTO dto = createDto();
+        dto.setRequesterName("   ");
+
+        assertThatThrownBy(() -> service.create(patientId, dto))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("requester's name");
+        verify(roiRepository, never()).save(any());
     }
 
     @Test
@@ -184,25 +227,22 @@ class RoiRequestServiceTest {
     }
 
     @Test
-    @DisplayName("createForSelf forces requesterType PATIENT and the patient's own name")
+    @DisplayName("createForSelf files as PATIENT with the patient's own name — the self DTO has no identity to spoof")
     void createForSelfForcesPatientIdentity() {
         when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        RoiRequestCreateDTO dto = createDto();
-        // A self-service caller trying to file as a third party is overridden.
-        dto.setRequesterType(RoiRequesterType.THIRD_PARTY);
-        dto.setRequesterName("Somebody Else");
 
-        var saved = service.createForSelf(patient, hospitalId, dto);
+        var saved = service.createForSelf(patient, hospitalId, selfDto());
 
         assertThat(saved.getRequesterType()).isEqualTo(RoiRequesterType.PATIENT);
         assertThat(saved.getRequesterName()).isEqualTo(patient.getFullName());
+        assertThat(saved.getRequesterContact()).isEqualTo("awa@example.bf");
     }
 
     @Test
     @DisplayName("createForSelf refuses a patient with no registered hospital")
     void createForSelfNeedsAHospital() {
-        RoiRequestCreateDTO dto = createDto();
+        RoiSelfRequestCreateDTO dto = selfDto();
         assertThatThrownBy(() -> service.createForSelf(patient, null, dto))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("registered hospital");
@@ -211,9 +251,10 @@ class RoiRequestServiceTest {
     // ── decisions ───────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("fulfil emits BOTH its trail entry AND the PATIENT_EXPORT disclosure keyed by patient")
+    @DisplayName("fulfil emits BOTH its trail entry AND the PATIENT_EXPORT disclosure keyed by patient — narrative-free")
     void fulfilEmitsTheDisclosureRow() {
         asClinicianAtHospital();
+        auditSinkUp();
         RoiRequest request = pendingRequest();
         when(roiRepository.findById(request.getId())).thenReturn(Optional.of(request));
         when(roiRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -234,6 +275,30 @@ class RoiRequestServiceTest {
             .containsExactlyInAnyOrder(
                 tuple(AuditEventType.ROI_FULFILLED, patientId),
                 tuple(AuditEventType.PATIENT_EXPORT, patientId));
+        // No request narrative in either plaintext description; resourceId
+        // links the rows to the encrypted request.
+        assertThat(audit.getAllValues())
+            .allSatisfy(a -> assertThat(a.getEventDescription())
+                .doesNotContain("Full record")
+                .doesNotContain("Cabinet Ouédraogo")
+                .doesNotContain("Insurance claim"));
+    }
+
+    @Test
+    @DisplayName("fulfilment is REFUSED when the disclosure row cannot persist — no FULFILLED without PATIENT_EXPORT")
+    void fulfilRefusedWhenDisclosureCannotPersist() {
+        asClinicianAtHospital();
+        RoiRequest request = pendingRequest();
+        when(roiRepository.findById(request.getId())).thenReturn(Optional.of(request));
+        when(roiRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        // The audit sink's failure mode is a null return, never a throw.
+        when(auditService.logEvent(any())).thenReturn(null);
+        RoiDecisionDTO decision = RoiDecisionDTO.builder().build();
+        UUID requestId = request.getId();
+
+        assertThatThrownBy(() -> service.fulfil(requestId, decision))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("disclosure log");
     }
 
     @Test
@@ -378,7 +443,7 @@ class RoiRequestServiceTest {
     @DisplayName("requestsForSelf is null-safe and lists across hospitals")
     void requestsForSelfListsOwn() {
         assertThat(service.requestsForSelf(null)).isEmpty();
-        when(roiRepository.findByPatient_IdOrderByCreatedAtDesc(patientId))
+        when(roiRepository.findByPatientIdOrderByCreatedAtDesc(patientId))
             .thenReturn(List.of(pendingRequest()));
 
         assertThat(service.requestsForSelf(patient)).hasSize(1);
@@ -395,7 +460,7 @@ class RoiRequestServiceTest {
     }
 
     @Test
-    @DisplayName("an audit-sink failure never undoes a recorded request")
+    @DisplayName("a trail-entry audit failure never undoes a recorded request")
     void auditFailureIsSwallowed() {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));

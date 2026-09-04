@@ -468,10 +468,11 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     @Operation(summary = "File a release-of-information request",
         description = "Filed as the patient (Tier 2 item 39b); lands on the registered "
-            + "hospital's records-desk worklist. Purpose and scope are required.")
+            + "hospital's records-desk worklist. Purpose and scope are required; the "
+            + "requester identity is always the patient's own.")
     public ResponseEntity<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> createRoiRequest(
             Authentication auth,
-            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.roi.RoiRequestCreateDTO dto) {
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
             .body(portalService.createRoiRequest(auth, dto));
     }

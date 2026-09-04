@@ -60,7 +60,7 @@ public interface PatientPortalService {
 
     /** File a release-of-information request as the patient (Tier 2 item 39b). */
     com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
-            Authentication auth, com.example.hms.payload.dto.roi.RoiRequestCreateDTO dto);
+            Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto);
 
     /** The patient's own ROI requests across hospitals, newest first. */
     java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(

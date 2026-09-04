@@ -12,7 +12,11 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
-/** Log a release-of-information request received at the desk (Tier 2 item 39b). */
+/**
+ * Log a release-of-information request received at the desk (Tier 2 item
+ * 39b) — the STAFF intake shape. The patient's own /me submission uses
+ * {@link RoiSelfRequestCreateDTO}, which carries no requester identity.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -23,7 +27,12 @@ public class RoiRequestCreateDTO {
     @NotNull(message = "requesterType is required")
     private RoiRequesterType requesterType;
 
-    /** The third party's name; optional for the patient's own request. */
+    /**
+     * The requester's name. Required when {@code requesterType} is
+     * THIRD_PARTY (enforced in the service — a release to an unnamed
+     * outside party cannot be accounted for); optional when the patient
+     * asks in person.
+     */
     @Size(max = 200)
     private String requesterName;
 

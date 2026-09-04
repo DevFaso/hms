@@ -15,10 +15,13 @@
 -- version: optimistic lock (the V149 lesson) -- two concurrent decisions on
 -- one request must not both report success.
 --
--- No FK ON DELETE CASCADE on patient_id, unlike V150's history rows: an ROI
--- request is a legal/administrative record of an exchange with an outside
--- party, not a patient-owned convenience row -- it must survive scrutiny
--- even if the patient row is purged. The purge path owns its own decisions.
+-- NO FOREIGN KEY on patient_id at all -- the V141 call, for the V141
+-- reason: an ROI request is a legal/administrative record of an exchange
+-- with an outside party and must OUTLIVE the patient row. A cascading FK
+-- would delete the record with its subject; a plain (RESTRICT) FK would
+-- block the purge path instead. The column is a lookup key, not a
+-- relationship, and patient_name is an encrypted snapshot taken at intake
+-- so the row stays legible after a purge.
 --
 -- Rollback:
 --   DROP TABLE clinical.roi_requests;
@@ -27,6 +30,7 @@
 CREATE TABLE IF NOT EXISTS clinical.roi_requests (
     id                   UUID         NOT NULL DEFAULT gen_random_uuid(),
     patient_id           UUID         NOT NULL,
+    patient_name         TEXT,
     hospital_id          UUID         NOT NULL,
     requester_type       VARCHAR(20)  NOT NULL,
     requester_name       TEXT,
@@ -44,7 +48,8 @@ CREATE TABLE IF NOT EXISTS clinical.roi_requests (
     updated_at           TIMESTAMP    NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_roi_requests   PRIMARY KEY (id),
-    CONSTRAINT fk_roi_patient    FOREIGN KEY (patient_id)          REFERENCES clinical.patients(id),
+    -- patient_id deliberately has NO FK: see the header. Hospitals and
+    -- staff are never hard-deleted, so their FKs stay.
     CONSTRAINT fk_roi_hospital   FOREIGN KEY (hospital_id)         REFERENCES hospital.hospitals(id),
     CONSTRAINT fk_roi_decided_by FOREIGN KEY (decided_by_staff_id) REFERENCES hospital.staff(id)
 );

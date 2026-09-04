@@ -257,7 +257,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional
     public com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
-            Authentication auth, com.example.hms.payload.dto.roi.RoiRequestCreateDTO dto) {
+            Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
         Patient patient = findPatient(auth);
         // Filed against the patient's registered hospital: the request lands
         // on that facility's triage worklist.

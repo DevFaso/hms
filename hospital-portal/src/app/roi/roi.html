@@ -22,14 +22,15 @@
       <p class="hint">{{ 'ROI.PICK_HOSPITAL' | translate }}</p>
     </section>
   } @else {
-    <div class="tabs" role="tablist">
+    <!-- Status filters as plain pressed buttons: a full ARIA tab widget
+         needs tabpanels + roving tabindex, and these are filters anyway. -->
+    <div class="tabs">
       @for (s of statuses; track s) {
         <button
           type="button"
-          role="tab"
           class="tab"
           [class.active]="activeStatus() === s"
-          [attr.aria-selected]="activeStatus() === s"
+          [attr.aria-pressed]="activeStatus() === s"
           (click)="setStatus(s)"
         >
           {{ statusKey(s) | translate }}
@@ -258,6 +259,32 @@
     } @else if (d.kind === 'deny') {
       <p class="hint">{{ 'ROI.DENY_HINT' | translate }}</p>
     }
+
+    <!-- The complete request, un-ellipsized: purpose is what the decision
+         weighs and contact is where the copy goes - the decider sees both. -->
+    <dl class="decision-details">
+      <div>
+        <dt>{{ 'ROI.REQUESTER' | translate }}</dt>
+        <dd>
+          {{ requesterKey(d.row.requesterType) | translate }}
+          @if (d.row.requesterName) {
+            — {{ d.row.requesterName }}
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ 'ROI.REQUESTER_CONTACT' | translate }}</dt>
+        <dd>{{ d.row.requesterContact || '—' }}</dd>
+      </div>
+      <div>
+        <dt>{{ 'ROI.PURPOSE' | translate }}</dt>
+        <dd>{{ d.row.purpose }}</dd>
+      </div>
+      <div>
+        <dt>{{ 'ROI.SCOPE' | translate }}</dt>
+        <dd>{{ d.row.scopeDescription }}</dd>
+      </div>
+    </dl>
     <label class="field">
       <span>
         {{ 'ROI.DECISION_NOTE' | translate }}

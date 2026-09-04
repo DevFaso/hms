@@ -15,16 +15,16 @@ import java.util.UUID;
 public interface RoiRequestRepository extends JpaRepository<RoiRequest, UUID> {
 
     /** The records-desk worklist: one status, oldest request first. */
-    @EntityGraph(attributePaths = {"patient", "decidedBy"})
+    @EntityGraph(attributePaths = {"decidedBy"})
     Page<RoiRequest> findByHospital_IdAndStatusOrderByRequestedOnAscCreatedAtAsc(
             UUID hospitalId, RoiRequestStatus status, Pageable pageable);
 
     /** One patient's requests at the caller's hospital, newest first — the chart view. */
-    @EntityGraph(attributePaths = {"patient", "decidedBy"})
-    List<RoiRequest> findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(
+    @EntityGraph(attributePaths = {"decidedBy"})
+    List<RoiRequest> findByPatientIdAndHospital_IdOrderByCreatedAtDesc(
             UUID patientId, UUID hospitalId);
 
     /** The patient's own requests across hospitals, newest first — the /me view. */
-    @EntityGraph(attributePaths = {"patient", "hospital", "decidedBy"})
-    List<RoiRequest> findByPatient_IdOrderByCreatedAtDesc(UUID patientId);
+    @EntityGraph(attributePaths = {"hospital", "decidedBy"})
+    List<RoiRequest> findByPatientIdOrderByCreatedAtDesc(UUID patientId);
 }

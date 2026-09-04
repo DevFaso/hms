@@ -1,9 +1,20 @@
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Subject, Subscription, of, switchMap } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 import {
   RoiCreateRequest,
@@ -27,6 +38,11 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
  * a release, mirroring RoiWorklistController exactly. Every request here
  * is hospital-pinned server-side, so a super-admin in global view defers
  * until the scope chip pins one (the #549 lesson).
+ *
+ * <p>Every load runs through one switchMap (the registries pattern): only
+ * the LATEST status/scope selection may update the table, and unpinning
+ * the scope cancels any in-flight response — a late page from the
+ * previous hospital must never repopulate a view that was just cleared.
  */
 @Component({
   selector: 'app-roi',
@@ -42,7 +58,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
   templateUrl: './roi.html',
   styleUrl: './roi.scss',
 })
-export class RoiComponent implements OnInit {
+export class RoiComponent implements OnInit, OnDestroy {
   private readonly roiService = inject(RoiService);
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -89,8 +105,45 @@ export class RoiComponent implements OnInit {
 
   readonly truncated = computed(() => this.total() > this.rows().length);
 
+  private readonly load$ = new Subject<RoiRequestStatus>();
+  private loadSub?: Subscription;
+
   ngOnInit(): void {
+    this.loadSub = this.load$
+      .pipe(
+        // switchMap: only the LATEST selection may update the view, and a
+        // push while unpinned CANCELS the in-flight request - a slow
+        // response for the previous hospital or status arriving after the
+        // table was cleared must be dropped, not rendered.
+        switchMap((status) => {
+          if (!this.scopeReady()) {
+            return of({ rows: [] as RoiRequest[], total: 0, failed: false });
+          }
+          this.loading.set(true);
+          this.loadFailed.set(false);
+          return this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE).pipe(
+            map((page) => ({
+              rows: page.content ?? [],
+              total: page.totalElements ?? 0,
+              failed: false,
+            })),
+            // Unavailable, never "no requests": an outage must not read
+            // as an empty queue (house stance).
+            catchError(() => of({ rows: [] as RoiRequest[], total: 0, failed: true })),
+          );
+        }),
+      )
+      .subscribe((state) => {
+        this.loading.set(false);
+        this.rows.set(state.rows);
+        this.total.set(state.total);
+        this.loadFailed.set(state.failed);
+      });
     this.reloadForScope();
+  }
+
+  ngOnDestroy(): void {
+    this.loadSub?.unsubscribe();
   }
 
   onScopeChange(_hospitalId: string | null): void {
@@ -101,33 +154,18 @@ export class RoiComponent implements OnInit {
     this.rows.set([]);
     this.total.set(0);
     this.loadFailed.set(false);
-    if (!this.scopeReady()) {
-      return;
-    }
-    this.load();
+    // Push even when unpinned: the emission is what cancels an in-flight
+    // response from the previously pinned hospital.
+    this.load$.next(this.activeStatus());
   }
 
   setStatus(status: RoiRequestStatus): void {
     this.activeStatus.set(status);
-    this.load();
+    this.load$.next(status);
   }
 
   load(): void {
-    this.loading.set(true);
-    this.roiService.worklist(this.activeStatus(), 0, RoiComponent.PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.loading.set(false);
-        this.rows.set(page.content ?? []);
-        this.total.set(page.totalElements ?? 0);
-        this.loadFailed.set(false);
-      },
-      // Unavailable, never "no requests": an outage must not read as an
-      // empty queue (house stance).
-      error: () => {
-        this.loading.set(false);
-        this.loadFailed.set(true);
-      },
-    });
+    this.load$.next(this.activeStatus());
   }
 
   /* ── intake ── */

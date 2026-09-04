@@ -1,6 +1,7 @@
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 
@@ -35,18 +36,24 @@ function page(rows: RoiRequest[]): RoiPage {
  * Release of information (Tier 2 item 39b). Pins: the deny reason is
  * required before the button enables; an outage renders "unavailable",
  * never an empty queue; a global-view super-admin gets the pick-a-hospital
- * state with zero requests fired.
+ * state with zero requests fired; and the switchMap race — a late response
+ * from a previous scope or status must never overwrite the current view,
+ * because a super-admin unpinning a hospital would otherwise see the old
+ * hospital's PHI repopulate a cleared table.
  */
 describe('RoiComponent', () => {
   let fixture: ComponentFixture<RoiComponent>;
   let component: RoiComponent;
   let roiService: jasmine.SpyObj<RoiService>;
   let toast: jasmine.SpyObj<ToastService>;
-  let scopedHospitalId: string | null;
+  // A signal, not a closure variable: the component reads the scope inside
+  // a computed(), which only re-evaluates on a signal dependency change —
+  // the mid-flight unpin test needs that invalidation to actually happen.
+  let scopedHospitalId: WritableSignal<string | null>;
   let decisionRoles: boolean;
 
   beforeEach(async () => {
-    scopedHospitalId = 'h1';
+    scopedHospitalId = signal<string | null>('h1');
     decisionRoles = true;
     roiService = jasmine.createSpyObj<RoiService>('RoiService', [
       'worklist',
@@ -88,11 +95,11 @@ describe('RoiComponent', () => {
         {
           provide: RoleContextService,
           useValue: {
-            effectiveHospitalIdForRequest: () => scopedHospitalId,
+            effectiveHospitalIdForRequest: () => scopedHospitalId(),
             activeHospitalId: 'h1',
             isSuperAdmin: () => false,
-            globalView: () => scopedHospitalId === null,
-            selectedHospitalId: () => scopedHospitalId,
+            globalView: () => scopedHospitalId() === null,
+            selectedHospitalId: () => scopedHospitalId(),
             permittedHospitalIds: ['h1'],
             hasAnyActiveRole: () => decisionRoles,
           },
@@ -112,7 +119,7 @@ describe('RoiComponent', () => {
   });
 
   it('a global-view super-admin gets the pick-a-hospital state — no requests fired', () => {
-    scopedHospitalId = null;
+    scopedHospitalId.set(null);
     fixture.detectChanges();
     expect(roiService.worklist).not.toHaveBeenCalled();
     expect(component.scopeReady()).toBeFalse();
@@ -123,6 +130,33 @@ describe('RoiComponent', () => {
     fixture.detectChanges();
     expect(component.loadFailed()).toBeTrue();
     expect(component.rows().length).toBe(0);
+  });
+
+  it('unpinning the scope mid-flight drops the old hospital response — PHI never repopulates', () => {
+    const slow = new Subject<RoiPage>();
+    roiService.worklist.and.returnValue(slow.asObservable());
+    fixture.detectChanges(); // init fires the PENDING load; response still in flight
+
+    scopedHospitalId.set(null); // super-admin returns to global view
+    component.onScopeChange(null);
+    slow.next(page([request()])); // the previous hospital's rows arrive late
+    slow.complete();
+
+    expect(component.rows().length).toBe(0);
+    expect(component.scopeReady()).toBeFalse();
+  });
+
+  it('a slow response for the previous status never overwrites the newer one', () => {
+    const slowPending = new Subject<RoiPage>();
+    roiService.worklist.and.returnValue(slowPending.asObservable());
+    fixture.detectChanges(); // PENDING load in flight
+
+    roiService.worklist.and.returnValue(of(page([request({ id: 'r2', status: 'DENIED' })])));
+    component.setStatus('DENIED'); // resolves immediately
+    slowPending.next(page([request(), request({ id: 'r9' })])); // stale PENDING arrives late
+    slowPending.complete();
+
+    expect(component.rows().map((r) => r.id)).toEqual(['r2']);
   });
 
   it('the deny decision is invalid until a reason is typed', () => {
