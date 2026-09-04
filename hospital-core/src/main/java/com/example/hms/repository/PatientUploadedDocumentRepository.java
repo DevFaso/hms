@@ -20,6 +20,15 @@ public interface PatientUploadedDocumentRepository extends JpaRepository<Patient
     Page<PatientUploadedDocument> findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(
             UUID patientId, PatientDocumentType documentType, Pageable pageable);
 
+    /**
+     * FHIR read path: same rows as {@link #findByPatient_IdAndDeletedAtIsNull}
+     * but with the mapper-walked associations fetched in the page query —
+     * without the graph, mapping a full page costs one uploader query per row.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "uploadedByUser"})
+    Page<PatientUploadedDocument> findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
+            UUID patientId, Pageable pageable);
+
     /** Fetch a single document only if it belongs to the patient and is not deleted. */
     Optional<PatientUploadedDocument> findByIdAndPatient_IdAndDeletedAtIsNull(UUID id, UUID patientId);
 }

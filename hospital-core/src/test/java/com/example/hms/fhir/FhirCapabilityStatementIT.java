@@ -59,6 +59,8 @@ class FhirCapabilityStatementIT {
                 "\"type\":\"DiagnosticReport\"",
                 // Tier 2 item 43
                 "\"type\":\"Appointment\"",
-                "\"type\":\"Slot\"");
+                "\"type\":\"Slot\"",
+                // Tier 2 item 44
+                "\"type\":\"DocumentReference\"");
     }
 }
