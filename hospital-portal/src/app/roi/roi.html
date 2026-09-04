@@ -247,12 +247,12 @@
     role="dialog"
     aria-modal="true"
     tabindex="-1"
-    [attr.aria-label]="'ROI.' + d.kind.toUpperCase() | translate"
+    [attr.aria-label]="decisionActionKey(d.kind) | translate"
     (keydown.escape)="closeDecision()"
     (keydown.tab)="trapTab($any($event), decisionDialog)"
     data-testid="decision-modal"
   >
-    <h2>{{ 'ROI.' + d.kind.toUpperCase() | translate }} — {{ d.row.patientName }}</h2>
+    <h2>{{ decisionActionKey(d.kind) | translate }} — {{ d.row.patientName }}</h2>
     @if (d.kind === 'fulfil') {
       <p class="hint">{{ 'ROI.FULFIL_HINT' | translate }}</p>
     } @else if (d.kind === 'deny') {
@@ -285,7 +285,7 @@
         [disabled]="!decisionValid() || saving()"
         (click)="submitDecision()"
       >
-        {{ 'ROI.' + d.kind.toUpperCase() | translate }}
+        {{ decisionActionKey(d.kind) | translate }}
       </button>
     </div>
   </div>

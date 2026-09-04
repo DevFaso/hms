@@ -220,7 +220,7 @@ export class RoiComponent implements OnInit {
       next: () => {
         this.saving.set(false);
         this.closeDecision();
-        this.toast.success(this.translate.instant('ROI.DECIDED_' + d.kind.toUpperCase()));
+        this.toast.success(this.translate.instant(RoiComponent.DECIDED_KEYS[d.kind]));
         this.load();
       },
       error: (err: HttpErrorResponse) => {
@@ -234,8 +234,34 @@ export class RoiComponent implements OnInit {
     return type === 'PATIENT' ? 'ROI.REQUESTER_PATIENT' : 'ROI.REQUESTER_THIRD_PARTY';
   }
 
+  /** Static key maps, not concatenation — the i18n parity gate scans string literals. */
+  private static readonly DECIDED_KEYS: Record<DecisionKind, string> = {
+    fulfil: 'ROI.DECIDED_FULFIL',
+    deny: 'ROI.DECIDED_DENY',
+    cancel: 'ROI.DECIDED_CANCEL',
+  };
+
+  private static readonly ACTION_KEYS: Record<DecisionKind, string> = {
+    fulfil: 'ROI.FULFIL',
+    deny: 'ROI.DENY',
+    cancel: 'ROI.CANCEL',
+  };
+
+  decisionActionKey(kind: DecisionKind): string {
+    return RoiComponent.ACTION_KEYS[kind];
+  }
+
   statusKey(status: RoiRequestStatus): string {
-    return 'ROI.STATUS_' + status;
+    switch (status) {
+      case 'PENDING':
+        return 'ROI.STATUS_PENDING';
+      case 'FULFILLED':
+        return 'ROI.STATUS_FULFILLED';
+      case 'DENIED':
+        return 'ROI.STATUS_DENIED';
+      default:
+        return 'ROI.STATUS_CANCELLED';
+    }
   }
 
   /* ── Dialog focus: move in on open, cycle on Tab, restore on close ── */
