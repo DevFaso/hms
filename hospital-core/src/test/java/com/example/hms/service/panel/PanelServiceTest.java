@@ -255,6 +255,101 @@ class PanelServiceTest {
     }
 
     @Test
+    @DisplayName("myPanel returns the caller's ACTIVE page once the staff row resolves")
+    void myPanelReturnsTheCallersPage() {
+        asClinicianAtHospital();
+        UUID userId = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(provider));
+        PanelAssignment row = PanelAssignment.builder()
+            .patient(patient).hospital(hospital).providerStaff(provider)
+            .panelRole(PanelRole.PRIMARY_PROVIDER).status(PanelAssignmentStatus.ACTIVE)
+            .assignedOn(TODAY.minusDays(5)).build();
+        row.setId(UUID.randomUUID());
+        when(panelRepository.findByProviderStaff_IdAndHospital_IdAndStatusOrderByAssignedOnDesc(
+                org.mockito.ArgumentMatchers.eq(provider.getId()),
+                org.mockito.ArgumentMatchers.eq(hospitalId),
+                org.mockito.ArgumentMatchers.eq(PanelAssignmentStatus.ACTIVE),
+                any(org.springframework.data.domain.PageRequest.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(row)));
+
+        var page = service.myPanel(0, 5000);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).getPatientName()).isEqualTo("Awa Traore");
+    }
+
+    @Test
+    @DisplayName("providerPanel refuses a staff id from another hospital as not-found")
+    void providerPanelRefusesForeignStaff() {
+        asClinicianAtHospital();
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        provider.setHospital(other);
+        when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
+
+        assertThatThrownBy(() -> service.providerPanel(provider.getId(), 0, 50))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("patientAssignments lists the tenant patient's history newest first")
+    void patientAssignmentsListsHistory() {
+        asClinicianAtHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        PanelAssignment row = PanelAssignment.builder()
+            .patient(patient).hospital(hospital).providerStaff(provider)
+            .panelRole(PanelRole.CHW).status(PanelAssignmentStatus.ENDED)
+            .assignedOn(TODAY.minusDays(90)).endedOn(TODAY.minusDays(10))
+            .endReason("Superseded by reassignment").build();
+        row.setId(UUID.randomUUID());
+        when(panelRepository
+            .findByPatient_IdAndHospital_IdOrderByAssignedOnDescCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(java.util.List.of(row));
+
+        var rows = service.patientAssignments(patientId);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getEndReason()).isEqualTo("Superseded by reassignment");
+    }
+
+    @Test
+    @DisplayName("overview maps the group-by rows into provider/role/count entries")
+    void overviewMapsGroupedRows() {
+        asClinicianAtHospital();
+        UUID staffId = UUID.randomUUID();
+        java.util.List<Object[]> grouped = java.util.List.<Object[]>of(
+            new Object[]{staffId, "Dr. Diallo", PanelRole.PRIMARY_PROVIDER, 42L});
+        when(panelRepository.activePanelSizes(hospitalId)).thenReturn(grouped);
+
+        var rows = service.overview();
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getProviderStaffId()).isEqualTo(staffId);
+        assertThat(rows.get(0).getPanelRole()).isEqualTo(PanelRole.PRIMARY_PROVIDER);
+        assertThat(rows.get(0).getActiveCount()).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("an audit failure never undoes a recorded empanelment")
+    void auditFailureIsSwallowed() {
+        asClinicianAtHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(provider.getId())).thenReturn(Optional.of(provider));
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(panelRepository.findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
+                any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(panelRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.doThrow(new RuntimeException("audit sink down"))
+            .when(auditService).logEvent(any());
+
+        var dto = service.assign(patientId, assignRequest());
+
+        assertThat(dto.getStatus()).isEqualTo(PanelAssignmentStatus.ACTIVE);
+    }
+
+    @Test
     @DisplayName("no active hospital context refuses every entry point")
     void noHospitalContextRefuses() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
