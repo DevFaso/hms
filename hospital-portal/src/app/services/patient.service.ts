@@ -2,6 +2,16 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+export interface PatientAddressHistoryEntry {
+  id: string;
+  /** The composed address line as it stood. */
+  address?: string;
+  city?: string;
+  country?: string;
+  /** When this address stopped being current. */
+  replacedAt: string;
+}
+
 export interface PatientResponse {
   id: string;
   firstName: string;
@@ -16,6 +26,8 @@ export interface PatientResponse {
   state?: string;
   zipCode?: string;
   country?: string;
+  /** Self-reported free text (Tier 2 item 38). */
+  ethnicity?: string;
   phoneNumberPrimary?: string;
   phoneNumberSecondary?: string;
   email?: string;
@@ -63,6 +75,8 @@ export interface PatientCreateRequest {
   state?: string;
   zipCode?: string;
   country?: string;
+  /** Self-reported free text (Tier 2 item 38). */
+  ethnicity?: string;
   phoneNumberPrimary: string;
   phoneNumberSecondary?: string;
   /** Optional — phone-first: most patients register with a phone number only. */
@@ -252,6 +266,11 @@ export class PatientService {
     if (hospitalId) params = params.set('hospitalId', hospitalId);
     if (search) params = params.set('search', search);
     return this.http.get<PatientResponse[]>('/patients', { params });
+  }
+
+  /** Superseded addresses, newest move first (Tier 2 item 38). */
+  addressHistory(id: string): Observable<PatientAddressHistoryEntry[]> {
+    return this.http.get<PatientAddressHistoryEntry[]>(`/patients/${id}/address-history`);
   }
 
   /** Tier 2 item 44 — the chart's record download (was print-only). */

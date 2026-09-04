@@ -133,6 +133,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             List.of(RefillStatus.REQUESTED, RefillStatus.PAUSED);
 
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
 
@@ -221,6 +222,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public PatientProfileDTO updateMyProfile(Authentication auth, PatientProfileUpdateDTO dto) {
         Patient patient = findPatient(auth);
+        // The self-service path is a real address-write surface: it records
+        // moves exactly like the staff paths (PR #550 review — the hook
+        // originally lived only in PatientServiceImpl and this path
+        // silently bypassed it).
+        var before = addressHistoryRecorder.snapshot(patient);
 
         // Only update fields the patient is allowed to change
         if (dto.getPhoneNumberPrimary() != null)       patient.setPhoneNumberPrimary(dto.getPhoneNumberPrimary());
@@ -237,7 +243,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
         if (dto.getPreferredPharmacy() != null)        patient.setPreferredPharmacy(dto.getPreferredPharmacy());
+        if (dto.getEthnicity() != null)                patient.setEthnicity(dto.getEthnicity());
 
+        addressHistoryRecorder.recordIfMoved(patient, before);
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
@@ -885,6 +893,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .state(p.getState())
                 .zipCode(p.getZipCode())
                 .country(p.getCountry())
+                .ethnicity(p.getEthnicity())
                 .emergencyContactName(p.getEmergencyContactName())
                 .emergencyContactPhone(p.getEmergencyContactPhone())
                 .emergencyContactRelationship(p.getEmergencyContactRelationship())

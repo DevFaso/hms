@@ -2255,4 +2255,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V150 - demographics depth (Tier 2 item 38): self-reported
+         free-text ethnicity on clinical.patients, and
+         clinical.patient_address_history keeping each superseded address
+         (valid until its created_at). Idempotent per the
+         mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V150-patient-demographics-depth" author="hms-team" runOnChange="false">
+        <sqlFile path="V150__patient_demographics_depth.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

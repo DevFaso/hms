@@ -1381,11 +1381,22 @@ that exists rather than inventing one.
 
 ## E5 — Records, identity, HIM
 
-- [ ] 38. **Demographics depth** — ethnicity, preferred language, address
-  history. `ethnicity` and `AddressHistory` are zero-file; `preferredLanguage`
-  appears in 4. Language is operational here, not decorative: the UI is EN/FR/ES
-  while patients speak Bambara, Dioula and Mooré, and the SMS channel picks a
-  locale per message.
+- [x] 38. **Demographics depth** — ethnicity, preferred language, address
+  history. ✅ DONE 2026-09-03 (`feat/demographics-depth`, V150).
+  The entry was one-third stale (the item-39 lesson again): the LANGUAGE
+  third had already shipped — `PatientLanguage` (fr/en/es + bm/dyu/mos with
+  `hasMessageBundle`) and `PatientLocaleResolver`, read by the appointment,
+  recall and reception dispatch paths; a Mooré/Dioula/Bambara SMS still
+  needs a commissioned bundle, which is a translation task, not code.
+  What V150 added: `clinical.patients.ethnicity` — self-reported FREE TEXT
+  on purpose (an enum of ethnic groups would be the schema inventing a
+  taxonomy; V146 cadence stance) — and `clinical.patient_address_history`,
+  written by both patient-update paths only when the address components
+  actually change (first fill-in of a blank address and re-statements
+  record nothing; the composed `address` string is derived formatting and
+  deliberately not part of the comparison). Read surface:
+  GET /patients/{id}/address-history + a lazy expander on the chart's
+  demographics card; ethnicity on the registration form and chart.
 - [x] 39. **Disclosure accounting.**
   ✅ DONE 2026-08-26 (**PR #528** `feature/disclosure-accounting`, V141).
   The entry said "the patient-facing report over that existing ledger" and

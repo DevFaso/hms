@@ -3,7 +3,7 @@ import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { PatientDetailComponent } from './patient-detail';
 import { PatientService } from '../services/patient.service';
 import { VitalSignService, VitalSignResponse } from '../services/vital-sign.service';
@@ -47,7 +47,7 @@ describe('PatientDetailComponent', () => {
   } as any;
 
   beforeEach(async () => {
-    patientServiceSpy = jasmine.createSpyObj('PatientService', ['getById']);
+    patientServiceSpy = jasmine.createSpyObj('PatientService', ['getById', 'addressHistory']);
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
@@ -449,6 +449,45 @@ describe('PatientDetailComponent', () => {
 
       expect(component.canViewMicro()).toBeFalse();
       expect(fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]')).toBeNull();
+    });
+  });
+
+  describe('address history (Tier 2 #38)', () => {
+    it('lazily loads and renders the superseded addresses', () => {
+      patientServiceSpy.addressHistory.and.returnValue(
+        of([
+          {
+            id: 'h1',
+            address: 'Ancien quartier, Ouahigouya',
+            city: 'Ouahigouya',
+            replacedAt: '2026-08-01T10:00:00',
+          },
+        ]),
+      );
+
+      component.loadAddressHistory();
+
+      expect(patientServiceSpy.addressHistory).toHaveBeenCalled();
+      expect(component.addressHistoryLoaded()).toBeTrue();
+      expect(component.addressHistory().length).toBe(1);
+    });
+
+    it('an empty history marks loaded so the empty state renders (not the button again)', () => {
+      patientServiceSpy.addressHistory.and.returnValue(of([]));
+
+      component.loadAddressHistory();
+
+      expect(component.addressHistoryLoaded()).toBeTrue();
+      expect(component.addressHistory().length).toBe(0);
+    });
+
+    it('a load failure keeps the button (retry possible) and reports the error', () => {
+      patientServiceSpy.addressHistory.and.returnValue(throwError(() => new Error('boom')));
+
+      component.loadAddressHistory();
+
+      expect(component.addressHistoryLoaded()).toBeFalse();
+      expect(toastSpy.error).toHaveBeenCalled();
     });
   });
 });

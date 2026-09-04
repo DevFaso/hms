@@ -203,6 +203,20 @@ export class PatientDetailComponent implements OnInit {
     ]);
   }
 
+  /* ── Address history (Tier 2 #38) ── */
+  addressHistoryLoaded = signal(false);
+  addressHistory = signal<import('../services/patient.service').PatientAddressHistoryEntry[]>([]);
+
+  loadAddressHistory(): void {
+    this.patientService.addressHistory(this.patientId).subscribe({
+      next: (entries) => {
+        this.addressHistory.set(entries);
+        this.addressHistoryLoaded.set(true);
+      },
+      error: () => this.toast.error(this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED')),
+    });
+  }
+
   /* ── FHIR record download (Tier 2 #44) ── */
   recordDownloadLoading = signal(false);
 

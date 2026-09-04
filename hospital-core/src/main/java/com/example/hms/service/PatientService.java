@@ -42,6 +42,10 @@ public interface PatientService {
 
     PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, UUID hospitalId, Locale locale);
 
+    /** Superseded addresses, newest move first (Tier 2 item 38). */
+    java.util.List<com.example.hms.payload.dto.PatientAddressHistoryDTO> getAddressHistory(
+            UUID patientId, UUID hospitalId);
+
     void deletePatient(UUID id, Locale locale);
 
     @Transactional(readOnly = true)

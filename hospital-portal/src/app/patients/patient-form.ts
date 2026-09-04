@@ -81,6 +81,7 @@ export class PatientFormComponent implements OnInit {
     phoneNumberSecondary: '',
     dateOfBirth: '',
     gender: '',
+    ethnicity: '',
     address: '',
     city: '',
     state: '',

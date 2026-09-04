@@ -302,7 +302,40 @@
               <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
               ><span class="value">{{ p.address ?? '—' }}</span>
             </div>
+            <div class="info-row">
+              <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span
+              ><span class="value">{{ p.ethnicity ?? '—' }}</span>
+            </div>
           </div>
+          @if (!addressHistoryLoaded()) {
+            <button
+              type="button"
+              class="btn-link address-history-toggle"
+              data-testid="load-address-history"
+              (click)="loadAddressHistory()"
+            >
+              {{ 'PATIENTS.ADDRESS_HISTORY' | translate }}
+            </button>
+          } @else if (addressHistory().length === 0) {
+            <p class="address-history-empty">{{ 'PATIENTS.ADDRESS_HISTORY_EMPTY' | translate }}</p>
+          } @else {
+            <div class="address-history">
+              <h4>{{ 'PATIENTS.ADDRESS_HISTORY' | translate }}</h4>
+              <ul>
+                @for (entry of addressHistory(); track entry.id) {
+                  <li>
+                    <span class="value">{{ entry.address ?? entry.city ?? '—' }}</span>
+                    <span class="until">
+                      {{
+                        'PATIENTS.ADDRESS_UNTIL'
+                          | translate: { date: (entry.replacedAt | date: 'mediumDate') }
+                      }}
+                    </span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
         </div>
         <div class="info-card">
           <h3>
