@@ -462,6 +462,29 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(careTeam));
     }
 
+    // ── Release of information (Tier 2 item 39b) ────────────────────────
+
+    @PostMapping("/roi-requests")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "File a release-of-information request",
+        description = "Filed as the patient (Tier 2 item 39b); lands on the registered "
+            + "hospital's records-desk worklist. Purpose and scope are required; the "
+            + "requester identity is always the patient's own.")
+    public ResponseEntity<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> createRoiRequest(
+            Authentication auth,
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .body(portalService.createRoiRequest(auth, dto));
+    }
+
+    @GetMapping("/roi-requests")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "My release-of-information requests and their outcomes")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO>> myRoiRequests(
+            Authentication auth) {
+        return ResponseEntity.ok(portalService.myRoiRequests(auth));
+    }
+
     // ── Access log ───────────────────────────────────────────────────────
 
     @Operation(summary = "View who accessed my records",

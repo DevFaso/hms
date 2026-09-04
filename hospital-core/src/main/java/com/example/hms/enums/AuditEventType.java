@@ -161,6 +161,14 @@ public enum AuditEventType {
     PANEL_ASSIGNED,
     PANEL_ENDED,
 
+    // Release-of-information workflow (Tier 2 item 39b). Past-tense per
+    // the naming convention above. Fulfilment ALSO emits PATIENT_EXPORT -
+    // that is the row the disclosure accounting shows the patient.
+    ROI_REQUESTED,
+    ROI_FULFILLED,
+    ROI_DENIED,
+    ROI_CANCELLED,
+
     OTHER
 }
 

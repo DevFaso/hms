@@ -134,6 +134,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private final PatientRepository patientRepository;
     private final com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
+    private final com.example.hms.service.roi.RoiRequestService roiRequestService;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
 
@@ -249,6 +250,26 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
+    }
+
+    // ── Release of information (Tier 2 item 39b) ────────────────────────
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
+            Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
+        Patient patient = findPatient(auth);
+        // Filed against the patient's registered hospital: the request lands
+        // on that facility's triage worklist.
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return roiRequestService.createForSelf(patient, hospitalId, dto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
+            Authentication auth) {
+        return roiRequestService.requestsForSelf(findPatient(auth));
     }
 
     // ── Health summary (aggregated) ──────────────────────────────────────

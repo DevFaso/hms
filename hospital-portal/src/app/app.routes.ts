@@ -366,6 +366,25 @@ export const routes: Routes = [
         loadComponent: () => import('./panel/panel').then((m) => m.PanelComponent),
       },
 
+      // Release of information (Tier 2 item 39b). Role set mirrors the
+      // @PreAuthorize on PatientRoiController / RoiWorklistController
+      // exactly - intake includes the desk; decisions tighten in-page.
+      {
+        path: 'roi',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./roi/roi').then((m) => m.RoiComponent),
+      },
+
       // Staff
       {
         path: 'staff',
