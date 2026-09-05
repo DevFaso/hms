@@ -77,7 +77,8 @@ export interface OrgServiceResponse {
   provider: string;
   baseUrl: string;
   documentationUrl: string;
-  apiKeyReference: string;
+  /** Write-only server-side since item 45: reads say only whether it is set. */
+  apiKeyReferenceSet: boolean;
   managedByPlatform: boolean;
   ownership?: PlatformOwnership;
   metadata?: PlatformServiceMetadata;

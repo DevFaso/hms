@@ -324,7 +324,8 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
             .provider(service.getProvider())
             .baseUrl(service.getBaseUrl())
             .documentationUrl(service.getDocumentationUrl())
-            .apiKeyReference(service.getApiKeyReference())
+            // apiKeyReference deliberately NOT copied (item 45): a
+            // credential pointer must not ride a Kafka event.
             .ownershipTeam(service.getOwnership() != null ? service.getOwnership().getOwnerTeam() : null)
             .ownershipContactEmail(service.getOwnership() != null ? service.getOwnership().getOwnerContactEmail() : null)
             .ownershipServiceLevel(service.getOwnership() != null ? service.getOwnership().getServiceLevel() : null)

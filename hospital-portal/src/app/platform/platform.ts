@@ -331,7 +331,9 @@ export class PlatformComponent implements OnInit {
       provider: svc.provider ?? '',
       baseUrl: svc.baseUrl ?? '',
       documentationUrl: svc.documentationUrl ?? '',
-      apiKeyReference: svc.apiKeyReference ?? '',
+      // Write-only since item 45 - the server no longer returns the
+      // value. Blank means keep; typing replaces.
+      apiKeyReference: '',
       managedByPlatform: svc.managedByPlatform,
       ownerTeam: svc.ownership?.ownerTeam ?? '',
       ownerContactEmail: svc.ownership?.ownerContactEmail ?? '',

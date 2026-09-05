@@ -91,7 +91,10 @@ public class PlatformServiceMapper {
             .provider(entity.getProvider())
             .baseUrl(entity.getBaseUrl())
             .documentationUrl(entity.getDocumentationUrl())
-            .apiKeyReference(entity.getApiKeyReference())
+            // Write-only since item 45: the reference is a credential and
+            // must not round-trip through reads, the portal or events.
+            .apiKeyReferenceSet(entity.getApiKeyReference() != null
+                && !entity.getApiKeyReference().isBlank())
             .managedByPlatform(entity.isManagedByPlatform())
             .ownership(toOwnershipDto(entity.getOwnership()))
             .metadata(toMetadataDto(entity.getMetadata()))
@@ -163,7 +166,8 @@ public class PlatformServiceMapper {
             .organizationServiceId(service != null ? service.getId() : null)
             .serviceType(service != null ? service.getServiceType() : null)
             .enabled(link.isEnabled())
-            .credentialsReference(link.getCredentialsReference())
+            .credentialsReferenceSet(link.getCredentialsReference() != null
+                && !link.getCredentialsReference().isBlank())
             .overrideEndpoint(link.getOverrideEndpoint())
             .ownership(toOwnershipDto(link.getOwnership()))
             .build();
@@ -186,7 +190,8 @@ public class PlatformServiceMapper {
             .organizationServiceId(service != null ? service.getId() : null)
             .serviceType(service != null ? service.getServiceType() : null)
             .enabled(link.isEnabled())
-            .credentialsReference(link.getCredentialsReference())
+            .credentialsReferenceSet(link.getCredentialsReference() != null
+                && !link.getCredentialsReference().isBlank())
             .overrideEndpoint(link.getOverrideEndpoint())
             .ownership(toOwnershipDto(link.getOwnership()))
             .build();

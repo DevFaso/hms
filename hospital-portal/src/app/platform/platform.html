@@ -593,7 +593,9 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'PLATFORM.API_KEY_REF' | translate }}</span>
-                <span>{{ selectedService()!.apiKeyReference || '—' }}</span>
+                <span>{{
+                  selectedService()!.apiKeyReferenceSet ? ('PLATFORM.API_KEY_SET' | translate) : '—'
+                }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'PLATFORM.PLATFORM_MANAGED' | translate }}</span>
@@ -740,6 +742,7 @@
                 class="form-input"
                 [ngModel]="serviceForm().apiKeyReference"
                 (ngModelChange)="updateServiceField('apiKeyReference', $event)"
+                [attr.placeholder]="'PLATFORM.API_KEY_KEEP' | translate"
                 name="apiKeyRef"
               />
             </div>

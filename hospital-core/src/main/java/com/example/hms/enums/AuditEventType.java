@@ -169,6 +169,17 @@ public enum AuditEventType {
     ROI_DENIED,
     ROI_CANCELLED,
 
+    // Third-party access (Tier 2 item 45). Past-tense per the naming
+    // convention above. API_KEY_CREATED / API_KEY_REVOKED already existed
+    // in the security block (declared with no emitter until now); item 45
+    // gives them their first writers and adds the rest. Credential
+    // lifecycle events are the trail a key-compromise investigation
+    // starts from - every issuance, rotation and revocation gets a row.
+    API_KEY_ROTATED,
+    WEBHOOK_ENDPOINT_REGISTERED,
+    WEBHOOK_ENDPOINT_UPDATED,
+    WEBHOOK_ENDPOINT_DISABLED,
+
     OTHER
 }
 

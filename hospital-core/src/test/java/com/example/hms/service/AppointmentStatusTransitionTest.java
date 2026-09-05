@@ -56,6 +56,7 @@ class AppointmentStatusTransitionTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     @Mock private com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @InjectMocks

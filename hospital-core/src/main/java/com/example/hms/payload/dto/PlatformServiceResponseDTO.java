@@ -28,7 +28,8 @@ public class PlatformServiceResponseDTO {
 
     private String documentationUrl;
 
-    private String apiKeyReference;
+    /** Whether a key reference is configured - the value itself is write-only (item 45). */
+    private boolean apiKeyReferenceSet;
 
     private boolean managedByPlatform;
 

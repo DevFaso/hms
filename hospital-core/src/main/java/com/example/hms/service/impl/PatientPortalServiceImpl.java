@@ -172,6 +172,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
 
     // MVP 4 additions
     private final QuestionnaireRepository questionnaireRepository;
@@ -596,6 +597,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // The appointment owns its slot (P3 #22): a patient cancelling from the
         // portal frees the time for the next patient just like a desk cancel.
         slotInventoryService.releaseForAppointment(appointment.getId());
+        // Outbound webhooks (Tier 2 item 45): the portal cancel is its own
+        // write path - a subscriber must see it like a desk cancel.
+        if (appointment.getHospital() != null) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_CANCELLED,
+                "Appointment", appointment.getId());
+        }
         log.info("Patient {} cancelled appointment {}", patientId, appointment.getId());
 
         // ── Send cancellation email to patient ──
@@ -637,6 +645,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     + "Patient rescheduled: " + dto.getReason());
         }
         appointmentRepository.save(appointment);
+        // Outbound webhooks (Tier 2 item 45): same rule as the desk path.
+        if (appointment.getHospital() != null) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_RESCHEDULED,
+                "Appointment", appointment.getId());
+        }
         log.info("Patient {} rescheduled appointment {} to {}", patientId, appointment.getId(), dto.getNewDate());
 
         // ── Send reschedule confirmation email to patient ──
