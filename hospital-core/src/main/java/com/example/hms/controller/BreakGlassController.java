@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
 import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
 import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits BREAK_GLASS_ACCESS")
 @RequestMapping("/break-glass")
 @RequiredArgsConstructor
 @Tag(name = "Break-the-Glass",

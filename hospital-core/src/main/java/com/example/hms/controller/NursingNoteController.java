@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.nurse.NursingNoteAddendumRequestDTO;
 import com.example.hms.payload.dto.nurse.NursingNoteCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NursingNoteResponseDTO;
@@ -26,6 +27,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits its own nursing-note audit rows")
 @RequestMapping("/nurse/notes")
 @RequiredArgsConstructor
 @Validated

@@ -14,6 +14,7 @@ import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.SecurityUtils;
@@ -117,6 +118,12 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
         List<UUID> targets = request.getUserIds();
         if (targets == null || targets.isEmpty()) {
+            if (!Boolean.TRUE.equals(request.getResetAll())) {
+                throw new BusinessException(
+                    "Refusing a platform-wide MFA reset: no userIds were given and resetAll is not true. "
+                        + "Name the users, or set resetAll=true to reset every enrolled user"
+                        + (request.getHospitalId() != null ? " at the given hospital." : " on the platform."));
+            }
             // Fall back to every user with an active enrolment row.
             // UserMfaEnrollment exposes the user via the JPA association — there
             // is no flat `userId` field on the entity, so navigate through getUser().

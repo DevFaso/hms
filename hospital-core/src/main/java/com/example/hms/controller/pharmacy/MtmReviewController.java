@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.pharmacy.MtmReviewRequestDTO;
 import com.example.hms.payload.dto.pharmacy.MtmReviewResponseDTO;
 import com.example.hms.service.pharmacy.MtmReviewService;
@@ -28,6 +29,7 @@ import java.util.UUID;
  * P-09: REST endpoints for MTM (Medication Therapy Management) reviews.
  */
 @RestController
+@WriteAudited(skip = true, reason = "service emits MTM_REVIEW_STARTED / MTM_INTERVENTION_RECORDED")
 @RequestMapping("/mtm-reviews")
 @RequiredArgsConstructor
 @Tag(name = "MTM Reviews", description = "Pharmacist-led medication therapy management reviews")

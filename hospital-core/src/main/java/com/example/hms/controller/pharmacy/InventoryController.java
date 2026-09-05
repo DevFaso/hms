@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.InventoryItemRequestDTO;
 import com.example.hms.payload.dto.pharmacy.InventoryItemResponseDTO;
@@ -101,6 +102,7 @@ public class InventoryController {
 
     // ── Stock lots ───────────────────────────────────────────────────────
 
+    @WriteAudited(skip = true, reason = "service emits STOCK_RECEIPT / STOCK_REORDER_ALERT")
     @PostMapping("/lots")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Receive stock", description = "Record a new stock lot (goods receipt)")
@@ -186,6 +188,7 @@ public class InventoryController {
                 inventoryService.getItemsBelowReorderThreshold(pharmacyId)));
     }
 
+    @WriteAudited(skip = true, reason = "service emits STOCK_RECEIPT / STOCK_REORDER_ALERT")
     @PostMapping("/reorder-alerts/trigger")
     @PreAuthorize("hasAnyRole('STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Trigger reorder alerts", description = "Send notifications for all items below reorder threshold")

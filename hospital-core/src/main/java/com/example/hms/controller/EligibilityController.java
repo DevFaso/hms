@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EligibilityCheckType;
 import com.example.hms.enums.EligibilityScheme;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits its own eligibility audit rows")
 @RequestMapping("/eligibility")
 @RequiredArgsConstructor
 @Tag(name = "Eligibility & Prior-Auth",

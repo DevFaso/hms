@@ -32,6 +32,8 @@ import { MicroTabComponent } from './micro/micro-tab.component';
 import { PatientPhotoComponent } from './patient-photo/patient-photo.component';
 import { PrintLabelService } from '../services/print-label.service';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
+import { DocumentsTabComponent } from './documents-tab/documents-tab.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
@@ -53,6 +55,7 @@ type TabKey =
   | 'encounters'
   | 'appointments'
   | 'directives'
+  | 'documents'
   | 'sharing';
 
 @Component({
@@ -70,6 +73,8 @@ type TabKey =
     MicroTabComponent,
     PatientPhotoComponent,
     CoverageTabComponent,
+    DocumentsTabComponent,
+    HospitalScopeChipComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
     StoryboardBannerComponent,
@@ -337,6 +342,32 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_RECEPTIONIST',
       'ROLE_NURSE',
       'ROLE_DOCTOR',
+    ]);
+  }
+
+  /**
+   * The documents tab is hospital-pinned (the backend reads through the
+   * hospital the patient is registered at). The chart has no scope selector
+   * of its own, so the tab hosts the cross-tenant chip and forwards the
+   * selection; a change re-fetches under the new X-Hospital-Id.
+   */
+  readonly documentsScope = signal<string | null>(null);
+
+  onDocumentsScopeChange(hospitalId: string | null): void {
+    this.documentsScope.set(hospitalId);
+  }
+
+  /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read a
+   *  chart, no lab roles, never ROLE_PATIENT (their reads stay on /me). */
+  canViewDocuments(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_PHARMACIST',
+      'ROLE_RECEPTIONIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
     ]);
   }
 

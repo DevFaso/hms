@@ -276,6 +276,20 @@ class EmergencyControlServiceImplTest {
     }
 
     @Test
+    @DisplayName("forceMfaReenrol refuses an empty user list unless resetAll=true — nothing is deleted")
+    void forceMfaReenrolRefusesSilentResetAll() {
+        EmergencyForceMfaRequestDTO req = EmergencyForceMfaRequestDTO.builder()
+            .userIds(List.of()).reason("oops, blank field").build();
+
+        assertThatThrownBy(() -> service.forceMfaReenrol(req, "123456"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("resetAll");
+        verify(mfaEnrollmentRepository, never()).findAll();
+        verify(mfaEnrollmentRepository, never()).deleteAll(any());
+        verify(mfaBackupCodeRepository, never()).deleteAllByUserId(any());
+    }
+
+    @Test
     @DisplayName("forceMfaReenrol with empty userIds discovers every enrolled user from the repo")
     void forceMfaReenrolFallbackToAll() {
         UUID t1 = UUID.randomUUID();
@@ -290,7 +304,7 @@ class EmergencyControlServiceImplTest {
         when(mfaEnrollmentRepository.findByUserId(t2)).thenReturn(List.of(e2));
 
         EmergencyForceMfaRequestDTO req = EmergencyForceMfaRequestDTO.builder()
-            .userIds(null).reason("global rotate").build();
+            .userIds(null).resetAll(true).reason("global rotate").build();
 
         EmergencyActionResponseDTO out = service.forceMfaReenrol(req, "123");
 

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.pharmacy.PharmacyRequestDTO;
@@ -107,6 +108,7 @@ public class PharmacyRegistryController {
 
     @DeleteMapping("/{id}")
     // P-01: pharmacy deactivation is a governance act — restrict to admin roles only.
+    @WriteAudited(skip = true, reason = "service emits PHARMACY_DEACTIVATED")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Deactivate a pharmacy")
     public ResponseEntity<Void> deactivate(

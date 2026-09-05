@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -39,6 +40,7 @@ import java.time.Instant;
  */
 @Slf4j
 @RestController
+@WriteAudited(skip = true, reason = "service emits CONFIGURATION_CHANGED with the mode and reason")
 @RequiredArgsConstructor
 @Tag(name = "Downtime", description = "Platform read-only continuity mode")
 public class DowntimeController {

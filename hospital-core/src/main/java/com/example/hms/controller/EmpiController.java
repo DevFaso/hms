@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.payload.dto.empi.EmpiMergeEventResponseDTO;
@@ -31,6 +32,7 @@ import java.util.UUID;
  * identity-graph-only: it never touches clinical rows.
  */
 @RestController
+@WriteAudited(skip = true, reason = "service emits PATIENT_MERGE and identity events")
 @RequestMapping("/empi")
 @Tag(name = "EMPI Administration", description = "Master patient identity lookup and duplicate merge")
 public class EmpiController {

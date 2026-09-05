@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.payload.dto.superadmin.RegionPolicyCapabilitiesDTO;
 import com.example.hms.payload.dto.superadmin.RegionPolicyResponseDTO;
@@ -26,6 +27,7 @@ import java.util.List;
  * batch — MVP-9c).
  */
 @RestController
+@WriteAudited(skip = true, reason = "service emits REGION_POLICY_UPDATED")
 @RequestMapping("/super-admin/data-residency/policies")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin — Region Policy",

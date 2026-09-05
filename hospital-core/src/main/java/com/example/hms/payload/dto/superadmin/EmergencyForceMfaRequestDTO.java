@@ -18,7 +18,11 @@ import java.util.UUID;
 @Builder
 public class EmergencyForceMfaRequestDTO {
 
-    /** Optional. When null/empty, every user with an enrolment is reset. */
+    /**
+     * Users to reset. When null/empty the request means "every enrolled user
+     * in scope" and is REFUSED unless {@link #resetAll} is {@code true}; an
+     * empty list no longer resets everyone by omission.
+     */
     private List<UUID> userIds;
 
     /**
@@ -30,6 +34,15 @@ public class EmergencyForceMfaRequestDTO {
      * user at this hospital".
      */
     private UUID hospitalId;
+
+    /**
+     * Must be {@code true} when {@link #userIds} is empty. An empty list
+     * used to mean "everyone" silently — one blank field away from
+     * resetting every enrolled user on the platform (the actor included).
+     * The portal now asks for a typed confirmation and sends this flag;
+     * the service refuses an empty list without it.
+     */
+    private Boolean resetAll;
 
     @NotBlank
     @Size(min = 5, max = 1000)
