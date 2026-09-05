@@ -122,7 +122,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
-        log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
+        // Sonar S2629: only invoke getDescription when the warn line will actually be emitted.
+        if (log.isWarnEnabled()) {
+            log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
+        }
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 

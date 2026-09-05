@@ -292,8 +292,9 @@ class MtmReviewServiceImplTest {
     @Test
     void listByHospitalWithoutActiveHospitalIsA400NotAnNpe() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest pageable = PageRequest.of(0, 50);
 
-        assertThatThrownBy(() -> service.listByHospital(hospitalId, PageRequest.of(0, 50)))
+        assertThatThrownBy(() -> service.listByHospital(hospitalId, pageable))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("active hospital is required");
         verify(reviewRepository, never()).findByHospital_Id(any(), any());
@@ -311,8 +312,9 @@ class MtmReviewServiceImplTest {
     @Test
     void listByPatientWithoutActiveHospitalIsA400NotAnUnscopedQuery() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest pageable = PageRequest.of(0, 50);
 
-        assertThatThrownBy(() -> service.listByPatient(patientId, PageRequest.of(0, 50)))
+        assertThatThrownBy(() -> service.listByPatient(patientId, pageable))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("active hospital is required");
         verify(reviewRepository, never()).findByPatient_IdAndHospital_Id(any(), any(), any());
