@@ -24,6 +24,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -52,7 +53,7 @@ class WebhookPublisherTest {
     @BeforeEach
     void setUp() {
         publisher = new WebhookPublisher(endpointRepository, deliveryRepository,
-            org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+            mock(org.springframework.transaction.PlatformTransactionManager.class));
         hospitalId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);

@@ -20,7 +20,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -56,7 +55,7 @@ class PartnerApiSecurityIT {
     @DisplayName("a valid X-API-Key reaches /partner/ping and the principal carries the key's identity")
     void validKeyAuthenticates() {
         UUID hospitalId = UUID.randomUUID();
-        when(apiKeyService.authenticate(eq("hms_pk_valid")))
+        when(apiKeyService.authenticate("hms_pk_valid"))
             .thenReturn(Optional.of(new ApiKeyService.ApiKeyAuth(
                 UUID.randomUUID(), hospitalId, "Mutuelle X claims")));
 
@@ -69,7 +68,7 @@ class PartnerApiSecurityIT {
     @Test
     @DisplayName("an invalid key is refused with 401 and no hint about why")
     void invalidKeyIsRefused() {
-        when(apiKeyService.authenticate(eq("hms_pk_wrong"))).thenReturn(Optional.empty());
+        when(apiKeyService.authenticate("hms_pk_wrong")).thenReturn(Optional.empty());
 
         ResponseEntity<String> response = pingWith("hms_pk_wrong");
 

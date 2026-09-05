@@ -26,6 +26,9 @@ import java.util.Map;
  * encrypts it with the configured key, and writes the ciphertext back.
  * Re-running is a no-op — the prefix check is the idempotency guard.
  *
+ * <p>Every SQL statement below is a full constant literal — three known
+ * tables, no dynamic identifiers, values bound as parameters.
+ *
  * <p>Skips quietly when no encryption key is configured (test/dev
  * profiles without {@code app.encryption.key}); logs loudly on any
  * failure but never blocks startup — a boot that fails on a backfill
@@ -37,10 +40,28 @@ import java.util.Map;
 @Slf4j
 public class CredentialReferenceEncryptionBackfill {
 
-    private static final List<Map.Entry<String, String>> TARGETS = List.of(
-        Map.entry("platform.organization_platform_services", "api_key_reference"),
-        Map.entry("platform.hospital_platform_service_links", "credentials_reference"),
-        Map.entry("platform.department_platform_service_links", "credentials_reference"));
+    private record Target(String label, String selectSql, String updateSql) {
+    }
+
+    private static final List<Target> TARGETS = List.of(
+        new Target("organization_platform_services.api_key_reference",
+            "SELECT id, api_key_reference AS val FROM platform.organization_platform_services"
+                + " WHERE api_key_reference IS NOT NULL AND api_key_reference <> ''"
+                + " AND api_key_reference NOT LIKE 'gcm1:%'",
+            "UPDATE platform.organization_platform_services SET api_key_reference = ?"
+                + " WHERE id = ?"),
+        new Target("hospital_platform_service_links.credentials_reference",
+            "SELECT id, credentials_reference AS val FROM platform.hospital_platform_service_links"
+                + " WHERE credentials_reference IS NOT NULL AND credentials_reference <> ''"
+                + " AND credentials_reference NOT LIKE 'gcm1:%'",
+            "UPDATE platform.hospital_platform_service_links SET credentials_reference = ?"
+                + " WHERE id = ?"),
+        new Target("department_platform_service_links.credentials_reference",
+            "SELECT id, credentials_reference AS val FROM platform.department_platform_service_links"
+                + " WHERE credentials_reference IS NOT NULL AND credentials_reference <> ''"
+                + " AND credentials_reference NOT LIKE 'gcm1:%'",
+            "UPDATE platform.department_platform_service_links SET credentials_reference = ?"
+                + " WHERE id = ?"));
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -53,31 +74,25 @@ public class CredentialReferenceEncryptionBackfill {
             log.info("Credential-reference encryption backfill skipped: no encryption key configured");
             return;
         }
-        for (Map.Entry<String, String> target : TARGETS) {
+        for (Target target : TARGETS) {
             try {
-                int updated = backfillColumn(target.getKey(), target.getValue());
+                int updated = backfillTarget(target);
                 if (updated > 0) {
-                    log.info("Encrypted {} legacy {}.{} value(s) at rest",
-                        updated, target.getKey(), target.getValue());
+                    log.info("Encrypted {} legacy {} value(s) at rest", updated, target.label());
                 }
             } catch (RuntimeException ex) {
-                log.error("Credential-reference backfill failed for {}.{}: {}",
-                    target.getKey(), target.getValue(), ex.getMessage(), ex);
+                log.error("Credential-reference backfill failed for {}: {}",
+                    target.label(), ex.getMessage(), ex);
             }
         }
     }
 
-    private int backfillColumn(String table, String column) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-            "SELECT id, " + column + " AS val FROM " + table
-                + " WHERE " + column + " IS NOT NULL AND " + column + " <> ''"
-                + " AND " + column + " NOT LIKE 'gcm1:%'");
+    private int backfillTarget(Target target) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(target.selectSql());
         int updated = 0;
         for (Map<String, Object> row : rows) {
             String cipherText = converter.convertToDatabaseColumn(String.valueOf(row.get("val")));
-            updated += jdbcTemplate.update(
-                "UPDATE " + table + " SET " + column + " = ? WHERE id = ?",
-                cipherText, row.get("id"));
+            updated += jdbcTemplate.update(target.updateSql(), cipherText, row.get("id"));
         }
         return updated;
     }

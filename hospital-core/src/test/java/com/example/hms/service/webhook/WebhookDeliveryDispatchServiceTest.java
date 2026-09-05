@@ -159,12 +159,12 @@ class WebhookDeliveryDispatchServiceTest {
         String expectedSignature = WebhookSigner.sign(
             "whsec_test", expectedTimestamp, delivery.getPayload());
         verify(transport).post(
-            eq("https://receiver.example/hook"),
-            eq(delivery.getPayload()),
-            eq(expectedSignature),
-            eq(expectedTimestamp),
-            eq("APPOINTMENT_BOOKED"),
-            eq(delivery.getId().toString()));
+            "https://receiver.example/hook",
+            delivery.getPayload(),
+            expectedSignature,
+            expectedTimestamp,
+            "APPOINTMENT_BOOKED",
+            delivery.getId().toString());
     }
 
     @Test
