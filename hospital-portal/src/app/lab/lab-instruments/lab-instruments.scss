@@ -158,8 +158,8 @@
     color: #92400e;
   }
   &[data-status='CALIBRATION_DUE'] {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &[data-status='OUT_OF_SERVICE'] {
     background: #fee2e2;

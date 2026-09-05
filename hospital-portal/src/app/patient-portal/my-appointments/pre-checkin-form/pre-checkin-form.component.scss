@@ -92,12 +92,12 @@
   }
 
   &.active .dot {
-    background: var(--primary-color, #2563eb);
+    background: var(--primary-color, var(--primary));
     color: #f0f0f0;
   }
 
   &.active .label {
-    color: var(--primary-color, #3b82f6);
+    color: var(--primary-color, var(--primary));
     font-weight: 600;
   }
 
@@ -163,7 +163,7 @@
 
     &:focus {
       outline: none;
-      border-color: var(--primary-color, #3b82f6);
+      border-color: var(--primary-color, var(--primary-light));
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
     }
   }
@@ -289,7 +289,7 @@
 
 .btn-primary {
   padding: 0.6rem 1.5rem;
-  background: var(--primary-color, #2563eb);
+  background: var(--primary-color, var(--primary));
   color: #f0f0f0;
   border: none;
   border-radius: 6px;
@@ -299,7 +299,7 @@
   transition: background 0.2s;
 
   &:hover:not(:disabled) {
-    background: var(--primary-hover, #2563eb);
+    background: var(--primary-hover, var(--primary));
   }
 
   &:disabled {

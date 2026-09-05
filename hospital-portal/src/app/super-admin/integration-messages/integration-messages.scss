@@ -172,8 +172,8 @@
   color: #1e293b;
 
   &[data-direction='OUTBOUND'] {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &[data-direction='INBOUND'] {
     background: #dcfce7;

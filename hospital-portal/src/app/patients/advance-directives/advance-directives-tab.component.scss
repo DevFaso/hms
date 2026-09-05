@@ -148,8 +148,8 @@
 }
 
 .btn-primary {
-  background: var(--color-primary, #2563eb);
-  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary, var(--primary));
+  border-color: var(--color-primary, var(--primary));
   color: #fff;
 }
 

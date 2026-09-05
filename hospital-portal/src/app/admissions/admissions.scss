@@ -27,8 +27,8 @@
   font-size: 1.5rem;
 
   &.admitted {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.discharged {
     background: #d1fae5;
@@ -84,9 +84,9 @@
   transition: all 0.2s;
 
   &.active {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--primary);
   }
 
   &:hover:not(.active) {
@@ -173,8 +173,8 @@
   font-weight: 600;
 
   &.status-admitted {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-discharged {
     background: #d1fae5;
@@ -210,8 +210,8 @@
     color: #92400e;
   }
   &.acuity-moderate {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.acuity-low {
     background: #d1fae5;

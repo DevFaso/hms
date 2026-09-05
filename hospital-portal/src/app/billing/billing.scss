@@ -28,8 +28,8 @@
   flex-shrink: 0;
 
   &.total {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.paid {
     background: #d1fae5;
@@ -94,8 +94,8 @@
     color: #374151;
   }
   &.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--primary);
+    border-bottom-color: var(--primary);
     font-weight: 600;
   }
 }
@@ -154,7 +154,7 @@
 
 .invoice-num {
   font-weight: 600;
-  color: #2563eb !important;
+  color: var(--primary) !important;
 }
 
 .amount {
@@ -196,7 +196,7 @@
 
   &:hover {
     background: #f3f4f6;
-    color: #2563eb;
+    color: var(--primary);
   }
 
   .material-symbols-outlined {
@@ -232,8 +232,8 @@
     color: #3730a3;
   }
   &.status-refunded {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 }
 

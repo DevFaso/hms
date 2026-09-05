@@ -148,7 +148,7 @@
   }
 
   &.intake strong {
-    color: #1d4ed8;
+    color: var(--primary-dark);
   }
 
   &.output strong {
@@ -207,8 +207,8 @@
   font-weight: 600;
 
   &.intake {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
   }
 
   &.output {

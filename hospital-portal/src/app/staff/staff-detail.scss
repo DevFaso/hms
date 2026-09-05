@@ -12,7 +12,7 @@
   margin-bottom: 1.25rem;
 
   &:hover {
-    color: #2563eb;
+    color: var(--primary);
   }
 
   .material-symbols-outlined {
@@ -73,8 +73,8 @@
   display: inline-block;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--primary-dark);
+  background: var(--primary-soft);
   padding: 3px 12px;
   border-radius: 99px;
 }
@@ -279,14 +279,14 @@
   padding: 0.5rem 1rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   border-radius: 8px;
   text-decoration: none;
   transition: background 0.15s;
 
   &:hover {
-    background: #dbeafe;
+    background: var(--primary-tint);
   }
 
   .material-symbols-outlined {
@@ -509,9 +509,9 @@
   transition: all 0.15s;
 
   &:hover {
-    background: #eff6ff;
-    border-color: #93c5fd;
-    color: #1d4ed8;
+    background: var(--primary-soft);
+    border-color: var(--primary-light);
+    color: var(--primary-dark);
   }
 }
 
@@ -696,7 +696,7 @@
   flex-shrink: 0;
 
   &[data-status='SCHEDULED'] {
-    background: #3b82f6;
+    background: var(--primary-light);
   }
   &[data-status='COMPLETED'] {
     background: #10b981;

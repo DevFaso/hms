@@ -146,8 +146,8 @@
   letter-spacing: 0.03em;
 
   &.type-rx {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.type-fill {

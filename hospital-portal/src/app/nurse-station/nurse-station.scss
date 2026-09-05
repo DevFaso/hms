@@ -33,7 +33,7 @@
   transition: all 0.2s;
   &:hover {
     background: #f3f4f6;
-    color: #2563eb;
+    color: var(--primary);
   }
 }
 
@@ -56,9 +56,9 @@
   cursor: pointer;
   transition: all 0.2s;
   &.active {
-    background: #1e40af;
+    background: var(--primary-deep);
     color: #fff;
-    border-color: #1e40af;
+    border-color: var(--primary-deep);
   }
   &:hover:not(.active) {
     background: #f3f4f6;
@@ -97,8 +97,8 @@
   justify-content: center;
   font-size: 1.5rem;
   &.vitals {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.meds {
     background: #d1fae5;
@@ -164,9 +164,9 @@
   cursor: pointer;
   transition: all 0.2s;
   &.active {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--primary);
   }
   &:hover:not(.active) {
     background: #f3f4f6;
@@ -218,12 +218,12 @@
 
 .patient-link {
   font-weight: 600;
-  color: #2563eb;
+  color: var(--primary);
   text-decoration: none;
   cursor: pointer;
   &:hover {
     text-decoration: underline;
-    color: #1d4ed8;
+    color: var(--primary-dark);
   }
 }
 
@@ -260,8 +260,8 @@
     color: #92400e;
   }
   &.status-due {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-overdue {
     background: #fee2e2;
@@ -363,11 +363,11 @@
     }
   }
   &.action-record {
-    background: #dbeafe;
-    color: #1e40af;
-    border-color: #bfdbfe;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
+    border-color: var(--primary-tint);
     &:hover:not(:disabled) {
-      background: #bfdbfe;
+      background: var(--primary-tint);
     }
   }
   &.action-complete {
@@ -534,7 +534,7 @@
   font-family: inherit;
   &:focus {
     outline: none;
-    border-color: #2563eb;
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
   }
 }
@@ -563,10 +563,10 @@
     }
   }
   &.modal-confirm {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
     &:hover {
-      background: #1d4ed8;
+      background: var(--primary-dark);
     }
     &:disabled {
       opacity: 0.5;
@@ -752,7 +752,7 @@
     background: #6b7280;
   }
   &.flow-header-active {
-    background: #2563eb;
+    background: var(--primary);
   }
   &.flow-header-critical {
     background: #dc2626;
@@ -786,7 +786,7 @@
     font-weight: 600;
     margin-bottom: 0.2rem;
     a {
-      color: #2563eb;
+      color: var(--primary);
       text-decoration: none;
       &:hover {
         text-decoration: underline;
@@ -824,8 +824,8 @@
     color: #065f46;
   }
   &.acuity-2 {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.acuity-3 {
     background: #fef3c7;
@@ -855,7 +855,7 @@
     align-items: center;
     gap: 0.5rem;
     .material-symbols-outlined {
-      color: #2563eb;
+      color: var(--primary);
     }
   }
 }
@@ -895,7 +895,7 @@
     transition: border-color 0.15s;
 
     &:focus {
-      border-color: #2563eb;
+      border-color: var(--primary);
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
     &::placeholder {
@@ -1088,8 +1088,8 @@
   }
 
   &.inbox-unread {
-    border-left: 3px solid #2563eb;
-    background: #eff6ff;
+    border-left: 3px solid var(--primary);
+    background: var(--primary-soft);
   }
 }
 
@@ -1100,7 +1100,7 @@
   }
 
   .inbox-unread & .material-symbols-outlined {
-    color: #2563eb;
+    color: var(--primary);
   }
 }
 
@@ -1193,7 +1193,7 @@
   transition: all 0.15s;
 
   &.active {
-    background: #1e40af;
+    background: var(--primary-deep);
     color: #fff;
   }
 

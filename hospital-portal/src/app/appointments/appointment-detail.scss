@@ -59,9 +59,9 @@
   }
 
   &.status-scheduled {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    border: 1px solid var(--primary-tint);
   }
   &.status-confirmed {
     background: #f0fdf4;
@@ -128,7 +128,7 @@
     cursor: default;
   }
   &.btn-confirm {
-    background: #1d4ed8;
+    background: var(--primary-dark);
     color: #fff;
   }
   &.btn-checkin {
@@ -184,7 +184,7 @@
 
     .material-symbols-outlined {
       font-size: 1.25rem;
-      color: #2563eb;
+      color: var(--primary);
     }
   }
 }
@@ -331,7 +331,7 @@
 
     &:focus {
       outline: none;
-      border-color: #2563eb;
+      border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
   }

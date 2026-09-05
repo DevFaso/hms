@@ -74,14 +74,14 @@
   font-size: 12px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
 }
 .pay-btn:hover {
-  background: #1d4ed8;
+  background: var(--primary-dark);
 }
 .pay-btn .material-symbols-outlined {
   font-size: 16px;
@@ -179,7 +179,7 @@
 }
 .pay-field input:focus,
 .pay-field select:focus {
-  border-color: #2563eb;
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .pay-actions {
@@ -206,7 +206,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -215,7 +215,7 @@
   gap: 6px;
 }
 .pay-submit-btn:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--primary-dark);
 }
 .pay-submit-btn:disabled {
   opacity: 0.6;

@@ -63,7 +63,7 @@
 
   &.unread {
     background: #f8fafc;
-    border-left: 3px solid #3b82f6;
+    border-left: 3px solid var(--primary-light);
   }
 }
 
@@ -81,8 +81,8 @@
   }
 
   &.type-appointment {
-    background: #eff6ff;
-    color: #2563eb;
+    background: var(--primary-soft);
+    color: var(--primary);
   }
   &.type-lab {
     background: #f5f3ff;
@@ -134,7 +134,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: var(--primary-light);
   flex-shrink: 0;
   margin-top: 6px;
 }
@@ -194,10 +194,10 @@
 
 // Expanded detail panel (shown below the card when clicked)
 .notif-expanded-panel {
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--primary-tint);
   border-top: none;
   border-radius: 0 0 12px 12px;
-  background: #eff6ff;
+  background: var(--primary-soft);
   padding: 0.875rem 1.25rem;
   margin-top: -8px;
 

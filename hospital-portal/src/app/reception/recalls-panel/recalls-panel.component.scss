@@ -117,7 +117,7 @@
 
 /* Status chips */
 .recall-status-pending {
-  color: #2563eb;
+  color: var(--primary);
 }
 .recall-status-notified {
   color: #7c3aed;

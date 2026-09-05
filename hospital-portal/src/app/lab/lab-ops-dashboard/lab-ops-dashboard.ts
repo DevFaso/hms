@@ -50,8 +50,8 @@ export class LabOpsDashboardComponent implements OnInit {
         label: 'Orders Today',
         value: s.ordersToday,
         icon: 'science',
-        color: '#2563eb',
-        bgColor: '#dbeafe',
+        color: '#0e7c6b',
+        bgColor: '#ccebe4',
       },
       {
         key: 'completed_today',
@@ -130,7 +130,7 @@ export class LabOpsDashboardComponent implements OnInit {
       {
         label: 'In Progress',
         count: s.statusInProgress,
-        color: '#3b82f6',
+        color: '#23b79c',
         pct: pct(s.statusInProgress),
       },
       {

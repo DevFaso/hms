@@ -203,8 +203,8 @@
 }
 
 .badge-approved {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 
 .badge-draft {
@@ -616,7 +616,7 @@
 .btn-link {
   background: none;
   border: none;
-  color: #2563eb;
+  color: var(--primary);
   cursor: pointer;
   padding: 2px 6px;
   font-size: 0.85rem;

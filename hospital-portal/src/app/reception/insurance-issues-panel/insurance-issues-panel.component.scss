@@ -50,7 +50,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: #2563eb;
+  color: var(--primary);
   font-weight: 500;
   cursor: pointer;
   text-decoration: underline;
@@ -80,6 +80,6 @@
 
   &:hover {
     background: #f3f4f6;
-    color: #2563eb;
+    color: var(--primary);
   }
 }

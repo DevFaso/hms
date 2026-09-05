@@ -24,7 +24,7 @@
 
 .card-title-icon {
   font-size: 20px;
-  color: #2563eb;
+  color: var(--primary);
 }
 
 .card-title {
@@ -35,8 +35,8 @@
 }
 
 .count-badge {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--primary-soft);
+  color: var(--primary);
   font-size: 12px;
   font-weight: 600;
   padding: 2px 8px;
@@ -46,7 +46,7 @@
 .card-link {
   font-size: 13px;
   font-weight: 500;
-  color: #2563eb;
+  color: var(--primary);
   text-decoration: none;
   &:hover {
     text-decoration: underline;
@@ -84,7 +84,7 @@
   }
 
   &.wl-tab-active {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
 
     .wl-tab-count {
@@ -153,7 +153,7 @@
     border-left-color: #d97706;
   }
   &.urgency-routine {
-    border-left-color: #2563eb;
+    border-left-color: var(--primary);
   }
   &.urgency-low {
     border-left-color: #94a3b8;
@@ -242,8 +242,8 @@
     color: #92400e;
   }
   &.status-active {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-completed {
     background: #d1fae5;
@@ -312,8 +312,8 @@
   transition: all 0.15s;
 
   &:hover {
-    background: #eff6ff;
-    color: #2563eb;
+    background: var(--primary-soft);
+    color: var(--primary);
   }
 
   .material-symbols-outlined {
@@ -367,8 +367,8 @@
   outline: none;
 
   &:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 2px #dbeafe;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-tint);
   }
 }
 
@@ -383,8 +383,8 @@
   cursor: pointer;
 
   &:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 2px #dbeafe;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-tint);
   }
 }
 

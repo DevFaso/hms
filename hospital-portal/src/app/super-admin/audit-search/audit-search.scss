@@ -356,8 +356,8 @@
   cursor: pointer;
 
   &.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--primary);
+    border-bottom-color: var(--primary);
   }
 }
 
@@ -402,8 +402,8 @@
   color: #1e293b;
 
   &[data-source='SUPPORT'] {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &[data-source='FRONTEND'] {
     background: #dcfce7;

@@ -4,8 +4,17 @@
 
 /* ── Design tokens (CSS custom properties) ── */
 :root {
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
+  /* Keneya brand primary (the woven-cross teal from #505), replacing the
+     Tailwind blue the portal shipped with. Contrast on white: 5.10:1
+     (primary), 7.58:1 (dark). --primary-light is 2.52:1 on white and is for
+     fills, borders and chart series ONLY — never text; the palette
+     migration mapped every former light-blue `color:` to --primary. */
+  --primary: #0e7c6b;
+  --primary-dark: #0a5f52;
+  --primary-deep: #0a5f52; /* text on --primary-tint: 5.98:1 */
+  --primary-light: #23b79c; /* fills, borders, sparklines — not text */
+  --primary-tint: #ccebe4; /* chips, selected rows (was blue-100/200) */
+  --primary-soft: #e6f4f1; /* hover and info surfaces (was blue-50) */
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --border: #e2e8f0;
@@ -20,7 +29,7 @@
   // 2px outline is the WCAG 2.4.7 minimum; the offset gives the ring
   // a halo so it shows over busy backgrounds. See
   // docs/ui/accessibility.md §3.
-  --focus-ring: 2px solid #2563eb;
+  --focus-ring: 2px solid #0e7c6b;
   --focus-ring-inverse: 2px solid #fbbf24; // for dark surfaces (sidebar)
   --focus-ring-offset: 2px;
 }

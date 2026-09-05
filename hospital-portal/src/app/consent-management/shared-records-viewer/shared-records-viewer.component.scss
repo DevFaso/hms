@@ -301,8 +301,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
 }
 
 .card-subtitle {
