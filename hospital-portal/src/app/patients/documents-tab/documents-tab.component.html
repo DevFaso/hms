@@ -99,5 +99,28 @@
         </tbody>
       </table>
     </div>
+    @if (totalPages() > 1) {
+      <nav class="pager" [attr.aria-label]="'PATIENT_DOCUMENTS.PAGER' | translate">
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          (click)="previousPage()"
+          [disabled]="!hasPrevious()"
+        >
+          {{ 'PATIENT_DOCUMENTS.PREVIOUS' | translate }}
+        </button>
+        <span class="muted">
+          {{ 'PATIENT_DOCUMENTS.PAGE_OF' | translate: { page: page() + 1, total: totalPages() } }}
+        </span>
+        <button
+          type="button"
+          class="btn-secondary btn-sm"
+          (click)="nextPage()"
+          [disabled]="!hasNext()"
+        >
+          {{ 'PATIENT_DOCUMENTS.NEXT' | translate }}
+        </button>
+      </nav>
+    }
   }
 </div>

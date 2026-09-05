@@ -1,8 +1,24 @@
-import { ChangeDetectionStrategy, Component, Input, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  Input,
+  OnChanges,
+  OnInit,
+  SimpleChanges,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { PatientDocumentsService } from '../../services/patient-documents.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, catchError, of, switchMap, tap } from 'rxjs';
+import {
+  PatientDocumentPage,
+  PatientDocumentsService,
+} from '../../services/patient-documents.service';
 import {
   PatientDocumentResponse,
   PatientDocumentType,
@@ -22,6 +38,15 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
   { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
 ];
 
+export const PAGE_SIZE = 25;
+
+interface ListRequest {
+  type: PatientDocumentType | null;
+  page: number;
+}
+
+type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; message: string | null };
+
 /**
  * Chart tab: what the patient uploaded through the portal (outside lab
  * reports, referral letters, insurance papers), readable by the care team.
@@ -29,6 +54,9 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
  * Read-only on purpose — uploads and deletions stay the patient's. Every
  * download is audited server-side; the tab only ever fetches bytes through
  * the authenticated route, never through the legacy `fileUrl`.
+ *
+ * Requests go through one switchMap pipeline so a slow earlier response can
+ * never overwrite the filter or page the operator is now looking at.
  */
 @Component({
   selector: 'app-documents-tab',
@@ -38,11 +66,19 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
   styleUrl: './documents-tab.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DocumentsTabComponent implements OnInit {
+export class DocumentsTabComponent implements OnInit, OnChanges {
   @Input({ required: true }) patientId = '';
+  /**
+   * The super-admin's cross-tenant scope, forwarded by the chart so a change
+   * on the scope chip re-fetches under the new X-Hospital-Id. Non-super-admin
+   * hosts leave it null; the interceptor sends their own hospital.
+   */
+  @Input() hospitalScope: string | null = null;
 
   private readonly documentsService = inject(PatientDocumentsService);
   private readonly toast = inject(ToastService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly requests$ = new Subject<ListRequest>();
 
   readonly typeOptions = DOCUMENT_TYPE_OPTIONS;
 
@@ -51,30 +87,78 @@ export class DocumentsTabComponent implements OnInit {
   /** Server-provided message when the list cannot load (e.g. no active hospital). */
   readonly error = signal<string | null>(null);
   readonly typeFilter = signal<PatientDocumentType | ''>('');
+  readonly page = signal(0);
+  readonly totalPages = signal(0);
+  readonly totalElements = signal(0);
+  readonly hasPrevious = computed(() => this.page() > 0);
+  readonly hasNext = computed(() => this.page() + 1 < this.totalPages());
   readonly downloading = signal<string | null>(null);
+
+  constructor() {
+    this.requests$
+      .pipe(
+        tap(() => {
+          this.loading.set(true);
+          this.error.set(null);
+        }),
+        switchMap((req) =>
+          this.documentsService.list(this.patientId, req.type, req.page, PAGE_SIZE).pipe(
+            switchMap((page) => of<ListOutcome>({ ok: true, page })),
+            catchError((err: unknown) =>
+              of<ListOutcome>({ ok: false, message: this.serverMessage(err) }),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((outcome) => {
+        if (outcome.ok) {
+          this.documents.set(outcome.page.content ?? []);
+          this.totalPages.set(outcome.page.totalPages ?? 0);
+          this.totalElements.set(outcome.page.totalElements ?? 0);
+          this.page.set(outcome.page.number ?? 0);
+        } else {
+          this.documents.set([]);
+          this.totalPages.set(0);
+          this.totalElements.set(0);
+          this.error.set(outcome.message);
+        }
+        this.loading.set(false);
+      });
+  }
 
   ngOnInit(): void {
     this.load();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    // A scope change after init means a different X-Hospital-Id on the next
+    // request; start over from the first page.
+    if (changes['hospitalScope'] && !changes['hospitalScope'].firstChange) {
+      this.page.set(0);
+      this.load();
+    }
+  }
+
   load(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.documentsService.list(this.patientId, this.typeFilter() || null).subscribe({
-      next: (page) => {
-        this.documents.set(page.content ?? []);
-        this.loading.set(false);
-      },
-      error: (err: unknown) => {
-        this.documents.set([]);
-        this.error.set(this.serverMessage(err));
-        this.loading.set(false);
-      },
-    });
+    this.requests$.next({ type: this.typeFilter() || null, page: this.page() });
   }
 
   onFilterChange(value: PatientDocumentType | ''): void {
     this.typeFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  previousPage(): void {
+    if (!this.hasPrevious()) return;
+    this.page.update((p) => p - 1);
+    this.load();
+  }
+
+  nextPage(): void {
+    if (!this.hasNext()) return;
+    this.page.update((p) => p + 1);
     this.load();
   }
 
@@ -95,7 +179,8 @@ export class DocumentsTabComponent implements OnInit {
         anchor.href = url;
         anchor.download = doc.displayName || 'document';
         anchor.click();
-        URL.revokeObjectURL(url);
+        // Defer revoke so Safari/WebKit has time to start reading the blob.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
       },
       error: () => {
         this.downloading.set(null);

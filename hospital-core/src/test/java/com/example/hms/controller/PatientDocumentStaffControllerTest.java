@@ -21,6 +21,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -119,13 +121,16 @@ class PatientDocumentStaffControllerTest {
         Path tmp = Files.createTempFile("staff-doc", ".pdf");
         Files.writeString(tmp, "%PDF-1.4 test");
         tmp.toFile().deleteOnExit();
+        // Patient-chosen name with a quote, a space and an accent: must neither
+        // break the header nor leak unencoded.
         when(documentService.downloadForPatient(hospitalId, patientId, documentId))
-            .thenReturn(new PatientDocumentService.DocumentPayload(tmp, "application/pdf", "lab \"q\".pdf"));
+            .thenReturn(new PatientDocumentService.DocumentPayload(tmp, "application/pdf", "résumé \"q\".pdf"));
 
         mockMvc.perform(get("/patients/{patientId}/documents/{documentId}/download", patientId, documentId))
             .andExpect(status().isOk())
             .andExpect(content().contentType("application/pdf"))
-            .andExpect(header().string("Content-Disposition", "attachment; filename=\"lab 'q'.pdf\""))
+            .andExpect(header().string("Content-Disposition", startsWith("attachment;")))
+            .andExpect(header().string("Content-Disposition", containsString("filename*=UTF-8''r%C3%A9sum%C3%A9%20%22q%22.pdf")))
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(content().string("%PDF-1.4 test"));
     }

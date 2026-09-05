@@ -18,6 +18,10 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Role;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.service.impl.PatientDocumentServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +68,7 @@ class PatientDocumentServiceImplTest {
     @Mock private FileUploadService fileUploadService;
     @Mock private PatientDocumentMapper documentMapper;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private Authentication auth;
 
@@ -352,9 +357,16 @@ class PatientDocumentServiceImplTest {
             SecurityContextHolder.clearContext();
         }
 
-        private void registered() {
+        private PatientHospitalRegistration registered() {
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital A");
+            PatientHospitalRegistration registration = new PatientHospitalRegistration();
+            registration.setHospital(hospital);
+            registration.setPatient(patient);
             when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
-                    .thenReturn(Optional.of(new PatientHospitalRegistration()));
+                    .thenReturn(Optional.of(registration));
+            return registration;
         }
 
         @Test
@@ -407,6 +419,13 @@ class PatientDocumentServiceImplTest {
         @DisplayName("download streams the stored file and writes a DATA_ACCESS row naming the document, not the file name")
         void downloadStreamsAndAudits() {
             registered();
+            Role nurse = new Role();
+            nurse.setName("ROLE_NURSE");
+            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+            assignment.setId(UUID.randomUUID());
+            assignment.setRole(nurse);
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
+                    .thenReturn(Optional.of(assignment));
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient)
                     .documentType(PatientDocumentType.LAB_RESULT)
@@ -436,10 +455,38 @@ class PatientDocumentServiceImplTest {
             assertThat(row.getStatus()).isEqualTo(AuditStatus.SUCCESS);
             assertThat(row.getPatientId()).isEqualTo(patientId);
             assertThat(row.getResourceId()).isEqualTo(docId.toString());
-            assertThat(row.getEntityType()).isEqualTo("PatientUploadedDocument");
+            assertThat(row.getEntityType()).isEqualTo("PATIENT_UPLOADED_DOCUMENT");
+            // Structured anchors, so per-hospital audit queries find the row.
+            assertThat(row.getHospitalName()).isEqualTo("Hospital A");
+            assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
+            assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
             // The patient-chosen file name can itself be PHI; the row must not carry it.
             assertThat(row.getEventDescription()).contains(docId.toString()).contains("LAB_RESULT")
                     .doesNotContain("hiv-results");
+        }
+
+        @Test
+        @DisplayName("a super-admin scoped by header has no assignment at the hospital — the row still carries the hospital")
+        void downloadBySuperAdminAuditsHospitalWithoutAssignment() {
+            registered();
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
+                    .thenReturn(Optional.empty());
+            PatientUploadedDocument doc = PatientUploadedDocument.builder()
+                    .patient(patient).documentType(PatientDocumentType.OTHER).filePath("/uploads/patient-documents/z.pdf")
+                    .build();
+            doc.setId(docId);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/z.pdf", "patient-documents"))
+                    .thenReturn(java.nio.file.Path.of("z.pdf"));
+
+            service.downloadForPatient(hospitalId, patientId, docId);
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getHospitalName()).isEqualTo("Hospital A");
+            assertThat(audit.getValue().getAssignmentId()).isNull();
+            assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
         }
 
         @Test

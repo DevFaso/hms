@@ -6928,7 +6928,11 @@
     "BY": "par",
     "DOWNLOAD": "Télécharger",
     "DOWNLOADING": "Téléchargement…",
-    "DOWNLOAD_FAILED": "Le document n'a pas pu être téléchargé"
+    "DOWNLOAD_FAILED": "Le document n'a pas pu être téléchargé",
+    "PAGER": "Pages de documents",
+    "PREVIOUS": "Précédent",
+    "NEXT": "Suivant",
+    "PAGE_OF": "Page {{page}} sur {{total}}"
   },
   "MED_HISTORY": {
     "TAB": "Historique",

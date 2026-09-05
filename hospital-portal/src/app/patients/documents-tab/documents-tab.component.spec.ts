@@ -1,8 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
-import { DocumentsTabComponent } from './documents-tab.component';
-import { PatientDocumentsService } from '../../services/patient-documents.service';
+import { Subject, of, throwError } from 'rxjs';
+import { DocumentsTabComponent, PAGE_SIZE } from './documents-tab.component';
+import {
+  PatientDocumentPage,
+  PatientDocumentsService,
+} from '../../services/patient-documents.service';
 import { ToastService } from '../../core/toast.service';
 import { PatientDocumentResponse } from '../../services/patient-portal.service';
 
@@ -23,6 +26,18 @@ const doc = (over: Partial<PatientDocumentResponse> = {}): PatientDocumentRespon
   ...over,
 });
 
+const page = (
+  content: PatientDocumentResponse[],
+  over: Partial<PatientDocumentPage> = {},
+): PatientDocumentPage => ({
+  content,
+  totalElements: content.length,
+  totalPages: 1,
+  number: 0,
+  size: PAGE_SIZE,
+  ...over,
+});
+
 describe('DocumentsTabComponent', () => {
   let fixture: ComponentFixture<DocumentsTabComponent>;
   let component: DocumentsTabComponent;
@@ -36,9 +51,7 @@ describe('DocumentsTabComponent', () => {
       'downloadBlob',
     ]);
     toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
-    serviceSpy.list.and.returnValue(
-      of({ content: [doc()], totalElements: 1, totalPages: 1, number: 0, size: 50 }),
-    );
+    serviceSpy.list.and.returnValue(of(page([doc()])));
 
     await TestBed.configureTestingModule({
       imports: [DocumentsTabComponent, TranslateModule.forRoot()],
@@ -55,16 +68,62 @@ describe('DocumentsTabComponent', () => {
   });
 
   it("loads the patient's documents on init and renders them", () => {
-    expect(serviceSpy.list).toHaveBeenCalledWith('p1', null);
+    expect(serviceSpy.list).toHaveBeenCalledWith('p1', null, 0, PAGE_SIZE);
     expect(component.documents().length).toBe(1);
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('referral.pdf');
     expect(text).toContain('47 KB');
   });
 
-  it('reloads with the type filter when it changes', () => {
+  it('reloads from page 0 with the type filter when it changes', () => {
+    component.nextPage(); // no-op on a single page
     component.onFilterChange('LAB_RESULT');
-    expect(serviceSpy.list).toHaveBeenCalledWith('p1', 'LAB_RESULT');
+    expect(serviceSpy.list).toHaveBeenCalledWith('p1', 'LAB_RESULT', 0, PAGE_SIZE);
+  });
+
+  it('pages forward and back, bounded by totalPages', () => {
+    const multi = (number: number) =>
+      page([doc({ id: `d${number}` })], { totalPages: 3, number, totalElements: 60 });
+    serviceSpy.list.and.returnValues(of(multi(0)), of(multi(1)), of(multi(0)));
+
+    component.load(); // seed a three-page state
+    expect(component.hasPrevious()).toBeFalse();
+    expect(component.hasNext()).toBeTrue();
+
+    component.nextPage();
+    expect(serviceSpy.list).toHaveBeenCalledWith('p1', null, 1, PAGE_SIZE);
+    expect(component.page()).toBe(1);
+    expect(component.hasPrevious()).toBeTrue();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav.pager')).not.toBeNull();
+
+    component.previousPage();
+    expect(serviceSpy.list.calls.mostRecent().args).toEqual(['p1', null, 0, PAGE_SIZE]);
+    expect(component.page()).toBe(0);
+    component.previousPage(); // bounded: no request below page 0
+    expect(serviceSpy.list).toHaveBeenCalledTimes(4);
+  });
+
+  it('only the latest request can update the view (switchMap)', () => {
+    const slow = new Subject<PatientDocumentPage>();
+    const fast = new Subject<PatientDocumentPage>();
+    serviceSpy.list.and.returnValues(slow, fast);
+
+    component.onFilterChange('LAB_RESULT'); // -> slow
+    component.onFilterChange('INVOICE'); // -> fast, cancels slow
+    fast.next(page([doc({ id: 'invoice', documentType: 'INVOICE' })]));
+    fast.complete();
+    slow.next(page([doc({ id: 'stale', documentType: 'LAB_RESULT' })]));
+    slow.complete();
+
+    expect(component.documents().map((d) => d.id)).toEqual(['invoice']);
+  });
+
+  it('re-fetches from page 0 when the hospital scope changes after init', () => {
+    fixture.componentRef.setInput('hospitalScope', 'h2');
+    fixture.detectChanges();
+    expect(serviceSpy.list.calls.mostRecent().args).toEqual(['p1', null, 0, PAGE_SIZE]);
+    expect(serviceSpy.list).toHaveBeenCalledTimes(2);
   });
 
   it('shows the server message when the list cannot load (no active hospital)', () => {
@@ -78,19 +137,21 @@ describe('DocumentsTabComponent', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).not.toBeNull();
   });
 
-  it('downloads through the authenticated route, never via fileUrl', () => {
+  it('downloads through the authenticated route, never via fileUrl, and revokes later', async () => {
     serviceSpy.downloadBlob.and.returnValue(of(new Blob(['%PDF'])));
     spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
-    spyOn(URL, 'revokeObjectURL');
+    const revoke = spyOn(URL, 'revokeObjectURL');
     const click = spyOn(HTMLAnchorElement.prototype, 'click');
 
     component.download(doc());
 
     expect(serviceSpy.downloadBlob).toHaveBeenCalledWith('p1', 'd1');
     expect(click).toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled(); // deferred so WebKit can start reading
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(revoke).toHaveBeenCalledWith('blob:x');
     expect(component.downloading()).toBeNull();
-    const html = (fixture.nativeElement as HTMLElement).innerHTML;
-    expect(html).not.toContain('legacy.example');
+    expect((fixture.nativeElement as HTMLElement).innerHTML).not.toContain('legacy.example');
   });
 
   it('reports a failed download and clears the busy state', () => {

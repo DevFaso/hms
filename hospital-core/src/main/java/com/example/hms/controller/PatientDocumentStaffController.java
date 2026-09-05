@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -100,8 +102,14 @@ public class PatientDocumentStaffController {
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(payload.contentType()))
             .cacheControl(CacheControl.noStore())
-            .header(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
+            // The display name is the patient's own file name: quotes, backslashes,
+            // control characters and non-ASCII all reach here. Spring's builder
+            // emits the RFC 5987 form (filename*=UTF-8''…) so none of it can break
+            // the header or the response.
+            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                .filename(payload.displayName(), StandardCharsets.UTF_8)
+                .build()
+                .toString())
             .body(new FileSystemResource(payload.path()));
     }
 }

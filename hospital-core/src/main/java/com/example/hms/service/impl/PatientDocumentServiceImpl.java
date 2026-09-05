@@ -14,9 +14,12 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
@@ -49,6 +52,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final FileUploadService fileUploadService;
     private final PatientDocumentMapper documentMapper;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
 
     @Override
@@ -151,10 +155,10 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Override
     @Transactional(readOnly = true)
     public DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
-        requireRegisteredAt(hospitalId, patientId);
+        PatientHospitalRegistration registration = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
-        auditStaffDownload(hospitalId, patientId, doc);
+        auditStaffDownload(hospitalId, registration, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
         return new DocumentPayload(path, contentType, displayName);
@@ -167,15 +171,17 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      * the same answer as a document that does not exist, so the endpoint
      * does not confirm that a patient is known elsewhere.
      */
-    private void requireRegisteredAt(UUID hospitalId, UUID patientId) {
+    private PatientHospitalRegistration requireRegisteredAt(UUID hospitalId, UUID patientId) {
         if (hospitalId == null) {
             throw new BusinessException(
                     "An active hospital is required: patient documents are read through the hospital "
                             + "the patient is registered at. Select a hospital first.");
         }
-        if (patientId == null || registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId).isEmpty()) {
-            throw new ResourceNotFoundException("Patient not found: " + patientId);
+        if (patientId == null) {
+            throw new ResourceNotFoundException("Patient not found: null");
         }
+        return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
     }
 
     /**
@@ -184,19 +190,36 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      * a disclosure in its own right and gets its own row every time. The
      * description carries the document id and type only — the display name
      * is patient-chosen and can itself be PHI ("hiv-results.pdf").
+     *
+     * <p>The row is anchored structurally, not in free text: the hospital
+     * snapshot comes from the registration that authorised the read, and the
+     * actor's assignment at that hospital (when one exists — a super-admin
+     * scoped via X-Hospital-Id has none) links the row to the assignment so
+     * the per-hospital audit queries find it. The audit service derives no
+     * assignment from {@code userId} alone.
      */
-    private void auditStaffDownload(UUID hospitalId, UUID patientId, PatientUploadedDocument doc) {
+    private void auditStaffDownload(UUID hospitalId, PatientHospitalRegistration registration,
+                                    PatientUploadedDocument doc) {
         try {
+            UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                    .orElse(null);
+            UserRoleHospitalAssignment assignment = actorId == null ? null
+                    : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
+                            .orElse(null);
+            String hospitalName = registration.getHospital() != null ? registration.getHospital().getName() : null;
+            UUID patientId = registration.getPatient() != null ? registration.getPatient().getId() : null;
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userName(SecurityUtils.getCurrentUsername())
-                    .userId(authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
-                            .orElse(null))
+                    .userId(actorId)
+                    .assignmentId(assignment != null ? assignment.getId() : null)
+                    .roleName(assignment != null && assignment.getRole() != null ? assignment.getRole().getName() : null)
+                    .hospitalName(hospitalName)
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)
-.entityType("PATIENT_UPLOADED_DOCUMENT")
+                    .entityType("PATIENT_UPLOADED_DOCUMENT")
                     .resourceId(doc.getId() != null ? doc.getId().toString() : null)
                     .eventDescription("Staff download of patient-uploaded document " + doc.getId()
-                            + " (" + doc.getDocumentType() + ") via hospital " + hospitalId)
+                            + " (" + doc.getDocumentType() + ")")
                     .status(AuditStatus.SUCCESS)
                     .build());
         } catch (RuntimeException ex) {
