@@ -65,12 +65,13 @@ class MigrationRegistrationTest {
      * {@code R__prod_role_grants.sql} is excluded from the registration check
      * because it is not a Liquibase artefact at all.
      *
-     * <p>Its header says "This is a Liquibase 'repeatable' changeset (R__
-     * prefix). It re-runs whenever the file checksum changes." That is Flyway's
-     * convention, not Liquibase's — Liquibase discovers nothing by filename, and
-     * expresses repeatability as {@code runOnChange="true"} on a changeSet it
-     * lists. Nothing in this repository references the file, so the grants it
-     * describes have never been applied by it.
+     * <p>Its {@code R__} prefix is Flyway's repeatable-migration convention, not
+     * Liquibase's — Liquibase discovers nothing by filename, and expresses
+     * repeatability as {@code runOnChange="true"} on a changeSet it lists.
+     * Nothing in the changelog references the file; it is run by hand, as
+     * postgres, on prod (see its header). What this class does check is that
+     * its schema arrays keep up with the migrations —
+     * {@link #roleGrantsCoverEverySchemaTheMigrationsCreate()}.
      *
      * <p>It is excluded rather than registered because registering it here would
      * make every deploy attempt to GRANT to hms_app / hms_readonly /
@@ -164,6 +165,59 @@ class MigrationRegistrationTest {
         assertThat(empty)
             .withFailMessage("These migrations are empty and will apply nothing: %s", empty)
             .isEmpty();
+    }
+
+    /** {@code CREATE SCHEMA [IF NOT EXISTS] name} in any versioned migration. */
+    private static final Pattern CREATE_SCHEMA =
+        Pattern.compile("CREATE\\s+SCHEMA\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([a-z_]+)", Pattern.CASE_INSENSITIVE);
+
+    /** One {@code schemas TEXT[] := ARRAY[...]} literal in the grants file. */
+    private static final Pattern SCHEMA_ARRAY = Pattern.compile("ARRAY\\[([^\\]]+)\\]");
+
+    @Test
+    void roleGrantsCoverEverySchemaTheMigrationsCreate() throws IOException {
+        // R__prod_role_grants.sql is run by hand on prod, where Liquibase runs
+        // as postgres and the application as hms_app. A schema missing from its
+        // arrays is a schema hms_app cannot even USAGE: `scheduling` (V19) and
+        // `integration` (V68) sat outside the list until 2026-09-05, and every
+        // waitlist / recall / DHIS2 query on prod failed with
+        // "permission denied for schema scheduling" while the H2 suite, which
+        // has one user, saw nothing.
+        Path migrationDir = migrationDirectory();
+
+        Set<String> created = new TreeSet<>();
+        try (Stream<Path> files = Files.list(migrationDir)) {
+            for (Path file : files.filter(p -> VERSIONED.matcher(p.getFileName().toString()).matches()).toList()) {
+                Matcher matcher = CREATE_SCHEMA.matcher(Files.readString(file, StandardCharsets.UTF_8));
+                while (matcher.find()) {
+                    created.add(matcher.group(1).toLowerCase());
+                }
+            }
+        }
+        assertThat(created).isNotEmpty();
+
+        String grants = Files.readString(migrationDir.resolve("R__prod_role_grants.sql"), StandardCharsets.UTF_8);
+        Matcher arrays = SCHEMA_ARRAY.matcher(grants);
+        int arraysChecked = 0;
+        while (arrays.find()) {
+            arraysChecked++;
+            Set<String> granted = new TreeSet<>();
+            for (String element : arrays.group(1).split(",")) {
+                granted.add(element.trim().replace("'", "").toLowerCase());
+            }
+            Set<String> missing = new TreeSet<>(created);
+            missing.removeAll(granted);
+            assertThat(missing)
+                .withFailMessage(
+                    "R__prod_role_grants.sql array #%d omits schemas the migrations create, so "
+                        + "hms_app on prod cannot reach any table in them: %s%n%n"
+                        + "Add them to every schema array in the file and re-run it on prod.",
+                    arraysChecked, missing)
+                .isEmpty();
+        }
+        assertThat(arraysChecked)
+            .withFailMessage("R__prod_role_grants.sql no longer declares its schema arrays as ARRAY[...]")
+            .isPositive();
     }
 
     private static boolean isBlank(Path path) {
