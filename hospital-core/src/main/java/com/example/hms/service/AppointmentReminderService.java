@@ -90,7 +90,10 @@ public class AppointmentReminderService {
     /**
      * Send reminders for appointments starting within the lead window.
      * Per-appointment failures are logged and skipped; each appointment is
-     * stamped exactly once regardless of dispatch outcome.
+     * stamped exactly once regardless of dispatch outcome — the stamp is a
+     * conditional UPDATE taken before sending, so that holds across two
+     * instances and across the sweep and its manual trigger, not just within
+     * one loop.
      *
      * @return number of appointments for which at least one channel fired
      */
@@ -109,13 +112,21 @@ public class AppointmentReminderService {
                 if (startsAt.isBefore(now) || startsAt.isAfter(windowEnd)) {
                     continue; // outside the hour-precision window — picked up by a later tick
                 }
+                // Claim first, send second. The conditional UPDATE is the only
+                // thing that decides who reminds this appointment: a second
+                // sweep, or the manual trigger racing the sweep, reads the same
+                // candidate list but loses the claim and sends nothing. Stamping
+                // even when every channel is skipped keeps the sweep converging.
+                LocalDateTime claimedAt = LocalDateTime.now();
+                if (appointmentRepository.claimReminder(appointment.getId(), claimedAt) == 0) {
+                    continue; // somebody else already reminded (or is reminding) this one
+                }
+                // Keep the managed entity in step with the row the UPDATE just
+                // wrote; nothing below saves it, so this is bookkeeping only.
+                appointment.setReminderSentAt(claimedAt);
                 if (remind(appointment, startsAt)) {
                     reminded++;
                 }
-                // Stamp even when both channels were skipped, so the sweep
-                // converges instead of re-evaluating the same row forever.
-                appointment.setReminderSentAt(LocalDateTime.now());
-                appointmentRepository.save(appointment);
             } catch (RuntimeException ex) {
                 log.warn("Appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage(), ex);
             }

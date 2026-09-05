@@ -91,6 +91,7 @@ class AppointmentReminderServiceTest {
 
         lenient().when(messageSource.getMessage(eq("sms.appointment.reminder"), any(), any(Locale.class)))
             .thenReturn("Rappel : rendez-vous à CHU Yalgado.");
+        lenient().when(appointmentRepository.claimReminder(any(), any())).thenReturn(1);
         lenient().when(appointmentRepository.save(any(Appointment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
@@ -117,7 +118,7 @@ class AppointmentReminderServiceTest {
             contains("Rappel"), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
         verify(smsService).send(eq("+22670707070"), contains("Rappel"));
         assertThat(appointment.getReminderSentAt()).isNotNull();
-        verify(appointmentRepository).save(appointment);
+        verify(appointmentRepository).claimReminder(eq(appointment.getId()), any());
     }
 
     @Test
@@ -193,7 +194,7 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isZero();
         assertThat(appointment.getReminderSentAt()).isNull(); // later tick picks it up
-        verify(appointmentRepository, never()).save(any(Appointment.class));
+        verify(appointmentRepository, never()).claimReminder(any(), any());
     }
 
     @Test
@@ -207,7 +208,7 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isZero();
         assertThat(appointment.getReminderSentAt()).isNotNull(); // sweep converges
-        verify(appointmentRepository).save(appointment);
+        verify(appointmentRepository).claimReminder(eq(appointment.getId()), any());
     }
 
     @Test
@@ -237,5 +238,20 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isEqualTo(1);
         assertThat(appointment.getReminderSentAt()).isNotNull();
+    }
+
+    @Test
+    void losingTheClaimSendsNothing() {
+        // A second instance (or the manual trigger) already stamped this
+        // appointment: the conditional UPDATE returns 0 and no channel fires.
+        feed(appointment);
+        when(appointmentRepository.claimReminder(eq(appointment.getId()), any())).thenReturn(0);
+
+        int reminded = service.sendDueReminders();
+
+        assertThat(reminded).isZero();
+        assertThat(appointment.getReminderSentAt()).isNull();
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(smsService, never()).send(anyString(), anyString());
     }
 }

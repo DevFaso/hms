@@ -2322,4 +2322,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V155 — ShedLock table (platform.shedlock). 26 @Scheduled sweeps ran
+         with no lock; a deploy overlap or a restart storm is enough for two
+         instances to run the same sweep. Every DB-touching scheduler now
+         carries @SchedulerLock (SchedulerLockCoverageTest enforces it); the
+         per-instance cache evictors deliberately do not. No entity maps this
+         table — ShedLock's JDBC provider owns it.
+         ================================================================= -->
+    <changeSet id="V155-shedlock" author="hms-team" runOnChange="false">
+        <sqlFile path="V155__shedlock.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

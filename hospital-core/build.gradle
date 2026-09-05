@@ -18,6 +18,9 @@ dependencies {
 
     // Liquibase
     implementation 'org.liquibase:liquibase-core'
+    // Distributed scheduler locks: one instance runs a sweep, the others skip it.
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.3.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.3.0'
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'

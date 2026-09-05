@@ -1599,7 +1599,11 @@ that exists rather than inventing one.
   `Duration.between(LocalDateTime, LocalDateTime)`. This is one call about
   whether clinical timestamps move to `Instant`/`OffsetDateTime` on
   `BaseEntity`, not 21 edits. It resurfaces in every Sonar run until decided.
-- ShedLock / `@Version` on the remaining check-then-act races.
+- ~~ShedLock / `@Version` on the remaining check-then-act races.~~ V155 +
+  `@SchedulerLock` on all 20 DB-touching sweeps (`SchedulerLockCoverageTest`
+  keeps the per-instance evictors an explicit list); the reminder stamp is a
+  conditional UPDATE taken before sending (`claimReminder`). Slot hold/book
+  had `@Version` since V128.
 - Audit events on the write surfaces added since #431.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).

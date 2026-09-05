@@ -3,6 +3,7 @@ package com.example.hms.service.scheduled;
 import com.example.hms.service.scheduling.SlotInventoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ public class SlotHoldReclaimScheduler {
 
     private final SlotInventoryService slotInventoryService;
 
+    @SchedulerLock(name = "SlotHoldReclaimScheduler.reclaim", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${app.scheduling.slot-hold-reclaim-ms:120000}")
     public void reclaim() {
         try {

@@ -1,6 +1,7 @@
 package com.example.hms.repository;
 
 import com.example.hms.model.Appointment;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,12 +9,25 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 @Repository
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID>, JpaSpecificationExecutor<Appointment> {
+
+    /**
+     * Claims an appointment for reminding: sets the stamp only if nobody has.
+     * Returns 1 for the caller that won and 0 for everyone else, so the sweep
+     * and its manual trigger — or two overlapping sweeps — cannot both remind
+     * the same patient. The stamp goes down BEFORE anything is sent (the
+     * claim-then-send shape from the webhook outbox); a message lost to a
+     * crash between the two is the accepted cost, a double message is not.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE Appointment a SET a.reminderSentAt = :now WHERE a.id = :id AND a.reminderSentAt IS NULL")
+    int claimReminder(@Param("id") UUID id, @Param("now") LocalDateTime now);
 
     // Custom queries for flexible appointment lookup
     @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email)")

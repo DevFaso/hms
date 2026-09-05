@@ -6,6 +6,7 @@ import com.example.hms.repository.pharmacy.DispenseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +46,7 @@ public class PharmacyRefillReminderScheduler {
     @Value("${pharmacy.refill-reminder.lookback-days:60}")
     private int lookbackDays;
 
+    @SchedulerLock(name = "PharmacyRefillReminderScheduler.sendDailyRefillReminders", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${pharmacy.refill-reminder.cron:0 0 9 * * *}")
     public void sendDailyRefillReminders() {
         LocalDateTime now = LocalDateTime.now();

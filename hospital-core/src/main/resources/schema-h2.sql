@@ -16,6 +16,15 @@ CREATE SCHEMA IF NOT EXISTS scheduling;
 CREATE SCHEMA IF NOT EXISTS security;
 CREATE SCHEMA IF NOT EXISTS support;
 
+-- ShedLock (V155): no entity maps it, so Hibernate create-drop never builds it;
+-- without this every @SchedulerLock job would fail to lock under H2.
+CREATE TABLE IF NOT EXISTS platform.shedlock (
+    name        VARCHAR(64)  NOT NULL PRIMARY KEY,
+    lock_until  TIMESTAMP    NOT NULL,
+    locked_at   TIMESTAMP    NOT NULL,
+    locked_by   VARCHAR(255) NOT NULL
+);
+
 -- Clinical prescriptions domain (ensures Hibernate FK creation succeeds during local runs)
 CREATE TABLE IF NOT EXISTS clinical.prescriptions (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

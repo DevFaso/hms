@@ -4,6 +4,7 @@ import com.example.hms.service.AppointmentReminderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ public class AppointmentReminderScheduler {
 
     private final AppointmentReminderService appointmentReminderService;
 
+    @SchedulerLock(name = "AppointmentReminderScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${hms.appointments.reminder.interval-ms:900000}")
     public void runSweep() {
         try {

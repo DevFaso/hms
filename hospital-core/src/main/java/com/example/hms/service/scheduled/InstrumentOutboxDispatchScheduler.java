@@ -3,6 +3,7 @@ package com.example.hms.service.scheduled;
 import com.example.hms.service.integration.InstrumentOutboxDispatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,7 @@ public class InstrumentOutboxDispatchScheduler {
      * disabled by default so this costs one no-op query on installations that
      * have no instrument interface.
      */
+    @SchedulerLock(name = "InstrumentOutboxDispatchScheduler.dispatch", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${app.hl7.mllp.outbound.sweep-interval-ms:60000}")
     public void dispatch() {
         try {

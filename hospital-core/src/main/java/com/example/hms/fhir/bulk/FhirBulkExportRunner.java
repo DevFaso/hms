@@ -27,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -156,6 +157,7 @@ public class FhirBulkExportRunner {
             operationsProperties.getBulkExport().getStorageDir()).toAbsolutePath().normalize();
     }
 
+    @SchedulerLock(name = "FhirBulkExportRunner.runSweep", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${app.fhir.operations.bulk-export.runner-interval-ms:60000}")
     public void runSweep() {
         if (!service.isEnabled()) {
