@@ -434,7 +434,11 @@
       "RESET_ALL_CONFIRM": "Tapez RESET ALL MFA pour confirmer la réinitialisation de tout le monde",
       "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
       "RESET_ALL_CONFIRM_TYPED": "Tapez RESET ALL MFA pour confirmer, ou sélectionnez les utilisateurs à réinitialiser.",
-      "ACTION": "Forcer le ré-enrôlement"
+      "ACTION": "Forcer le ré-enrôlement",
+      "SEARCH_FAILED": "La recherche d'utilisateurs a échoué. Réessayez avant de conclure que personne ne correspond.",
+      "HOSPITALS_LOADING": "Chargement des hôpitaux…",
+      "HOSPITALS_FAILED": "La liste des hôpitaux n'a pas pu être chargée ; le périmètre hospitalier est indisponible.",
+      "RETRY": "Réessayer"
     },
     "BROADCAST": {
       "TITLE": "Bannière de diffusion",

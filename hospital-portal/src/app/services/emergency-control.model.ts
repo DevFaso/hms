@@ -14,7 +14,11 @@ export interface EmergencyForceMfaRequest {
   userIds?: string[];
   /** Narrow the reset to users with an active assignment at this hospital. */
   hospitalId?: string;
-  /** Required by the backend when userIds is empty: an explicit platform-wide reset. */
+  /**
+   * Required by the backend when userIds is empty: an explicit reset of every
+   * enrolled user IN SCOPE — the whole platform, or only the users assigned to
+   * `hospitalId` when that is set.
+   */
   resetAll?: boolean;
   reason: string;
 }

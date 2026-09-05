@@ -434,7 +434,11 @@
       "RESET_ALL_CONFIRM": "Type RESET ALL MFA to confirm a reset of everyone",
       "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
       "RESET_ALL_CONFIRM_TYPED": "Type RESET ALL MFA to confirm, or select the users to reset.",
-      "ACTION": "Force re-enrol"
+      "ACTION": "Force re-enrol",
+      "SEARCH_FAILED": "The user search failed. Try again before assuming nobody matches.",
+      "HOSPITALS_LOADING": "Loading hospitals…",
+      "HOSPITALS_FAILED": "The hospital list could not be loaded, so scoping is unavailable.",
+      "RETRY": "Retry"
     },
     "BROADCAST": {
       "TITLE": "Broadcast banner",

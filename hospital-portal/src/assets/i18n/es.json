@@ -434,7 +434,11 @@
       "RESET_ALL_CONFIRM": "Escriba RESET ALL MFA para confirmar el restablecimiento de todos",
       "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
       "RESET_ALL_CONFIRM_TYPED": "Escriba RESET ALL MFA para confirmar, o seleccione los usuarios a restablecer.",
-      "ACTION": "Forzar re-enrolamiento"
+      "ACTION": "Forzar re-enrolamiento",
+      "SEARCH_FAILED": "La búsqueda de usuarios falló. Reintente antes de asumir que nadie coincide.",
+      "HOSPITALS_LOADING": "Cargando hospitales…",
+      "HOSPITALS_FAILED": "No se pudo cargar la lista de hospitales; el ámbito hospitalario no está disponible.",
+      "RETRY": "Reintentar"
     },
     "BROADCAST": {
       "TITLE": "Banner de difusión",

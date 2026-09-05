@@ -101,6 +101,53 @@ describe('EmergencyComponent — MFA-reset picker', () => {
     expect(component.mfaSelected().length).toBe(1);
   });
 
+  it('searches the same term again after a pick cleared the box', async () => {
+    users.search.and.returnValue(
+      of({ content: [user('u1', 'Awa')], totalElements: 1, totalPages: 1, size: 10, number: 0 }),
+    );
+    component.onMfaQueryChange('Aw');
+    await settle();
+    component.addMfaTarget(component.mfaResults()[0]);
+    component.onMfaQueryChange('Aw');
+    await settle();
+    expect(users.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears stale results the moment the query changes', async () => {
+    users.search.and.returnValue(
+      of({ content: [user('u1', 'Awa')], totalElements: 1, totalPages: 1, size: 10, number: 0 }),
+    );
+    component.onMfaQueryChange('Aw');
+    await settle();
+    expect(component.mfaResults().length).toBe(1);
+    component.onMfaQueryChange('Bin');
+    expect(component.mfaResults()).toEqual([]);
+  });
+
+  it('reports a failed search instead of "no user matches"', async () => {
+    users.search.and.returnValue(throwError(() => new Error('503')));
+    component.onMfaQueryChange('Aw');
+    await settle();
+    expect(component.mfaSearchFailed()).toBeTrue();
+    expect(component.mfaResults()).toEqual([]);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.picker-error')).not.toBeNull();
+  });
+
+  it('invalidates the typed phrase when the blast radius changes', () => {
+    component.mfaResetAllConfirm.set(RESET_ALL_PHRASE);
+    component.onMfaScopeChange('h1');
+    expect(component.mfaResetAllConfirm()).toBe('');
+
+    component.mfaResetAllConfirm.set(RESET_ALL_PHRASE);
+    component.addMfaTarget(user('u1', 'Awa'));
+    expect(component.mfaResetAllConfirm()).toBe('');
+
+    component.mfaResetAllConfirm.set(RESET_ALL_PHRASE);
+    component.removeMfaTarget('u1');
+    expect(component.mfaResetAllConfirm()).toBe('');
+  });
+
   it('does not search for a single character', async () => {
     component.onMfaQueryChange('A');
     await settle();
@@ -152,5 +199,59 @@ describe('EmergencyComponent — MFA-reset picker', () => {
     component.forceMfaReenrol();
     expect(component.mfaPanel().error).toBe('mfa_required: invalid or missing X-Mfa-Token');
     expect(component.mfaPanel().busy).toBeFalse();
+  });
+});
+
+describe('EmergencyComponent — hospital scope directory', () => {
+  it('shows a failure with retry instead of an empty "whole platform" list', async () => {
+    const controls = jasmine.createSpyObj<EmergencyControlService>('EmergencyControlService', [
+      'forceLogoutAll',
+      'killFeature',
+      'forceMfaReenrol',
+      'broadcast',
+    ]);
+    const users = jasmine.createSpyObj<UserService>('UserService', ['search']);
+    const hospitals = jasmine.createSpyObj<HospitalService>('HospitalService', ['list']);
+    hospitals.list.and.returnValues(
+      throwError(() => new Error('503')),
+      of([]),
+    );
+    const downtime = {
+      load: jasmine.createSpy('load'),
+      status: signal(null),
+      toggle: jasmine.createSpy('toggle').and.returnValue(of(null)),
+    };
+    await TestBed.configureTestingModule({
+      imports: [EmergencyComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: EmergencyControlService, useValue: controls },
+        { provide: UserService, useValue: users },
+        { provide: HospitalService, useValue: hospitals },
+        { provide: DowntimeService, useValue: downtime },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EmergencyComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+    // NgModel applies [disabled] asynchronously (setDisabledState after a
+    // resolved promise), so settle before reading the DOM.
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.hospitalsLoading()).toBeFalse();
+    expect(component.hospitalsFailed()).toBeTrue();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      'select[aria-busy]',
+    ) as HTMLSelectElement;
+    expect(select.disabled).toBeTrue();
+
+    component.loadHospitals();
+    expect(hospitals.list).toHaveBeenCalledTimes(2);
+    expect(component.hospitalsFailed()).toBeFalse();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(select.disabled).toBeFalse();
   });
 });

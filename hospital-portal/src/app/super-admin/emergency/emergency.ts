@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -9,7 +9,7 @@ import { EmergencyActionResponse } from '../../services/emergency-control.model'
 import { DowntimeService, DowntimeStatus } from '../../services/downtime.service';
 import { UserService, UserSummary } from '../../services/user.service';
 import { HospitalResponse, HospitalService } from '../../services/hospital.service';
-import { Subject, debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
+import { Subject, debounceTime, switchMap, of, catchError, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface PanelState {
@@ -19,6 +19,16 @@ interface PanelState {
 }
 
 const FRESH_PANEL: PanelState = { busy: false, result: null, error: null };
+
+interface SearchOutcome {
+  users: UserSummary[];
+  failed: boolean;
+}
+
+interface HospitalsOutcome {
+  hospitals: HospitalResponse[];
+  failed: boolean;
+}
 
 /**
  * Typed confirmation for a platform-wide MFA reset. Deliberately NOT
@@ -40,6 +50,7 @@ export class EmergencyComponent {
   private readonly translate = inject(TranslateService);
   private readonly userService = inject(UserService);
   private readonly hospitalService = inject(HospitalService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /* ── Downtime read-only mode (P3 #23a) ── */
   readonly downtimeStatus = signal<DowntimeStatus | null>(null);
@@ -55,36 +66,57 @@ export class EmergencyComponent {
 
     // MFA-reset picker: search users by name as the operator types. Nobody
     // knows a UUID by heart; the API still receives ids, resolved here.
+    // No distinctUntilChanged: after a pick clears the box, retyping the
+    // same two letters must search again.
     this.mfaSearch$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((q) => {
           const term = q.trim();
           if (term.length < 2) {
             this.mfaSearching.set(false);
-            return of<UserSummary[]>([]);
+            return of<SearchOutcome>({ users: [], failed: false });
           }
           this.mfaSearching.set(true);
           return this.userService.search(0, 10, { name: term }).pipe(
-            switchMap((page) => of(page.content ?? [])),
-            catchError(() => of<UserSummary[]>([])),
+            map((page): SearchOutcome => ({ users: page.content ?? [], failed: false })),
+            // A failed directory call is NOT "no user matches": on a
+            // destructive control that reading nudges the operator toward
+            // the reset-everyone path. Say the search failed.
+            catchError(() => of<SearchOutcome>({ users: [], failed: true })),
           );
         }),
         takeUntilDestroyed(),
       )
-      .subscribe((users) => {
+      .subscribe((outcome) => {
         this.mfaSearching.set(false);
-        this.mfaResults.set(users);
+        this.mfaSearchFailed.set(outcome.failed);
+        this.mfaResults.set(outcome.users);
       });
 
+    this.loadHospitals();
+  }
+
+  /**
+   * The scope dropdown is only trustworthy when the directory actually
+   * answered: while loading or after a failure it must not present "whole
+   * platform" as the complete list of choices.
+   */
+  loadHospitals(): void {
+    this.hospitalsLoading.set(true);
+    this.hospitalsFailed.set(false);
     this.hospitalService
       .list()
       .pipe(
-        catchError(() => of<HospitalResponse[]>([])),
-        takeUntilDestroyed(),
+        map((hospitals): HospitalsOutcome => ({ hospitals, failed: false })),
+        catchError(() => of<HospitalsOutcome>({ hospitals: [], failed: true })),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((hospitals) => this.hospitals.set(hospitals));
+      .subscribe((outcome) => {
+        this.hospitalsLoading.set(false);
+        this.hospitalsFailed.set(outcome.failed);
+        this.hospitals.set(outcome.hospitals);
+      });
   }
 
   private refreshDowntimeCard(): void {
@@ -126,9 +158,12 @@ export class EmergencyComponent {
   readonly mfaQuery = signal('');
   readonly mfaResults = signal<UserSummary[]>([]);
   readonly mfaSearching = signal(false);
+  readonly mfaSearchFailed = signal(false);
   readonly mfaSelected = signal<UserSummary[]>([]);
   readonly mfaHospitalId = signal('');
   readonly hospitals = signal<HospitalResponse[]>([]);
+  readonly hospitalsLoading = signal(true);
+  readonly hospitalsFailed = signal(false);
   /** Typed phrase, only asked for when no user is selected (= everyone). */
   readonly mfaResetAllConfirm = signal('');
   readonly mfaResetsEveryone = computed(() => this.mfaSelected().length === 0);
@@ -137,7 +172,19 @@ export class EmergencyComponent {
 
   onMfaQueryChange(value: string): void {
     this.mfaQuery.set(value);
+    // Stale results must not stay clickable under a new name.
+    this.mfaResults.set([]);
+    this.mfaSearchFailed.set(false);
     this.mfaSearch$.next(value);
+  }
+
+  /**
+   * Any change to the blast radius invalidates the typed phrase: it confirms
+   * exactly what was on screen when it was typed, nothing later.
+   */
+  onMfaScopeChange(hospitalId: string): void {
+    this.mfaHospitalId.set(hospitalId);
+    this.mfaResetAllConfirm.set('');
   }
 
   addMfaTarget(user: UserSummary): void {
@@ -145,10 +192,14 @@ export class EmergencyComponent {
     this.mfaSelected.update((list) => [...list, user]);
     this.mfaQuery.set('');
     this.mfaResults.set([]);
+    // Targeted now; a phrase typed for "everyone" must not survive a later
+    // chip removal.
+    this.mfaResetAllConfirm.set('');
   }
 
   removeMfaTarget(userId: string): void {
     this.mfaSelected.update((list) => list.filter((u) => u.id !== userId));
+    this.mfaResetAllConfirm.set('');
   }
 
   readonly broadcastMessage = signal('');

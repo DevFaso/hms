@@ -18,7 +18,11 @@ import java.util.UUID;
 @Builder
 public class EmergencyForceMfaRequestDTO {
 
-    /** Optional. When null/empty, every user with an enrolment is reset. */
+    /**
+     * Users to reset. When null/empty the request means "every enrolled user
+     * in scope" and is REFUSED unless {@link #resetAll} is {@code true}; an
+     * empty list no longer resets everyone by omission.
+     */
     private List<UUID> userIds;
 
     /**
