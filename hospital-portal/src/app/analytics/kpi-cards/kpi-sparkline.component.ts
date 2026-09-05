@@ -73,7 +73,7 @@ export class KpiSparklineComponent {
   /** Series — `null`/`undefined` values mark gaps. */
   series = input.required<(number | null | undefined)[]>();
   /** Stroke color (defaults to the card accent). */
-  color = input<string>('#3b82f6');
+  color = input<string>('#23b79c');
   /** Accessible label prefix (e.g. translated "Door-to-doctor"). */
   label = input<string>('trend');
 

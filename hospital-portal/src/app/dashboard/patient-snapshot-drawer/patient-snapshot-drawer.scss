@@ -92,11 +92,11 @@
   }
 
   &.drawer-btn-primary {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
 
     &:hover {
-      background: #1d4ed8;
+      background: var(--primary-dark);
     }
   }
 }
@@ -171,7 +171,7 @@
 
 .section-icon {
   font-size: 18px;
-  color: #2563eb;
+  color: var(--primary);
 }
 
 .section-title {
@@ -334,8 +334,8 @@
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--primary-soft);
+  color: var(--primary);
   text-transform: uppercase;
 }
 
@@ -365,7 +365,7 @@
 .note-type {
   font-size: 11px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--primary);
 }
 
 .note-author {

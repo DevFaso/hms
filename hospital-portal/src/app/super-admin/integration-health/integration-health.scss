@@ -140,7 +140,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--primary);
     outline-offset: -2px;
   }
 }
@@ -301,7 +301,7 @@
   color: #475569;
 
   &.busy {
-    color: #2563eb;
+    color: var(--primary);
   }
 
   &.ok {

@@ -33,7 +33,7 @@ import { DiagnosisSlice } from '../morbidity.service';
 export class DiagnosisBarsComponent {
   slices = input.required<DiagnosisSlice[]>();
   /** Bar fill colour, so the network chart and per-hospital cards can differ. */
-  color = input<string>('var(--dx-bar, #2563eb)');
+  color = input<string>('var(--dx-bar, #0e7c6b)');
   /** Compact mode for the per-hospital cards. */
   compact = input<boolean>(false);
 

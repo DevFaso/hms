@@ -28,8 +28,8 @@
     color: #92400e;
   }
   &.active {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.completed {
     background: #d1fae5;
@@ -76,9 +76,9 @@
   cursor: pointer;
   transition: all 0.2s;
   &.active {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--primary);
   }
   &:hover:not(.active) {
     background: #f3f4f6;
@@ -160,8 +160,8 @@
     color: #92400e;
   }
   &.status-active {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-completed {
     background: #d1fae5;
@@ -326,10 +326,10 @@
   background: #fef2f2;
 }
 .action-link.submit {
-  color: #2563eb;
+  color: var(--primary);
 }
 .action-link.submit:hover {
-  background: #eff6ff;
+  background: var(--primary-soft);
 }
 .action-link.acknowledge {
   color: #059669;

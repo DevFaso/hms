@@ -24,8 +24,8 @@
   justify-content: center;
   font-size: 1.5rem;
   &.active {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.completed {
     background: #d1fae5;
@@ -72,9 +72,9 @@
   cursor: pointer;
   transition: all 0.2s;
   &.active {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
-    border-color: #2563eb;
+    border-color: var(--primary);
   }
   &:hover:not(.active) {
     background: #f3f4f6;
@@ -159,8 +159,8 @@
   font-size: 0.78rem;
   font-weight: 600;
   &.status-ordered {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-progress {
     background: #fef3c7;

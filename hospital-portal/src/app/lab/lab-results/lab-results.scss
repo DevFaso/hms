@@ -29,8 +29,8 @@
   flex-shrink: 0;
 
   &.total {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.pending {
     background: #fef3c7;
@@ -84,8 +84,8 @@
     color: #374151;
   }
   &.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--primary);
+    border-bottom-color: var(--primary);
     font-weight: 600;
   }
 }

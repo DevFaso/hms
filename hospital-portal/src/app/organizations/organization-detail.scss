@@ -10,7 +10,7 @@
   margin-bottom: 1rem;
 
   &:hover {
-    color: #3b82f6;
+    color: var(--primary);
   }
 
   .material-symbols-outlined {
@@ -114,11 +114,11 @@
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--primary-light);
   color: #fff;
 
   &:hover:not(:disabled) {
-    background: #2563eb;
+    background: var(--primary);
   }
 }
 
@@ -253,7 +253,7 @@
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: var(--primary-light);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
   }
 }

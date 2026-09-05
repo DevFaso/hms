@@ -67,12 +67,12 @@
 
 /* Column colours */
 .col-scheduled .col-header {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
 }
 .col-confirmed .col-header {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 .col-arrived .col-header {
   background: #d1fae5;

@@ -21,7 +21,7 @@
   margin-bottom: 1.5rem;
 
   svg {
-    color: #2563eb;
+    color: var(--primary);
   }
 
   h1 {
@@ -98,7 +98,7 @@
   font-family: 'Fira Code', monospace;
 
   &:focus {
-    border-color: #2563eb;
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   }
 }
@@ -128,7 +128,7 @@
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -138,7 +138,7 @@
   transition: background 0.2s;
 
   &:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 
   &:disabled {

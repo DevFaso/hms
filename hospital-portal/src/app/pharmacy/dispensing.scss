@@ -19,8 +19,8 @@
 // against the page background. Renamed from .form-card so it no longer
 // shadows the shared neutral form-card on these pages.
 .form-card-accent {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-tint);
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -38,7 +38,7 @@
     gap: 0.5rem;
     margin: 0;
     font-size: 1rem;
-    color: #1e40af;
+    color: var(--primary-deep);
 
     .material-symbols-outlined {
       font-size: 22px;
@@ -116,7 +116,7 @@
 
   .material-symbols-outlined {
     font-size: 22px;
-    color: #3b82f6;
+    color: var(--primary);
   }
 }
 
@@ -149,8 +149,8 @@
 }
 
 .badge-info {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 // Refill context stacks: decision chip, then the supporting detail the
@@ -184,12 +184,12 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: #3b82f6;
+  color: var(--primary);
   transition: all 0.15s;
 
   &:hover {
-    background: #eff6ff;
-    border-color: #3b82f6;
+    background: var(--primary-soft);
+    border-color: var(--primary-light);
   }
 
   &.danger {
@@ -221,7 +221,12 @@
 
 .loading-bar {
   height: 4px;
-  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #3b82f6 100%);
+  background: linear-gradient(
+    90deg,
+    var(--primary-light) 0%,
+    var(--primary-light) 50%,
+    var(--primary-light) 100%
+  );
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
   border-radius: 2px;

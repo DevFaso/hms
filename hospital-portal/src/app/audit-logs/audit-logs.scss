@@ -32,8 +32,8 @@
   font-size: 1.5rem;
 
   &.total {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.types {
@@ -142,8 +142,8 @@
   }
 
   &.status-info {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.status-warning {

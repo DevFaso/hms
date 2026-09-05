@@ -38,7 +38,7 @@
 }
 .form-grid input:focus,
 .form-grid select:focus {
-  border-color: #2563eb;
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .btn-primary {
@@ -49,14 +49,14 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--primary-dark);
 }
 .btn-primary:disabled {
   opacity: 0.6;
@@ -129,16 +129,16 @@
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-tint);
   border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
   transition: background 0.2s;
 }
 .btn-view-data:hover {
-  background: #dbeafe;
+  background: var(--primary-tint);
 }
 .btn-view-data .material-symbols-outlined {
   font-size: 16px;

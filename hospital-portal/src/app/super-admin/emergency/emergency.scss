@@ -75,7 +75,7 @@
     border-top: 4px solid #d97706;
   }
   &.info {
-    border-top: 4px solid #2563eb;
+    border-top: 4px solid var(--primary);
   }
 
   label {
@@ -123,7 +123,7 @@
     color: #fff;
   }
   .btn-primary {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
   }
 

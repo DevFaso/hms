@@ -4,7 +4,7 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
-$primary: #2563eb;
+$primary: #0e7c6b;
 $success: #059669;
 $warning: #d97706;
 $danger: #dc2626;
@@ -404,7 +404,7 @@ $shadow-md:
     color: #fff;
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
     &:hover {
-      background: #1d4ed8;
+      background: var(--primary-dark);
       transform: translateY(-1px);
       box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
     }
@@ -522,7 +522,7 @@ $shadow-md:
     box-shadow 0.18s,
     transform 0.18s;
   box-shadow: $shadow;
-  border-left: 3px solid var(--stat-color, #2563eb);
+  border-left: 3px solid var(--stat-color, var(--primary));
 
   &:hover {
     box-shadow: $shadow-md;
@@ -550,7 +550,7 @@ $shadow-md:
       135deg,
       $card 0%,
       $card 65%,
-      color-mix(in srgb, var(--stat-bg, #dbeafe) 80%, transparent) 100%
+      color-mix(in srgb, var(--stat-bg, var(--primary-tint)) 80%, transparent) 100%
     );
   }
 
@@ -589,7 +589,7 @@ $shadow-md:
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: var(--stat-bg, #dbeafe);
+  background: var(--stat-bg, var(--primary-tint));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -598,7 +598,7 @@ $shadow-md:
 
 .stat-icon {
   font-size: 22px;
-  color: var(--stat-color, #2563eb);
+  color: var(--stat-color, var(--primary));
 }
 
 .stat-body {
@@ -763,7 +763,7 @@ $shadow-md:
   padding: 4px 8px;
   border-radius: 6px;
   &:hover {
-    background: #eff6ff;
+    background: var(--primary-soft);
   }
   transition: background 0.15s;
 }
@@ -1305,8 +1305,8 @@ $shadow-md:
   flex-shrink: 0;
 
   &.status-scheduled {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-confirmed {
     background: #d1fae5;
@@ -1350,8 +1350,8 @@ $shadow-md:
     color: #065f46;
   }
   &.triage-ready {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.triage-progress {
     background: #fef3c7;
@@ -1623,7 +1623,7 @@ $shadow-md:
   box-shadow: $shadow;
 
   &:hover {
-    border-color: var(--qa-color, #2563eb);
+    border-color: var(--qa-color, var(--primary));
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
     transform: translateY(-2px);
   }
@@ -1633,7 +1633,7 @@ $shadow-md:
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: var(--qa-bg, #dbeafe);
+  background: var(--qa-bg, var(--primary-tint));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1641,7 +1641,7 @@ $shadow-md:
 
 .qa-icon {
   font-size: 22px;
-  color: var(--qa-color, #2563eb);
+  color: var(--qa-color, var(--primary));
 }
 
 .qa-label {
@@ -1686,8 +1686,8 @@ $shadow-md:
   box-shadow: $shadow;
 
   &:hover {
-    border-color: var(--tile-color, #2563eb);
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--tile-color, #2563eb) 18%, transparent);
+    border-color: var(--tile-color, var(--primary));
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--tile-color, var(--primary)) 18%, transparent);
     transform: translateY(-2px);
   }
 }
@@ -1699,11 +1699,11 @@ $shadow-md:
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--tile-color, #2563eb) 12%, transparent);
+  background: color-mix(in srgb, var(--tile-color, var(--primary)) 12%, transparent);
 
   .material-symbols-outlined {
     font-size: 24px;
-    color: var(--tile-color, #2563eb);
+    color: var(--tile-color, var(--primary));
   }
 }
 
@@ -2049,7 +2049,7 @@ $shadow-md:
 // alias the shared palette. Do NOT reintroduce purple/teal/red gradients
 // without product approval — see UI consistency note 2026-05-02.
 %hero-gradient-shared {
-  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 55%, #e0f2fe 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 55%, #e0f2fe 100%);
   box-shadow: 0 8px 32px rgba(37, 99, 235, 0.28);
 }
 
@@ -2072,15 +2072,15 @@ $shadow-md:
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: #dbeafe;
-  border: 1px solid #bfdbfe;
+  background: var(--primary-tint);
+  border: 1px solid var(--primary-tint);
   border-radius: 20px;
   padding: 3px 10px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #1d4ed8;
+  color: var(--primary-dark);
   margin-bottom: 8px;
   width: fit-content;
 
@@ -2150,14 +2150,14 @@ $shadow-md:
   border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-left: 3px solid var(--metric-color, #2563eb);
+  border-left: 3px solid var(--metric-color, var(--primary));
 }
 .metric-icon {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: var(--metric-bg, #dbeafe);
-  color: var(--metric-color, #2563eb);
+  background: var(--metric-bg, var(--primary-tint));
+  color: var(--metric-color, var(--primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2190,7 +2190,7 @@ $shadow-md:
   border-radius: 10px;
   text-align: center;
   background: var(--metric-bg, #f1f5f9);
-  border-top: 3px solid var(--metric-color, #2563eb);
+  border-top: 3px solid var(--metric-color, var(--primary));
 }
 .metric-tile-label {
   font-size: 11px;
@@ -2203,7 +2203,7 @@ $shadow-md:
   margin-top: 4px;
   font-size: 20px;
   font-weight: 700;
-  color: var(--metric-color, #1d4ed8);
+  color: var(--metric-color, var(--primary-dark));
   line-height: 1.1;
 }
 .kv-row {
@@ -2224,7 +2224,7 @@ $shadow-md:
 .kv-value {
   font-size: 16px;
   font-weight: 700;
-  color: var(--kv-color, #1d4ed8);
+  color: var(--kv-color, var(--primary-dark));
 }
 
 // Activity Trend (7d) chart — class-based replacement for inline bar styles.
@@ -2252,7 +2252,7 @@ $shadow-md:
   width: 100%;
   max-width: 28px;
   min-height: 4px;
-  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  background: linear-gradient(180deg, var(--primary-light) 0%, var(--primary) 100%);
   border-radius: 4px 4px 0 0;
 }
 .trend-col-empty .trend-bar {
@@ -2349,7 +2349,7 @@ $shadow-md:
   padding: 16px 12px;
   border-radius: 12px;
   background: var(--tile-bg, #f0f4ff);
-  color: var(--tile-color, #2563eb);
+  color: var(--tile-color, var(--primary));
   text-decoration: none;
   transition:
     transform 0.15s ease,
@@ -2374,7 +2374,7 @@ $shadow-md:
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--tile-color, #2563eb);
+    color: var(--tile-color, var(--primary));
 
     .material-symbols-outlined {
       font-size: 22px;
@@ -2385,7 +2385,7 @@ $shadow-md:
     font-size: 11px;
     font-weight: 600;
     text-align: center;
-    color: var(--tile-color, #2563eb);
+    color: var(--tile-color, var(--primary));
     line-height: 1.3;
   }
 }
@@ -2432,8 +2432,8 @@ $shadow-md:
 
 // ── Inbox icon color helpers (avoids inline styles) ──────────────────────────
 .inbox-icon-chat {
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
+  background: var(--primary-tint) !important;
+  color: var(--primary-dark) !important;
 }
 
 .inbox-icon-lab {
@@ -2459,7 +2459,7 @@ $shadow-md:
 // ── Stat sub-note ────────────────────────────────────────────────────────────
 .stat-sub-note {
   font-size: 10px;
-  color: var(--stat-color, #2563eb);
+  color: var(--stat-color, var(--primary));
   opacity: 0.7;
   margin-top: 2px;
 }
@@ -2700,8 +2700,8 @@ $shadow-md:
 
   &[data-status='SCHEDULED'],
   &[data-status='CONFIRMED'] {
-    background: #dbeafe;
-    color: #2563eb;
+    background: var(--primary-tint);
+    color: var(--primary);
   }
 
   &[data-status='COMPLETED'] {
@@ -2978,8 +2978,8 @@ $shadow-md:
   color: #166534;
 }
 .integration-pilot {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 .integration-inactive {
   background: #f1f5f9;
@@ -3016,8 +3016,8 @@ $shadow-md:
 }
 
 .hg-chip-condition {
-  background: #dbeafe;
-  color: #2563eb;
+  background: var(--primary-tint);
+  color: var(--primary);
 }
 
 // ── Patient Dashboard Responsive ─────────────────────────────
@@ -3154,7 +3154,7 @@ $shadow-md:
 .inbox-icon-document_to_sign,
 .inbox-icon-task,
 .inbox-icon-pharmacy_clarification {
-  background: #eff6ff;
+  background: var(--primary-soft);
   color: $primary;
 }
 
@@ -3205,7 +3205,7 @@ $shadow-md:
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 99px;
-  background: #dbeafe;
+  background: var(--primary-tint);
   color: $primary;
   white-space: nowrap;
   flex-shrink: 0;

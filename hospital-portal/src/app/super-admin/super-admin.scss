@@ -312,7 +312,7 @@
   gap: 0.4rem;
   padding: 0.75rem 1rem;
   font-size: 0.85rem;
-  color: #3b82f6;
+  color: var(--primary);
   text-decoration: none;
   border-top: 1px solid #f1f5f9;
 
@@ -364,8 +364,8 @@
 
   &.active {
     background: #fff;
-    border-color: #3b82f6;
-    color: #1d4ed8;
+    border-color: var(--primary-light);
+    color: var(--primary-dark);
     font-weight: 600;
   }
 }
@@ -379,8 +379,8 @@
 }
 
 .activity-tab.active .activity-count {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
 }
 
 .activity-list {

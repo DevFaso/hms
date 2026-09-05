@@ -19,7 +19,7 @@
 
   .header-icon {
     font-size: 2rem;
-    color: var(--color-primary, #2563eb);
+    color: var(--color-primary, var(--primary));
   }
 
   .page-title {
@@ -52,8 +52,8 @@
     margin-bottom: -2px;
 
     &.active {
-      color: var(--color-primary, #2563eb);
-      border-bottom-color: var(--color-primary, #2563eb);
+      color: var(--color-primary, var(--primary));
+      border-bottom-color: var(--color-primary, var(--primary));
     }
   }
 }
@@ -164,8 +164,8 @@
   }
 
   &[data-status='BOOKED'] {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &[data-status='BLOCKED'] {
@@ -284,8 +284,8 @@
 }
 
 .btn-primary {
-  background: var(--color-primary, #2563eb);
-  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary, var(--primary));
+  border-color: var(--color-primary, var(--primary));
   color: #fff;
 }
 

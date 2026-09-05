@@ -39,13 +39,13 @@
   padding: 0.5rem 1rem;
   border-radius: 8px;
   border: none;
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 
   .material-symbols-outlined {
@@ -95,7 +95,7 @@
   }
 
   &.selected {
-    background: #eff6ff;
+    background: var(--primary-soft);
   }
 }
 
@@ -160,8 +160,8 @@
   }
 
   &.bed-status-reserved {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.bed-status-maintenance,
@@ -373,6 +373,6 @@
 }
 
 .modal-confirm {
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
 }

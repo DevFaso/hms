@@ -48,8 +48,8 @@
   font-weight: 600;
 
   &.status-admitted {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-discharged {
     background: #d1fae5;
@@ -302,8 +302,8 @@
     font-size: 0.88rem;
 
     &.active {
-      background: var(--primary, #2563eb);
-      border-color: var(--primary, #2563eb);
+      background: var(--primary, var(--primary));
+      border-color: var(--primary, var(--primary));
       color: #fff;
     }
   }
@@ -396,7 +396,7 @@
 
       .update-version {
         font-weight: 700;
-        color: var(--primary, #2563eb);
+        color: var(--primary, var(--primary));
       }
 
       .update-reason {
@@ -497,7 +497,7 @@
     border-bottom: 1px solid #ececf4;
 
     .timeline-icon {
-      color: var(--primary, #2563eb);
+      color: var(--primary, var(--primary));
     }
 
     .timeline-summary {

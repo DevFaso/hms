@@ -25,10 +25,13 @@
             @if (m.isPrimary) {
               <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
             }
-            <div class="ct-avatar" [style.background]="m.isPrimary ? '#dbeafe' : '#f1f5f9'">
+            <div
+              class="ct-avatar"
+              [style.background]="m.isPrimary ? 'var(--primary-tint)' : '#f1f5f9'"
+            >
               <span
                 class="material-symbols-outlined"
-                [style.color]="m.isPrimary ? '#2563eb' : '#64748b'"
+                [style.color]="m.isPrimary ? 'var(--primary)' : '#64748b'"
               >
                 {{ m.isPrimary ? 'star' : 'person' }}
               </span>

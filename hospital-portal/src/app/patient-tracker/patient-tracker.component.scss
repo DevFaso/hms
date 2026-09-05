@@ -45,7 +45,7 @@
 }
 
 .btn-refresh {
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -56,7 +56,7 @@
   transition: background 0.15s;
 
   &:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 
   &:disabled {
@@ -143,7 +143,7 @@
   border-top-color: #ef4444;
 }
 .col-in-progress {
-  border-top-color: #3b82f6;
+  border-top-color: var(--primary-light);
 }
 .col-awaiting {
   border-top-color: #8b5cf6;
@@ -263,7 +263,7 @@
 }
 
 .acuity-moderate {
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--primary-light);
 }
 
 .acuity-routine {

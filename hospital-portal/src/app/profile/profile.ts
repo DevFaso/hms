@@ -689,7 +689,7 @@ export class ProfileComponent implements OnInit {
 
   getActivityColor(eventType: string): string {
     if (eventType.includes('CREATE')) return '#059669';
-    if (eventType.includes('UPDATE') || eventType.includes('EDIT')) return '#2563eb';
+    if (eventType.includes('UPDATE') || eventType.includes('EDIT')) return '#0e7c6b';
     if (eventType.includes('DELETE') || eventType.includes('REMOVE')) return '#dc2626';
     if (eventType.includes('LOGIN')) return '#7c3aed';
     if (eventType.includes('LOGOUT')) return '#64748b';
