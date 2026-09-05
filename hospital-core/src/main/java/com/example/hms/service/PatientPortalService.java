@@ -66,6 +66,19 @@ public interface PatientPortalService {
     java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
             Authentication auth);
 
+    // ── Standardized PRO screenings (Tier 2 item 47) ─────────────────────
+
+    /** What the patient may answer now, and what they answered before — never a score. */
+    com.example.hms.payload.dto.pro.ProSelfReportDTO myScreenings(Authentication auth);
+
+    /** An instrument rendered in the patient's language, scores withheld. */
+    com.example.hms.payload.dto.pro.ProInstrumentViewDTO myScreeningInstrument(
+            Authentication auth, String code, String language);
+
+    /** Record the patient's own answers; eligible only while a postpartum plan is open. */
+    com.example.hms.payload.dto.pro.ProSelfReportDTO.Entry submitScreening(
+            Authentication auth, com.example.hms.payload.dto.pro.ProResponseCreateDTO dto);
+
     // ── Health summary (aggregated dashboard) ────────────────────────────
     HealthSummaryDTO getHealthSummary(Authentication auth, Locale locale);
 

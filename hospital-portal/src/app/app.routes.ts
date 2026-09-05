@@ -126,6 +126,15 @@ export const routes: Routes = [
           import('./patient-portal/my-vitals/my-vitals.component').then((m) => m.MyVitalsComponent),
       },
       {
+        path: 'my-screenings',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-screenings/my-screenings.component').then(
+            (m) => m.MyScreeningsComponent,
+          ),
+      },
+      {
         path: 'my-billing',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },

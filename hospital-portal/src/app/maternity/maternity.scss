@@ -569,3 +569,21 @@
 .labor-row-caution td {
   background: #fffbeb;
 }
+
+/* ── Postpartum mental-health screening (Tier 2 item 47) ───── */
+
+// A safety-item answer nobody has signed off yet: the row that must not be
+// scrolled past. Same treatment as an urgent labor row so the meaning reads
+// across tabs.
+.screening-critical td {
+  background: #fef2f2;
+}
+
+.screening-card .data-table {
+  margin-top: 0.75rem;
+}
+
+.pro-citation {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+}

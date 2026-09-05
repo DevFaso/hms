@@ -13,6 +13,9 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
+import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
+import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
+import com.example.hms.payload.dto.pro.ProSelfReportDTO;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
@@ -735,6 +738,76 @@ class PatientPortalControllerPhase2Test {
                             .principal(auth))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data", hasSize(0)));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Standardized PRO screenings (Tier 2 item 47)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("/me/patient/pro-screenings")
+    class ProScreenings {
+
+        @Test
+        @DisplayName("GET returns what is open and what was answered, with no score")
+        void myScreenings_success() throws Exception {
+            UUID entryId = UUID.randomUUID();
+            when(portalService.myScreenings(any(Authentication.class)))
+                    .thenReturn(ProSelfReportDTO.builder()
+                            .available(List.of(ProSelfReportDTO.Available.builder()
+                                    .code("EPDS").name("Edinburgh").languages(List.of("en", "fr")).build()))
+                            .history(List.of(ProSelfReportDTO.Entry.builder()
+                                    .id(entryId).instrumentCode("EPDS")
+                                    .administeredAt(LocalDateTime.of(2026, 9, 1, 9, 0))
+                                    .followUpPlanned(true).careTeamAlerted(false).build()))
+                            .build());
+
+            mockMvc.perform(get("/me/patient/pro-screenings").principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.available", hasSize(1)))
+                    .andExpect(jsonPath("$.available[0].code").value("EPDS"))
+                    .andExpect(jsonPath("$.history[0].id").value(entryId.toString()))
+                    .andExpect(jsonPath("$.history[0].followUpPlanned").value(true))
+                    .andExpect(jsonPath("$.history[0].totalScore").doesNotExist());
+        }
+
+        @Test
+        @DisplayName("GET /pro-instruments/{code}?language= passes the language through")
+        void myScreeningInstrument_success() throws Exception {
+            when(portalService.myScreeningInstrument(any(Authentication.class), eq("EPDS"), eq("fr")))
+                    .thenReturn(ProInstrumentViewDTO.builder().code("EPDS").language("fr").build());
+
+            mockMvc.perform(get("/me/patient/pro-instruments/EPDS").param("language", "fr").principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.language").value("fr"));
+        }
+
+        @Test
+        @DisplayName("POST returns 201 with the patient's own entry")
+        void submitScreening_success() throws Exception {
+            UUID entryId = UUID.randomUUID();
+            when(portalService.submitScreening(any(Authentication.class), any(ProResponseCreateDTO.class)))
+                    .thenReturn(ProSelfReportDTO.Entry.builder().id(entryId).instrumentCode("EPDS").build());
+
+            mockMvc.perform(post("/me/patient/pro-screenings")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"instrumentCode\":\"EPDS\",\"language\":\"fr\",\"answers\":{\"1\":2}}")
+                            .principal(auth))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.id").value(entryId.toString()));
+
+            verify(portalService).submitScreening(any(), any(ProResponseCreateDTO.class));
+        }
+
+        @Test
+        @DisplayName("POST without answers → 400")
+        void submitScreening_missingAnswers_returns400() throws Exception {
+            mockMvc.perform(post("/me/patient/pro-screenings")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"instrumentCode\":\"EPDS\"}")
+                            .principal(auth))
+                    .andExpect(status().isBadRequest());
         }
     }
 }

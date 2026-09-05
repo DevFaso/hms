@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { ProScreeningSummary } from './pro-screening.service';
+
 export type PostpartumSchedulePhase =
   'IMMEDIATE_RECOVERY' | 'SHIFT_BASELINE' | 'ENHANCED_MONITORING' | 'DISCHARGE_PLANNING';
 export type PostpartumFundusTone =
@@ -52,6 +54,12 @@ export interface PostpartumSchedule {
   nextDueAt?: string | null;
   overdueSince?: string | null;
   overdue: boolean;
+  /**
+   * Standardized mental-health screening (EPDS) for this plan — whether one
+   * is due and what the last one found. Absent from older schedules and from
+   * a plan that was never opened.
+   */
+  screening?: ProScreeningSummary | null;
 }
 
 export interface PostpartumObservationRequest {

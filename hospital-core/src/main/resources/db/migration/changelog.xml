@@ -2295,4 +2295,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V153: Standardized PROs, EPDS first (Tier 2 item 47).
+         pro_instruments / items / options (score on the option) / texts
+         (per language) + pro_responses (encrypted answers, plain score
+         columns, critical-value-style escalation columns). Instrument
+         content is loaded from a validated source, never coded.
+         Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V153-pro-instruments-epds" author="hms-team" runOnChange="false">
+        <sqlFile path="V153__pro_instruments_epds.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

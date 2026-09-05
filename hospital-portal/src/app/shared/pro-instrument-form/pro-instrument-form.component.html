@@ -1,0 +1,34 @@
+@if (instrument().instruction) {
+  <p class="pro-instruction">{{ instrument().instruction }}</p>
+}
+
+<p class="pro-progress" aria-live="polite">
+  {{
+    'PRO.FORM.PROGRESS' | translate: { answered: answeredCount(), total: instrument().items.length }
+  }}
+</p>
+
+@for (item of instrument().items; track item.itemNo) {
+  <fieldset class="pro-item" [class.pro-item-unanswered]="answers()[item.itemNo] === undefined">
+    <legend>
+      <span class="pro-item-no">{{ item.itemNo }}.</span>
+      {{ item.prompt }}
+    </legend>
+    <div class="pro-options" role="radiogroup" [attr.aria-label]="item.prompt">
+      @for (opt of item.options; track opt.optionNo) {
+        <label class="pro-option" [for]="optionId(item.itemNo, opt.optionNo)">
+          <input
+            type="radio"
+            [id]="optionId(item.itemNo, opt.optionNo)"
+            [name]="idPrefix() + '-item-' + item.itemNo"
+            [value]="opt.optionNo"
+            [checked]="answers()[item.itemNo] === opt.optionNo"
+            [disabled]="disabled()"
+            (change)="select(item.itemNo, opt.optionNo)"
+          />
+          <span>{{ opt.label }}</span>
+        </label>
+      }
+    </div>
+  </fieldset>
+}

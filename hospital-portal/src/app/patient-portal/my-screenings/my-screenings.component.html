@@ -1,0 +1,142 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">psychology</span>
+      {{ 'PRO.MY.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'COMMON.LOADING' | translate }}</span>
+    </div>
+  } @else if (failed()) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">error</span>
+      <h3>{{ 'PRO.MY.LOAD_FAILED_TITLE' | translate }}</h3>
+      <p>{{ 'PRO.MY.LOAD_FAILED_DESC' | translate }}</p>
+      <button type="button" class="screen-btn" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (active(); as current) {
+    <!-- ── Answering ── -->
+    <div class="screen-form-card">
+      <div class="screen-form-head">
+        <h3>{{ instrument()?.name || current.name }}</h3>
+        @if (instrument(); as view) {
+          @if (view.availableLanguages.length > 1) {
+            <div class="screen-field">
+              <label for="my-screen-language">{{ 'PRO.LANGUAGE' | translate }}</label>
+              <select
+                id="my-screen-language"
+                [ngModel]="language"
+                (ngModelChange)="changeLanguage($event)"
+              >
+                @for (lang of view.availableLanguages; track lang) {
+                  <option [value]="lang">{{ lang }}</option>
+                }
+              </select>
+            </div>
+          }
+        }
+      </div>
+      <p class="screen-privacy">
+        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+        {{ 'PRO.MY.PRIVACY_NOTE' | translate }}
+      </p>
+
+      @if (instrumentLoading()) {
+        <div class="portal-loading">
+          <div class="portal-spinner"></div>
+          <span>{{ 'COMMON.LOADING' | translate }}</span>
+        </div>
+      } @else if (instrumentFailed() || !instrument()) {
+        <div class="portal-empty">
+          <span class="material-symbols-outlined">error</span>
+          <h3>{{ 'PRO.INSTRUMENT_LOAD_ERROR' | translate }}</h3>
+        </div>
+      } @else if (instrument(); as view) {
+        <app-pro-instrument-form idPrefix="my-pro" [instrument]="view" [(answers)]="answers" />
+        @if (view.sourceCitation) {
+          <p class="rec-muted screen-citation">{{ view.sourceCitation }}</p>
+        }
+      }
+
+      <div class="screen-form-actions">
+        <button type="button" class="screen-cancel-btn" (click)="cancel()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="screen-btn"
+          (click)="submit()"
+          [disabled]="submitting() || !instrument()"
+        >
+          {{ (submitting() ? 'PRO.MY.SUBMITTING' : 'PRO.MY.SUBMIT') | translate }}
+        </button>
+      </div>
+    </div>
+  } @else {
+    <!-- ── Open screenings ── -->
+    @if (available().length > 0) {
+      <div class="portal-section">
+        <h2 class="portal-section-title">{{ 'PRO.MY.AVAILABLE' | translate }}</h2>
+        <div class="portal-list">
+          @for (a of available(); track a.code) {
+            <div class="portal-list-item">
+              <div class="pli-icon screen-icon">
+                <span class="material-symbols-outlined">psychology</span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title">{{ a.name }}</span>
+                <span class="pli-sub">{{ 'PRO.MY.AVAILABLE_HINT' | translate }}</span>
+              </div>
+              <button type="button" class="screen-btn" (click)="start(a)">
+                {{ 'PRO.MY.START' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">event_available</span>
+        <h3>{{ 'PRO.MY.NONE_OPEN_TITLE' | translate }}</h3>
+        <p>{{ 'PRO.MY.NONE_OPEN_DESC' | translate }}</p>
+      </div>
+    }
+
+    <!-- ── Past answers ── -->
+    @if (history().length > 0) {
+      <div class="portal-section">
+        <h2 class="portal-section-title">{{ 'PRO.MY.HISTORY' | translate }}</h2>
+        <div class="portal-list">
+          @for (h of history(); track h.id) {
+            <div class="portal-list-item" [class.screen-alerted]="h.careTeamAlerted">
+              <div class="pli-icon">
+                <span class="material-symbols-outlined">
+                  {{ h.careTeamAlerted ? 'notifications_active' : 'task_alt' }}
+                </span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title">{{ h.instrumentName || h.instrumentCode }}</span>
+                <span class="pli-sub">
+                  @if (h.careTeamAlerted) {
+                    {{ 'PRO.MY.CARE_TEAM_ALERTED' | translate }}
+                  } @else if (h.followUpPlanned) {
+                    {{ 'PRO.MY.FOLLOW_UP_PLANNED' | translate }}
+                  } @else {
+                    {{ 'PRO.MY.RECORDED' | translate }}
+                  }
+                </span>
+                <span class="pli-meta">{{ h.administeredAt | date: 'medium' }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>
