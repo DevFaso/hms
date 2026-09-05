@@ -57,12 +57,16 @@ public class LabResultController {
     @PostMapping("/critical-escalation/run")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Run the critical-value escalation sweep now",
-        description = "Mirrors the scheduled sweep; escalates unacknowledged critical results past the configured delay.")
-    public ResponseEntity<java.util.Map<String, Integer>> runCriticalEscalationSweep() {
-        // null = the scheduled sweep (or another operator) holds the lock right
-        // now; nothing was escalated by THIS call, which is what 0 says.
-        Integer escalated = criticalValueNotificationService.escalateOverdueUnderLock();
-        return ResponseEntity.ok(java.util.Map.of("escalated", escalated == null ? 0 : escalated));
+        description = "Mirrors the scheduled sweep; escalates unacknowledged critical results past the configured delay. "
+            + "409 with skipped=true when another run (the scheduled sweep or another operator) holds the escalation lock.")
+    public ResponseEntity<java.util.Map<String, Object>> runCriticalEscalationSweep() {
+        Integer escalated = criticalValueNotificationService.escalateOverdue();
+        if (escalated == null) {
+            // The scheduled sweep (or another operator) holds the lock: this call
+            // did not run. Say so — a 0 here would read as "nothing overdue".
+            return ResponseEntity.status(409).body(java.util.Map.of("escalated", 0, "skipped", true));
+        }
+        return ResponseEntity.ok(java.util.Map.of("escalated", escalated));
     }
 
     @PostMapping

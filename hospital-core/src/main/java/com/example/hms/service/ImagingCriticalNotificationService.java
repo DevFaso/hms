@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -140,38 +141,24 @@ public class ImagingCriticalNotificationService {
     }
 
     /**
-     * The locked entry point for BOTH the scheduled sweep and the manual
-     * endpoint. ShedLock (proxy-method mode) cannot lock a method that returns
-     * a primitive — it has nothing to return when another run holds the lock
-     * — so the lock sits on this boxed wrapper: {@code null} means "skipped,
-     * another instance or the manual trigger is escalating right now"; a
-     * number is the count from a run that actually happened. Putting the lock
-     * on {@code int escalateOverdue()} threw LockingNotSupportedException on
-     * every invocation in production (2026-09-05).
-     *
-     * @return reports escalated, or null when the lock was held elsewhere
-     */
-    @SchedulerLock(name = "ImagingCriticalNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
-    @Transactional
-    public Integer escalateOverdueUnderLock() {
-        return escalateOverdueInternal();
-    }
-
-    /**
      * Escalate critical findings still unacknowledged past the configured delay.
      *
      * <p>Per-report failures are logged and skipped so one bad row never stalls
      * the sweep.
      *
-     * @return number of reports escalated on this pass
+     * <p>Locked entry point shared by the scheduled sweep and the manual
+     * endpoint (both contend for one ShedLock). Returns {@code null} when
+     * ShedLock skipped the run because the lock is held elsewhere; boxed
+     * because ShedLock cannot skip a primitive-returning method
+     * ({@code SchedulerLockCoverageTest} enforces that for every lock).
+     *
+     * @return number of reports escalated on this pass, or null when the run was skipped
      */
+    @SchedulerLock(name = "ImagingCriticalNotificationService.escalateOverdue", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
     @Transactional
-    public int escalateOverdue() {
-        return escalateOverdueInternal();
-    }
-
-    /** Shared body of the two public entry points; private, so neither call is a transactional self-invocation. */
-    private int escalateOverdueInternal() {
+    public Integer escalateOverdue() {
+        // Fails loudly if a future caller reaches this body around the lock.
+        LockAssert.assertLocked();
         LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<ImagingReport> overdue = imagingReportRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;

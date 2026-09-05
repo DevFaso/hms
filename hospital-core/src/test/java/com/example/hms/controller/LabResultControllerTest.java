@@ -117,7 +117,7 @@ class LabResultControllerTest {
 
     @Test
     void runCriticalEscalationSweep_returnsCount() {
-        when(criticalValueNotificationService.escalateOverdueUnderLock()).thenReturn(3);
+        when(criticalValueNotificationService.escalateOverdue()).thenReturn(3);
 
         var response = controller.runCriticalEscalationSweep();
 
@@ -125,14 +125,15 @@ class LabResultControllerTest {
     }
 
     @Test
-    void runCriticalEscalationSweep_lockHeldElsewhereReadsAsZero() {
+    void runCriticalEscalationSweep_lockHeldElsewhereIsA409NotAFakeZero() {
         // ShedLock answers null when the scheduled sweep holds the lock: this
-        // call escalated nothing, which is what 0 says.
-        when(criticalValueNotificationService.escalateOverdueUnderLock()).thenReturn(null);
+        // call did not run, and the operator must be able to tell.
+        when(criticalValueNotificationService.escalateOverdue()).thenReturn(null);
 
         var response = controller.runCriticalEscalationSweep();
 
-        assertThat(response.getBody()).containsEntry("escalated", 0);
+        assertThat(response.getStatusCode().value()).isEqualTo(409);
+        assertThat(response.getBody()).containsEntry("skipped", true).containsEntry("escalated", 0);
     }
 
     @Test

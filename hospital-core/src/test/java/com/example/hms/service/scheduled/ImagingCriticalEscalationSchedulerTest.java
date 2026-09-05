@@ -15,21 +15,21 @@ class ImagingCriticalEscalationSchedulerTest {
 
     @Test
     void runsThroughTheLockedEntryPoint() {
-        when(service.escalateOverdueUnderLock()).thenReturn(2);
+        when(service.escalateOverdue()).thenReturn(2);
         scheduler.runSweep();
-        verify(service).escalateOverdueUnderLock();
+        verify(service).escalateOverdue();
     }
 
     @Test
     void aSkippedRunIsNotAFailure() {
         // null = another instance or the manual trigger holds the lock.
-        when(service.escalateOverdueUnderLock()).thenReturn(null);
+        when(service.escalateOverdue()).thenReturn(null);
         assertThatCode(scheduler::runSweep).doesNotThrowAnyException();
     }
 
     @Test
     void oneBadTickNeverKillsTheSchedulerThread() {
-        when(service.escalateOverdueUnderLock()).thenThrow(new IllegalStateException("boom"));
+        when(service.escalateOverdue()).thenThrow(new IllegalStateException("boom"));
         assertThatCode(scheduler::runSweep).doesNotThrowAnyException();
     }
 }

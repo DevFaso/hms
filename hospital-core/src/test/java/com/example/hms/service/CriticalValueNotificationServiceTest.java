@@ -27,6 +27,7 @@ import com.example.hms.repository.LabResultRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import net.javacrumbs.shedlock.core.LockAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,8 @@ class CriticalValueNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        // The body asserts it runs under the lock; unit tests have no proxy.
+        LockAssert.TestHelper.makeAllAssertsPass(true);
         ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
 
         orderingUser = new User();
@@ -176,13 +179,13 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
-    void escalateOverdueUnderLockRunsTheSameSweepAndBoxesTheCount() {
+    void escalateOverdueReturnsTheBoxedCountTheLockedProxyReliesOn() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
         when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
             .thenReturn(List.of(result));
 
-        Integer escalated = service.escalateOverdueUnderLock();
+        Integer escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
         verify(labResultRepository).save(result);
@@ -376,17 +379,5 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(updated.getCriticalReadBackAt()).isNotNull();
         assertThat(updated.isAcknowledged()).isTrue();
-    }
-
-    @org.junit.jupiter.api.Test
-    void escalateOverdueUnderLockDelegatesAndReturnsABoxedCount() throws NoSuchMethodException {
-        // The locked entry point must box its result: ShedLock returns null for
-        // a skipped run and cannot do that for a primitive.
-        java.lang.reflect.Method locked = CriticalValueNotificationService.class.getMethod("escalateOverdueUnderLock");
-        org.assertj.core.api.Assertions.assertThat(locked.getReturnType()).isEqualTo(Integer.class);
-        org.assertj.core.api.Assertions.assertThat(locked.getAnnotation(
-            net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(CriticalValueNotificationService.class.getMethod("escalateOverdue")
-            .getAnnotation(net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNull();
     }
 }

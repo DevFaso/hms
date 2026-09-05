@@ -8,6 +8,7 @@ import com.example.hms.model.User;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
+import net.javacrumbs.shedlock.core.LockAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,6 +72,8 @@ class ImagingCriticalNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        // The body asserts it runs under the lock; unit tests have no proxy.
+        LockAssert.TestHelper.makeAllAssertsPass(true);
         ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
 
         hospitalId = UUID.randomUUID();
@@ -332,12 +335,12 @@ class ImagingCriticalNotificationServiceTest {
     }
 
     @Test
-    void escalateOverdueUnderLockRunsTheSameSweepAndBoxesTheCount() {
+    void escalateOverdueReturnsTheBoxedCountTheLockedProxyReliesOn() {
         ImagingReport report = flagged();
         report.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
         when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
 
-        Integer escalated = service.escalateOverdueUnderLock();
+        Integer escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
@@ -355,17 +358,5 @@ class ImagingCriticalNotificationServiceTest {
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 1);
-    }
-
-    @org.junit.jupiter.api.Test
-    void escalateOverdueUnderLockDelegatesAndReturnsABoxedCount() throws NoSuchMethodException {
-        // The locked entry point must box its result: ShedLock returns null for
-        // a skipped run and cannot do that for a primitive.
-        java.lang.reflect.Method locked = ImagingCriticalNotificationService.class.getMethod("escalateOverdueUnderLock");
-        org.assertj.core.api.Assertions.assertThat(locked.getReturnType()).isEqualTo(Integer.class);
-        org.assertj.core.api.Assertions.assertThat(locked.getAnnotation(
-            net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNotNull();
-        org.assertj.core.api.Assertions.assertThat(ImagingCriticalNotificationService.class.getMethod("escalateOverdue")
-            .getAnnotation(net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNull();
     }
 }
