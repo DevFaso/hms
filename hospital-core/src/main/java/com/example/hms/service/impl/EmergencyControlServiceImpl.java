@@ -275,7 +275,7 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(actorId)
                 .userName(SecurityUtils.getCurrentUsername())
-                .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
+                .eventType(AuditEventType.MFA_FAILURE)
                 .eventDescription("Emergency " + action + " REJECTED: MFA step-up failed (" + why + ").")
                 .status(AuditStatus.FAILURE)
                 .build());

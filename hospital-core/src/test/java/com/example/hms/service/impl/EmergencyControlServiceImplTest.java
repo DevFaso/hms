@@ -142,7 +142,7 @@ class EmergencyControlServiceImplTest {
         // control must leave a trace (it left none before 2026-09-05).
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.MFA_FAILURE);
         assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
         assertThat(audit.getValue().getEventDescription())
             .contains("force-logout-all").contains("REJECTED").contains("no X-Mfa-Token supplied");
