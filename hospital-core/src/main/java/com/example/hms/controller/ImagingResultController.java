@@ -195,8 +195,15 @@ public class ImagingResultController {
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
     @Operation(summary = "Run the critical imaging escalation sweep",
                description = "Escalates critical findings still unacknowledged past the configured delay. "
-                   + "Returns the number of reports escalated on this pass.")
-    public ResponseEntity<Map<String, Integer>> runCriticalEscalation() {
-        return ResponseEntity.ok(Map.of("escalated", criticalNotificationService.escalateOverdue()));
+                   + "Returns the number of reports escalated on this pass; 409 with skipped=true when another "
+                   + "run (the scheduled sweep or another operator) holds the escalation lock.")
+    public ResponseEntity<Map<String, Object>> runCriticalEscalation() {
+        Integer escalated = criticalNotificationService.escalateOverdue();
+        if (escalated == null) {
+            // The scheduled sweep (or another operator) holds the lock: this call
+            // did not run. Say so — a 0 here would read as "nothing overdue".
+            return ResponseEntity.status(409).body(Map.of("escalated", 0, "skipped", true));
+        }
+        return ResponseEntity.ok(Map.of("escalated", escalated));
     }
 }

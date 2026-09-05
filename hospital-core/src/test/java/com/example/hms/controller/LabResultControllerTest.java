@@ -125,6 +125,18 @@ class LabResultControllerTest {
     }
 
     @Test
+    void runCriticalEscalationSweep_lockHeldElsewhereIsA409NotAFakeZero() {
+        // ShedLock answers null when the scheduled sweep holds the lock: this
+        // call did not run, and the operator must be able to tell.
+        when(criticalValueNotificationService.escalateOverdue()).thenReturn(null);
+
+        var response = controller.runCriticalEscalationSweep();
+
+        assertThat(response.getStatusCode().value()).isEqualTo(409);
+        assertThat(response.getBody()).containsEntry("skipped", true).containsEntry("escalated", 0);
+    }
+
+    @Test
     void runCriticalEscalationSweep_preAuthorize_isAdminOnly() throws Exception {
         List<String> roles = extractRolesFromMethod("runCriticalEscalationSweep");
         assertThat(roles).containsExactlyInAnyOrder("HOSPITAL_ADMIN", "SUPER_ADMIN");

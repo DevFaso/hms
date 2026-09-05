@@ -27,6 +27,7 @@ import com.example.hms.repository.LabResultRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import net.javacrumbs.shedlock.core.LockAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,8 @@ class CriticalValueNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        // The body asserts it runs under the lock; unit tests have no proxy.
+        LockAssert.TestHelper.makeAllAssertsPass(true);
         ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
 
         orderingUser = new User();
@@ -172,6 +175,19 @@ class CriticalValueNotificationServiceTest {
 
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNotNull(); // sweep convergence
+        verify(labResultRepository).save(result);
+    }
+
+    @Test
+    void escalateOverdueReturnsTheBoxedCountTheLockedProxyReliesOn() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(result));
+
+        Integer escalated = service.escalateOverdue();
+
+        assertThat(escalated).isEqualTo(1);
         verify(labResultRepository).save(result);
     }
 

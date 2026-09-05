@@ -28,13 +28,18 @@ public class ImagingCriticalEscalationScheduler {
 
     private final ImagingCriticalNotificationService imagingCriticalNotificationService;
 
-    // Locked on the shared path (ImagingCriticalNotificationService.escalateOverdue) so the manual
-    // trigger and this sweep hold the same lock; a lock here as well would
-    // block its own delegate.
+    // The lock is on the service's escalateOverdue() (Integer, so ShedLock can
+    // answer null for a skipped run) — the manual endpoint calls that same
+    // method, so both contend for one lock. A lock here too would block its
+    // own delegate.
     @Scheduled(fixedDelayString = "${hms.imaging.critical-escalation.interval-ms:300000}")
     public void runSweep() {
         try {
-            int escalated = imagingCriticalNotificationService.escalateOverdue();
+            Integer escalated = imagingCriticalNotificationService.escalateOverdue();
+            if (escalated == null) {
+                log.info("Critical-imaging escalation sweep skipped: another run holds the lock");
+                return;
+            }
             if (escalated > 0) {
                 log.info("Critical-imaging escalation sweep: {} report(s) escalated", escalated);
             }
