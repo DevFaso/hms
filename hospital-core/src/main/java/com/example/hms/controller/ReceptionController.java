@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.payload.dto.CheckInRequestDTO;
 import com.example.hms.payload.dto.CheckInResponseDTO;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits its own encounter-status audit rows")
 @RequestMapping("/reception")
 @Tag(name = "Reception / Front Desk", description = "Receptionist cockpit — queue, snapshot, clearance APIs")
 @RequiredArgsConstructor

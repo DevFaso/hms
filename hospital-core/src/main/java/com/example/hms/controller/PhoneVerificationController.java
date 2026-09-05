@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.service.PhoneVerificationService;
@@ -32,6 +33,7 @@ import java.util.UUID;
  * member who initiated them.
  */
 @RestController
+@WriteAudited(skip = true, reason = "unauthenticated verification flow with its own audit rows")
 @RequestMapping(value = "/patients/phone-verification", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class PhoneVerificationController {

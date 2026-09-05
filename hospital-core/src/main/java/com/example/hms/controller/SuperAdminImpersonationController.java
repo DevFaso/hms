@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.superadmin.ImpersonationActiveResponseDTO;
 import com.example.hms.payload.dto.superadmin.ImpersonationStartRequestDTO;
 import com.example.hms.payload.dto.superadmin.ImpersonationStartResponseDTO;
@@ -24,6 +25,7 @@ import static com.example.hms.config.SecurityConstants.HEADER_STRING;
 import static com.example.hms.config.SecurityConstants.TOKEN_PREFIX;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits IMPERSONATION_STARTED / IMPERSONATION_ENDED")
 @RequestMapping("/super-admin/impersonation")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Support Impersonation",

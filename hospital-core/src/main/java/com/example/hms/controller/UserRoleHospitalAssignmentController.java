@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.AssignmentMinimalDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentResponseDTO;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ROLE_REVOKED / ASSIGNMENT_CONFIRMED")
 @RequestMapping("/assignments")
 @RequiredArgsConstructor
 @Slf4j

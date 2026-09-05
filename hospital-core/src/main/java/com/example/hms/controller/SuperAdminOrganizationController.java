@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.payload.dto.HospitalResponseDTO;
@@ -40,6 +41,7 @@ import java.util.UUID;
 import org.springframework.context.i18n.LocaleContextHolder;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits TENANT_* lifecycle events")
 @RequestMapping("/super-admin/organizations")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Organizations", description = "Tenant management and compliance overview")

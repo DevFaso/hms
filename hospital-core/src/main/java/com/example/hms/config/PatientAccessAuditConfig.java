@@ -1,6 +1,7 @@
 package com.example.hms.config;
 
 import com.example.hms.security.audit.PatientAccessAuditInterceptor;
+import com.example.hms.security.audit.WriteAuditInterceptor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -43,10 +44,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class PatientAccessAuditConfig implements WebMvcConfigurer {
 
     private final ObjectProvider<PatientAccessAuditInterceptor> interceptorProvider;
+    private final ObjectProvider<WriteAuditInterceptor> writeInterceptorProvider;
 
     public PatientAccessAuditConfig(
-            ObjectProvider<PatientAccessAuditInterceptor> interceptorProvider) {
+            ObjectProvider<PatientAccessAuditInterceptor> interceptorProvider,
+            ObjectProvider<WriteAuditInterceptor> writeInterceptorProvider) {
         this.interceptorProvider = interceptorProvider;
+        this.writeInterceptorProvider = writeInterceptorProvider;
     }
 
     @Override
@@ -57,13 +61,22 @@ public class PatientAccessAuditConfig implements WebMvcConfigurer {
                 + "reads will NOT be recorded, and the patient disclosure page will show only "
                 + "break-glass, sharing and export events. Expected in @WebMvcTest slices; "
                 + "a defect anywhere else.");
-            return;
+        } else {
+            // No path pattern: the interceptor decides what is a patient read by
+            // looking at the resolved handler, which is more reliable than a URL
+            // prefix. Patient data hangs off /encounters, /lab-results, /admissions
+            // and a dozen other roots, so a prefix list would be the same
+            // remember-to-add-it problem this replaces.
+            registry.addInterceptor(interceptor);
         }
-        // No path pattern: the interceptor decides what is a patient read by
-        // looking at the resolved handler, which is more reliable than a URL
-        // prefix. Patient data hangs off /encounters, /lab-results, /admissions
-        // and a dozen other roots, so a prefix list would be the same
-        // remember-to-add-it problem this replaces.
-        registry.addInterceptor(interceptor);
+
+        WriteAuditInterceptor writeInterceptor = writeInterceptorProvider.getIfAvailable();
+        if (writeInterceptor == null) {
+            log.warn("[WRITE-AUDIT] No WriteAuditInterceptor bean — successful writes will NOT be "
+                + "recorded. Expected in @WebMvcTest slices; a defect anywhere else.");
+        } else {
+            // Same reasoning: no path pattern, the interceptor reads the handler.
+            registry.addInterceptor(writeInterceptor);
+        }
     }
 }

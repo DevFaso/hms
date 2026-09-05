@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.pharmacy.PharmacyRequestDTO;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits PHARMACY_* events")
 @RequestMapping("/pharmacy-registry")
 @RequiredArgsConstructor
 @Tag(name = "Pharmacy Registry", description = "Manage registered pharmacies")

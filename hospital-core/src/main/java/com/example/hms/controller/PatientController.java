@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
@@ -68,6 +69,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits PATIENT_CREATE / PATIENT_UPDATE / PATIENT_DELETE")
 @RequestMapping("/patients")
 @RequiredArgsConstructor
 @Tag(name = "Patient Management", description = "CRUD operations for patients (staff only)")

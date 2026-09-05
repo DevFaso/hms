@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.InventoryItemRequestDTO;
 import com.example.hms.payload.dto.pharmacy.InventoryItemResponseDTO;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits STOCK_* events")
 @RequestMapping("/pharmacy/inventory")
 @Tag(name = "Pharmacy Inventory", description = "Inventory item and stock lot management")
 @RequiredArgsConstructor

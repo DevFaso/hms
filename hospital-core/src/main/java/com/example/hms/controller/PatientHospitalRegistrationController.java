@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
@@ -33,6 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits its own registration audit rows")
 @RequestMapping(value = "/registrations", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 @Tag(name = "Patient-Hospital Registration", description = "Manage patient-hospital assignments (staff only)")

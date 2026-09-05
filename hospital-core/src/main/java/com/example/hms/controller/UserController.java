@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.UpdateUserRequestDTO;
@@ -36,6 +37,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE / ROLE_ASSIGNED")
 @RequestMapping("/users")
 @RequiredArgsConstructor
 @Tag(name = "User API", description = "Handles User CRUD operations, admin-controlled registration, and search")

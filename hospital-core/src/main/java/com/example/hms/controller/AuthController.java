@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -72,6 +73,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "login, logout, refresh and password flows emit their own LOGIN/LOGOUT/PASSWORD_* events")
 @RequestMapping("/auth")
 @Slf4j
 public class AuthController {
