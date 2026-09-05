@@ -420,9 +420,20 @@
     },
     "FORCE_MFA": {
       "TITLE": "Forzar re-enrolamiento MFA",
-      "DESC": "Elimina el enrolamiento MFA + códigos de respaldo para los usuarios listados (o todos si está vacío).",
-      "USER_IDS": "IDs de usuario (separados por coma, opcional)",
-      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
+      "DESC": "Elimina el enrolamiento MFA y los códigos de respaldo de los usuarios seleccionados. Sin selección, restablece a TODOS los usuarios enrolados (opcionalmente en un solo hospital) — eso requiere una confirmación escrita.",
+      "SEARCH_USERS": "Usuarios a restablecer",
+      "SEARCH_PLACEHOLDER": "Escriba un nombre para buscar…",
+      "NO_RESULTS": "Ningún usuario coincide con ese nombre.",
+      "SELECTED": "Usuarios seleccionados",
+      "REMOVE": "Quitar",
+      "HOSPITAL_SCOPE": "Ámbito hospitalario",
+      "ALL_HOSPITALS": "Toda la plataforma (sin filtro de hospital)",
+      "SUMMARY": "Restablecerá el MFA de {{count}} usuario(s) seleccionado(s).",
+      "RESET_ALL_PLATFORM": "Ningún usuario seleccionado: esto restablece el MFA de TODOS los usuarios enrolados de la plataforma, usted incluido.",
+      "RESET_ALL_AT_HOSPITAL": "Ningún usuario seleccionado: esto restablece el MFA de todos los usuarios enrolados asignados al hospital elegido.",
+      "RESET_ALL_CONFIRM": "Escriba RESET ALL MFA para confirmar el restablecimiento de todos",
+      "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
+      "RESET_ALL_CONFIRM_TYPED": "Escriba RESET ALL MFA para confirmar, o seleccione los usuarios a restablecer.",
       "ACTION": "Forzar re-enrolamiento"
     },
     "BROADCAST": {

@@ -31,6 +31,15 @@ public class EmergencyForceMfaRequestDTO {
      */
     private UUID hospitalId;
 
+    /**
+     * Must be {@code true} when {@link #userIds} is empty. An empty list
+     * used to mean "everyone" silently — one blank field away from
+     * resetting every enrolled user on the platform (the actor included).
+     * The portal now asks for a typed confirmation and sends this flag;
+     * the service refuses an empty list without it.
+     */
+    private Boolean resetAll;
+
     @NotBlank
     @Size(min = 5, max = 1000)
     private String reason;

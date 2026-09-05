@@ -106,14 +106,82 @@
       <h2>{{ 'EMERGENCY.FORCE_MFA.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.FORCE_MFA.DESC' | translate }}</p>
       <label>
-        <span>{{ 'EMERGENCY.FORCE_MFA.USER_IDS' | translate }}</span>
+        <span>{{ 'EMERGENCY.FORCE_MFA.SEARCH_USERS' | translate }}</span>
         <input
-          type="text"
-          placeholder="{{ 'EMERGENCY.FORCE_MFA.USER_IDS_PLACEHOLDER' | translate }}"
-          [ngModel]="mfaUserIds()"
-          (ngModelChange)="mfaUserIds.set($event)"
+          type="search"
+          autocomplete="off"
+          placeholder="{{ 'EMERGENCY.FORCE_MFA.SEARCH_PLACEHOLDER' | translate }}"
+          [ngModel]="mfaQuery()"
+          (ngModelChange)="onMfaQueryChange($event)"
+          [attr.aria-busy]="mfaSearching()"
+          aria-controls="mfa-search-results"
         />
       </label>
+      @if (mfaResults().length > 0) {
+        <ul class="picker-results" id="mfa-search-results" role="listbox">
+          @for (u of mfaResults(); track u.id) {
+            <li>
+              <button type="button" role="option" aria-selected="false" (click)="addMfaTarget(u)">
+                <strong>{{ u.firstName }} {{ u.lastName }}</strong>
+                <span class="picker-meta">{{ u.username }} · {{ u.roleName }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      } @else if (mfaQuery().trim().length >= 2 && !mfaSearching()) {
+        <p class="picker-empty">{{ 'EMERGENCY.FORCE_MFA.NO_RESULTS' | translate }}</p>
+      }
+      @if (mfaSelected().length > 0) {
+        <div class="picker-chips" [attr.aria-label]="'EMERGENCY.FORCE_MFA.SELECTED' | translate">
+          @for (u of mfaSelected(); track u.id) {
+            <span class="chip">
+              {{ u.firstName }} {{ u.lastName }}
+              <small>{{ u.username }}</small>
+              <button
+                type="button"
+                class="chip-remove"
+                (click)="removeMfaTarget(u.id)"
+                [attr.aria-label]="('EMERGENCY.FORCE_MFA.REMOVE' | translate) + ' ' + u.username"
+              >
+                ×
+              </button>
+            </span>
+          }
+        </div>
+      }
+      <label>
+        <span>{{ 'EMERGENCY.FORCE_MFA.HOSPITAL_SCOPE' | translate }}</span>
+        <select [ngModel]="mfaHospitalId()" (ngModelChange)="mfaHospitalId.set($event)">
+          <option value="">{{ 'EMERGENCY.FORCE_MFA.ALL_HOSPITALS' | translate }}</option>
+          @for (h of hospitals(); track h.id) {
+            <option [value]="h.id">{{ h.name }} ({{ h.code }})</option>
+          }
+        </select>
+      </label>
+      @if (mfaResetsEveryone()) {
+        <p class="reset-all-warning" role="alert">
+          {{
+            (mfaHospitalId()
+              ? 'EMERGENCY.FORCE_MFA.RESET_ALL_AT_HOSPITAL'
+              : 'EMERGENCY.FORCE_MFA.RESET_ALL_PLATFORM'
+            ) | translate
+          }}
+        </p>
+        <label>
+          <span>{{ 'EMERGENCY.FORCE_MFA.RESET_ALL_CONFIRM' | translate }}</span>
+          <input
+            type="text"
+            autocomplete="off"
+            placeholder="{{ 'EMERGENCY.FORCE_MFA.RESET_ALL_PLACEHOLDER' | translate }}"
+            [ngModel]="mfaResetAllConfirm()"
+            (ngModelChange)="mfaResetAllConfirm.set($event)"
+          />
+        </label>
+      } @else {
+        <p class="picker-summary">
+          {{ 'EMERGENCY.FORCE_MFA.SUMMARY' | translate: { count: mfaSelected().length } }}
+        </p>
+      }
       <label>
         <span>{{ 'EMERGENCY.REASON' | translate }}</span>
         <textarea

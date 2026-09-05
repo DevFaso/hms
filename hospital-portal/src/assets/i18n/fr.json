@@ -420,9 +420,20 @@
     },
     "FORCE_MFA": {
       "TITLE": "Forcer le ré-enrôlement MFA",
-      "DESC": "Efface l'enrôlement MFA + les codes de secours pour les utilisateurs listés (ou tous si vide).",
-      "USER_IDS": "Identifiants utilisateur (séparés par virgule, optionnel)",
-      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
+      "DESC": "Efface l'enrôlement MFA et les codes de secours des utilisateurs sélectionnés. Sans sélection, TOUS les utilisateurs enrôlés sont réinitialisés (éventuellement pour un seul hôpital) — cela exige une confirmation saisie.",
+      "SEARCH_USERS": "Utilisateurs à réinitialiser",
+      "SEARCH_PLACEHOLDER": "Saisissez un nom pour rechercher…",
+      "NO_RESULTS": "Aucun utilisateur ne correspond à ce nom.",
+      "SELECTED": "Utilisateurs sélectionnés",
+      "REMOVE": "Retirer",
+      "HOSPITAL_SCOPE": "Périmètre hospitalier",
+      "ALL_HOSPITALS": "Toute la plateforme (sans filtre d'hôpital)",
+      "SUMMARY": "Réinitialisera le MFA de {{count}} utilisateur(s) sélectionné(s).",
+      "RESET_ALL_PLATFORM": "Aucun utilisateur sélectionné : ceci réinitialise le MFA de TOUS les utilisateurs enrôlés de la plateforme, vous compris.",
+      "RESET_ALL_AT_HOSPITAL": "Aucun utilisateur sélectionné : ceci réinitialise le MFA de tous les utilisateurs enrôlés affectés à l'hôpital choisi.",
+      "RESET_ALL_CONFIRM": "Tapez RESET ALL MFA pour confirmer la réinitialisation de tout le monde",
+      "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
+      "RESET_ALL_CONFIRM_TYPED": "Tapez RESET ALL MFA pour confirmer, ou sélectionnez les utilisateurs à réinitialiser.",
       "ACTION": "Forcer le ré-enrôlement"
     },
     "BROADCAST": {

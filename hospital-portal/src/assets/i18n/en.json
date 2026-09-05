@@ -420,9 +420,20 @@
     },
     "FORCE_MFA": {
       "TITLE": "Force MFA re-enrolment",
-      "DESC": "Clears MFA enrolment + backup codes for the listed users (or all users when blank).",
-      "USER_IDS": "User ids (comma-separated, optional)",
-      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
+      "DESC": "Clears MFA enrolment and backup codes for the selected users. With nobody selected it resets EVERY enrolled user (optionally at one hospital) — that needs a typed confirmation.",
+      "SEARCH_USERS": "Users to reset",
+      "SEARCH_PLACEHOLDER": "Type a name to search…",
+      "NO_RESULTS": "No user matches that name.",
+      "SELECTED": "Selected users",
+      "REMOVE": "Remove",
+      "HOSPITAL_SCOPE": "Hospital scope",
+      "ALL_HOSPITALS": "Whole platform (no hospital filter)",
+      "SUMMARY": "Will reset MFA for {{count}} selected user(s).",
+      "RESET_ALL_PLATFORM": "No user selected: this resets MFA for EVERY enrolled user on the platform, including you.",
+      "RESET_ALL_AT_HOSPITAL": "No user selected: this resets MFA for every enrolled user assigned to the chosen hospital.",
+      "RESET_ALL_CONFIRM": "Type RESET ALL MFA to confirm a reset of everyone",
+      "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
+      "RESET_ALL_CONFIRM_TYPED": "Type RESET ALL MFA to confirm, or select the users to reset.",
       "ACTION": "Force re-enrol"
     },
     "BROADCAST": {
