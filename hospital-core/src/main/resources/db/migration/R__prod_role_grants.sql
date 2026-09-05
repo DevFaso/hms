@@ -3,8 +3,17 @@
 -- Repeatable migration: grants schema-level privileges to
 -- hms_app, hms_readonly, and hms_migrator roles.
 --
--- This is a Liquibase "repeatable" changeset (R__ prefix).
--- It re-runs whenever the file checksum changes.
+-- NOT registered in changelog.xml: Liquibase discovers nothing by
+-- filename, and registering it would GRANT to roles that only exist
+-- on prod. Run it by hand, as postgres, on the prod database — and
+-- re-run it after any migration that adds a schema.
+--
+-- The schema arrays below must list EVERY schema a migration creates
+-- (`CREATE SCHEMA` in V*.sql). MigrationRegistrationTest fails when
+-- one is missing: `scheduling` (V19) and `integration` (V68) were left
+-- out for months, so hms_app on prod could not read
+-- appointment_waitlist, patient_recalls or the dhis2_* tables —
+-- "permission denied for schema scheduling" on every scheduler sweep.
 --
 -- Roles:
 --   postgres      → superuser, owns everything (emergency only)
@@ -19,7 +28,7 @@
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT ALL ON SCHEMA %I TO hms_migrator', s);
@@ -30,7 +39,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO hms_app', s);
@@ -41,7 +50,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO hms_readonly', s);
@@ -54,7 +63,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO hms_app', s);
@@ -66,7 +75,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO hms_readonly', s);
@@ -78,7 +87,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     EXECUTE format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I TO hms_migrator', s);
@@ -92,7 +101,7 @@ END $$;
 DO $$
 DECLARE
   s TEXT;
-  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','lab','platform','reference','security','support','public'];
+  schemas TEXT[] := ARRAY['billing','clinical','empi','governance','hospital','integration','lab','platform','reference','scheduling','security','support','public'];
 BEGIN
   FOREACH s IN ARRAY schemas LOOP
     -- Future tables created by postgres → hms_app gets CRUD
