@@ -1604,9 +1604,14 @@ that exists rather than inventing one.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.
-- `R__prod_role_grants.sql` — a Flyway `R__` name in a Liquibase repo, so those
-  production role grants have never run. Registering it would `GRANT` on every
-  deploy and fail where the roles don't exist. Operational call.
+- `R__prod_role_grants.sql` — a Flyway `R__` name in a Liquibase repo; it is
+  run by hand on prod as `postgres`, never by Liquibase (registering it would
+  `GRANT` on every deploy and fail where the roles don't exist). Its schema
+  arrays had drifted — `scheduling` and `integration` were missing, so
+  waitlist/recall/DHIS2 were unreachable by `hms_app` on prod until the
+  grants were run by hand 2026-09-05 (#556 fixed the file and added a guard
+  test). Still owed: re-run the full script on prod so the two schemas also
+  get default privileges for future tables.
 - Two-factor transport for controlled substances; `app.empi.probabilistic.enabled`
   still defaults false.
 

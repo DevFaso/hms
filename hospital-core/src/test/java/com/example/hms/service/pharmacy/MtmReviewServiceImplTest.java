@@ -26,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -280,5 +281,40 @@ class MtmReviewServiceImplTest {
 
         assertThatThrownBy(() -> service.getReview(reviewId))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // -------------------------------------------------------------------------
+    // Super-admin in global view: requireActiveHospitalId() returns null.
+    // Every MTM surface is per-facility, so that is a BusinessException (400)
+    // naming the fix, not the NullPointerException (500) it used to be.
+    // -------------------------------------------------------------------------
+
+    @Test
+    void listByHospitalWithoutActiveHospitalIsA400NotAnNpe() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listByHospital(hospitalId, PageRequest.of(0, 50)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active hospital is required");
+        verify(reviewRepository, never()).findByHospital_Id(any(), any());
+    }
+
+    @Test
+    void getReviewWithoutActiveHospitalIsA400NotAnNpe() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.getReview(reviewId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active hospital is required");
+    }
+
+    @Test
+    void listByPatientWithoutActiveHospitalIsA400NotAnUnscopedQuery() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listByPatient(patientId, PageRequest.of(0, 50)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active hospital is required");
+        verify(reviewRepository, never()).findByPatient_IdAndHospital_Id(any(), any(), any());
     }
 }
