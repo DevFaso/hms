@@ -10,6 +10,9 @@ import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
+import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
+import com.example.hms.payload.dto.pro.ProSelfReportDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
@@ -460,6 +463,64 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<CareTeamDTO>> getMyCareTeam(Authentication auth) {
         CareTeamDTO careTeam = portalService.getMyCareTeam(auth);
         return ResponseEntity.ok(ApiResponseWrapper.success(careTeam));
+    }
+
+    // ── Release of information (Tier 2 item 39b) ────────────────────────
+
+    @PostMapping("/roi-requests")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "File a release-of-information request",
+        description = "Filed as the patient (Tier 2 item 39b); lands on the registered "
+            + "hospital's records-desk worklist. Purpose and scope are required; the "
+            + "requester identity is always the patient's own.")
+    public ResponseEntity<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> createRoiRequest(
+            Authentication auth,
+            @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(portalService.createRoiRequest(auth, dto));
+    }
+
+    @GetMapping("/roi-requests")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "My release-of-information requests and their outcomes")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO>> myRoiRequests(
+            Authentication auth) {
+        return ResponseEntity.ok(portalService.myRoiRequests(auth));
+    }
+
+    // ── Standardized PRO screenings (Tier 2 item 47) ────────────────────
+
+    @GetMapping("/pro-screenings")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "My screenings",
+        description = "Instruments open to me right now (while a postpartum plan is active) and what I "
+            + "answered before. Carries no score by design - the care team follows up in person.")
+    public ResponseEntity<ProSelfReportDTO> myScreenings(Authentication auth) {
+        return ResponseEntity.ok(portalService.myScreenings(auth));
+    }
+
+    @GetMapping("/pro-instruments/{code}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "A screening instrument in my language",
+        description = "Items and answer options, no scores. Falls back to English when the "
+            + "requested language is not loaded and says which language was served.")
+    public ResponseEntity<ProInstrumentViewDTO> myScreeningInstrument(
+            Authentication auth,
+            @PathVariable String code,
+            @RequestParam(required = false) String language) {
+        return ResponseEntity.ok(portalService.myScreeningInstrument(auth, code, language));
+    }
+
+    @PostMapping("/pro-screenings")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @Operation(summary = "Answer a screening",
+        description = "Recorded as PATIENT_REPORTED against the hospital whose postpartum plan is open "
+            + "for me. A safety-item answer alerts the care team immediately.")
+    public ResponseEntity<ProSelfReportDTO.Entry> submitScreening(
+            Authentication auth,
+            @Valid @RequestBody ProResponseCreateDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(portalService.submitScreening(auth, dto));
     }
 
     // ── Access log ───────────────────────────────────────────────────────

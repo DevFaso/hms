@@ -210,6 +210,8 @@ public class PatientServiceImpl implements PatientService {
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
+    private final PatientAddressHistoryRecorder addressHistoryRecorder;
     private final PhoneVerificationService phoneVerificationService;
     private final PatientMapper patientMapper;
     private final MessageSource messageSource;
@@ -372,7 +374,9 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
 
+        PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
+        addressHistoryRecorder.recordIfMoved(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
 
         return buildPatientDto(updatedPatient, dto.getHospitalId());
@@ -394,8 +398,10 @@ public class PatientServiceImpl implements PatientService {
         }
 
         boolean updated = false;
+        PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
 
         updated |= applyNullable(request.getPhoneNumberPrimary(), patient::setPhoneNumberPrimary);
+        updated |= applyNullable(request.getEthnicity(), patient::setEthnicity);
         updated |= applyNullable(request.getPhoneNumberSecondary(), patient::setPhoneNumberSecondary);
         updated |= applyNullable(request.getEmail(), patient::setEmail);
 
@@ -417,6 +423,7 @@ public class PatientServiceImpl implements PatientService {
                 patient.getZipCode(),
                 patient.getCountry()
             ));
+            addressHistoryRecorder.recordIfMoved(patient, before);
         }
 
         updated |= applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
@@ -2528,6 +2535,31 @@ public class PatientServiceImpl implements PatientService {
         String normalized = trimToNull(value);
         setter.accept(normalized);
         return true;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.PatientAddressHistoryDTO> getAddressHistory(
+            UUID patientId, UUID hospitalId) {
+        // Cross-tenant collapse: a foreign patient and a nonexistent one get
+        // the IDENTICAL not-found — distinct errors would let a caller probe
+        // which UUIDs exist at other hospitals (same stance as $everything's
+        // loadAndVerifyTenantOwnedPatient).
+        boolean visible = patientRepository.findByIdUnscoped(patientId)
+            .map(p -> p.isRegisteredInHospital(hospitalId))
+            .orElse(false);
+        if (!visible) {
+            throw new ResourceNotFoundException("Patient not found: " + patientId);
+        }
+        return addressHistoryRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
+            .map(h -> com.example.hms.payload.dto.PatientAddressHistoryDTO.builder()
+                .id(h.getId())
+                .address(h.getAddress())
+                .city(h.getCity())
+                .country(h.getCountry())
+                .replacedAt(h.getCreatedAt())
+                .build())
+            .toList();
     }
 
     private String buildMailingAddress(String line1, String line2, String city, String state, String postalCode, String country) {

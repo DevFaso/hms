@@ -1381,11 +1381,22 @@ that exists rather than inventing one.
 
 ## E5 — Records, identity, HIM
 
-- [ ] 38. **Demographics depth** — ethnicity, preferred language, address
-  history. `ethnicity` and `AddressHistory` are zero-file; `preferredLanguage`
-  appears in 4. Language is operational here, not decorative: the UI is EN/FR/ES
-  while patients speak Bambara, Dioula and Mooré, and the SMS channel picks a
-  locale per message.
+- [x] 38. **Demographics depth** — ethnicity, preferred language, address
+  history. ✅ DONE 2026-09-03 (`feat/demographics-depth`, V150).
+  The entry was one-third stale (the item-39 lesson again): the LANGUAGE
+  third had already shipped — `PatientLanguage` (fr/en/es + bm/dyu/mos with
+  `hasMessageBundle`) and `PatientLocaleResolver`, read by the appointment,
+  recall and reception dispatch paths; a Mooré/Dioula/Bambara SMS still
+  needs a commissioned bundle, which is a translation task, not code.
+  What V150 added: `clinical.patients.ethnicity` — self-reported FREE TEXT
+  on purpose (an enum of ethnic groups would be the schema inventing a
+  taxonomy; V146 cadence stance) — and `clinical.patient_address_history`,
+  written by both patient-update paths only when the address components
+  actually change (first fill-in of a blank address and re-statements
+  record nothing; the composed `address` string is derived formatting and
+  deliberately not part of the comparison). Read surface:
+  GET /patients/{id}/address-history + a lazy expander on the chart's
+  demographics card; ethnicity on the registration form and chart.
 - [x] 39. **Disclosure accounting.**
   ✅ DONE 2026-08-26 (**PR #528** `feature/disclosure-accounting`, V141).
   The entry said "the patient-facing report over that existing ledger" and
@@ -1438,11 +1449,23 @@ that exists rather than inventing one.
   label. The portal's `catchError(() => of([]))` is gone: an outage used to
   render as *"Nobody has accessed your records yet"*, an affirmatively false
   statement about a privacy-critical fact.
-- [ ] 39b. **Release of information — request workflow.** The other half of
-  the original #39. A patient or an authorised third party formally requests
-  a copy of the record; staff triage, fulfil or deny, and the fulfilment is
-  itself a disclosure that lands in the #39 accounting. Nothing exists for
-  the request side; the accounting it would feed now does.
+- [x] 39b. **Release of information — request workflow.**
+  ✅ DONE 2026-09-04 (`feat/roi-requests`, V151). The other half of the
+  original #39, wired into it by construction: fulfilment emits a
+  PATIENT_EXPORT audit row keyed by patient, which the V141 whitelist
+  classifies as COPY_RELEASED — every fulfilled request lands on the
+  patient's own "Who Viewed My Records" with no further wiring; denials
+  stay off it (nothing was disclosed). `clinical.roi_requests` (encrypted
+  requester/purpose/scope/decision narrative; @Version per the #549
+  concurrency lesson; NO delete cascade — a request is a record of an
+  exchange with an outside party and must survive scrutiny). Intake under
+  /patients/{id}/roi-requests (the desk logs paper requests; RECEPTIONIST
+  in), triage worklist + fulfil/deny/cancel under /roi-requests (decisions
+  tightened to DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN; deny REQUIRES the
+  reason — it is the outcome the requester is told). Patients file and
+  track their own via /me/patient/roi-requests. Portal /roi page:
+  status-tabbed queue oldest-first, intake on the shared picker, scope
+  chip for super-admins.
 - [x] 40. **Provider credentialing renewal.**
   ✅ DONE 2026-08-26 (**PR #525** `feature/provider-credentialing`, V140).
   The gap was worse than "nothing verifies": `license_number` and
@@ -1516,9 +1539,21 @@ that exists rather than inventing one.
 - [ ] 44. **FHIR DocumentReference + patient record download.** The portal is
   print-only. #477's bulk exporter already streams NDJSON through
   patient-scoped queries, so a single-patient download is a narrow lift.
-- [ ] 45. **Outbound webhooks / API-key management** for third-party clients.
+- [x] 45. **Outbound webhooks / API-key management** for third-party clients.
   `apiKeyReference` exists on `PlatformService` as a pointer with no issuance,
   rotation or verification behind it.
+  ✔ 2026-09-04 (V152): `platform.api_keys` — issue (SHA-256 hash at rest, raw
+  shown once), rotate, revoke-never-delete, optional expiry; verification via
+  `ApiKeyAuthenticationFilter` (X-API-Key) gating the new `/partner/**`
+  surface (ping + own delivery log — the verify path has a real caller).
+  Outbound webhooks: hospital-scoped endpoints (HTTPS-public-only SSRF gate,
+  encrypted HMAC secret shown once), thin id-reference payloads (no PHI in
+  transit), `X-HMS-Webhook-Signature` = HMAC-SHA256 over `timestamp.body`,
+  instrument-outbox retry sweep, auto-disable on consecutive failures,
+  emitters on all four appointment write paths, portal `/webhooks` admin
+  page. Also FIXED the pre-existing leak: `apiKeyReference` /
+  `credentialsReference` now encrypted at rest, write-only in responses, and
+  dropped from the Kafka event payload.
 
 ## E7 — Engagement
 
@@ -1529,11 +1564,31 @@ that exists rather than inventing one.
   E-check-in with dynamic questionnaires covers BEFORE the visit; arrival at
   the desk has no self-service path. Verified zero code (`SelfCheckIn`,
   `Kiosk`).
-- [ ] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
+- [x] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
   entirely absent (no PHQ-9, no GAD-7 anywhere). The one that belongs in this
   product first is the **Edinburgh Postnatal Depression Scale** in the
   postpartum module, where there is already a care plan, an alert engine and a
   visit cadence to hang it on. PHQ-9/GAD-7 follow as generic instruments.
+  ✔ 2026-09-04 (V153): `clinical.pro_instruments / _items / _options /
+  _texts / pro_responses`. **The instrument is data, not code** — every
+  option carries its own score, `critical_item_no` marks the item that
+  escalates regardless of the total (EPDS item 10), and the engine only sums,
+  compares to `positive_threshold` and checks that item. **No instrument text
+  is seeded** (V120 rule): EPDS wording, option scores and cutoffs enter
+  through `PUT /pro-instruments/{code}` (SUPER_ADMIN, structural validation)
+  from the validated source, EN original + validated FR translation, with
+  attribution; until loaded, `GET /pro-instruments` hides the instrument and
+  the postpartum "Administer" button stays off. Responses stored (answers /
+  notes / ack note encrypted, scores plain for the trend); self-harm-positive
+  → notify recorder + panel owners on save, re-escalate by sweep until
+  acknowledged (`hms.pro.critical-escalation.*`, fallback role when no
+  recorder/panel resolves — patient self-report). Cadence hook on
+  `PostpartumScheduleDTO.screening` (due / last result / escalation open).
+  Portal: shared `<app-pro-instrument-form>` renderer (labels only, never a
+  score), postpartum-tab screening card + administer/acknowledge modals,
+  patient `/my-screenings` self-report — **deliberately score-free** for the
+  mother (she sees "care team alerted" / "follow-up planned", never a
+  number). Bambara/Dioula/Mooré texts need commissioned human translation.
 
 ## Standing platform debt — owed, not parity
 

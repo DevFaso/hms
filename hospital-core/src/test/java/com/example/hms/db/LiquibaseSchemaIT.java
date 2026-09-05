@@ -106,10 +106,10 @@ class LiquibaseSchemaIT {
             // V72: optimistic-lock @Version on general_referrals
             assertColumnExists(stmt, publicSchema, "general_referrals", "version");
 
-            // V121: slot inventory. Asserted here because prod runs
-            // ddl-auto=validate against the Liquibase-built schema, while the
-            // H2 suite builds tables FROM the entities — so H2 can never catch
-            // a column the migration forgot.
+            // V121: slot inventory. Entity-mapped columns are now covered
+            // wholesale by EntitySchemaValidationIT (ddl-auto=validate over
+            // the Liquibase-built schema); keep this test for schemas, seed
+            // rows and objects no entity maps.
             assertTableExists(stmt, "clinical", "visit_types");
             assertTableExists(stmt, "clinical", "session_templates");
             assertTableExists(stmt, "clinical", "appointment_slots");

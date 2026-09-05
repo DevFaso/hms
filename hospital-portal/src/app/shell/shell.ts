@@ -168,6 +168,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-vitals',
         },
         {
+          icon: 'psychology',
+          label: 'Screenings',
+          translationKey: 'NAV.SCREENINGS',
+          route: '/my-screenings',
+        },
+        {
           icon: 'receipt_long',
           label: 'Billing',
           translationKey: 'NAV.BILLING',
@@ -529,6 +535,36 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        // Tier 2 item 37. Same mirroring rule as /registries.
+        icon: 'supervisor_account',
+        label: 'Patient Panels',
+        translationKey: 'NAV.PANELS',
+        route: '/panels',
+        roles: [
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
+        // Tier 2 item 39b. Same mirroring rule; RECEPTIONIST included -
+        // the desk is where paper requests arrive.
+        icon: 'outgoing_mail',
+        label: 'Release of Information',
+        translationKey: 'NAV.ROI',
+        route: '/roi',
+        roles: [
+          'ROLE_RECEPTIONIST',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'pregnant_woman',
         label: 'Maternity',
         translationKey: 'NAV.MATERNITY',
@@ -844,6 +880,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Assignments',
         translationKey: 'NAV.ASSIGNMENTS',
         route: '/admin-assignments',
+      });
+    }
+    // API keys + outbound webhooks (Tier 2 item 45) — mirrors the
+    // /api-keys and /webhook-endpoints controller gates exactly.
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'])) {
+      items.push({
+        icon: 'webhook',
+        label: 'API & Webhooks',
+        translationKey: 'NAV.WEBHOOKS',
+        route: '/webhooks',
       });
     }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)

@@ -133,6 +133,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             List.of(RefillStatus.REQUESTED, RefillStatus.PAUSED);
 
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
+    private final com.example.hms.service.roi.RoiRequestService roiRequestService;
+    private final com.example.hms.service.pro.ProResponseService proResponseService;
+    private final com.example.hms.service.pro.ProInstrumentService proInstrumentService;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
 
@@ -170,6 +174,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
 
     // MVP 4 additions
     private final QuestionnaireRepository questionnaireRepository;
@@ -221,6 +226,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public PatientProfileDTO updateMyProfile(Authentication auth, PatientProfileUpdateDTO dto) {
         Patient patient = findPatient(auth);
+        // The self-service path is a real address-write surface: it records
+        // moves exactly like the staff paths (PR #550 review — the hook
+        // originally lived only in PatientServiceImpl and this path
+        // silently bypassed it).
+        var before = addressHistoryRecorder.snapshot(patient);
 
         // Only update fields the patient is allowed to change
         if (dto.getPhoneNumberPrimary() != null)       patient.setPhoneNumberPrimary(dto.getPhoneNumberPrimary());
@@ -237,10 +247,59 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
         if (dto.getPreferredPharmacy() != null)        patient.setPreferredPharmacy(dto.getPreferredPharmacy());
+        if (dto.getEthnicity() != null)                patient.setEthnicity(dto.getEthnicity());
 
+        addressHistoryRecorder.recordIfMoved(patient, before);
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
+    }
+
+    // ── Release of information (Tier 2 item 39b) ────────────────────────
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.roi.RoiRequestResponseDTO createRoiRequest(
+            Authentication auth, com.example.hms.payload.dto.roi.RoiSelfRequestCreateDTO dto) {
+        Patient patient = findPatient(auth);
+        // Filed against the patient's registered hospital: the request lands
+        // on that facility's triage worklist.
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return roiRequestService.createForSelf(patient, hospitalId, dto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
+            Authentication auth) {
+        return roiRequestService.requestsForSelf(findPatient(auth));
+    }
+
+    // ── Standardized PRO screenings (Tier 2 item 47) ─────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.pro.ProSelfReportDTO myScreenings(Authentication auth) {
+        // The open postpartum plan picks the hospital, not the primary
+        // registration: the plan may live at a hospital the patient joined later.
+        return proResponseService.overviewForSelf(findPatient(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.pro.ProInstrumentViewDTO myScreeningInstrument(
+            Authentication auth, String code, String language) {
+        findPatient(auth);
+        return proInstrumentService.render(code, language);
+    }
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.pro.ProSelfReportDTO.Entry submitScreening(
+            Authentication auth, com.example.hms.payload.dto.pro.ProResponseCreateDTO dto) {
+        // The /me surface takes neither a hospital nor an administration time
+        // from the body; recordForSelf pins both (open plan, server clock).
+        return proResponseService.recordForSelf(findPatient(auth), dto);
     }
 
     // ── Health summary (aggregated) ──────────────────────────────────────
@@ -567,6 +626,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // The appointment owns its slot (P3 #22): a patient cancelling from the
         // portal frees the time for the next patient just like a desk cancel.
         slotInventoryService.releaseForAppointment(appointment.getId());
+        // Outbound webhooks (Tier 2 item 45): the portal cancel is its own
+        // write path - a subscriber must see it like a desk cancel.
+        if (appointment.getHospital() != null) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_CANCELLED,
+                "Appointment", appointment.getId());
+        }
         log.info("Patient {} cancelled appointment {}", patientId, appointment.getId());
 
         // ── Send cancellation email to patient ──
@@ -608,6 +674,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     + "Patient rescheduled: " + dto.getReason());
         }
         appointmentRepository.save(appointment);
+        // Outbound webhooks (Tier 2 item 45): same rule as the desk path.
+        if (appointment.getHospital() != null) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_RESCHEDULED,
+                "Appointment", appointment.getId());
+        }
         log.info("Patient {} rescheduled appointment {} to {}", patientId, appointment.getId(), dto.getNewDate());
 
         // ── Send reschedule confirmation email to patient ──
@@ -885,6 +957,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .state(p.getState())
                 .zipCode(p.getZipCode())
                 .country(p.getCountry())
+                .ethnicity(p.getEthnicity())
                 .emergencyContactName(p.getEmergencyContactName())
                 .emergencyContactPhone(p.getEmergencyContactPhone())
                 .emergencyContactRelationship(p.getEmergencyContactRelationship())

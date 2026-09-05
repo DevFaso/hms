@@ -10,6 +10,7 @@ import com.example.hms.model.embedded.PlatformServiceMetadata;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
@@ -76,7 +77,15 @@ public class OrganizationPlatformService extends BaseEntity {
     @Column(name = "documentation_url", length = 255)
     private String documentationUrl;
 
-    @Column(name = "api_key_reference", length = 120)
+    /**
+     * A credential pointer — encrypted at rest since item 45 (it used to
+     * sit plaintext AND flow into the response DTO, the portal detail
+     * panel and the Kafka event; now it is write-only: responses carry
+     * only whether it is set). Column widened to TEXT in V152 for the
+     * ciphertext; pre-existing plaintext values read back verbatim.
+     */
+    @Column(name = "api_key_reference", columnDefinition = "TEXT")
+    @Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
     private String apiKeyReference;
 
     @Column(name = "managed_by_platform", nullable = false)

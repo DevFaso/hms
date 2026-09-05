@@ -126,6 +126,15 @@ export const routes: Routes = [
           import('./patient-portal/my-vitals/my-vitals.component').then((m) => m.MyVitalsComponent),
       },
       {
+        path: 'my-screenings',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-screenings/my-screenings.component').then(
+            (m) => m.MyScreeningsComponent,
+          ),
+      },
+      {
         path: 'my-billing',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
@@ -346,6 +355,54 @@ export const routes: Routes = [
           ],
         },
         loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
+      },
+
+      // Panel management / empanelment (Tier 2 item 37). Role set mirrors
+      // the @PreAuthorize on PatientPanelController / PanelWorklistController
+      // exactly - the same clinical write set as /registries.
+      {
+        path: 'panels',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./panel/panel').then((m) => m.PanelComponent),
+      },
+
+      // Release of information (Tier 2 item 39b). Role set mirrors the
+      // @PreAuthorize on PatientRoiController / RoiWorklistController
+      // exactly - intake includes the desk; decisions tighten in-page.
+      {
+        path: 'roi',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./roi/roi').then((m) => m.RoiComponent),
+      },
+
+      // API keys + outbound webhooks (Tier 2 item 45) — mirrors
+      // ApiKeyController / WebhookEndpointController exactly.
+      {
+        path: 'webhooks',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'],
+        },
+        loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
       },
 
       // Staff

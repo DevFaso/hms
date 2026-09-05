@@ -10,6 +10,10 @@ COPY gradlew .
 COPY gradle gradle
 COPY build.gradle .
 COPY settings.gradle .
+# gradle.properties carries org.gradle.jvmargs — without it the forked
+# single-use daemon runs on the 512 MiB default heap, which compileJava
+# outgrew (Railway builder GC-thrash kill, 2026-09-04).
+COPY gradle.properties .
 
 # Copy module build files
 COPY hospital-core/build.gradle hospital-core/build.gradle

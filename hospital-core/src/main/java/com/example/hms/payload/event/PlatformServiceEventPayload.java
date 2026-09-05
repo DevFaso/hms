@@ -29,7 +29,6 @@ public class PlatformServiceEventPayload {
     private final String provider;
     private final String baseUrl;
     private final String documentationUrl;
-    private final String apiKeyReference;
     private final String ownershipTeam;
     private final String ownershipContactEmail;
     private final String ownershipServiceLevel;

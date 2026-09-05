@@ -77,7 +77,8 @@ export interface OrgServiceResponse {
   provider: string;
   baseUrl: string;
   documentationUrl: string;
-  apiKeyReference: string;
+  /** Write-only server-side since item 45: reads say only whether it is set. */
+  apiKeyReferenceSet: boolean;
   managedByPlatform: boolean;
   ownership?: PlatformOwnership;
   metadata?: PlatformServiceMetadata;
@@ -125,7 +126,8 @@ export interface HospitalServiceLink {
   organizationServiceId: string;
   serviceType: PlatformServiceType;
   enabled: boolean;
-  credentialsReference: string;
+  /** Write-only server-side since item 45: reads say only whether it is set. */
+  credentialsReferenceSet: boolean;
   overrideEndpoint: string;
   ownership?: PlatformOwnership;
 }
@@ -138,7 +140,8 @@ export interface DepartmentServiceLink {
   organizationServiceId: string;
   serviceType: PlatformServiceType;
   enabled: boolean;
-  credentialsReference: string;
+  /** Write-only server-side since item 45: reads say only whether it is set. */
+  credentialsReferenceSet: boolean;
   overrideEndpoint: string;
   ownership?: PlatformOwnership;
 }

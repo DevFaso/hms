@@ -27,7 +27,8 @@ public class DepartmentPlatformServiceLinkResponseDTO {
 
     private boolean enabled;
 
-    private String credentialsReference;
+    /** Whether credentials are configured - the value itself is write-only (item 45). */
+    private boolean credentialsReferenceSet;
 
     private String overrideEndpoint;
 

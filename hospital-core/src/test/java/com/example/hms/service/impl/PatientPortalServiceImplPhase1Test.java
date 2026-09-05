@@ -87,6 +87,7 @@ import static org.mockito.Mockito.when;
 class PatientPortalServiceImplPhase1Test {
 
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PatientLabResultService labResultService;
     @Mock private PatientMedicationService medicationService;

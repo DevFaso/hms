@@ -2242,4 +2242,84 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V149 - panel management / empanelment (Tier 2 item 37). New
+         clinical.panel_assignments table: one ACTIVE panel owner
+         (primary provider or CHW) per patient/hospital/role, enforced by
+         a partial unique index; ENDED rows keep the reassignment
+         history. Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V149-panel-assignments" author="hms-team" runOnChange="false">
+        <sqlFile path="V149__panel_assignments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V150 - demographics depth (Tier 2 item 38): self-reported
+         free-text ethnicity on clinical.patients, and
+         clinical.patient_address_history keeping each superseded address
+         (valid until its created_at). Idempotent per the
+         mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V150-patient-demographics-depth" author="hms-team" runOnChange="false">
+        <sqlFile path="V150__patient_demographics_depth.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V151 - release-of-information requests (Tier 2 item 39b): the
+         request side of the V141 disclosure accounting. Encrypted
+         requester/purpose/scope/decision narrative, optimistic-lock
+         version column, worklist index. Idempotent per the
+         mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V151-roi-requests" author="hms-team" runOnChange="false">
+        <sqlFile path="V151__roi_requests.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V152 - outbound webhooks + API-key management (Tier 2 item 45):
+         platform.api_keys (SHA-256 hash only, revoke-never-delete),
+         webhook_endpoints (encrypted HMAC secret) + subscriptions +
+         deliveries outbox (instrument-outbox retry mechanics); widens the
+         three credential-pointer columns to TEXT for encryption at rest.
+         Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V152-webhooks-api-keys" author="hms-team" runOnChange="false">
+        <sqlFile path="V152__webhooks_api_keys.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V153: Standardized PROs, EPDS first (Tier 2 item 47).
+         pro_instruments / items / options (score on the option) / texts
+         (per language) + pro_responses (encrypted answers, plain score
+         columns, critical-value-style escalation columns). Instrument
+         content is loaded from a validated source, never coded.
+         Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V153-pro-instruments-epds" author="hms-team" runOnChange="false">
+        <sqlFile path="V153__pro_instruments_epds.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V154: the audit columns V153 forgot. ProInstrumentItem/Option/Text
+         extend BaseEntity (created_at/updated_at) but V153 only gave those
+         columns to pro_instruments and pro_responses; ddl-auto=validate
+         refused to boot on dev. V153 is recorded, so it cannot be edited.
+         ADD COLUMN IF NOT EXISTS with DEFAULT now() (the V110 shape).
+         ================================================================= -->
+    <changeSet id="V154-pro-instrument-audit-columns" author="hms-team" runOnChange="false">
+        <sqlFile path="V154__pro_instrument_audit_columns.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

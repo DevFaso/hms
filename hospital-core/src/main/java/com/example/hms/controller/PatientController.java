@@ -430,11 +430,33 @@ public class PatientController {
     }
 
     @Operation(
+        summary = "Superseded addresses for one patient (Tier 2 item 38)",
+        description = "Each entry was the patient's address until its replacedAt moment; newest "
+            + "move first. Gate mirrors the chart read set so every role that can open the "
+            + "demographics card can use its button.",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @GetMapping("/{id}/address-history")
+    @PreAuthorize(PATIENT_READ_ROLES)
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.PatientAddressHistoryDTO>> getAddressHistory(
+        @PathVariable UUID id,
+        @RequestParam(required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        if (resolvedHospitalId == null) {
+            throw new BusinessException("Hospital context is required to view address history.");
+        }
+        return ResponseEntity.ok(patientService.getAddressHistory(id, resolvedHospitalId));
+    }
+
+    @Operation(
         summary = "List structured allergy entries for prescribing",
         description = "Provides an audit-friendly list of allergy entries scoped to the clinician's hospital.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @GetMapping("/{id}/allergies")
+@GetMapping("/{id}/allergies")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PHARMACIST')")
     public ResponseEntity<List<PatientAllergyResponseDTO>> getPatientAllergies(
         @PathVariable UUID id,

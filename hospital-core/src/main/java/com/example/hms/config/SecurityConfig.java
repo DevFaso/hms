@@ -152,6 +152,14 @@ public class SecurityConfig {
     private final KeycloakJwtAuthenticationConverter oidcJwtAuthenticationConverter;
     private final ObjectProvider<KeycloakHospitalContextFilter> oidcHospitalContextFilterProvider;
 
+    /**
+     * ObjectProvider on purpose (the PR #536 lesson): the API-key filter is
+     * constructed here, not component-scanned, and in a {@code @WebMvcTest}
+     * slice with no ApiKeyService bean it degrades to a no-op instead of
+     * breaking every controller slice.
+     */
+    private final ObjectProvider<com.example.hms.service.apikey.ApiKeyService> apiKeyServiceProvider;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
@@ -384,6 +392,13 @@ public class SecurityConfig {
                 // Partner pharmacy SMS webhook — authenticated inside the controller
                 // via the X-HMS-Partner-Signature shared-secret header (T-55).
                 .requestMatchers(HttpMethod.POST, "/webhooks/partner-sms").permitAll()
+
+                // Third-party partner surface (Tier 2 item 45): authenticated by
+                // ApiKeyAuthenticationFilter from the X-API-Key header. The
+                // authority exists ONLY on a verified key — no staff token
+                // carries it, so a JWT cannot reach /partner/**.
+                .requestMatchers("/partner/**")
+                    .hasAuthority(com.example.hms.security.ApiKeyAuthenticationFilter.ROLE_PARTNER_API)
 
                 // Feature flags
                 .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
@@ -733,6 +748,10 @@ public class SecurityConfig {
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // Partner API keys (Tier 2 item 45); no-op outside /partner/**.
+            .addFilterBefore(
+                new com.example.hms.security.ApiKeyAuthenticationFilter(apiKeyServiceProvider),
+                UsernamePasswordAuthenticationFilter.class)
             // Helpful debug for 401/403
             .addFilterAfter((request, response, chain) -> {
                 chain.doFilter(request, response);

@@ -86,6 +86,8 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/emar': 'CARE',
   '/patient-education': 'CARE',
   '/registries': 'CARE',
+  '/panels': 'CARE',
+  '/roi': 'PATIENTS_FLOW',
   '/consent-management': 'CARE',
 
   // ── MEDICATIONS & PHARMACY ───────────────────────────────────────────
@@ -137,6 +139,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/roles': 'ADMINISTRATION',
   '/admin': 'ADMINISTRATION',
   '/admin-assignments': 'ADMINISTRATION',
+  '/webhooks': 'ADMINISTRATION',
   '/admin-governance': 'ADMINISTRATION',
   '/feature-flags': 'ADMINISTRATION',
   // The same entry resolves to one path or the other depending on whether the
@@ -164,6 +167,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/my-medications': 'MY_HEALTH',
   '/my-lab-results': 'MY_HEALTH',
   '/my-vitals': 'MY_HEALTH',
+  '/my-screenings': 'MY_HEALTH',
   '/my-medical-history': 'MY_HEALTH',
   '/my-education': 'MY_HEALTH',
 

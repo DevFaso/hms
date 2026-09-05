@@ -105,6 +105,8 @@ class PatientServiceImplTest {
     @Mock
     private PatientRepository patientRepository;
     @Mock
+    private com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
+    @Mock
     private PatientMapper patientMapper;
     @Mock
     private MessageSource messageSource;

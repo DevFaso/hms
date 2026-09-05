@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.platform.WebhookEventType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
@@ -89,6 +90,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final StaffAvailabilityService staffAvailabilityService;
     private final DepartmentRepository departmentRepository;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
+
+    /** The resourceType every appointment webhook payload names (item 45). */
+    private static final String WEBHOOK_RESOURCE_APPOINTMENT = "Appointment";
     private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
@@ -337,6 +342,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAssignment(assignment);
 
         Appointment saved = appointmentRepository.save(appointment);
+
+        // Outbound webhooks (Tier 2 item 45): thin id-reference only. The
+        // publisher defers to AFTER COMMIT and enqueues in its own
+        // transaction - it can never fail or roll back this booking, and
+        // never emits for a booking that rolled back.
+        webhookPublisher.publish(hospital.getId(), WebhookEventType.APPOINTMENT_BOOKED,
+            WEBHOOK_RESOURCE_APPOINTMENT, saved.getId());
 
         // Build reschedule/cancel links
         String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId();
@@ -595,6 +607,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment saved = appointmentRepository.save(existing);
         entityManager.refresh(saved);
 
+        // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
+        // regardless of which write path moved it.
+        publishRescheduleIfMoved(saved, oldDate, oldStart, oldEnd);
+
         // Notify patient when date/time changes (treat as reschedule)
         boolean dateChanged  = !saved.getAppointmentDate().equals(oldDate);
         boolean startChanged = !saved.getStartTime().equals(oldStart);
@@ -620,6 +636,19 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /** Emits the item-45 reschedule event iff the schedule actually moved. */
+    private void publishRescheduleIfMoved(Appointment saved, LocalDate oldDate,
+                                          LocalTime oldStart, LocalTime oldEnd) {
+        boolean moved = !saved.getAppointmentDate().equals(oldDate)
+            || !saved.getStartTime().equals(oldStart)
+            || !saved.getEndTime().equals(oldEnd);
+        if (moved) {
+            webhookPublisher.publish(saved.getHospital().getId(),
+                WebhookEventType.APPOINTMENT_RESCHEDULED, WEBHOOK_RESOURCE_APPOINTMENT,
+                saved.getId());
+        }
     }
 
     /* =======================
@@ -679,6 +708,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         // or moved, the slot goes back into circulation.
         if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
             slotInventoryService.releaseForAppointment(appointment.getId());
+        }
+
+        // Outbound webhooks (Tier 2 item 45).
+        if (newStatus == AppointmentStatus.CANCELLED) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                WebhookEventType.APPOINTMENT_CANCELLED, WEBHOOK_RESOURCE_APPOINTMENT, appointment.getId());
+        } else if (newStatus == AppointmentStatus.RESCHEDULED) {
+            webhookPublisher.publish(appointment.getHospital().getId(),
+                WebhookEventType.APPOINTMENT_RESCHEDULED, WEBHOOK_RESOURCE_APPOINTMENT, appointment.getId());
         }
 
         // Email notification triggers

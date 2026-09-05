@@ -7,19 +7,26 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.fhir.FhirOperationsProperties;
 import com.example.hms.fhir.mapper.ConditionFhirMapper;
+import com.example.hms.fhir.mapper.DocumentReferenceFhirMapper;
 import com.example.hms.fhir.mapper.EncounterFhirMapper;
 import com.example.hms.fhir.mapper.MedicationRequestFhirMapper;
 import com.example.hms.fhir.mapper.ObservationFhirMapper;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientUploadedDocument;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PatientUploadedDocumentRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import org.hl7.fhir.r4.model.Bundle;
@@ -87,11 +94,15 @@ public class PatientEverythingService {
     private final LabResultRepository labResultRepository;
     private final PatientProblemRepository patientProblemRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final PatientUploadedDocumentRepository uploadedDocumentRepository;
+    private final DischargeSummaryRepository dischargeSummaryRepository;
+    private final UserRepository userRepository;
     private final PatientFhirMapper patientMapper;
     private final EncounterFhirMapper encounterMapper;
     private final ObservationFhirMapper observationMapper;
     private final ConditionFhirMapper conditionMapper;
     private final MedicationRequestFhirMapper medicationRequestMapper;
+    private final DocumentReferenceFhirMapper documentReferenceMapper;
     private final AuditEventLogService auditEventLogService;
 
     public PatientEverythingService(
@@ -103,11 +114,15 @@ public class PatientEverythingService {
         LabResultRepository labResultRepository,
         PatientProblemRepository patientProblemRepository,
         PrescriptionRepository prescriptionRepository,
+        PatientUploadedDocumentRepository uploadedDocumentRepository,
+        DischargeSummaryRepository dischargeSummaryRepository,
+        UserRepository userRepository,
         PatientFhirMapper patientMapper,
         EncounterFhirMapper encounterMapper,
         ObservationFhirMapper observationMapper,
         ConditionFhirMapper conditionMapper,
         MedicationRequestFhirMapper medicationRequestMapper,
+        DocumentReferenceFhirMapper documentReferenceMapper,
         AuditEventLogService auditEventLogService
     ) {
         this.operationsProperties = operationsProperties;
@@ -118,11 +133,15 @@ public class PatientEverythingService {
         this.labResultRepository = labResultRepository;
         this.patientProblemRepository = patientProblemRepository;
         this.prescriptionRepository = prescriptionRepository;
+        this.uploadedDocumentRepository = uploadedDocumentRepository;
+        this.dischargeSummaryRepository = dischargeSummaryRepository;
+        this.userRepository = userRepository;
         this.patientMapper = patientMapper;
         this.encounterMapper = encounterMapper;
         this.observationMapper = observationMapper;
         this.conditionMapper = conditionMapper;
         this.medicationRequestMapper = medicationRequestMapper;
+        this.documentReferenceMapper = documentReferenceMapper;
         this.auditEventLogService = auditEventLogService;
     }
 
@@ -137,6 +156,7 @@ public class PatientEverythingService {
      */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId) {
+        ensureEnabled();
         return doEverythingForPatient(patientId,
             PatientEverythingParams.of(null, null, null, null));
     }
@@ -147,7 +167,87 @@ public class PatientEverythingService {
      */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId, PatientEverythingParams params) {
+        ensureEnabled();
         return doEverythingForPatient(patientId, params);
+    }
+
+    /**
+     * Tier 2 item 44 — the portal's "download my record" export. Pages
+     * through every section at {@link PatientEverythingParams#MAX_COUNT}
+     * and merges into ONE bundle, because a downloaded file cannot follow
+     * a {@code next} link. Deliberately NOT behind
+     * {@code app.fhir.operations.everything.enabled}: that flag gates the
+     * EXTERNAL FHIR operation surface, while this is an internal,
+     * role-gated, audited portal endpoint — tenancy and the registration
+     * gate still apply on every page. Each page emits its own audit row,
+     * so the export trail shows exactly what left the system.
+     */
+    @Transactional(readOnly = true)
+    public Bundle fullRecordForDownload(UUID patientId) {
+        Bundle merged = null;
+        Integer cursor = null;
+        // Hard page cap: 40 pages x 500/section is far beyond any real
+        // record, and it turns a cursor bug into a bounded file instead of
+        // an unbounded loop.
+        java.util.Set<String> seenEntryKeys = new java.util.HashSet<>();
+        for (int page = 0; page < 40; page++) {
+            Bundle chunk = doEverythingForPatient(patientId,
+                PatientEverythingParams.of(null, null, PatientEverythingParams.MAX_COUNT, cursor));
+            if (merged == null) {
+                merged = chunk;
+                merged.getEntry().forEach(e -> seenEntryKeys.add(entryKey(e)));
+            } else {
+                appendNewEntries(merged, chunk, seenEntryKeys);
+            }
+            cursor = nextCursorOf(chunk);
+            if (cursor == null) break;
+        }
+        if (cursor != null) {
+            // A partial file that LOOKS complete is worse than no file: the
+            // reader treats it as "the whole record". Fail loudly instead.
+            throw new IllegalStateException(
+                "Patient record export exceeded the 40-page safety limit — refusing to "
+                    + "return a partial file that would masquerade as the full record.");
+        }
+        merged.getLink().removeIf(l -> "next".equals(l.getRelation()));
+        merged.setTotal(merged.getEntry().size());
+        return merged;
+    }
+
+    /**
+     * Appends only entries not seen on earlier pages, keyed by
+     * resourceType/id. Belt to the first-page gating on unpaged sections:
+     * any section that re-emits across cursor iterations would otherwise
+     * duplicate its rows in the merged file. Package-visible for its test.
+     */
+    static void appendNewEntries(Bundle merged, Bundle chunk, java.util.Set<String> seenEntryKeys) {
+        for (Bundle.BundleEntryComponent entry : chunk.getEntry()) {
+            String key = entryKey(entry);
+            if (key == null || seenEntryKeys.add(key)) {
+                merged.getEntry().add(entry);
+            }
+        }
+    }
+
+    private static String entryKey(Bundle.BundleEntryComponent entry) {
+        Resource resource = entry.getResource();
+        if (resource == null || resource.getIdElement().getIdPart() == null) {
+            return null;
+        }
+        return resource.fhirType() + "/" + resource.getIdElement().getIdPart();
+    }
+
+    /** Reads the {@code _page} cursor back out of the bundle's own next link. Package-visible for its test. */
+    static Integer nextCursorOf(Bundle bundle) {
+        return bundle.getLink().stream()
+            .filter(l -> "next".equals(l.getRelation()) && l.getUrl() != null)
+            .findFirst()
+            .map(l -> {
+                java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("_page=(\\d+)").matcher(l.getUrl());
+                return m.find() ? Integer.valueOf(m.group(1)) : null;
+            })
+            .orElse(null);
     }
 
     /**
@@ -156,7 +256,6 @@ public class PatientEverythingService {
      * through Spring's proxy without self-calling — Sonar S2229.
      */
     private Bundle doEverythingForPatient(UUID patientId, PatientEverythingParams params) {
-        ensureEnabled();
         UUID hospitalId = resolveHospitalScopeOrForbid();
         Patient patient = loadAndVerifyTenantOwnedPatient(patientId, hospitalId);
 
@@ -169,6 +268,7 @@ public class PatientEverythingService {
         appendObservationSection(bundle, ctx);
         appendConditionSection(bundle, ctx);
         appendMedicationRequestSection(bundle, ctx);
+        appendDocumentReferenceSection(bundle, ctx);
 
         bundle.setTotal(bundle.getEntry().size());
         if (ctx.hasMore()) {
@@ -179,6 +279,30 @@ public class PatientEverythingService {
 
         emitAudit(patient, describe(patientId, params, bundle.getTotal()));
         return bundle;
+    }
+
+    private void appendDocumentReferenceSection(Bundle bundle, SectionContext ctx) {
+        if (!ctx.includes("DocumentReference")) return;
+        // Uploaded documents are patient-anchored (no hospital column); the
+        // registration gate in loadAndVerifyTenantOwnedPatient already ran.
+        Page<PatientUploadedDocument> docs = uploadedDocumentRepository
+            .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(ctx.patientId(), ctx.pageRequest());
+        ctx.notePageOverflow(docs);
+        docs.forEach(d -> {
+            if (ctx.passesSinceFilter(d.getUpdatedAt())) {
+                addEntry(bundle, documentReferenceMapper.toFhir(d));
+            }
+        });
+        // Discharge summaries are few per patient — unpaged, first page only
+        // (same rule as the Condition section).
+        if (ctx.isFirstPage()) {
+            dischargeSummaryRepository
+                .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(
+                    ctx.patientId(), ctx.hospitalId())
+                .stream()
+                .filter(sSummary -> ctx.passesSinceFilter(sSummary.getUpdatedAt()))
+                .forEach(sSummary -> addEntry(bundle, documentReferenceMapper.toFhir(sSummary)));
+        }
     }
 
     private UUID resolveHospitalScopeOrForbid() {
@@ -257,7 +381,10 @@ public class PatientEverythingService {
     }
 
     private void appendConditionSection(Bundle bundle, SectionContext ctx) {
-        if (!ctx.includes("Condition")) return;
+        // Unpaged section: emit ONLY on the first page, or every cursor
+        // iteration repeats the complete problem list (duplicate entries in
+        // paged responses and in the merged download alike).
+        if (!ctx.includes("Condition") || !ctx.isFirstPage()) return;
         // Hospital-scoped per Copilot review (PR copilot-review) — the
         // previous findByPatient_Id call could leak problems recorded
         // at other hospitals for the same patient into a
@@ -278,6 +405,20 @@ public class PatientEverythingService {
                 addEntry(bundle, medicationRequestMapper.toFhir(p));
             }
         });
+    }
+
+    /**
+     * Best-effort actor for the PHI-export audit trail; null when the
+     * principal has no local row (falls back to SYSTEM downstream). Public
+     * only because its test lives beside the other tenant-gate tests in the
+     * parent package.
+     */
+    public User resolveExportActor() {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null || username.isBlank()) {
+            return null;
+        }
+        return userRepository.findByUsernameIgnoreCase(username).orElse(null);
     }
 
     private static String nextLink(UUID patientId, PatientEverythingParams params, int nextCursor) {
@@ -351,10 +492,17 @@ public class PatientEverythingService {
 
     private void emitAudit(Patient patient, String description) {
         try {
+            // Without an explicit actor the audit sink records the exporter
+            // as SYSTEM — useless for a PHI-export trail. Best-effort
+            // resolution from the security context; a FHIR client whose
+            // principal has no local row still falls back to SYSTEM.
+            User actor = resolveExportActor();
             AuditEventRequestDTO request = AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
+                .userId(actor != null ? actor.getId() : null)
+                .userName(actor != null ? actor.getUsername() : SecurityUtils.getCurrentUsername())
                 .resourceId(patient.getId() == null ? null : patient.getId().toString())
                 .eventDescription(description)
                 .build();

@@ -42,6 +42,9 @@ public class PatientProfileDTO {
     private String zipCode;
     private String country;
 
+    /** Self-reported free text (Tier 2 item 38). */
+    private String ethnicity;
+
     // Emergency contact
     private String emergencyContactName;
     private String emergencyContactPhone;

@@ -181,6 +181,20 @@
         }
       </div>
 
+      <div class="form-group">
+        <label for="ethnicity">{{ 'PATIENTS.ETHNICITY' | translate }}</label>
+        <!-- Free text on purpose: self-reported, in the patient's own words —
+             never a dropdown taxonomy the schema invented. Optional. -->
+        <input
+          id="ethnicity"
+          type="text"
+          maxlength="100"
+          [(ngModel)]="form.ethnicity"
+          name="ethnicity"
+          [placeholder]="'PATIENTS.ETHNICITY_PLACEHOLDER' | translate"
+        />
+      </div>
+
       <div class="form-group full-width section-divider">
         <h3 class="section-title">{{ 'PATIENTS.LOCATION' | translate }}</h3>
       </div>

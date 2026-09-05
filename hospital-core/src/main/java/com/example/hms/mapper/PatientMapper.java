@@ -183,6 +183,7 @@ public class PatientMapper {
             .zipCode(patient.getZipCode())
             .postalCode(patient.getZipCode())
             .country(patient.getCountry())
+            .ethnicity(patient.getEthnicity())
             .phoneNumberPrimary(patient.getPhoneNumberPrimary())
             .phoneNumberSecondary(patient.getPhoneNumberSecondary())
             .email(patient.getEmail())
@@ -263,6 +264,7 @@ public class PatientMapper {
         patient.setState(dto.getState());
         patient.setZipCode(dto.getZipCode());
         patient.setCountry(dto.getCountry());
+        patient.setEthnicity(dto.getEthnicity());
         patient.setPhoneNumberPrimary(dto.getPhoneNumberPrimary());
         patient.setPhoneNumberSecondary(dto.getPhoneNumberSecondary());
         patient.setEmail(dto.getEmail());

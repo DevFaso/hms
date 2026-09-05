@@ -105,6 +105,17 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Size(max = 100) @Column(name = "country", length = 100)
     private String country;
 
+    /**
+     * Self-reported, free text, optional (Tier 2 item 38). Deliberately not
+     * an enum — the patient's own words, never a schema-invented taxonomy.
+     * Encrypted at rest (free text can carry anything the patient said);
+     * TEXT because the AES-GCM+Base64 payload outgrows the plaintext cap.
+     */
+    @Size(max = 100)
+    @Column(name = "ethnicity", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String ethnicity;
+
     @NotBlank @Size(max = 100)
     @Column(name = "phone_number_primary", length = 100, nullable = false, unique = true)
     private String phoneNumberPrimary;
