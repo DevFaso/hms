@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -7,6 +7,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EmergencyControlService } from '../../services/emergency-control.service';
 import { EmergencyActionResponse } from '../../services/emergency-control.model';
 import { DowntimeService, DowntimeStatus } from '../../services/downtime.service';
+import { UserService, UserSummary } from '../../services/user.service';
+import { HospitalResponse, HospitalService } from '../../services/hospital.service';
+import { Subject, debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface PanelState {
   busy: boolean;
@@ -15,6 +19,13 @@ interface PanelState {
 }
 
 const FRESH_PANEL: PanelState = { busy: false, result: null, error: null };
+
+/**
+ * Typed confirmation for a platform-wide MFA reset. Deliberately NOT
+ * translated — like FORCE LOGOUT ALL, it must match exactly in every
+ * locale (EMERGENCY.FORCE_MFA.RESET_ALL_PLACEHOLDER shows it).
+ */
+export const RESET_ALL_PHRASE = 'RESET ALL MFA';
 
 @Component({
   selector: 'app-super-admin-emergency',
@@ -27,6 +38,8 @@ export class EmergencyComponent {
   private readonly service = inject(EmergencyControlService);
   private readonly downtimeService = inject(DowntimeService);
   private readonly translate = inject(TranslateService);
+  private readonly userService = inject(UserService);
+  private readonly hospitalService = inject(HospitalService);
 
   /* ── Downtime read-only mode (P3 #23a) ── */
   readonly downtimeStatus = signal<DowntimeStatus | null>(null);
@@ -39,6 +52,39 @@ export class EmergencyComponent {
     // The shared signal already polls in the shell; mirror it here so the
     // card reflects the current state on entry.
     this.refreshDowntimeCard();
+
+    // MFA-reset picker: search users by name as the operator types. Nobody
+    // knows a UUID by heart; the API still receives ids, resolved here.
+    this.mfaSearch$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          const term = q.trim();
+          if (term.length < 2) {
+            this.mfaSearching.set(false);
+            return of<UserSummary[]>([]);
+          }
+          this.mfaSearching.set(true);
+          return this.userService.search(0, 10, { name: term }).pipe(
+            switchMap((page) => of(page.content ?? [])),
+            catchError(() => of<UserSummary[]>([])),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((users) => {
+        this.mfaSearching.set(false);
+        this.mfaResults.set(users);
+      });
+
+    this.hospitalService
+      .list()
+      .pipe(
+        catchError(() => of<HospitalResponse[]>([])),
+        takeUntilDestroyed(),
+      )
+      .subscribe((hospitals) => this.hospitals.set(hospitals));
   }
 
   private refreshDowntimeCard(): void {
@@ -75,9 +121,35 @@ export class EmergencyComponent {
   readonly killReason = signal('');
   readonly killMfa = signal('');
 
-  readonly mfaUserIds = signal('');
+  /* ── MFA-reset picker ── */
+  private readonly mfaSearch$ = new Subject<string>();
+  readonly mfaQuery = signal('');
+  readonly mfaResults = signal<UserSummary[]>([]);
+  readonly mfaSearching = signal(false);
+  readonly mfaSelected = signal<UserSummary[]>([]);
+  readonly mfaHospitalId = signal('');
+  readonly hospitals = signal<HospitalResponse[]>([]);
+  /** Typed phrase, only asked for when no user is selected (= everyone). */
+  readonly mfaResetAllConfirm = signal('');
+  readonly mfaResetsEveryone = computed(() => this.mfaSelected().length === 0);
   readonly mfaReason = signal('');
   readonly mfaMfa = signal('');
+
+  onMfaQueryChange(value: string): void {
+    this.mfaQuery.set(value);
+    this.mfaSearch$.next(value);
+  }
+
+  addMfaTarget(user: UserSummary): void {
+    if (this.mfaSelected().some((u) => u.id === user.id)) return;
+    this.mfaSelected.update((list) => [...list, user]);
+    this.mfaQuery.set('');
+    this.mfaResults.set([]);
+  }
+
+  removeMfaTarget(userId: string): void {
+    this.mfaSelected.update((list) => list.filter((u) => u.id !== userId));
+  }
 
   readonly broadcastMessage = signal('');
   readonly broadcastSeverity = signal<'INFO' | 'WARN' | 'CRITICAL'>('INFO');
@@ -119,18 +191,32 @@ export class EmergencyComponent {
   }
 
   forceMfaReenrol(): void {
-    const ids = this.mfaUserIds()
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    const ids = this.mfaSelected().map((u) => u.id);
+    const resetAll = ids.length === 0;
+    if (resetAll && this.mfaResetAllConfirm() !== RESET_ALL_PHRASE) {
+      this.mfaPanel.set({
+        ...FRESH_PANEL,
+        error: this.translate.instant('EMERGENCY.FORCE_MFA.RESET_ALL_CONFIRM_TYPED'),
+      });
+      return;
+    }
     this.mfaPanel.set({ busy: true, result: null, error: null });
     this.service
       .forceMfaReenrol(
-        { userIds: ids.length > 0 ? ids : undefined, reason: this.mfaReason() },
+        {
+          userIds: resetAll ? undefined : ids,
+          hospitalId: this.mfaHospitalId() || undefined,
+          resetAll: resetAll ? true : undefined,
+          reason: this.mfaReason(),
+        },
         this.mfaMfa(),
       )
       .subscribe({
-        next: (response) => this.mfaPanel.set({ busy: false, result: response, error: null }),
+        next: (response) => {
+          this.mfaPanel.set({ busy: false, result: response, error: null });
+          this.mfaSelected.set([]);
+          this.mfaResetAllConfirm.set('');
+        },
         error: (err) =>
           this.mfaPanel.set({ busy: false, result: null, error: this.errorText(err) }),
       });
