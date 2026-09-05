@@ -4,7 +4,6 @@ import com.example.hms.service.ImagingCriticalNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +28,9 @@ public class ImagingCriticalEscalationScheduler {
 
     private final ImagingCriticalNotificationService imagingCriticalNotificationService;
 
-    @SchedulerLock(name = "ImagingCriticalEscalationScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
+    // Locked on the shared path (ImagingCriticalNotificationService.escalateOverdue) so the manual
+    // trigger and this sweep hold the same lock; a lock here as well would
+    // block its own delegate.
     @Scheduled(fixedDelayString = "${hms.imaging.critical-escalation.interval-ms:300000}")
     public void runSweep() {
         try {

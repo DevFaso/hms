@@ -11,6 +11,7 @@ import com.example.hms.repository.LabResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -136,6 +137,7 @@ public class CriticalValueNotificationService {
      *
      * @return number of results escalated on this pass
      */
+    @SchedulerLock(name = "CriticalValueNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Transactional
     public int escalateOverdue() {
         LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));

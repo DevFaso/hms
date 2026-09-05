@@ -1602,7 +1602,9 @@ that exists rather than inventing one.
 - ~~ShedLock / `@Version` on the remaining check-then-act races.~~ V155 +
   `@SchedulerLock` on all 20 DB-touching sweeps (`SchedulerLockCoverageTest`
   keeps the per-instance evictors an explicit list); the reminder stamp is a
-  conditional UPDATE taken before sending (`claimReminder`). Slot hold/book
+  conditional UPDATE committed in its own transaction before sending
+  (`ReminderClaimService`); the lab/imaging escalations lock the shared service
+  method so the manual triggers contend for the same lock. Slot hold/book
   had `@Version` since V128.
 - Audit events on the write surfaces added since #431.
 - WHO LMS growth-reference import — needs a verified source + clinical

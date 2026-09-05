@@ -45,6 +45,28 @@ class SchedulerLockCoverageTest {
         "GlobalSessionRevocationService.refresh", "polls the global min-iat into this instance's cache"
     );
 
+    /**
+     * Jobs whose lock lives on the service method they delegate to, because a
+     * manual endpoint calls that same method: the sweep and the manual run
+     * then contend for ONE lock. A lock on the scheduler method as well would
+     * block its own delegate (ShedLock skips a method whose lock is held).
+     */
+    private static final Map<String, String> LOCKED_VIA_DELEGATE = Map.of(
+        "CriticalValueEscalationScheduler.runSweep", "com.example.hms.service.CriticalValueNotificationService#escalateOverdue",
+        "ImagingCriticalEscalationScheduler.runSweep", "com.example.hms.service.ImagingCriticalNotificationService#escalateOverdue"
+    );
+
+    @Test
+    @DisplayName("a job locked through its delegate has the lock there, and only there")
+    void delegateLocksAreReal() throws Exception {
+        for (Map.Entry<String, String> entry : LOCKED_VIA_DELEGATE.entrySet()) {
+            String[] target = entry.getValue().split("#");
+            Method delegate = Class.forName(target[0]).getMethod(target[1]);
+            assertThat(AnnotatedElementUtils.findMergedAnnotation(delegate, SchedulerLock.class))
+                .as(entry.getKey() + " delegates to a locked " + entry.getValue()).isNotNull();
+        }
+    }
+
     @Test
     @DisplayName("every scheduled job is locked, or named as per-instance with a reason")
     void everyScheduledJobIsLockedOrPerInstance() {
@@ -60,11 +82,12 @@ class SchedulerLockCoverageTest {
                 String key = bean.getSimpleName() + "." + method.getName();
                 SchedulerLock lock = AnnotatedElementUtils.findMergedAnnotation(method, SchedulerLock.class);
                 if (lock == null) {
-                    if (!PER_INSTANCE.containsKey(key)) {
+                    if (!PER_INSTANCE.containsKey(key) && !LOCKED_VIA_DELEGATE.containsKey(key)) {
                         unlocked.add(key);
                     }
                     continue;
                 }
+                assertThat(LOCKED_VIA_DELEGATE).as(key + " must not lock twice").doesNotContainKey(key);
                 locked++;
                 assertThat(seenNames.add(lock.name())).as("duplicate lock name " + lock.name()).isTrue();
                 assertThat(lock.name()).hasSizeLessThanOrEqualTo(64);
@@ -83,7 +106,7 @@ class SchedulerLockCoverageTest {
                 String.join("\n", unlocked))
             .isEmpty();
         assertThat(badDurations).as("lockAtLeastFor must not exceed lockAtMostFor").isEmpty();
-        assertThat(locked).isGreaterThanOrEqualTo(19);
+        assertThat(locked).isGreaterThanOrEqualTo(18);
     }
 
     @Test
@@ -97,7 +120,7 @@ class SchedulerLockCoverageTest {
                 }
             }
         }
-        assertThat(existing).containsAll(PER_INSTANCE.keySet());
+        assertThat(existing).containsAll(PER_INSTANCE.keySet()).containsAll(LOCKED_VIA_DELEGATE.keySet());
     }
 
     /**
