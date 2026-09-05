@@ -37,7 +37,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE / ROLE_ASSIGNED")
 @RequestMapping("/users")
 @RequiredArgsConstructor
 @Tag(name = "User API", description = "Handles User CRUD operations, admin-controlled registration, and search")
@@ -50,6 +49,7 @@ public class UserController {
     private final UserService userService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
 
+    @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
         summary = "Admin: Create a user with specific roles and hospital assignment",
         description = "SUPER/HOSPITAL_ADMIN can register any role. RECEPTIONIST can only register PATIENT; hospital is resolved from JWT."
@@ -181,6 +181,7 @@ public class UserController {
         return authorities.contains(SUPER_ADMIN_AUTHORITY);
     }
 
+    @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable UUID id,
@@ -188,6 +189,7 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUser(id, dto));
     }
 
+    @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(summary = "Delete user by ID (Soft Delete)")
     @DeleteMapping("/{id}")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {

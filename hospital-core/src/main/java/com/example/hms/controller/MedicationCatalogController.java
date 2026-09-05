@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits MEDICATION_* events")
 @RequestMapping("/medication-catalog")
 @RequiredArgsConstructor
 @Tag(name = "Medication Catalog", description = "Manage the hospital medication formulary")
@@ -109,6 +108,7 @@ public class MedicationCatalogController {
 
     @DeleteMapping("/{id}")
     // P-02: formulary deactivation is a governance act — restrict to admin roles only.
+    @WriteAudited(skip = true, reason = "service emits MEDICATION_DEACTIVATED")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Deactivate a medication catalog item")
     public ResponseEntity<Void> deactivate(

@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits PHARMACY_* events")
 @RequestMapping("/pharmacy-registry")
 @RequiredArgsConstructor
 @Tag(name = "Pharmacy Registry", description = "Manage registered pharmacies")
@@ -109,6 +108,7 @@ public class PharmacyRegistryController {
 
     @DeleteMapping("/{id}")
     // P-01: pharmacy deactivation is a governance act — restrict to admin roles only.
+    @WriteAudited(skip = true, reason = "service emits PHARMACY_DEACTIVATED")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Deactivate a pharmacy")
     public ResponseEntity<Void> deactivate(

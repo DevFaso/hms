@@ -41,7 +41,6 @@ import java.util.UUID;
 import org.springframework.context.i18n.LocaleContextHolder;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits TENANT_* lifecycle events")
 @RequestMapping("/super-admin/organizations")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Organizations", description = "Tenant management and compliance overview")
@@ -159,6 +158,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(lifecycleService.getLifecycle(organizationId));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/suspend")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Suspend an organization (block all logins org-wide)",
@@ -171,6 +171,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(lifecycleService.suspend(organizationId, request, mfaToken));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/restore")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Restore a suspended or archived organization",
@@ -182,6 +183,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(lifecycleService.restore(organizationId, request));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/archive")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Archive an organization (soft delete; data retained, hidden by default)",
@@ -194,6 +196,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(lifecycleService.archive(organizationId, request, mfaToken));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/schedule-purge")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Schedule purge for an archived organization (default 30-day grace)",
@@ -206,6 +209,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(lifecycleService.schedulePurge(organizationId, request, mfaToken));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/cancel-purge")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Cancel a scheduled purge", security = @SecurityRequirement(name = "bearerAuth"))
@@ -244,6 +248,7 @@ public class SuperAdminOrganizationController {
         return ResponseEntity.ok(regionService.getOrganizationRegion(organizationId));
     }
 
+    @WriteAudited(skip = true, reason = "service emits TENANT_* / ORGANIZATION_REGION_UPDATED")
     @PostMapping("/{organizationId}/region")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Update the data-residency region for one organization",

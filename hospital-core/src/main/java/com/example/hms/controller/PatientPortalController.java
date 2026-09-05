@@ -1,6 +1,5 @@
 package com.example.hms.controller;
 
-import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
@@ -95,7 +94,6 @@ import java.util.UUID;
  * {@link PatientPortalService} which reuses existing clinical services.
  */
 @RestController
-@WriteAudited(skip = true, reason = "patient self-service; the service emits its own rows and self-writes are not disclosures")
 @RequestMapping("/me/patient")
 @RequiredArgsConstructor
 @Tag(name = "Patient Portal", description = "Self-service endpoints for patients (MyChart equivalent)")

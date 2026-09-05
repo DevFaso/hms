@@ -42,10 +42,9 @@ class PatientAccessAuditConfigTest {
         return provider;
     }
 
+    @SuppressWarnings("unchecked")
     private WriteAuditInterceptor writeInterceptor() {
-        @SuppressWarnings("unchecked")
-        ObjectProvider<AuditEventLogService> auditProvider = mock(ObjectProvider.class);
-        return new WriteAuditInterceptor(auditProvider);
+        return new WriteAuditInterceptor(mock(ObjectProvider.class), mock(ObjectProvider.class), mock(ObjectProvider.class));
     }
 
     private List<?> registeredInterceptors(InterceptorRegistry registry) {

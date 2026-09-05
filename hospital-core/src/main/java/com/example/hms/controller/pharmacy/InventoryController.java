@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits STOCK_* events")
 @RequestMapping("/pharmacy/inventory")
 @Tag(name = "Pharmacy Inventory", description = "Inventory item and stock lot management")
 @RequiredArgsConstructor
@@ -103,6 +102,7 @@ public class InventoryController {
 
     // ── Stock lots ───────────────────────────────────────────────────────
 
+    @WriteAudited(skip = true, reason = "service emits STOCK_RECEIPT / STOCK_REORDER_ALERT")
     @PostMapping("/lots")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Receive stock", description = "Record a new stock lot (goods receipt)")
@@ -188,6 +188,7 @@ public class InventoryController {
                 inventoryService.getItemsBelowReorderThreshold(pharmacyId)));
     }
 
+    @WriteAudited(skip = true, reason = "service emits STOCK_RECEIPT / STOCK_REORDER_ALERT")
     @PostMapping("/reorder-alerts/trigger")
     @PreAuthorize("hasAnyRole('STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Trigger reorder alerts", description = "Send notifications for all items below reorder threshold")

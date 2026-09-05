@@ -1,6 +1,8 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.AuditEventLogService;
@@ -14,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -68,6 +72,11 @@ class WriteAuditDispatchTest {
         ResponseEntity<String> read(@PathVariable UUID episodeId) {
             return ResponseEntity.ok("{}");
         }
+
+        @PostMapping("/episodes/search")
+        ResponseEntity<String> search() {
+            return ResponseEntity.ok("[]");
+        }
     }
 
     private AuditEventLogService auditService;
@@ -79,7 +88,13 @@ class WriteAuditDispatchTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(auditService);
-        WriteAuditInterceptor interceptor = new WriteAuditInterceptor(provider);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<ControllerAuthUtils> authUtils = mock(ObjectProvider.class);
+        when(authUtils.getIfAvailable()).thenReturn(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class)));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<UserRoleHospitalAssignmentRepository> assignments = mock(ObjectProvider.class);
+        when(assignments.getIfAvailable()).thenReturn(null);
+        WriteAuditInterceptor interceptor = new WriteAuditInterceptor(provider, authUtils, assignments);
         ReflectionTestUtils.setField(interceptor, "enabled", true);
         mockMvc = MockMvcBuilders.standaloneSetup(new LaborController()).addInterceptors(interceptor).build();
         CustomUserDetails principal = new CustomUserDetails(
@@ -124,10 +139,23 @@ class WriteAuditDispatchTest {
     }
 
     @Test
-    @DisplayName("a rejected write and a read record nothing")
+    @DisplayName("a rejected write, a read, and a POST /search record nothing")
     void ignoresFailuresAndReads() throws Exception {
         mockMvc.perform(post("/labor/episodes/{episodeId}/reject", EPISODE)).andExpect(status().isBadRequest());
         mockMvc.perform(get("/labor/episodes/{episodeId}", EPISODE)).andExpect(status().isOk());
+        mockMvc.perform(post("/labor/episodes/search")).andExpect(status().isOk());
         verify(auditService, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("a Keycloak-authenticated write is recorded through the OIDC principal")
+    void recordsThroughAnOidcPrincipal() throws Exception {
+        Jwt jwt = Jwt.withTokenValue("t").header("alg", "none").claim("uid", DOCTOR.toString()).subject("dr.kabore").build();
+        SecurityContextHolder.getContext().setAuthentication(
+            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR"))));
+
+        mockMvc.perform(post("/labor/episodes/{patientId}", PATIENT)).andExpect(status().isCreated());
+
+        assertThat(emitted().getUserId()).isEqualTo(DOCTOR);
     }
 }

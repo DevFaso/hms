@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits its own registration audit rows")
 @RequestMapping(value = "/registrations", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 @Tag(name = "Patient-Hospital Registration", description = "Manage patient-hospital assignments (staff only)")
@@ -48,6 +47,7 @@ public class PatientHospitalRegistrationController {
     // NURSE/MIDWIFE may create patients (POST /patients auto-registers), so they can
     // also link an existing one; super-admin follows the house unscoped convention.
     // The service pins non-super-admin writes to the caller's active hospital.
+    @WriteAudited(skip = true, reason = "service emits its own registration audit row on create")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE', T(com.example.hms.config.SecurityConstants).ROLE_SUPER_ADMIN)")
     @Operation(
         summary = "Assign patient to a hospital (staff only)",

@@ -73,7 +73,6 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "login, logout, refresh and password flows emit their own LOGIN/LOGOUT/PASSWORD_* events")
 @RequestMapping("/auth")
 @Slf4j
 public class AuthController {
@@ -497,6 +496,7 @@ public class AuthController {
                 "If the email is registered, a new verification link has been sent."));
     }
 
+    @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/logout")
     @Operation(summary = "Logout current user", description = "Clears authentication context on the server side (stateless JWT requires client to discard tokens).")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
@@ -544,6 +544,7 @@ public class AuthController {
      * carries its own {@code exp} claim, so a tampered or expired refresh token is rejected
      * by {@link JwtTokenProvider#validateToken}.
      */
+    @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/token/refresh")
     @Operation(
         summary = "Refresh access token",
@@ -713,6 +714,7 @@ public class AuthController {
      * Used by the lock-screen to re-authenticate when the session is idle.
      * Requires a valid JWT (user is already logged in but screen is locked).
      */
+    @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/verify-password")
     @Operation(summary = "Verify password for screen unlock",
                description = "Validates the current user's password. Returns 200 if correct, 401 if wrong. "
@@ -1057,6 +1059,7 @@ public class AuthController {
      * The client passes this as {@code ?ticket=<value>} on the {@code /ws-chat} endpoint
      * instead of sending the JWT as a query parameter.
      */
+    @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
     @PostMapping("/ws-ticket")
     public ResponseEntity<Map<String, String>> issueWsTicket(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {

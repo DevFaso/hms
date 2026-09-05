@@ -76,8 +76,7 @@ class WriteAuditCoverageTest {
                 }
             }
         }
-        assertThat(recorded).isGreaterThan(skipped);
-        assertThat(recorded).isGreaterThan(200);
+        assertThat(recorded).isGreaterThan(skipped).isGreaterThan(200);
     }
 
     private static boolean isWrite(Method method) {

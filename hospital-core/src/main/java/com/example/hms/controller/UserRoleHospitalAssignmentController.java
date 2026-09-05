@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ROLE_REVOKED / ASSIGNMENT_CONFIRMED")
 @RequestMapping("/assignments")
 @RequiredArgsConstructor
 @Slf4j
@@ -47,6 +46,7 @@ public class UserRoleHospitalAssignmentController {
 
     private final UserRoleHospitalAssignmentService assignmentService;
 
+    @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Assign a user and role across multiple hospitals or organizations")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping("/multi-scope")
@@ -62,6 +62,7 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.assignRoleToMultipleScopes(requestDTO));
     }
 
+    @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Assign a role to a user in a hospital")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping
@@ -128,6 +129,7 @@ public class UserRoleHospitalAssignmentController {
         }
     }
 
+    @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping("/{assignmentId}/confirm")

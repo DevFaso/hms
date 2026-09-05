@@ -1,6 +1,5 @@
 package com.example.hms.controller;
 
-import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.ChatAttachmentKind;
 import com.example.hms.enums.ReferralAttachmentCategory;
 import com.example.hms.payload.dto.ChartAttachmentUploadResponseDTO;
@@ -35,7 +34,6 @@ import java.util.UUID;
  */
 @Slf4j
 @RestController
-@WriteAudited(skip = true, reason = "service emits its own upload audit rows")
 @RequestMapping("/files")
 @RequiredArgsConstructor
 @Tag(name = "File Upload API", description = "Handles file upload operations")
