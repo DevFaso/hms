@@ -71,7 +71,7 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
         key: 'IN_PROGRESS',
         label: t('DASHBOARD.FLOW_COL.IN_ENCOUNTER'),
         icon: 'stethoscope',
-        color: '#2563eb',
+        color: '#0e7c6b',
       },
       {
         key: 'AWAITING_RESULTS',

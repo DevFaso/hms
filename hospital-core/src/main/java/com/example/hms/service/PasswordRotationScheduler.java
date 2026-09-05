@@ -5,6 +5,7 @@ import com.example.hms.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,7 @@ public class PasswordRotationScheduler {
     private final UserRepository userRepository;
     private final EmailService emailService;
 
+    @SchedulerLock(name = "PasswordRotationScheduler.runDailyPasswordRotationCheck", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${app.security.password-rotation.cron:0 15 3 * * *}")
     @Transactional
     public void runDailyPasswordRotationCheck() {

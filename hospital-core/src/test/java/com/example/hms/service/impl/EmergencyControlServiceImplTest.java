@@ -22,6 +22,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import org.mockito.ArgumentCaptor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -135,6 +137,15 @@ class EmergencyControlServiceImplTest {
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("mfa_required");
         verify(revocationService, never()).revokeAll(any(), any(), any());
+
+        // The rejection itself is audited — a missing code on a platform-wide
+        // control must leave a trace (it left none before 2026-09-05).
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.MFA_FAILURE);
+        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(audit.getValue().getEventDescription())
+            .contains("force-logout-all").contains("REJECTED").contains("no X-Mfa-Token supplied");
     }
 
     @Test
@@ -146,6 +157,12 @@ class EmergencyControlServiceImplTest {
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, "bad"))
             .isInstanceOf(UnauthorizedException.class);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(audit.getValue().getEventDescription()).contains("X-Mfa-Token did not verify");
+        verify(revocationService, never()).revokeAll(any(), any(), any());
     }
 
     @Test
@@ -259,6 +276,20 @@ class EmergencyControlServiceImplTest {
     }
 
     @Test
+    @DisplayName("forceMfaReenrol refuses an empty user list unless resetAll=true — nothing is deleted")
+    void forceMfaReenrolRefusesSilentResetAll() {
+        EmergencyForceMfaRequestDTO req = EmergencyForceMfaRequestDTO.builder()
+            .userIds(List.of()).reason("oops, blank field").build();
+
+        assertThatThrownBy(() -> service.forceMfaReenrol(req, "123456"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("resetAll");
+        verify(mfaEnrollmentRepository, never()).findAll();
+        verify(mfaEnrollmentRepository, never()).deleteAll(any());
+        verify(mfaBackupCodeRepository, never()).deleteAllByUserId(any());
+    }
+
+    @Test
     @DisplayName("forceMfaReenrol with empty userIds discovers every enrolled user from the repo")
     void forceMfaReenrolFallbackToAll() {
         UUID t1 = UUID.randomUUID();
@@ -273,7 +304,7 @@ class EmergencyControlServiceImplTest {
         when(mfaEnrollmentRepository.findByUserId(t2)).thenReturn(List.of(e2));
 
         EmergencyForceMfaRequestDTO req = EmergencyForceMfaRequestDTO.builder()
-            .userIds(null).reason("global rotate").build();
+            .userIds(null).resetAll(true).reason("global rotate").build();
 
         EmergencyActionResponseDTO out = service.forceMfaReenrol(req, "123");
 

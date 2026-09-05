@@ -200,8 +200,8 @@
 }
 
 .badge-manager {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 
 .badge-scientist {

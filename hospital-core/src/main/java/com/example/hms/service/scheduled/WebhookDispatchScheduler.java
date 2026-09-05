@@ -3,6 +3,7 @@ package com.example.hms.service.scheduled;
 import com.example.hms.service.webhook.WebhookDeliveryDispatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ public class WebhookDispatchScheduler {
 
     private final WebhookDeliveryDispatchService dispatchService;
 
+    @SchedulerLock(name = "WebhookDispatchScheduler.sweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${app.webhooks.sweep-interval-ms:60000}")
     public void sweep() {
         try {

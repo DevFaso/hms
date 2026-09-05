@@ -11,7 +11,7 @@
   transition: border-color 0.2s ease;
 
   &.expanded {
-    border-color: #2563eb;
+    border-color: var(--primary);
   }
 }
 
@@ -40,8 +40,8 @@
 }
 
 .ah-icon {
-  color: #1d4ed8;
-  background: #dbeafe;
+  color: var(--primary-dark);
+  background: var(--primary-tint);
   border-radius: 10px;
   width: 34px;
   height: 34px;
@@ -82,8 +82,8 @@
 .ah-count {
   font-size: 12px;
   font-weight: 700;
-  color: #1e3a8a;
-  background: #dbeafe;
+  color: var(--primary-deep);
+  background: var(--primary-tint);
   border-radius: 999px;
   padding: 4px 10px;
 }
@@ -115,7 +115,7 @@
 
   &:hover {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-    border-color: #93c5fd;
+    border-color: var(--primary-light);
   }
 }
 

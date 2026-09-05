@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.Role;
@@ -45,6 +46,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits CONSENT_GRANTED / CONSENT_REVOKED / CONSENT_UPDATE")
 @RequestMapping("/patient-consents")
 @RequiredArgsConstructor
 @Tag(name = "Patient Consents", description = "Endpoints for granting, revoking, listing, and checking patient record sharing consents.")

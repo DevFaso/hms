@@ -35,8 +35,8 @@
 }
 
 .role-chip {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--primary-soft);
+  color: var(--primary);
   padding: 3px 10px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -240,8 +240,8 @@ fieldset.field {
     background 0.15s,
     border-color 0.15s;
   &:hover {
-    background: #eff6ff;
-    border-color: #93c5fd;
+    background: var(--primary-soft);
+    border-color: var(--primary-light);
   }
   input[type='checkbox'] {
     accent-color: var(--primary);
@@ -300,9 +300,9 @@ fieldset.field {
     font-size: 18px;
   }
   &.edit {
-    color: #2563eb;
+    color: var(--primary);
     &:hover {
-      background: #eff6ff;
+      background: var(--primary-soft);
     }
   }
   &.delete {

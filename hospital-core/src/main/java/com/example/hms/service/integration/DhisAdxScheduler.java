@@ -7,6 +7,7 @@ import java.time.YearMonth;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,7 @@ public class DhisAdxScheduler {
     private final Dhis2FacilityConfigRepository facilityConfigRepository;
     private final DhisAdxExportService exportService;
 
+    @SchedulerLock(name = "DhisAdxScheduler.runSweep", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${dhis2.export.scheduler.cron:0 0 2 1 * *}",
                zone = "${dhis2.export.scheduler.zone:UTC}")
     public void runSweep() {

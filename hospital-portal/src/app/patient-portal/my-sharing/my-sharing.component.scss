@@ -40,7 +40,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -51,7 +51,7 @@
   }
 
   &:hover {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 }
 
@@ -102,7 +102,7 @@
 
     &:focus {
       outline: none;
-      border-color: #2563eb;
+      border-color: var(--primary);
     }
   }
 }
@@ -135,14 +135,14 @@
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
 
   &:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 
   &:disabled {

@@ -9,7 +9,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: #2563eb;
+  background: var(--primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -17,7 +17,7 @@
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--primary-dark);
   }
 
   &:disabled {

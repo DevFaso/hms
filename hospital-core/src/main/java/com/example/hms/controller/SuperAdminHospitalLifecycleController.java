@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.superadmin.HospitalLifecycleResponseDTO;
 import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
 import com.example.hms.service.HospitalLifecycleService;
@@ -29,6 +30,7 @@ import java.util.UUID;
  * via the {@code X-Mfa-Token} header on destructive actions.
  */
 @RestController
+@WriteAudited(skip = true, reason = "service emits HOSPITAL_* lifecycle events")
 @RequestMapping("/super-admin/hospitals")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin — Hospital Lifecycle",

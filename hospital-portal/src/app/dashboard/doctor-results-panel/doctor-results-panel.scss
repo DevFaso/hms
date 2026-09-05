@@ -22,7 +22,7 @@
 
 .card-title-icon {
   font-size: 18px;
-  color: #2563eb;
+  color: var(--primary);
 }
 
 .card-title {
@@ -33,8 +33,8 @@
 }
 
 .count-badge {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--primary-soft);
+  color: var(--primary);
   font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;
@@ -49,7 +49,7 @@
 .card-link {
   font-size: 12px;
   font-weight: 500;
-  color: #2563eb;
+  color: var(--primary);
   text-decoration: none;
   &:hover {
     text-decoration: underline;
@@ -104,7 +104,7 @@
     background: #d97706;
   }
   &.rp-dot-normal {
-    background: #2563eb;
+    background: var(--primary);
   }
 }
 
@@ -202,8 +202,8 @@
   transition: all 0.15s;
 
   &:hover {
-    background: #eff6ff;
-    color: #2563eb;
+    background: var(--primary-soft);
+    color: var(--primary);
   }
 
   .material-symbols-outlined {

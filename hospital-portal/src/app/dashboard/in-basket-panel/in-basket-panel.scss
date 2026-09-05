@@ -74,8 +74,8 @@
   white-space: nowrap;
 
   &.active {
-    background: var(--primary-light, #eff6ff);
-    color: var(--primary, #2563eb);
+    background: var(--primary-light, var(--primary-soft));
+    color: var(--primary, var(--primary));
     font-weight: 600;
   }
 
@@ -107,7 +107,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid var(--border, #e5e7eb);
-  border-top-color: var(--primary, #2563eb);
+  border-top-color: var(--primary, var(--primary));
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -251,9 +251,9 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 2px solid var(--primary, #2563eb);
+  border: 2px solid var(--primary, var(--primary));
   background: transparent;
-  color: var(--primary, #2563eb);
+  color: var(--primary, var(--primary));
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -262,7 +262,7 @@
   justify-content: center;
 
   &:hover {
-    background: var(--primary, #2563eb);
+    background: var(--primary, var(--primary));
     color: #fff;
   }
 }

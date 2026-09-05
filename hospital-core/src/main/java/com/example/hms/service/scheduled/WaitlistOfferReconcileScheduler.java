@@ -3,6 +3,7 @@ package com.example.hms.service.scheduled;
 import com.example.hms.service.ReceptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ public class WaitlistOfferReconcileScheduler {
 
     private final ReceptionService receptionService;
 
+    @SchedulerLock(name = "WaitlistOfferReconcileScheduler.reconcile", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${app.scheduling.waitlist-offer-reconcile-ms:300000}")
     public void reconcile() {
         try {

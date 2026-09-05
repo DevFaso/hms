@@ -302,7 +302,7 @@
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: #2563eb;
+    color: var(--primary);
   }
 
   strong {
@@ -590,9 +590,9 @@
   }
 
   &.intra-org {
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #93c5fd;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
+    border: 1px solid var(--primary-light);
   }
 
   &.cross-org {
@@ -707,7 +707,7 @@
 .stat-count {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--primary, #2563eb);
+  color: var(--primary, var(--primary));
   line-height: 1;
 }
 
@@ -873,7 +873,7 @@
   align-items: center;
   gap: 6px;
   padding: 9px 18px;
-  background: var(--primary, #2563eb);
+  background: var(--primary, var(--primary));
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -889,7 +889,7 @@
   }
 
   &:hover:not(:disabled) {
-    background: var(--primary-dark, #1d4ed8);
+    background: var(--primary-dark, var(--primary-dark));
   }
 
   &:disabled {

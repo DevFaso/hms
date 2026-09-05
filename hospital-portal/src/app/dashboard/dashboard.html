@@ -442,7 +442,10 @@
             <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
           </div>
           <div class="metric-pair">
-            <div class="metric-block" style="--metric-color: #1d4ed8; --metric-bg: #dbeafe">
+            <div
+              class="metric-block"
+              style="--metric-color: var(--primary-dark); --metric-bg: var(--primary-tint)"
+            >
               <div class="metric-icon">
                 <span class="material-symbols-outlined">event_busy</span>
               </div>
@@ -507,7 +510,10 @@
             </div>
           </div>
           <div class="metric-quad">
-            <div class="metric-tile" style="--metric-color: #1d4ed8; --metric-bg: #eff6ff">
+            <div
+              class="metric-tile"
+              style="--metric-color: var(--primary-dark); --metric-bg: var(--primary-soft)"
+            >
               <div class="metric-tile-label">{{ 'DASHBOARD.TOTAL' | translate }}</div>
               <div class="metric-tile-value">{{ bedOccupancy()!.totalBeds }}</div>
             </div>
@@ -2066,8 +2072,8 @@
               </div>
             </div>
             <div class="stat-card" style="flex: 1; min-width: 0">
-              <div class="stat-icon-wrap" style="background: #dbeafe">
-                <span class="material-symbols-outlined stat-icon" style="color: #2563eb"
+              <div class="stat-icon-wrap" style="background: var(--primary-tint)">
+                <span class="material-symbols-outlined stat-icon" style="color: var(--primary)"
                   >calendar_month</span
                 >
               </div>
@@ -2123,8 +2129,8 @@
               class="stat-card"
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
-              <div class="stat-icon-wrap" style="background: #dbeafe">
-                <span class="material-symbols-outlined stat-icon" style="color: #2563eb"
+              <div class="stat-icon-wrap" style="background: var(--primary-tint)">
+                <span class="material-symbols-outlined stat-icon" style="color: var(--primary)"
                   >assignment</span
                 >
               </div>
@@ -3007,11 +3013,11 @@
               <div class="care-team-member">
                 <div
                   class="ctm-avatar"
-                  [style.background]="member.isPrimary ? '#dbeafe' : '#f1f5f9'"
+                  [style.background]="member.isPrimary ? 'var(--primary-tint)' : '#f1f5f9'"
                 >
                   <span
                     class="material-symbols-outlined"
-                    [style.color]="member.isPrimary ? '#2563eb' : '#64748b'"
+                    [style.color]="member.isPrimary ? 'var(--primary)' : '#64748b'"
                   >
                     {{ member.isPrimary ? 'star' : 'person' }}
                   </span>
@@ -3057,7 +3063,9 @@
               @if (hs.activeDiagnoses.length) {
                 <div class="health-glance-section">
                   <h4 class="hg-label">
-                    <span class="material-symbols-outlined" style="font-size: 16px; color: #2563eb"
+                    <span
+                      class="material-symbols-outlined"
+                      style="font-size: 16px; color: var(--primary)"
                       >clinical_notes</span
                     >
                     {{ 'DASHBOARD.ACTIVE_CONDITIONS' | translate }}

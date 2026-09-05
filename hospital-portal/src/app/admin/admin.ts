@@ -34,7 +34,7 @@ export class AdminComponent implements OnInit {
   loading = signal(true);
 
   stats = signal<SystemStat[]>([
-    { label: 'Total Users', value: '—', icon: 'group', color: '#3b82f6' },
+    { label: 'Total Users', value: '—', icon: 'group', color: '#23b79c' },
     { label: 'Active Staff', value: '—', icon: 'badge', color: '#10b981' },
     { label: 'Departments', value: '—', icon: 'domain', color: '#8b5cf6' },
     { label: 'System Health', value: 'Online', icon: 'monitor_heart', color: '#059669' },
@@ -51,7 +51,7 @@ export class AdminComponent implements OnInit {
       description: 'Manage user accounts, roles, and permissions',
       icon: 'manage_accounts',
       route: '/users',
-      color: '#3b82f6',
+      color: '#23b79c',
     },
     {
       title: 'Patient Tracker',
@@ -106,7 +106,7 @@ export class AdminComponent implements OnInit {
             label: 'On Shift Today',
             value: data.staffing?.onShiftToday ?? '—',
             icon: 'schedule',
-            color: '#3b82f6',
+            color: '#23b79c',
           },
           {
             label: "Today's Appointments",

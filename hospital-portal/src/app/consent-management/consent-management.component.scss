@@ -20,8 +20,8 @@
 
 /* Summary card icon colours */
 .summary-card .card-icon.total {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
 }
 
 .summary-card .card-icon.active {
@@ -41,8 +41,8 @@
 }
 
 .type-treatment {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
 }
 .type-research {
   background: #ede9fe;
@@ -184,8 +184,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,8 +251,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--primary-tint);
+  color: var(--primary-dark);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -399,8 +399,8 @@
 
 .btn-outline {
   background: #fff;
-  color: #2563eb;
-  border: 1px solid #2563eb;
+  color: var(--primary);
+  border: 1px solid var(--primary);
   font-size: 0.8rem;
   padding: 5px 12px;
   border-radius: 6px;
@@ -410,7 +410,7 @@
     color 0.15s;
 
   &:hover {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
   }
 }

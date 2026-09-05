@@ -244,7 +244,7 @@
     }
 
     &.expanded {
-      background: #eff6ff;
+      background: var(--primary-soft);
       border-left: 3px solid #7c3aed;
     }
   }

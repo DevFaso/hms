@@ -49,7 +49,7 @@
     }
 
     &.is-active {
-      background: #2563eb;
+      background: var(--primary);
       color: #fff;
     }
   }
@@ -152,7 +152,7 @@
 
     strong {
       font-family: ui-monospace, 'Menlo', monospace;
-      color: #2563eb;
+      color: var(--primary);
     }
 
     span {
@@ -181,7 +181,7 @@
   border: 1px solid transparent;
 
   &--primary {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
 
     &:disabled {

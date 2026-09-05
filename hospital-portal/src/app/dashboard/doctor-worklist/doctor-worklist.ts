@@ -190,7 +190,7 @@ export class DoctorWorklistComponent implements OnInit, OnDestroy {
   }
 
   getAvatarColor(name: string): string {
-    const colors = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777'];
+    const colors = ['#0e7c6b', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777'];
     let hash = 0;
     for (let i = 0; i < (name?.length ?? 0); i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];

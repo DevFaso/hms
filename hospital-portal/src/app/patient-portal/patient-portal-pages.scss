@@ -177,8 +177,8 @@
 
   &[data-status='IN_PROGRESS'],
   &[data-status='ACTIVE'] {
-    background: #dbeafe;
-    color: #2563eb;
+    background: var(--primary-tint);
+    color: var(--primary);
   }
 
   &[data-status='SCHEDULED'],
@@ -280,8 +280,8 @@
 
   &[data-status='SCHEDULED'],
   &[data-status='CONFIRMED'] {
-    background: #dbeafe;
-    color: #2563eb;
+    background: var(--primary-tint);
+    color: var(--primary);
   }
 
   &[data-status='COMPLETED'] {

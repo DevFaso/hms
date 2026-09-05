@@ -4,6 +4,7 @@ import com.example.hms.service.pro.ProScreeningEscalationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,7 @@ public class ProScreeningEscalationScheduler {
 
     private final ProScreeningEscalationService escalationService;
 
+    @SchedulerLock(name = "ProScreeningEscalationScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${hms.pro.critical-escalation.interval-ms:300000}")
     public void runSweep() {
         try {

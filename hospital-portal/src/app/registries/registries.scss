@@ -270,8 +270,8 @@
   }
 
   &.reg-status-completed {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
   }
 
   &.reg-status-transferred_out {

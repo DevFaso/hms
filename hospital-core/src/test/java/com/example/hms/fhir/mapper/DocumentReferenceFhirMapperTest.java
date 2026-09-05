@@ -18,10 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DocumentReferenceFhirMapperTest {
 
-    private final DocumentReferenceFhirMapper mapper = new DocumentReferenceFhirMapper();
+    private final DocumentReferenceFhirMapper mapper = new DocumentReferenceFhirMapper("https://api.e-keneya.test/");
 
     @Test
-    @DisplayName("uploaded document maps metadata + public URL — and NEVER the server file path")
+    @DisplayName("uploaded document maps metadata + the staff download URL — and NEVER the server file path")
     void uploadedDocumentMapsMetadataWithoutTheFilePath() {
         UUID patientId = UUID.randomUUID();
         Patient patient = new Patient();
@@ -58,12 +58,13 @@ class DocumentReferenceFhirMapperTest {
         assertThat(attachment.getContentType()).isEqualTo("application/pdf");
         assertThat(attachment.getTitle()).isEqualTo("cbc-2026.pdf");
         assertThat(attachment.getSize()).isEqualTo(48_211);
-        // Metadata ONLY: the stored fileUrl is dead legacy (/uploads served
-        // permitAll once) and the only live download route is the patient's
-        // own /me surface — a staff/FHIR link would 404 or resurrect an
-        // unauthenticated PHI path. No url, no server path, no SHA-256 in
-        // attachment.hash (R4 defines hash as SHA-1).
-        assertThat(attachment.getUrl()).isNull();
+        // The link is the staff download route (bearer + hospital-scoped),
+        // absolute on the configured public origin (trailing slash trimmed).
+        // Never the stored fileUrl — that column is dead legacy from when
+        // /uploads was served permitAll — and never the server path. No
+        // SHA-256 in attachment.hash (R4 defines hash as SHA-1).
+        assertThat(attachment.getUrl()).isEqualTo(
+            "https://api.e-keneya.test/api/patients/" + patientId + "/documents/" + src.getId() + "/download");
         String serialized = ca.uhn.fhir.context.FhirContext.forR4Cached()
             .newJsonParser().encodeResourceToString(doc);
         assertThat(serialized)
@@ -135,5 +136,24 @@ class DocumentReferenceFhirMapperTest {
 
         assertThat(mapper.toFhir(src).getDocStatus())
             .isEqualTo(DocumentReference.ReferredDocumentStatus.FINAL);
+    }
+
+    @Test
+    @DisplayName("without app.public-base-url the attachment url is origin-relative, never absent")
+    void attachmentUrlIsRelativeWhenNoPublicBaseUrl() {
+        DocumentReferenceFhirMapper bare = new DocumentReferenceFhirMapper("");
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        PatientUploadedDocument src = PatientUploadedDocument.builder()
+            .patient(patient)
+            .documentType(PatientDocumentType.OTHER)
+            .displayName("x.pdf")
+            .filePath("/srv/x.pdf")
+            .build();
+        src.setId(UUID.randomUUID());
+
+        String url = bare.toFhir(src).getContentFirstRep().getAttachment().getUrl();
+
+        assertThat(url).isEqualTo("/api/patients/" + patient.getId() + "/documents/" + src.getId() + "/download");
     }
 }

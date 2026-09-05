@@ -118,7 +118,7 @@ export class SuperAdminComponent implements OnInit {
         sublabelKey: 'SUPER_ADMIN.STAT.ACTIVE',
         subvalue: s.activeUsers ?? 0,
         icon: 'group',
-        color: '#3b82f6',
+        color: '#23b79c',
         route: '/users',
       },
       {
@@ -325,7 +325,7 @@ export class SuperAdminComponent implements OnInit {
       descKey: 'SUPER_ADMIN.LINK.USERS_DESC',
       icon: 'manage_accounts',
       route: '/users',
-      color: '#3b82f6',
+      color: '#23b79c',
     },
     {
       titleKey: 'SUPER_ADMIN.LINK.ROLES_TITLE',

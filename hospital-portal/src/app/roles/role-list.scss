@@ -271,9 +271,9 @@
   display: flex;
   gap: 4px;
   .btn-sm.edit {
-    color: #2563eb;
+    color: var(--primary);
     &:hover {
-      background: #eff6ff;
+      background: var(--primary-soft);
     }
   }
   .btn-sm.delete {

@@ -21,6 +21,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.NotificationPreferenceRepository;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -41,6 +42,7 @@ class AppointmentReminderServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private SmsService smsService;
     @Mock private MessageSource messageSource;
+    @Mock private ReminderClaimService reminderClaimService;
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     private AppointmentReminderService service;
@@ -53,7 +55,7 @@ class AppointmentReminderServiceTest {
     void setUp() {
         service = new AppointmentReminderService(
             appointmentRepository, preferenceRepository, notificationService, smsService,
-            messageSource, patientLocaleResolver);
+            messageSource, patientLocaleResolver, reminderClaimService, Clock.systemDefaultZone());
         ReflectionTestUtils.setField(service, "leadHours", 24L);
         ReflectionTestUtils.setField(service, "reminderLocale", "fr");
         // These tests are about the sweep, not the language. Pass the caller's
@@ -91,6 +93,7 @@ class AppointmentReminderServiceTest {
 
         lenient().when(messageSource.getMessage(eq("sms.appointment.reminder"), any(), any(Locale.class)))
             .thenReturn("Rappel : rendez-vous à CHU Yalgado.");
+        lenient().when(reminderClaimService.claim(any(), any())).thenReturn(true);
         lenient().when(appointmentRepository.save(any(Appointment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
@@ -116,8 +119,7 @@ class AppointmentReminderServiceTest {
         verify(notificationService).createNotification(
             contains("Rappel"), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
         verify(smsService).send(eq("+22670707070"), contains("Rappel"));
-        assertThat(appointment.getReminderSentAt()).isNotNull();
-        verify(appointmentRepository).save(appointment);
+        verify(reminderClaimService).claim(eq(appointment.getId()), any());
     }
 
     @Test
@@ -161,7 +163,6 @@ class AppointmentReminderServiceTest {
         verify(smsService, never()).send(anyString(), anyString());
         // In-app still fired — the appointment still counts as reminded.
         assertThat(reminded).isEqualTo(1);
-        assertThat(appointment.getReminderSentAt()).isNotNull();
     }
 
     @Test
@@ -193,7 +194,7 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isZero();
         assertThat(appointment.getReminderSentAt()).isNull(); // later tick picks it up
-        verify(appointmentRepository, never()).save(any(Appointment.class));
+        verify(reminderClaimService, never()).claim(any(), any());
     }
 
     @Test
@@ -206,8 +207,7 @@ class AppointmentReminderServiceTest {
         int reminded = service.sendDueReminders();
 
         assertThat(reminded).isZero();
-        assertThat(appointment.getReminderSentAt()).isNotNull(); // sweep converges
-        verify(appointmentRepository).save(appointment);
+        verify(reminderClaimService).claim(eq(appointment.getId()), any());
     }
 
     @Test
@@ -220,7 +220,6 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isEqualTo(1); // SMS still fired
         verify(smsService).send(anyString(), anyString());
-        assertThat(appointment.getReminderSentAt()).isNotNull();
     }
 
     @Test
@@ -236,6 +235,19 @@ class AppointmentReminderServiceTest {
         int reminded = service.sendDueReminders();
 
         assertThat(reminded).isEqualTo(1);
-        assertThat(appointment.getReminderSentAt()).isNotNull();
+    }
+
+    @Test
+    void losingTheClaimSendsNothing() {
+        // A second instance (or the manual trigger) already stamped this
+        // appointment: the conditional UPDATE returns 0 and no channel fires.
+        feed(appointment);
+        when(reminderClaimService.claim(eq(appointment.getId()), any())).thenReturn(false);
+
+        int reminded = service.sendDueReminders();
+
+        assertThat(reminded).isZero();
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(smsService, never()).send(anyString(), anyString());
     }
 }

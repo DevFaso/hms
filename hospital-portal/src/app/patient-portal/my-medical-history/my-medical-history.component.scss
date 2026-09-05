@@ -65,12 +65,12 @@
       text-align: left;
       font-size: 12px;
       font-weight: 700;
-      color: #2563eb;
+      color: var(--primary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       padding: 10px 14px;
-      border-bottom: 2px solid #dbeafe;
-      background: #eff6ff;
+      border-bottom: 2px solid var(--primary-tint);
+      background: var(--primary-soft);
     }
   }
 
@@ -107,7 +107,7 @@
   h3 {
     font-size: 15px;
     font-weight: 700;
-    color: #2563eb;
+    color: var(--primary);
     margin: 0 0 12px;
   }
 }
@@ -142,7 +142,7 @@
 .notes-link {
   font-size: 14px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--primary);
   cursor: pointer;
   text-decoration: none;
 
@@ -169,7 +169,7 @@
 
   &:focus {
     outline: none;
-    border-color: #2563eb;
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   }
 }
@@ -190,7 +190,7 @@
   padding: 4px 10px;
   border: none;
   background: none;
-  color: #2563eb;
+  color: var(--primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;

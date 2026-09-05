@@ -28,6 +28,9 @@ public class ImagingCriticalEscalationScheduler {
 
     private final ImagingCriticalNotificationService imagingCriticalNotificationService;
 
+    // Locked on the shared path (ImagingCriticalNotificationService.escalateOverdue) so the manual
+    // trigger and this sweep hold the same lock; a lock here as well would
+    // block its own delegate.
     @Scheduled(fixedDelayString = "${hms.imaging.critical-escalation.interval-ms:300000}")
     public void runSweep() {
         try {

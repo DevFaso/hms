@@ -216,8 +216,8 @@
   }
 
   &--ga {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
   }
 
   &--cm {

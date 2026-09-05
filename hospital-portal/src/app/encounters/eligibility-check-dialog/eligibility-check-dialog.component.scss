@@ -169,7 +169,7 @@
   border: 1px solid transparent;
 
   &--primary {
-    background: #2563eb;
+    background: var(--primary);
     color: #fff;
 
     &:disabled {

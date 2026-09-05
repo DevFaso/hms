@@ -3,6 +3,7 @@ package com.example.hms.service.credentialing;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class LicenseExpiryScheduler {
 
     private final LicenseExpirySweepService sweepService;
 
+    @SchedulerLock(name = "LicenseExpiryScheduler.runSweep", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5S")
     @Scheduled(
         cron = "${hms.credentialing.expiry.cron:0 0 6 * * *}",
         zone = "${hms.credentialing.expiry.zone:UTC}")

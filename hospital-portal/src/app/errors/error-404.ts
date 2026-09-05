@@ -52,14 +52,14 @@ import { RouterLink } from '@angular/router';
       align-items: center;
       gap: 0.5rem;
       padding: 0.625rem 1.25rem;
-      background: #2563eb;
+      background: #0e7c6b;
       color: #fff;
       border-radius: 8px;
       text-decoration: none;
       font-weight: 500;
     }
     .back-link:hover {
-      background: #1d4ed8;
+      background: #0a5f52;
     }
   `,
 })

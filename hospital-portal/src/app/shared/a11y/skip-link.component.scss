@@ -8,7 +8,7 @@
 //   of the viewport so a keyboard user can see what just gained focus.
 // - z-index is intentionally very high; the link must overlay any topbar
 //   or sticky shell chrome when revealed.
-// - Color tokens match the existing primary palette (#2563eb / #fff). The
+// - Color tokens match the existing primary palette (var(--primary) / #fff). The
 //   contrast pair is 8.59:1, comfortably above WCAG AA 4.5:1.
 
 .skip-link {
@@ -21,7 +21,7 @@
   // the element stays in the accessibility tree and the tab order.
   // When focused, the top: 0 below overrides this.
   padding: 0.625rem 1rem;
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -33,7 +33,7 @@
   &:focus,
   &:focus-visible {
     top: 0;
-    outline: 3px solid #fbbf24; // amber 400 — high contrast on #2563eb
+    outline: 3px solid #fbbf24; // amber 400 — high contrast on var(--primary)
     outline-offset: 2px;
   }
 }

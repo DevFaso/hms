@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "writes here are audit-search housekeeping on the audit log itself")
 @RequestMapping("/audit-logs")
 @Validated
 @RequiredArgsConstructor

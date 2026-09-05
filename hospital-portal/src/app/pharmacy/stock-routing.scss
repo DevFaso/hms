@@ -2,8 +2,8 @@
 
 // Local accent variant — see dispensing.scss for the shared rationale.
 .form-card-accent {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-tint);
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -54,7 +54,7 @@
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: var(--primary-light);
     box-shadow: 0 0 0 3px rgb(59 130 246 / 10%);
   }
 }
@@ -175,8 +175,8 @@ textarea.form-control {
   }
 
   &.badge-info {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.badge-secondary {
@@ -203,7 +203,7 @@ textarea.form-control {
   }
 
   &.btn-primary {
-    background: #3b82f6;
+    background: var(--primary-light);
     color: #fff;
   }
 

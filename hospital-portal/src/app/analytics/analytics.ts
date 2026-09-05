@@ -39,8 +39,8 @@ export class AnalyticsComponent implements OnInit {
         label: 'Total Patients',
         value: a.totalPatients,
         icon: 'people',
-        color: '#3b82f6',
-        bg: '#eff6ff',
+        color: '#23b79c',
+        bg: '#e6f4f1',
       },
       {
         label: 'Appointments',
@@ -149,7 +149,7 @@ export class AnalyticsComponent implements OnInit {
 
   statusColor(status: string): string {
     const colors: Record<string, string> = {
-      SCHEDULED: '#3b82f6',
+      SCHEDULED: '#23b79c',
       CONFIRMED: '#6366f1',
       COMPLETED: '#10b981',
       CANCELLED: '#ef4444',
@@ -158,7 +158,7 @@ export class AnalyticsComponent implements OnInit {
       ARRIVED: '#8b5cf6',
       PENDING: '#94a3b8',
       DRAFT: '#94a3b8',
-      SENT: '#3b82f6',
+      SENT: '#23b79c',
       PAID: '#10b981',
       PARTIALLY_PAID: '#f59e0b',
       OVERDUE: '#ef4444',

@@ -120,8 +120,8 @@
   /* Subset of the data-residency badges; new region codes can either
      extend this list or fall through to the default neutral chip. */
   &--bf {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &--ci {
     background: #fef3c7;
@@ -211,7 +211,7 @@
     font-size: 0.9rem;
 
     &:focus {
-      outline: 2px solid #2563eb;
+      outline: 2px solid var(--primary);
       outline-offset: -1px;
       border-color: transparent;
     }
@@ -253,8 +253,8 @@
 }
 
 .save-btn {
-  border: 1px solid #2563eb;
-  background: #2563eb;
+  border: 1px solid var(--primary);
+  background: var(--primary);
   color: #fff;
 
   &:disabled {

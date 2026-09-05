@@ -6,6 +6,7 @@ import com.example.hms.service.OrganizationLifecycleStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,7 @@ public class TenantPurgeJob {
      * whole transaction rollback-only and silently revert the orgs already
      * processed earlier in the iteration.
      */
+    @SchedulerLock(name = "TenantPurgeJob.runSweep", lockAtMostFor = "PT2H", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${hms.tenant-purge.cron:0 0 3 * * *}")
     public void runSweep() {
         if (!enabled) {

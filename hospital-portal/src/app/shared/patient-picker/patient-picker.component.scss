@@ -32,7 +32,7 @@
     box-sizing: border-box;
 
     &:focus {
-      border-color: #2563eb;
+      border-color: var(--primary);
     }
   }
 
@@ -44,7 +44,7 @@
     width: 14px;
     height: 14px;
     border: 2px solid #d1d5db;
-    border-top-color: #2563eb;
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
@@ -82,7 +82,7 @@
   transition: background 120ms;
 
   &:hover {
-    background: #eff6ff;
+    background: var(--primary-soft);
   }
 
   .opt-avatar {
@@ -90,7 +90,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -127,8 +127,8 @@
   align-items: center;
   gap: 0.625rem;
   padding: 0.5rem 0.75rem;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1.5px solid #93c5fd;
+  background: linear-gradient(135deg, var(--primary-soft) 0%, var(--primary-tint) 100%);
+  border: 1.5px solid var(--primary-light);
   border-radius: 10px;
   min-height: 2.375rem;
 
@@ -137,7 +137,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -156,7 +156,7 @@
     .chip-name {
       font-size: 0.8125rem;
       font-weight: 600;
-      color: #1e40af;
+      color: var(--primary-deep);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -164,7 +164,7 @@
 
     .chip-sub {
       font-size: 0.7rem;
-      color: #3b82f6;
+      color: var(--primary);
     }
   }
 
@@ -174,7 +174,7 @@
     border: none;
     cursor: pointer;
     padding: 2px;
-    color: #3b82f6;
+    color: var(--primary);
     display: flex;
     align-items: center;
     border-radius: 4px;

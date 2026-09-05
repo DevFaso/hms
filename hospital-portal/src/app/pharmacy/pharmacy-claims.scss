@@ -74,8 +74,8 @@
       color: #374151;
     }
     &[data-status='SUBMITTED'] {
-      background: #dbeafe;
-      color: #1e40af;
+      background: var(--primary-tint);
+      color: var(--primary-deep);
     }
     &[data-status='ACCEPTED'] {
       background: #dcfce7;

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.User;
@@ -40,6 +41,7 @@ import java.util.Optional;
  */
 @Slf4j
 @RestController
+@WriteAudited(skip = true, reason = "service emits MFA_ENROLLED / MFA_VERIFIED / MFA_FAILURE")
 @RequestMapping("/auth/mfa")
 @RequiredArgsConstructor
 public class MfaController {

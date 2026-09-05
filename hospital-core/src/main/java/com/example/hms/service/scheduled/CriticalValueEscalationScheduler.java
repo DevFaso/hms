@@ -25,6 +25,9 @@ public class CriticalValueEscalationScheduler {
 
     private final CriticalValueNotificationService criticalValueNotificationService;
 
+    // Locked on the shared path (CriticalValueNotificationService.escalateOverdue) so the manual
+    // trigger and this sweep hold the same lock; a lock here as well would
+    // block its own delegate.
     @Scheduled(fixedDelayString = "${hms.lab.critical-escalation.interval-ms:300000}")
     public void runSweep() {
         try {
