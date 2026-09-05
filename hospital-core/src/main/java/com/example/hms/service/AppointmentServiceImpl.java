@@ -340,9 +340,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Appointment saved = appointmentRepository.save(appointment);
 
-        // Outbound webhooks (Tier 2 item 45): thin id-reference only, and
-        // enqueued in this transaction so the event exists iff the booking
-        // committed. The publisher is best-effort internally.
+        // Outbound webhooks (Tier 2 item 45): thin id-reference only. The
+        // publisher defers to AFTER COMMIT and enqueues in its own
+        // transaction - it can never fail or roll back this booking, and
+        // never emits for a booking that rolled back.
         webhookPublisher.publish(hospital.getId(), WebhookEventType.APPOINTMENT_BOOKED,
             "Appointment", saved.getId());
 

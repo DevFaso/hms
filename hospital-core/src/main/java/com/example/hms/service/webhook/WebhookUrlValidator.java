@@ -46,15 +46,30 @@ public final class WebhookUrlValidator {
             throw new BusinessException("Webhook URLs must point at a public host.");
         }
         try {
-            InetAddress address = InetAddress.getByName(host);
-            if (address.isLoopbackAddress() || address.isSiteLocalAddress()
-                || address.isLinkLocalAddress() || address.isMulticastAddress()
-                || address.isAnyLocalAddress()) {
-                throw new BusinessException("Webhook URLs must point at a public host.");
+            // EVERY A/AAAA answer must be public: a name whose first
+            // answer is public but whose alternate is private would
+            // otherwise pass registration and deliver internally.
+            for (InetAddress address : InetAddress.getAllByName(host)) {
+                if (isNonPublic(address)) {
+                    throw new BusinessException("Webhook URLs must point at a public host.");
+                }
             }
         } catch (UnknownHostException e) {
             throw new BusinessException(
                 "The webhook host could not be resolved - check the URL.");
         }
+    }
+
+    private static boolean isNonPublic(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        // IPv6 unique-local (fc00::/7): Java reports it as neither
+        // site-local nor link-local, so it needs its own check.
+        boolean uniqueLocalIpv6 = bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
+        return uniqueLocalIpv6
+            || address.isLoopbackAddress()
+            || address.isSiteLocalAddress()
+            || address.isLinkLocalAddress()
+            || address.isMulticastAddress()
+            || address.isAnyLocalAddress();
     }
 }

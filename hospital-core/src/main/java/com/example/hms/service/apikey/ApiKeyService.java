@@ -166,7 +166,13 @@ public class ApiKeyService {
         return Optional.of(new ApiKeyAuth(key.getId(), key.getHospital().getId(), key.getLabel()));
     }
 
-    /** Throttled and best-effort — a bookkeeping write must never fail a request. */
+    /**
+     * Throttled and best-effort — a bookkeeping write must never fail a
+     * request. A direct UPDATE (executed immediately, no {@code @Version}
+     * involvement) rather than a managed-entity save: the entity flush
+     * would happen at commit, AFTER any try/catch here, and a concurrent
+     * stamp would then 500 a request whose key was perfectly valid.
+     */
     private void touchLastUsed(ApiKey key) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (key.getLastUsedAt() != null
@@ -174,8 +180,7 @@ public class ApiKeyService {
             return;
         }
         try {
-            key.setLastUsedAt(now);
-            apiKeyRepository.save(key);
+            apiKeyRepository.stampLastUsed(key.getId(), now);
         } catch (RuntimeException ex) {
             log.warn("Failed to stamp lastUsedAt on API key {}: {}", key.getId(), ex.getMessage());
         }

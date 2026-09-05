@@ -311,7 +311,9 @@
     role="dialog"
     aria-modal="true"
     tabindex="-1"
-    [attr.aria-label]="'WEBHOOKS.REGISTER_ENDPOINT' | translate"
+    [attr.aria-label]="
+      (editingEndpoint() ? 'WEBHOOKS.EDIT_ENDPOINT' : 'WEBHOOKS.REGISTER_ENDPOINT') | translate
+    "
     (keydown.escape)="closeEndpointForm()"
     (keydown.tab)="trapTab($any($event), endpointDialog)"
     data-testid="endpoint-modal"

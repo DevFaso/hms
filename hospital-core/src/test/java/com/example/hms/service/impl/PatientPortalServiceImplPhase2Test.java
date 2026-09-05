@@ -133,6 +133,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.service.NotificationService notificationService;
     @Mock private com.example.hms.service.EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     @Mock private com.example.hms.repository.QuestionnaireRepository questionnaireRepository;
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
@@ -218,6 +219,33 @@ class PatientPortalServiceImplPhase2Test {
             // The appointment owns its slot (P3 #22): a portal cancel frees
             // the time just like a desk cancel.
             verify(slotInventoryService).releaseForAppointment(apptId);
+        }
+
+        @Test
+        @DisplayName("a hospital-backed portal cancel announces APPOINTMENT_CANCELLED to item 45's outbox")
+        void cancelEmitsTheCancellationWebhook() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any(Appointment.class)))
+                    .thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+
+            service.cancelMyAppointment(auth,
+                    CancelAppointmentRequestDTO.builder().appointmentId(apptId).build(),
+                    Locale.ENGLISH);
+
+            // The portal cancel is its own write path - a subscriber must
+            // see it like a desk cancel, keyed by hospital and appointment.
+            verify(webhookPublisher).publish(hospital.getId(),
+                    com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_CANCELLED,
+                    "Appointment", apptId);
         }
 
         @Test
@@ -343,6 +371,33 @@ class PatientPortalServiceImplPhase2Test {
     @Nested
     @DisplayName("rescheduleMyAppointment")
     class RescheduleMyAppointment {
+
+        @Test
+        @DisplayName("a hospital-backed portal reschedule announces APPOINTMENT_RESCHEDULED to item 45's outbox")
+        void rescheduleEmitsTheRescheduledWebhook() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build(), Locale.ENGLISH);
+
+            verify(webhookPublisher).publish(hospital.getId(),
+                    com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_RESCHEDULED,
+                    "Appointment", apptId);
+        }
 
         @Test
         @DisplayName("should reschedule a scheduled appointment successfully")

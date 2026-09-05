@@ -66,6 +66,7 @@ public class WebhookEndpointService {
     @Transactional
     public WebhookEndpointRegisteredDTO register(WebhookEndpointRequestDTO request) {
         UUID hospitalId = requireHospital();
+        requireSubscribable(request);
         WebhookUrlValidator.requireDeliverable(request.getUrl());
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         String secret = generateSecret();
@@ -90,6 +91,7 @@ public class WebhookEndpointService {
         UUID hospitalId = requireHospital();
         WebhookEndpoint endpoint = requireInTenant(endpointId, hospitalId);
         requireNotRevoked(endpoint);
+        requireSubscribable(request);
         WebhookUrlValidator.requireDeliverable(request.getUrl());
         endpoint.setUrl(request.getUrl().strip());
         endpoint.setDescription(trimToNull(request.getDescription()));
@@ -210,6 +212,18 @@ public class WebhookEndpointService {
         return endpointRepository.findById(endpointId)
             .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+    }
+
+    /**
+     * PING is fired from the test button and bypasses subscriptions — a
+     * PING-only "subscription" would be a valid-looking configuration
+     * that can never receive an event.
+     */
+    private static void requireSubscribable(WebhookEndpointRequestDTO request) {
+        if (request.getEvents().contains(WebhookEventType.PING)) {
+            throw new BusinessException(
+                "PING is the test delivery, not a subscribable event - use the ping action.");
+        }
     }
 
     private static void requireNotRevoked(WebhookEndpoint endpoint) {

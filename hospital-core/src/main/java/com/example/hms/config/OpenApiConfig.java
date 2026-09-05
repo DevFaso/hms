@@ -15,12 +15,26 @@ public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "BearerAuth";
 
+    /** X-API-Key scheme for the /partner surface (Tier 2 item 45). */
+    public static final String API_KEY_SCHEME_NAME = "ApiKeyAuth";
+
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(apiInfo())
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
-                .components(new Components().addSecuritySchemes(SECURITY_SCHEME_NAME, jwtSecurityScheme()));
+                .components(new Components()
+                        .addSecuritySchemes(SECURITY_SCHEME_NAME, jwtSecurityScheme())
+                        .addSecuritySchemes(API_KEY_SCHEME_NAME, apiKeySecurityScheme()));
+    }
+
+    private SecurityScheme apiKeySecurityScheme() {
+        return new SecurityScheme()
+                .name(com.example.hms.security.ApiKeyAuthenticationFilter.API_KEY_HEADER)
+                .type(SecurityScheme.Type.APIKEY)
+                .in(SecurityScheme.In.HEADER)
+                .description("Issued API key for third-party clients (Tier 2 item 45). "
+                        + "Authenticates the /partner surface only; staff JWTs cannot reach it.");
     }
 
     private Info apiInfo() {

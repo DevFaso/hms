@@ -35,6 +35,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('" + ApiKeyAuthenticationFilter.ROLE_PARTNER_API + "')")
 @Tag(name = "Partner API", description = "Third-party client surface, X-API-Key authenticated")
+// Overrides the global BearerAuth requirement: generated clients and
+// Swagger UI must advertise the X-API-Key header, not a JWT this surface
+// rejects.
+@io.swagger.v3.oas.annotations.security.SecurityRequirements(
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+        name = com.example.hms.config.OpenApiConfig.API_KEY_SCHEME_NAME))
 public class PartnerApiController {
 
     private final WebhookEndpointService webhookEndpointService;

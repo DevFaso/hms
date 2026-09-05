@@ -33,8 +33,10 @@ import static org.mockito.Mockito.when;
  * The publisher contracts (Tier 2 item 45): one delivery row per
  * subscribed ACTIVE endpoint; the payload is VALID JSON carrying exactly
  * the thin id-reference fields and nothing else — the no-PHI-in-webhooks
- * rule is structural, pinned here by schema; and a bookkeeping failure
- * never escapes into the clinical write path that called publish.
+ * rule is structural, pinned here by schema; a bookkeeping failure never
+ * escapes into the clinical write path that called publish; and inside
+ * an active transaction the enqueue is DEFERRED to after commit, so a
+ * rolled-back clinical write emits nothing.
  */
 @ExtendWith(MockitoExtension.class)
 class WebhookPublisherTest {
@@ -49,7 +51,8 @@ class WebhookPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new WebhookPublisher(endpointRepository, deliveryRepository);
+        publisher = new WebhookPublisher(endpointRepository, deliveryRepository,
+            org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
         hospitalId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
@@ -97,6 +100,32 @@ class WebhookPublisherTest {
             "Appointment", UUID.randomUUID());
 
         verifyNoInteractions(deliveryRepository);
+    }
+
+    @Test
+    @DisplayName("inside a transaction the enqueue waits for the commit - a rollback emits nothing")
+    void enqueueDefersToAfterCommit() {
+        org.springframework.transaction.support.TransactionSynchronizationManager
+            .initSynchronization();
+        try {
+            publisher.publish(hospitalId, WebhookEventType.APPOINTMENT_BOOKED,
+                "Appointment", UUID.randomUUID());
+
+            // Nothing enqueued while the clinical transaction is open...
+            verifyNoInteractions(endpointRepository, deliveryRepository);
+
+            // ...a rollback would simply drop the synchronization; a commit
+            // fires it and the enqueue happens then.
+            when(endpointRepository.findSubscribed(any(), any(), any()))
+                .thenReturn(List.of(endpoint));
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .getSynchronizations().forEach(
+                    org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(deliveryRepository).save(any());
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .clearSynchronization();
+        }
     }
 
     @Test

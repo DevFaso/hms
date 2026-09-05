@@ -148,8 +148,9 @@ class ApiKeyServiceTest {
         assertThat(auth).isPresent();
         assertThat(auth.get().hospitalId()).isEqualTo(hospitalId);
         assertThat(auth.get().label()).isEqualTo("Mutuelle X claims");
-        // Liveness stamp on first sight.
-        assertThat(key.getLastUsedAt()).isEqualTo(NOW);
+        // Liveness stamp on first sight - as a direct UPDATE that cannot
+        // optimistic-lock a valid request into a 500.
+        verify(apiKeyRepository).stampLastUsed(key.getId(), NOW);
     }
 
     @Test
@@ -179,7 +180,7 @@ class ApiKeyServiceTest {
 
         assertThat(service.authenticate("hms_pk_whatever")).isPresent();
 
-        verify(apiKeyRepository, never()).save(any());
+        verify(apiKeyRepository, never()).stampLastUsed(any(), any());
     }
 
     // ── rotation / revocation ───────────────────────────────────────────

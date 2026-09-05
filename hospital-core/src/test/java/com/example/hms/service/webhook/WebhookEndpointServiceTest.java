@@ -134,6 +134,21 @@ class WebhookEndpointServiceTest {
     }
 
     @Test
+    @DisplayName("PING is not subscribable - it bypasses subscriptions, so a PING-only endpoint could never fire")
+    void pingIsNotSubscribable() {
+        asAdminAtHospital();
+        WebhookEndpointRequestDTO dto = WebhookEndpointRequestDTO.builder()
+            .url(PUBLIC_URL)
+            .events(Set.of(WebhookEventType.PING, WebhookEventType.APPOINTMENT_BOOKED))
+            .build();
+
+        assertThatThrownBy(() -> service.register(dto))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("PING");
+        verify(endpointRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("update revalidates the URL - the gate holds on every write path")
     void updateRevalidatesUrl() {
         asAdminAtHospital();

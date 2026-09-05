@@ -9,84 +9,148 @@ import com.example.hms.model.platform.WebhookEndpoint;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.platform.WebhookDeliveryRepository;
 import com.example.hms.service.AuditEventLogService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * The webhook dispatch sweep (Tier 2 item 45) — the instrument-outbox
- * mechanics (V119): pending rows under the attempt ceiling, oldest first;
- * every attempt stamps attempts/lastAttemptAt; a 2xx is SENT, anything
- * else retries until the ceiling and then lands terminally in ERROR.
- * Terminal failures count toward the endpoint's consecutive-failure
- * strike count; any success resets it; at the threshold the endpoint
- * auto-disables — a dead receiver must not accumulate an unbounded queue.
+ * The webhook dispatch sweep (Tier 2 item 45) — claim-then-send:
+ *
+ * <ol>
+ *   <li>a short transaction lists candidate ids (pending, under the
+ *       attempt ceiling, retry window elapsed);</li>
+ *   <li>each row is CLAIMED by the conditional-update idiom (the house
+ *       no-ShedLock pattern) in its own short transaction — a concurrent
+ *       sweep on another instance loses the update and skips the row, so
+ *       nothing is ever delivered twice;</li>
+ *   <li>the HTTP call runs with NO transaction open — a slow receiver
+ *       must not hold a database connection;</li>
+ *   <li>the outcome is recorded in a final short transaction.</li>
+ * </ol>
+ *
+ * <p>A 2xx is SENT and resets the endpoint's strike count; anything else
+ * retries until the ceiling and then lands terminally in ERROR, striking
+ * the endpoint; at the threshold the endpoint auto-disables — a dead
+ * receiver must not accumulate an unbounded queue.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class WebhookDeliveryDispatchService {
 
     private static final int MAX_ERROR_LENGTH = 2000;
+
+    /** What the load step hands the transactionless HTTP step. */
+    private record ClaimedWork(String url, String secret, String payload,
+                               String eventType, String deliveryId) {
+    }
 
     private final WebhookDeliveryRepository deliveryRepository;
     private final WebhookDeliveryTransport transport;
     private final WebhookProperties properties;
     private final AuditEventLogService auditService;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    public WebhookDeliveryDispatchService(WebhookDeliveryRepository deliveryRepository,
+                                          WebhookDeliveryTransport transport,
+                                          WebhookProperties properties,
+                                          AuditEventLogService auditService,
+                                          Clock clock,
+                                          PlatformTransactionManager transactionManager) {
+        this.deliveryRepository = deliveryRepository;
+        this.transport = transport;
+        this.properties = properties;
+        this.auditService = auditService;
+        this.clock = clock;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    /** Deliberately NOT @Transactional — see the class javadoc. */
     public int dispatchPending() {
         if (!properties.isEnabled()) {
             return 0;
         }
-        LocalDateTime retryBefore = LocalDateTime.now(clock)
-            .minusSeconds(properties.getRetryAfterSeconds());
-        List<WebhookDelivery> batch = deliveryRepository.findDispatchable(
-            WebhookDeliveryStatus.PENDING, properties.getMaxAttempts(), retryBefore,
-            PageRequest.of(0, properties.getBatchSize()));
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime retryBefore = now.minusSeconds(properties.getRetryAfterSeconds());
+        List<UUID> candidates = transactionTemplate.execute(status ->
+            deliveryRepository.findDispatchableIds(WebhookDeliveryStatus.PENDING,
+                properties.getMaxAttempts(), retryBefore,
+                PageRequest.of(0, properties.getBatchSize())));
+        if (candidates == null || candidates.isEmpty()) {
+            return 0;
+        }
         int sent = 0;
-        for (WebhookDelivery delivery : batch) {
-            if (dispatchOne(delivery)) {
+        for (UUID deliveryId : candidates) {
+            if (dispatchOne(deliveryId, retryBefore, now)) {
                 sent++;
             }
         }
-        if (!batch.isEmpty()) {
-            log.info("Webhook sweep: {} attempted, {} delivered", batch.size(), sent);
-        }
+        log.info("Webhook sweep: {} candidates, {} delivered", candidates.size(), sent);
         return sent;
     }
 
-    private boolean dispatchOne(WebhookDelivery delivery) {
-        WebhookEndpoint endpoint = delivery.getEndpoint();
-        delivery.setAttempts(delivery.getAttempts() + 1);
-        delivery.setLastAttemptAt(LocalDateTime.now(clock));
+    private boolean dispatchOne(UUID deliveryId, LocalDateTime retryBefore, LocalDateTime now) {
+        Integer claimed = transactionTemplate.execute(status ->
+            deliveryRepository.claim(deliveryId, WebhookDeliveryStatus.PENDING,
+                properties.getMaxAttempts(), retryBefore, now));
+        if (claimed == null || claimed != 1) {
+            // Another instance took it, or it was decided since listing.
+            return false;
+        }
 
-        // A pause/disable/revoke between enqueue and sweep parks the row as
-        // a terminal ERROR rather than delivering to an endpoint the admin
-        // switched off.
-        if (endpoint.getStatus() != WebhookEndpointStatus.ACTIVE) {
-            delivery.setStatus(WebhookDeliveryStatus.ERROR);
-            delivery.setLastError("Endpoint is " + endpoint.getStatus() + ".");
-            deliveryRepository.save(delivery);
+        ClaimedWork work = transactionTemplate.execute(status -> loadWork(deliveryId));
+        if (work == null) {
             return false;
         }
 
         long timestamp = Instant.now(clock).getEpochSecond();
-        String signature = WebhookSigner.sign(endpoint.getSecret(), timestamp,
-            delivery.getPayload());
+        String signature = WebhookSigner.sign(work.secret(), timestamp, work.payload());
+        // No transaction open across the wire call.
         WebhookDeliveryTransport.Result result = transport.post(
-            endpoint.getUrl(), delivery.getPayload(), signature, timestamp,
-            delivery.getEventType().name(),
-            delivery.getId() != null ? delivery.getId().toString() : "");
+            work.url(), work.payload(), signature, timestamp, work.eventType(),
+            work.deliveryId());
 
+        Boolean success = transactionTemplate.execute(status ->
+            recordOutcome(deliveryId, result));
+        return Boolean.TRUE.equals(success);
+    }
+
+    /**
+     * Runs inside a short transaction: pulls what the HTTP step needs
+     * (decrypting the secret via the entity read) and parks the row as a
+     * terminal ERROR if the endpoint was switched off since enqueue.
+     */
+    private ClaimedWork loadWork(UUID deliveryId) {
+        WebhookDelivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
+        if (delivery == null) {
+            return null;
+        }
+        WebhookEndpoint endpoint = delivery.getEndpoint();
+        if (endpoint.getStatus() != WebhookEndpointStatus.ACTIVE) {
+            delivery.setStatus(WebhookDeliveryStatus.ERROR);
+            delivery.setLastError("Endpoint is " + endpoint.getStatus() + ".");
+            deliveryRepository.save(delivery);
+            return null;
+        }
+        return new ClaimedWork(endpoint.getUrl(), endpoint.getSecret(), delivery.getPayload(),
+            delivery.getEventType().name(), delivery.getId().toString());
+    }
+
+    /** Runs inside a short transaction: the attempt was already counted by the claim. */
+    private boolean recordOutcome(UUID deliveryId, WebhookDeliveryTransport.Result result) {
+        WebhookDelivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
+        if (delivery == null) {
+            return false;
+        }
+        WebhookEndpoint endpoint = delivery.getEndpoint();
         delivery.setResponseStatus(result.httpStatus());
         if (result.success()) {
             delivery.setStatus(WebhookDeliveryStatus.SENT);
