@@ -3,6 +3,7 @@ package com.example.hms.service.pharmacy.partner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ public class PartnerResponseTimeoutScheduler {
 
     private final PartnerExchangeService exchangeService;
 
+    @SchedulerLock(name = "PartnerResponseTimeoutScheduler.runSweep", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${pharmacy.partner.scheduler.interval-ms:900000}",
                initialDelayString = "${pharmacy.partner.scheduler.initial-delay-ms:60000}")
     public void runSweep() {

@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.UncategorizedSQLException;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -99,6 +100,7 @@ public class KpiMaterializedViewRefreshScheduler {
      * property at startup; runtime changes require a restart, which
      * is the right granularity for matview cadence.
      */
+    @SchedulerLock(name = "KpiMaterializedViewRefreshScheduler.refreshAll", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
     @Scheduled(fixedRateString = "${app.analytics.kpi.materialized-views.refresh-interval-ms:300000}")
     public void refreshAll() {
         Instant started = Instant.now();

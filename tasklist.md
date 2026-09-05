@@ -1599,14 +1599,20 @@ that exists rather than inventing one.
   `Duration.between(LocalDateTime, LocalDateTime)`. This is one call about
   whether clinical timestamps move to `Instant`/`OffsetDateTime` on
   `BaseEntity`, not 21 edits. It resurfaces in every Sonar run until decided.
-- ShedLock / `@Version` on the remaining check-then-act races.
+- ~~ShedLock / `@Version` on the remaining check-then-act races.~~ V155 +
+  `@SchedulerLock` on all 20 DB-touching sweeps (`SchedulerLockCoverageTest`
+  keeps the per-instance evictors an explicit list); the reminder stamp is a
+  conditional UPDATE committed in its own transaction before sending
+  (`ReminderClaimService`); the lab/imaging escalations lock the shared service
+  method so the manual triggers contend for the same lock. Slot hold/book
+  had `@Version` since V128.
 - ~~Audit events on the write surfaces added since #431.~~ Closed by
   `WriteAuditInterceptor`: every successful POST/PUT/PATCH/DELETE by an
   authenticated user is recorded (DATA_CREATE/UPDATE/DELETE, entity from the
-  route, patient from `{patientId}`) unless the controller opts out with
+  route, patient from `{patientId}`, and the actor's assignment/hospital when
+  the request is hospital-scoped) unless the handler opts out with
   `@WriteAudited(skip = true, reason = …)` because its service already emits a
-  specific event. Still owed: the generic rows carry no assignment/hospital
-  snapshot beyond what the audit service derives from the actor.
+  specific event.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.

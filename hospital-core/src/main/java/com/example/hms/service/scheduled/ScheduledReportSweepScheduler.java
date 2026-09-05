@@ -4,6 +4,7 @@ import com.example.hms.service.reporting.ScheduledReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,7 @@ public class ScheduledReportSweepScheduler {
 
     private final ScheduledReportService scheduledReportService;
 
+    @SchedulerLock(name = "ScheduledReportSweepScheduler.runSweep", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
     @Scheduled(fixedDelayString = "${hms.reports.sweep-interval-ms:3600000}")
     public void runSweep() {
         try {

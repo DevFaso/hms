@@ -4,6 +4,7 @@ import com.example.hms.service.registry.CareGapTraceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class CareGapScheduler {
 
     // Zone pinned: a cron without one runs in the JVM's default zone, and
     // "05:30 UTC" in the docs would quietly mean 05:30 host-local.
+    @SchedulerLock(name = "CareGapScheduler.runSweep", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${hms.care-gaps.cron:0 30 5 * * *}", zone = "${hms.care-gaps.zone:UTC}")
     public void runSweep() {
         try {

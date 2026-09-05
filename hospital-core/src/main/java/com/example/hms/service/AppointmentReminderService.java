@@ -17,6 +17,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -54,6 +55,8 @@ public class AppointmentReminderService {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AppointmentRepository appointmentRepository;
+    private final ReminderClaimService reminderClaimService;
+    private final Clock clock;
     private final NotificationPreferenceRepository preferenceRepository;
     private final NotificationService notificationService;
     private final SmsService smsService;
@@ -77,9 +80,13 @@ public class AppointmentReminderService {
         NotificationService notificationService,
         SmsService smsService,
         MessageSource messageSource,
-        PatientLocaleResolver patientLocaleResolver
+        PatientLocaleResolver patientLocaleResolver,
+        ReminderClaimService reminderClaimService,
+        Clock clock
     ) {
         this.appointmentRepository = appointmentRepository;
+        this.reminderClaimService = reminderClaimService;
+        this.clock = clock;
         this.patientLocaleResolver = patientLocaleResolver;
         this.preferenceRepository = preferenceRepository;
         this.notificationService = notificationService;
@@ -90,37 +97,55 @@ public class AppointmentReminderService {
     /**
      * Send reminders for appointments starting within the lead window.
      * Per-appointment failures are logged and skipped; each appointment is
-     * stamped exactly once regardless of dispatch outcome.
+     * stamped exactly once regardless of dispatch outcome — the stamp is a
+     * conditional UPDATE committed in its own transaction before sending
+     * ({@link ReminderClaimService}), so that holds across two instances and
+     * across the sweep and its manual trigger, not just within one loop.
      *
      * @return number of appointments for which at least one channel fired
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public int sendDueReminders() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime windowEnd = now.plusHours(leadHours);
-
         List<Appointment> candidates = appointmentRepository.findAwaitingReminder(
             REMINDABLE_STATUSES, now.toLocalDate(), windowEnd.toLocalDate());
-
         int reminded = 0;
         for (Appointment appointment : candidates) {
-            try {
-                LocalDateTime startsAt = appointment.getAppointmentDate().atTime(appointment.getStartTime());
-                if (startsAt.isBefore(now) || startsAt.isAfter(windowEnd)) {
-                    continue; // outside the hour-precision window — picked up by a later tick
-                }
-                if (remind(appointment, startsAt)) {
-                    reminded++;
-                }
-                // Stamp even when both channels were skipped, so the sweep
-                // converges instead of re-evaluating the same row forever.
-                appointment.setReminderSentAt(LocalDateTime.now());
-                appointmentRepository.save(appointment);
-            } catch (RuntimeException ex) {
-                log.warn("Appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage(), ex);
+            if (remindIfClaimed(appointment, now, windowEnd)) {
+                reminded++;
             }
         }
         return reminded;
+    }
+
+    /**
+     * One candidate: inside the window, claim first (committed on its own —
+     * see {@link ReminderClaimService}), send second. The managed entity is
+     * left untouched: the sweep runs read-only, so nothing here can flush a
+     * stale full-row UPDATE over a concurrent cancellation or reschedule.
+     *
+     * @return true when at least one channel fired for this appointment
+     */
+    private boolean remindIfClaimed(Appointment appointment, LocalDateTime now, LocalDateTime windowEnd) {
+        try {
+            LocalDateTime startsAt = appointment.getAppointmentDate().atTime(appointment.getStartTime());
+            if (startsAt.isBefore(now) || startsAt.isAfter(windowEnd)) {
+                return false; // outside the hour-precision window — picked up by a later tick
+            }
+            // The conditional UPDATE is the only thing that decides who reminds
+            // this appointment: a second instance, or the manual trigger racing
+            // the sweep, reads the same candidate list but loses the claim and
+            // sends nothing. Claiming even when every channel is then skipped
+            // keeps the sweep converging.
+            if (!reminderClaimService.claim(appointment.getId(), LocalDateTime.now(clock))) {
+                return false; // somebody else already reminded (or is reminding) this one
+            }
+            return remind(appointment, startsAt);
+        } catch (RuntimeException ex) {
+            log.warn("Appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage(), ex);
+            return false;
+        }
     }
 
     /** @return true when at least one channel dispatched. */
