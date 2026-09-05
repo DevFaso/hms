@@ -2309,4 +2309,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V154: the audit columns V153 forgot. ProInstrumentItem/Option/Text
+         extend BaseEntity (created_at/updated_at) but V153 only gave those
+         columns to pro_instruments and pro_responses; ddl-auto=validate
+         refused to boot on dev. V153 is recorded, so it cannot be edited.
+         ADD COLUMN IF NOT EXISTS with DEFAULT now() (the V110 shape).
+         ================================================================= -->
+    <changeSet id="V154-pro-instrument-audit-columns" author="hms-team" runOnChange="false">
+        <sqlFile path="V154__pro_instrument_audit_columns.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

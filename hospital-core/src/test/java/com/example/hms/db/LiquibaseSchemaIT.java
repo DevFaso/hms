@@ -1,12 +1,27 @@
 package com.example.hms.db;
 
+import com.example.hms.security.crypto.TotpSecretEncryptor;
+import jakarta.persistence.Entity;
 import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import org.hibernate.SessionFactory;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy;
+import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.resource.beans.container.spi.BeanContainer;
+import org.hibernate.resource.beans.container.spi.ContainedBean;
+import org.hibernate.resource.beans.spi.BeanInstanceProducer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -15,6 +30,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -410,6 +427,101 @@ class LiquibaseSchemaIT {
                 }
             }).as("duplicate hospital-scoped code must be rejected by uq_mci_code_hospital")
                 .isInstanceOf(java.sql.SQLException.class);
+        }
+    }
+
+    /**
+     * The check production runs at boot, run here first: build a Hibernate
+     * SessionFactory over every {@code @Entity} with {@code hbm2ddl.auto=validate}
+     * against the Liquibase-built schema.
+     *
+     * <p>Why: every PostgreSQL profile validates, every test profile is
+     * create-drop — so a column an entity maps and a migration forgot has
+     * never been visible to the suite. V108 → V110, V116–V118 and V153 → V154
+     * (three PRO tables extending BaseEntity without created_at/updated_at)
+     * each took an environment down for exactly that. The other tests in this
+     * class prove the changelog applies; this one proves the model can live
+     * on what it built.
+     *
+     * <p>Naming strategies mirror Spring Boot's defaults so the column names
+     * Hibernate looks for are the ones the application looks for.
+     */
+    @Test
+    void entitiesValidateAgainstTheMigratedSchema() throws Exception {
+        runLiquibaseUpdate();
+
+        StandardServiceRegistry registry = new StandardServiceRegistryBuilder()
+            .applySetting(AvailableSettings.JAKARTA_JDBC_URL, POSTGRES.getJdbcUrl())
+            .applySetting(AvailableSettings.JAKARTA_JDBC_USER, POSTGRES.getUsername())
+            .applySetting(AvailableSettings.JAKARTA_JDBC_PASSWORD, POSTGRES.getPassword())
+            .applySetting(AvailableSettings.HBM2DDL_AUTO, "validate")
+            .applySetting(AvailableSettings.JDBC_TIME_ZONE, "UTC")
+            .applySetting(AvailableSettings.PHYSICAL_NAMING_STRATEGY,
+                CamelCaseToUnderscoresNamingStrategy.class.getName())
+            .applySetting(AvailableSettings.IMPLICIT_NAMING_STRATEGY,
+                SpringImplicitNamingStrategy.class.getName())
+            .applySetting(AvailableSettings.BEAN_CONTAINER, new ConverterBeanContainer())
+            .build();
+        try {
+            MetadataSources sources = new MetadataSources(registry);
+            List<Class<?>> entities = entityClasses();
+            assertThat(entities).as("entity scan found the model").hasSizeGreaterThan(200);
+            entities.forEach(sources::addAnnotatedClass);
+
+            assertThatCode(() -> {
+                try (SessionFactory ignored = sources.buildMetadata().buildSessionFactory()) {
+                    // Building it IS the validation: Hibernate compares every
+                    // mapped table and column to the live schema and throws
+                    // SchemaManagementException on the first gap.
+                }
+            }).as("every @Entity must map onto the Liquibase-built schema (ddl-auto=validate)")
+                .doesNotThrowAnyException();
+        } finally {
+            StandardServiceRegistryBuilder.destroy(registry);
+        }
+    }
+
+    private static List<Class<?>> entityClasses() throws ClassNotFoundException {
+        ClassPathScanningCandidateComponentProvider scanner =
+            new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
+        List<Class<?>> classes = new ArrayList<>();
+        for (BeanDefinition definition : scanner.findCandidateComponents("com.example.hms")) {
+            classes.add(Class.forName(definition.getBeanClassName()));
+        }
+        return classes;
+    }
+
+    /**
+     * Stands in for Spring's {@code SpringBeanContainer}. Outside Spring,
+     * Hibernate instantiates {@code @Convert} classes by reflection, and
+     * {@link TotpSecretEncryptor} is a {@code @Component} whose only
+     * constructor takes the {@code @Value} key. Validation never converts a
+     * value — it only needs the converter's type signature — so any key does.
+     * Everything else keeps Hibernate's no-arg fallback.
+     */
+    private static final class ConverterBeanContainer implements BeanContainer {
+        private static final String TEST_KEY = "00".repeat(32);
+
+        @Override
+        public <B> ContainedBean<B> getBean(Class<B> beanType, LifecycleOptions options,
+                                            BeanInstanceProducer fallback) {
+            if (beanType == TotpSecretEncryptor.class) {
+                B bean = beanType.cast(new TotpSecretEncryptor(TEST_KEY));
+                return () -> bean;
+            }
+            return () -> fallback.produceBeanInstance(beanType);
+        }
+
+        @Override
+        public <B> ContainedBean<B> getBean(String name, Class<B> beanType, LifecycleOptions options,
+                                            BeanInstanceProducer fallback) {
+            return getBean(beanType, options, fallback);
+        }
+
+        @Override
+        public void stop() {
+            // nothing held
         }
     }
 
