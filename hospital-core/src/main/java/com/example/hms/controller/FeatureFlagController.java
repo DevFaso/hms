@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.featureflag.FeatureFlagOverrideRequestDTO;
 import com.example.hms.service.FeatureFlagService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits CONFIGURATION_CHANGED per flag override")
 @RequestMapping("/feature-flags")
 @RequiredArgsConstructor
 @Tag(name = "Feature Flags", description = "Resolve effective feature flags with environment-aware overrides")

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.superadmin.EmergencyActionResponseDTO;
 import com.example.hms.payload.dto.superadmin.EmergencyBroadcastRequestDTO;
 import com.example.hms.payload.dto.superadmin.EmergencyForceLogoutRequestDTO;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * MVP-2 tenant lifecycle and MVP-4 impersonation start.
  */
 @RestController
+@WriteAudited(skip = true, reason = "service emits EMERGENCY_* SECURITY_ALERT_TRIGGERED rows")
 @RequestMapping("/super-admin/emergency")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Emergency Controls",

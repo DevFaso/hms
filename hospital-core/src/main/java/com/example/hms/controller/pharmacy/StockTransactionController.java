@@ -1,5 +1,6 @@
 package com.example.hms.controller.pharmacy;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.StockTransactionRequestDTO;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits STOCK_* events")
 @RequestMapping("/pharmacy/stock-transactions")
 @Tag(name = "Stock Transactions", description = "Record and query stock movements (adjustments, transfers, returns)")
 @RequiredArgsConstructor

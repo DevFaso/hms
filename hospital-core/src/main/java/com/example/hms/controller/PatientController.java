@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
@@ -215,6 +216,7 @@ public class PatientController {
     // ----------------------------------------------------------
     // Update
     // ----------------------------------------------------------
+    @WriteAudited(skip = true, reason = "service emits PATIENT_UPDATE / PATIENT_DELETE")
     @Operation(
         summary = "Update patient profile (staff only)",
         description = "Update a patient's profile. Receptionists are scoped to their hospital.",
@@ -240,6 +242,7 @@ public class PatientController {
         return ResponseEntity.ok(patientService.updatePatient(id, dto, locale));
     }
 
+    @WriteAudited(skip = true, reason = "service emits PATIENT_UPDATE / PATIENT_DELETE")
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> patchPatient(
@@ -256,6 +259,7 @@ public class PatientController {
     // ----------------------------------------------------------
     // Delete
     // ----------------------------------------------------------
+    @WriteAudited(skip = true, reason = "service emits PATIENT_UPDATE / PATIENT_DELETE")
     @Operation(
         summary = "Delete patient profile (admin only)",
         description = "Deletes a patient profile and corresponding user record.",
@@ -379,6 +383,7 @@ public class PatientController {
         return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, resolvedHospitalId));
     }
 
+    @WriteAudited(skip = true, reason = "a read under POST; the service records the access itself")
     @Operation(
         summary = "Doctor consolidated record view",
         description = "Provides a comprehensive patient record snapshot with sensitive data gating and audit logging.",
@@ -404,6 +409,7 @@ public class PatientController {
         return ResponseEntity.ok(response);
     }
 
+    @WriteAudited(skip = true, reason = "a read under POST; the service records the access itself")
     @Operation(
         summary = "Doctor timeline view",
         description = "Provides a longitudinal patient timeline with sensitive data gating and audit logging.",

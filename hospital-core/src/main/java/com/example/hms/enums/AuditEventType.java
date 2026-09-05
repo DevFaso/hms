@@ -76,6 +76,7 @@ public enum AuditEventType {
     // Data operations
     ACCESS,
     DATA_ACCESS,
+    DATA_CREATE,
     DATA_UPDATE,
     DATA_EXPORT,
     DATA_DELETE,

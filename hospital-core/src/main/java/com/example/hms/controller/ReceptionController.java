@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.payload.dto.CheckInRequestDTO;
 import com.example.hms.payload.dto.CheckInResponseDTO;
@@ -53,6 +54,7 @@ public class ReceptionController {
 
     // ── MVP 1: Patient Check-In ───────────────────────────────────────────────
 
+    @WriteAudited(skip = true, reason = "service emits its own check-in / encounter-status rows")
     @PostMapping("/check-in")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Check in a patient for their scheduled appointment. Creates an ARRIVED encounter.")
@@ -232,6 +234,7 @@ public class ReceptionController {
 
     // ── MVP 11: Flow board – encounter status update (drag-and-drop) ──────────
 
+    @WriteAudited(skip = true, reason = "service emits its own check-in / encounter-status rows")
     @PatchMapping("/encounters/{encounterId}/status")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Update encounter status (used by flow board drag-and-drop). Doctors/Nurses/Midwives may only update their own patients' encounters.")

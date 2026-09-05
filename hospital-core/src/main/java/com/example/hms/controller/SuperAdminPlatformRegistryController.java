@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.superadmin.PlatformRegistrySnapshotDTO;
 import com.example.hms.payload.dto.superadmin.PlatformReleaseWindowRequestDTO;
 import com.example.hms.payload.dto.superadmin.PlatformReleaseWindowResponseDTO;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@WriteAudited(skip = true, reason = "service emits PLATFORM_REGISTRY_UPDATED")
 @RequestMapping("/super-admin/platform")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Platform Registry", description = "Manage cross-tenant platform integrations and release automation")
