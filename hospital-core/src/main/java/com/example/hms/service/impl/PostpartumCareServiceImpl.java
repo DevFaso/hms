@@ -64,6 +64,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final PostpartumObservationMapper mapper;
+    /** Tier 2 item 47: the mental-health screen rides on the schedule. */
+    private final com.example.hms.service.pro.ProResponseService proResponseService;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -171,24 +173,28 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             observationRepository.findFirstByCarePlan_IdOrderByObservationTimeDesc(plan.getId()).orElse(null),
             plan
         );
+        PostpartumScheduleDTO schedule;
         if (response != null && response.getSchedule() != null) {
-            return response.getSchedule();
+            schedule = response.getSchedule();
+        } else {
+            boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
+            Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
+                ? null
+                : plan.getShiftFrequencyMinutes();
+            schedule = PostpartumScheduleDTO.builder()
+                .carePlanId(plan.getId())
+                .phase(plan.getActivePhase())
+                .immediateWindowComplete(plan.isImmediateWindowCompleted())
+                .immediateChecksCompleted(plan.getImmediateObservationsCompleted())
+                .immediateCheckTarget(plan.getImmediateObservationTarget())
+                .frequencyMinutes(frequency)
+                .nextDueAt(plan.getNextDueAt())
+                .overdueSince(plan.getOverdueSince())
+                .overdue(overdue)
+                .build();
         }
-        boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
-        Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
-            ? null
-            : plan.getShiftFrequencyMinutes();
-        return PostpartumScheduleDTO.builder()
-            .carePlanId(plan.getId())
-            .phase(plan.getActivePhase())
-            .immediateWindowComplete(plan.isImmediateWindowCompleted())
-            .immediateChecksCompleted(plan.getImmediateObservationsCompleted())
-            .immediateCheckTarget(plan.getImmediateObservationTarget())
-            .frequencyMinutes(frequency)
-            .nextDueAt(plan.getNextDueAt())
-            .overdueSince(plan.getOverdueSince())
-            .overdue(overdue)
-            .build();
+        schedule.setScreening(proResponseService.summaryForCarePlan(plan));
+        return schedule;
     }
 
     private PatientHospitalRegistration resolveRegistration(Patient patient, UUID registrationId, UUID hospitalId) {

@@ -135,6 +135,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final PatientRepository patientRepository;
     private final com.example.hms.service.PatientAddressHistoryRecorder addressHistoryRecorder;
     private final com.example.hms.service.roi.RoiRequestService roiRequestService;
+    private final com.example.hms.service.pro.ProResponseService proResponseService;
+    private final com.example.hms.service.pro.ProInstrumentService proInstrumentService;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
 
@@ -271,6 +273,33 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public java.util.List<com.example.hms.payload.dto.roi.RoiRequestResponseDTO> myRoiRequests(
             Authentication auth) {
         return roiRequestService.requestsForSelf(findPatient(auth));
+    }
+
+    // ── Standardized PRO screenings (Tier 2 item 47) ─────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.pro.ProSelfReportDTO myScreenings(Authentication auth) {
+        // The open postpartum plan picks the hospital, not the primary
+        // registration: the plan may live at a hospital the patient joined later.
+        return proResponseService.overviewForSelf(findPatient(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.pro.ProInstrumentViewDTO myScreeningInstrument(
+            Authentication auth, String code, String language) {
+        findPatient(auth);
+        return proInstrumentService.render(code, language);
+    }
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.pro.ProSelfReportDTO.Entry submitScreening(
+            Authentication auth, com.example.hms.payload.dto.pro.ProResponseCreateDTO dto) {
+        // The /me surface takes neither a hospital nor an administration time
+        // from the body; recordForSelf pins both (open plan, server clock).
+        return proResponseService.recordForSelf(findPatient(auth), dto);
     }
 
     // ── Health summary (aggregated) ──────────────────────────────────────

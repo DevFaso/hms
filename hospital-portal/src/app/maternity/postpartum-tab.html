@@ -57,6 +57,141 @@
       </div>
     }
 
+    <!-- ══ Mental-health screening (Tier 2 item 47) ══ -->
+    <div class="view-section action-form screening-card">
+      <div class="filter-bar">
+        <h3 class="section-heading">
+          {{ 'PRO.HEADING' | translate: { instrument: screeningCode() } }}
+        </h3>
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="openScreening($event)"
+          [disabled]="!screeningAvailable()"
+          [title]="screeningAvailable() ? '' : ('PRO.NOT_LOADED' | translate)"
+        >
+          <span class="material-symbols-outlined">psychology</span>
+          {{ 'PRO.ADMINISTER' | translate }}
+        </button>
+      </div>
+
+      @if (schedule()?.screening; as sc) {
+        @if (!sc.instrumentAvailable) {
+          <p class="muted">{{ 'PRO.NOT_LOADED' | translate }}</p>
+        } @else if (sc.due) {
+          <p>
+            <span class="risk-badge risk-moderate">{{ 'PRO.DUE' | translate }}</span>
+            @if (!sc.lastAdministeredAt) {
+              <span class="muted">{{ 'PRO.NEVER_SCREENED' | translate }}</span>
+            }
+          </p>
+        }
+        @if (sc.lastAdministeredAt) {
+          <p>
+            {{ 'PRO.LAST_SCREEN' | translate }}: {{ sc.lastAdministeredAt | date: 'short' }} ·
+            <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
+            @if (sc.lastCriticalItemPositive) {
+              <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
+            } @else if (sc.lastScreenPositive) {
+              <span class="risk-badge risk-moderate">{{ 'PRO.SCREEN_POSITIVE' | translate }}</span>
+            } @else {
+              <span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
+            }
+            @if (sc.escalationOpen) {
+              <span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
+            }
+          </p>
+        }
+      }
+
+      @if (screeningsLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>{{ 'COMMON.LOADING' | translate }}</p>
+        </div>
+      } @else if (screeningsError()) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">error</span>
+          <h3>{{ 'PRO.LOAD_ERROR' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="retryScreenings()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      } @else if (screenings().length === 0) {
+        <p class="muted">{{ 'PRO.NO_SCREENINGS' | translate }}</p>
+      } @else {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'POSTPARTUM.TIME' | translate }}</th>
+                <th scope="col">{{ 'PRO.SOURCE' | translate }}</th>
+                <th scope="col">{{ 'PRO.SCORE' | translate }}</th>
+                <th scope="col">{{ 'PRO.RESULT' | translate }}</th>
+                <th scope="col">{{ 'PRO.ACKNOWLEDGEMENT' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of screenings(); track r.id) {
+                <tr class="data-row" [class.screening-critical]="needsAcknowledgement(r)">
+                  <td>{{ r.administeredAt | date: 'short' }}</td>
+                  <td>{{ 'PRO.SOURCE_' + r.source | translate }}</td>
+                  <td>
+                    {{ r.totalScore }} / {{ r.maxScore }}
+                    @if (!r.complete) {
+                      <span class="muted">({{ r.answeredItems }}/{{ r.totalItems }})</span>
+                    }
+                  </td>
+                  <td>
+                    @if (r.criticalItemPositive) {
+                      <span class="risk-badge risk-high">{{
+                        'PRO.CRITICAL_ITEM' | translate
+                      }}</span>
+                    }
+                    @if (r.screenPositive) {
+                      <span class="risk-badge risk-moderate">
+                        {{ 'PRO.SCREEN_POSITIVE' | translate }}
+                      </span>
+                    } @else {
+                      <span class="risk-badge risk-low">{{
+                        'PRO.SCREEN_NEGATIVE' | translate
+                      }}</span>
+                    }
+                  </td>
+                  <td>
+                    @if (needsAcknowledgement(r)) {
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        (click)="openAcknowledge(r, $event)"
+                      >
+                        {{ 'PRO.ACKNOWLEDGE' | translate }}
+                      </button>
+                      @if (r.escalationLevel > 0) {
+                        <span class="muted">
+                          {{ 'PRO.ESCALATION_LEVEL' | translate: { level: r.escalationLevel } }}
+                        </span>
+                      }
+                    } @else if (r.acknowledgedAt) {
+                      {{ r.acknowledgedByDisplay || '—' }} ·
+                      {{ r.acknowledgedAt | date: 'short' }}
+                      @if (r.acknowledgementNote) {
+                        <span class="muted" [title]="r.acknowledgementNote">
+                          · {{ r.acknowledgementNote }}
+                        </span>
+                      }
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.OBSERVATIONS' | translate }}</h3>
       <button class="btn-primary" (click)="openObservation()">
@@ -600,6 +735,154 @@
         </button>
         <button class="btn-primary" [disabled]="assessmentSaving()" (click)="submitAssessment()">
           {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Screening modal (Tier 2 item 47) ══ -->
+@if (showScreeningModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeScreening()"
+    (keydown.escape)="closeScreening()"
+  >
+    <div
+      #screeningDialog
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pro-screening-title"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeScreening(); $event.stopPropagation()"
+      (keydown.tab)="trapTab($any($event), screeningDialog)"
+    >
+      <div class="modal-header">
+        <h2 id="pro-screening-title">{{ screeningInstrument()?.name || screeningCode() }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeScreening()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (screeningInstrumentLoading()) {
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>{{ 'COMMON.LOADING' | translate }}</p>
+          </div>
+        } @else if (screeningInstrumentError() || !screeningInstrument()) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">error</span>
+            <h3>{{ 'PRO.INSTRUMENT_LOAD_ERROR' | translate }}</h3>
+            <p class="muted">{{ 'PRO.NOT_LOADED' | translate }}</p>
+          </div>
+        } @else if (screeningInstrument(); as instrument) {
+          <div class="form-row">
+            <div class="field">
+              <label for="pro-time">{{ 'PRO.ADMINISTERED_AT' | translate }}</label>
+              <input id="pro-time" type="datetime-local" [(ngModel)]="screeningAdministeredAt" />
+            </div>
+            @if (instrument.availableLanguages.length > 1) {
+              <div class="field">
+                <label for="pro-language">{{ 'PRO.LANGUAGE' | translate }}</label>
+                <select
+                  id="pro-language"
+                  [ngModel]="screeningLanguage"
+                  (ngModelChange)="changeScreeningLanguage($event)"
+                >
+                  @for (lang of instrument.availableLanguages; track lang) {
+                    <option [value]="lang">{{ lang }}</option>
+                  }
+                </select>
+              </div>
+            }
+          </div>
+          <app-pro-instrument-form
+            idPrefix="pp-pro"
+            [instrument]="instrument"
+            [(answers)]="screeningAnswers"
+          />
+          <div class="field">
+            <label for="pro-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
+            <textarea id="pro-notes" rows="2" [(ngModel)]="screeningNotes"></textarea>
+          </div>
+          @if (instrument.sourceCitation) {
+            <p class="muted pro-citation">{{ instrument.sourceCitation }}</p>
+          }
+        }
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeScreening()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="screeningSaving() || !screeningInstrument()"
+          (click)="submitScreening()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Acknowledge modal (Tier 2 item 47) ══ -->
+@if (showAckModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAcknowledge()"
+    (keydown.escape)="closeAcknowledge()"
+  >
+    <div
+      #ackDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pro-ack-title"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeAcknowledge(); $event.stopPropagation()"
+      (keydown.tab)="trapTab($any($event), ackDialog)"
+    >
+      <div class="modal-header">
+        <h2 id="pro-ack-title">{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeAcknowledge()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>{{ 'PRO.ACKNOWLEDGE_HINT' | translate }}</p>
+        <div class="field">
+          <label for="pro-ack-note">{{ 'PRO.ACTION_TAKEN' | translate }}</label>
+          <textarea id="pro-ack-note" rows="3" [(ngModel)]="ackNote"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeAcknowledge()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="ackSaving()"
+          (click)="submitAcknowledge()"
+        >
+          {{ 'PRO.ACKNOWLEDGE' | translate }}
         </button>
       </div>
     </div>

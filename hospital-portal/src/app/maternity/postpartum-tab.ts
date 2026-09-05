@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, catchError, of, switchMap, tap } from 'rxjs';
 
 import {
   PostpartumService,
@@ -21,15 +31,34 @@ import {
 } from '../services/postpartum.service';
 import { PatientResponse } from '../services/patient.service';
 import { DeliveryRecordResponse, LaborService } from '../services/labor.service';
+import {
+  ProAnswers,
+  ProInstrumentView,
+  ProResponse,
+  ProScreeningService,
+} from '../services/pro-screening.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import {
+  ProInstrumentFormComponent,
+  unansweredItems,
+} from '../shared/pro-instrument-form/pro-instrument-form.component';
 import { nowLocalDatetime } from '../shared/date-utils';
+
+/** The instrument the postpartum module screens with when the plan does not say. */
+const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 
 @Component({
   selector: 'app-postpartum-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    ProInstrumentFormComponent,
+  ],
   templateUrl: './postpartum-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,6 +66,7 @@ import { nowLocalDatetime } from '../shared/date-utils';
 export class PostpartumTabComponent {
   private readonly postpartumService = inject(PostpartumService);
   private readonly laborService = inject(LaborService);
+  private readonly screeningService = inject(ProScreeningService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -145,11 +175,77 @@ export class PostpartumTabComponent {
   assessmentForm: NewbornAssessmentRequest = {};
   selectedFollowUps = new Set<NewbornFollowUpAction>();
 
+  /* ── Mental-health screening (Tier 2 item 47) ── */
+  screenings = signal<ProResponse[]>([]);
+  screeningsLoading = signal(false);
+  screeningsError = signal(false);
+  /** The instrument this plan screens with; the schedule says, else EPDS. */
+  screeningCode = computed(
+    () => this.schedule()?.screening?.instrumentCode ?? DEFAULT_SCREENING_INSTRUMENT,
+  );
+  /**
+   * Until the validated text is loaded (SUPER_ADMIN import), there is nothing
+   * to administer — the button stays off rather than opening an empty modal.
+   * An older schedule without the hook is treated as available so the modal
+   * can still explain itself.
+   */
+  screeningAvailable = computed(() => this.schedule()?.screening?.instrumentAvailable ?? true);
+
+  showScreeningModal = signal(false);
+  screeningInstrument = signal<ProInstrumentView | null>(null);
+  screeningInstrumentLoading = signal(false);
+  screeningInstrumentError = signal(false);
+  screeningAnswers = signal<ProAnswers>({});
+  screeningSaving = signal(false);
+  screeningLanguage = '';
+  screeningNotes = '';
+  screeningAdministeredAt = '';
+
+  showAckModal = signal(false);
+  ackTarget = signal<ProResponse | null>(null);
+  ackSaving = signal(false);
+  ackNote = '';
+
+  private readonly screeningDialog = viewChild<ElementRef<HTMLElement>>('screeningDialog');
+  private readonly ackDialog = viewChild<ElementRef<HTMLElement>>('ackDialog');
+  private dialogOpener: HTMLElement | null = null;
+
+  /**
+   * One pipeline for the instrument, keyed on language: switching languages
+   * mid-flight cancels the earlier request, so a slow first response can
+   * never land on top of the one the midwife actually asked for.
+   */
+  private readonly instrumentRequests = new Subject<string>();
+
+  constructor() {
+    this.instrumentRequests
+      .pipe(
+        tap(() => {
+          this.screeningInstrumentLoading.set(true);
+          this.screeningInstrumentError.set(false);
+        }),
+        switchMap((language) =>
+          this.screeningService
+            .instrument(this.screeningCode(), language || undefined)
+            .pipe(catchError(() => of(null))),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((view) => {
+        this.screeningInstrument.set(view);
+        this.screeningInstrumentLoading.set(false);
+        this.screeningInstrumentError.set(view === null);
+        // The server may have fallen back to English; show what was served.
+        if (view) this.screeningLanguage = view.language;
+      });
+  }
+
   onPatientPicked(p: PatientResponse | null): void {
     this.patient.set(p);
     this.schedule.set(null);
     this.observations.set([]);
     this.assessments.set([]);
+    this.screenings.set([]);
     if (p) this.load();
   }
 
@@ -160,10 +256,8 @@ export class PostpartumTabComponent {
   load(): void {
     const patient = this.patient();
     if (!patient) return;
-    this.postpartumService.schedule(patient.id).subscribe({
-      next: (schedule) => this.schedule.set(schedule),
-      error: () => this.schedule.set(null),
-    });
+    this.loadSchedule(patient.id);
+    this.loadScreenings(patient.id);
     // Mother and newborn sections track their own loading/error state — a
     // shared flag let the newborn list show "no assessments" while its
     // request was still in flight (or had silently failed).
@@ -194,6 +288,38 @@ export class PostpartumTabComponent {
       },
     });
     this.loadDeliveries(patient.id);
+  }
+
+  // Both loaders guard on the patient still being selected on EVERY path: a
+  // failed request for the previous patient must not blank the next one's
+  // schedule or flag their history as broken.
+  private loadSchedule(patientId: string): void {
+    this.postpartumService.schedule(patientId).subscribe({
+      next: (schedule) => {
+        if (this.patient()?.id === patientId) this.schedule.set(schedule);
+      },
+      error: () => {
+        if (this.patient()?.id === patientId) this.schedule.set(null);
+      },
+    });
+  }
+
+  private loadScreenings(patientId: string): void {
+    this.screeningsLoading.set(true);
+    this.screeningsError.set(false);
+    this.screeningService.history(patientId, this.screeningCode(), 20).subscribe({
+      next: (list) => {
+        if (this.patient()?.id !== patientId) return;
+        this.screenings.set(list ?? []);
+        this.screeningsLoading.set(false);
+      },
+      error: () => {
+        if (this.patient()?.id !== patientId) return;
+        this.screenings.set([]);
+        this.screeningsLoading.set(false);
+        this.screeningsError.set(true);
+      },
+    });
   }
 
   /**
@@ -335,5 +461,156 @@ export class PostpartumTabComponent {
   apgarSummary(a: NewbornAssessmentResponse): string {
     const parts = [a.apgarOneMinute, a.apgarFiveMinute, a.apgarTenMinute];
     return parts.map((v) => (v === null || v === undefined ? '—' : String(v))).join(' / ');
+  }
+
+  /* ── Mental-health screening ── */
+
+  retryScreenings(): void {
+    const patient = this.patient();
+    if (patient) this.loadScreenings(patient.id);
+  }
+
+  /** A safety-item answer nobody on the care team has yet signed off. */
+  needsAcknowledgement(r: ProResponse): boolean {
+    return r.criticalItemPositive && !r.acknowledgedAt;
+  }
+
+  openScreening(event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
+    this.screeningAnswers.set({});
+    this.screeningNotes = '';
+    this.screeningAdministeredAt = nowLocalDatetime();
+    this.screeningLanguage = this.translate.currentLang || '';
+    this.showScreeningModal.set(true);
+    this.instrumentRequests.next(this.screeningLanguage);
+    this.focusDialogSoon(() => this.screeningDialog()?.nativeElement);
+  }
+
+  closeScreening(): void {
+    this.showScreeningModal.set(false);
+    this.restoreOpenerFocus();
+  }
+
+  /**
+   * Same instrument, other loaded language. Answers survive the switch: the
+   * structure is identical in every language, so item 3 / option 2 means the
+   * same thing whichever wording the mother was read.
+   */
+  changeScreeningLanguage(language: string): void {
+    this.screeningLanguage = language;
+    this.instrumentRequests.next(language);
+  }
+
+  screeningUnanswered(): number[] {
+    const instrument = this.screeningInstrument();
+    return instrument ? unansweredItems(instrument, this.screeningAnswers()) : [];
+  }
+
+  submitScreening(): void {
+    const patient = this.patient();
+    const instrument = this.screeningInstrument();
+    if (!patient || !instrument) return;
+    // Every item or nothing: a partial EPDS has no validated cutoff, and the
+    // server would refuse it anyway — better to say which ones are missing.
+    const missing = this.screeningUnanswered();
+    if (missing.length > 0) {
+      this.toast.warning(this.translate.instant('PRO.INCOMPLETE', { items: missing.join(', ') }));
+      return;
+    }
+    this.screeningSaving.set(true);
+    this.screeningService
+      .record(patient.id, {
+        instrumentCode: instrument.code,
+        language: instrument.language,
+        answers: this.screeningAnswers(),
+        administeredAt: this.screeningAdministeredAt || undefined,
+        notes: this.screeningNotes.trim() || undefined,
+      })
+      .subscribe({
+        next: (created) => {
+          this.screeningSaving.set(false);
+          this.closeScreening();
+          this.screenings.update((list) => [created, ...list]);
+          this.loadSchedule(patient.id);
+          if (created.criticalItemPositive) {
+            this.toast.error(this.translate.instant('PRO.SAVED_CRITICAL'));
+          } else if (created.screenPositive) {
+            this.toast.warning(this.translate.instant('PRO.SAVED_POSITIVE'));
+          } else {
+            this.toast.success(this.translate.instant('PRO.SAVED'));
+          }
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('PRO.SAVE_ERROR'));
+          this.screeningSaving.set(false);
+        },
+      });
+  }
+
+  openAcknowledge(r: ProResponse, event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
+    this.ackTarget.set(r);
+    this.ackNote = '';
+    this.showAckModal.set(true);
+    this.focusDialogSoon(() => this.ackDialog()?.nativeElement);
+  }
+
+  closeAcknowledge(): void {
+    this.showAckModal.set(false);
+    this.ackTarget.set(null);
+    this.restoreOpenerFocus();
+  }
+
+  /* ── Dialog focus: move in on open, cycle on Tab, restore on close ── */
+
+  trapTab(event: KeyboardEvent, dialog: HTMLElement): void {
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute('disabled'));
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  private focusDialogSoon(resolve: () => HTMLElement | undefined): void {
+    // The dialog renders on the next change-detection pass.
+    setTimeout(() => resolve()?.focus(), 0);
+  }
+
+  private restoreOpenerFocus(): void {
+    this.dialogOpener?.focus();
+    this.dialogOpener = null;
+  }
+
+  submitAcknowledge(): void {
+    const patient = this.patient();
+    const target = this.ackTarget();
+    if (!patient || !target) return;
+    this.ackSaving.set(true);
+    this.screeningService.acknowledge(patient.id, target.id, this.ackNote).subscribe({
+      next: (updated) => {
+        this.ackSaving.set(false);
+        this.closeAcknowledge();
+        this.screenings.update((list) => list.map((r) => (r.id === updated.id ? updated : r)));
+        this.loadSchedule(patient.id);
+        this.toast.success(this.translate.instant('PRO.ACKNOWLEDGED'));
+      },
+      error: () => {
+        // "Already acknowledged by a colleague" and "reload and retry" are the
+        // usual refusals; both mean the row on screen is stale, so re-fetch.
+        this.toast.error(this.translate.instant('PRO.ACKNOWLEDGE_ERROR'));
+        this.ackSaving.set(false);
+        this.loadScreenings(patient.id);
+      },
+    });
   }
 }

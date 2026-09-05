@@ -1564,11 +1564,31 @@ that exists rather than inventing one.
   E-check-in with dynamic questionnaires covers BEFORE the visit; arrival at
   the desk has no self-service path. Verified zero code (`SelfCheckIn`,
   `Kiosk`).
-- [ ] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
+- [x] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
   entirely absent (no PHQ-9, no GAD-7 anywhere). The one that belongs in this
   product first is the **Edinburgh Postnatal Depression Scale** in the
   postpartum module, where there is already a care plan, an alert engine and a
   visit cadence to hang it on. PHQ-9/GAD-7 follow as generic instruments.
+  ✔ 2026-09-04 (V153): `clinical.pro_instruments / _items / _options /
+  _texts / pro_responses`. **The instrument is data, not code** — every
+  option carries its own score, `critical_item_no` marks the item that
+  escalates regardless of the total (EPDS item 10), and the engine only sums,
+  compares to `positive_threshold` and checks that item. **No instrument text
+  is seeded** (V120 rule): EPDS wording, option scores and cutoffs enter
+  through `PUT /pro-instruments/{code}` (SUPER_ADMIN, structural validation)
+  from the validated source, EN original + validated FR translation, with
+  attribution; until loaded, `GET /pro-instruments` hides the instrument and
+  the postpartum "Administer" button stays off. Responses stored (answers /
+  notes / ack note encrypted, scores plain for the trend); self-harm-positive
+  → notify recorder + panel owners on save, re-escalate by sweep until
+  acknowledged (`hms.pro.critical-escalation.*`, fallback role when no
+  recorder/panel resolves — patient self-report). Cadence hook on
+  `PostpartumScheduleDTO.screening` (due / last result / escalation open).
+  Portal: shared `<app-pro-instrument-form>` renderer (labels only, never a
+  score), postpartum-tab screening card + administer/acknowledge modals,
+  patient `/my-screenings` self-report — **deliberately score-free** for the
+  mother (she sees "care team alerted" / "follow-up planned", never a
+  number). Bambara/Dioula/Mooré texts need commissioned human translation.
 
 ## Standing platform debt — owed, not parity
 

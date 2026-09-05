@@ -71,6 +71,8 @@ class PostpartumCareServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private com.example.hms.service.pro.ProResponseService proResponseService;
 
     private PostpartumCareServiceImpl service;
     private UUID patientId;
@@ -90,7 +92,8 @@ class PostpartumCareServiceImplTest {
             staffRepository,
             userRepository,
             notificationService,
-            new PostpartumObservationMapper()
+            new PostpartumObservationMapper(),
+            proResponseService
         );
 
         patientId = UUID.randomUUID();

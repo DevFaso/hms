@@ -180,6 +180,11 @@ public enum AuditEventType {
     WEBHOOK_ENDPOINT_UPDATED,
     WEBHOOK_ENDPOINT_DISABLED,
 
+    // Standardized PROs (Tier 2 item 47)
+    PRO_INSTRUMENT_IMPORTED,
+    PRO_RESPONSE_RECORDED,
+    PRO_ALERT_ACKNOWLEDGED,
+
     OTHER
 }
 

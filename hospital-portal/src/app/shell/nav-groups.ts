@@ -167,6 +167,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/my-medications': 'MY_HEALTH',
   '/my-lab-results': 'MY_HEALTH',
   '/my-vitals': 'MY_HEALTH',
+  '/my-screenings': 'MY_HEALTH',
   '/my-medical-history': 'MY_HEALTH',
   '/my-education': 'MY_HEALTH',
 

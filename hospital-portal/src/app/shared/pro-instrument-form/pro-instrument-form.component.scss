@@ -1,0 +1,89 @@
+// Self-contained, like patient-picker: emulated encapsulation keeps page
+// styles out, and this form is rendered on both a staff modal and a patient
+// page whose stylesheets disagree about almost everything.
+
+:host {
+  display: block;
+}
+
+.pro-instruction {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.pro-progress {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.pro-item {
+  margin: 0 0 14px;
+  padding: 12px 14px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+
+  legend {
+    padding: 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.4;
+  }
+
+  &.pro-item-unanswered {
+    border-left: 3px solid #cbd5e1;
+  }
+}
+
+.pro-item-no {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+
+.pro-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pro-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  cursor: pointer;
+
+  &:hover {
+    background: #f1f5f9;
+  }
+
+  input[type='radio'] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #2563eb;
+  }
+
+  input[type='radio']:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  input[type='radio']:disabled + span {
+    color: #94a3b8;
+  }
+}
