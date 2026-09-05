@@ -177,6 +177,47 @@ describe('PostpartumTabComponent — screening', () => {
     expect(component.screeningLanguage).toBe('fr');
   });
 
+  it('a failed instrument load is an error state, not an empty modal', () => {
+    screeningSpy.instrument.and.returnValue(throwError(() => new Error('boom')));
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openScreening();
+    expect(component.screeningInstrumentError()).toBeTrue();
+    expect(component.screeningInstrumentLoading()).toBeFalse();
+    expect(component.screeningInstrument()).toBeNull();
+    // The pipeline survives the failure: the next request still goes out.
+    screeningSpy.instrument.and.returnValue(of(instrument));
+    component.changeScreeningLanguage('fr');
+    expect(component.screeningInstrumentError()).toBeFalse();
+    expect(component.screeningInstrument()?.code).toBe('EPDS');
+  });
+
+  it('a slow earlier language never lands on top of the one asked for last', () => {
+    const slowEnglish = new Subject<ProInstrumentView>();
+    screeningSpy.instrument.and.returnValue(slowEnglish);
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openScreening();
+    screeningSpy.instrument.and.returnValue(of({ ...instrument, language: 'fr' }));
+    component.changeScreeningLanguage('fr');
+    expect(component.screeningLanguage).toBe('fr');
+
+    slowEnglish.next({ ...instrument, language: 'en' });
+    slowEnglish.complete();
+    expect(component.screeningLanguage).toBe('fr');
+    expect(component.screeningInstrument()?.language).toBe('fr');
+  });
+
+  it('a failed schedule for the previous patient does not blank the next one', () => {
+    const slowFailure = new Subject<PostpartumSchedule>();
+    postpartumSpy.schedule.and.returnValue(slowFailure);
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    postpartumSpy.schedule.and.returnValue(of(schedule()));
+    component.onPatientPicked({ id: 'p2' } as PatientResponse);
+    expect(component.schedule()).not.toBeNull();
+
+    slowFailure.error(new Error('boom'));
+    expect(component.schedule()).not.toBeNull();
+  });
+
   it('refuses an incomplete screening and names the missing items', () => {
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
     component.openScreening();

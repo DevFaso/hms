@@ -81,12 +81,20 @@ public class ProScreeningEscalationService {
     /**
      * Write-time notification. Never propagates: the response is the record
      * and a notification failure must not roll it back — the sweep picks a
-     * critical row up anyway, because {@code notifiedAt} stays null.
+     * critical row up anyway, because it keys on {@code acknowledgedAt}.
+     *
+     * <p>{@code notifiedAt} is stamped only when at least one notification
+     * was created. It is what the patient reads as "your care team was
+     * alerted", so it must never be set on the strength of the answer
+     * alone: a hospital with no recorder, no panel and nobody in the
+     * fallback role gets a warning in the log, not a reassurance on the
+     * patient's phone.
      */
     public void notifyOnRecord(ProResponse response) {
         try {
+            Set<String> recipients;
             if (response.isCriticalItemPositive()) {
-                Set<String> recipients = recipients(response, 1);
+                recipients = recipients(response, 1);
                 String message = buildMessage(response, true, false);
                 for (String recipient : recipients) {
                     notificationService.createNotification(message, recipient, CRITICAL_TYPE);
@@ -97,15 +105,18 @@ public class ProScreeningEscalationService {
                         response.getId(), response.getHospital().getId());
                 }
             } else if (response.isScreenPositive()) {
+                recipients = recipients(response, 1);
                 String message = buildMessage(response, false, false);
-                for (String recipient : recipients(response, 1)) {
+                for (String recipient : recipients) {
                     notificationService.createNotification(message, recipient, SCREEN_POSITIVE_TYPE);
                 }
             } else {
                 return;
             }
-            response.setNotifiedAt(LocalDateTime.now());
-            responseRepository.save(response);
+            if (!recipients.isEmpty()) {
+                response.setNotifiedAt(LocalDateTime.now());
+                responseRepository.save(response);
+            }
         } catch (RuntimeException ex) {
             log.warn("PRO screening notification failed for response {}: {}",
                 response.getId(), ex.getMessage(), ex);
@@ -139,16 +150,22 @@ public class ProScreeningEscalationService {
     private void escalateOne(ProResponse response) {
         int round = response.getEscalationLevel() + 1;
         String message = buildMessage(response, true, true);
-        for (String recipient : recipients(response, round)) {
+        Set<String> recipients = recipients(response, round);
+        for (String recipient : recipients) {
             notificationService.createNotification(message, recipient, ESCALATION_TYPE);
         }
         // SMS once per round, not once per recipient (same reasoning as the lab chain).
         sendSmsBestEffort(response, message);
 
-        // Stamp even with no resolvable recipient so the interval advances
-        // and the sweep does not reconsider the row every pass.
+        // Stamp the round even with no resolvable recipient so the interval
+        // advances and the sweep does not reconsider the row every pass —
+        // but "somebody was told" only when somebody was.
+        LocalDateTime now = LocalDateTime.now();
         response.setEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
-        response.setLastEscalationAt(LocalDateTime.now());
+        response.setLastEscalationAt(now);
+        if (response.getNotifiedAt() == null && !recipients.isEmpty()) {
+            response.setNotifiedAt(now);
+        }
         responseRepository.save(response);
 
         if (round >= TIER_TWO_ROUND) {

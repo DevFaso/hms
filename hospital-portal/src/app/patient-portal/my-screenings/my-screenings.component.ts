@@ -1,7 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, catchError, of, switchMap, tap } from 'rxjs';
 
 import {
   ProAnswers,
@@ -57,6 +59,42 @@ export class MyScreeningsComponent implements OnInit {
   submitting = signal(false);
   language = '';
 
+  /**
+   * One pipeline for the instrument, keyed on (code, language): a language
+   * switch cancels the request before it, so a slow first answer can never
+   * overwrite the wording the mother chose. Cancelling clears the key so a
+   * late response for a closed form is dropped too.
+   */
+  private readonly instrumentRequests = new Subject<{ code: string; language: string } | null>();
+
+  constructor() {
+    this.instrumentRequests
+      .pipe(
+        tap((request) => {
+          this.instrumentLoading.set(request !== null);
+          this.instrumentFailed.set(false);
+        }),
+        switchMap((request) =>
+          request
+            ? this.screenings
+                .myInstrument(request.code, request.language || undefined)
+                .pipe(catchError(() => of('failed' as const)))
+            : of(null),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((view) => {
+        this.instrumentLoading.set(false);
+        if (view === 'failed') {
+          this.instrument.set(null);
+          this.instrumentFailed.set(true);
+          return;
+        }
+        this.instrument.set(view);
+        if (view) this.language = view.language;
+      });
+  }
+
   ngOnInit(): void {
     this.load();
   }
@@ -81,36 +119,19 @@ export class MyScreeningsComponent implements OnInit {
     this.active.set(instrument);
     this.answers.set({});
     this.language = this.translate.currentLang || '';
-    this.loadInstrument(instrument.code, this.language);
+    this.instrumentRequests.next({ code: instrument.code, language: this.language });
   }
 
   cancel(): void {
     this.active.set(null);
-    this.instrument.set(null);
+    this.instrumentRequests.next(null);
   }
 
   changeLanguage(language: string): void {
     const active = this.active();
     if (!active) return;
     this.language = language;
-    this.loadInstrument(active.code, language);
-  }
-
-  private loadInstrument(code: string, language: string): void {
-    this.instrumentLoading.set(true);
-    this.instrumentFailed.set(false);
-    this.screenings.myInstrument(code, language || undefined).subscribe({
-      next: (view) => {
-        this.instrument.set(view);
-        this.language = view.language;
-        this.instrumentLoading.set(false);
-      },
-      error: () => {
-        this.instrument.set(null);
-        this.instrumentFailed.set(true);
-        this.instrumentLoading.set(false);
-      },
-    });
+    this.instrumentRequests.next({ code: active.code, language });
   }
 
   unanswered(): number[] {

@@ -111,6 +111,11 @@ CREATE TABLE IF NOT EXISTS clinical.pro_responses (
     answers                   TEXT         NOT NULL,
     notes                     TEXT,
     total_score               INT          NOT NULL,
+    -- Snapshot of the definition the answers were scored against. A later
+    -- import may replace the instrument's items and option scores; the
+    -- denominator this response was read on must not move with it.
+    max_score                 INT          NOT NULL,
+    instrument_version        VARCHAR(40),
     answered_items            INT          NOT NULL,
     total_items               INT          NOT NULL,
     complete                  BOOLEAN      NOT NULL,
@@ -132,8 +137,12 @@ CREATE TABLE IF NOT EXISTS clinical.pro_responses (
     CONSTRAINT pk_pro_responses PRIMARY KEY (id),
     CONSTRAINT fk_pro_response_instrument FOREIGN KEY (instrument_id)
         REFERENCES clinical.pro_instruments(id),
+    -- A screening response is part of the clinical record and outlives
+    -- nothing: like every other chart table (labor episodes, delivery
+    -- records, transfusions), it blocks a hard delete of its patient
+    -- rather than vanishing with it or dangling without it.
     CONSTRAINT fk_pro_response_patient FOREIGN KEY (patient_id)
-        REFERENCES clinical.patients(id),
+        REFERENCES clinical.patients(id) ON DELETE RESTRICT,
     CONSTRAINT fk_pro_response_hospital FOREIGN KEY (hospital_id)
         REFERENCES hospital.hospitals(id),
     CONSTRAINT fk_pro_response_care_plan FOREIGN KEY (postpartum_care_plan_id)

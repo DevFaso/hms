@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -168,7 +169,7 @@ public class ProResponseService {
             builder.lastResponseId(last.getId())
                 .lastAdministeredAt(last.getAdministeredAt())
                 .lastTotalScore(last.getTotalScore())
-                .maxScore(last.getInstrument() != null ? last.getInstrument().getMaxScore() : null)
+                .maxScore(last.getMaxScore())
                 .lastScreenPositive(last.isScreenPositive())
                 .lastCriticalItemPositive(last.isCriticalItemPositive())
                 .escalationOpen(last.isEscalationOpen());
@@ -180,14 +181,17 @@ public class ProResponseService {
 
     /**
      * What the patient may answer and what they answered before. Eligible
-     * while a postpartum plan is open at the patient's hospital — that is
-     * the only context in which an unsolicited self-report has somebody
-     * on the other end.
+     * while a postpartum plan is open for the patient at any hospital they
+     * are registered with — that is the only context in which an
+     * unsolicited self-report has somebody on the other end. The plan
+     * picks the hospital, not the patient's primary one: a mother whose
+     * plan lives at the district hospital must not be told nothing is open
+     * because she first registered at the health post.
      */
     @Transactional(readOnly = true)
-    public ProSelfReportDTO overviewForSelf(Patient patient, UUID hospitalId) {
+    public ProSelfReportDTO overviewForSelf(Patient patient) {
         List<ProSelfReportDTO.Available> available = new ArrayList<>();
-        if (hospitalId != null && activePlan(patient, hospitalId) != null) {
+        if (openPlanForSelf(patient) != null) {
             for (ProInstrument instrument : instrumentService.listActive()) {
                 List<String> languages = instrumentService.languagesOf(instrument);
                 if (!languages.isEmpty()) {
@@ -207,14 +211,37 @@ public class ProResponseService {
         return ProSelfReportDTO.builder().available(available).history(history).build();
     }
 
+    /**
+     * The self-report contract: the hospital comes from the open plan and
+     * the administration time is the server's. A patient may not choose
+     * either — a backdated critical answer would sort beneath the "last
+     * result" the care team looks at, and the escalation clock would start
+     * in the past.
+     */
     @Transactional
-    public ProSelfReportDTO.Entry recordForSelf(Patient patient, UUID hospitalId, ProResponseCreateDTO request) {
-        if (hospitalId == null || activePlan(patient, hospitalId) == null) {
+    public ProSelfReportDTO.Entry recordForSelf(Patient patient, ProResponseCreateDTO request) {
+        PostpartumCarePlan plan = openPlanForSelf(patient);
+        if (plan == null) {
             throw new BusinessException(
                 "No screening is open for you right now. Your care team will invite you when one is due.");
         }
-        ProResponse response = persist(patient, hospitalId, request, ProResponseSource.PATIENT_REPORTED, null);
+        request.setHospitalId(null);
+        request.setAdministeredAt(null);
+        ProResponse response = persist(patient, plan.getHospital().getId(), request,
+            ProResponseSource.PATIENT_REPORTED, null);
         return mapper.toSelfEntry(response);
+    }
+
+    /**
+     * The patient's open postpartum plan, wherever it is: newest active
+     * plan at a hospital the patient is (still) registered with.
+     */
+    private PostpartumCarePlan openPlanForSelf(Patient patient) {
+        return carePlanRepository.findByPatient_IdAndActiveTrue(patient.getId()).stream()
+            .filter(p -> p.getHospital() != null && isRegistered(patient, p.getHospital().getId()))
+            .max(Comparator.comparing(PostpartumCarePlan::getCreatedAt,
+                Comparator.nullsFirst(Comparator.naturalOrder())))
+            .orElse(null);
     }
 
     // ── shared write path ─────────────────────────────────────────────
@@ -246,6 +273,8 @@ public class ProResponseService {
             .answers(mapper.answersToJson(request.getAnswers()))
             .notes(trimToNull(request.getNotes()))
             .totalScore(score.totalScore())
+            .maxScore(instrument.getMaxScore())
+            .instrumentVersion(instrument.getVersion())
             .answeredItems(score.answeredItems())
             .totalItems(score.totalItems())
             .complete(score.complete())
@@ -304,11 +333,13 @@ public class ProResponseService {
 
     /** Same not-found as a nonexistent patient: a foreign chart is not a chart. */
     private static void requireInTenant(Patient patient, UUID hospitalId) {
-        boolean registered = patient.isRegisteredInHospital(hospitalId)
-            || hospitalId.equals(patient.getHospitalId());
-        if (!registered) {
+        if (!isRegistered(patient, hospitalId)) {
             throw new ResourceNotFoundException(PATIENT_NOT_FOUND);
         }
+    }
+
+    private static boolean isRegistered(Patient patient, UUID hospitalId) {
+        return patient.isRegisteredInHospital(hospitalId) || hospitalId.equals(patient.getHospitalId());
     }
 
     private String currentDisplayName(UUID userId, UUID hospitalId) {

@@ -150,6 +150,11 @@ class ProResponseServiceTest {
             patientId, hospitalId)).thenReturn(Optional.empty());
     }
 
+    /** The /me surface resolves the plan across hospitals, not against a caller tenant. */
+    private void openPlanForSelf(PostpartumCarePlan... plans) {
+        when(carePlanRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(plans));
+    }
+
     private static ProResponseCreateDTO answers(Map<Integer, Integer> answers) {
         return ProResponseCreateDTO.builder().instrumentCode("EPDS").answers(answers).build();
     }
@@ -160,7 +165,8 @@ class ProResponseServiceTest {
             .source(ProResponseSource.STAFF_ADMINISTERED)
             .administeredAt(NOW.minusHours(1))
             .answers("{\"1\":2,\"2\":2}")
-            .totalScore(2).answeredItems(2).totalItems(2).complete(true)
+            .totalScore(2).maxScore(2).instrumentVersion("fixture-1")
+            .answeredItems(2).totalItems(2).complete(true)
             .screenPositive(true).criticalItemScore(critical ? 1 : 0).criticalItemPositive(critical)
             .build();
         r.setId(UUID.randomUUID());
@@ -480,13 +486,15 @@ class ProResponseServiceTest {
 
         @Test
         void overviewOffersInstrumentsOnlyWhileAPlanIsOpenAndNeverShowsAScore() {
-            openPlan();
+            openPlanForSelf(plan);
             when(instrumentService.listActive()).thenReturn(List.of(instrument));
             when(instrumentService.languagesOf(instrument)).thenReturn(List.of("en", "fr"));
+            ProResponse notified = stored(true, false);
+            notified.setNotifiedAt(NOW.minusMinutes(59));
             when(responseRepository.findByPatient_IdOrderByAdministeredAtDesc(eq(patientId), any(Pageable.class)))
-                .thenReturn(List.of(stored(true, false)));
+                .thenReturn(List.of(notified));
 
-            ProSelfReportDTO overview = service.overviewForSelf(patient, hospitalId);
+            ProSelfReportDTO overview = service.overviewForSelf(patient);
 
             assertThat(overview.getAvailable()).hasSize(1);
             assertThat(overview.getAvailable().get(0).getCode()).isEqualTo("EPDS");
@@ -498,12 +506,24 @@ class ProResponseServiceTest {
         }
 
         @Test
+        void careTeamAlertedIsAPromiseNotAnInferenceFromTheScore() {
+            openPlanForSelf();
+            // Critical answer, but nobody could be notified: the patient must not be told somebody was.
+            when(responseRepository.findByPatient_IdOrderByAdministeredAtDesc(eq(patientId), any(Pageable.class)))
+                .thenReturn(List.of(stored(true, false)));
+
+            ProSelfReportDTO overview = service.overviewForSelf(patient);
+
+            assertThat(overview.getHistory().get(0).isCareTeamAlerted()).isFalse();
+        }
+
+        @Test
         void overviewOffersNothingWithoutAnOpenPlanButStillShowsHistory() {
-            noPlan();
+            openPlanForSelf();
             when(responseRepository.findByPatient_IdOrderByAdministeredAtDesc(eq(patientId), any(Pageable.class)))
                 .thenReturn(List.of());
 
-            ProSelfReportDTO overview = service.overviewForSelf(patient, hospitalId);
+            ProSelfReportDTO overview = service.overviewForSelf(patient);
 
             assertThat(overview.getAvailable()).isEmpty();
             assertThat(overview.getHistory()).isEmpty();
@@ -512,9 +532,10 @@ class ProResponseServiceTest {
 
         @Test
         void selfReportIsRecordedAsPatientReportedWithNoRecorder() {
+            openPlanForSelf(plan);
             openPlan();
 
-            ProSelfReportDTO.Entry entry = service.recordForSelf(patient, hospitalId, answers(Map.of(1, 2, 2, 1)));
+            ProSelfReportDTO.Entry entry = service.recordForSelf(patient, answers(Map.of(1, 2, 2, 1)));
 
             assertThat(entry.getId()).isNotNull();
             assertThat(entry.isFollowUpPlanned()).isFalse();
@@ -523,19 +544,65 @@ class ProResponseServiceTest {
             assertThat(saved.getValue().getSource()).isEqualTo(ProResponseSource.PATIENT_REPORTED);
             assertThat(saved.getValue().getRecordedByUserId()).isNull();
             assertThat(saved.getValue().getCarePlan()).isSameAs(plan);
+            assertThat(saved.getValue().getHospital()).isSameAs(hospital);
+            assertThat(saved.getValue().getMaxScore()).isEqualTo(2);
             verify(escalationService).notifyOnRecord(saved.getValue());
         }
 
         @Test
-        void selfReportIsRefusedWithoutAnOpenPlan() {
-            noPlan();
+        void selfReportTakesNeitherAHospitalNorATimeFromThePatient() {
+            openPlanForSelf(plan);
+            openPlan();
+            ProResponseCreateDTO dto = answers(Map.of(1, 2, 2, 2));
+            dto.setHospitalId(UUID.randomUUID());
+            dto.setAdministeredAt(NOW.minusDays(3));
+
+            service.recordForSelf(patient, dto);
+
+            ArgumentCaptor<ProResponse> saved = ArgumentCaptor.forClass(ProResponse.class);
+            verify(responseRepository).saveAndFlush(saved.capture());
+            // The open plan picks the hospital; the server clock stamps the time.
+            assertThat(saved.getValue().getHospital()).isSameAs(hospital);
+            assertThat(saved.getValue().getAdministeredAt()).isEqualTo(NOW);
+        }
+
+        @Test
+        void thePlanPicksTheHospitalNotThePatientsPrimaryOne() {
+            // First registered at a health post; the postpartum plan lives at the district hospital.
+            patient.setHospitalId(UUID.randomUUID());
+            openPlanForSelf(plan);
+            openPlan();
+
+            service.recordForSelf(patient, answers(Map.of(1, 1, 2, 1)));
+
+            ArgumentCaptor<ProResponse> saved = ArgumentCaptor.forClass(ProResponse.class);
+            verify(responseRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getHospital()).isSameAs(hospital);
+        }
+
+        @Test
+        void aPlanAtAHospitalThePatientIsNotRegisteredWithDoesNotCount() {
+            Hospital elsewhere = new Hospital();
+            elsewhere.setId(UUID.randomUUID());
+            PostpartumCarePlan foreign = PostpartumCarePlan.builder().patient(patient).hospital(elsewhere).build();
+            foreign.setId(UUID.randomUUID());
+            openPlanForSelf(foreign);
             ProResponseCreateDTO dto = answers(Map.of(1, 1, 2, 1));
 
-            assertThatThrownBy(() -> service.recordForSelf(patient, hospitalId, dto))
+            assertThatThrownBy(() -> service.recordForSelf(patient, dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("No screening is open for you");
-            assertThatThrownBy(() -> service.recordForSelf(patient, null, dto))
-                .isInstanceOf(BusinessException.class);
+            verify(responseRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        void selfReportIsRefusedWithoutAnOpenPlan() {
+            openPlanForSelf();
+            ProResponseCreateDTO dto = answers(Map.of(1, 1, 2, 1));
+
+            assertThatThrownBy(() -> service.recordForSelf(patient, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No screening is open for you");
             verify(responseRepository, never()).saveAndFlush(any());
         }
     }

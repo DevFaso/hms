@@ -109,6 +109,17 @@ public class ProResponse extends BaseEntity {
     @Column(name = "total_score", nullable = false)
     private int totalScore;
 
+    /**
+     * Snapshot of the definition the answers were scored against. A later
+     * import may replace the instrument's items and option scores; the
+     * denominator this response is read on must not move with it.
+     */
+    @Column(name = "max_score", nullable = false)
+    private int maxScore;
+
+    @Column(name = "instrument_version", length = 40)
+    private String instrumentVersion;
+
     @Column(name = "answered_items", nullable = false)
     private int answeredItems;
 
@@ -129,7 +140,12 @@ public class ProResponse extends BaseEntity {
     @Builder.Default
     private boolean criticalItemPositive = false;
 
-    /** When the write-time notification went out (or was attempted). */
+    /**
+     * When the first notification actually reached somebody — at least one
+     * notification row was created for a resolvable recipient. Null means
+     * nobody has been told yet, whatever the answers say; the patient-facing
+     * "care team alerted" reads this, never the score.
+     */
     @Column(name = "notified_at")
     private LocalDateTime notifiedAt;
 

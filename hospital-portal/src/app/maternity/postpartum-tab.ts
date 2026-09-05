@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, catchError, of, switchMap, tap } from 'rxjs';
 
 import {
   PostpartumService,
@@ -196,6 +206,40 @@ export class PostpartumTabComponent {
   ackSaving = signal(false);
   ackNote = '';
 
+  private readonly screeningDialog = viewChild<ElementRef<HTMLElement>>('screeningDialog');
+  private readonly ackDialog = viewChild<ElementRef<HTMLElement>>('ackDialog');
+  private dialogOpener: HTMLElement | null = null;
+
+  /**
+   * One pipeline for the instrument, keyed on language: switching languages
+   * mid-flight cancels the earlier request, so a slow first response can
+   * never land on top of the one the midwife actually asked for.
+   */
+  private readonly instrumentRequests = new Subject<string>();
+
+  constructor() {
+    this.instrumentRequests
+      .pipe(
+        tap(() => {
+          this.screeningInstrumentLoading.set(true);
+          this.screeningInstrumentError.set(false);
+        }),
+        switchMap((language) =>
+          this.screeningService
+            .instrument(this.screeningCode(), language || undefined)
+            .pipe(catchError(() => of(null))),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((view) => {
+        this.screeningInstrument.set(view);
+        this.screeningInstrumentLoading.set(false);
+        this.screeningInstrumentError.set(view === null);
+        // The server may have fallen back to English; show what was served.
+        if (view) this.screeningLanguage = view.language;
+      });
+  }
+
   onPatientPicked(p: PatientResponse | null): void {
     this.patient.set(p);
     this.schedule.set(null);
@@ -246,12 +290,17 @@ export class PostpartumTabComponent {
     this.loadDeliveries(patient.id);
   }
 
+  // Both loaders guard on the patient still being selected on EVERY path: a
+  // failed request for the previous patient must not blank the next one's
+  // schedule or flag their history as broken.
   private loadSchedule(patientId: string): void {
     this.postpartumService.schedule(patientId).subscribe({
       next: (schedule) => {
         if (this.patient()?.id === patientId) this.schedule.set(schedule);
       },
-      error: () => this.schedule.set(null),
+      error: () => {
+        if (this.patient()?.id === patientId) this.schedule.set(null);
+      },
     });
   }
 
@@ -265,6 +314,7 @@ export class PostpartumTabComponent {
         this.screeningsLoading.set(false);
       },
       error: () => {
+        if (this.patient()?.id !== patientId) return;
         this.screenings.set([]);
         this.screeningsLoading.set(false);
         this.screeningsError.set(true);
@@ -425,17 +475,20 @@ export class PostpartumTabComponent {
     return r.criticalItemPositive && !r.acknowledgedAt;
   }
 
-  openScreening(): void {
+  openScreening(event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.screeningAnswers.set({});
     this.screeningNotes = '';
     this.screeningAdministeredAt = nowLocalDatetime();
     this.screeningLanguage = this.translate.currentLang || '';
     this.showScreeningModal.set(true);
-    this.loadScreeningInstrument(this.screeningLanguage);
+    this.instrumentRequests.next(this.screeningLanguage);
+    this.focusDialogSoon(() => this.screeningDialog()?.nativeElement);
   }
 
   closeScreening(): void {
     this.showScreeningModal.set(false);
+    this.restoreOpenerFocus();
   }
 
   /**
@@ -445,25 +498,7 @@ export class PostpartumTabComponent {
    */
   changeScreeningLanguage(language: string): void {
     this.screeningLanguage = language;
-    this.loadScreeningInstrument(language);
-  }
-
-  private loadScreeningInstrument(language: string): void {
-    this.screeningInstrumentLoading.set(true);
-    this.screeningInstrumentError.set(false);
-    this.screeningService.instrument(this.screeningCode(), language || undefined).subscribe({
-      next: (view) => {
-        this.screeningInstrument.set(view);
-        // The server may have fallen back to English; show what was served.
-        this.screeningLanguage = view.language;
-        this.screeningInstrumentLoading.set(false);
-      },
-      error: () => {
-        this.screeningInstrument.set(null);
-        this.screeningInstrumentLoading.set(false);
-        this.screeningInstrumentError.set(true);
-      },
-    });
+    this.instrumentRequests.next(language);
   }
 
   screeningUnanswered(): number[] {
@@ -512,15 +547,48 @@ export class PostpartumTabComponent {
       });
   }
 
-  openAcknowledge(r: ProResponse): void {
+  openAcknowledge(r: ProResponse, event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.ackTarget.set(r);
     this.ackNote = '';
     this.showAckModal.set(true);
+    this.focusDialogSoon(() => this.ackDialog()?.nativeElement);
   }
 
   closeAcknowledge(): void {
     this.showAckModal.set(false);
     this.ackTarget.set(null);
+    this.restoreOpenerFocus();
+  }
+
+  /* ── Dialog focus: move in on open, cycle on Tab, restore on close ── */
+
+  trapTab(event: KeyboardEvent, dialog: HTMLElement): void {
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute('disabled'));
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  private focusDialogSoon(resolve: () => HTMLElement | undefined): void {
+    // The dialog renders on the next change-detection pass.
+    setTimeout(() => resolve()?.focus(), 0);
+  }
+
+  private restoreOpenerFocus(): void {
+    this.dialogOpener?.focus();
+    this.dialogOpener = null;
   }
 
   submitAcknowledge(): void {

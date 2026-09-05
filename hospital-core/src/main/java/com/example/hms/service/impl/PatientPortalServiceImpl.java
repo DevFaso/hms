@@ -280,8 +280,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.pro.ProSelfReportDTO myScreenings(Authentication auth) {
-        Patient patient = findPatient(auth);
-        return proResponseService.overviewForSelf(patient, resolvePatientHospitalId(patient));
+        // The open postpartum plan picks the hospital, not the primary
+        // registration: the plan may live at a hospital the patient joined later.
+        return proResponseService.overviewForSelf(findPatient(auth));
     }
 
     @Override
@@ -296,11 +297,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public com.example.hms.payload.dto.pro.ProSelfReportDTO.Entry submitScreening(
             Authentication auth, com.example.hms.payload.dto.pro.ProResponseCreateDTO dto) {
-        Patient patient = findPatient(auth);
-        // The /me surface never takes a hospital from the body: the answers
-        // land at the hospital whose postpartum plan is open for the patient.
-        dto.setHospitalId(null);
-        return proResponseService.recordForSelf(patient, resolvePatientHospitalId(patient), dto);
+        // The /me surface takes neither a hospital nor an administration time
+        // from the body; recordForSelf pins both (open plan, server clock).
+        return proResponseService.recordForSelf(findPatient(auth), dto);
     }
 
     // ── Health summary (aggregated) ──────────────────────────────────────

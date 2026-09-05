@@ -64,8 +64,9 @@
           {{ 'PRO.HEADING' | translate: { instrument: screeningCode() } }}
         </h3>
         <button
+          type="button"
           class="btn-primary"
-          (click)="openScreening()"
+          (click)="openScreening($event)"
           [disabled]="!screeningAvailable()"
           [title]="screeningAvailable() ? '' : ('PRO.NOT_LOADED' | translate)"
         >
@@ -159,7 +160,11 @@
                   </td>
                   <td>
                     @if (needsAcknowledgement(r)) {
-                      <button type="button" class="btn-secondary" (click)="openAcknowledge(r)">
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        (click)="openAcknowledge(r, $event)"
+                      >
                         {{ 'PRO.ACKNOWLEDGE' | translate }}
                       </button>
                       @if (r.escalationLevel > 0) {
@@ -745,15 +750,18 @@
     (keydown.escape)="closeScreening()"
   >
     <div
+      #screeningDialog
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="pro-screening-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeScreening(); $event.stopPropagation()"
+      (keydown.tab)="trapTab($any($event), screeningDialog)"
     >
       <div class="modal-header">
-        <h2>{{ screeningInstrument()?.name || screeningCode() }}</h2>
+        <h2 id="pro-screening-title">{{ screeningInstrument()?.name || screeningCode() }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -836,15 +844,18 @@
     (keydown.escape)="closeAcknowledge()"
   >
     <div
+      #ackDialog
       class="modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="pro-ack-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAcknowledge(); $event.stopPropagation()"
+      (keydown.tab)="trapTab($any($event), ackDialog)"
     >
       <div class="modal-header">
-        <h2>{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}</h2>
+        <h2 id="pro-ack-title">{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

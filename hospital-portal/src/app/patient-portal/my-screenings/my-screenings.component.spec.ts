@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { MyScreeningsComponent } from './my-screenings.component';
 import {
   ProInstrumentView,
@@ -58,11 +58,12 @@ describe('MyScreeningsComponent', () => {
   });
 
   let report: () => Observable<ProSelfReport>;
+  let instrumentResult: () => Observable<ProInstrumentView>;
   let submitResult: () => Observable<ProSelfReportEntry>;
 
   const service = {
     myScreenings: jasmine.createSpy('myScreenings').and.callFake(() => report()),
-    myInstrument: jasmine.createSpy('myInstrument').and.callFake(() => of(instrument)),
+    myInstrument: jasmine.createSpy('myInstrument').and.callFake(() => instrumentResult()),
     submitMine: jasmine.createSpy('submitMine').and.callFake(() => submitResult()),
   };
 
@@ -74,6 +75,7 @@ describe('MyScreeningsComponent', () => {
 
   beforeEach(async () => {
     report = () => of({ available: [], history: [] });
+    instrumentResult = () => of(instrument);
     submitResult = () => of(entry({ id: 'new', followUpPlanned: true }));
     service.myScreenings.calls.reset();
     service.myInstrument.calls.reset();
@@ -132,6 +134,49 @@ describe('MyScreeningsComponent', () => {
     expect(component.instrument()?.code).toBe('TEST');
     expect(component.language).toBe('en');
     expect(fixture.nativeElement.querySelectorAll('fieldset.pro-item').length).toBe(2);
+  });
+
+  it('a failed instrument load is reported, and the next attempt still goes out', () => {
+    instrumentResult = () => throwError(() => new Error('boom'));
+    fixture.detectChanges();
+    component.start({ code: 'TEST', name: 'Test instrument', languages: ['en', 'fr'] });
+    expect(component.instrumentFailed()).toBeTrue();
+    expect(component.instrumentLoading()).toBeFalse();
+    expect(component.instrument()).toBeNull();
+
+    instrumentResult = () => of({ ...instrument, language: 'fr' });
+    component.changeLanguage('fr');
+    expect(component.instrumentFailed()).toBeFalse();
+    expect(component.instrument()?.language).toBe('fr');
+  });
+
+  it('a slow earlier language never overwrites the one chosen last', () => {
+    const slowEnglish = new Subject<ProInstrumentView>();
+    instrumentResult = () => slowEnglish;
+    fixture.detectChanges();
+    component.start({ code: 'TEST', name: 'Test instrument', languages: ['en', 'fr'] });
+    instrumentResult = () => of({ ...instrument, language: 'fr' });
+    component.changeLanguage('fr');
+    expect(component.language).toBe('fr');
+
+    slowEnglish.next({ ...instrument, language: 'en' });
+    slowEnglish.complete();
+    expect(component.language).toBe('fr');
+    expect(component.instrument()?.language).toBe('fr');
+  });
+
+  it('a late response for a cancelled form is dropped', () => {
+    const slow = new Subject<ProInstrumentView>();
+    instrumentResult = () => slow;
+    fixture.detectChanges();
+    component.start({ code: 'TEST', name: 'Test instrument', languages: ['en'] });
+    component.cancel();
+    expect(component.instrumentLoading()).toBeFalse();
+
+    slow.next(instrument);
+    slow.complete();
+    expect(component.instrument()).toBeNull();
+    expect(component.active()).toBeNull();
   });
 
   it('refuses to submit until every item is answered', () => {

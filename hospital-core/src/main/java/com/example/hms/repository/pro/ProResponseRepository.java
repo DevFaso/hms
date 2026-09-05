@@ -29,6 +29,9 @@ public interface ProResponseRepository extends JpaRepository<ProResponse, UUID> 
     Optional<ProResponse> findFirstByCarePlan_IdAndInstrument_CodeOrderByAdministeredAtDesc(
         UUID carePlanId, String instrumentCode);
 
+    /** Has anybody answered this instrument — the gate on re-scoring it in place. */
+    boolean existsByInstrument_Id(UUID instrumentId);
+
     /** Tenant-scoped read: a response from another hospital is a not-found, not a leak. */
     Optional<ProResponse> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 

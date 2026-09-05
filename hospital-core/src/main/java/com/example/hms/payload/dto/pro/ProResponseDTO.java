@@ -30,7 +30,9 @@ public class ProResponseDTO {
     private Map<Integer, Integer> answers;
     private String notes;
     private int totalScore;
+    /** The maximum of the definition this response was scored against, not today's. */
     private int maxScore;
+    private String instrumentVersion;
     private int answeredItems;
     private int totalItems;
     private boolean complete;

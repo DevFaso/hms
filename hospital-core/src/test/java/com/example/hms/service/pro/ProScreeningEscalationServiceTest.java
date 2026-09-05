@@ -169,6 +169,22 @@ class ProScreeningEscalationServiceTest {
         verify(notificationService).createNotification(anyString(), eq("midwife.b"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
         verify(userRepository, never()).findById(any());
+        assertThat(response.getNotifiedAt()).isNotNull();
+    }
+
+    @Test
+    void nobodyToTellMeansNobodyWasTold() {
+        // Self-report, no panel, no midwife on the roster: the patient must not read "care team alerted".
+        response.setCriticalItemPositive(true);
+        response.setRecordedByUserId(null);
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_MIDWIFE"))
+            .thenReturn(List.of());
+
+        service.notifyOnRecord(response);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(response.getNotifiedAt()).isNull();
+        verify(responseRepository, never()).save(any());
     }
 
     @Test
@@ -265,7 +281,28 @@ class ProScreeningEscalationServiceTest {
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(response.getEscalationLevel()).isEqualTo((short) 1);
         assertThat(response.getLastEscalationAt()).isNotNull();
+        // The interval advances; the promise to the patient does not.
+        assertThat(response.getNotifiedAt()).isNull();
         verify(responseRepository).save(response);
+    }
+
+    @Test
+    void aLaterRoundThatReachesSomebodyMakesThePromiseTrue() {
+        response.setCriticalItemPositive(true);
+        response.setRecordedByUserId(null);
+        response.setEscalationLevel((short) 1);
+        when(responseRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(response));
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_MIDWIFE"))
+            .thenReturn(List.of());
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
+            .thenReturn(List.of("admin.zongo"));
+
+        service.escalateOverdue();
+
+        verify(notificationService).createNotification(anyString(), eq("admin.zongo"),
+            eq(ProScreeningEscalationService.ESCALATION_TYPE));
+        assertThat(response.getNotifiedAt()).isNotNull();
     }
 
     @Test

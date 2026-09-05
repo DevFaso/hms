@@ -62,7 +62,8 @@ public class ProResponseMapper {
             .answers(answersFromJson(response.getAnswers()))
             .notes(response.getNotes())
             .totalScore(response.getTotalScore())
-            .maxScore(instrument != null ? instrument.getMaxScore() : 0)
+            .maxScore(response.getMaxScore())
+            .instrumentVersion(response.getInstrumentVersion())
             .answeredItems(response.getAnsweredItems())
             .totalItems(response.getTotalItems())
             .complete(response.isComplete())
@@ -84,7 +85,10 @@ public class ProResponseMapper {
             .instrumentName(instrument != null ? instrument.getName() : null)
             .administeredAt(response.getAdministeredAt())
             .followUpPlanned(response.isScreenPositive() || response.isCriticalItemPositive())
-            .careTeamAlerted(response.isCriticalItemPositive())
+            // A promise, not an inference: true only once a notification
+            // reached somebody. A critical answer nobody could be told about
+            // must not read as "your care team was alerted".
+            .careTeamAlerted(response.getNotifiedAt() != null)
             .build();
     }
 }

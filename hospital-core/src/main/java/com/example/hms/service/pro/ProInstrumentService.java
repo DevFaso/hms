@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.pro.ProInstrumentDefinitionDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.repository.pro.ProInstrumentRepository;
 import com.example.hms.repository.pro.ProInstrumentTextRepository;
+import com.example.hms.repository.pro.ProResponseRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
@@ -22,12 +23,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Instrument definitions (Tier 2 item 47): rendering one in a language, and
@@ -35,9 +38,17 @@ import java.util.Set;
  *
  * <p>Import replaces the instrument's items, options and texts wholesale
  * and is validated structurally — every item has options, every language
- * covers every item with one label per option, the critical item exists.
- * What it cannot validate is the content itself; that is why the caller is
- * SUPER_ADMIN only and the citation is mandatory.
+ * covers every item with one label per option, the critical item exists,
+ * the threshold is reachable. What it cannot validate is the content
+ * itself; that is why the caller is SUPER_ADMIN only and the citation is
+ * mandatory.
+ *
+ * <p>Once responses exist against an instrument, its scoring structure
+ * (items, option scores, threshold, critical item) may only change under a
+ * new {@code version}: every response snapshots the version and maximum it
+ * was scored against, so the trend keeps reading correctly, and a
+ * silently re-scored definition would make stored answers mean something
+ * else. Text-only changes — a corrected translation — pass freely.
  */
 @Slf4j
 @Service
@@ -48,6 +59,7 @@ public class ProInstrumentService {
 
     private final ProInstrumentRepository instrumentRepository;
     private final ProInstrumentTextRepository textRepository;
+    private final ProResponseRepository responseRepository;
     private final AuditEventLogService auditService;
     private final RoleValidator roleValidator;
 
@@ -83,7 +95,11 @@ public class ProInstrumentService {
      */
     @Transactional(readOnly = true)
     public ProInstrumentViewDTO render(String code, String language) {
-        ProInstrument instrument = requireActive(code);
+        return render(requireActive(code), language);
+    }
+
+    /** Render a loaded entity — active or not; the import renders what it just wrote. */
+    private ProInstrumentViewDTO render(ProInstrument instrument, String language) {
         List<String> available = textRepository.findLanguages(instrument.getId());
         if (available.isEmpty()) {
             throw new BusinessException("Instrument " + instrument.getCode() + " has no text loaded.");
@@ -132,6 +148,9 @@ public class ProInstrumentService {
         ProInstrument instrument = instrumentRepository.findByCode(code)
             .orElseGet(() -> ProInstrument.builder().code(code).build());
         boolean created = instrument.getId() == null;
+        if (!created) {
+            requireVersionBumpIfScoringChanged(instrument, definition);
+        }
 
         instrument.setName(definition.getName().trim());
         instrument.setVersion(trimToNull(definition.getVersion()));
@@ -182,7 +201,56 @@ public class ProInstrumentService {
         log.info("PRO instrument {} {} ({} items, {} languages)",
             saved.getCode(), created ? "created" : "replaced",
             definition.getItems().size(), definition.getTexts().size());
-        return render(saved.getCode(), DEFAULT_LANGUAGE);
+        return render(saved, DEFAULT_LANGUAGE);
+    }
+
+    /**
+     * A definition that re-scores an instrument somebody has already
+     * answered must carry a new version. Compares the scoring structure —
+     * item numbers, option scores in option order, threshold, critical
+     * item — and ignores names, citations and text.
+     */
+    private void requireVersionBumpIfScoringChanged(ProInstrument existing,
+                                                    ProInstrumentDefinitionDTO definition) {
+        if (scoringFingerprint(existing).equals(scoringFingerprint(definition))) {
+            return;
+        }
+        if (!responseRepository.existsByInstrument_Id(existing.getId())) {
+            return;
+        }
+        String current = existing.getVersion();
+        String proposed = trimToNull(definition.getVersion());
+        if (proposed == null || proposed.equals(current)) {
+            throw new BusinessException("Instrument " + existing.getCode() + " has recorded responses"
+                + " under version " + (current == null ? "(none)" : current)
+                + "; changing its items, option scores, threshold or critical item needs a new version.");
+        }
+    }
+
+    static String scoringFingerprint(ProInstrument instrument) {
+        Map<Integer, List<Integer>> items = new TreeMap<>();
+        for (ProInstrumentItem item : instrument.getItems()) {
+            items.put(item.getItemNo(), item.getOptions().stream()
+                .sorted(Comparator.comparingInt(ProInstrumentOption::getOptionNo))
+                .map(ProInstrumentOption::getScore)
+                .toList());
+        }
+        return fingerprint(items, instrument.getPositiveThreshold(), instrument.getCriticalItemNo());
+    }
+
+    static String scoringFingerprint(ProInstrumentDefinitionDTO definition) {
+        Map<Integer, List<Integer>> items = new TreeMap<>();
+        for (ProInstrumentDefinitionDTO.Item item : definition.getItems()) {
+            items.put(item.getItemNo(), item.getOptions().stream()
+                .sorted(Comparator.comparingInt(ProInstrumentDefinitionDTO.Option::getOptionNo))
+                .map(ProInstrumentDefinitionDTO.Option::getScore)
+                .toList());
+        }
+        return fingerprint(items, definition.getPositiveThreshold(), definition.getCriticalItemNo());
+    }
+
+    private static String fingerprint(Map<Integer, List<Integer>> items, Integer threshold, Integer critical) {
+        return items + "|threshold=" + threshold + "|critical=" + critical;
     }
 
     /**
@@ -208,6 +276,11 @@ public class ProInstrumentService {
                         + " options must be numbered 1.." + item.getOptions().size() + " without gaps.");
                 }
             }
+        }
+        int maxScore = maxScoreOf(definition);
+        if (definition.getPositiveThreshold() != null && definition.getPositiveThreshold() > maxScore) {
+            throw new BusinessException("Positive threshold " + definition.getPositiveThreshold()
+                + " exceeds the instrument's maximum score " + maxScore + "; it could never screen positive.");
         }
         Integer critical = definition.getCriticalItemNo();
         if (critical != null && !optionCounts.containsKey(critical)) {

@@ -19,6 +19,7 @@ import com.example.hms.payload.dto.pro.ProInstrumentDefinitionDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.repository.pro.ProInstrumentRepository;
 import com.example.hms.repository.pro.ProInstrumentTextRepository;
+import com.example.hms.repository.pro.ProResponseRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ class ProInstrumentServiceTest {
 
     @Mock private ProInstrumentRepository instrumentRepository;
     @Mock private ProInstrumentTextRepository textRepository;
+    @Mock private ProResponseRepository responseRepository;
     @Mock private AuditEventLogService auditService;
     @Mock private RoleValidator roleValidator;
 
@@ -163,6 +165,19 @@ class ProInstrumentServiceTest {
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("numbered 1..3 without gaps");
+        }
+
+        @Test
+        void rejectsAThresholdTheInstrumentCanNeverReach() {
+            ProInstrumentDefinitionDTO def = definition();
+            def.setPositiveThreshold(6);
+
+            assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Positive threshold 6 exceeds the instrument's maximum score 5");
+            // The maximum itself is reachable: a perfect score screens positive.
+            def.setPositiveThreshold(5);
+            ProInstrumentService.validateStructure(def);
         }
 
         @Test
@@ -340,17 +355,19 @@ class ProInstrumentServiceTest {
                 stored.set(saved);
                 return saved;
             });
-            // The import ends by rendering what it wrote.
-            when(instrumentRepository.findByCodeAndActiveTrue("TEST"))
-                .thenAnswer(inv -> Optional.ofNullable(stored.get()));
             lenient().when(textRepository.findLanguages(any())).thenReturn(List.of("en", "fr"));
             lenient().when(textRepository.findByInstrument_IdAndLanguage(any(), any())).thenReturn(List.of());
 
-            service.importDefinition(definition());
+            ProInstrumentViewDTO view = service.importDefinition(definition());
 
+            // The import ends by rendering what it wrote — the entity in hand, not a re-lookup.
+            assertThat(view.getCode()).isEqualTo("TEST");
+            assertThat(view.getMaxScore()).isEqualTo(5);
+            verify(instrumentRepository, org.mockito.Mockito.never()).findByCodeAndActiveTrue(any());
             ArgumentCaptor<ProInstrument> captor = ArgumentCaptor.forClass(ProInstrument.class);
             verify(instrumentRepository).saveAndFlush(captor.capture());
             ProInstrument saved = captor.getValue();
+            assertThat(saved).isSameAs(stored.get());
             assertThat(saved.getCode()).isEqualTo("TEST");
             assertThat(saved.getMaxScore()).isEqualTo(2 + 3);
             assertThat(saved.getPositiveThreshold()).isEqualTo(3);
@@ -377,7 +394,8 @@ class ProInstrumentServiceTest {
             ProInstrument existing = storedInstrument();
             existing.getTexts().add(text(existing, "en", 1, 0, "Old prompt"));
             when(instrumentRepository.findByCode("TEST")).thenReturn(Optional.of(existing));
-            when(instrumentRepository.findByCodeAndActiveTrue("TEST")).thenReturn(Optional.of(existing));
+            // Nobody has answered it yet: the structure may change freely.
+            when(responseRepository.existsByInstrument_Id(existing.getId())).thenReturn(false);
             when(instrumentRepository.saveAndFlush(existing)).thenReturn(existing);
             lenient().when(textRepository.findLanguages(any())).thenReturn(List.of("en"));
             lenient().when(textRepository.findByInstrument_IdAndLanguage(any(), any())).thenReturn(List.of());
@@ -392,6 +410,95 @@ class ProInstrumentServiceTest {
             ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
             verify(auditService).logEvent(audit.capture());
             assertThat(audit.getValue().getEventDescription()).isEqualTo("PRO instrument replaced TEST");
+        }
+
+        @Test
+        void anInactiveDefinitionImportsAndRendersAllTheSame() {
+            when(instrumentRepository.findByCode("TEST")).thenReturn(Optional.empty());
+            when(instrumentRepository.saveAndFlush(any(ProInstrument.class))).thenAnswer(inv -> {
+                ProInstrument saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                return saved;
+            });
+            lenient().when(textRepository.findLanguages(any())).thenReturn(List.of("en"));
+            lenient().when(textRepository.findByInstrument_IdAndLanguage(any(), any())).thenReturn(List.of());
+            ProInstrumentDefinitionDTO def = definition();
+            def.setActive(false);
+
+            ProInstrumentViewDTO view = service.importDefinition(def);
+
+            // Staging an instrument before switching it on is a supported path, not a 404.
+            assertThat(view.getCode()).isEqualTo("TEST");
+            ArgumentCaptor<ProInstrument> captor = ArgumentCaptor.forClass(ProInstrument.class);
+            verify(instrumentRepository).saveAndFlush(captor.capture());
+            assertThat(captor.getValue().isActive()).isFalse();
+        }
+
+        @Test
+        void reScoringAnAnsweredInstrumentNeedsANewVersion() {
+            ProInstrument existing = storedInstrument();
+            existing.setVersion("1");
+            when(instrumentRepository.findByCode("TEST")).thenReturn(Optional.of(existing));
+            when(responseRepository.existsByInstrument_Id(existing.getId())).thenReturn(true);
+            // definition() has 4 options on item 2 where the stored instrument has 2, under the same version.
+            ProInstrumentDefinitionDTO sameVersion = definition();
+
+            assertThatThrownBy(() -> service.importDefinition(sameVersion))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("has recorded responses under version 1")
+                .hasMessageContaining("needs a new version");
+            ProInstrumentDefinitionDTO noVersion = definition();
+            noVersion.setVersion("  ");
+            assertThatThrownBy(() -> service.importDefinition(noVersion))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("needs a new version");
+            verify(instrumentRepository, org.mockito.Mockito.never()).saveAndFlush(any());
+            // Stored rows are untouched by a refused import.
+            assertThat(existing.getItems().get(1).getOptions()).hasSize(2);
+        }
+
+        @Test
+        void reScoringAnAnsweredInstrumentPassesUnderANewVersion() {
+            ProInstrument existing = storedInstrument();
+            existing.setVersion("1");
+            when(instrumentRepository.findByCode("TEST")).thenReturn(Optional.of(existing));
+            when(responseRepository.existsByInstrument_Id(existing.getId())).thenReturn(true);
+            when(instrumentRepository.saveAndFlush(existing)).thenReturn(existing);
+            lenient().when(textRepository.findLanguages(any())).thenReturn(List.of("en"));
+            lenient().when(textRepository.findByInstrument_IdAndLanguage(any(), any())).thenReturn(List.of());
+            ProInstrumentDefinitionDTO bumped = definition();
+            bumped.setVersion("2");
+
+            service.importDefinition(bumped);
+
+            assertThat(existing.getVersion()).isEqualTo("2");
+            assertThat(existing.getItems().get(1).getOptions()).hasSize(4);
+        }
+
+        @Test
+        void aTextOnlyChangeToAnAnsweredInstrumentPassesWithoutAVersionBump() {
+            ProInstrument existing = storedInstrument();
+            existing.setVersion("1");
+            when(instrumentRepository.findByCode("TEST")).thenReturn(Optional.of(existing));
+            when(instrumentRepository.saveAndFlush(existing)).thenReturn(existing);
+            lenient().when(textRepository.findLanguages(any())).thenReturn(List.of("en"));
+            lenient().when(textRepository.findByInstrument_IdAndLanguage(any(), any())).thenReturn(List.of());
+            // Same items, option scores, threshold and critical item as storedInstrument(); a corrected label.
+            ProInstrumentDefinitionDTO corrected = ProInstrumentDefinitionDTO.builder()
+                .code("test").name("Test instrument (corrected)").version("1")
+                .sourceCitation("Fixture (not a real instrument)")
+                .positiveThreshold(3).criticalItemNo(2)
+                .items(new ArrayList<>(List.of(item(1, 0, 1, 2), item(2, 1, 0))))
+                .texts(new ArrayList<>(List.of(translation("en", "Instruction",
+                    itemText(1, "Item one?", "never", "sometimes", "often"),
+                    itemText(2, "Item two?", "yes", "no")))))
+                .build();
+
+            service.importDefinition(corrected);
+
+            // The gate is never even consulted: nothing about the scoring moved.
+            verify(responseRepository, org.mockito.Mockito.never()).existsByInstrument_Id(any());
+            assertThat(existing.getName()).isEqualTo("Test instrument (corrected)");
         }
 
         @Test
