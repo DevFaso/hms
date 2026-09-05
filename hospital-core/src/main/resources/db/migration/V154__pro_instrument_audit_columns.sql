@@ -13,14 +13,10 @@
 -- file). This is the V110 shape: ADD COLUMN IF NOT EXISTS, a no-op on any
 -- database that somehow already has the columns.
 --
--- Nothing in the suite could see this: H2 builds its tables FROM the
--- entities, and LiquibaseSchemaIT only applied the changelog. The same
--- change adds an entity-vs-migrated-schema validation to that IT.
---
 -- Rollback:
---   ALTER TABLE clinical.pro_instrument_texts   DROP COLUMN created_at, DROP COLUMN updated_at;
---   ALTER TABLE clinical.pro_instrument_options DROP COLUMN created_at, DROP COLUMN updated_at;
 --   ALTER TABLE clinical.pro_instrument_items   DROP COLUMN created_at, DROP COLUMN updated_at;
+--   ALTER TABLE clinical.pro_instrument_options DROP COLUMN created_at, DROP COLUMN updated_at;
+--   ALTER TABLE clinical.pro_instrument_texts   DROP COLUMN created_at, DROP COLUMN updated_at;
 -- =============================================================================
 
 ALTER TABLE clinical.pro_instrument_items
