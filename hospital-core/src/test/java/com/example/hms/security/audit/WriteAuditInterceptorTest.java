@@ -279,7 +279,7 @@ class WriteAuditInterceptorTest {
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(hospital);
         assignment.setRole(role);
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+        when(assignmentRepository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
             .thenReturn(Optional.of(assignment));
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
@@ -291,6 +291,29 @@ class WriteAuditInterceptorTest {
         assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
         assertThat(row.getHospitalName()).isEqualTo("Hospital A");
         assertThat(row.getRoleName()).isEqualTo("ROLE_MIDWIFE");
+        // afterCompletion runs with no persistence context: the plain finder hands
+        // back a lazy hospital proxy that dies on getName() (dev, 2026-09-05).
+        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("a failed assignment lookup degrades to an unanchored row instead of losing the write")
+    void aFailedAssignmentLookupStillRecordsTheWrite() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+            .thenThrow(new IllegalStateException("database away"));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
+
+        interceptor.afterCompletion(request("POST", "/labor/episodes", Map.of()), ok(201),
+            handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getUserId()).isEqualTo(NURSE);
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.DATA_CREATE);
+        assertThat(row.getAssignmentId()).isNull();
+        assertThat(row.getHospitalName()).isNull();
     }
 
     @Test
@@ -301,7 +324,7 @@ class WriteAuditInterceptorTest {
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isNull();
         assertThat(row.getHospitalName()).isNull();
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
+        verify(assignmentRepository, never()).findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }

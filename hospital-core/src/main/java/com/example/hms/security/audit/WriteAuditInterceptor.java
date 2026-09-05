@@ -11,6 +11,7 @@ import com.example.hms.service.AuditEventLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -155,8 +156,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             .userId(actorId)
             .userName(auth.getName())
             .assignmentId(assignment != null ? assignment.getId() : null)
-            .hospitalName(assignment != null && assignment.getHospital() != null
-                ? assignment.getHospital().getName() : null)
+            .hospitalName(hospitalNameOf(assignment))
             .roleName(assignment != null && assignment.getRole() != null
                 ? assignment.getRole().getName() : primaryRole(auth))
             .ipAddress(request.getRemoteAddr())
@@ -216,13 +216,36 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * it). Null for a super-admin in global view or an actor with no
      * assignment there — the row is then global, which is the truth.
      */
+    /**
+     * The actor's active assignment at the request's hospital, with hospital and
+     * role already loaded: this runs in {@code afterCompletion}, after the
+     * request's persistence context is gone, so a lazy {@code hospital} proxy
+     * would throw {@code LazyInitializationException} on {@code getName()} and
+     * take the whole row with it (dev, 2026-09-05). A lookup that fails anyway
+     * degrades to an unanchored row: the actor and the action still land.
+     */
     private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
         UserRoleHospitalAssignmentRepository repository = assignmentRepositoryProvider.getIfAvailable();
         if (hospitalId == null || repository == null) {
             return null;
         }
-        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
+        try {
+            return repository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
+                .orElse(null);
+        } catch (RuntimeException lookupFailure) {
+            log.warn("[WRITE-AUDIT] Assignment lookup failed for actor {} at hospital {}; recording the row unanchored: {}",
+                actorId, hospitalId, lookupFailure.getMessage(), lookupFailure);
+            return null;
+        }
+    }
+
+    /** Null unless the hospital is actually loaded: a dead proxy must not cost the row. */
+    private static String hospitalNameOf(UserRoleHospitalAssignment assignment) {
+        if (assignment == null || assignment.getHospital() == null || !Hibernate.isInitialized(assignment.getHospital())) {
+            return null;
+        }
+        return assignment.getHospital().getName();
     }
 
     static AuditEventType eventTypeFor(String method) {

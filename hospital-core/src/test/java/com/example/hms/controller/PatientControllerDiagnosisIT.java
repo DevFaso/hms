@@ -29,6 +29,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
@@ -105,6 +106,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	private UserRoleHospitalAssignmentRepository assignmentRepository;
 
 	@Autowired
+	private AuditEventLogRepository auditEventLogRepository;
+
+	@Autowired
 	private StaffRepository staffRepository;
 
 	@Autowired
@@ -127,6 +131,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 
 	@BeforeEach
 	void setUp() {
+		// Hospital-scoped writes are now audited with the actor's assignment id
+		// (fk_audit_assignment): clear the audit rows before the rows they point at.
+		auditEventLogRepository.deleteAll();
 		patientProblemHistoryRepository.deleteAll();
 		patientProblemRepository.deleteAll();
 		registrationRepository.deleteAll();
