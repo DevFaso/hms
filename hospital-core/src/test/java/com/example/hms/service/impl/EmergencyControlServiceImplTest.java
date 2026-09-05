@@ -22,6 +22,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import org.mockito.ArgumentCaptor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -135,6 +137,15 @@ class EmergencyControlServiceImplTest {
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("mfa_required");
         verify(revocationService, never()).revokeAll(any(), any(), any());
+
+        // The rejection itself is audited — a missing code on a platform-wide
+        // control must leave a trace (it left none before 2026-09-05).
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.MFA_FAILURE);
+        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(audit.getValue().getEventDescription())
+            .contains("force-logout-all").contains("REJECTED").contains("no X-Mfa-Token supplied");
     }
 
     @Test
@@ -146,6 +157,12 @@ class EmergencyControlServiceImplTest {
 
         assertThatThrownBy(() -> service.forceLogoutAll(req, "bad"))
             .isInstanceOf(UnauthorizedException.class);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(audit.getValue().getEventDescription()).contains("X-Mfa-Token did not verify");
+        verify(revocationService, never()).revokeAll(any(), any(), any());
     }
 
     @Test

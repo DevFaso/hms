@@ -76,7 +76,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
 
     @Override
     public MtmReviewResponseDTO startReview(MtmReviewRequestDTO dto) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId = requireHospital();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
             throw new BusinessException("Review hospital does not match the active hospital context");
         }
@@ -124,7 +124,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
 
     @Override
     public MtmReviewResponseDTO updateReview(UUID id, MtmReviewRequestDTO dto) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId = requireHospital();
         MtmReview existing = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
         if (existing.getHospital() == null || !activeHospitalId.equals(existing.getHospital().getId())) {
@@ -166,7 +166,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     @Override
     @Transactional(readOnly = true)
     public MtmReviewResponseDTO getReview(UUID id) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId = requireHospital();
         MtmReview existing = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
         if (existing.getHospital() == null || !activeHospitalId.equals(existing.getHospital().getId())) {
@@ -175,10 +175,28 @@ public class MtmReviewServiceImpl implements MtmReviewService {
         return mapper.toResponseDTO(existing);
     }
 
+    /**
+     * A super-admin in global view has no active hospital, and
+     * {@code requireActiveHospitalId()} says so by returning null. Every
+     * MTM surface is per-facility, so that case is a 400 telling the caller
+     * to pick a hospital — the same answer transfusions and cultures give —
+     * not the NullPointerException the {@code active.equals(...)} checks
+     * used to throw (500 on /mtm-reviews from the super-admin dashboard,
+     * 2026-09-05).
+     */
+    private UUID requireHospital() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(
+                "An active hospital is required: MTM reviews belong to a facility. Select a hospital first.");
+        }
+        return hospitalId;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<MtmReviewResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
-        UUID active = roleValidator.requireActiveHospitalId();
+        UUID active = requireHospital();
         if (!active.equals(hospitalId)) {
             throw new BusinessException("Hospital ID does not match the active hospital context");
         }
@@ -188,7 +206,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     @Override
     @Transactional(readOnly = true)
     public Page<MtmReviewResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
-        UUID active = roleValidator.requireActiveHospitalId();
+        UUID active = requireHospital();
         return reviewRepository.findByPatient_IdAndHospital_Id(patientId, active, pageable)
                 .map(mapper::toResponseDTO);
     }

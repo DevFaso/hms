@@ -110,6 +110,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * {@link UnauthorizedException} carries {@code @ResponseStatus(UNAUTHORIZED)},
+     * but a {@code @ResponseStatus} only applies when no handler claims the
+     * exception — and {@link #handleRuntimeException} claims every
+     * {@code RuntimeException}. So a rejected MFA step-up on the emergency
+     * controls, impersonation start or tenant lifecycle came back as a 500
+     * reading "An unexpected error occurred: mfa_required: …", logged as an
+     * unhandled exception, and shown to the super-admin as a server fault
+     * rather than "your code was wrong". Found 2026-09-05 testing the
+     * emergency controls on dev.
+     */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
+        log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+    }
+
+    /**
      * Constraint violations from the database.
      *
      * <p>The driver's message is logged in full and <b>not</b> returned. It

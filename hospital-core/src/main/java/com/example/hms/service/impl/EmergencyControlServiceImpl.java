@@ -239,6 +239,13 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         }
         if (enrolled) {
             if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
+                // A rejected step-up on an emergency control is exactly what a
+                // security review wants to see: a wrong code here is either a
+                // typo or someone guessing at a platform-wide kill switch. The
+                // audit service writes in REQUIRES_NEW, so the row survives the
+                // rollback the exception below triggers.
+                auditStepUpRejected(actorId, action, mfaToken == null || mfaToken.isBlank()
+                    ? "no X-Mfa-Token supplied" : "X-Mfa-Token did not verify");
                 throw new UnauthorizedException(
                     "mfa_required: invalid or missing X-Mfa-Token for emergency " + action);
             }
@@ -260,6 +267,20 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
                 .build());
         } catch (RuntimeException ex) {
             log.error("[EMERGENCY] Failed to audit MFA-bypass event", ex);
+        }
+    }
+
+    private void auditStepUpRejected(UUID actorId, String action, String why) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actorId)
+                .userName(SecurityUtils.getCurrentUsername())
+                .eventType(AuditEventType.MFA_FAILURE)
+                .eventDescription("Emergency " + action + " REJECTED: MFA step-up failed (" + why + ").")
+                .status(AuditStatus.FAILURE)
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("[EMERGENCY] Failed to audit rejected MFA step-up for {}", action, ex);
         }
     }
 

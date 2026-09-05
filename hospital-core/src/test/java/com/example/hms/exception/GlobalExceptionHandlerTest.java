@@ -324,4 +324,37 @@ class GlobalExceptionHandlerTest {
                 .contains("already registered");
         }
     }
+
+    // =========================================================================
+    // handleUnauthorized — a rejected MFA step-up is a 401, not a 500
+    // =========================================================================
+    @Nested
+    @DisplayName("handleUnauthorized")
+    class HandleUnauthorized {
+
+        @Test
+        @DisplayName("returns 401 with the exception message, not the RuntimeException 500")
+        void returns401WithMessage() {
+            UnauthorizedException ex = new UnauthorizedException(
+                "mfa_required: invalid or missing X-Mfa-Token for emergency broadcast");
+            ResponseEntity<Object> response = handler.handleUnauthorized(ex, request);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull()
+                .containsEntry("status", 401)
+                .containsEntry("message", "mfa_required: invalid or missing X-Mfa-Token for emergency broadcast");
+        }
+
+        @Test
+        @DisplayName("is declared for UnauthorizedException so Spring routes it here before the RuntimeException catch-all")
+        void isRegisteredForUnauthorizedException() throws NoSuchMethodException {
+            var handlerMethod = GlobalExceptionHandler.class.getMethod(
+                "handleUnauthorized", UnauthorizedException.class, WebRequest.class);
+            var annotation = handlerMethod.getAnnotation(
+                org.springframework.web.bind.annotation.ExceptionHandler.class);
+            assertThat(annotation).isNotNull();
+            assertThat(annotation.value()).containsExactly(UnauthorizedException.class);
+        }
+    }
 }
