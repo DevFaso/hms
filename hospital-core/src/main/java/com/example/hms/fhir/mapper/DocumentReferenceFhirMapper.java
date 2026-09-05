@@ -57,7 +57,19 @@ public class DocumentReferenceFhirMapper {
     private final String publicBaseUrl;
 
     public DocumentReferenceFhirMapper(@Value("${app.public-base-url:}") String publicBaseUrl) {
-        this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.replaceAll("/+$", "");
+        this.publicBaseUrl = stripTrailingSlashes(publicBaseUrl);
+    }
+
+    /** Plain loop rather than {@code replaceAll("/+$", "")}: no backtracking on a long value (Sonar S8786). */
+    private static String stripTrailingSlashes(String value) {
+        if (value == null) {
+            return "";
+        }
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '/') {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     public DocumentReference toFhir(PatientUploadedDocument src) {

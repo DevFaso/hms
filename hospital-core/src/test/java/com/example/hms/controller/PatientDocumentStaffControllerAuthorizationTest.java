@@ -5,6 +5,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.access.prepost.PreAuthorize;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -15,17 +20,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PatientDocumentStaffControllerAuthorizationTest {
 
+    /** The quoted role names inside {@code hasAnyAuthority('…','…')}. */
+    private static Set<String> grantedRoles() {
+        Matcher matcher = Pattern.compile("'([A-Z_]+)'").matcher(PatientDocumentStaffController.READ_ROLES);
+        Set<String> roles = new HashSet<>();
+        while (matcher.find()) {
+            roles.add(matcher.group(1));
+        }
+        return roles;
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
         "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"})
     void chartRolesMayRead(String role) {
-        assertThat(PatientDocumentStaffController.READ_ROLES).contains("'" + role + "'");
+        Set<String> granted = grantedRoles();
+        assertThat(granted).contains(role);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT"})
     void otherRolesMayNot(String role) {
-        assertThat(PatientDocumentStaffController.READ_ROLES).doesNotContain("'" + role + "'");
+        Set<String> granted = grantedRoles();
+        assertThat(granted).doesNotContain(role);
     }
 
     @Test

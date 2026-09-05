@@ -372,7 +372,8 @@ class PatientDocumentServiceImplTest {
         @Test
         @DisplayName("no active hospital (super-admin global view) is a 400 naming the fix, not an NPE")
         void noHospitalIsABusinessException() {
-            assertThatThrownBy(() -> service.listForPatient(null, patientId, null, PageRequest.of(0, 20)))
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(null, patientId, null, pageable))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("active hospital is required");
             assertThatThrownBy(() -> service.downloadForPatient(null, patientId, docId))
@@ -386,7 +387,8 @@ class PatientDocumentServiceImplTest {
             when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, PageRequest.of(0, 20)))
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, pageable))
                     .isInstanceOf(ResourceNotFoundException.class);
             assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
                     .isInstanceOf(ResourceNotFoundException.class);
