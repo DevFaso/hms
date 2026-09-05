@@ -176,6 +176,19 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void escalateOverdueUnderLockRunsTheSameSweepAndBoxesTheCount() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(result));
+
+        Integer escalated = service.escalateOverdueUnderLock();
+
+        assertThat(escalated).isEqualTo(1);
+        verify(labResultRepository).save(result);
+    }
+
+    @Test
     void escalateOverdueNotifiesAndStampsOnce() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));

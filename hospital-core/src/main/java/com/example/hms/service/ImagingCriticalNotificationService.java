@@ -140,14 +140,6 @@ public class ImagingCriticalNotificationService {
     }
 
     /**
-     * Escalate critical findings still unacknowledged past the configured delay.
-     *
-     * <p>Per-report failures are logged and skipped so one bad row never stalls
-     * the sweep.
-     *
-     * @return number of reports escalated on this pass
-     */
-    /**
      * The locked entry point for BOTH the scheduled sweep and the manual
      * endpoint. ShedLock (proxy-method mode) cannot lock a method that returns
      * a primitive — it has nothing to return when another run holds the lock
@@ -162,11 +154,24 @@ public class ImagingCriticalNotificationService {
     @SchedulerLock(name = "ImagingCriticalNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Transactional
     public Integer escalateOverdueUnderLock() {
-        return escalateOverdue();
+        return escalateOverdueInternal();
     }
 
+    /**
+     * Escalate critical findings still unacknowledged past the configured delay.
+     *
+     * <p>Per-report failures are logged and skipped so one bad row never stalls
+     * the sweep.
+     *
+     * @return number of reports escalated on this pass
+     */
     @Transactional
     public int escalateOverdue() {
+        return escalateOverdueInternal();
+    }
+
+    /** Shared body of the two public entry points; private, so neither call is a transactional self-invocation. */
+    private int escalateOverdueInternal() {
         LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<ImagingReport> overdue = imagingReportRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;

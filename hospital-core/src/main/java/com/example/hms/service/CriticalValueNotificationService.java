@@ -129,15 +129,6 @@ public class CriticalValueNotificationService {
     }
 
     /**
-     * Escalate critical results still unresolved past the configured delay.
-     *
-     * <p>Repeats on the interval rather than firing once, and widens the
-     * audience as rounds pass. Per-result failures are logged and skipped so one
-     * bad row never stalls the sweep.
-     *
-     * @return number of results escalated on this pass
-     */
-    /**
      * The locked entry point for BOTH the scheduled sweep and the manual
      * endpoint. ShedLock (proxy-method mode) cannot lock a method that returns
      * a primitive — it has nothing to return when another run holds the lock
@@ -152,11 +143,25 @@ public class CriticalValueNotificationService {
     @SchedulerLock(name = "CriticalValueNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     @Transactional
     public Integer escalateOverdueUnderLock() {
-        return escalateOverdue();
+        return escalateOverdueInternal();
     }
 
+    /**
+     * Escalate critical results still unresolved past the configured delay.
+     *
+     * <p>Repeats on the interval rather than firing once, and widens the
+     * audience as rounds pass. Per-result failures are logged and skipped so one
+     * bad row never stalls the sweep.
+     *
+     * @return number of results escalated on this pass
+     */
     @Transactional
     public int escalateOverdue() {
+        return escalateOverdueInternal();
+    }
+
+    /** Shared body of the two public entry points; private, so neither call is a transactional self-invocation. */
+    private int escalateOverdueInternal() {
         LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;

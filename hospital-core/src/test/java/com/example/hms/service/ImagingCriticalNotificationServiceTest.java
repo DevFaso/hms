@@ -332,6 +332,18 @@ class ImagingCriticalNotificationServiceTest {
     }
 
     @Test
+    void escalateOverdueUnderLockRunsTheSameSweepAndBoxesTheCount() {
+        ImagingReport report = flagged();
+        report.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        when(imagingReportRepository.findCriticalAwaitingEscalation(any())).thenReturn(List.of(report));
+
+        Integer escalated = service.escalateOverdueUnderLock();
+
+        assertThat(escalated).isEqualTo(1);
+        assertThat(report.getCriticalEscalatedAt()).isNotNull();
+    }
+
+    @Test
     void escalationStampsEvenWithNobodyToNotifySoTheIntervalAdvances() {
         ImagingReport report = flagged();
         report.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
