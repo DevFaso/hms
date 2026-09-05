@@ -1,0 +1,103 @@
+<div class="documents-container">
+  <div class="section-toolbar">
+    <h3>{{ 'PATIENT_DOCUMENTS.TITLE' | translate }}</h3>
+    <label class="filter">
+      <span class="sr-only">{{ 'PATIENT_DOCUMENTS.FILTER_TYPE' | translate }}</span>
+      <select
+        [ngModel]="typeFilter()"
+        (ngModelChange)="onFilterChange($event)"
+        [attr.aria-label]="'PATIENT_DOCUMENTS.FILTER_TYPE' | translate"
+      >
+        <option value="">{{ 'PATIENT_DOCUMENTS.FILTER_ALL' | translate }}</option>
+        @for (t of typeOptions; track t.value) {
+          <option [value]="t.value">{{ t.labelKey | translate }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <p class="hint">{{ 'PATIENT_DOCUMENTS.HINT' | translate }}</p>
+
+  @if (loading()) {
+    <div class="loading-state" role="status">
+      <div class="spinner"></div>
+      <span class="sr-only">{{ 'PATIENT_DOCUMENTS.LOADING' | translate }}</span>
+    </div>
+  } @else if (error()) {
+    <div class="error-state" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <div>
+        <strong>{{ 'PATIENT_DOCUMENTS.LOAD_FAILED' | translate }}</strong>
+        <p>{{ error() }}</p>
+      </div>
+      <button type="button" class="btn-secondary btn-sm" (click)="load()">
+        {{ 'PATIENT_DOCUMENTS.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (documents().length === 0) {
+    <p class="empty-hint">
+      @if (typeFilter()) {
+        {{ 'PATIENT_DOCUMENTS.NO_DOCUMENTS_OF_TYPE' | translate }}
+      } @else {
+        {{ 'PATIENT_DOCUMENTS.NO_DOCUMENTS' | translate }}
+      }
+    </p>
+  } @else {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PATIENT_DOCUMENTS.COL_DOCUMENT' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_DOCUMENTS.COL_TYPE' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_DOCUMENTS.COL_COLLECTED' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_DOCUMENTS.COL_UPLOADED' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_DOCUMENTS.COL_SIZE' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (doc of documents(); track doc.id) {
+            <tr>
+              <td>
+                <strong class="doc-name">{{ doc.displayName }}</strong>
+                @if (doc.notes) {
+                  <p class="doc-notes">{{ doc.notes }}</p>
+                }
+              </td>
+              <td>
+                <span class="type-chip">{{ typeLabelKey(doc.documentType) | translate }}</span>
+              </td>
+              <td>{{ doc.collectionDate ? (doc.collectionDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{ doc.createdAt | date: 'medium' }}
+                @if (doc.uploadedByDisplayName) {
+                  <span class="muted">
+                    · {{ 'PATIENT_DOCUMENTS.BY' | translate }} {{ doc.uploadedByDisplayName }}
+                  </span>
+                }
+              </td>
+              <td>{{ formatSize(doc.fileSizeBytes) ?? '—' }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="btn-primary btn-sm"
+                  (click)="download(doc)"
+                  [disabled]="downloading() !== null"
+                  [attr.aria-busy]="downloading() === doc.id"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                  {{
+                    (downloading() === doc.id
+                      ? 'PATIENT_DOCUMENTS.DOWNLOADING'
+                      : 'PATIENT_DOCUMENTS.DOWNLOAD'
+                    ) | translate
+                  }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

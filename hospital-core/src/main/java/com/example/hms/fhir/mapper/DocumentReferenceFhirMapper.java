@@ -11,6 +11,7 @@ import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.Enumerations;
 import org.hl7.fhir.r4.model.Reference;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -22,16 +23,16 @@ import java.util.Date;
  * Maps the two document domains onto FHIR R4 {@code DocumentReference}
  * (Tier 2 item 44):
  * <ul>
- *   <li>{@code upl-{uuid}} — a {@link PatientUploadedDocument}: METADATA
- *       ONLY. The server-side {@code filePath} is never exposed; the stored
- *       {@code fileUrl} is not mapped either — historical rows carry dead
- *       {@code /uploads} paths from when that tree was served permitAll, and
- *       the only live download route ({@code /me/patient/documents/...}) is
- *       the patient's own portal surface, which a staff/FHIR caller cannot
- *       use. A staff-authorized binary endpoint is a follow-up; until it
- *       exists, no URL beats a 404 or a resurrected unauthenticated PHI
- *       path. The SHA-256 checksum is also deliberately not mapped — R4
- *       defines {@code attachment.hash} as a <em>SHA-1</em> digest.</li>
+ *   <li>{@code upl-{uuid}} — a {@link PatientUploadedDocument}: metadata
+ *       plus {@code attachment.url} pointing at the staff download route
+ *       ({@code /api/patients/{patientId}/documents/{id}/download}), which
+ *       is bearer-authenticated and scoped to a hospital the patient is
+ *       registered at — the same gate this resource is served under. The
+ *       server-side {@code filePath} is never exposed, and the stored
+ *       {@code fileUrl} column is not mapped either: historical rows carry
+ *       dead {@code /uploads} paths from when that tree was served
+ *       permitAll. The SHA-256 checksum is also deliberately not mapped —
+ *       R4 defines {@code attachment.hash} as a <em>SHA-1</em> digest.</li>
  *   <li>{@code discharge-{uuid}} — a {@link DischargeSummary}: the composed
  *       narrative rides inline as a {@code text/plain} attachment, with
  *       {@code docStatus} carrying the draft/final lifecycle.</li>
@@ -45,6 +46,19 @@ public class DocumentReferenceFhirMapper {
     private static final String LOCAL_DOC_TYPE = "urn:hms:patient-document-type";
     private static final String PATIENT_REF = "Patient/";
     private static final String DISCHARGE_SUMMARY_DISPLAY = "Discharge summary";
+
+    /**
+     * Origin the API is reachable at from outside (scheme + host, no path),
+     * so {@code attachment.url} is absolute as FHIR expects. Empty on
+     * environments that have not configured {@code app.public-base-url};
+     * the link is then origin-relative, which a same-origin portal still
+     * resolves.
+     */
+    private final String publicBaseUrl;
+
+    public DocumentReferenceFhirMapper(@Value("${app.public-base-url:}") String publicBaseUrl) {
+        this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.replaceAll("/+$", "");
+    }
 
     public DocumentReference toFhir(PatientUploadedDocument src) {
         if (src == null || src.getId() == null) return null;
@@ -70,8 +84,12 @@ public class DocumentReferenceFhirMapper {
     }
 
     /** Extracted from {@link #toFhir(PatientUploadedDocument)} — Sonar S3776. */
-    private static Attachment uploadedAttachment(PatientUploadedDocument src) {
+    private Attachment uploadedAttachment(PatientUploadedDocument src) {
         Attachment attachment = new Attachment();
+        if (src.getPatient() != null && src.getPatient().getId() != null) {
+            attachment.setUrl(publicBaseUrl + "/api/patients/" + src.getPatient().getId()
+                + "/documents/" + src.getId() + "/download");
+        }
         if (src.getMimeType() != null && !src.getMimeType().isBlank()) {
             attachment.setContentType(src.getMimeType());
         }
@@ -85,7 +103,7 @@ public class DocumentReferenceFhirMapper {
             attachment.setCreation(Date.from(
                 src.getCollectionDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
         }
-        // No url, no data, no hash — see the class javadoc for why each is
+        // No inline data and no hash — see the class javadoc for why each is
         // withheld on purpose.
         return attachment;
     }

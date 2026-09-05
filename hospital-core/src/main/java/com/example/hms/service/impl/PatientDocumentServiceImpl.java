@@ -10,9 +10,15 @@ import com.example.hms.model.PatientUploadedDocument;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.portal.PatientDocumentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientDocumentResponseDTO;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.SecurityUtils;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.PatientDocumentService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,6 +48,8 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final PatientUploadedDocumentRepository documentRepository;
     private final FileUploadService fileUploadService;
     private final PatientDocumentMapper documentMapper;
+    private final PatientHospitalRegistrationRepository registrationRepository;
+    private final AuditEventLogService auditEventLogService;
 
     @Override
     // rollbackFor is load-bearing, not decoration. Spring rolls back on
@@ -117,6 +126,82 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
         return new DocumentPayload(path, contentType, displayName);
+    }
+
+    // ── Staff surface ───────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PatientDocumentResponseDTO> listForPatient(UUID hospitalId, UUID patientId,
+                                                           PatientDocumentType documentType, Pageable pageable) {
+        requireRegisteredAt(hospitalId, patientId);
+        Page<PatientUploadedDocument> page = documentType == null
+                ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
+                : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
+        return page.map(documentMapper::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PatientDocumentResponseDTO getForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
+        requireRegisteredAt(hospitalId, patientId);
+        return documentMapper.toDto(requireOwnDocument(patientId, documentId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
+        requireRegisteredAt(hospitalId, patientId);
+        PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
+        auditStaffDownload(hospitalId, patientId, doc);
+        String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
+        String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
+        return new DocumentPayload(path, contentType, displayName);
+    }
+
+    /**
+     * Staff see a patient's uploads only through a hospital the patient is
+     * registered at. No hospital (a super-admin in global view) is a 400 that
+     * says so; a patient not registered at the caller's hospital is a 404 —
+     * the same answer as a document that does not exist, so the endpoint
+     * does not confirm that a patient is known elsewhere.
+     */
+    private void requireRegisteredAt(UUID hospitalId, UUID patientId) {
+        if (hospitalId == null) {
+            throw new BusinessException(
+                    "An active hospital is required: patient documents are read through the hospital "
+                            + "the patient is registered at. Select a hospital first.");
+        }
+        if (patientId == null || registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId).isEmpty()) {
+            throw new ResourceNotFoundException("Patient not found: " + patientId);
+        }
+    }
+
+    /**
+     * The chart-level PATIENT_ACCESS row is written by the interceptor and
+     * de-duplicated per (user, patient) for a window; a document download is
+     * a disclosure in its own right and gets its own row every time. The
+     * description carries the document id and type only — the display name
+     * is patient-chosen and can itself be PHI ("hiv-results.pdf").
+     */
+    private void auditStaffDownload(UUID hospitalId, UUID patientId, PatientUploadedDocument doc) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userName(SecurityUtils.getCurrentUsername())
+                    .userId(authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                            .orElse(null))
+                    .patientId(patientId)
+                    .eventType(AuditEventType.DATA_ACCESS)
+                    .entityType("PatientUploadedDocument")
+                    .resourceId(doc.getId() != null ? doc.getId().toString() : null)
+                    .eventDescription("Staff download of patient-uploaded document " + doc.getId()
+                            + " (" + doc.getDocumentType() + ") via hospital " + hospitalId)
+                    .status(AuditStatus.SUCCESS)
+                    .build());
+        } catch (RuntimeException ex) {
+            log.warn("Audit emit failed for staff document download {}: {}", doc.getId(), ex.getMessage());
+        }
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

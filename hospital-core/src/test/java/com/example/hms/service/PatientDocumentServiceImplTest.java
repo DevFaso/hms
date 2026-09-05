@@ -9,10 +9,17 @@ import com.example.hms.model.PatientUploadedDocument;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.portal.PatientDocumentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientDocumentResponseDTO;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.impl.PatientDocumentServiceImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,7 +34,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -40,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +63,8 @@ class PatientDocumentServiceImplTest {
     @Mock private PatientUploadedDocumentRepository documentRepository;
     @Mock private FileUploadService fileUploadService;
     @Mock private PatientDocumentMapper documentMapper;
+    @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private AuditEventLogService auditEventLogService;
     @Mock private Authentication auth;
 
     @InjectMocks
@@ -308,6 +321,137 @@ class PatientDocumentServiceImplTest {
 
             assertThatThrownBy(() -> service.downloadDocument(auth, docId))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    // ── Staff surface ────────────────────────────────────────────────────────
+    // Reads through the chart: gated on the caller's active hospital and the
+    // patient's registration there. The patient-side ownership helpers above
+    // are not involved — the caller is staff, not the patient.
+
+    @Nested
+    @DisplayName("staff surface: listForPatient / getForPatient / downloadForPatient")
+    class StaffSurface {
+
+        private final UUID hospitalId = UUID.randomUUID();
+        private final UUID docId = UUID.randomUUID();
+        private final UUID staffId = UUID.randomUUID();
+
+        @BeforeEach
+        void staffCaller() {
+            // The outer setUp stubs the patient-side caller; staff reads never
+            // touch it, and MockitoExtension is strict about unused stubs.
+            org.mockito.Mockito.reset(authUtils);
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken("dr.who", "n/a", List.of()));
+            lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staffId));
+        }
+
+        @AfterEach
+        void clearCaller() {
+            SecurityContextHolder.clearContext();
+        }
+
+        private void registered() {
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        }
+
+        @Test
+        @DisplayName("no active hospital (super-admin global view) is a 400 naming the fix, not an NPE")
+        void noHospitalIsABusinessException() {
+            assertThatThrownBy(() -> service.listForPatient(null, patientId, null, PageRequest.of(0, 20)))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("active hospital is required");
+            assertThatThrownBy(() -> service.downloadForPatient(null, patientId, docId))
+                    .isInstanceOf(BusinessException.class);
+            verify(documentRepository, never()).findByPatient_IdAndDeletedAtIsNull(any(), any());
+        }
+
+        @Test
+        @DisplayName("a patient not registered at the caller's hospital reads as not-found, not forbidden")
+        void unregisteredPatientIsNotFound() {
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, PageRequest.of(0, 20)))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(documentRepository, never()).findByIdAndPatient_IdAndDeletedAtIsNull(any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("lists live documents for a registered patient, optionally by type")
+        void listsForRegisteredPatient() {
+            registered();
+            Pageable pageable = PageRequest.of(0, 20);
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
+            PatientDocumentResponseDTO dto = new PatientDocumentResponseDTO();
+            when(documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(doc)));
+            when(documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(
+                    patientId, PatientDocumentType.REFERRAL_LETTER, pageable))
+                    .thenReturn(new PageImpl<>(List.of(doc, doc)));
+            when(documentMapper.toDto(doc)).thenReturn(dto);
+
+            assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
+            assertThat(service.listForPatient(hospitalId, patientId, PatientDocumentType.REFERRAL_LETTER, pageable)
+                    .getContent()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("download streams the stored file and writes a DATA_ACCESS row naming the document, not the file name")
+        void downloadStreamsAndAudits() {
+            registered();
+            PatientUploadedDocument doc = PatientUploadedDocument.builder()
+                    .patient(patient)
+                    .documentType(PatientDocumentType.LAB_RESULT)
+                    .filePath("/uploads/patient-documents/y.pdf")
+                    .mimeType("application/pdf")
+                    .displayName("hiv-results.pdf")
+                    .build();
+            doc.setId(docId);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            java.nio.file.Path onDisk = java.nio.file.Path.of("y.pdf");
+            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
+                    .thenReturn(onDisk);
+
+            PatientDocumentService.DocumentPayload payload = service.downloadForPatient(hospitalId, patientId, docId);
+
+            assertThat(payload.path()).isEqualTo(onDisk);
+            assertThat(payload.contentType()).isEqualTo("application/pdf");
+            assertThat(payload.displayName()).isEqualTo("hiv-results.pdf");
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            AuditEventRequestDTO row = audit.getValue();
+            assertThat(row.getUserId()).isEqualTo(staffId);
+            assertThat(row.getUserName()).isEqualTo("dr.who");
+            assertThat(row.getEventType()).isEqualTo(AuditEventType.DATA_ACCESS);
+            assertThat(row.getStatus()).isEqualTo(AuditStatus.SUCCESS);
+            assertThat(row.getPatientId()).isEqualTo(patientId);
+            assertThat(row.getResourceId()).isEqualTo(docId.toString());
+            assertThat(row.getEntityType()).isEqualTo("PatientUploadedDocument");
+            // The patient-chosen file name can itself be PHI; the row must not carry it.
+            assertThat(row.getEventDescription()).contains(docId.toString()).contains("LAB_RESULT")
+                    .doesNotContain("hiv-results");
+        }
+
+        @Test
+        @DisplayName("a deleted or foreign document reads as not-found and is not audited")
+        void missingDocumentIsNotFoundAndNotAudited() {
+            registered();
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(auditEventLogService, never()).logEvent(any());
         }
     }
 }

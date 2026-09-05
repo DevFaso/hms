@@ -6908,6 +6908,28 @@
     "CONSENT_REVOKE_REASON": "Motif de révocation",
     "CONSENT_REVOKE_REASON_REQUIRED": "Un motif de révocation est requis."
   },
+  "PATIENT_DOCUMENTS": {
+    "TAB": "Documents",
+    "TAB_TITLE": "Documents déposés par le patient via le portail",
+    "TITLE": "Documents déposés par le patient",
+    "HINT": "Résultats de laboratoire externes, lettres d'orientation et autres fichiers ajoutés par le patient depuis son portail. Lecture seule ici ; chaque téléchargement est enregistré dans le journal d'audit.",
+    "FILTER_TYPE": "Filtrer par type",
+    "FILTER_ALL": "Tous les types",
+    "LOADING": "Chargement des documents…",
+    "LOAD_FAILED": "Impossible de charger les documents",
+    "RETRY": "Réessayer",
+    "NO_DOCUMENTS": "Le patient n'a déposé aucun document.",
+    "NO_DOCUMENTS_OF_TYPE": "Aucun document de ce type.",
+    "COL_DOCUMENT": "Document",
+    "COL_TYPE": "Type",
+    "COL_COLLECTED": "Prélevé le",
+    "COL_UPLOADED": "Déposé le",
+    "COL_SIZE": "Taille",
+    "BY": "par",
+    "DOWNLOAD": "Télécharger",
+    "DOWNLOADING": "Téléchargement…",
+    "DOWNLOAD_FAILED": "Le document n'a pas pu être téléchargé"
+  },
   "MED_HISTORY": {
     "TAB": "Historique",
     "TAB_TITLE": "Historique médical structuré",
