@@ -193,7 +193,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                             .orElse(null))
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)
-                    .entityType("PatientUploadedDocument")
+.entityType("PATIENT_UPLOADED_DOCUMENT")
                     .resourceId(doc.getId() != null ? doc.getId().toString() : null)
                     .eventDescription("Staff download of patient-uploaded document " + doc.getId()
                             + " (" + doc.getDocumentType() + ") via hospital " + hospitalId)
