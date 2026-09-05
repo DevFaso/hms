@@ -59,8 +59,10 @@ public class LabResultController {
     @Operation(summary = "Run the critical-value escalation sweep now",
         description = "Mirrors the scheduled sweep; escalates unacknowledged critical results past the configured delay.")
     public ResponseEntity<java.util.Map<String, Integer>> runCriticalEscalationSweep() {
-        int escalated = criticalValueNotificationService.escalateOverdue();
-        return ResponseEntity.ok(java.util.Map.of("escalated", escalated));
+        // null = the scheduled sweep (or another operator) holds the lock right
+        // now; nothing was escalated by THIS call, which is what 0 says.
+        Integer escalated = criticalValueNotificationService.escalateOverdueUnderLock();
+        return ResponseEntity.ok(java.util.Map.of("escalated", escalated == null ? 0 : escalated));
     }
 
     @PostMapping

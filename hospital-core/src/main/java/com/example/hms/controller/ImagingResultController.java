@@ -197,6 +197,8 @@ public class ImagingResultController {
                description = "Escalates critical findings still unacknowledged past the configured delay. "
                    + "Returns the number of reports escalated on this pass.")
     public ResponseEntity<Map<String, Integer>> runCriticalEscalation() {
-        return ResponseEntity.ok(Map.of("escalated", criticalNotificationService.escalateOverdue()));
+        // null = the scheduled sweep (or another operator) holds the lock right now.
+        Integer escalated = criticalNotificationService.escalateOverdueUnderLock();
+        return ResponseEntity.ok(Map.of("escalated", escalated == null ? 0 : escalated));
     }
 }

@@ -364,4 +364,16 @@ class CriticalValueNotificationServiceTest {
         assertThat(updated.getCriticalReadBackAt()).isNotNull();
         assertThat(updated.isAcknowledged()).isTrue();
     }
+
+    @org.junit.jupiter.api.Test
+    void escalateOverdueUnderLockDelegatesAndReturnsABoxedCount() throws NoSuchMethodException {
+        // The locked entry point must box its result: ShedLock returns null for
+        // a skipped run and cannot do that for a primitive.
+        java.lang.reflect.Method locked = CriticalValueNotificationService.class.getMethod("escalateOverdueUnderLock");
+        org.assertj.core.api.Assertions.assertThat(locked.getReturnType()).isEqualTo(Integer.class);
+        org.assertj.core.api.Assertions.assertThat(locked.getAnnotation(
+            net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(CriticalValueNotificationService.class.getMethod("escalateOverdue")
+            .getAnnotation(net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNull();
+    }
 }

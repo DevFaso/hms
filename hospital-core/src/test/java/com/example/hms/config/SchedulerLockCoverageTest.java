@@ -52,8 +52,8 @@ class SchedulerLockCoverageTest {
      * block its own delegate (ShedLock skips a method whose lock is held).
      */
     private static final Map<String, String> LOCKED_VIA_DELEGATE = Map.of(
-        "CriticalValueEscalationScheduler.runSweep", "com.example.hms.service.CriticalValueNotificationService#escalateOverdue",
-        "ImagingCriticalEscalationScheduler.runSweep", "com.example.hms.service.ImagingCriticalNotificationService#escalateOverdue"
+        "CriticalValueEscalationScheduler.runSweep", "com.example.hms.service.CriticalValueNotificationService#escalateOverdueUnderLock",
+        "ImagingCriticalEscalationScheduler.runSweep", "com.example.hms.service.ImagingCriticalNotificationService#escalateOverdueUnderLock"
     );
 
     @Test
@@ -64,6 +64,10 @@ class SchedulerLockCoverageTest {
             Method delegate = Class.forName(target[0]).getMethod(target[1]);
             assertThat(AnnotatedElementUtils.findMergedAnnotation(delegate, SchedulerLock.class))
                 .as(entry.getKey() + " delegates to a locked " + entry.getValue()).isNotNull();
+            assertThat(delegate.getReturnType().isPrimitive())
+                .as(entry.getValue() + " must not return a primitive: ShedLock cannot skip it "
+                    + "(LockingNotSupportedException on every call — prod, 2026-09-05)")
+                .isFalse();
         }
     }
 

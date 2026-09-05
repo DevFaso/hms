@@ -344,4 +344,16 @@ class ImagingCriticalNotificationServiceTest {
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 1);
     }
+
+    @org.junit.jupiter.api.Test
+    void escalateOverdueUnderLockDelegatesAndReturnsABoxedCount() throws NoSuchMethodException {
+        // The locked entry point must box its result: ShedLock returns null for
+        // a skipped run and cannot do that for a primitive.
+        java.lang.reflect.Method locked = ImagingCriticalNotificationService.class.getMethod("escalateOverdueUnderLock");
+        org.assertj.core.api.Assertions.assertThat(locked.getReturnType()).isEqualTo(Integer.class);
+        org.assertj.core.api.Assertions.assertThat(locked.getAnnotation(
+            net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(ImagingCriticalNotificationService.class.getMethod("escalateOverdue")
+            .getAnnotation(net.javacrumbs.shedlock.spring.annotation.SchedulerLock.class)).isNull();
+    }
 }

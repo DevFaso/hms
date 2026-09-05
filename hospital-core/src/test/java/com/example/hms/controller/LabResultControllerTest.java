@@ -117,7 +117,7 @@ class LabResultControllerTest {
 
     @Test
     void runCriticalEscalationSweep_returnsCount() {
-        when(criticalValueNotificationService.escalateOverdue()).thenReturn(3);
+        when(criticalValueNotificationService.escalateOverdueUnderLock()).thenReturn(3);
 
         var response = controller.runCriticalEscalationSweep();
 

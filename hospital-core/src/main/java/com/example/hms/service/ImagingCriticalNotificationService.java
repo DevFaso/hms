@@ -147,7 +147,24 @@ public class ImagingCriticalNotificationService {
      *
      * @return number of reports escalated on this pass
      */
+    /**
+     * The locked entry point for BOTH the scheduled sweep and the manual
+     * endpoint. ShedLock (proxy-method mode) cannot lock a method that returns
+     * a primitive — it has nothing to return when another run holds the lock
+     * — so the lock sits on this boxed wrapper: {@code null} means "skipped,
+     * another instance or the manual trigger is escalating right now"; a
+     * number is the count from a run that actually happened. Putting the lock
+     * on {@code int escalateOverdue()} threw LockingNotSupportedException on
+     * every invocation in production (2026-09-05).
+     *
+     * @return reports escalated, or null when the lock was held elsewhere
+     */
     @SchedulerLock(name = "ImagingCriticalNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
+    @Transactional
+    public Integer escalateOverdueUnderLock() {
+        return escalateOverdue();
+    }
+
     @Transactional
     public int escalateOverdue() {
         LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
