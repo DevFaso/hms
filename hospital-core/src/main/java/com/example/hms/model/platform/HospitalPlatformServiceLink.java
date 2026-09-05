@@ -5,6 +5,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.embedded.PlatformOwnership;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
@@ -54,7 +55,9 @@ public class HospitalPlatformServiceLink extends BaseEntity {
     @Builder.Default
     private boolean enabled = true;
 
-    @Column(name = "credentials_reference", length = 120)
+    /** Credential pointer - encrypted at rest since item 45 (V152 widened to TEXT); write-only in responses. */
+    @Column(name = "credentials_reference", columnDefinition = "TEXT")
+    @Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
     private String credentialsReference;
 
     @Column(name = "override_endpoint", length = 255)

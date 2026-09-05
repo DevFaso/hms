@@ -56,6 +56,7 @@ class AppointmentStatusTransitionTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     @Mock private com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @InjectMocks
@@ -174,6 +175,8 @@ class AppointmentStatusTransitionTest {
         appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b");
 
         verify(appointmentRepository).save(appointment);
+        // Completion is not an outward-facing event - no webhook.
+        org.mockito.Mockito.verifyNoInteractions(webhookPublisher);
     }
 
     // ── Invalid status transitions ──
@@ -270,6 +273,46 @@ class AppointmentStatusTransitionTest {
         verify(appointmentRepository).save(appointment);
         // The appointment owns its slot (P3 #22): cancelling frees the time.
         verify(slotInventoryService).releaseForAppointment(appointmentId);
+        // The fulfilment-critical link to item 45's outbox: the cancel is
+        // announced to subscribers, keyed by this hospital and appointment.
+        verify(webhookPublisher).publish(hospital.getId(),
+            com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_CANCELLED,
+            "Appointment", appointmentId);
+    }
+
+    @Test
+    void rescheduleActionEmitsTheRescheduledWebhook() {
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        appointment.setAppointmentDate(LocalDate.now().plusDays(1));
+        appointment.setStartTime(LocalTime.of(9, 0));
+        appointment.setEndTime(LocalTime.of(10, 0));
+
+        AppointmentResponseDTO dto = AppointmentResponseDTO.builder().id(appointmentId).build();
+        when(appointmentRepository.save(any())).thenReturn(appointment);
+        when(appointmentMapper.toAppointmentResponseDTO(appointment)).thenReturn(dto);
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "reschedule", null, "doctor_b");
+
+        verify(webhookPublisher).publish(hospital.getId(),
+            com.example.hms.enums.platform.WebhookEventType.APPOINTMENT_RESCHEDULED,
+            "Appointment", appointmentId);
+    }
+
+    @Test
+    void confirmEmitsNoWebhook() {
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setAppointmentDate(LocalDate.now().plusDays(1));
+        appointment.setStartTime(LocalTime.of(9, 0));
+        appointment.setEndTime(LocalTime.of(10, 0));
+
+        AppointmentResponseDTO dto = AppointmentResponseDTO.builder().id(appointmentId).build();
+        when(appointmentRepository.save(any())).thenReturn(appointment);
+        when(appointmentMapper.toAppointmentResponseDTO(appointment)).thenReturn(dto);
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "confirm", null, "doctor_b");
+
+        // Confirming changes nothing a subscriber tracks - no event.
+        org.mockito.Mockito.verifyNoInteractions(webhookPublisher);
     }
 
     // ── The check-in / reschedule lifecycle holes ──

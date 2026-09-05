@@ -876,6 +876,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admin-assignments',
       });
     }
+    // API keys + outbound webhooks (Tier 2 item 45) — mirrors the
+    // /api-keys and /webhook-endpoints controller gates exactly.
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'])) {
+      items.push({
+        icon: 'webhook',
+        label: 'API & Webhooks',
+        translationKey: 'NAV.WEBHOOKS',
+        route: '/webhooks',
+      });
+    }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
     if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
       items.push({

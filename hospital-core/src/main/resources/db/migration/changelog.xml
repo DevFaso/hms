@@ -2281,4 +2281,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V152 - outbound webhooks + API-key management (Tier 2 item 45):
+         platform.api_keys (SHA-256 hash only, revoke-never-delete),
+         webhook_endpoints (encrypted HMAC secret) + subscriptions +
+         deliveries outbox (instrument-outbox retry mechanics); widens the
+         three credential-pointer columns to TEXT for encryption at rest.
+         Idempotent per the mid-deploy-kill rule.
+         ================================================================= -->
+    <changeSet id="V152-webhooks-api-keys" author="hms-team" runOnChange="false">
+        <sqlFile path="V152__webhooks_api_keys.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -139,6 +139,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/roles': 'ADMINISTRATION',
   '/admin': 'ADMINISTRATION',
   '/admin-assignments': 'ADMINISTRATION',
+  '/webhooks': 'ADMINISTRATION',
   '/admin-governance': 'ADMINISTRATION',
   '/feature-flags': 'ADMINISTRATION',
   // The same entry resolves to one path or the other depending on whether the

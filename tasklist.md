@@ -1539,9 +1539,21 @@ that exists rather than inventing one.
 - [ ] 44. **FHIR DocumentReference + patient record download.** The portal is
   print-only. #477's bulk exporter already streams NDJSON through
   patient-scoped queries, so a single-patient download is a narrow lift.
-- [ ] 45. **Outbound webhooks / API-key management** for third-party clients.
+- [x] 45. **Outbound webhooks / API-key management** for third-party clients.
   `apiKeyReference` exists on `PlatformService` as a pointer with no issuance,
   rotation or verification behind it.
+  ✔ 2026-09-04 (V152): `platform.api_keys` — issue (SHA-256 hash at rest, raw
+  shown once), rotate, revoke-never-delete, optional expiry; verification via
+  `ApiKeyAuthenticationFilter` (X-API-Key) gating the new `/partner/**`
+  surface (ping + own delivery log — the verify path has a real caller).
+  Outbound webhooks: hospital-scoped endpoints (HTTPS-public-only SSRF gate,
+  encrypted HMAC secret shown once), thin id-reference payloads (no PHI in
+  transit), `X-HMS-Webhook-Signature` = HMAC-SHA256 over `timestamp.body`,
+  instrument-outbox retry sweep, auto-disable on consecutive failures,
+  emitters on all four appointment write paths, portal `/webhooks` admin
+  page. Also FIXED the pre-existing leak: `apiKeyReference` /
+  `credentialsReference` now encrypted at rest, write-only in responses, and
+  dropped from the Kafka event payload.
 
 ## E7 — Engagement
 

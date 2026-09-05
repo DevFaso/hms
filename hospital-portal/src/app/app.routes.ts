@@ -385,6 +385,17 @@ export const routes: Routes = [
         loadComponent: () => import('./roi/roi').then((m) => m.RoiComponent),
       },
 
+      // API keys + outbound webhooks (Tier 2 item 45) — mirrors
+      // ApiKeyController / WebhookEndpointController exactly.
+      {
+        path: 'webhooks',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'],
+        },
+        loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
+      },
+
       // Staff
       {
         path: 'staff',

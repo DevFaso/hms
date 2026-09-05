@@ -1,0 +1,438 @@
+<div class="webhooks-page">
+  <header class="page-header">
+    <h1>{{ 'WEBHOOKS.TITLE' | translate }}</h1>
+    <div class="header-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
+    </div>
+  </header>
+
+  @if (!scopeReady()) {
+    <section class="card">
+      <p class="hint">{{ 'WEBHOOKS.PICK_HOSPITAL' | translate }}</p>
+    </section>
+  } @else if (loadFailed()) {
+    <section class="card">
+      <p class="hint error-hint">{{ 'WEBHOOKS.LOAD_FAILED' | translate }}</p>
+    </section>
+  } @else if (loading()) {
+    <section class="card">
+      <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+    </section>
+  } @else {
+    <!-- ── API keys ─────────────────────────────────────────────────── -->
+    <section class="card">
+      <div class="section-header">
+        <h2>{{ 'WEBHOOKS.KEYS_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="open-issue"
+          (click)="openIssue($event)"
+        >
+          <span class="material-symbols-outlined">key</span>
+          {{ 'WEBHOOKS.ISSUE_KEY' | translate }}
+        </button>
+      </div>
+      <p class="hint">{{ 'WEBHOOKS.KEYS_HINT' | translate }}</p>
+      @if (keys().length === 0) {
+        <p class="hint">{{ 'WEBHOOKS.NO_KEYS' | translate }}</p>
+      } @else {
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'WEBHOOKS.KEY_LABEL' | translate }}</th>
+                <th>{{ 'WEBHOOKS.KEY_PREFIX' | translate }}</th>
+                <th>{{ 'WEBHOOKS.STATUS' | translate }}</th>
+                <th>{{ 'WEBHOOKS.EXPIRES' | translate }}</th>
+                <th>{{ 'WEBHOOKS.LAST_USED' | translate }}</th>
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (key of keys(); track key.id) {
+                <tr>
+                  <td>{{ key.label }}</td>
+                  <td class="mono">{{ key.keyPrefix }}…</td>
+                  <td>
+                    <span class="status-pill" [class.revoked]="key.status !== 'ACTIVE'">
+                      {{ keyStatusKey(key.status) | translate }}
+                    </span>
+                  </td>
+                  <td>{{ key.expiresOn ? (key.expiresOn | date: 'mediumDate') : '—' }}</td>
+                  <td>{{ key.lastUsedAt ? (key.lastUsedAt | date: 'short') : '—' }}</td>
+                  <td class="actions-cell">
+                    @if (key.status === 'ACTIVE') {
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="openConfirm('rotate-key', key.id, key.label, $event)"
+                      >
+                        {{ 'WEBHOOKS.ROTATE' | translate }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-link danger"
+                        data-testid="revoke-key"
+                        (click)="openConfirm('revoke-key', key.id, key.label, $event)"
+                      >
+                        {{ 'WEBHOOKS.REVOKE' | translate }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <!-- ── Webhook endpoints ────────────────────────────────────────── -->
+    <section class="card">
+      <div class="section-header">
+        <h2>{{ 'WEBHOOKS.ENDPOINTS_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="open-register"
+          (click)="openEndpointForm(null, $event)"
+        >
+          <span class="material-symbols-outlined">webhook</span>
+          {{ 'WEBHOOKS.REGISTER_ENDPOINT' | translate }}
+        </button>
+      </div>
+      <p class="hint">{{ 'WEBHOOKS.ENDPOINTS_HINT' | translate }}</p>
+      @if (endpoints().length === 0) {
+        <p class="hint">{{ 'WEBHOOKS.NO_ENDPOINTS' | translate }}</p>
+      } @else {
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'WEBHOOKS.URL' | translate }}</th>
+                <th>{{ 'WEBHOOKS.EVENTS' | translate }}</th>
+                <th>{{ 'WEBHOOKS.STATUS' | translate }}</th>
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (ep of endpoints(); track ep.id) {
+                <tr>
+                  <td class="url-cell">
+                    <span class="mono">{{ ep.url }}</span>
+                    @if (ep.description) {
+                      <span class="hint">{{ ep.description }}</span>
+                    }
+                  </td>
+                  <td>
+                    @for (ev of ep.events; track ev) {
+                      <span class="event-chip">{{ eventKey(ev) | translate }}</span>
+                    }
+                  </td>
+                  <td>
+                    <span
+                      class="status-pill"
+                      [class.revoked]="ep.status === 'REVOKED'"
+                      [class.warning]="ep.status === 'PAUSED' || ep.status === 'DISABLED_FAILURES'"
+                    >
+                      {{ endpointStatusKey(ep.status) | translate }}
+                    </span>
+                    @if (ep.status === 'DISABLED_FAILURES') {
+                      <span class="hint">
+                        {{
+                          'WEBHOOKS.DISABLED_HINT' | translate: { count: ep.consecutiveFailures }
+                        }}
+                      </span>
+                    }
+                  </td>
+                  <td class="actions-cell">
+                    @if (ep.status !== 'REVOKED') {
+                      @if (ep.status === 'ACTIVE') {
+                        <button
+                          type="button"
+                          class="btn-link"
+                          data-testid="ping-btn"
+                          (click)="ping(ep)"
+                        >
+                          {{ 'WEBHOOKS.PING' | translate }}
+                        </button>
+                      }
+                      <button type="button" class="btn-link" (click)="togglePause(ep)">
+                        {{
+                          (ep.status === 'ACTIVE' ? 'WEBHOOKS.PAUSE' : 'WEBHOOKS.RESUME')
+                            | translate
+                        }}
+                      </button>
+                      <button type="button" class="btn-link" (click)="openEndpointForm(ep, $event)">
+                        {{ 'COMMON.EDIT' | translate }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="openConfirm('rotate-secret', ep.id, ep.url, $event)"
+                      >
+                        {{ 'WEBHOOKS.ROTATE_SECRET' | translate }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-link danger"
+                        (click)="openConfirm('revoke-endpoint', ep.id, ep.url, $event)"
+                      >
+                        {{ 'WEBHOOKS.REVOKE' | translate }}
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="btn-link"
+                      data-testid="deliveries-btn"
+                      (click)="toggleDeliveries(ep)"
+                    >
+                      {{ 'WEBHOOKS.DELIVERIES' | translate }}
+                    </button>
+                  </td>
+                </tr>
+                @if (deliveriesFor() === ep.id) {
+                  <tr class="drilldown-row">
+                    <td colspan="4">
+                      @if (deliveriesFailed()) {
+                        <p class="hint error-hint">
+                          {{ 'WEBHOOKS.DELIVERIES_FAILED' | translate }}
+                        </p>
+                      } @else if (deliveryRows().length === 0) {
+                        <p class="hint">{{ 'WEBHOOKS.NO_DELIVERIES' | translate }}</p>
+                      } @else {
+                        <table class="deliveries-table">
+                          <thead>
+                            <tr>
+                              <th>{{ 'WEBHOOKS.EVENT' | translate }}</th>
+                              <th>{{ 'WEBHOOKS.STATUS' | translate }}</th>
+                              <th>{{ 'WEBHOOKS.ATTEMPTS' | translate }}</th>
+                              <th>{{ 'WEBHOOKS.LAST_ERROR' | translate }}</th>
+                              <th>{{ 'WEBHOOKS.SENT_AT' | translate }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (d of deliveryRows(); track d.id) {
+                              <tr>
+                                <td>{{ eventKey(d.eventType) | translate }}</td>
+                                <td>
+                                  <span
+                                    class="status-pill"
+                                    [class.revoked]="d.status === 'ERROR'"
+                                    [class.warning]="d.status === 'PENDING'"
+                                  >
+                                    {{ deliveryStatusKey(d.status) | translate }}
+                                  </span>
+                                </td>
+                                <td>{{ d.attempts }}</td>
+                                <td class="error-cell">{{ d.lastError || '—' }}</td>
+                                <td>{{ d.sentAt ? (d.sentAt | date: 'short') : '—' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>
+
+<!-- ── Issue-key modal ──────────────────────────────────────────────── -->
+@if (showIssue()) {
+  <div class="modal-backdrop" (click)="closeIssue()" aria-hidden="true"></div>
+  <div
+    #issueDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="'WEBHOOKS.ISSUE_KEY' | translate"
+    (keydown.escape)="closeIssue()"
+    (keydown.tab)="trapTab($any($event), issueDialog)"
+    data-testid="issue-modal"
+  >
+    <h2>{{ 'WEBHOOKS.ISSUE_KEY' | translate }}</h2>
+    <p class="hint">{{ 'WEBHOOKS.ISSUE_HINT' | translate }}</p>
+    <label class="field">
+      <span>{{ 'WEBHOOKS.KEY_LABEL' | translate }} *</span>
+      <input
+        type="text"
+        name="keyLabel"
+        maxlength="120"
+        [ngModel]="formKeyLabel()"
+        (ngModelChange)="formKeyLabel.set($event)"
+        [attr.placeholder]="'WEBHOOKS.KEY_LABEL_PLACEHOLDER' | translate"
+      />
+    </label>
+    <label class="field">
+      <span>{{ 'WEBHOOKS.EXPIRES' | translate }}</span>
+      <input
+        type="date"
+        name="keyExpiresOn"
+        [ngModel]="formKeyExpiresOn()"
+        (ngModelChange)="formKeyExpiresOn.set($event)"
+      />
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeIssue()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="submit-issue"
+        [disabled]="!formKeyLabel().trim() || saving()"
+        (click)="submitIssue()"
+      >
+        {{ 'WEBHOOKS.ISSUE_CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── Endpoint form modal ──────────────────────────────────────────── -->
+@if (showEndpointForm()) {
+  <div class="modal-backdrop" (click)="closeEndpointForm()" aria-hidden="true"></div>
+  <div
+    #endpointDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="
+      (editingEndpoint() ? 'WEBHOOKS.EDIT_ENDPOINT' : 'WEBHOOKS.REGISTER_ENDPOINT') | translate
+    "
+    (keydown.escape)="closeEndpointForm()"
+    (keydown.tab)="trapTab($any($event), endpointDialog)"
+    data-testid="endpoint-modal"
+  >
+    <h2>
+      {{
+        (editingEndpoint() ? 'WEBHOOKS.EDIT_ENDPOINT' : 'WEBHOOKS.REGISTER_ENDPOINT') | translate
+      }}
+    </h2>
+    <p class="hint">{{ 'WEBHOOKS.ENDPOINT_HINT' | translate }}</p>
+    <label class="field">
+      <span>{{ 'WEBHOOKS.URL' | translate }} *</span>
+      <input
+        type="url"
+        name="endpointUrl"
+        maxlength="500"
+        [ngModel]="formUrl()"
+        (ngModelChange)="formUrl.set($event)"
+        placeholder="https://"
+      />
+    </label>
+    <label class="field">
+      <span>{{ 'WEBHOOKS.DESCRIPTION' | translate }}</span>
+      <input
+        type="text"
+        name="endpointDescription"
+        maxlength="255"
+        [ngModel]="formDescription()"
+        (ngModelChange)="formDescription.set($event)"
+      />
+    </label>
+    <fieldset class="field events-fieldset">
+      <legend>{{ 'WEBHOOKS.EVENTS' | translate }} *</legend>
+      @for (ev of subscribableEvents; track ev) {
+        <label class="event-option">
+          <input
+            type="checkbox"
+            [name]="'ev-' + ev"
+            [checked]="formEvents().has(ev)"
+            (change)="toggleEvent(ev)"
+          />
+          {{ eventKey(ev) | translate }}
+        </label>
+      }
+    </fieldset>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeEndpointForm()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        data-testid="submit-endpoint"
+        [disabled]="!endpointFormValid() || saving()"
+        (click)="submitEndpointForm()"
+      >
+        {{ (editingEndpoint() ? 'COMMON.SAVE' : 'WEBHOOKS.REGISTER_CONFIRM') | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── One-time secret reveal ───────────────────────────────────────── -->
+@if (revealed(); as r) {
+  <div class="modal-backdrop" aria-hidden="true"></div>
+  <div
+    #revealDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="r.titleKey | translate"
+    (keydown.escape)="closeReveal()"
+    (keydown.tab)="trapTab($any($event), revealDialog)"
+    data-testid="reveal-modal"
+  >
+    <h2>{{ r.titleKey | translate }}</h2>
+    <p class="hint warning-hint">{{ 'WEBHOOKS.REVEAL_ONCE' | translate }}</p>
+    <code class="secret-value" data-testid="revealed-secret">{{ r.value }}</code>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="copyRevealed()">
+        {{ 'WEBHOOKS.COPY' | translate }}
+      </button>
+      <button type="button" class="btn-primary" data-testid="close-reveal" (click)="closeReveal()">
+        {{ 'WEBHOOKS.REVEAL_DONE' | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- ── Confirm modal ────────────────────────────────────────────────── -->
+@if (confirming(); as c) {
+  <div class="modal-backdrop" (click)="closeConfirm()" aria-hidden="true"></div>
+  <div
+    #confirmDialog
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    [attr.aria-label]="confirmMessageKey(c.kind) | translate"
+    (keydown.escape)="closeConfirm()"
+    (keydown.tab)="trapTab($any($event), confirmDialog)"
+    data-testid="confirm-modal"
+  >
+    <h2>{{ confirmMessageKey(c.kind) | translate }}</h2>
+    <p class="mono confirm-target">{{ c.label }}</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" (click)="closeConfirm()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary danger"
+        data-testid="submit-confirm"
+        [disabled]="saving()"
+        (click)="submitConfirm()"
+      >
+        {{ 'COMMON.CONFIRM' | translate }}
+      </button>
+    </div>
+  </div>
+}
