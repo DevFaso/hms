@@ -128,6 +128,16 @@
           {{ 'COVERAGE.TAB' | translate }}
         </button>
       }
+      @if (canViewDocuments()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'documents'"
+          (click)="setTab('documents')"
+          [title]="'PATIENT_DOCUMENTS.TAB_TITLE' | translate"
+        >
+          {{ 'PATIENT_DOCUMENTS.TAB' | translate }}
+        </button>
+      }
       @if (canViewVitals()) {
         <button
           class="tab"
@@ -235,6 +245,18 @@
     <!-- ═══ Coverage Tab (insurance + hospital registrations) ═══ -->
     @if (activeTab() === 'coverage' && canViewCoverage()) {
       <app-coverage-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Documents Tab (what the patient uploaded through the portal) ═══ -->
+    @if (activeTab() === 'documents' && canViewDocuments()) {
+      <!-- Super-admin only (display:none otherwise): the tab is hospital-pinned
+           and the chart has no other scope selector, so "select a hospital
+           first" must be actionable right here. -->
+      <app-hospital-scope-chip
+        [disableUrlSync]="true"
+        (scopeChange)="onDocumentsScopeChange($event)"
+      />
+      <app-documents-tab [patientId]="patient()!.id" [hospitalScope]="documentsScope()" />
     }
 
     <!-- ═══ Advance Directives Tab (P2 #13 — first write surface) ═══ -->

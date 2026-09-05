@@ -57,6 +57,23 @@ public interface PatientDocumentService {
      */
     DocumentPayload downloadDocument(Authentication auth, UUID documentId);
 
+    // ── Staff surface ───────────────────────────────────────────────────
+    // A patient uploads a referral letter or an outside lab report so the
+    // people treating them can read it. Until this surface existed the only
+    // reader was the patient (ROLE_PATIENT, ownership-checked above), so
+    // nothing a patient uploaded was reachable from the chart, and the FHIR
+    // DocumentReference for it was metadata-only. Staff access is gated on
+    // the caller's active hospital and the patient's registration there —
+    // the same gate Patient/{id}/$everything and DocumentReference use.
+
+    Page<PatientDocumentResponseDTO> listForPatient(UUID hospitalId, UUID patientId,
+                                                    PatientDocumentType documentType, Pageable pageable);
+
+    PatientDocumentResponseDTO getForPatient(UUID hospitalId, UUID patientId, UUID documentId);
+
+    /** Streams the bytes to a staff caller and writes a DATA_ACCESS audit row naming the document. */
+    DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId);
+
     /** One downloadable document: on-disk path + the headers to serve it with. */
     record DocumentPayload(java.nio.file.Path path, String contentType, String displayName) { }
 }
