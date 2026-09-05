@@ -42,7 +42,7 @@ class PatientDocumentStaffControllerAuthorizationTest {
     @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT"})
     void otherRolesMayNot(String role) {
         Set<String> granted = grantedRoles();
-        assertThat(granted).doesNotContain(role);
+        assertThat(granted).isNotEmpty().doesNotContain(role);
     }
 
     @Test
