@@ -37,6 +37,14 @@ export function deliveryWarningKeys(
       keys.add(r.outcome === 'FAILED' ? 'DELIVERY.SMS_FAILED' : 'DELIVERY.SMS_NOT_CONFIGURED');
     }
   }
+  // A report made entirely of NO_CONTACT rows produces no key above — each
+  // row is individually unremarkable ("this patient has no email") while
+  // together they mean the account has no way in at all: created inactive,
+  // confirmation code sitting in the database. Warn on the whole report, not
+  // on any single row.
+  if (keys.size === 0 && !hasActivationSent(report)) {
+    keys.add('DELIVERY.NO_ACTIVATION_CHANNEL');
+  }
   return [...keys];
 }
 

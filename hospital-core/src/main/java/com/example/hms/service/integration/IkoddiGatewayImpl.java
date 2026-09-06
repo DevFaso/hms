@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,8 +21,11 @@ import java.util.Map;
  * {@link IkoddiGateway} backed by Spring {@link RestClient}, following the
  * {@code DhisHttpClient} conventions: timeouts from properties, secrets from
  * env-injected config keys, package-private test constructor so unit tests can
- * bind a {@code MockRestServiceServer}. Transport/credential failures surface
- * as {@link IllegalStateException} for callers to translate to business errors.
+ * bind a {@code MockRestServiceServer}. Remote failures surface as
+ * {@link IllegalStateException} for callers to translate to business errors;
+ * a channel with no credentials behind it surfaces as
+ * {@link NotificationTransportUnavailableException} (503) instead, so a
+ * deployment gap never reads to the user as a bad request.
  */
 @Component
 public class IkoddiGatewayImpl implements IkoddiGateway {
@@ -172,18 +176,37 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
         }
     }
 
+    /**
+     * The missing-property list goes to the log, not to the caller: this used
+     * to throw IllegalStateException, which the global handler renders as a
+     * 400 carrying the exception message verbatim — so a receptionist who
+     * pressed "Send code" was shown "Set app.ikoddi.enabled plus api-key,
+     * organization-id and otp-app-id".
+     */
     private void requireOtpConfigured() {
         if (!isConfigured()) {
-            throw new IllegalStateException(
-                "IKODDI OTP is not configured. Set app.ikoddi.enabled plus api-key, organization-id and otp-app-id.");
+            LOG.warn("IKODDI OTP unavailable — enabled={}, api-key={}, organization-id={}, otp-app-id={}. "
+                    + "Set app.ikoddi.enabled=true plus the three credentials to enable phone verification.",
+                enabled, present(apiKey), present(organizationId), present(otpAppId));
+            throw new NotificationTransportUnavailableException(
+                "SMS verification is unavailable right now. Continue without verifying the phone, "
+                    + "or contact your administrator.");
         }
     }
 
     private void requireSmsConfigured() {
         if (!enabled || !StringUtils.hasText(apiKey) || !StringUtils.hasText(organizationId)) {
-            throw new IllegalStateException(
-                "IKODDI SMS is not configured. Set app.ikoddi.enabled plus api-key and organization-id.");
+            LOG.warn("IKODDI SMS unavailable — enabled={}, api-key={}, organization-id={}. "
+                    + "Set app.ikoddi.enabled=true plus the credentials to enable outbound SMS.",
+                enabled, present(apiKey), present(organizationId));
+            throw new NotificationTransportUnavailableException(
+                "Text messaging is unavailable right now.");
         }
+    }
+
+    /** Log-safe presence marker — never the credential itself. */
+    private static String present(String value) {
+        return StringUtils.hasText(value) ? "set" : "MISSING";
     }
 
     private IllegalStateException requestFailure(String operation, RestClientResponseException ex) {

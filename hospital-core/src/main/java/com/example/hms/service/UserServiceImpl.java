@@ -55,6 +55,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -90,6 +91,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserRoleHospitalAssignmentService assignmentService;
     private final EmailService emailService;
+    private final AssignmentLinkService assignmentLinkService;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
@@ -390,11 +392,20 @@ public class UserServiceImpl implements UserService {
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
                     : null;
+            // The account is inactive until the assignment code is confirmed,
+            // so the welcome mail must carry the confirmation screen's address.
+            // Prefer the hospital-scoped assignment (that is the one whose code
+            // was mailed); a global role has exactly one assignment anyway.
+            final String activationUrl = ensuredAssignments.stream()
+                    .filter(a -> a.getAssignmentCode() != null && !a.getAssignmentCode().isBlank())
+                    .max(Comparator.comparing(a -> a.getHospital() != null))
+                    .map(a -> assignmentLinkService.buildProfileCompletionUrl(a.getAssignmentCode()))
+                    .orElse(null);
             try {
                 emailService.sendAdminWelcomeEmail(
                     user.getEmail(), displayName,
                     user.getUsername(), request.getPassword(),
-                    roleName, hospitalName);
+                    roleName, hospitalName, activationUrl);
                 log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
                 com.example.hms.utility.ActivationDeliveryTracker.report(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()

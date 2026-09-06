@@ -389,9 +389,18 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
         } catch (DisabledException ex) {
+            // "Verify your email" named a flow staff do not have: only patients
+            // carry an email activation token. Everyone else activates by
+            // confirming the role assignment with the emailed/texted code, so
+            // the message has to point at that — the credentials are correct
+            // here, and a dead end at this exact step is what gets reported as
+            // "I never received an activation email".
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User account is disabled. Please verify your email."));
+                    .body(new MessageResponse(
+                            "Your account is not activated yet. Open the \"Confirm Your Hospital Role "
+                            + "Assignment\" message we sent you and enter the confirmation code. "
+                            + "If it never arrived, ask your administrator to resend it."));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),

@@ -691,7 +691,8 @@ public class EmailServiceImpl implements EmailService {
                                       String username,
                                       String tempPassword,
                                       String roleName,
-                                      String hospitalName) {
+                                      String hospitalName,
+                                      String activationUrl) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         log.info("📧 Sending admin welcome email to: {}", to);
@@ -722,15 +723,18 @@ public class EmailServiceImpl implements EmailService {
             + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
             + "Welcome to HMS</h1>"
-            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">Your account has been created</p>"
+            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">One step left to activate it</p>"
             + "</div>";
 
         String bodyContent = "<div style=\"padding:32px 40px;\">"
             + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">Hi <strong>" + escapedName + "</strong>,</p>"
             + "<p style=\"color:#475569;line-height:1.6;\">"
             + "A <strong>" + escapedRole + "</strong> account has been created for you " + atHospital
-            + "You can sign in immediately using the credentials below. "
-            + "You will be prompted to change your password on first login."
+            + "<strong>One step is left before you can sign in:</strong> confirm this role "
+            + "with the confirmation code we sent you in a separate message "
+            + "(subject: &ldquo;Action Required: Confirm Your Hospital Role Assignment&rdquo;). "
+            + "Keep the credentials below — you will need them right after you confirm, "
+            + "and you will be prompted to change the password on first login."
             + "</p>"
             + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
             + "padding:20px 24px;margin:24px 0;\">"
@@ -747,17 +751,12 @@ public class EmailServiceImpl implements EmailService {
             + "<td style=\"padding:6px 0 6px 16px;\">" + escapedRole + "</td></tr>"
             + hospitalLine
             + "</table></div>"
-            + "<p style=\"text-align:center;margin:28px 0;\">"
-            + "<a href=\"" + loginUrl + "\" style=\"background:#2563eb;color:#ffffff;"
-            + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
-            + "font-weight:600;display:inline-block;\">Sign In to Your Account</a></p>"
-            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">Or copy this link:<br/>"
-            + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>"
+            + ctaBlock(activationUrl, loginUrl)
             + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
             + "border-radius:0 8px 8px 0;margin-top:24px;\">"
             + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
             + "<strong>&#9888; Security notice:</strong> This email contains a temporary password. "
-            + "Please sign in and change it immediately. Do not share this email with anyone. "
+            + "Change it as soon as you have activated your account. Do not share this email with anyone. "
             + "If you did not expect this account, contact your system administrator right away."
             + "</p></div>"
             + "</div>";
@@ -765,8 +764,34 @@ public class EmailServiceImpl implements EmailService {
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
 
         sendHtml(List.of(to), List.of(), List.of(),
-            "Welcome to HMS \u2014 Your Account Is Ready", body);
+            "Welcome to HMS \u2014 Activate Your Account", body);
         log.info("✅ Admin welcome email sent to {}", to);
+    }
+
+
+    /**
+     * Activation-first call to action. With an activation URL the button goes
+     * to the confirmation screen; without one it still names the step rather
+     * than offering a login the account will refuse. The login link stays as
+     * secondary text so the address is in the mail either way.
+     */
+    private static String ctaBlock(String rawActivationUrl, String rawLoginUrl) {
+        boolean hasActivation = rawActivationUrl != null && !rawActivationUrl.isBlank();
+        String activationUrl = hasActivation ? escapeHtml(rawActivationUrl) : null;
+        String loginUrl = escapeHtml(rawLoginUrl);
+        String href = hasActivation ? activationUrl : loginUrl;
+        String label = hasActivation ? "Activate My Account" : "Go to HMS";
+        String secondary = hasActivation
+            ? "Or copy this link:<br/><a href=\"" + activationUrl + "\" style=\"color:#2563eb;\">"
+              + activationUrl + "</a><br/><br/>After activating, sign in at "
+              + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a>"
+            : "Once your role is confirmed, sign in at <a href=\"" + loginUrl
+              + "\" style=\"color:#2563eb;\">" + loginUrl + "</a>";
+        return "<p style=\"text-align:center;margin:28px 0;\">"
+            + "<a href=\"" + href + "\" style=\"background:#2563eb;color:#ffffff;"
+            + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
+            + "font-weight:600;display:inline-block;\">" + label + "</a></p>"
+            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + secondary + "</p>";
     }
 
 }
