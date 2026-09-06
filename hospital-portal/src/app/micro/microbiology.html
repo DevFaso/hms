@@ -2,6 +2,7 @@
   <div class="page-header">
     <h1>{{ 'MICRO.PAGE_TITLE' | translate }}</h1>
     <div class="header-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       <div class="filter-switch" role="group" [attr.aria-label]="'MICRO.FILTER_LABEL' | translate">
         <button
           type="button"
@@ -43,6 +44,7 @@
           type="button"
           class="btn-primary"
           data-testid="new-culture"
+          [disabled]="!scopeReady()"
           (click)="openCreateModal()"
         >
           <span class="material-symbols-outlined">add</span>
@@ -51,6 +53,8 @@
       }
     </div>
   </div>
+
+  <app-hospital-scope-hint />
 
   @if (loading()) {
     <div class="loading-state">

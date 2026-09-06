@@ -8,8 +8,14 @@
       </div>
     </div>
     <div class="header-right">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       @if (canManage()) {
-        <button class="btn-primary" (click)="openCreate()" data-testid="oncall-add">
+        <button
+          class="btn-primary"
+          (click)="openCreate()"
+          [disabled]="!scopeReady()"
+          data-testid="oncall-add"
+        >
           <span class="material-symbols-outlined">add</span>
           {{ 'ON_CALL.ADD' | translate }}
         </button>
@@ -19,6 +25,8 @@
       </button>
     </div>
   </header>
+
+  <app-hospital-scope-hint />
 
   <div class="filter-bar">
     <label for="oncall-from"

@@ -66,10 +66,18 @@ describe('HospitalTypeaheadComponent', () => {
     // ngOnInit setTimeout-focus side-effect).
   });
 
-  afterEach(() => httpMock.verify());
+  // The opener's request is shared by HospitalService (first-page cache), so a
+  // keystroke does not cancel it: every test answers it with initialPage().
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  const initialPage = () =>
+    httpMock.expectOne(
+      (r) => r.url === '/super-admin/hospitals/search' && r.params.get('q') === '',
+    );
 
   it('renders the search input and the All-hospitals option by default', () => {
     fixture.detectChanges();
+    initialPage().flush([]);
     const root: HTMLElement = fixture.nativeElement;
     expect(root.querySelector('[data-testid="hospital-typeahead-input"]')).toBeTruthy();
     expect(root.querySelector('[data-testid="hospital-typeahead-all"]')).toBeTruthy();
@@ -78,6 +86,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('hides the All-hospitals sentinel when [hideAllOption] is true', () => {
     fixture.componentRef.setInput('hideAllOption', true);
     fixture.detectChanges();
+    initialPage().flush([]);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector(
         '[data-testid="hospital-typeahead-all"]',
@@ -85,22 +94,45 @@ describe('HospitalTypeaheadComponent', () => {
     ).toBeNull();
   });
 
-  it('does NOT issue a request for sub-2-character queries', (done) => {
+  it('lists the first page on open and narrows from the first character', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
-    component['onQueryChange']('a');
+    initialPage().flush([sampleHospital]);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="hospital-typeahead-option-h-1"]',
+      ),
+    ).toBeTruthy();
+
+    component['onQueryChange']('m');
     setTimeout(() => {
-      // expectNone(matcher) returns void; assert explicitly so Jasmine
-      // doesn't flag the spec as having "no expectations".
-      const matches = httpMock.match(() => true);
-      expect(matches.length).toBe(0);
+      const req = httpMock.expectOne(
+        (r) => r.url === '/super-admin/hospitals/search' && r.params.get('q') === 'm',
+      );
+      req.flush([]);
       done();
     }, DEBOUNCE_WAIT_MS);
+  });
+
+  it('shows the type-to-narrow row when the first page is full', () => {
+    fixture.componentRef.setInput('autoFocus', false);
+    fixture.detectChanges();
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      ...sampleHospital,
+      id: `h-${i}`,
+      name: `Hospital ${i}`,
+    }));
+    initialPage().flush(fullPage);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('HOSPITAL_SCOPE.TYPE_TO_NARROW');
   });
 
   it('debounces keystrokes and issues a single LIMIT-20 search', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('m');
     component['onQueryChange']('me');
     component['onQueryChange']('mem');
@@ -118,6 +150,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('emits selectHospital with the picked match', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     let emitted: HospitalResponse | undefined;
     component.selectHospital.subscribe((h) => (emitted = h));
 
@@ -137,6 +170,7 @@ describe('HospitalTypeaheadComponent', () => {
 
   it('emits selectAll when the All-hospitals sentinel is clicked', () => {
     fixture.detectChanges();
+    initialPage().flush([]);
     const emitted = jasmine.createSpy('selectAll');
     component.selectAll.subscribe(emitted);
     (fixture.nativeElement as HTMLElement)
@@ -148,6 +182,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('shows a NO_MATCHES message when the search returns zero results', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('zzz');
     setTimeout(() => {
       httpMock.expectOne('/super-admin/hospitals/search?q=zzz&limit=20').flush([]);
@@ -161,6 +196,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('shows a SEARCH_ERROR message on backend failure', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('memo');
     setTimeout(() => {
       httpMock

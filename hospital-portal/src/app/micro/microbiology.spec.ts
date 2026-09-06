@@ -1,4 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MicrobiologyComponent } from './microbiology';
@@ -6,6 +9,7 @@ import { MicroCultureResponse, MicroService } from '../services/micro.service';
 import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 
 describe('MicrobiologyComponent', () => {
   let fixture: ComponentFixture<MicrobiologyComponent>;
@@ -65,12 +69,30 @@ describe('MicrobiologyComponent', () => {
     labServiceSpy = jasmine.createSpyObj('LabService', ['listOrders']);
     labServiceSpy.listOrders.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    roleContextSpy = jasmine.createSpyObj('RoleContextService', ['hasAnyActiveRole']);
+    roleContextSpy = jasmine.createSpyObj('RoleContextService', [
+      'hasAnyActiveRole',
+      'isSuperAdmin',
+    ]);
     roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    roleContextSpy.isSuperAdmin.and.returnValue(false);
+    // The scope chip and hint read the rest; the spy keeps hasAnyActiveRole/isSuperAdmin.
+    const {
+      hasAnyActiveRole: _roles,
+      isSuperAdmin: _admin,
+      ...scopeMembers
+    } = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: [],
+    }) as unknown as Record<string, unknown>;
+    Object.assign(roleContextSpy, scopeMembers);
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: MicroService, useValue: microServiceSpy },
         { provide: LabService, useValue: labServiceSpy },
         { provide: ToastService, useValue: toastSpy },

@@ -2270,6 +2270,8 @@
     "NO_MATCHES": "Aucun hôpital ne correspond à votre recherche.",
     "SCOPED": "Hôpital",
     "SEARCH_ERROR": "Échec du chargement des hôpitaux. Veuillez réessayer.",
+    "TYPE_TO_NARROW": "Affichage des {{count}} premiers hôpitaux — tapez pour affiner.",
+    "PICK_TO_CONTINUE": "Sélectionnez un hôpital ci-dessus pour continuer — cette page appartient à un établissement.",
     "EMPTY_GLOBAL": {
       "ENCOUNTERS": "Aucune consultation dans aucun de vos hôpitaux.",
       "LAB_RESULTS": "Aucun résultat de laboratoire dans aucun de vos hôpitaux.",

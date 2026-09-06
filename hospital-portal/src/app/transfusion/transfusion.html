@@ -5,20 +5,23 @@
       <p class="page-subtitle">{{ 'TRANSFUSION.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       @if (tab() === 'requests' && canRequest) {
-        <button class="btn-primary" (click)="openNewRequest()">
+        <button class="btn-primary" (click)="openNewRequest()" [disabled]="!scopeReady()">
           <span class="material-symbols-outlined">add</span>
           {{ 'TRANSFUSION.NEW_REQUEST' | translate }}
         </button>
       }
       @if (tab() === 'units' && canLab) {
-        <button class="btn-primary" (click)="openUnitModal()">
+        <button class="btn-primary" (click)="openUnitModal()" [disabled]="!scopeReady()">
           <span class="material-symbols-outlined">add</span>
           {{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}
         </button>
       }
     </div>
   </div>
+
+  <app-hospital-scope-hint />
 
   <div class="filter-bar">
     <div class="tabs">

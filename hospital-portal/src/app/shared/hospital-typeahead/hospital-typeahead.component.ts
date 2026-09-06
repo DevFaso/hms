@@ -16,7 +16,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, catchError, debounceTime, distinctUntilChanged, of, switchMap, tap } from 'rxjs';
+import { Subject, catchError, debounceTime, merge, of, switchMap, tap } from 'rxjs';
 
 import { HospitalResponse, HospitalService } from '../../services/hospital.service';
 
@@ -62,23 +62,26 @@ export class HospitalTypeaheadComponent implements OnInit {
   // Debounce window matches the design doc's 300 ms; below the
   // ~400 ms perception threshold for "feels instant".
   private static readonly DEBOUNCE_MS = 300;
-  private static readonly MIN_QUERY_LENGTH = 2;
   private static readonly LIMIT = 20;
+  /** Exposed for the "type to narrow" row. */
+  protected readonly limit = HospitalTypeaheadComponent.LIMIT;
 
   protected readonly query = signal<string>('');
   protected readonly results = signal<HospitalResponse[]>([]);
   protected readonly loading = signal<boolean>(false);
   protected readonly errored = signal<boolean>(false);
+  /** A full page means there are more: say so instead of silently truncating. */
+  protected readonly truncated = computed(
+    () => this.results().length >= HospitalTypeaheadComponent.LIMIT,
+  );
 
   /**
-   * What the empty-results helper text should say. We intentionally show
-   *   - nothing when the query is too short (the placeholder already explains)
-   *   - a "no matches" message only after a query of >=2 chars resolved to zero
+   * What the empty-results helper text should say: a "no matches" line once
+   * a search resolved to zero rows, an error line when the backend failed,
+   * nothing while loading. The list is populated from the first render, so
+   * there is no "type more" state any more.
    */
   protected readonly emptyMessageKey = computed(() => {
-    if (this.query().trim().length < HospitalTypeaheadComponent.MIN_QUERY_LENGTH) {
-      return null;
-    }
     if (this.loading()) {
       return null;
     }
@@ -94,11 +97,17 @@ export class HospitalTypeaheadComponent implements OnInit {
   private readonly search$ = new Subject<string>();
 
   ngOnInit(): void {
-    this.search$
+    // The first page loads on open (empty query, first LIMIT by name): the
+    // picker used to open on an empty list with only a placeholder to say
+    // that typing was required. Keystrokes are debounced; the opener is not.
+    // No distinctUntilChanged: an emptied box after a failed opener must be
+    // able to ask for the first page again.
+    merge(of(''), this.search$.pipe(debounceTime(HospitalTypeaheadComponent.DEBOUNCE_MS)))
       .pipe(
-        debounceTime(HospitalTypeaheadComponent.DEBOUNCE_MS),
-        distinctUntilChanged(),
         tap(() => {
+          // The previous query's rows are not answers to this one: clear them
+          // so a stale option cannot be picked while the request is in flight.
+          this.results.set([]);
           this.loading.set(true);
           this.errored.set(false);
         }),
@@ -125,16 +134,8 @@ export class HospitalTypeaheadComponent implements OnInit {
 
   protected onQueryChange(value: string): void {
     this.query.set(value);
-    const trimmed = value.trim();
-    if (trimmed.length < HospitalTypeaheadComponent.MIN_QUERY_LENGTH) {
-      // Clear the previous result list so the dropdown doesn't keep
-      // showing stale matches while the user is mid-edit.
-      this.results.set([]);
-      this.loading.set(false);
-      this.errored.set(false);
-      return;
-    }
-    this.search$.next(trimmed);
+    // An emptied box goes back to the first page, not to an empty list.
+    this.search$.next(value.trim());
   }
 
   protected pickAll(): void {

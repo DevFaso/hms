@@ -4,6 +4,7 @@ import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.model.Hospital;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -54,8 +55,9 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
             "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
-            "(:active IS NULL OR h.active = :active)")
-    Page<Hospital> searchHospitals(@Param("name") String name,
+            "(:active IS NULL OR h.active = :active) " +
+            "ORDER BY LOWER(h.name)")
+    Slice<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
                                    @Param("state") String state,
                                    @Param("active") Boolean active,

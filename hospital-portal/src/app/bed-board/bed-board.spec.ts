@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -16,6 +17,7 @@ import { IsolationPrecautionResponse, IsolationService } from '../services/isola
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -123,6 +125,7 @@ describe('BedBoardComponent', () => {
   let isolationSpy: jasmine.SpyObj<IsolationService>;
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let scope: RoleContextStubState;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -146,17 +149,15 @@ describe('BedBoardComponent', () => {
     transferSpy.getPending.and.returnValue(of([]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    const roleCtx = {
-      hasAnyActiveRole: () => true,
-      isSuperAdmin: () => false,
-      activeHospitalId: 'h1',
-    } as unknown as RoleContextService;
+    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE', 'ROLE_DOCTOR'] };
+    const roleCtx = roleContextStub(scope);
 
     await TestBed.configureTestingModule({
       imports: [BedBoardComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BedBoardService, useValue: boardSpy },
         { provide: IsolationService, useValue: isolationSpy },
         { provide: TransferService, useValue: transferSpy },
@@ -170,6 +171,19 @@ describe('BedBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
+    // A bed board belongs to a building: nothing to fetch until one is picked.
+    scope.superAdmin = true;
+    scope.hospitalId = null;
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
+    ).toBeTruthy();
   });
 
   it('loads the board on init', () => {

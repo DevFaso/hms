@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -7,6 +10,7 @@ import { OnCallService, OnCallScheduleResponse } from '../services/on-call.servi
 import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -55,16 +59,16 @@ describe('OnCallComponent', () => {
     TestBed.configureTestingModule({
       imports: [OnCallComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: OnCallService, useValue: onCallService },
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: {
-            activeHospitalId: 'h-1',
-            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
-          },
+          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: activeRoles }),
         },
       ],
     });
