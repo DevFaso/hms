@@ -427,10 +427,10 @@ class SuperAdminDashboardControllerTest {
 
         // The chip opens with no query: that is the first page of active
         // hospitals (the service reads a blank filter as "none"), not the empty
-        // list the old two-character minimum produced — and the opener is not
-        // a cross-tenant read worth an audit row per click.
+        // list the old two-character minimum produced. It is still a
+        // cross-tenant read, so it is audited like any other (design call #4).
         verify(hospitalService).searchHospitals(eq(""), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
-        verify(crossTenantReadAudit, never()).recordCrossTenantRead(any(), any(), anyInt());
+        verify(crossTenantReadAudit).recordCrossTenantRead("HOSPITAL", "hospitals/search?q=", 1);
     }
 
     @Test

@@ -67,19 +67,22 @@ export class MtmReviewComponent implements OnInit {
     this.loadReviews();
   }
 
+  /** The pinned scope first; the JWT claim only for staff with several hospitals and no primary one. */
   private hospitalIdForRequests(): string | null {
     return this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? null;
   }
 
   loadReviews(): void {
-    // The chip's scope first, then the assignment/JWT the old code read: a
-    // staff member with several hospitals and no primary one keeps working.
+    if (!this.scopeReady()) {
+      this.reviews.set([]);
+      this.loading.set(false);
+      return;
+    }
     const hospitalId = this.hospitalIdForRequests();
     if (!hospitalId) {
       this.reviews.set([]);
-      if (!this.roleContext.isSuperAdmin()) {
-        this.toast.error('Active hospital context required');
-      }
+      this.loading.set(false);
+      this.toast.error('Active hospital context required');
       return;
     }
     this.loading.set(true);

@@ -151,6 +151,7 @@ export class SlotAdminComponent implements OnInit {
   loadVisitTypes(): void {
     if (!this.scopeReady()) {
       this.visitTypes.set([]);
+      this.vtLoading.set(false);
       return;
     }
     this.vtLoading.set(true);
@@ -254,6 +255,7 @@ export class SlotAdminComponent implements OnInit {
   loadTemplates(): void {
     if (!this.scopeReady()) {
       this.templates.set([]);
+      this.tplLoading.set(false);
       return;
     }
     this.tplLoading.set(true);
@@ -401,6 +403,7 @@ export class SlotAdminComponent implements OnInit {
   searchSlots(): void {
     if (!this.scopeReady()) {
       this.slots.set([]);
+      this.slotsLoading.set(false);
       return;
     }
     this.slotsLoading.set(true);
@@ -482,10 +485,7 @@ export class SlotAdminComponent implements OnInit {
       // The pinned hospital first: a super-admin scoped via the chip must be
       // offered that hospital's staff, not their own primary hospital's.
       const hospitalId =
-        this.roleContext.effectiveHospitalIdForRequest() ??
-        this.roleContext.activeHospitalId ??
-        this.auth.getHospitalId() ??
-        undefined;
+        this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.staffOptions.set([]),

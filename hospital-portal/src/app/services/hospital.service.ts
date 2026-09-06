@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, map, shareReplay, throwError } from 'rxjs';
+import { Observable, catchError, map, shareReplay, tap, throwError } from 'rxjs';
 
 /** Minimal hospital DTO returned by /me/hospital. */
 export interface HospitalMinimal {
@@ -79,15 +79,19 @@ export class HospitalService {
   }
 
   create(req: HospitalRequest): Observable<HospitalResponse> {
-    return this.http.post<HospitalResponse>('/hospitals', req);
+    return this.http
+      .post<HospitalResponse>('/hospitals', req)
+      .pipe(tap(() => this.forgetFirstPage()));
   }
 
   update(id: string, req: HospitalRequest): Observable<HospitalResponse> {
-    return this.http.put<HospitalResponse>(`/hospitals/${id}`, req);
+    return this.http
+      .put<HospitalResponse>(`/hospitals/${id}`, req)
+      .pipe(tap(() => this.forgetFirstPage()));
   }
 
   delete(id: string): Observable<void> {
-    return this.http.delete<void>(`/hospitals/${id}`);
+    return this.http.delete<void>(`/hospitals/${id}`).pipe(tap(() => this.forgetFirstPage()));
   }
 
   /**
@@ -121,26 +125,37 @@ export class HospitalService {
    * answer is kept for a minute and shared (a failed one is not kept).
    */
   searchHospitals(q: string, limit = 20): Observable<HospitalResponse[]> {
-    if (q === '') {
-      const now = Date.now();
-      if (!this.firstPage$ || now - this.firstPageAt > HospitalService.FIRST_PAGE_TTL_MS) {
-        this.firstPageAt = now;
-        this.firstPage$ = this.fetchHospitals('', limit).pipe(
-          catchError((err: unknown) => {
-            this.firstPage$ = undefined;
-            return throwError(() => err);
-          }),
-          shareReplay(1),
-        );
-      }
-      return this.firstPage$;
+    if (q !== '') {
+      return this.fetchHospitals(q, limit);
     }
-    return this.fetchHospitals(q, limit);
+    const cached = this.firstPages.get(limit);
+    if (cached && Date.now() - cached.at <= HospitalService.FIRST_PAGE_TTL_MS) {
+      return cached.page$;
+    }
+    const page$ = this.fetchHospitals('', limit).pipe(
+      catchError((err: unknown) => {
+        // Drop only this entry: a newer opener may already have replaced it.
+        if (this.firstPages.get(limit)?.page$ === page$) {
+          this.firstPages.delete(limit);
+        }
+        return throwError(() => err);
+      }),
+      shareReplay(1),
+    );
+    this.firstPages.set(limit, { at: Date.now(), page$ });
+    return page$;
+  }
+
+  /** A hospital written through this service changes the first page: forget it. */
+  private forgetFirstPage(): void {
+    this.firstPages.clear();
   }
 
   private static readonly FIRST_PAGE_TTL_MS = 60_000;
-  private firstPage$?: Observable<HospitalResponse[]>;
-  private firstPageAt = 0;
+  private readonly firstPages = new Map<
+    number,
+    { at: number; page$: Observable<HospitalResponse[]> }
+  >();
 
   private fetchHospitals(q: string, limit: number): Observable<HospitalResponse[]> {
     const params = new HttpParams().set('q', q).set('limit', String(limit));

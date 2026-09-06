@@ -26,6 +26,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -54,6 +55,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
     TranslateModule,
     PatientPickerComponent,
     HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
   ],
   templateUrl: './roi.html',
   styleUrl: './roi.scss',
@@ -97,7 +99,7 @@ export class RoiComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  readonly scopeReady = computed(() => this.pickerHospitalId() != null);
+  readonly scopeReady = this.roleCtx.hasHospitalScope;
   /** Mirrors RoiWorklistController.DECISION_ROLES exactly. */
   readonly canDecide = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),

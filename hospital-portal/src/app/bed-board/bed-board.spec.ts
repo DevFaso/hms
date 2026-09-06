@@ -126,6 +126,7 @@ describe('BedBoardComponent', () => {
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
   let scope: RoleContextStubState;
+  let roleCtx: RoleContextService;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -150,7 +151,7 @@ describe('BedBoardComponent', () => {
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE', 'ROLE_DOCTOR'] };
-    const roleCtx = roleContextStub(scope);
+    roleCtx = roleContextStub(scope);
 
     await TestBed.configureTestingModule({
       imports: [BedBoardComponent, TranslateModule.forRoot()],
@@ -184,6 +185,20 @@ describe('BedBoardComponent', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
     ).toBeTruthy();
+  });
+
+  it('picking a hospital after landing in global view loads that board', () => {
+    scope.superAdmin = true;
+    scope.hospitalId = null;
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+
+    // What the chip does on a pick: pin the scope, then tell the host.
+    roleCtx.scopeToHospital('h1');
+    fixture.componentInstance.onScopeChange();
+    expect(boardSpy.getBoard).toHaveBeenCalledTimes(1);
+    expect(transferSpy.getPending).toHaveBeenCalledTimes(1);
   });
 
   it('loads the board on init', () => {

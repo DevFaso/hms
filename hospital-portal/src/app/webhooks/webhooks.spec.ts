@@ -97,6 +97,7 @@ describe('WebhooksComponent', () => {
           provide: RoleContextService,
           useValue: {
             effectiveHospitalIdForRequest: () => scopedHospitalId(),
+            hasHospitalScope: () => scopedHospitalId() != null,
             activeHospitalId: 'h1',
             isSuperAdmin: () => false,
             globalView: () => scopedHospitalId() === null,

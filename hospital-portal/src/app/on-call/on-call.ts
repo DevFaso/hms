@@ -241,10 +241,7 @@ export class OnCallComponent implements OnInit {
       // The pinned hospital first: a super-admin scoped via the chip must be
       // offered that hospital's staff, not their own primary hospital's.
       const hospitalId =
-        this.roleContext.effectiveHospitalIdForRequest() ??
-        this.roleContext.activeHospitalId ??
-        this.auth.getHospitalId() ??
-        undefined;
+        this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.toast.error(this.translate.instant('ON_CALL.STAFF_LOAD_ERROR')),
