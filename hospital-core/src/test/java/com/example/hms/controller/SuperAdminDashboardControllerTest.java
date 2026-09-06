@@ -40,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -243,21 +244,17 @@ class SuperAdminDashboardControllerTest {
     }
 
     @Test
-    void searchHospitalsForScopeChip_returnsEmptyListWhenQueryTooShort() {
+    void searchHospitalsForScopeChip_nullQueryIsTheFirstPageToo() {
         HospitalContextHolder.setContext(superAdminContext());
+        when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(List.of(new HospitalResponseDTO()));
 
-        // null, "", " ", "a" — all below the 2-char minimum.
+        // The chip opens with no query at all: that is the first page, not
+        // an empty list (the old 2-character minimum left the picker blank).
         assertThat(controller.searchHospitalsForScopeChip(null, 20, Locale.ENGLISH).getBody())
-            .isEmpty();
-        assertThat(controller.searchHospitalsForScopeChip("", 20, Locale.ENGLISH).getBody())
-            .isEmpty();
-        assertThat(controller.searchHospitalsForScopeChip("  ", 20, Locale.ENGLISH).getBody())
-            .isEmpty();
-        assertThat(controller.searchHospitalsForScopeChip("a", 20, Locale.ENGLISH).getBody())
-            .isEmpty();
-
-        verify(hospitalService, never())
-            .searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any());
+            .hasSize(1);
+        verify(hospitalService).searchHospitals(
+            isNull(), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
     }
 
     @Test
@@ -426,6 +423,32 @@ class SuperAdminDashboardControllerTest {
 
         verify(crossTenantReadAudit).recordCrossTenantRead(
             "HOSPITAL", "hospitals/search?q=memo", 1);
+    }
+
+    @Test
+    void searchHospitalsForScopeChip_emptyQueryListsTheFirstPageByName() {
+        HospitalContextHolder.setContext(superAdminContext());
+        when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(List.of(new HospitalResponseDTO()));
+
+        controller.searchHospitalsForScopeChip("   ", 20, Locale.ENGLISH);
+
+        // No prefix filter: the picker opens on the first page of active
+        // hospitals instead of an empty list nobody can act on.
+        verify(hospitalService).searchHospitals(
+            isNull(), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
+    }
+
+    @Test
+    void searchHospitalsForScopeChip_singleCharacterAlreadyNarrows() {
+        HospitalContextHolder.setContext(superAdminContext());
+        when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(List.of());
+
+        controller.searchHospitalsForScopeChip(" h ", 50, Locale.ENGLISH);
+
+        verify(hospitalService).searchHospitals(
+            eq("h"), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
     }
 
     @Test

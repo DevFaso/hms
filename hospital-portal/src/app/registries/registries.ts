@@ -25,6 +25,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { ToastService } from '../core/toast.service';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
@@ -53,7 +54,13 @@ interface RegistryLoad {
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    HospitalScopeChipComponent,
+  ],
   templateUrl: './registries.html',
   styleUrl: './registries.scss',
 })
@@ -92,6 +99,14 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   /** Hospital scope for the picker — the super-admin-aware one, not the primary. */
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
+  /**
+   * A super-admin in global view has no cohort to show (a registry belongs to
+   * a hospital): the page shows the "select a hospital" hint and makes no
+   * call until one is picked. Staff are always scoped by their assignment.
+   */
+  readonly scopeReady = computed(
+    () => !this.roleCtx.isSuperAdmin() || this.pickerHospitalId() != null,
+  );
 
   private readonly load$ = new Subject<{ program: CareProgram; status: StatusFilter }>();
   private loadSub?: Subscription;
@@ -121,6 +136,17 @@ export class RegistriesComponent implements OnInit, OnDestroy {
         // it, a slow HIV response finishing after a quick TB one would
         // display HIV rows under the TB tab.
         switchMap(({ program, status }) => {
+          if (!this.scopeReady()) {
+            // Push even when unscoped: the emission cancels an in-flight
+            // response for the previously pinned hospital.
+            return of({
+              rows: [],
+              totalRows: 0,
+              rowsFailed: false,
+              counts: {},
+              countsFailed: false,
+            });
+          }
           this.loading.set(true);
           this.loadFailed.set(false);
           const page = this.registryService
@@ -174,6 +200,10 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   load(): void {
     this.load$.next({ program: this.activeProgram(), status: this.statusFilter() });
+  }
+
+  onScopeChange(): void {
+    this.load();
   }
 
   countFor(status: ProgramEnrollmentStatus): number {

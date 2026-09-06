@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -99,13 +102,20 @@ describe('SlotAdminComponent', () => {
     TestBed.configureTestingModule({
       imports: [SlotAdminComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: SlotInventoryService, useValue: slotService },
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: { activeHospitalId: 'h-1', hasAnyActiveRole: () => true },
+          useValue: {
+            activeHospitalId: 'h-1',
+            isSuperAdmin: () => false,
+            hasAnyActiveRole: () => true,
+          },
         },
       ],
     });

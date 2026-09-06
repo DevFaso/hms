@@ -7,7 +7,16 @@
         <p class="page-subtitle">{{ 'SLOT_ADMIN.SUBTITLE' | translate }}</p>
       </div>
     </div>
+    <div class="header-right">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
+    </div>
   </header>
+
+  @if (!scopeReady()) {
+    <p class="scope-hint" data-testid="scope-hint">
+      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
+    </p>
+  }
 
   <div class="section-tabs" role="tablist">
     <button

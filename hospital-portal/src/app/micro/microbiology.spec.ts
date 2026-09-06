@@ -1,4 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MicrobiologyComponent } from './microbiology';
@@ -65,12 +68,19 @@ describe('MicrobiologyComponent', () => {
     labServiceSpy = jasmine.createSpyObj('LabService', ['listOrders']);
     labServiceSpy.listOrders.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    roleContextSpy = jasmine.createSpyObj('RoleContextService', ['hasAnyActiveRole']);
+    roleContextSpy = jasmine.createSpyObj('RoleContextService', [
+      'hasAnyActiveRole',
+      'isSuperAdmin',
+    ]);
     roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    roleContextSpy.isSuperAdmin.and.returnValue(false);
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: MicroService, useValue: microServiceSpy },
         { provide: LabService, useValue: labServiceSpy },
         { provide: ToastService, useValue: toastSpy },

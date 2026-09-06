@@ -220,3 +220,14 @@ button {
     margin: 1.5cm;
   }
 }
+
+/* "Select a hospital above to continue": the super-admin global-view
+   empty state on pages whose data belongs to one facility. */
+.scope-hint {
+  margin: 1rem 0;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  border-left: 4px solid var(--primary);
+  font-size: 0.9375rem;
+}

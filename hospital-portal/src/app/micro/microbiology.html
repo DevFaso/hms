@@ -2,6 +2,7 @@
   <div class="page-header">
     <h1>{{ 'MICRO.PAGE_TITLE' | translate }}</h1>
     <div class="header-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       <div class="filter-switch" role="group" [attr.aria-label]="'MICRO.FILTER_LABEL' | translate">
         <button
           type="button"
@@ -51,6 +52,12 @@
       }
     </div>
   </div>
+
+  @if (!scopeReady()) {
+    <p class="scope-hint" data-testid="scope-hint">
+      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
+    </p>
+  }
 
   @if (loading()) {
     <div class="loading-state">

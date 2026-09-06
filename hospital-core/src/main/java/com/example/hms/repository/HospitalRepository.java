@@ -51,10 +51,12 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * {@code findAllWithDepartments} below.</p>
      */
     @Query("SELECT h FROM Hospital h WHERE " +
-            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
+            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%')) " +
+            "OR LOWER(h.code) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
-            "(:active IS NULL OR h.active = :active)")
+            "(:active IS NULL OR h.active = :active) " +
+            "ORDER BY LOWER(h.name)")
     Page<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
                                    @Param("state") String state,

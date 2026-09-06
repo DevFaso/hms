@@ -1,11 +1,12 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
-import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -16,14 +17,24 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeChipComponent],
   templateUrl: './mtm-review.html',
   styleUrl: './mtm-review.scss',
 })
 export class MtmReviewComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
-  private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no facility to show (MTM reviews belong to a facility): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
 
   reviews = signal<MtmReviewResponse[]>([]);
   loading = signal(false);
@@ -38,10 +49,14 @@ export class MtmReviewComponent implements OnInit {
     this.loadReviews();
   }
 
+  onScopeChange(): void {
+    this.loadReviews();
+  }
+
   loadReviews(): void {
-    const hospitalId = this.auth.getHospitalId();
-    if (!hospitalId) {
-      this.toast.error('Active hospital context required');
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
+    if (!this.scopeReady() || !hospitalId) {
+      this.reviews.set([]);
       return;
     }
     this.loading.set(true);
@@ -60,7 +75,7 @@ export class MtmReviewComponent implements OnInit {
   openCreate(): void {
     this.selectedReviewId = null;
     this.form = this.emptyForm();
-    this.form.hospitalId = this.auth.getHospitalId() ?? '';
+    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.showForm.set(true);
   }
 

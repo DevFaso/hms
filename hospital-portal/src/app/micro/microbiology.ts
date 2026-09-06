@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { LabOrderResponse, LabService } from '../services/lab.service';
 import {
   GROWTH_RESULTS,
@@ -27,7 +28,7 @@ import {
 @Component({
   selector: 'app-microbiology',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './microbiology.html',
   styleUrl: './microbiology.scss',
 })
@@ -37,6 +38,16 @@ export class MicrobiologyComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no laboratory to show (culture reports belong to a facility): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
 
   readonly growthResults = GROWTH_RESULTS;
   readonly methods = SUSCEPTIBILITY_METHODS;
@@ -122,7 +133,17 @@ export class MicrobiologyComponent implements OnInit {
     this.load();
   }
 
+  onScopeChange(): void {
+    this.load();
+  }
+
   load(): void {
+    if (!this.scopeReady()) {
+      this.cultures.set([]);
+      this.error.set('');
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.error.set('');
     const status = this.statusFilter();

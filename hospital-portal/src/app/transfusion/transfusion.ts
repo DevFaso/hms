@@ -21,6 +21,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 
@@ -37,7 +38,14 @@ type Tab = 'requests' | 'units';
 @Component({
   selector: 'app-transfusion',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+    HospitalScopeChipComponent,
+  ],
   templateUrl: './transfusion.html',
   styleUrl: './transfusion.scss',
 })
@@ -45,6 +53,16 @@ export class TransfusionComponent implements OnInit {
   private readonly transfusion = inject(TransfusionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no blood bank to show (units and transfusions belong to a facility): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
   private readonly translate = inject(TranslateService);
 
   tab = signal<Tab>('requests');
@@ -162,6 +180,13 @@ export class TransfusionComponent implements OnInit {
     this.loadRequests();
   }
 
+  onScopeChange(): void {
+    this.loadRequests();
+    if (this.tab() === 'units') {
+      this.loadUnits();
+    }
+  }
+
   setTab(tab: Tab): void {
     this.tab.set(tab);
     if (tab === 'units' && this.units().length === 0) {
@@ -172,6 +197,11 @@ export class TransfusionComponent implements OnInit {
   /* ── Requests ── */
 
   loadRequests(): void {
+    if (!this.scopeReady()) {
+      this.requests.set([]);
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     const filter = this.requestStatusFilter();
     this.transfusion.listRequests(filter || undefined).subscribe({
@@ -315,6 +345,11 @@ export class TransfusionComponent implements OnInit {
   /* ── Units ── */
 
   loadUnits(): void {
+    if (!this.scopeReady()) {
+      this.units.set([]);
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     const filter = this.unitStatusFilter();
     this.transfusion.listUnits(filter || undefined).subscribe({

@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 
@@ -53,6 +56,7 @@ describe('RegistriesComponent', () => {
   let component: RegistriesComponent;
   let registryService: jasmine.SpyObj<ProgramRegistryService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let superAdminGlobalView = false;
 
   beforeEach(async () => {
     registryService = jasmine.createSpyObj<ProgramRegistryService>('ProgramRegistryService', [
@@ -70,10 +74,14 @@ describe('RegistriesComponent', () => {
     registryService.recordVisit.and.returnValue(of(enrollment()));
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    superAdminGlobalView = false;
 
     await TestBed.configureTestingModule({
       imports: [RegistriesComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: ProgramRegistryService, useValue: registryService },
         {
           provide: PatientService,
@@ -81,7 +89,15 @@ describe('RegistriesComponent', () => {
         },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => 'h1', activeHospitalId: 'h1' },
+          useValue: {
+            isSuperAdmin: () => superAdminGlobalView,
+            effectiveHospitalIdForRequest: () => (superAdminGlobalView ? null : 'h1'),
+            globalView: () => superAdminGlobalView,
+            selectedHospitalId: () => null,
+            enableGlobalView: () => undefined,
+            scopeToHospital: () => undefined,
+            activeHospitalId: 'h1',
+          },
         },
         { provide: ToastService, useValue: toast },
       ],
@@ -94,6 +110,14 @@ describe('RegistriesComponent', () => {
   function root(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('a super-admin in global view sees the pick-a-hospital hint and no cohort is requested', () => {
+    superAdminGlobalView = true;
+    fixture.detectChanges();
+    expect(registryService.registry).not.toHaveBeenCalled();
+    expect(registryService.counts).not.toHaveBeenCalled();
+    expect(root().querySelector('[data-testid="scope-hint"]')).toBeTruthy();
+  });
 
   it('loads the first page of the ACTIVE cohort of the first programme on init', () => {
     fixture.detectChanges();

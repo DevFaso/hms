@@ -5,6 +5,7 @@
       <p class="page-subtitle">{{ 'BED_BOARD.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       <button class="btn-secondary" (click)="loadBoard()" [disabled]="loading()">
         <span class="material-symbols-outlined">refresh</span>
         {{ 'BED_BOARD.REFRESH' | translate }}
@@ -14,6 +15,12 @@
 
   <!-- An airborne case in a ward that cannot contain it. This is the board's
        reason for existing, so it sits above everything else. -->
+  @if (!scopeReady()) {
+    <p class="scope-hint" data-testid="scope-hint">
+      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
+    </p>
+  }
+
   @if (mismatches().length > 0) {
     <div class="alert-banner" role="alert">
       <span class="material-symbols-outlined">coronavirus</span>

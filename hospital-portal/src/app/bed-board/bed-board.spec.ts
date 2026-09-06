@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -123,6 +124,7 @@ describe('BedBoardComponent', () => {
   let isolationSpy: jasmine.SpyObj<IsolationService>;
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let superAdminGlobalView = false;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -146,9 +148,15 @@ describe('BedBoardComponent', () => {
     transferSpy.getPending.and.returnValue(of([]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    superAdminGlobalView = false;
     const roleCtx = {
       hasAnyActiveRole: () => true,
-      isSuperAdmin: () => false,
+      isSuperAdmin: () => superAdminGlobalView,
+      effectiveHospitalIdForRequest: () => (superAdminGlobalView ? null : 'h1'),
+      globalView: () => superAdminGlobalView,
+      selectedHospitalId: () => null,
+      enableGlobalView: () => undefined,
+      scopeToHospital: () => undefined,
       activeHospitalId: 'h1',
     } as unknown as RoleContextService;
 
@@ -157,6 +165,7 @@ describe('BedBoardComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BedBoardService, useValue: boardSpy },
         { provide: IsolationService, useValue: isolationSpy },
         { provide: TransferService, useValue: transferSpy },
@@ -170,6 +179,18 @@ describe('BedBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
+    // A bed board belongs to a building: nothing to fetch until one is picked.
+    superAdminGlobalView = true;
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
+    ).toBeTruthy();
   });
 
   it('loads the board on init', () => {

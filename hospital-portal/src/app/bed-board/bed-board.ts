@@ -18,6 +18,7 @@ import {
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 /**
@@ -38,7 +39,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeChipComponent],
   templateUrl: './bed-board.html',
   styleUrl: './bed-board.scss',
 })
@@ -48,6 +49,16 @@ export class BedBoardComponent implements OnInit {
   private readonly transfers = inject(TransferService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no building to show (a bed board belongs to a building): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
   private readonly translate = inject(TranslateService);
 
   loading = signal(false);
@@ -183,7 +194,16 @@ export class BedBoardComponent implements OnInit {
     this.loadPendingTransfers();
   }
 
+  onScopeChange(): void {
+    this.loadBoard();
+    this.loadPendingTransfers();
+  }
+
   loadPendingTransfers(): void {
+    if (!this.scopeReady()) {
+      this.pendingTransfers.set([]);
+      return;
+    }
     this.transfers.getPending().subscribe({
       next: (list) => this.pendingTransfers.set(list),
       error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR')),
@@ -191,6 +211,11 @@ export class BedBoardComponent implements OnInit {
   }
 
   loadBoard(): void {
+    if (!this.scopeReady()) {
+      this.board.set(null);
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.boardService.getBoard().subscribe({
       next: (board) => {

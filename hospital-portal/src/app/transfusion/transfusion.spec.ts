@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -88,6 +89,7 @@ describe('TransfusionComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: TransfusionService, useValue: txSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: RoleContextService, useValue: roleCtx },
@@ -318,6 +320,7 @@ describe('TransfusionComponent — platelet pairing pending confirmation', () =>
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: TransfusionService, useValue: txSpy },
         {
           provide: ToastService,

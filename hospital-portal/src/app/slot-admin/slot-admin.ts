@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -16,6 +16,7 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { AuthService } from '../auth/auth.service';
 
 type AdminSection = 'visit-types' | 'templates' | 'slots';
@@ -32,7 +33,7 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
 @Component({
   selector: 'app-slot-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './slot-admin.html',
   styleUrl: './slot-admin.scss',
 })
@@ -42,6 +43,16 @@ export class SlotAdminComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no calendar to manage (visit types, templates and slots belong to a hospital): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
   private readonly auth = inject(AuthService);
 
   section = signal<AdminSection>('visit-types');
@@ -91,6 +102,18 @@ export class SlotAdminComponent implements OnInit {
     this.loadVisitTypes();
   }
 
+  onScopeChange(): void {
+    this.templates.set([]);
+    this.slots.set([]);
+    this.loadVisitTypes();
+    if (this.section() === 'templates') {
+      this.loadTemplates();
+    }
+    if (this.section() === 'slots') {
+      this.searchSlots();
+    }
+  }
+
   setSection(section: AdminSection): void {
     this.section.set(section);
     if (section === 'visit-types' && this.visitTypes().length === 0) {
@@ -111,6 +134,10 @@ export class SlotAdminComponent implements OnInit {
   // ── Visit types ────────────────────────────────────────────
 
   loadVisitTypes(): void {
+    if (!this.scopeReady()) {
+      this.visitTypes.set([]);
+      return;
+    }
     this.vtLoading.set(true);
     this.slotService.listVisitTypes(this.vtShowInactive()).subscribe({
       next: (rows) => {
@@ -205,6 +232,10 @@ export class SlotAdminComponent implements OnInit {
   // ── Session templates ──────────────────────────────────────
 
   loadTemplates(): void {
+    if (!this.scopeReady()) {
+      this.templates.set([]);
+      return;
+    }
     this.tplLoading.set(true);
     this.slotService.listTemplates(this.tplShowInactive()).subscribe({
       next: (rows) => {
@@ -345,6 +376,10 @@ export class SlotAdminComponent implements OnInit {
   }
 
   searchSlots(): void {
+    if (!this.scopeReady()) {
+      this.slots.set([]);
+      return;
+    }
     this.slotsLoading.set(true);
     this.slotService
       .searchOpen({

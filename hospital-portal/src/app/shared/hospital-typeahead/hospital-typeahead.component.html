@@ -56,6 +56,15 @@
         }
       </li>
     }
+    @if (truncated()) {
+      <li
+        class="hospital-typeahead__item hospital-typeahead__item--empty"
+        data-testid="hospital-typeahead-narrow"
+        role="presentation"
+      >
+        {{ 'HOSPITAL_SCOPE.TYPE_TO_NARROW' | translate: { count: limit } }}
+      </li>
+    }
     @if (emptyMessageKey(); as key) {
       <li class="hospital-typeahead__item hospital-typeahead__item--empty" role="presentation">
         {{ key | translate }}

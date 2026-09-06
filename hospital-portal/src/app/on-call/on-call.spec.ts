@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -55,6 +58,9 @@ describe('OnCallComponent', () => {
     TestBed.configureTestingModule({
       imports: [OnCallComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: OnCallService, useValue: onCallService },
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
@@ -63,6 +69,7 @@ describe('OnCallComponent', () => {
           provide: RoleContextService,
           useValue: {
             activeHospitalId: 'h-1',
+            isSuperAdmin: () => false,
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
           },
         },

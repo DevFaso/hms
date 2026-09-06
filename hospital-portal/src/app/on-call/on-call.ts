@@ -12,6 +12,7 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { AuthService } from '../auth/auth.service';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
@@ -35,7 +36,7 @@ interface OnCallFormModel {
 @Component({
   selector: 'app-on-call',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './on-call.html',
   styleUrl: './on-call.scss',
 })
@@ -45,6 +46,16 @@ export class OnCallComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * A super-admin in global view has no rota to show (an on-call schedule belongs to a hospital): the page shows the
+   * "select a hospital" hint and makes no call until one is picked. Staff are
+   * always scoped by their assignment, so nothing changes for them.
+   */
+  readonly scopeReady = computed(
+    () =>
+      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
+  );
   private readonly auth = inject(AuthService);
 
   entries = signal<OnCallScheduleResponse[]>([]);
@@ -75,7 +86,17 @@ export class OnCallComponent implements OnInit {
     this.load();
   }
 
+  onScopeChange(): void {
+    this.load();
+  }
+
   load(): void {
+    if (!this.scopeReady()) {
+      this.entries.set([]);
+      this.error.set(null);
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.error.set(null);
     const from = this.filterFrom

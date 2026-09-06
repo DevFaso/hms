@@ -66,7 +66,20 @@ describe('HospitalTypeaheadComponent', () => {
     // ngOnInit setTimeout-focus side-effect).
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    // The picker fetches its first page on open; a test that never typed
+    // still owes that request an answer.
+    httpMock
+      .match((r) => r.params.get('q') === '')
+      .filter((r) => !r.cancelled)
+      .forEach((r) => r.flush([]));
+    httpMock.verify();
+  });
+
+  const initialPage = () =>
+    httpMock.expectOne(
+      (r) => r.url === '/super-admin/hospitals/search' && r.params.get('q') === '',
+    );
 
   it('renders the search input and the All-hospitals option by default', () => {
     fixture.detectChanges();
@@ -85,17 +98,39 @@ describe('HospitalTypeaheadComponent', () => {
     ).toBeNull();
   });
 
-  it('does NOT issue a request for sub-2-character queries', (done) => {
+  it('lists the first page on open and narrows from the first character', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
-    component['onQueryChange']('a');
+    initialPage().flush([sampleHospital]);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="hospital-typeahead-option-h-1"]',
+      ),
+    ).toBeTruthy();
+
+    component['onQueryChange']('m');
     setTimeout(() => {
-      // expectNone(matcher) returns void; assert explicitly so Jasmine
-      // doesn't flag the spec as having "no expectations".
-      const matches = httpMock.match(() => true);
-      expect(matches.length).toBe(0);
+      const req = httpMock.expectOne(
+        (r) => r.url === '/super-admin/hospitals/search' && r.params.get('q') === 'm',
+      );
+      req.flush([]);
       done();
     }, DEBOUNCE_WAIT_MS);
+  });
+
+  it('shows the type-to-narrow row when the first page is full', () => {
+    fixture.componentRef.setInput('autoFocus', false);
+    fixture.detectChanges();
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      ...sampleHospital,
+      id: `h-${i}`,
+      name: `Hospital ${i}`,
+    }));
+    initialPage().flush(fullPage);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('HOSPITAL_SCOPE.TYPE_TO_NARROW');
   });
 
   it('debounces keystrokes and issues a single LIMIT-20 search', (done) => {
