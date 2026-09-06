@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: Use when preparing a feature PR commit message, responding to Copilot AI review comments, addressing Sonar code-smell findings, or naming a feature branch. Captures HMS's foundation-pass commit style, branch-naming convention, "started vs completed" status discipline, and the specific lessons learned from recent reviews on PRs #331-#335.
+description: Use after pushing ANY PR branch (the self-review gate — /code-review after every push, before the user merges; Copilot review quota is exhausted since 2026-09-05), when preparing a feature PR commit message, responding to review comments, addressing Sonar code-smell findings, or naming a feature branch. Captures HMS's foundation-pass commit style, branch-naming convention, "started vs completed" status discipline, and the specific lessons learned from recent reviews on PRs #331-#335.
 ---
 
 # PR + review-response patterns
@@ -8,6 +8,51 @@ description: Use when preparing a feature PR commit message, responding to Copil
 The team has settled into a specific commit-message + review-response
 shape across PRs #331-#335. Follow it for any new PR — reviewers expect
 this format.
+
+## Self-review gate — after EVERY push, before the merge (mandatory since 2026-09-05)
+
+Copilot's PR-review quota is exhausted (2026-09-05). Until further notice a PR
+gets **no reviewer except `/code-review`**, and the user merges PRs without
+warning — so the review has to be finished before the PR is reported ready,
+not after.
+
+The gate, every time a PR branch is pushed (first push **and** every follow-up):
+
+1. `git push` → `gh pr create` (or the follow-up push).
+2. `/code-review <PR#> high`. The finder agents run on a worktree copy of the
+   branch: **confirm every finding against the real tree before acting** —
+   grep the line, read the caller, run the test. A finding that does not hold
+   is dropped with a one-line reason in the PR comment.
+3. Apply what holds. A finding that widens the scope (a pre-existing defect in
+   a neighbouring class, a refactor of a shared service) goes to a
+   "Not in this PR, noted for follow-up" list in the PR body, not into the diff.
+4. Run the full suite locally (`./gradlew :hospital-core:test` from the repo
+   root; Karma for portal changes), commit as
+   `fix(<scope>): self-review of #N — <what changed>`, push.
+5. Re-run `/code-review` on the new head. Repeat 3–5 until a round yields
+   nothing actionable. Two rounds is normal; three means the fix is being
+   designed in the PR — stop and rethink the shape.
+6. Post one PR comment: findings **taken** (grouped by angle, one line each)
+   and findings **noted, not in this PR**. Update the PR body to describe the
+   final shape, not the first cut.
+7. `gh pr checks <PR#> --watch` until green (Sonar included), then report the
+   PR as ready with: suite count, CI status, review rounds, and the follow-ups.
+
+What the gate has caught that CI, Sonar and the unit suite did not:
+
+- **#563** (ShedLock hotfix): six angles → one locked entry point instead of a
+  locked wrapper plus an unlocked twin; lock advisor ordered outside the
+  transaction; skipped runs answer 409 instead of a fake 0.
+- **#564** (write-audit lazy proxy): ten angles → the first cut (a second
+  `@EntityGraph` finder, a `Hibernate.isInitialized` guard, an inner catch,
+  two repository tests) protected a value the audit service derives from the
+  id anyway; collapsed to passing `assignmentId` (−261 lines). The same round
+  surfaced that `audit_event_logs.assignment_id` has **no FK on Postgres**
+  while H2 builds one from the entity, a role-name format split, and a test
+  cleanup at the wrong end that only passed by class ordering.
+
+Anti-pattern this replaces: "CI is green and Copilot has no comments, so it is
+ready." Copilot has no comments because it has no tokens.
 
 ## Branch naming
 
