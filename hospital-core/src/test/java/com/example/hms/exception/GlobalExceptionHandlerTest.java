@@ -28,6 +28,36 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // handleNotificationTransportUnavailable
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleNotificationTransportUnavailable")
+    class HandleNotificationTransportUnavailable {
+
+        @Test
+        @DisplayName("returns 503 and the message unprefixed — @ResponseStatus alone would be dead here")
+        void returns503WithTheMessageIntact() {
+            // handleRuntimeException claims every RuntimeException, and Spring
+            // runs ExceptionHandlerExceptionResolver before the
+            // ResponseStatusExceptionResolver that would read @ResponseStatus.
+            // Without the dedicated handler this is a 500 whose body reads
+            // "An unexpected error occurred: ...".
+            var ex = new NotificationTransportUnavailableException(
+                "SMS verification is unavailable right now.");
+
+            ResponseEntity<Object> response =
+                handler.handleNotificationTransportUnavailable(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).containsEntry("message", "SMS verification is unavailable right now.");
+            assertThat(String.valueOf(body.get("message"))).doesNotContain("unexpected error");
+        }
+    }
+
+    // =========================================================================
     // handleConflictException — core new handler
     // =========================================================================
 

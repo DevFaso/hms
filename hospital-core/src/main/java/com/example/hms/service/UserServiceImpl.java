@@ -55,7 +55,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -392,15 +391,18 @@ public class UserServiceImpl implements UserService {
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
                     : null;
-            // The account is inactive until the assignment code is confirmed,
-            // so the welcome mail must carry the confirmation screen's address.
-            // Prefer the hospital-scoped assignment (that is the one whose code
-            // was mailed); a global role has exactly one assignment anyway.
-            final String activationUrl = ensuredAssignments.stream()
-                    .filter(a -> a.getAssignmentCode() != null && !a.getAssignmentCode().isBlank())
-                    .max(Comparator.comparing(a -> a.getHospital() != null))
-                    .map(a -> assignmentLinkService.buildProfileCompletionUrl(a.getAssignmentCode()))
-                    .orElse(null);
+            // The account is inactive until an assignment code is confirmed, so
+            // the welcome mail carries the confirmation screen's address — but
+            // only when there is exactly one assignment to point at. A
+            // two-role registration mails one code per assignment, and
+            // RoleWelcomeComponent validates the typed code against the
+            // assignment named in the URL: linking an arbitrary one would make
+            // the other mail's code look wrong. With several, the mail names
+            // the step and each assignment mail carries its own correct link.
+            final String soleCode = soleAssignmentCode(ensuredAssignments);
+            final String activationUrl = soleCode == null
+                    ? null
+                    : assignmentLinkService.buildProfileCompletionUrl(soleCode);
             try {
                 emailService.sendAdminWelcomeEmail(
                     user.getEmail(), displayName,
@@ -1320,6 +1322,31 @@ public class UserServiceImpl implements UserService {
             chars[j] = tmp;
         }
         return new String(chars);
+    }
+
+
+    /**
+     * The assignment code the welcome mail may link, or null when there is no
+     * single right answer.
+     *
+     * <p>A two-role registration mails one confirmation code per assignment,
+     * and {@code RoleWelcomeComponent} validates the typed code against the
+     * assignment named in the URL — so linking an arbitrary one would make the
+     * other mail's code look wrong. With several, the welcome mail names the
+     * step instead, and each assignment mail carries its own correct link.
+     *
+     * <p>Visible for testing.
+     */
+    static String soleAssignmentCode(List<UserRoleHospitalAssignment> assignments) {
+        if (assignments == null) {
+            return null;
+        }
+        List<String> codes = assignments.stream()
+                .map(UserRoleHospitalAssignment::getAssignmentCode)
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .toList();
+        return codes.size() == 1 ? codes.get(0) : null;
     }
 
 }

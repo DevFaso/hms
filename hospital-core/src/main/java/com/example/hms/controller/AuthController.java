@@ -389,18 +389,15 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
         } catch (DisabledException ex) {
-            // "Verify your email" named a flow staff do not have: only patients
-            // carry an email activation token. Everyone else activates by
-            // confirming the role assignment with the emailed/texted code, so
-            // the message has to point at that — the credentials are correct
-            // here, and a dead end at this exact step is what gets reported as
-            // "I never received an activation email".
+            // "Please verify your email" named a flow only patients have: they
+            // carry an activation token and get a /verify link, while staff
+            // activate by confirming a role assignment with an emailed code.
+            // Sending one down the other's path is a dead end at the exact
+            // step that gets reported as "I never received an activation
+            // email", so the message follows the account's real route.
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(
-                            "Your account is not activated yet. Open the \"Confirm Your Hospital Role "
-                            + "Assignment\" message we sent you and enter the confirmation code. "
-                            + "If it never arrived, ask your administrator to resend it."));
+                    .body(new MessageResponse(inactiveAccountGuidance(loginRequest.getUsername())));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),
@@ -1186,4 +1183,35 @@ public class AuthController {
 
         return new HospitalContext(primaryId, primaryName, ids.isEmpty() ? null : ids);
     }
+
+    /**
+     * Which activation route this particular disabled account actually has.
+     * Credentials have already been accepted at the call site, so naming the
+     * route reveals nothing an attacker could not get by other means.
+     */
+    private String inactiveAccountGuidance(String username) {
+        var userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return "Your account is not active. Please contact your administrator.";
+        }
+        var user = userOpt.get();
+
+        if (user.getActivationToken() != null) {
+            // Patient path: an activation LINK was mailed, not a code.
+            return "Your account is not activated yet. Open the activation link we emailed you. "
+                + "If it expired or never arrived, request a new one from the sign-in page.";
+        }
+
+        boolean awaitingConfirmation = assignmentRepository.findByUser(user).stream()
+            .anyMatch(a -> a.getConfirmationVerifiedAt() == null);
+        if (awaitingConfirmation) {
+            return "Your account is not activated yet. Open the \"Confirm Your Hospital Role "
+                + "Assignment\" message we sent you and enter the confirmation code. "
+                + "If it never arrived, ask your administrator to resend it.";
+        }
+
+        // Nothing left to confirm: an administrator switched this account off.
+        return "Your account has been deactivated. Please contact your administrator.";
+    }
+
 }
