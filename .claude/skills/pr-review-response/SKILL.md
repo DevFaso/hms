@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: "Use after pushing ANY PR branch (the self-review gate: /code-review after every push, draft until it passes, before the user merges), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
+description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
 ---
 
 # PR + review-response patterns
@@ -9,58 +9,52 @@ The team has settled into a specific commit-message + review-response
 shape across PRs #331-#335. Follow it for any new PR — reviewers expect
 this format.
 
-## Self-review gate — after EVERY push, draft until it passes
+## Self-review gate — draft until it passes
 
 A PR gets one structured review before the user sees it as mergeable, and
 it is this one. Copilot's review quota has been exhausted since 2026-09-05
-and may or may not come back; when it does it supplements this gate, it
-does not replace it. The user merges PRs without warning, so the PR stays
-a **draft** until the gate has passed.
+and may or may not come back; when it does, its comments are findings for
+step 3, not a substitute. The user merges PRs without warning, so the PR is
+a **draft** until the gate has passed. Not "CI is green and there are no
+comments, so it is ready". What the gate has caught that CI, Sonar and the
+unit suite did not is under
+[Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
 
-The gate, every time a PR branch is pushed:
-
-1. Run the [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
-   locally first (backend: test + jacoco verification; portal: format, lint,
-   `test:headless`, i18n, as that section lists — the commit hook alone only
-   checks portal format and lint, see [Pre-commit hook](#pre-commit-hook)).
-   Then `git push`; on the first push `gh pr create --draft`.
-2. `/code-review <PR#> high`. The finder agents run on a worktree copy of the
-   branch: confirm every finding against the real tree before acting — for
-   code, grep the line, read the caller, run the test; for prose or config,
-   `git diff origin/develop -- <file>` and check the claim against the file
-   it cites (CI workflow, settings, entity). A finding that does not hold is
-   dropped with a one-line reason (step 6). Fold in anything Sonar posted on
-   the PR.
-3. Apply what holds. A finding that widens the scope (a pre-existing defect
-   in a neighbouring class, a refactor of a shared service) becomes a bullet
-   under **Standing platform debt** in `tasklist.md` in the same commit,
-   linked from the PR body — never part of the diff (see
+1. **Before every push** run the
+   [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
+   for each side the diff touches. Push. First push: `gh pr create --draft`;
+   a push to a PR already marked ready: `gh pr ready --undo <PR#>` first.
+   Then start `gh pr checks <PR#> --watch` in the background (~11 min, longer
+   than a foreground tool call).
+2. `/code-review <PR#> high` — always with the PR number; a bare re-run
+   reviews an empty diff and passes trivially. The finders run on a worktree
+   copy of the branch: confirm every finding against the real tree before
+   acting — for code, grep the line, read the caller, run the test; for
+   prose or config, `git diff origin/develop -- <file>` and check the claim
+   against the file it cites. A finding that does not hold is dropped with a
+   one-line reason (step 5). Review comments on the PR (Sonar; Copilot when
+   it is back) and a red check from the watch are findings too.
+3. Apply what holds in the working tree. A finding that widens the scope
+   stays out of the fix: it becomes one bullet under **Standing platform
+   debt** in `tasklist.md`, edited now so it lands in the step-4 commit (see
    [Off-scope comments](#off-scope-comments--when-to-defer)).
-4. Re-run the local gate from step 1, commit as the self-review variant in
-   [Review-response commit pattern](#review-response-commit-pattern), push.
-5. `/code-review <PR#> high` again on the new head — with the PR number, or
-   the skill reviews an empty diff and passes trivially. Repeat 2–5 until a
-   round yields nothing actionable. Two rounds is normal. A third round with
-   actionable findings means the fix is being designed in the PR: stop, post
-   the round-3 findings as the PR comment, and ask the user how to proceed
-   before pushing more.
-6. Post one PR comment in three buckets: **taken** (grouped by angle, one
-   line each), **dropped** (finding + the one-line reason it does not hold),
-   **noted, not in this PR** (with the tasklist bullet). Update the PR body
-   to describe the final shape, not the first cut.
-7. CI: start `gh pr checks <PR#> --watch` in the background right after each
-   push (it runs ~11 min, longer than a foreground tool call, and errors with
-   "no checks reported" if run before the runs exist); read it when it
-   finishes. A red check fixed by a code change re-enters at step 2; a push
-   that changes no reviewed line (a local merge of develop, a retry of a
-   flaky check) re-runs only this step. When every check is green,
-   `gh pr ready <PR#>` and report: suite count, CI status, review rounds,
-   the tasklist bullets.
-
-What this replaces: "CI is green and Copilot has no comments, so it is
-ready." Copilot has no comments because it has no tokens. What the gate has
-caught that CI, Sonar and the unit suite did not is recorded under
-[Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review-2026-09-05-batch--prs-563--564).
+4. Commit as the self-review variant in
+   [Review-response commit pattern](#review-response-commit-pattern), then
+   back to step 1 (gate, push, watch) and step 2 reviews the new head. One
+   pass through 1–4 is a round. Two rounds is normal. A third round with
+   actionable findings means the fix is being designed in the PR: stop,
+   post the round-3 findings as the PR comment (step 5), and ask the user how
+   to proceed before pushing more.
+5. When a round yields nothing actionable, post one PR comment in three
+   buckets: **taken** (grouped by angle, one line each), **dropped** (finding
+   plus the one-line reason it does not hold), **noted, not in this PR** (the
+   tasklist bullet). Update the PR body to describe the final shape, not the
+   first cut.
+6. When the last round was clean **and** every check is green,
+   `gh pr ready <PR#>` and report: suite count, CI status, rounds, tasklist
+   bullets. A push that leaves the PR diff unchanged (a local merge of
+   develop, a retry of a flaky check) still runs step 1 but skips the review
+   round: read the watch, then this step.
 
 ## Branch naming
 
@@ -145,13 +139,14 @@ Cloud / etc.>
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
-The self-review variant (the gate above) keeps the shape and changes the
-subject and the source line:
+The self-review variant (the gate above) keeps the shape; the subject,
+the source line and the per-finding label change, and the off-scope line
+names the tasklist bullets:
 
 ```
 fix(<scope>): self-review of #N — <what changed, one line>
 
-/code-review high, round <k>: <n> taken, <m> dropped, <p> noted.
+/code-review high, round <k>.
 
 <File>:<Line> — <angle>:
 - <root cause>
@@ -159,7 +154,7 @@ fix(<scope>): self-review of #N — <what changed, one line>
 
 Noted, not in this PR: <tasklist.md bullet titles>.
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+<the tag from the Co-author tag section>
 ```
 
 Common review-comment categories the team has seen:
@@ -198,23 +193,21 @@ diff). Verify with:
 git diff origin/develop -- <file> | head
 ```
 
-If the offending lines aren't in your diff, **defer to a separate
-`fix(<scope>)` PR** and call it out explicitly in the response commit
-message:
+If the offending lines aren't in your diff, **defer**: the fix stays out
+of this PR, the finding becomes one bullet under **Standing platform debt**
+in `tasklist.md` in the same PR, and the response commit message says so:
 
 > The MLLP/Hl7MessageDispatcher Copilot comments on lazy hospital,
 > casing normalization, integration_id length, etc. are noise on this
 > PR — verified the diff against `origin/develop` touches X but NOT Y.
-> Those issues are real and should be addressed in a follow-on
-> `fix(hl7)` PR; tracked separately.
+> Those issues are real; tracked as a Standing platform debt bullet in
+> tasklist.md for a follow-on `fix(hl7)` PR.
 
 Don't silently expand the PR scope — it makes review harder and
 inflates the diff against the original review.
 
-Where the deferred item lives: a bullet under **Standing platform debt** in
-`tasklist.md`, added in the same PR. A PR comment or body is not a tracker —
-#563's follow-ups (per-row transactions for the escalation sweeps, the
-referral-expiry shared lock) lived only in a comment until 2026-09-05.
+A PR comment or body is not a tracker: #563's follow-ups lived only in a
+comment until 2026-09-05.
 
 ## PR title vs commit subject
 
@@ -257,10 +250,18 @@ highest-leverage discipline on the project.
 
 ```bash
 cd hospital-portal
-npm run format:check   # prettier --check src/**/*.{ts,html,scss,md,json}
-npm run lint           # eslint src/**/*.{ts,html}
-npm test               # jest unit + spec
+npm run lint             # eslint src/**/*.{ts,html}
+npm run format:check     # prettier --check src/**/*.{ts,html,scss,md,json}
+npm run i18n:parity      # every EN key present in FR and ES (strict)
+npm run i18n:referenced  # every key a template uses exists
+npm run build            # AOT: the template type errors lint misses
+npm run test:coverage    # Karma, ChromeHeadless, --watch=false, with coverage
+npm run coverage:check   # the coverage ratchet CI enforces
 ```
+
+That is the `lint-build-test` job of `frontend-ci.yml`, in its order.
+`e2e:a11y` is its own job; run `npm run e2e` locally when a smoke route
+changed.
 
 If `format:check` fails, run `npm run format` to auto-fix, then
 re-stage. **Do not** push a branch with an unformatted file — the
@@ -294,8 +295,10 @@ relied on `compileJava` passing rather than the full test task.
 
 ```bash
 # From repo root:
-(cd hospital-portal && npm run format:check && npm run lint && npm test) \
-  && ./gradlew :hospital-core:test :hospital-core:jacocoTestCoverageVerification
+(cd hospital-portal && npm run lint && npm run format:check \
+  && npm run i18n:parity && npm run i18n:referenced && npm run build \
+  && npm run test:coverage && npm run coverage:check) \
+  && ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
 ```
 
 When that command exits 0, commit. When it doesn't, fix and re-run —
@@ -1159,7 +1162,9 @@ method, and asserts a Bundle with just the Patient entry comes back.
 That doesn't add bug-finding value, but it pushes coverage above the
 80% line without faking it.
 
-## Anti-patterns surfaced by self-review (2026-09-05 batch — PRs #563 / #564)
+## Anti-patterns surfaced by self-review
+
+2026-09-05 batch — PRs #563 / #564.
 
 ### Backend — ShedLock cannot lock a primitive-returning method, and the lock must outlive the transaction
 
