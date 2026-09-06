@@ -16,7 +16,16 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, catchError, debounceTime, merge, of, switchMap, tap } from 'rxjs';
+import {
+  Subject,
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  merge,
+  of,
+  switchMap,
+  tap,
+} from 'rxjs';
 
 import { HospitalResponse, HospitalService } from '../../services/hospital.service';
 
@@ -62,18 +71,15 @@ export class HospitalTypeaheadComponent implements OnInit {
   // Debounce window matches the design doc's 300 ms; below the
   // ~400 ms perception threshold for "feels instant".
   private static readonly DEBOUNCE_MS = 300;
-  private static readonly LIMIT = 20;
-  /** Exposed for the "type to narrow" row. */
-  protected readonly limit = HospitalTypeaheadComponent.LIMIT;
+  /** Page size asked of the server (its cap is 20); also the "type to narrow" threshold. */
+  protected readonly limit = 20;
 
   protected readonly query = signal<string>('');
   protected readonly results = signal<HospitalResponse[]>([]);
   protected readonly loading = signal<boolean>(false);
   protected readonly errored = signal<boolean>(false);
   /** A full page means there are more: say so instead of silently truncating. */
-  protected readonly truncated = computed(
-    () => this.results().length >= HospitalTypeaheadComponent.LIMIT,
-  );
+  protected readonly truncated = computed(() => this.results().length >= this.limit);
 
   /**
    * What the empty-results helper text should say: a "no matches" line once
@@ -89,7 +95,11 @@ export class HospitalTypeaheadComponent implements OnInit {
       return 'HOSPITAL_SCOPE.SEARCH_ERROR';
     }
     if (this.results().length === 0) {
-      return 'HOSPITAL_SCOPE.NO_MATCHES';
+      // Nothing typed and nothing back: the tenant has no active hospital,
+      // which is not a failed search.
+      return this.query().trim() === ''
+        ? 'HOSPITAL_SCOPE.NONE_ACTIVE'
+        : 'HOSPITAL_SCOPE.NO_MATCHES';
     }
     return null;
   });
@@ -100,10 +110,11 @@ export class HospitalTypeaheadComponent implements OnInit {
     // The first page loads on open (empty query, first LIMIT by name): the
     // picker used to open on an empty list with only a placeholder to say
     // that typing was required. Keystrokes are debounced; the opener is not.
-    // No distinctUntilChanged: an emptied box after a failed opener must be
-    // able to ask for the first page again.
     merge(of(''), this.search$.pipe(debounceTime(HospitalTypeaheadComponent.DEBOUNCE_MS)))
       .pipe(
+        // The same query again (a trailing space, a corrected typo) is not a
+        // new search — unless the last one failed, in which case it is a retry.
+        distinctUntilChanged((previous, next) => previous === next && !this.errored()),
         tap(() => {
           // The previous query's rows are not answers to this one: clear them
           // so a stale option cannot be picked while the request is in flight.
@@ -112,7 +123,7 @@ export class HospitalTypeaheadComponent implements OnInit {
           this.errored.set(false);
         }),
         switchMap((q) =>
-          this.hospitalService.searchHospitals(q, HospitalTypeaheadComponent.LIMIT).pipe(
+          this.hospitalService.searchHospitals(q, this.limit).pipe(
             catchError(() => {
               this.errored.set(true);
               return of([] as HospitalResponse[]);

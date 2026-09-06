@@ -17,13 +17,8 @@
     </div>
   </header>
 
-  @if (!scopeReady()) {
-    <!-- Super-admin global view: every panel read is hospital-pinned
-         server-side, so there is nothing to ask until the chip pins one. -->
-    <section class="card">
-      <p class="hint">{{ 'PANEL.PICK_HOSPITAL' | translate }}</p>
-    </section>
-  } @else {
+  <app-hospital-scope-hint />
+  @if (scopeReady()) {
     <!-- ── My panel ─────────────────────────────────────────────────── -->
     <section class="card">
       <h2>{{ 'PANEL.MY_PANEL' | translate }}</h2>

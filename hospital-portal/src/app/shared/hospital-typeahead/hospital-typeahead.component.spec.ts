@@ -115,6 +115,16 @@ describe('HospitalTypeaheadComponent', () => {
     }, DEBOUNCE_WAIT_MS);
   });
 
+  it('says there are no active hospitals when the first page comes back empty', () => {
+    fixture.componentRef.setInput('autoFocus', false);
+    fixture.detectChanges();
+    initialPage().flush([]);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('HOSPITAL_SCOPE.NONE_ACTIVE');
+    expect(text).not.toContain('HOSPITAL_SCOPE.NO_MATCHES');
+  });
+
   it('shows the type-to-narrow row when the first page is full', () => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
@@ -138,6 +148,11 @@ describe('HospitalTypeaheadComponent', () => {
     component['onQueryChange']('mem');
     component['onQueryChange']('memo');
     setTimeout(() => {
+      // The intermediate keystrokes never reached the network — not even as
+      // cancelled requests (verify() ignores those, so count them here).
+      expect(
+        httpMock.match((r) => ['m', 'me', 'mem'].includes(r.params.get('q') ?? '')).length,
+      ).toBe(0);
       const req = httpMock.expectOne(
         (r) => r.url === '/super-admin/hospitals/search' && r.params.get('q') === 'memo',
       );
