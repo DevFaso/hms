@@ -15,25 +15,35 @@ A PR gets one structured review before the user sees it as mergeable, and
 it is this one. Copilot's review quota has been exhausted since 2026-09-05
 and may or may not come back; when it does, its comments are findings for
 step 3, not a substitute. The user merges PRs without warning, so the PR is
-a **draft** until the gate has passed. Not "CI is green and there are no
-comments, so it is ready". What the gate has caught that CI, Sonar and the
-unit suite did not is under
+opened as a **draft** and made ready only at step 6. Draft is a signal, not
+a lock (#509 was flipped to ready and merged), so every push must be a state
+you would let merge, its tasklist bullet included. Not "CI is green and
+there are no comments, so it is ready". What the gate has caught that CI,
+Sonar and the unit suite did not is under
 [Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
 
 1. **Before every push** run the
    [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
-   for each side the diff touches. Push. First push: `gh pr create --draft`;
-   a push to a PR already marked ready: `gh pr ready --undo <PR#>` first.
-   Then start `gh pr checks <PR#> --watch` in the background (~11 min, longer
-   than a foreground tool call).
+   for each side the diff touches. Push. First push:
+   `gh pr create --draft --title "<subject>" --body-file <file>` (the tool
+   is non-interactive; without the flags the command fails). A push to a PR
+   already marked ready: `gh pr ready --undo <PR#>` first. CI runs on the
+   pull-request event, so the runs appear seconds after that event, not the
+   push: once `gh pr checks <PR#>` lists them, start
+   `gh pr checks <PR#> --watch` in the background (~11 min, longer than a
+   foreground tool call; started earlier it exits with "no checks
+   reported").
 2. `/code-review <PR#> high` — always with the PR number; a bare re-run
-   reviews an empty diff and passes trivially. The finders run on a worktree
-   copy of the branch: confirm every finding against the real tree before
-   acting — for code, grep the line, read the caller, run the test; for
-   prose or config, `git diff origin/develop -- <file>` and check the claim
-   against the file it cites. A finding that does not hold is dropped with a
-   one-line reason (step 5). Review comments on the PR (Sonar; Copilot when
-   it is back) and a red check from the watch are findings too.
+   reviews an empty diff and passes trivially. For a diff touching
+   `security/`, `config/`, a controller, CORS or auth, also
+   `/security-review`: the code review looks for correctness, reuse and
+   efficiency, not for a widened allowlist or a missing `@PreAuthorize`.
+   The finders run on a worktree copy of the branch: confirm every finding
+   against the real tree before acting — for code, grep the line, read the
+   caller, run the test; for prose or config,
+   `git diff origin/develop -- <file>` and check the claim against the file
+   it cites. A finding that does not hold is dropped with a one-line reason
+   (step 5).
 3. Apply what holds in the working tree. A finding that widens the scope
    stays out of the fix: it becomes one bullet under **Standing platform
    debt** in `tasklist.md`, edited now so it lands in the step-4 commit (see
@@ -50,11 +60,19 @@ unit suite did not is under
    plus the one-line reason it does not hold), **noted, not in this PR** (the
    tasklist bullet). Update the PR body to describe the final shape, not the
    first cut.
-6. When the last round was clean **and** every check is green,
-   `gh pr ready <PR#>` and report: suite count, CI status, rounds, tasklist
-   bullets. A push that leaves the PR diff unchanged (a local merge of
-   develop, a retry of a flaky check) still runs step 1 but skips the review
-   round: read the watch, then this step.
+6. When the watch finishes, read what arrived with it: Sonar's PR comment
+   and issues (they land about ten minutes after the push, so never at step
+   2), any review comment (Copilot when it is back), a red check. Each is a
+   finding — step 3 — even when every check is green. Then, with the last
+   round clean and every check green: `git status` is clean;
+   `git rev-list --count origin/<branch>..origin/develop` is 0, else merge
+   develop in locally and go back to step 1 — a conflicted merge re-enters
+   after re-verifying `changelog.xml` registration (`MigrationRegistrationTest`)
+   and the i18n files by hand, because a resolved conflict in either has
+   dropped a migration before; a clean merge or a retry of a flaky check
+   runs step 1 and skips the review round; `gh pr diff <PR#> --name-only`
+   matches the description. Then `gh pr ready <PR#>` and report: suite
+   count, CI status, rounds, tasklist bullets.
 
 ## Branch naming
 
@@ -1176,6 +1194,10 @@ advisor wraps the transaction advisor and a lock cannot release before the
 stamps commit. A skipped manual run answers 409 with `skipped: true`, never a
 fake 0.
 
+`SchedulerLockCoverageTest` enforces the return-type and shared-entry-point
+rules; the unlocked twin is the proxy bypass described under
+[`@Transactional` self-invocation never works](#backend--transactional-self-invocation-never-works).
+
 **Caught:** #563. Copilot's four comments on that PR overlapped the missing
 imaging controller test, the fake-zero response and the wrapper
 self-invocation; the lock-advisor ordering came only from the self-review.
@@ -1189,6 +1211,10 @@ under its own session. Do not add a second `@EntityGraph` finder for one
 caller. Unit tests with mocked repositories cannot see a lazy proxy:
 reproduce with a full-stack IT that asserts the audit row exists, or a mock
 whose getter throws `LazyInitializationException`.
+
+The call itself is the audit-wiring example in the `phi-encryption-audit`
+skill; the same trap under another name is the Lazy-load trap in
+`hl7-mllp-integration`.
 
 **Caught:** #564. The first cut (a graph finder, a `Hibernate.isInitialized`
 guard, an inner catch, two repository tests) protected a value the audit

@@ -148,7 +148,7 @@ production traffic.
 For any endpoint representing **authenticated clinical access**
 (FHIR read / write, DICOM proxy, KPI dashboard, chart-review),
 the `AuditEventRequestDTO` builder MUST include the principal's
-`assignment` (or at minimum `userId` / `userName`). Without those
+`assignmentId` (or at minimum `userId` / `userName`). Without those
 fields, `AuditEventLogServiceImpl` resolves the actor as
 `SYSTEM` — which silently mis-attributes clinician access to
 "the system" instead of the actual user, undermining the audit
@@ -167,10 +167,16 @@ AuditEventRequestDTO request = AuditEventRequestDTO.builder()
     .resourceId(studyUid)
     .userId(principal.getUserId())
     .userName(principal.getUsername())
-    .assignment(principal.getActiveAssignment())
+    .assignmentId(principal.getActiveAssignmentId())
     .eventDescription("DICOM QIDO-RS lookup for study " + studyUid)
     .build();
 ```
+
+Ids only: `AuditEventLogServiceImpl.logEvent` is `REQUIRES_NEW` and reloads
+the assignment under its own session, deriving the hospital and role names
+itself. Never hand it an entity, and never read the assignment's lazy
+hospital outside a session — that lost every hospital-scoped write audit
+until #564 (2026-09-05).
 
 SYSTEM-actor writes (MLLP, scheduler, Kafka consumer) stay as-is —
 no principal is available — and supply a hospital snapshot
