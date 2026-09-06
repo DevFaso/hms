@@ -1592,9 +1592,9 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
-- UI palette migration `--primary: #2563eb` → Keneya green. The brand shipped
-  (#505–#507); the design tokens did not, so teal/ochre currently coexist with
-  blue. Touches contrast ratios, focus rings and the axe gate — its own PR.
+- ~~UI palette migration `--primary: #2563eb` → Keneya green.~~ Closed by
+  #562 (2026-09-05): the tokens in `styles.scss` (`--primary: #0e7c6b`, dark
+  `#0a5f52`, light `#23b79c` for fills only), axe 6/6.
 - `java:S8700` project-wide decision: 21 findings across 18 files, all
   `Duration.between(LocalDateTime, LocalDateTime)`. This is one call about
   whether clinical timestamps move to `Instant`/`OffsetDateTime` on
@@ -1605,14 +1605,28 @@ that exists rather than inventing one.
   conditional UPDATE committed in its own transaction before sending
   (`ReminderClaimService`); the lab/imaging escalations lock the shared service
   method so the manual triggers contend for the same lock. Slot hold/book
-  had `@Version` since V128.
+  had `@Version` since V128. Still owed (#563 self-review): the escalation
+  sweeps run one transaction per sweep with the SMS sent inside it, so a late
+  row can roll back stamps whose SMS already went out — per-row transactions
+  with the send after commit, the `ReminderClaimService` shape; and
+  `GeneralReferralController`'s manual trigger does not share
+  `ReferralExpiryScheduler`'s lock (per-row `@Version` prevents a double
+  transition, so contention, not corruption).
 - ~~Audit events on the write surfaces added since #431.~~ Closed by
   `WriteAuditInterceptor`: every successful POST/PUT/PATCH/DELETE by an
   authenticated user is recorded (DATA_CREATE/UPDATE/DELETE, entity from the
   route, patient from `{patientId}`, and the actor's assignment/hospital when
   the request is hospital-scoped) unless the handler opts out with
   `@WriteAudited(skip = true, reason = …)` because its service already emits a
-  specific event.
+  specific event. #564 restored the hospital-scoped rows, dropped until then
+  by a lazy-hospital read outside the session. Still owed (#564 self-review):
+  `findFirstByUser_IdAndHospital_IdAndActiveTrue` has no `ORDER BY`, so an
+  actor with two active roles at one hospital is anchored to either, on audit
+  rows and in authorisation alike (eight callers);
+  `AuditEventLogServiceImpl.logEvent` reloads the user and the assignment
+  with wide graphs and runs a guaranteed-miss `patientRepository.findById` on
+  sub-resource ids for every audited write; four `BaseIT` controller classes
+  each hand-roll the same FK-ordered `deleteAll()` list.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.

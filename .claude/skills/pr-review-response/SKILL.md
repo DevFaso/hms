@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: Use when preparing a feature PR commit message, responding to Copilot AI review comments, addressing Sonar code-smell findings, or naming a feature branch. Captures HMS's foundation-pass commit style, branch-naming convention, "started vs completed" status discipline, and the specific lessons learned from recent reviews on PRs #331-#335.
+description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
 ---
 
 # PR + review-response patterns
@@ -8,6 +8,71 @@ description: Use when preparing a feature PR commit message, responding to Copil
 The team has settled into a specific commit-message + review-response
 shape across PRs #331-#335. Follow it for any new PR — reviewers expect
 this format.
+
+## Self-review gate — draft until it passes
+
+A PR gets one structured review before the user sees it as mergeable, and
+it is this one. Copilot's review quota has been exhausted since 2026-09-05
+and may or may not come back; when it does, its comments are findings for
+step 3, not a substitute. The user merges PRs without warning, so the PR is
+opened as a **draft** and made ready only at step 6. Draft is a signal, not
+a lock (#509 was flipped to ready and merged), so every push must be a state
+you would let merge, its tasklist bullet included. Not "CI is green and
+there are no comments, so it is ready". What the gate has caught that CI,
+Sonar and the unit suite did not is under
+[Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
+
+1. **Before every push** run the
+   [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
+   for each side the diff touches. Push. First push:
+   `gh pr create --draft --title "<subject>" --body-file <file>` (the tool
+   is non-interactive; without the flags the command fails). A push to a PR
+   already marked ready: `gh pr ready --undo <PR#>` first. CI runs on the
+   pull-request event, so the runs appear seconds after that event, not the
+   push: once `gh pr checks <PR#>` lists them, start
+   `gh pr checks <PR#> --watch` in the background (~11 min, longer than a
+   foreground tool call; started earlier it exits with "no checks
+   reported").
+2. `/code-review <PR#> high` — always with the PR number; a bare re-run
+   reviews an empty diff and passes trivially. For a diff touching
+   `security/`, `config/`, a controller, CORS or auth, also
+   `/security-review`: the code review looks for correctness, reuse and
+   efficiency, not for a widened allowlist or a missing `@PreAuthorize`.
+   The finders run on a worktree copy of the branch: confirm every finding
+   against the real tree before acting — for code, grep the line, read the
+   caller, run the test; for prose or config,
+   `git diff origin/develop -- <file>` and check the claim against the file
+   it cites. A finding that does not hold is dropped with a one-line reason
+   (step 5).
+3. Apply what holds in the working tree. A finding that widens the scope
+   stays out of the fix: it becomes one bullet under **Standing platform
+   debt** in `tasklist.md`, edited now so it lands in the step-4 commit (see
+   [Off-scope comments](#off-scope-comments--when-to-defer)).
+4. Commit as the self-review variant in
+   [Review-response commit pattern](#review-response-commit-pattern), then
+   back to step 1 (gate, push, watch) and step 2 reviews the new head. One
+   pass through 1–4 is a round. Two rounds is normal. A third round with
+   actionable findings means the fix is being designed in the PR: stop,
+   post the round-3 findings as the PR comment (step 5), and ask the user how
+   to proceed before pushing more.
+5. When a round yields nothing actionable, post one PR comment in three
+   buckets: **taken** (grouped by angle, one line each), **dropped** (finding
+   plus the one-line reason it does not hold), **noted, not in this PR** (the
+   tasklist bullet). Update the PR body to describe the final shape, not the
+   first cut.
+6. When the watch finishes, read what arrived with it: Sonar's PR comment
+   and issues (they land about ten minutes after the push, so never at step
+   2), any review comment (Copilot when it is back), a red check. Each is a
+   finding — step 3 — even when every check is green. Then, with the last
+   round clean and every check green: `git status` is clean;
+   `git rev-list --count origin/<branch>..origin/develop` is 0, else merge
+   develop in locally and go back to step 1 — a conflicted merge re-enters
+   after re-verifying `changelog.xml` registration (`MigrationRegistrationTest`)
+   and the i18n files by hand, because a resolved conflict in either has
+   dropped a migration before; a clean merge or a retry of a flaky check
+   runs step 1 and skips the review round; `gh pr diff <PR#> --name-only`
+   matches the description. Then `gh pr ready <PR#>` and report: suite
+   count, CI status, rounds, tasklist bullets.
 
 ## Branch naming
 
@@ -92,6 +157,24 @@ Cloud / etc.>
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
+The self-review variant (the gate above) keeps the shape; the subject,
+the source line and the per-finding label change, and the off-scope line
+names the tasklist bullets:
+
+```
+fix(<scope>): self-review of #N — <what changed, one line>
+
+/code-review high, round <k>.
+
+<File>:<Line> — <angle>:
+- <root cause>
+- <fix>
+
+Noted, not in this PR: <tasklist.md bullet titles>.
+
+<the tag from the Co-author tag section>
+```
+
 Common review-comment categories the team has seen:
 
 - **Liquibase changelog missing** — V## SQL file added without
@@ -128,18 +211,21 @@ diff). Verify with:
 git diff origin/develop -- <file> | head
 ```
 
-If the offending lines aren't in your diff, **defer to a separate
-`fix(<scope>)` PR** and call it out explicitly in the response commit
-message:
+If the offending lines aren't in your diff, **defer**: the fix stays out
+of this PR, the finding becomes one bullet under **Standing platform debt**
+in `tasklist.md` in the same PR, and the response commit message says so:
 
 > The MLLP/Hl7MessageDispatcher Copilot comments on lazy hospital,
 > casing normalization, integration_id length, etc. are noise on this
 > PR — verified the diff against `origin/develop` touches X but NOT Y.
-> Those issues are real and should be addressed in a follow-on
-> `fix(hl7)` PR; tracked separately.
+> Those issues are real; tracked as a Standing platform debt bullet in
+> tasklist.md for a follow-on `fix(hl7)` PR.
 
 Don't silently expand the PR scope — it makes review harder and
 inflates the diff against the original review.
+
+A PR comment or body is not a tracker: #563's follow-ups lived only in a
+comment until 2026-09-05.
 
 ## PR title vs commit subject
 
@@ -182,10 +268,18 @@ highest-leverage discipline on the project.
 
 ```bash
 cd hospital-portal
-npm run format:check   # prettier --check src/**/*.{ts,html,scss,md,json}
-npm run lint           # eslint src/**/*.{ts,html}
-npm test               # jest unit + spec
+npm run lint             # eslint src/**/*.{ts,html}
+npm run format:check     # prettier --check src/**/*.{ts,html,scss,md,json}
+npm run i18n:parity      # every EN key present in FR and ES (strict)
+npm run i18n:referenced  # every key a template uses exists
+npm run build            # AOT: the template type errors lint misses
+npm run test:coverage    # Karma, ChromeHeadless, --watch=false, with coverage
+npm run coverage:check   # the coverage ratchet CI enforces
 ```
+
+That is the `lint-build-test` job of `frontend-ci.yml`, in its order.
+`e2e:a11y` is its own job; run `npm run e2e` locally when a smoke route
+changed.
 
 If `format:check` fails, run `npm run format` to auto-fix, then
 re-stage. **Do not** push a branch with an unformatted file — the
@@ -219,8 +313,10 @@ relied on `compileJava` passing rather than the full test task.
 
 ```bash
 # From repo root:
-(cd hospital-portal && npm run format:check && npm run lint && npm test) \
-  && ./gradlew :hospital-core:test :hospital-core:jacocoTestCoverageVerification
+(cd hospital-portal && npm run lint && npm run format:check \
+  && npm run i18n:parity && npm run i18n:referenced && npm run build \
+  && npm run test:coverage && npm run coverage:check) \
+  && ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
 ```
 
 When that command exits 0, commit. When it doesn't, fix and re-run —
@@ -1083,6 +1179,74 @@ query to return an empty `Page`, exercises every `append*Section`
 method, and asserts a Bundle with just the Patient entry comes back.
 That doesn't add bug-finding value, but it pushes coverage above the
 80% line without faking it.
+
+## Anti-patterns surfaced by self-review
+
+2026-09-05 batch — PRs #563 / #564.
+
+### Backend — ShedLock cannot lock a primitive-returning method, and the lock must outlive the transaction
+
+`@SchedulerLock` only on `void` or boxed-return methods (`Integer`; null
+means "skipped, another run holds the lock"). One locked entry point shared
+by the scheduler and the manual trigger, no unlocked twin.
+`@EnableSchedulerLock(order = Ordered.LOWEST_PRECEDENCE - 1)` so the lock
+advisor wraps the transaction advisor and a lock cannot release before the
+stamps commit. A skipped manual run answers 409 with `skipped: true`, never a
+fake 0.
+
+`SchedulerLockCoverageTest` enforces the return-type and shared-entry-point
+rules; the unlocked twin is the proxy bypass described under
+[`@Transactional` self-invocation never works](#backend--transactional-self-invocation-never-works).
+
+**Caught:** #563. Copilot's four comments on that PR overlapped the missing
+imaging controller test, the fake-zero response and the wrapper
+self-invocation; the lock-advisor ordering came only from the self-review.
+
+### Backend — code that runs after the persistence context is closed passes ids, never reads associations
+
+A `HandlerInterceptor.afterCompletion`, a scheduler tick after its
+`@Transactional` method, or any other out-of-session code hands the
+`REQUIRES_NEW` audit service ids only; the service reloads what it needs
+under its own session. Do not add a second `@EntityGraph` finder for one
+caller. Unit tests with mocked repositories cannot see a lazy proxy:
+reproduce with a full-stack IT that asserts the audit row exists, or a mock
+whose getter throws `LazyInitializationException`.
+
+The call itself is the audit-wiring example in the `phi-encryption-audit`
+skill; the same trap under another name is the Lazy-load trap in
+`hl7-mllp-integration`.
+
+**Caught:** #564. The first cut (a graph finder, a `Hibernate.isInitialized`
+guard, an inner catch, two repository tests) protected a value the audit
+service derives from the id anyway; the self-review collapsed it
+(+173/−261, net −88 lines).
+
+### Backend — H2 builds foreign keys the migrations never created
+
+An `@ManyToOne` whose target rows are hard-deleted needs
+`@NotFound(action = IGNORE)`. Before trusting an FK that the H2 suite
+exercises, grep the migrations: `audit_event_logs.assignment_id` is indexed
+(V33) but has no FK on Postgres, and `hbm2ddl` had built one on H2.
+
+**Caught:** #564 self-review; the H2 suite could not have shown it.
+
+### Backend — two emitters, one format
+
+A column written by more than one path (`role_name` from the assignment vs
+from the JWT) gets one normaliser; check the read-side twin
+(`PatientAccessAuditInterceptor`) before adding a format.
+
+**Caught:** #564 self-review — anchored rows had never reached the table
+before, so the split had never been visible.
+
+### Tests — an IT that leaves committed rows cleans up after itself
+
+`REQUIRES_NEW` writes (audit rows) survive the test transaction. Clear them
+in `@AfterEach` with `deleteAllInBatch()`, not only in `@BeforeEach`: sibling
+`BaseIT` classes share the H2 database and delete the rows yours point at.
+Passing only by class ordering is not passing.
+
+**Caught:** #564 self-review, four angles independently.
 
 ## Co-author tag
 

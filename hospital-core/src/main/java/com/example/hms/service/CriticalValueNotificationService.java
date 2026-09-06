@@ -11,6 +11,7 @@ import com.example.hms.repository.LabResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -135,11 +136,19 @@ public class CriticalValueNotificationService {
      * audience as rounds pass. Per-result failures are logged and skipped so one
      * bad row never stalls the sweep.
      *
-     * @return number of results escalated on this pass
+     * <p>Locked entry point shared by the scheduled sweep and the manual
+     * endpoint (both contend for one ShedLock). Returns {@code null} when
+     * ShedLock skipped the run because the lock is held elsewhere; boxed
+     * because ShedLock cannot skip a primitive-returning method
+     * ({@code SchedulerLockCoverageTest} enforces that for every lock).
+     *
+     * @return number of results escalated on this pass, or null when the run was skipped
      */
-    @SchedulerLock(name = "CriticalValueNotificationService.escalateOverdue", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
+    @SchedulerLock(name = "CriticalValueNotificationService.escalateOverdue", lockAtMostFor = "PT2M", lockAtLeastFor = "PT5S")
     @Transactional
-    public int escalateOverdue() {
+    public Integer escalateOverdue() {
+        // Fails loudly if a future caller reaches this body around the lock.
+        LockAssert.assertLocked();
         LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;

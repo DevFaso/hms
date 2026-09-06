@@ -154,11 +154,11 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             .patientId(patientId)
             .userId(actorId)
             .userName(auth.getName())
+            // No hospitalName here: the audit service fills it from assignmentId
+            // inside its own transaction. Reading the LAZY hospital in
+            // afterCompletion threw "no session" and lost the row (dev, 2026-09-05).
             .assignmentId(assignment != null ? assignment.getId() : null)
-            .hospitalName(assignment != null && assignment.getHospital() != null
-                ? assignment.getHospital().getName() : null)
-            .roleName(assignment != null && assignment.getRole() != null
-                ? assignment.getRole().getName() : primaryRole(auth))
+            .roleName(roleNameOf(assignment, auth))
             .ipAddress(request.getRemoteAddr())
             .eventDescription(request.getMethod().toUpperCase(Locale.ROOT) + " " + pattern)
             .build());
@@ -215,6 +215,11 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * (X-Hospital-Id, or the JWT's primary hospital as the filter resolved
      * it). Null for a super-admin in global view or an actor with no
      * assignment there — the row is then global, which is the truth.
+     *
+     * <p>This runs in {@code afterCompletion}, with no persistence context:
+     * only the assignment's own columns and its EAGER role may be read here.
+     * The LAZY hospital is a dead proxy; the audit service derives the hospital
+     * name from {@code assignmentId} under its own transaction.</p>
      */
     private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
@@ -307,6 +312,19 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         } catch (IllegalArgumentException notAUuid) {
             return null;
         }
+    }
+
+    /**
+     * The assignment's role at this hospital in the same bare form as
+     * {@link #primaryRole} and the read-side interceptor ({@code DOCTOR}, not
+     * {@code ROLE_DOCTOR}), so one actor's rows group under one role name.
+     */
+    private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
+        if (assignment == null || assignment.getRole() == null || assignment.getRole().getName() == null) {
+            return primaryRole(auth);
+        }
+        String name = assignment.getRole().getName();
+        return name.startsWith(ROLE_PREFIX) ? name.substring(ROLE_PREFIX.length()) : name;
     }
 
     private static String primaryRole(Authentication auth) {

@@ -26,6 +26,8 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -60,7 +62,15 @@ public class AuditEventLog extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_audit_user"))
     private User user;
 
+    /**
+     * Assignments are hard-deleted (user removal, {@code DELETE /assignments/..})
+     * and on Postgres {@code assignment_id} has no foreign key (V33 only indexes
+     * it), so audit rows outlive their assignment. Without {@code @NotFound} that
+     * dangling id makes every audit view that loads the row throw
+     * {@code FetchNotFoundException}; the snapshot columns keep the facts.
+     */
     @ManyToOne(fetch = FetchType.EAGER)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "assignment_id",
         foreignKey = @ForeignKey(name = "fk_audit_assignment"))
     private UserRoleHospitalAssignment assignment;

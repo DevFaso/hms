@@ -1,9 +1,11 @@
 package com.example.hms.config;
 
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
@@ -65,6 +67,48 @@ class SchedulerLockCoverageTest {
             assertThat(AnnotatedElementUtils.findMergedAnnotation(delegate, SchedulerLock.class))
                 .as(entry.getKey() + " delegates to a locked " + entry.getValue()).isNotNull();
         }
+    }
+
+    /**
+     * Every {@code @SchedulerLock} anywhere — on schedulers or on the service
+     * methods they delegate to — must be skippable: ShedLock answers a skipped
+     * run with null, so a primitive return type throws
+     * LockingNotSupportedException on EVERY call (prod, 2026-09-05). Names must
+     * be unique across both kinds, or two unrelated jobs silently share a lock.
+     */
+    @Test
+    @DisplayName("no locked method returns a primitive, and lock names are unique everywhere")
+    void everyLockIsSkippableAndUniquelyNamed() {
+        Set<String> primitives = new TreeSet<>();
+        Set<String> names = new HashSet<>();
+        Set<String> duplicates = new TreeSet<>();
+        for (Class<?> type : lockedBeans()) {
+            for (Method method : type.getDeclaredMethods()) {
+                SchedulerLock lock = AnnotatedElementUtils.findMergedAnnotation(method, SchedulerLock.class);
+                if (lock == null) {
+                    continue;
+                }
+                Class<?> returns = method.getReturnType();
+                if (returns.isPrimitive() && returns != void.class) {
+                    primitives.add(type.getSimpleName() + "." + method.getName() + " -> " + returns.getSimpleName());
+                }
+                if (!names.add(lock.name())) {
+                    duplicates.add(lock.name());
+                }
+            }
+        }
+        assertThat(primitives).as("box the return type (Integer, not int) so ShedLock can return null for a skipped run").isEmpty();
+        assertThat(duplicates).as("lock names shared by two methods").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the lock advisor is ordered outside the transaction advisor")
+    void lockAdvisorWrapsTheTransaction() {
+        EnableSchedulerLock enable = SchedulerLockConfig.class.getAnnotation(EnableSchedulerLock.class);
+        assertThat(enable).isNotNull();
+        assertThat(enable.order())
+            .as("lock must be acquired before the transaction opens and released after it commits")
+            .isLessThan(Ordered.LOWEST_PRECEDENCE);
     }
 
     @Test
@@ -130,7 +174,16 @@ class SchedulerLockCoverageTest {
      * test environment and silently drops the jobs that are off by default —
      * exactly the ones most likely to be forgotten.
      */
+    /** Every class with at least one {@code @SchedulerLock} method (schedulers and delegates alike). */
+    private static List<Class<?>> lockedBeans() {
+        return classesWithAnnotatedMethods(SchedulerLock.class.getName());
+    }
+
     private static List<Class<?>> scheduledBeans() {
+        return classesWithAnnotatedMethods(Scheduled.class.getName());
+    }
+
+    private static List<Class<?>> classesWithAnnotatedMethods(String annotationName) {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         CachingMetadataReaderFactory factory = new CachingMetadataReaderFactory(resolver);
         List<Class<?>> found = new ArrayList<>();
@@ -141,7 +194,7 @@ class SchedulerLockCoverageTest {
                 if (className.endsWith("Test") || className.contains("$")) {
                     continue;
                 }
-                if (reader.getAnnotationMetadata().hasAnnotatedMethods(Scheduled.class.getName())) {
+                if (reader.getAnnotationMetadata().hasAnnotatedMethods(annotationName)) {
                     found.add(Class.forName(className));
                 }
             }
