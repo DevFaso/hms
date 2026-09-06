@@ -1603,6 +1603,16 @@ that exists rather than inventing one.
   `AuthService.getHospitalId()` delegating to
   `roleContext.effectiveHospitalIdForRequest()` so the 22 remaining callers
   follow the chip. From the #566 self-review.
+- Hospital search index: V90 indexes `LOWER(name)` with the default opclass, so
+  on a non-C collation `LIKE 'x%'` is not a range scan and a one-letter prefix
+  late in the alphabet walks most of the index; a `text_pattern_ops` (or partial
+  `WHERE active`) index in V156 makes the typeahead's prefix a bounded scan at
+  the 10k-tenant scale the design doc plans for. From the #566 self-review.
+- Scope-gate boilerplate: six pages carry the same `scopeReady` alias +
+  `scopeChanged$` + `takeUntil` + `applyUrlScopeSync` block (registries and
+  webhooks use `load$` + `switchMap` instead); one injectable
+  (`ready`, `untilScopeChange()`, `sync(route)`) or the route-level gate above
+  would make it a one-liner per page. From the #566 self-review.
 - `@DataJpaTest` slices repeat the same `@ActiveProfiles("test")` +
   `@Import({TenantContextAccessor, EncryptionKeyHolder})` preamble in six
   classes; a `@TenantScopedDataJpaTest` meta-annotation and a

@@ -2271,7 +2271,8 @@
     "SCOPED": "Hôpital",
     "SEARCH_ERROR": "Échec du chargement des hôpitaux. Veuillez réessayer.",
     "TYPE_TO_NARROW": "Affichage des {{count}} premiers hôpitaux — tapez pour affiner.",
-    "PICK_TO_CONTINUE": "Sélectionnez un hôpital ci-dessus pour continuer — cette page appartient à un établissement.",
+    "PICK_TO_CONTINUE": "Sélectionnez un hôpital pour continuer — cette page appartient à un établissement.",
+    "NONE_ACTIVE": "Aucun hôpital actif pour le moment.",
     "EMPTY_GLOBAL": {
       "ENCOUNTERS": "Aucune consultation dans aucun de vos hôpitaux.",
       "LAB_RESULTS": "Aucun résultat de laboratoire dans aucun de vos hôpitaux.",
@@ -3444,7 +3445,6 @@
     "ROLE_PRIMARY": "Soignant principal",
     "ROLE_CHW": "Agent de santé communautaire",
     "SINCE": "Depuis",
-    "PICK_HOSPITAL": "Sélectionnez un hôpital ci-dessus pour voir et gérer ses panels — chaque panel appartient à un hôpital.",
     "VIEW": "Voir",
     "SHOWING_FIRST": "Affichage des {{shown}} premiers patients sur {{total}}.",
     "STAFF_FILTER": "Filtrer le personnel",
@@ -3466,7 +3466,6 @@
   },
   "WEBHOOKS": {
     "TITLE": "API & Webhooks",
-    "PICK_HOSPITAL": "Sélectionnez un hôpital ci-dessus - les clés et les points de terminaison appartiennent à un hôpital.",
     "LOAD_FAILED": "L'inventaire des identifiants est indisponible pour le moment.",
     "ACTION_FAILED": "L'action a échoué.",
     "KEYS_TITLE": "Clés API",
@@ -3538,7 +3537,6 @@
     "LOG_HINT": "La demande formelle que le bureau des dossiers instruit. Le motif et l'étendue sont ce que la décision évalue.",
     "LOG_CONFIRM": "Enregistrer la demande",
     "LOGGED": "Demande enregistrée.",
-    "PICK_HOSPITAL": "Sélectionnez un hôpital ci-dessus pour voir sa file de demandes — chaque demande appartient à un hôpital.",
     "PATIENT": "Patient",
     "REQUESTER": "Demandeur",
     "REQUESTER_TYPE": "Type de demandeur",

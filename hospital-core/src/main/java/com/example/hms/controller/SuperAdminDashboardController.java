@@ -384,13 +384,11 @@ public class SuperAdminDashboardController {
         // active=true: typeahead never offers archived/suspended tenants as a scope.
         List<HospitalResponseDTO> results = hospitalService.searchHospitals(
             trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);
-        if (!trimmed.isEmpty()) {
-            // The opener (first page, no query) fires on every chip open and
-            // reads only names; auditing it would bury real cross-tenant reads
-            // under one row per click. A typed prefix is a deliberate lookup.
-            crossTenantReadAudit.recordCrossTenantRead(
-                "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
-        }
+        // Every cross-tenant read is audited (design call #4), the opener
+        // included; the portal caches the opener per browser for a minute, so
+        // one chip open is one row, not one row per click.
+        crossTenantReadAudit.recordCrossTenantRead(
+            "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
         return ResponseEntity.ok(results);
     }
 }

@@ -17,11 +17,8 @@
     </div>
   </header>
 
-  @if (!scopeReady()) {
-    <section class="card">
-      <p class="hint">{{ 'ROI.PICK_HOSPITAL' | translate }}</p>
-    </section>
-  } @else {
+  <app-hospital-scope-hint />
+  @if (scopeReady()) {
     <!-- Status filters as plain pressed buttons: a full ARIA tab widget
          needs tabpanels + roving tabindex, and these are filters anyway. -->
     <div class="tabs">

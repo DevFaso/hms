@@ -192,19 +192,23 @@ export class TransfusionComponent implements OnInit {
     // the hidden tab is cleared (not fetched) and the visible tab reloads.
     this.selectedRequest.set(null);
     this.assignableUnits.set([]);
+    this.requests.set([]);
+    this.units.set([]);
     if (this.tab() === 'units') {
-      this.requests.set([]);
       this.loadUnits();
     } else {
-      this.units.set([]);
       this.loadRequests();
     }
   }
 
   setTab(tab: Tab): void {
     this.tab.set(tab);
+    // Each tab fetches lazily and once; a scope change empties the hidden one.
     if (tab === 'units' && this.units().length === 0) {
       this.loadUnits();
+    }
+    if (tab === 'requests' && this.requests().length === 0) {
+      this.loadRequests();
     }
   }
 

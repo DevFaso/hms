@@ -1,13 +1,4 @@
-import {
-  Component,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  computed,
-  inject,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -25,6 +16,7 @@ import {
   WebhookEventType,
 } from '../services/integration-keys.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -49,7 +41,13 @@ interface RevealedSecret {
 @Component({
   selector: 'app-webhooks',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './webhooks.html',
   styleUrl: './webhooks.scss',
 })
@@ -102,7 +100,7 @@ export class WebhooksComponent implements OnInit, OnDestroy {
   private readonly confirmDialog = viewChild<ElementRef<HTMLElement>>('confirmDialog');
   private dialogOpener: HTMLElement | null = null;
 
-  readonly scopeReady = computed(() => this.roleCtx.effectiveHospitalIdForRequest() != null);
+  readonly scopeReady = this.roleCtx.hasHospitalScope;
 
   private readonly load$ = new Subject<void>();
   private loadSub?: Subscription;
