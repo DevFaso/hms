@@ -64,6 +64,14 @@ export class RoleContextService {
    *   - super-admin scoped to a hospital → that hospital's UUID
    *   - non-super-admin → their `_activeHospitalId` (existing behaviour)
    */
+  /**
+   * True when a hospital-pinned request can be made right now: staff are
+   * always pinned by their assignment, a super-admin only once the scope chip
+   * has picked a hospital. Pages whose data belongs to one facility gate their
+   * loads and their write buttons on this and show the scope hint otherwise.
+   */
+  readonly hasHospitalScope = computed(() => this.effectiveHospitalIdForRequest() != null);
+
   readonly effectiveHospitalIdForRequest = computed(() => {
     if (this._activeRoles().includes('ROLE_SUPER_ADMIN')) {
       if (this._globalView()) {

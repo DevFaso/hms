@@ -4,6 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { LabOrderResponse, LabService } from '../services/lab.service';
 import {
   GROWTH_RESULTS,
@@ -27,7 +32,13 @@ import {
 @Component({
   selector: 'app-microbiology',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './microbiology.html',
   styleUrl: './microbiology.scss',
 })
@@ -37,6 +48,12 @@ export class MicrobiologyComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
   readonly growthResults = GROWTH_RESULTS;
   readonly methods = SUSCEPTIBILITY_METHODS;
@@ -119,27 +136,45 @@ export class MicrobiologyComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
+    this.load();
+  }
+
+  onScopeChange(): void {
+    this.scopeChanged$.next();
     this.load();
   }
 
   load(): void {
+    if (!this.scopeReady()) {
+      this.cultures.set([]);
+      this.error.set('');
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.error.set('');
     const status = this.statusFilter();
-    this.microService.list({ status: status || undefined, size: 100 }).subscribe({
-      next: (page) => {
-        this.cultures.set(page.content);
-        this.loading.set(false);
-        const current = this.selected();
-        if (current) {
-          this.selected.set(page.content.find((c) => c.id === current.id) ?? null);
-        }
-      },
-      error: (err) => {
-        this.error.set(err?.error?.message ?? this.translate.instant('MICRO.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.microService
+      .list({ status: status || undefined, size: 100 })
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (page) => {
+          this.cultures.set(page.content);
+          this.loading.set(false);
+          const current = this.selected();
+          if (current) {
+            this.selected.set(page.content.find((c) => c.id === current.id) ?? null);
+          }
+        },
+        error: (err) => {
+          this.error.set(err?.error?.message ?? this.translate.instant('MICRO.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   setFilter(status: MicroCultureStatus | ''): void {

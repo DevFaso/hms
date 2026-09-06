@@ -6,10 +6,9 @@
     </div>
   </header>
 
+  <app-hospital-scope-hint />
   @if (!scopeReady()) {
-    <section class="card">
-      <p class="hint">{{ 'WEBHOOKS.PICK_HOSPITAL' | translate }}</p>
-    </section>
+    <!-- the scope hint above says what to do -->
   } @else if (loadFailed()) {
     <section class="card">
       <p class="hint error-hint">{{ 'WEBHOOKS.LOAD_FAILED' | translate }}</p>

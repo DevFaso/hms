@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -54,8 +53,6 @@ public class SuperAdminDashboardController {
     private static final int HOSPITAL_SEARCH_MAX_LIMIT = 20;
     /** Default page size for the hospital typeahead when no {@code limit} param is supplied. */
     private static final int HOSPITAL_SEARCH_DEFAULT_LIMIT = 20;
-    /** Minimum query length before we hit the database (avoids a full table scan from a stray keystroke). */
-    private static final int HOSPITAL_SEARCH_MIN_QUERY_LENGTH = 2;
 
     /**
      * Belt-and-braces re-check that the caller is a <b>real</b> super-admin
@@ -375,16 +372,21 @@ public class SuperAdminDashboardController {
         requireRealSuperAdminFromJwtClaim();
 
         String trimmed = q == null ? "" : q.trim();
-        if (trimmed.length() < HOSPITAL_SEARCH_MIN_QUERY_LENGTH) {
-            // Empty / too-short query → empty result (do not return all 10k+).
-            return ResponseEntity.ok(Collections.emptyList());
-        }
+        // An empty query lists the first page by name, so the scope picker has
+        // something to show before the operator types (the chip used to open
+        // on an empty list with no hint that typing was required). The limit
+        // keeps a 10k-tenant deployment from paging its whole table through
+        // the chip; a prefix narrows it from the first character, and the
+        // service treats a blank one as "no filter".
 
         // Java 21+ Math.clamp(value, min, max) replaces Math.max(min, Math.min(max, value)).
         int safeLimit = Math.clamp(limit, 1, HOSPITAL_SEARCH_MAX_LIMIT);
         // active=true: typeahead never offers archived/suspended tenants as a scope.
         List<HospitalResponseDTO> results = hospitalService.searchHospitals(
             trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);
+        // Every cross-tenant read is audited (design call #4), the opener
+        // included; the portal caches the opener per browser for a minute, so
+        // one chip open is one row, not one row per click.
         crossTenantReadAudit.recordCrossTenantRead(
             "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
         return ResponseEntity.ok(results);

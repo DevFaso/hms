@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 
@@ -10,6 +13,7 @@ import {
 } from '../services/program-registry.service';
 import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
+import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
 import { ToastService } from '../core/toast.service';
 
 function enrollment(overrides: Partial<ProgramEnrollment> = {}): ProgramEnrollment {
@@ -53,6 +57,7 @@ describe('RegistriesComponent', () => {
   let component: RegistriesComponent;
   let registryService: jasmine.SpyObj<ProgramRegistryService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let scope: RoleContextStubState;
 
   beforeEach(async () => {
     registryService = jasmine.createSpyObj<ProgramRegistryService>('ProgramRegistryService', [
@@ -70,10 +75,14 @@ describe('RegistriesComponent', () => {
     registryService.recordVisit.and.returnValue(of(enrollment()));
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] };
 
     await TestBed.configureTestingModule({
       imports: [RegistriesComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: ProgramRegistryService, useValue: registryService },
         {
           provide: PatientService,
@@ -81,7 +90,7 @@ describe('RegistriesComponent', () => {
         },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => 'h1', activeHospitalId: 'h1' },
+          useValue: roleContextStub(scope),
         },
         { provide: ToastService, useValue: toast },
       ],
@@ -94,6 +103,15 @@ describe('RegistriesComponent', () => {
   function root(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('a super-admin in global view sees the pick-a-hospital hint and no cohort is requested', () => {
+    scope.superAdmin = true;
+    scope.hospitalId = null;
+    fixture.detectChanges();
+    expect(registryService.registry).not.toHaveBeenCalled();
+    expect(registryService.counts).not.toHaveBeenCalled();
+    expect(root().querySelector('[data-testid="scope-hint"]')).toBeTruthy();
+  });
 
   it('loads the first page of the ACTIVE cohort of the first programme on init', () => {
     fixture.detectChanges();

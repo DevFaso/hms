@@ -12,6 +12,11 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
@@ -35,7 +40,13 @@ interface OnCallFormModel {
 @Component({
   selector: 'app-on-call',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './on-call.html',
   styleUrl: './on-call.scss',
 })
@@ -45,6 +56,13 @@ export class OnCallComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
+
   private readonly auth = inject(AuthService);
 
   entries = signal<OnCallScheduleResponse[]>([]);
@@ -72,27 +90,49 @@ export class OnCallComponent implements OnInit {
   deleting = signal(false);
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
+    this.load();
+  }
+
+  onScopeChange(): void {
+    this.scopeChanged$.next();
+    // The form's staff and departments are cached per hospital: drop them so
+    // a super-admin pinned elsewhere is not offered the previous tenant's staff.
+    this.staffOptions.set([]);
+    this.departments.set([]);
     this.load();
   }
 
   load(): void {
+    if (!this.scopeReady()) {
+      this.entries.set([]);
+      this.error.set(null);
+      this.loading.set(false);
+      return;
+    }
     this.loading.set(true);
     this.error.set(null);
     const from = this.filterFrom
       ? new Date(`${this.filterFrom}T00:00:00`).toISOString()
       : undefined;
     const to = this.filterTo ? new Date(`${this.filterTo}T23:59:59`).toISOString() : undefined;
-    this.onCallService.list(from, to).subscribe({
-      next: (list) => {
-        this.entries.set(list);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        // "The rota window ends before it starts." is actionable; keep it.
-        this.error.set(err?.error?.message ?? this.translate.instant('ON_CALL.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.onCallService
+      .list(from, to)
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (list) => {
+          this.entries.set(list);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          // "The rota window ends before it starts." is actionable; keep it.
+          this.error.set(err?.error?.message ?? this.translate.instant('ON_CALL.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
   }
 
   openCreate(): void {
@@ -198,8 +238,10 @@ export class OnCallComponent implements OnInit {
   /** Staff + department options load once, on first modal open. */
   private ensureFormOptions(): void {
     if (this.staffOptions().length === 0) {
+      // The pinned hospital first: a super-admin scoped via the chip must be
+      // offered that hospital's staff, not their own primary hospital's.
       const hospitalId =
-        this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
+        this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.toast.error(this.translate.instant('ON_CALL.STAFF_LOAD_ERROR')),

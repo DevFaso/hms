@@ -2270,6 +2270,9 @@
     "NO_MATCHES": "Ningún hospital coincide con su búsqueda.",
     "SCOPED": "Hospital",
     "SEARCH_ERROR": "No se pudieron cargar los hospitales. Inténtelo de nuevo.",
+    "TYPE_TO_NARROW": "Se muestran los primeros {{count}} hospitales — escriba para acotar.",
+    "PICK_TO_CONTINUE": "Seleccione un hospital para continuar — esta página pertenece a un establecimiento.",
+    "NONE_ACTIVE": "Todavía no hay hospitales activos.",
     "EMPTY_GLOBAL": {
       "ENCOUNTERS": "No hay encuentros en ninguno de sus hospitales.",
       "LAB_RESULTS": "No hay resultados de laboratorio en ninguno de sus hospitales.",
@@ -3442,7 +3445,6 @@
     "ROLE_PRIMARY": "Profesional principal",
     "ROLE_CHW": "Agente de salud comunitaria",
     "SINCE": "Desde",
-    "PICK_HOSPITAL": "Seleccione un hospital arriba para ver y gestionar sus paneles — cada panel pertenece a un hospital.",
     "VIEW": "Ver",
     "SHOWING_FIRST": "Mostrando los primeros {{shown}} de {{total}} pacientes.",
     "STAFF_FILTER": "Filtrar personal",
@@ -3464,7 +3466,6 @@
   },
   "WEBHOOKS": {
     "TITLE": "API y Webhooks",
-    "PICK_HOSPITAL": "Seleccione un hospital arriba - las claves y los puntos de conexión pertenecen a un hospital.",
     "LOAD_FAILED": "El inventario de credenciales no está disponible en este momento.",
     "ACTION_FAILED": "La acción falló.",
     "KEYS_TITLE": "Claves API",
@@ -3536,7 +3537,6 @@
     "LOG_HINT": "La solicitud formal que tramita el archivo clínico. El motivo y el alcance son lo que pondera la decisión.",
     "LOG_CONFIRM": "Registrar solicitud",
     "LOGGED": "Solicitud registrada.",
-    "PICK_HOSPITAL": "Seleccione un hospital arriba para ver su cola de solicitudes — cada solicitud pertenece a un hospital.",
     "PATIENT": "Paciente",
     "REQUESTER": "Solicitante",
     "REQUESTER_TYPE": "Tipo de solicitante",

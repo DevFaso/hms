@@ -2270,6 +2270,9 @@
     "NO_MATCHES": "No hospitals match your search.",
     "SCOPED": "Hospital",
     "SEARCH_ERROR": "Couldn’t load hospitals. Please try again.",
+    "TYPE_TO_NARROW": "Showing the first {{count}} hospitals — type to narrow.",
+    "PICK_TO_CONTINUE": "Select a hospital to continue — this page belongs to one facility.",
+    "NONE_ACTIVE": "No active hospitals yet.",
     "EMPTY_GLOBAL": {
       "ENCOUNTERS": "No encounters across any of your hospitals.",
       "LAB_RESULTS": "No lab results across any of your hospitals.",
@@ -3442,7 +3445,6 @@
     "ROLE_PRIMARY": "Primary provider",
     "ROLE_CHW": "Community health worker",
     "SINCE": "Since",
-    "PICK_HOSPITAL": "Select a hospital above to see and manage its panels — every panel belongs to one hospital.",
     "VIEW": "View",
     "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} patients.",
     "STAFF_FILTER": "Filter staff",
@@ -3464,7 +3466,6 @@
   },
   "WEBHOOKS": {
     "TITLE": "API & Webhooks",
-    "PICK_HOSPITAL": "Select a hospital above - keys and endpoints belong to one hospital.",
     "LOAD_FAILED": "The credential inventory is unavailable right now.",
     "ACTION_FAILED": "The action failed.",
     "KEYS_TITLE": "API keys",
@@ -3536,7 +3537,6 @@
     "LOG_HINT": "The formal request a records desk triages. Purpose and scope are what the decision weighs.",
     "LOG_CONFIRM": "Log request",
     "LOGGED": "Request logged.",
-    "PICK_HOSPITAL": "Select a hospital above to see its request queue — every request belongs to one hospital.",
     "PATIENT": "Patient",
     "REQUESTER": "Requester",
     "REQUESTER_TYPE": "Requester type",

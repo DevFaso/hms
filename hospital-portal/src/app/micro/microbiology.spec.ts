@@ -1,4 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MicrobiologyComponent } from './microbiology';
@@ -6,14 +9,26 @@ import { MicroCultureResponse, MicroService } from '../services/micro.service';
 import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
 
 describe('MicrobiologyComponent', () => {
+  const EVERY_ROLE = [
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_MANAGER',
+    'ROLE_PHARMACIST',
+    'ROLE_RECEPTIONIST',
+  ];
   let fixture: ComponentFixture<MicrobiologyComponent>;
   let component: MicrobiologyComponent;
   let microServiceSpy: jasmine.SpyObj<MicroService>;
   let labServiceSpy: jasmine.SpyObj<LabService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let roleContextSpy: jasmine.SpyObj<RoleContextService>;
+  let scope: RoleContextStubState;
 
   const culture = (overrides: Partial<MicroCultureResponse>): MicroCultureResponse => ({
     id: 'c1',
@@ -65,16 +80,18 @@ describe('MicrobiologyComponent', () => {
     labServiceSpy = jasmine.createSpyObj('LabService', ['listOrders']);
     labServiceSpy.listOrders.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    roleContextSpy = jasmine.createSpyObj('RoleContextService', ['hasAnyActiveRole']);
-    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    scope = { superAdmin: false, hospitalId: 'h1', roles: [...EVERY_ROLE] };
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: MicroService, useValue: microServiceSpy },
         { provide: LabService, useValue: labServiceSpy },
         { provide: ToastService, useValue: toastSpy },
-        { provide: RoleContextService, useValue: roleContextSpy },
+        { provide: RoleContextService, useValue: roleContextStub(scope) },
       ],
     }).compileComponents();
 
@@ -95,7 +112,7 @@ describe('MicrobiologyComponent', () => {
   });
 
   it('hides the resulting controls without a backend-authorized role', () => {
-    roleContextSpy.hasAnyActiveRole.and.returnValue(false);
+    scope.roles = [];
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
 
@@ -104,9 +121,7 @@ describe('MicrobiologyComponent', () => {
 
   it('shows finalize only on preliminary reports and only to the finalize tier', () => {
     // Finalize tier excludes LAB_TECHNICIAN: mirror by refusing its role list.
-    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
-      roles.includes('ROLE_LAB_TECHNICIAN'),
-    );
+    scope.roles = ['ROLE_LAB_TECHNICIAN'];
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
     component.select(component.cultures()[0]);

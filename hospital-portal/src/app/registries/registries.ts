@@ -25,6 +25,10 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { ToastService } from '../core/toast.service';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
@@ -53,13 +57,22 @@ interface RegistryLoad {
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './registries.html',
   styleUrl: './registries.scss',
 })
 export class RegistriesComponent implements OnInit, OnDestroy {
   private readonly registryService = inject(ProgramRegistryService);
   private readonly roleCtx = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -92,6 +105,8 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   /** Hospital scope for the picker — the super-admin-aware one, not the primary. */
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
+  /** See RoleContextService.hasHospitalScope: the cohort and the enrol button wait for a pinned hospital. */
+  readonly scopeReady = this.roleCtx.hasHospitalScope;
 
   private readonly load$ = new Subject<{ program: CareProgram; status: StatusFilter }>();
   private loadSub?: Subscription;
@@ -115,12 +130,27 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadSub = this.load$
       .pipe(
         // switchMap: only the LATEST selection may update the view. Without
         // it, a slow HIV response finishing after a quick TB one would
         // display HIV rows under the TB tab.
         switchMap(({ program, status }) => {
+          if (!this.scopeReady()) {
+            // Push even when unscoped: the emission cancels an in-flight
+            // response for the previously pinned hospital.
+            return of({
+              rows: [],
+              totalRows: 0,
+              rowsFailed: false,
+              counts: {},
+              countsFailed: false,
+            });
+          }
           this.loading.set(true);
           this.loadFailed.set(false);
           const page = this.registryService
@@ -174,6 +204,10 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   load(): void {
     this.load$.next({ program: this.activeProgram(), status: this.statusFilter() });
+  }
+
+  onScopeChange(): void {
+    this.load();
   }
 
   countFor(status: ProgramEnrollmentStatus): number {

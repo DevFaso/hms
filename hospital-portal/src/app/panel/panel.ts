@@ -15,6 +15,7 @@ import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -42,6 +43,7 @@ import { ToastService } from '../core/toast.service';
     TranslateModule,
     PatientPickerComponent,
     HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
   ],
   templateUrl: './panel.html',
   styleUrl: './panel.scss',
@@ -93,7 +95,7 @@ export class PanelComponent implements OnInit {
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
   /** Null in a super-admin's global view — nothing hospital-pinned can load yet. */
-  readonly scopeReady = computed(() => this.pickerHospitalId() != null);
+  readonly scopeReady = this.roleCtx.hasHospitalScope;
   readonly isAdmin = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );

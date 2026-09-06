@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -12,6 +15,7 @@ import {
 import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -99,13 +103,20 @@ describe('SlotAdminComponent', () => {
     TestBed.configureTestingModule({
       imports: [SlotAdminComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: SlotInventoryService, useValue: slotService },
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: { activeHospitalId: 'h-1', hasAnyActiveRole: () => true },
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h-1',
+            roles: ['ROLE_HOSPITAL_ADMIN'],
+          }),
         },
       ],
     });

@@ -140,6 +140,11 @@ export class HospitalScopeChipComponent implements OnInit {
   }
 
   protected onSelectAll(): void {
+    if (this.roleContext.globalView()) {
+      // Already global: nothing changed, so no host reload.
+      this.overlayOpen.set(false);
+      return;
+    }
     this.roleContext.enableGlobalView();
     this._selectedHospitalName.set(null);
     this.overlayOpen.set(false);
@@ -148,6 +153,12 @@ export class HospitalScopeChipComponent implements OnInit {
   }
 
   protected onSelectHospital(hospital: HospitalResponse): void {
+    if (!this.roleContext.globalView() && this.roleContext.selectedHospitalId() === hospital.id) {
+      // Re-picking the pinned hospital changes nothing: hosts must not reload.
+      this._selectedHospitalName.set(hospital.name);
+      this.overlayOpen.set(false);
+      return;
+    }
     this.roleContext.scopeToHospital(hospital.id);
     this._selectedHospitalName.set(hospital.name);
     this.overlayOpen.set(false);

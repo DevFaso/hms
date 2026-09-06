@@ -3,9 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
-import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -16,7 +22,14 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './mtm-review.html',
   styleUrl: './mtm-review.scss',
 })
@@ -24,6 +37,13 @@ export class MtmReviewComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
   reviews = signal<MtmReviewResponse[]>([]);
   loading = signal(false);
@@ -35,32 +55,56 @@ export class MtmReviewComponent implements OnInit {
   form: MtmReviewRequest = this.emptyForm();
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadReviews();
   }
 
+  onScopeChange(): void {
+    this.scopeChanged$.next();
+    this.loadReviews();
+  }
+
+  /** The pinned scope first; the JWT claim only for staff with several hospitals and no primary one. */
+  private hospitalIdForRequests(): string | null {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? null;
+  }
+
   loadReviews(): void {
-    const hospitalId = this.auth.getHospitalId();
+    if (!this.scopeReady()) {
+      this.reviews.set([]);
+      this.loading.set(false);
+      return;
+    }
+    const hospitalId = this.hospitalIdForRequests();
     if (!hospitalId) {
+      this.reviews.set([]);
+      this.loading.set(false);
       this.toast.error('Active hospital context required');
       return;
     }
     this.loading.set(true);
-    this.svc.listMtmReviewsByHospital(hospitalId, 0, 50).subscribe({
-      next: (page) => {
-        this.reviews.set(page?.content ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.toast.error('Failed to load MTM reviews');
-      },
-    });
+    this.svc
+      .listMtmReviewsByHospital(hospitalId, 0, 50)
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (page) => {
+          this.reviews.set(page?.content ?? []);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.toast.error('Failed to load MTM reviews');
+        },
+      });
   }
 
   openCreate(): void {
     this.selectedReviewId = null;
     this.form = this.emptyForm();
-    this.form.hospitalId = this.auth.getHospitalId() ?? '';
+    this.form.hospitalId = this.hospitalIdForRequests() ?? '';
     this.showForm.set(true);
   }
 

@@ -19,9 +19,9 @@ import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.utility.RoleValidator;
 import org.apache.kafka.common.errors.DuplicateResourceException;
 import org.springframework.context.MessageSource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -162,7 +162,12 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional(readOnly = true)
     public List<HospitalResponseDTO> searchHospitals(String name, String city, String state, Boolean active, int page, int size, Locale locale) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<Hospital> hospitals = hospitalRepository.searchHospitals(name, city, state, active, pageable);
+        // Slice, not Page: the callers only read the content, and a Page runs a
+        // second COUNT over the same predicate whenever the page is full — which
+        // the scope picker's empty-query opener always is. Blank filters mean
+        // "no filter" here, so no caller has to know to pass null.
+        Slice<Hospital> hospitals = hospitalRepository.searchHospitals(
+            normalizeQuery(name), normalizeQuery(city), normalizeQuery(state), active, pageable);
     return hospitals.getContent().stream()
         .map(hospitalMapper::toHospitalDTO)
         .toList();
