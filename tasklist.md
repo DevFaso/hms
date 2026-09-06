@@ -1592,6 +1592,23 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- Escalation sweeps (`CriticalValueNotificationService`,
+  `ImagingCriticalNotificationService`): one transaction per sweep with the
+  SMS sent inside it, so a late row can roll back stamps whose SMS already
+  went out. Per-row transactions with the send after commit (the
+  `ReminderClaimService` shape). From the #563 self-review.
+- Referral expiry: `GeneralReferralController`'s manual trigger and
+  `ReferralExpiryScheduler` do not share a lock. Per-row `@Version` prevents a
+  double transition, so this is contention, not corruption. From the #563
+  self-review.
+- `findFirstByUser_IdAndHospital_IdAndActiveTrue` has no `ORDER BY`: an actor
+  with two active roles at one hospital is anchored to either, on audit rows
+  and in authorisation alike (eight callers). From the #564 self-review.
+- `AuditEventLogServiceImpl.logEvent` reloads the user and the assignment
+  with wide graphs and runs a guaranteed-miss `patientRepository.findById` on
+  sub-resource ids for every audited write; and four `BaseIT` controller
+  classes each hand-roll the same FK-ordered `deleteAll()` list. From the
+  #564 self-review.
 - UI palette migration `--primary: #2563eb` → Keneya green. The brand shipped
   (#505–#507); the design tokens did not, so teal/ochre currently coexist with
   blue. Touches contrast ratios, focus rings and the axe gate — its own PR.

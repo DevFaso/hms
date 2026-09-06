@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: Use after pushing ANY PR branch (the self-review gate — /code-review after every push, before the user merges; Copilot review quota is exhausted since 2026-09-05), when preparing a feature PR commit message, responding to review comments, addressing Sonar code-smell findings, or naming a feature branch. Captures HMS's foundation-pass commit style, branch-naming convention, "started vs completed" status discipline, and the specific lessons learned from recent reviews on PRs #331-#335.
+description: "Use after pushing ANY PR branch (the self-review gate: /code-review after every push, draft until it passes, before the user merges), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
 ---
 
 # PR + review-response patterns
@@ -9,50 +9,58 @@ The team has settled into a specific commit-message + review-response
 shape across PRs #331-#335. Follow it for any new PR — reviewers expect
 this format.
 
-## Self-review gate — after EVERY push, before the merge (mandatory since 2026-09-05)
+## Self-review gate — after EVERY push, draft until it passes
 
-Copilot's PR-review quota is exhausted (2026-09-05). Until further notice a PR
-gets **no reviewer except `/code-review`**, and the user merges PRs without
-warning — so the review has to be finished before the PR is reported ready,
-not after.
+A PR gets one structured review before the user sees it as mergeable, and
+it is this one. Copilot's review quota has been exhausted since 2026-09-05
+and may or may not come back; when it does it supplements this gate, it
+does not replace it. The user merges PRs without warning, so the PR stays
+a **draft** until the gate has passed.
 
-The gate, every time a PR branch is pushed (first push **and** every follow-up):
+The gate, every time a PR branch is pushed:
 
-1. `git push` → `gh pr create` (or the follow-up push).
+1. Run the [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
+   locally first (backend: test + jacoco verification; portal: format, lint,
+   `test:headless`, i18n, as that section lists — the commit hook alone only
+   checks portal format and lint, see [Pre-commit hook](#pre-commit-hook)).
+   Then `git push`; on the first push `gh pr create --draft`.
 2. `/code-review <PR#> high`. The finder agents run on a worktree copy of the
-   branch: **confirm every finding against the real tree before acting** —
-   grep the line, read the caller, run the test. A finding that does not hold
-   is dropped with a one-line reason in the PR comment.
-3. Apply what holds. A finding that widens the scope (a pre-existing defect in
-   a neighbouring class, a refactor of a shared service) goes to a
-   "Not in this PR, noted for follow-up" list in the PR body, not into the diff.
-4. Run the full suite locally (`./gradlew :hospital-core:test` from the repo
-   root; Karma for portal changes), commit as
-   `fix(<scope>): self-review of #N — <what changed>`, push.
-5. Re-run `/code-review` on the new head. Repeat 3–5 until a round yields
-   nothing actionable. Two rounds is normal; three means the fix is being
-   designed in the PR — stop and rethink the shape.
-6. Post one PR comment: findings **taken** (grouped by angle, one line each)
-   and findings **noted, not in this PR**. Update the PR body to describe the
-   final shape, not the first cut.
-7. `gh pr checks <PR#> --watch` until green (Sonar included), then report the
-   PR as ready with: suite count, CI status, review rounds, and the follow-ups.
+   branch: confirm every finding against the real tree before acting — for
+   code, grep the line, read the caller, run the test; for prose or config,
+   `git diff origin/develop -- <file>` and check the claim against the file
+   it cites (CI workflow, settings, entity). A finding that does not hold is
+   dropped with a one-line reason (step 6). Fold in anything Sonar posted on
+   the PR.
+3. Apply what holds. A finding that widens the scope (a pre-existing defect
+   in a neighbouring class, a refactor of a shared service) becomes a bullet
+   under **Standing platform debt** in `tasklist.md` in the same commit,
+   linked from the PR body — never part of the diff (see
+   [Off-scope comments](#off-scope-comments--when-to-defer)).
+4. Re-run the local gate from step 1, commit as the self-review variant in
+   [Review-response commit pattern](#review-response-commit-pattern), push.
+5. `/code-review <PR#> high` again on the new head — with the PR number, or
+   the skill reviews an empty diff and passes trivially. Repeat 2–5 until a
+   round yields nothing actionable. Two rounds is normal. A third round with
+   actionable findings means the fix is being designed in the PR: stop, post
+   the round-3 findings as the PR comment, and ask the user how to proceed
+   before pushing more.
+6. Post one PR comment in three buckets: **taken** (grouped by angle, one
+   line each), **dropped** (finding + the one-line reason it does not hold),
+   **noted, not in this PR** (with the tasklist bullet). Update the PR body
+   to describe the final shape, not the first cut.
+7. CI: start `gh pr checks <PR#> --watch` in the background right after each
+   push (it runs ~11 min, longer than a foreground tool call, and errors with
+   "no checks reported" if run before the runs exist); read it when it
+   finishes. A red check fixed by a code change re-enters at step 2; a push
+   that changes no reviewed line (a local merge of develop, a retry of a
+   flaky check) re-runs only this step. When every check is green,
+   `gh pr ready <PR#>` and report: suite count, CI status, review rounds,
+   the tasklist bullets.
 
-What the gate has caught that CI, Sonar and the unit suite did not:
-
-- **#563** (ShedLock hotfix): six angles → one locked entry point instead of a
-  locked wrapper plus an unlocked twin; lock advisor ordered outside the
-  transaction; skipped runs answer 409 instead of a fake 0.
-- **#564** (write-audit lazy proxy): ten angles → the first cut (a second
-  `@EntityGraph` finder, a `Hibernate.isInitialized` guard, an inner catch,
-  two repository tests) protected a value the audit service derives from the
-  id anyway; collapsed to passing `assignmentId` (−261 lines). The same round
-  surfaced that `audit_event_logs.assignment_id` has **no FK on Postgres**
-  while H2 builds one from the entity, a role-name format split, and a test
-  cleanup at the wrong end that only passed by class ordering.
-
-Anti-pattern this replaces: "CI is green and Copilot has no comments, so it is
-ready." Copilot has no comments because it has no tokens.
+What this replaces: "CI is green and Copilot has no comments, so it is
+ready." Copilot has no comments because it has no tokens. What the gate has
+caught that CI, Sonar and the unit suite did not is recorded under
+[Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review-2026-09-05-batch--prs-563--564).
 
 ## Branch naming
 
@@ -137,6 +145,23 @@ Cloud / etc.>
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
+The self-review variant (the gate above) keeps the shape and changes the
+subject and the source line:
+
+```
+fix(<scope>): self-review of #N — <what changed, one line>
+
+/code-review high, round <k>: <n> taken, <m> dropped, <p> noted.
+
+<File>:<Line> — <angle>:
+- <root cause>
+- <fix>
+
+Noted, not in this PR: <tasklist.md bullet titles>.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+```
+
 Common review-comment categories the team has seen:
 
 - **Liquibase changelog missing** — V## SQL file added without
@@ -185,6 +210,11 @@ message:
 
 Don't silently expand the PR scope — it makes review harder and
 inflates the diff against the original review.
+
+Where the deferred item lives: a bullet under **Standing platform debt** in
+`tasklist.md`, added in the same PR. A PR comment or body is not a tracker —
+#563's follow-ups (per-row transactions for the escalation sweeps, the
+referral-expiry shared lock) lived only in a comment until 2026-09-05.
 
 ## PR title vs commit subject
 
@@ -1128,6 +1158,64 @@ query to return an empty `Page`, exercises every `append*Section`
 method, and asserts a Bundle with just the Patient entry comes back.
 That doesn't add bug-finding value, but it pushes coverage above the
 80% line without faking it.
+
+## Anti-patterns surfaced by self-review (2026-09-05 batch — PRs #563 / #564)
+
+### Backend — ShedLock cannot lock a primitive-returning method, and the lock must outlive the transaction
+
+`@SchedulerLock` only on `void` or boxed-return methods (`Integer`; null
+means "skipped, another run holds the lock"). One locked entry point shared
+by the scheduler and the manual trigger, no unlocked twin.
+`@EnableSchedulerLock(order = Ordered.LOWEST_PRECEDENCE - 1)` so the lock
+advisor wraps the transaction advisor and a lock cannot release before the
+stamps commit. A skipped manual run answers 409 with `skipped: true`, never a
+fake 0.
+
+**Caught:** #563. Copilot's four comments on that PR overlapped the missing
+imaging controller test, the fake-zero response and the wrapper
+self-invocation; the lock-advisor ordering came only from the self-review.
+
+### Backend — code that runs after the persistence context is closed passes ids, never reads associations
+
+A `HandlerInterceptor.afterCompletion`, a scheduler tick after its
+`@Transactional` method, or any other out-of-session code hands the
+`REQUIRES_NEW` audit service ids only; the service reloads what it needs
+under its own session. Do not add a second `@EntityGraph` finder for one
+caller. Unit tests with mocked repositories cannot see a lazy proxy:
+reproduce with a full-stack IT that asserts the audit row exists, or a mock
+whose getter throws `LazyInitializationException`.
+
+**Caught:** #564. The first cut (a graph finder, a `Hibernate.isInitialized`
+guard, an inner catch, two repository tests) protected a value the audit
+service derives from the id anyway; the self-review collapsed it
+(+173/−261, net −88 lines).
+
+### Backend — H2 builds foreign keys the migrations never created
+
+An `@ManyToOne` whose target rows are hard-deleted needs
+`@NotFound(action = IGNORE)`. Before trusting an FK that the H2 suite
+exercises, grep the migrations: `audit_event_logs.assignment_id` is indexed
+(V33) but has no FK on Postgres, and `hbm2ddl` had built one on H2.
+
+**Caught:** #564 self-review; the H2 suite could not have shown it.
+
+### Backend — two emitters, one format
+
+A column written by more than one path (`role_name` from the assignment vs
+from the JWT) gets one normaliser; check the read-side twin
+(`PatientAccessAuditInterceptor`) before adding a format.
+
+**Caught:** #564 self-review — anchored rows had never reached the table
+before, so the split had never been visible.
+
+### Tests — an IT that leaves committed rows cleans up after itself
+
+`REQUIRES_NEW` writes (audit rows) survive the test transaction. Clear them
+in `@AfterEach` with `deleteAllInBatch()`, not only in `@BeforeEach`: sibling
+`BaseIT` classes share the H2 database and delete the rows yours point at.
+Passing only by class ordering is not passing.
+
+**Caught:** #564 self-review, four angles independently.
 
 ## Co-author tag
 
