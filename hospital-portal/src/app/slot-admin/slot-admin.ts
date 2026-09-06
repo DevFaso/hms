@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -17,6 +17,10 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 
 type AdminSection = 'visit-types' | 'templates' | 'slots';
@@ -33,7 +37,13 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
 @Component({
   selector: 'app-slot-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './slot-admin.html',
   styleUrl: './slot-admin.scss',
 })
@@ -43,16 +53,13 @@ export class SlotAdminComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
-  /**
-   * A super-admin in global view has no calendar to manage (visit types, templates and slots belong to a hospital): the page shows the
-   * "select a hospital" hint and makes no call until one is picked. Staff are
-   * always scoped by their assignment, so nothing changes for them.
-   */
-  readonly scopeReady = computed(
-    () =>
-      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
-  );
   private readonly auth = inject(AuthService);
 
   section = signal<AdminSection>('visit-types');
@@ -99,23 +106,31 @@ export class SlotAdminComponent implements OnInit {
   releasingId = signal<string | null>(null);
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadVisitTypes();
   }
 
   onScopeChange(): void {
+    this.scopeChanged$.next();
+    this.visitTypes.set([]);
     this.templates.set([]);
     this.slots.set([]);
-    this.loadVisitTypes();
-    if (this.section() === 'templates') {
-      this.loadTemplates();
-    }
-    if (this.section() === 'slots') {
-      this.searchSlots();
-    }
+    // The form's staff and departments are cached per hospital too.
+    this.staffOptions.set([]);
+    this.departments.set([]);
+    this.loadSection(this.section());
   }
 
   setSection(section: AdminSection): void {
     this.section.set(section);
+    this.loadSection(section);
+  }
+
+  /** Each section fetches lazily and once; a scope change empties them all first. */
+  private loadSection(section: AdminSection): void {
     if (section === 'visit-types' && this.visitTypes().length === 0) {
       this.loadVisitTypes();
     }
@@ -139,16 +154,21 @@ export class SlotAdminComponent implements OnInit {
       return;
     }
     this.vtLoading.set(true);
-    this.slotService.listVisitTypes(this.vtShowInactive()).subscribe({
-      next: (rows) => {
-        this.visitTypes.set(rows);
-        this.vtLoading.set(false);
-      },
-      error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('SLOT_ADMIN.VT_LOAD_ERROR'));
-        this.vtLoading.set(false);
-      },
-    });
+    this.slotService
+      .listVisitTypes(this.vtShowInactive())
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (rows) => {
+          this.visitTypes.set(rows);
+          this.vtLoading.set(false);
+        },
+        error: (err) => {
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('SLOT_ADMIN.VT_LOAD_ERROR'),
+          );
+          this.vtLoading.set(false);
+        },
+      });
   }
 
   setVtShowInactive(value: boolean): void {
@@ -237,18 +257,21 @@ export class SlotAdminComponent implements OnInit {
       return;
     }
     this.tplLoading.set(true);
-    this.slotService.listTemplates(this.tplShowInactive()).subscribe({
-      next: (rows) => {
-        this.templates.set(rows);
-        this.tplLoading.set(false);
-      },
-      error: (err) => {
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('SLOT_ADMIN.TPL_LOAD_ERROR'),
-        );
-        this.tplLoading.set(false);
-      },
-    });
+    this.slotService
+      .listTemplates(this.tplShowInactive())
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (rows) => {
+          this.templates.set(rows);
+          this.tplLoading.set(false);
+        },
+        error: (err) => {
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('SLOT_ADMIN.TPL_LOAD_ERROR'),
+          );
+          this.tplLoading.set(false);
+        },
+      });
   }
 
   setTplShowInactive(value: boolean): void {
@@ -389,6 +412,7 @@ export class SlotAdminComponent implements OnInit {
         to: this.slotTo || undefined,
         limit: 200,
       })
+      .pipe(takeUntil(this.scopeChanged$))
       .subscribe({
         next: (rows) => {
           this.slots.set(rows);
@@ -455,8 +479,13 @@ export class SlotAdminComponent implements OnInit {
 
   private ensureFormOptions(): void {
     if (this.staffOptions().length === 0) {
+      // The pinned hospital first: a super-admin scoped via the chip must be
+      // offered that hospital's staff, not their own primary hospital's.
       const hospitalId =
-        this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
+        this.roleContext.effectiveHospitalIdForRequest() ??
+        this.roleContext.activeHospitalId ??
+        this.auth.getHospitalId() ??
+        undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.staffOptions.set([]),

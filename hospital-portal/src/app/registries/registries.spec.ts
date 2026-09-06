@@ -13,6 +13,7 @@ import {
 } from '../services/program-registry.service';
 import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
+import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
 import { ToastService } from '../core/toast.service';
 
 function enrollment(overrides: Partial<ProgramEnrollment> = {}): ProgramEnrollment {
@@ -56,7 +57,7 @@ describe('RegistriesComponent', () => {
   let component: RegistriesComponent;
   let registryService: jasmine.SpyObj<ProgramRegistryService>;
   let toast: jasmine.SpyObj<ToastService>;
-  let superAdminGlobalView = false;
+  let scope: RoleContextStubState;
 
   beforeEach(async () => {
     registryService = jasmine.createSpyObj<ProgramRegistryService>('ProgramRegistryService', [
@@ -74,7 +75,7 @@ describe('RegistriesComponent', () => {
     registryService.recordVisit.and.returnValue(of(enrollment()));
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
-    superAdminGlobalView = false;
+    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_DOCTOR'] };
 
     await TestBed.configureTestingModule({
       imports: [RegistriesComponent, TranslateModule.forRoot()],
@@ -89,15 +90,7 @@ describe('RegistriesComponent', () => {
         },
         {
           provide: RoleContextService,
-          useValue: {
-            isSuperAdmin: () => superAdminGlobalView,
-            effectiveHospitalIdForRequest: () => (superAdminGlobalView ? null : 'h1'),
-            globalView: () => superAdminGlobalView,
-            selectedHospitalId: () => null,
-            enableGlobalView: () => undefined,
-            scopeToHospital: () => undefined,
-            activeHospitalId: 'h1',
-          },
+          useValue: roleContextStub(scope),
         },
         { provide: ToastService, useValue: toast },
       ],
@@ -112,7 +105,8 @@ describe('RegistriesComponent', () => {
   }
 
   it('a super-admin in global view sees the pick-a-hospital hint and no cohort is requested', () => {
-    superAdminGlobalView = true;
+    scope.superAdmin = true;
+    scope.hospitalId = null;
     fixture.detectChanges();
     expect(registryService.registry).not.toHaveBeenCalled();
     expect(registryService.counts).not.toHaveBeenCalled();

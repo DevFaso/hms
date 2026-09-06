@@ -66,15 +66,9 @@ describe('HospitalTypeaheadComponent', () => {
     // ngOnInit setTimeout-focus side-effect).
   });
 
-  afterEach(() => {
-    // The picker fetches its first page on open; a test that never typed
-    // still owes that request an answer.
-    httpMock
-      .match((r) => r.params.get('q') === '')
-      .filter((r) => !r.cancelled)
-      .forEach((r) => r.flush([]));
-    httpMock.verify();
-  });
+  // The opener's request is shared by HospitalService (first-page cache), so a
+  // keystroke does not cancel it: every test answers it with initialPage().
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
 
   const initialPage = () =>
     httpMock.expectOne(
@@ -83,6 +77,7 @@ describe('HospitalTypeaheadComponent', () => {
 
   it('renders the search input and the All-hospitals option by default', () => {
     fixture.detectChanges();
+    initialPage().flush([]);
     const root: HTMLElement = fixture.nativeElement;
     expect(root.querySelector('[data-testid="hospital-typeahead-input"]')).toBeTruthy();
     expect(root.querySelector('[data-testid="hospital-typeahead-all"]')).toBeTruthy();
@@ -91,6 +86,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('hides the All-hospitals sentinel when [hideAllOption] is true', () => {
     fixture.componentRef.setInput('hideAllOption', true);
     fixture.detectChanges();
+    initialPage().flush([]);
     expect(
       (fixture.nativeElement as HTMLElement).querySelector(
         '[data-testid="hospital-typeahead-all"]',
@@ -136,6 +132,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('debounces keystrokes and issues a single LIMIT-20 search', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('m');
     component['onQueryChange']('me');
     component['onQueryChange']('mem');
@@ -153,6 +150,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('emits selectHospital with the picked match', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     let emitted: HospitalResponse | undefined;
     component.selectHospital.subscribe((h) => (emitted = h));
 
@@ -172,6 +170,7 @@ describe('HospitalTypeaheadComponent', () => {
 
   it('emits selectAll when the All-hospitals sentinel is clicked', () => {
     fixture.detectChanges();
+    initialPage().flush([]);
     const emitted = jasmine.createSpy('selectAll');
     component.selectAll.subscribe(emitted);
     (fixture.nativeElement as HTMLElement)
@@ -183,6 +182,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('shows a NO_MATCHES message when the search returns zero results', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('zzz');
     setTimeout(() => {
       httpMock.expectOne('/super-admin/hospitals/search?q=zzz&limit=20').flush([]);
@@ -196,6 +196,7 @@ describe('HospitalTypeaheadComponent', () => {
   it('shows a SEARCH_ERROR message on backend failure', (done) => {
     fixture.componentRef.setInput('autoFocus', false);
     fixture.detectChanges();
+    initialPage().flush([]);
     component['onQueryChange']('memo');
     setTimeout(() => {
       httpMock

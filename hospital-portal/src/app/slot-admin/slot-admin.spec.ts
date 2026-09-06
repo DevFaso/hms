@@ -15,6 +15,7 @@ import {
 import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -111,11 +112,11 @@ describe('SlotAdminComponent', () => {
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: {
-            activeHospitalId: 'h-1',
-            isSuperAdmin: () => false,
-            hasAnyActiveRole: () => true,
-          },
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h-1',
+            roles: ['ROLE_HOSPITAL_ADMIN'],
+          }),
         },
       ],
     });

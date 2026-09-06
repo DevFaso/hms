@@ -1,12 +1,17 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
+import { AuthService } from '../auth/auth.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -17,24 +22,28 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeChipComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './mtm-review.html',
   styleUrl: './mtm-review.scss',
 })
 export class MtmReviewComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
-
-  /**
-   * A super-admin in global view has no facility to show (MTM reviews belong to a facility): the page shows the
-   * "select a hospital" hint and makes no call until one is picked. Staff are
-   * always scoped by their assignment, so nothing changes for them.
-   */
-  readonly scopeReady = computed(
-    () =>
-      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
-  );
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
   reviews = signal<MtmReviewResponse[]>([]);
   loading = signal(false);
@@ -46,36 +55,53 @@ export class MtmReviewComponent implements OnInit {
   form: MtmReviewRequest = this.emptyForm();
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadReviews();
   }
 
   onScopeChange(): void {
+    this.scopeChanged$.next();
     this.loadReviews();
   }
 
+  private hospitalIdForRequests(): string | null {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? null;
+  }
+
   loadReviews(): void {
-    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
-    if (!this.scopeReady() || !hospitalId) {
+    // The chip's scope first, then the assignment/JWT the old code read: a
+    // staff member with several hospitals and no primary one keeps working.
+    const hospitalId = this.hospitalIdForRequests();
+    if (!hospitalId) {
       this.reviews.set([]);
+      if (!this.roleContext.isSuperAdmin()) {
+        this.toast.error('Active hospital context required');
+      }
       return;
     }
     this.loading.set(true);
-    this.svc.listMtmReviewsByHospital(hospitalId, 0, 50).subscribe({
-      next: (page) => {
-        this.reviews.set(page?.content ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-        this.toast.error('Failed to load MTM reviews');
-      },
-    });
+    this.svc
+      .listMtmReviewsByHospital(hospitalId, 0, 50)
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (page) => {
+          this.reviews.set(page?.content ?? []);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loading.set(false);
+          this.toast.error('Failed to load MTM reviews');
+        },
+      });
   }
 
   openCreate(): void {
     this.selectedReviewId = null;
     this.form = this.emptyForm();
-    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
+    this.form.hospitalId = this.hospitalIdForRequests() ?? '';
     this.showForm.set(true);
   }
 

@@ -1592,6 +1592,22 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- Hospital scope is applied page by page: after #566, 18 of ~115 staff routes
+  carry the scope chip and gate on `RoleContextService.hasHospitalScope`, while
+  every other route whose backend calls `requireActiveHospitalId()` (imaging,
+  discharge, nurse station, procedure orders, registrations, bed management,
+  pharmacy inventory/dispensing/claims, lab QC, reports, billing, departments,
+  scheduling…) still fires in global view and shows a load-error toast. The
+  right depth is one route-level mechanism — `data: { requiresHospitalScope }`
+  on the route consumed by a shell-level gate (chip + hint + outlet) — plus
+  `AuthService.getHospitalId()` delegating to
+  `roleContext.effectiveHospitalIdForRequest()` so the 22 remaining callers
+  follow the chip. From the #566 self-review.
+- `@DataJpaTest` slices repeat the same `@ActiveProfiles("test")` +
+  `@Import({TenantContextAccessor, EncryptionKeyHolder})` preamble in six
+  classes; a `@TenantScopedDataJpaTest` meta-annotation and a
+  `HospitalFixtures` helper would make the next required bean a one-line
+  change. From the #566 self-review.
 - ~~UI palette migration `--primary: #2563eb` → Keneya green.~~ Closed by
   #562 (2026-09-05): the tokens in `styles.scss` (`--primary: #0e7c6b`, dark
   `#0a5f52`, light `#23b79c` for fills only), axe 6/6.

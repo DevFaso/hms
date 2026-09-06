@@ -376,16 +376,21 @@ public class SuperAdminDashboardController {
         // something to show before the operator types (the chip used to open
         // on an empty list with no hint that typing was required). The limit
         // keeps a 10k-tenant deployment from paging its whole table through
-        // the chip; the prefix narrows it from the first character.
-        String prefix = trimmed.isEmpty() ? null : trimmed;
+        // the chip; a prefix narrows it from the first character, and the
+        // service treats a blank one as "no filter".
 
         // Java 21+ Math.clamp(value, min, max) replaces Math.max(min, Math.min(max, value)).
         int safeLimit = Math.clamp(limit, 1, HOSPITAL_SEARCH_MAX_LIMIT);
         // active=true: typeahead never offers archived/suspended tenants as a scope.
         List<HospitalResponseDTO> results = hospitalService.searchHospitals(
-            prefix, null, null, Boolean.TRUE, 0, safeLimit, locale);
-        crossTenantReadAudit.recordCrossTenantRead(
-            "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
+            trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);
+        if (!trimmed.isEmpty()) {
+            // The opener (first page, no query) fires on every chip open and
+            // reads only names; auditing it would bury real cross-tenant reads
+            // under one row per click. A typed prefix is a deliberate lookup.
+            crossTenantReadAudit.recordCrossTenantRead(
+                "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
+        }
         return ResponseEntity.ok(results);
     }
 }

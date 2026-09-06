@@ -9,6 +9,7 @@ import { MicroCultureResponse, MicroService } from '../services/micro.service';
 import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 
 describe('MicrobiologyComponent', () => {
   let fixture: ComponentFixture<MicrobiologyComponent>;
@@ -74,6 +75,17 @@ describe('MicrobiologyComponent', () => {
     ]);
     roleContextSpy.hasAnyActiveRole.and.returnValue(true);
     roleContextSpy.isSuperAdmin.and.returnValue(false);
+    // The scope chip and hint read the rest; the spy keeps hasAnyActiveRole/isSuperAdmin.
+    const {
+      hasAnyActiveRole: _roles,
+      isSuperAdmin: _admin,
+      ...scopeMembers
+    } = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: [],
+    }) as unknown as Record<string, unknown>;
+    Object.assign(roleContextSpy, scopeMembers);
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],

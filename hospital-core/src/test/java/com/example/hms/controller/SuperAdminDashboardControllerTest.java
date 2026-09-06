@@ -21,6 +21,9 @@ import com.example.hms.service.PlatformAnalyticsService;
 import com.example.hms.service.SuperAdminDashboardService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -243,19 +246,6 @@ class SuperAdminDashboardControllerTest {
             .searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any());
     }
 
-    @Test
-    void searchHospitalsForScopeChip_nullQueryIsTheFirstPageToo() {
-        HospitalContextHolder.setContext(superAdminContext());
-        when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
-            .thenReturn(List.of(new HospitalResponseDTO()));
-
-        // The chip opens with no query at all: that is the first page, not
-        // an empty list (the old 2-character minimum left the picker blank).
-        assertThat(controller.searchHospitalsForScopeChip(null, 20, Locale.ENGLISH).getBody())
-            .hasSize(1);
-        verify(hospitalService).searchHospitals(
-            isNull(), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
-    }
 
     @Test
     void searchHospitalsForScopeChip_returnsServiceResultsForRealSuperAdmin() {
@@ -425,18 +415,22 @@ class SuperAdminDashboardControllerTest {
             "HOSPITAL", "hospitals/search?q=memo", 1);
     }
 
-    @Test
-    void searchHospitalsForScopeChip_emptyQueryListsTheFirstPageByName() {
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void searchHospitalsForScopeChip_noQueryIsTheFirstPageNotAnEmptyList(String q) {
         HospitalContextHolder.setContext(superAdminContext());
         when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
             .thenReturn(List.of(new HospitalResponseDTO()));
 
-        controller.searchHospitalsForScopeChip("   ", 20, Locale.ENGLISH);
+        assertThat(controller.searchHospitalsForScopeChip(q, 20, Locale.ENGLISH).getBody()).hasSize(1);
 
-        // No prefix filter: the picker opens on the first page of active
-        // hospitals instead of an empty list nobody can act on.
-        verify(hospitalService).searchHospitals(
-            isNull(), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
+        // The chip opens with no query: that is the first page of active
+        // hospitals (the service reads a blank filter as "none"), not the empty
+        // list the old two-character minimum produced — and the opener is not
+        // a cross-tenant read worth an audit row per click.
+        verify(hospitalService).searchHospitals(eq(""), isNull(), isNull(), eq(Boolean.TRUE), eq(0), eq(20), any());
+        verify(crossTenantReadAudit, never()).recordCrossTenantRead(any(), any(), anyInt());
     }
 
     @Test

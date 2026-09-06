@@ -22,6 +22,10 @@ import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 
@@ -45,6 +49,7 @@ type Tab = 'requests' | 'units';
     EnumLabelPipe,
     PatientPickerComponent,
     HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
   ],
   templateUrl: './transfusion.html',
   styleUrl: './transfusion.scss',
@@ -53,16 +58,13 @@ export class TransfusionComponent implements OnInit {
   private readonly transfusion = inject(TransfusionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
-  /**
-   * A super-admin in global view has no blood bank to show (units and transfusions belong to a facility): the page shows the
-   * "select a hospital" hint and makes no call until one is picked. Staff are
-   * always scoped by their assignment, so nothing changes for them.
-   */
-  readonly scopeReady = computed(
-    () =>
-      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
-  );
   private readonly translate = inject(TranslateService);
 
   tab = signal<Tab>('requests');
@@ -177,13 +179,25 @@ export class TransfusionComponent implements OnInit {
   reactionForm = this.emptyReactionForm();
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadRequests();
   }
 
   onScopeChange(): void {
-    this.loadRequests();
+    this.scopeChanged$.next();
+    // Both tabs cache their list and setTab() only fetches an empty one, so
+    // the hidden tab is cleared (not fetched) and the visible tab reloads.
+    this.selectedRequest.set(null);
+    this.assignableUnits.set([]);
     if (this.tab() === 'units') {
+      this.requests.set([]);
       this.loadUnits();
+    } else {
+      this.units.set([]);
+      this.loadRequests();
     }
   }
 
@@ -204,16 +218,19 @@ export class TransfusionComponent implements OnInit {
     }
     this.loading.set(true);
     const filter = this.requestStatusFilter();
-    this.transfusion.listRequests(filter || undefined).subscribe({
-      next: (list) => {
-        this.requests.set(list ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.transfusion
+      .listRequests(filter || undefined)
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (list) => {
+          this.requests.set(list ?? []);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
   }
 
   onRequestStatusFilter(status: string): void {
@@ -352,16 +369,19 @@ export class TransfusionComponent implements OnInit {
     }
     this.loading.set(true);
     const filter = this.unitStatusFilter();
-    this.transfusion.listUnits(filter || undefined).subscribe({
-      next: (list) => {
-        this.units.set(list ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.transfusion
+      .listUnits(filter || undefined)
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (list) => {
+          this.units.set(list ?? []);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
   }
 
   onUnitStatusFilter(status: string): void {

@@ -19,6 +19,10 @@ import { TransferOrderResponse, TransferService } from '../services/transfer.ser
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 /**
@@ -39,7 +43,14 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeChipComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './bed-board.html',
   styleUrl: './bed-board.scss',
 })
@@ -49,16 +60,13 @@ export class BedBoardComponent implements OnInit {
   private readonly transfers = inject(TransferService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
+  /** Emits on every scope change so a response for the previous hospital can never land. */
+  private readonly scopeChanged$ = new Subject<void>();
 
-  /**
-   * A super-admin in global view has no building to show (a bed board belongs to a building): the page shows the
-   * "select a hospital" hint and makes no call until one is picked. Staff are
-   * always scoped by their assignment, so nothing changes for them.
-   */
-  readonly scopeReady = computed(
-    () =>
-      !this.roleContext.isSuperAdmin() || this.roleContext.effectiveHospitalIdForRequest() != null,
-  );
   private readonly translate = inject(TranslateService);
 
   loading = signal(false);
@@ -190,11 +198,16 @@ export class BedBoardComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadBoard();
     this.loadPendingTransfers();
   }
 
   onScopeChange(): void {
+    this.scopeChanged$.next();
     this.loadBoard();
     this.loadPendingTransfers();
   }
@@ -204,10 +217,13 @@ export class BedBoardComponent implements OnInit {
       this.pendingTransfers.set([]);
       return;
     }
-    this.transfers.getPending().subscribe({
-      next: (list) => this.pendingTransfers.set(list),
-      error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR')),
-    });
+    this.transfers
+      .getPending()
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (list) => this.pendingTransfers.set(list),
+        error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR')),
+      });
   }
 
   loadBoard(): void {
@@ -217,16 +233,19 @@ export class BedBoardComponent implements OnInit {
       return;
     }
     this.loading.set(true);
-    this.boardService.getBoard().subscribe({
-      next: (board) => {
-        this.board.set(board);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('BED_BOARD.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.boardService
+      .getBoard()
+      .pipe(takeUntil(this.scopeChanged$))
+      .subscribe({
+        next: (board) => {
+          this.board.set(board);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('BED_BOARD.LOAD_ERROR'));
+          this.loading.set(false);
+        },
+      });
   }
 
   private matches(bed: BedBoardEntry, isolationOnly: boolean, availableOnly: boolean): boolean {

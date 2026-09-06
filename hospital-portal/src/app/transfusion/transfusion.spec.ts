@@ -17,6 +17,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 
 function mockRequest(
   overrides: Partial<TransfusionRequestResponse> = {},
@@ -78,11 +79,11 @@ describe('TransfusionComponent', () => {
     txSpy.listAssignableUnits.and.returnValue(of([mockUnit()]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    const roleCtx = {
-      hasAnyActiveRole: () => true,
-      isSuperAdmin: () => false,
-      activeHospitalId: 'h1',
-    } as unknown as RoleContextService;
+    const roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_LAB_TECHNICIAN'],
+    });
 
     await TestBed.configureTestingModule({
       imports: [TransfusionComponent, TranslateModule.forRoot()],
@@ -328,11 +329,11 @@ describe('TransfusionComponent — platelet pairing pending confirmation', () =>
         },
         {
           provide: RoleContextService,
-          useValue: {
-            hasAnyActiveRole: () => true,
-            isSuperAdmin: () => false,
-            activeHospitalId: 'h1',
-          } as unknown as RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h1',
+            roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_LAB_TECHNICIAN'],
+          }),
         },
       ],
     }).compileComponents();

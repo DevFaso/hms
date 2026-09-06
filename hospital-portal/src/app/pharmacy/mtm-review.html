@@ -6,18 +6,14 @@
     </div>
     <div class="header-actions">
       <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
-      <button class="btn-primary" (click)="openCreate()">
+      <button class="btn-primary" (click)="openCreate()" [disabled]="!scopeReady()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.MTM_NEW' | translate }}
       </button>
     </div>
   </div>
 
-  @if (!scopeReady()) {
-    <p class="scope-hint" data-testid="scope-hint">
-      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
-    </p>
-  }
+  <app-hospital-scope-hint />
 
   @if (showForm()) {
     <div class="form-card">

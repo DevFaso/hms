@@ -17,6 +17,7 @@ import { IsolationPrecautionResponse, IsolationService } from '../services/isola
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -124,7 +125,7 @@ describe('BedBoardComponent', () => {
   let isolationSpy: jasmine.SpyObj<IsolationService>;
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let superAdminGlobalView = false;
+  let scope: RoleContextStubState;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -148,17 +149,8 @@ describe('BedBoardComponent', () => {
     transferSpy.getPending.and.returnValue(of([]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    superAdminGlobalView = false;
-    const roleCtx = {
-      hasAnyActiveRole: () => true,
-      isSuperAdmin: () => superAdminGlobalView,
-      effectiveHospitalIdForRequest: () => (superAdminGlobalView ? null : 'h1'),
-      globalView: () => superAdminGlobalView,
-      selectedHospitalId: () => null,
-      enableGlobalView: () => undefined,
-      scopeToHospital: () => undefined,
-      activeHospitalId: 'h1',
-    } as unknown as RoleContextService;
+    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE', 'ROLE_DOCTOR'] };
+    const roleCtx = roleContextStub(scope);
 
     await TestBed.configureTestingModule({
       imports: [BedBoardComponent, TranslateModule.forRoot()],
@@ -183,7 +175,8 @@ describe('BedBoardComponent', () => {
 
   it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
     // A bed board belongs to a building: nothing to fetch until one is picked.
-    superAdminGlobalView = true;
+    scope.superAdmin = true;
+    scope.hospitalId = null;
     const fixture = TestBed.createComponent(BedBoardComponent);
     fixture.detectChanges();
     expect(boardSpy.getBoard).not.toHaveBeenCalled();

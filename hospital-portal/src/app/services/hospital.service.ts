@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, map, shareReplay, throwError } from 'rxjs';
 
 /** Minimal hospital DTO returned by /me/hospital. */
 export interface HospitalMinimal {
@@ -116,10 +116,33 @@ export class HospitalService {
    * the dedicated `isSuperAdmin` JWT claim and capped at 20 results
    * server-side.
    *
-   * Caller is expected to debounce keystrokes (300 ms) and to have
-   * already filtered out queries shorter than 2 characters.
+   * Caller is expected to debounce keystrokes (300 ms). An empty query is the
+   * first page by name; the picker asks for it on every open, so that one
+   * answer is kept for a minute and shared (a failed one is not kept).
    */
   searchHospitals(q: string, limit = 20): Observable<HospitalResponse[]> {
+    if (q === '') {
+      const now = Date.now();
+      if (!this.firstPage$ || now - this.firstPageAt > HospitalService.FIRST_PAGE_TTL_MS) {
+        this.firstPageAt = now;
+        this.firstPage$ = this.fetchHospitals('', limit).pipe(
+          catchError((err: unknown) => {
+            this.firstPage$ = undefined;
+            return throwError(() => err);
+          }),
+          shareReplay(1),
+        );
+      }
+      return this.firstPage$;
+    }
+    return this.fetchHospitals(q, limit);
+  }
+
+  private static readonly FIRST_PAGE_TTL_MS = 60_000;
+  private firstPage$?: Observable<HospitalResponse[]>;
+  private firstPageAt = 0;
+
+  private fetchHospitals(q: string, limit: number): Observable<HospitalResponse[]> {
     const params = new HttpParams().set('q', q).set('limit', String(limit));
     return this.http.get<HospitalResponse[]>('/super-admin/hospitals/search', { params });
   }

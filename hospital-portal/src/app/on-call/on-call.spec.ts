@@ -10,6 +10,7 @@ import { OnCallService, OnCallScheduleResponse } from '../services/on-call.servi
 import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -67,11 +68,7 @@ describe('OnCallComponent', () => {
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: {
-            activeHospitalId: 'h-1',
-            isSuperAdmin: () => false,
-            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
-          },
+          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: activeRoles }),
         },
       ],
     });

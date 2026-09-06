@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The hospital-scope picker's query. An empty query must list active
  * hospitals by name so the picker has something to show on open; a prefix
- * must match the code as well as the name (operators know "HCX-…" codes);
- * archived tenants are never offered as a scope.
+ * narrows on the start of the name (the V90 index on LOWER(name) serves
+ * that, and nothing indexes the code); archived tenants are never offered.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -52,9 +52,7 @@ class HospitalRepositorySearchIT {
     }
 
     @Test
-    void prefixMatchesTheCodeAsWellAsTheName() {
-        assertThat(hospitalRepository.searchHospitals("hcx", null, null, Boolean.TRUE, PageRequest.of(0, 20)).getContent())
-            .extracting(Hospital::getName).containsExactly("Central Clinic");
+    void prefixNarrowsOnTheStartOfTheName() {
         assertThat(hospitalRepository.searchHospitals("mem", null, null, Boolean.TRUE, PageRequest.of(0, 20)).getContent())
             .extracting(Hospital::getName).containsExactly("Memorial Hospital");
     }

@@ -26,6 +26,9 @@ import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { ToastService } from '../core/toast.service';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
@@ -60,6 +63,7 @@ interface RegistryLoad {
     TranslateModule,
     PatientPickerComponent,
     HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
   ],
   templateUrl: './registries.html',
   styleUrl: './registries.scss',
@@ -67,6 +71,8 @@ interface RegistryLoad {
 export class RegistriesComponent implements OnInit, OnDestroy {
   private readonly registryService = inject(ProgramRegistryService);
   private readonly roleCtx = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -99,14 +105,8 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   /** Hospital scope for the picker — the super-admin-aware one, not the primary. */
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  /**
-   * A super-admin in global view has no cohort to show (a registry belongs to
-   * a hospital): the page shows the "select a hospital" hint and makes no
-   * call until one is picked. Staff are always scoped by their assignment.
-   */
-  readonly scopeReady = computed(
-    () => !this.roleCtx.isSuperAdmin() || this.pickerHospitalId() != null,
-  );
+  /** See RoleContextService.hasHospitalScope: the cohort and the enrol button wait for a pinned hospital. */
+  readonly scopeReady = this.roleCtx.hasHospitalScope;
 
   private readonly load$ = new Subject<{ program: CareProgram; status: StatusFilter }>();
   private loadSub?: Subscription;
@@ -130,6 +130,10 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   ngOnInit(): void {
+    // Read ?hospitalId= before the first load: the chip does the same in its
+    // own ngOnInit, which runs after ours, and the interceptor must see the
+    // right scope on the initial fetch (the pattern every chip host uses).
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadSub = this.load$
       .pipe(
         // switchMap: only the LATEST selection may update the view. Without

@@ -44,6 +44,7 @@
           type="button"
           class="btn-primary"
           data-testid="new-culture"
+          [disabled]="!scopeReady()"
           (click)="openCreateModal()"
         >
           <span class="material-symbols-outlined">add</span>
@@ -53,11 +54,7 @@
     </div>
   </div>
 
-  @if (!scopeReady()) {
-    <p class="scope-hint" data-testid="scope-hint">
-      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
-    </p>
-  }
+  <app-hospital-scope-hint />
 
   @if (loading()) {
     <div class="loading-state">

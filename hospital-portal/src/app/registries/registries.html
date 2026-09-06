@@ -10,6 +10,7 @@
         type="button"
         class="btn-primary"
         (click)="openEnrollForm($event)"
+        [disabled]="!scopeReady()"
         data-testid="open-enroll"
       >
         <span class="material-symbols-outlined">person_add</span>
@@ -22,11 +23,7 @@
        these filter one table rather than switching panels, and half a
        tablist (roles without roving tabindex or arrow keys) reads worse
        to assistive tech than honest pressed buttons. -->
-  @if (!scopeReady()) {
-    <p class="scope-hint" data-testid="scope-hint">
-      {{ 'HOSPITAL_SCOPE.PICK_TO_CONTINUE' | translate }}
-    </p>
-  }
+  <app-hospital-scope-hint />
 
   <div class="program-tabs">
     @for (p of programs; track p) {

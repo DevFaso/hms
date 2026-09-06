@@ -16,16 +16,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import {
-  Subject,
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  merge,
-  of,
-  switchMap,
-  tap,
-} from 'rxjs';
+import { Subject, catchError, debounceTime, merge, of, switchMap, tap } from 'rxjs';
 
 import { HospitalResponse, HospitalService } from '../../services/hospital.service';
 
@@ -109,10 +100,14 @@ export class HospitalTypeaheadComponent implements OnInit {
     // The first page loads on open (empty query, first LIMIT by name): the
     // picker used to open on an empty list with only a placeholder to say
     // that typing was required. Keystrokes are debounced; the opener is not.
+    // No distinctUntilChanged: an emptied box after a failed opener must be
+    // able to ask for the first page again.
     merge(of(''), this.search$.pipe(debounceTime(HospitalTypeaheadComponent.DEBOUNCE_MS)))
       .pipe(
-        distinctUntilChanged(),
         tap(() => {
+          // The previous query's rows are not answers to this one: clear them
+          // so a stale option cannot be picked while the request is in flight.
+          this.results.set([]);
           this.loading.set(true);
           this.errored.set(false);
         }),
