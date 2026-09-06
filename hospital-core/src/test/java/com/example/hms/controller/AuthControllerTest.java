@@ -34,8 +34,10 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -697,78 +699,35 @@ class AuthControllerTest {
     }
 
     // =====================================================================
-    // Disabled-account guidance — one message per activation route
+    // Disabled-account guidance
     // =====================================================================
 
-    private com.example.hms.model.User disabledUser(String username) {
-        var user = new com.example.hms.model.User();
-        user.setId(java.util.UUID.randomUUID());
-        user.setUsername(username);
-        user.setActive(false);
-        return user;
-    }
-
-    private void authenticationRejectsAsDisabled() {
+    @Test
+    void login_disabledAccount_namesBothRoutesAndDisclosesNoState() throws Exception {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new DisabledException("Account is disabled"));
-    }
 
-    @Test
-    void login_disabledPatientWithActivationToken_pointsAtTheEmailedLink() throws Exception {
-        authenticationRejectsAsDisabled();
-        var patient = disabledUser("apatient");
-        patient.setActivationToken("tok-123");
-        when(userRepository.findByUsername("apatient")).thenReturn(java.util.Optional.of(patient));
-
-        mockMvc.perform(post("/auth/login")
+        var result = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new LoginRequest("apatient", "CorrectPass1!", null))))
+                                new LoginRequest("someone", "AnyPass1!", null))))
                 .andExpect(status().isUnauthorized())
-                // Patients get a link, never a role-confirmation code: sending
-                // them after a "Confirm Your Hospital Role Assignment" message
-                // they never received is the dead end this whole change is about.
+                // Both routes named, neither asserted: patients activate with a
+                // link, staff with a role-confirmation code, and a deactivated
+                // account has neither.
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("activation link")))
+                        org.hamcrest.Matchers.containsString("activation link or confirmation code")))
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("confirmation code"))));
-    }
-
-    @Test
-    void login_disabledStaffAwaitingConfirmation_pointsAtTheCode() throws Exception {
-        authenticationRejectsAsDisabled();
-        var staff = disabledUser("anurse");
-        when(userRepository.findByUsername("anurse")).thenReturn(java.util.Optional.of(staff));
-        var pending = new com.example.hms.model.UserRoleHospitalAssignment();
-        pending.setConfirmationVerifiedAt(null);
-        when(assignmentRepository.findByUser(staff)).thenReturn(java.util.Set.of(pending));
-
-        mockMvc.perform(post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new LoginRequest("anurse", "CorrectPass1!", null))))
-                .andExpect(status().isUnauthorized())
+                        org.hamcrest.Matchers.containsString("contact your administrator")))
+                // The old text sent everyone to an email-verification flow that
+                // only self-registered patients have.
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("confirmation code")));
-    }
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("verify your email"))))
+                .andReturn();
 
-    @Test
-    void login_deactivatedAccountWithNothingPending_saysDeactivated() throws Exception {
-        authenticationRejectsAsDisabled();
-        var former = disabledUser("exstaff");
-        when(userRepository.findByUsername("exstaff")).thenReturn(java.util.Optional.of(former));
-        var confirmed = new com.example.hms.model.UserRoleHospitalAssignment();
-        confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(30));
-        when(assignmentRepository.findByUser(former)).thenReturn(java.util.Set.of(confirmed));
-
-        mockMvc.perform(post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new LoginRequest("exstaff", "CorrectPass1!", null))))
-                .andExpect(status().isUnauthorized())
-                // Nothing is pending: telling this person to wait for a code
-                // that will never come sends them to the wrong desk.
-                .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("deactivated")));
+        // isEnabled is checked before the password, so this arm answers
+        // unauthenticated probes: it must not look the account up at all.
+        verify(userRepository, never()).findByUsername("someone");
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
     }
 }
