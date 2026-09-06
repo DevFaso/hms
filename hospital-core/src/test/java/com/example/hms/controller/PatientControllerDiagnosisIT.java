@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.BaseIT;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.OrganizationType;
@@ -16,6 +17,7 @@ import com.example.hms.model.PatientProblemHistory;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.PatientDiagnosisDeleteRequestDTO;
 import com.example.hms.payload.dto.PatientDiagnosisRequestDTO;
@@ -131,9 +133,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 
 	@BeforeEach
 	void setUp() {
-		// Hospital-scoped writes are now audited with the actor's assignment id
+		// Hospital-scoped writes are audited with the actor's assignment id
 		// (fk_audit_assignment): clear the audit rows before the rows they point at.
-		auditEventLogRepository.deleteAll();
+		auditEventLogRepository.deleteAllInBatch();
 		patientProblemHistoryRepository.deleteAll();
 		patientProblemRepository.deleteAll();
 		registrationRepository.deleteAll();
@@ -296,6 +298,43 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	}
 
 	@Test
+	@DisplayName("PUT /patients/{id}/diagnoses/{diagnosisId} leaves a write-audit row anchored to the doctor's assignment")
+	void hospitalScopedWriteIsAuditedWithTheDoctorsAssignment() throws Exception {
+		PatientProblem problem = createProblem("Gestational diabetes", ProblemStatus.ACTIVE, 3);
+		PatientDiagnosisUpdateRequestDTO request = PatientDiagnosisUpdateRequestDTO.builder()
+			.hospitalId(hospital.getId())
+			.status(ProblemStatus.RESOLVED)
+			.changeReason(STATUS_CHANGE_REASON)
+			.resolvedDate(LocalDate.now())
+			.diagnosisCodes(new ArrayList<>(List.of("O24.4")))
+			.build();
+
+		mockMvc.perform(put(API_CONTEXT + PATIENT_DIAGNOSIS_ITEM_PATH, patient.getId(), problem.getId())
+			.contextPath(API_CONTEXT)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(objectMapper.writeValueAsBytes(request))
+			.accept(MediaType.APPLICATION_JSON)
+			.with(doctorAuthentication()))
+			.andExpect(status().isOk());
+
+		// WriteAuditInterceptor records in afterCompletion, with no persistence
+		// context. Until #564 it read the assignment's LAZY hospital there, threw
+		// "no session", and this row never existed.
+		UserRoleHospitalAssignment assignment = assignmentRepository
+			.findFirstByUser_IdAndHospital_IdAndActiveTrue(doctorUser.getId(), hospital.getId())
+			.orElseThrow();
+		List<AuditEventLog> conventionRows = auditEventLogRepository.findAll().stream()
+			.filter(row -> row.getEventType() == AuditEventType.DATA_UPDATE)
+			.filter(row -> row.getEventDescription() != null && row.getEventDescription().startsWith("PUT "))
+			.toList();
+		assertThat(conventionRows).hasSize(1);
+		AuditEventLog row = conventionRows.get(0);
+		assertThat(row.getUser().getId()).isEqualTo(doctorUser.getId());
+		assertThat(row.getAssignment().getId()).isEqualTo(assignment.getId());
+		assertThat(row.getHospitalName()).isEqualTo(hospital.getName());
+	}
+
+	@Test
 	@DisplayName("DELETE /patients/{id}/diagnoses/{diagnosisId} marks diagnosis inactive with justification")
 	void deletePatientDiagnosis() throws Exception {
 		PatientProblem problem = createProblem("Old injury", ProblemStatus.ACTIVE, 4);
@@ -324,9 +363,12 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	}
 
 	@AfterEach
-	void clearSecurityContext() {
+	void clearContextsAndAuditRows() {
 		SecurityContextHolder.clearContext();
 		HospitalContextHolder.clear();
+		// The H2 database is shared with the sibling controller ITs, whose
+		// cleanup deletes assignments: leave no audit row anchored to ours.
+		auditEventLogRepository.deleteAllInBatch();
 	}
 
 	private Role ensureDoctorRole() {

@@ -11,7 +11,6 @@ import com.example.hms.service.AuditEventLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.Hibernate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -155,10 +154,11 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
             .patientId(patientId)
             .userId(actorId)
             .userName(auth.getName())
+            // No hospitalName here: the audit service fills it from assignmentId
+            // inside its own transaction. Reading the LAZY hospital in
+            // afterCompletion threw "no session" and lost the row (dev, 2026-09-05).
             .assignmentId(assignment != null ? assignment.getId() : null)
-            .hospitalName(hospitalNameOf(assignment))
-            .roleName(assignment != null && assignment.getRole() != null
-                ? assignment.getRole().getName() : primaryRole(auth))
+            .roleName(roleNameOf(assignment, auth))
             .ipAddress(request.getRemoteAddr())
             .eventDescription(request.getMethod().toUpperCase(Locale.ROOT) + " " + pattern)
             .build());
@@ -215,14 +215,11 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * (X-Hospital-Id, or the JWT's primary hospital as the filter resolved
      * it). Null for a super-admin in global view or an actor with no
      * assignment there — the row is then global, which is the truth.
-     */
-    /**
-     * The actor's active assignment at the request's hospital, with hospital and
-     * role already loaded: this runs in {@code afterCompletion}, after the
-     * request's persistence context is gone, so a lazy {@code hospital} proxy
-     * would throw {@code LazyInitializationException} on {@code getName()} and
-     * take the whole row with it (dev, 2026-09-05). A lookup that fails anyway
-     * degrades to an unanchored row: the actor and the action still land.
+     *
+     * <p>This runs in {@code afterCompletion}, with no persistence context:
+     * only the assignment's own columns and its EAGER role may be read here.
+     * The LAZY hospital is a dead proxy; the audit service derives the hospital
+     * name from {@code assignmentId} under its own transaction.</p>
      */
     private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
@@ -230,22 +227,7 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         if (hospitalId == null || repository == null) {
             return null;
         }
-        try {
-            return repository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
-                .orElse(null);
-        } catch (RuntimeException lookupFailure) {
-            log.warn("[WRITE-AUDIT] Assignment lookup failed for actor {} at hospital {}; recording the row unanchored: {}",
-                actorId, hospitalId, lookupFailure.getMessage(), lookupFailure);
-            return null;
-        }
-    }
-
-    /** Null unless the hospital is actually loaded: a dead proxy must not cost the row. */
-    private static String hospitalNameOf(UserRoleHospitalAssignment assignment) {
-        if (assignment == null || assignment.getHospital() == null || !Hibernate.isInitialized(assignment.getHospital())) {
-            return null;
-        }
-        return assignment.getHospital().getName();
+        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
     }
 
     static AuditEventType eventTypeFor(String method) {
@@ -330,6 +312,19 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         } catch (IllegalArgumentException notAUuid) {
             return null;
         }
+    }
+
+    /**
+     * The assignment's role at this hospital in the same bare form as
+     * {@link #primaryRole} and the read-side interceptor ({@code DOCTOR}, not
+     * {@code ROLE_DOCTOR}), so one actor's rows group under one role name.
+     */
+    private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
+        if (assignment == null || assignment.getRole() == null || assignment.getRole().getName() == null) {
+            return primaryRole(auth);
+        }
+        String name = assignment.getRole().getName();
+        return name.startsWith(ROLE_PREFIX) ? name.substring(ROLE_PREFIX.length()) : name;
     }
 
     private static String primaryRole(Authentication auth) {

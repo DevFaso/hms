@@ -11,6 +11,7 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.AuditEventLogService;
+import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -267,19 +268,22 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
-    @DisplayName("a hospital-scoped request carries the actor's assignment and hospital so tenant views find the row")
+    @DisplayName("a hospital-scoped request carries the actor's assignment id; the hospital itself is never touched here")
     void anchorsTheRowToTheActiveHospitalAssignment() throws Exception {
         UUID hospitalId = UUID.randomUUID();
-        Hospital hospital = new Hospital();
-        hospital.setId(hospitalId);
-        hospital.setName("Hospital A");
+        // afterCompletion runs with no persistence context, so the assignment's
+        // LAZY hospital is a dead proxy: reading its name threw and lost the
+        // whole row (dev, 2026-09-05). The audit service derives the name from
+        // assignmentId under its own transaction; this interceptor must not.
+        Hospital deadProxy = mock(Hospital.class);
+        when(deadProxy.getName()).thenThrow(new LazyInitializationException("could not initialize proxy - no session"));
         Role role = new Role();
         role.setName("ROLE_MIDWIFE");
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
-        assignment.setHospital(hospital);
+        assignment.setHospital(deadProxy);
         assignment.setRole(role);
-        when(assignmentRepository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
             .thenReturn(Optional.of(assignment));
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
@@ -289,31 +293,10 @@ class WriteAuditInterceptorTest {
 
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
-        assertThat(row.getHospitalName()).isEqualTo("Hospital A");
-        assertThat(row.getRoleName()).isEqualTo("ROLE_MIDWIFE");
-        // afterCompletion runs with no persistence context: the plain finder hands
-        // back a lazy hospital proxy that dies on getName() (dev, 2026-09-05).
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
-            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
-    }
-
-    @Test
-    @DisplayName("a failed assignment lookup degrades to an unanchored row instead of losing the write")
-    void aFailedAssignmentLookupStillRecordsTheWrite() throws Exception {
-        UUID hospitalId = UUID.randomUUID();
-        when(assignmentRepository.findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
-            .thenThrow(new IllegalStateException("database away"));
-        HospitalContextHolder.setContext(HospitalContext.builder()
-            .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
-
-        interceptor.afterCompletion(request("POST", "/labor/episodes", Map.of()), ok(201),
-            handler(Handlers.class, "plain"), null);
-
-        AuditEventRequestDTO row = emitted();
-        assertThat(row.getUserId()).isEqualTo(NURSE);
-        assertThat(row.getEventType()).isEqualTo(AuditEventType.DATA_CREATE);
-        assertThat(row.getAssignmentId()).isNull();
+        // Same bare form as the fallback and the read-side interceptor.
+        assertThat(row.getRoleName()).isEqualTo("MIDWIFE");
         assertThat(row.getHospitalName()).isNull();
+        verify(deadProxy, never()).getName();
     }
 
     @Test
@@ -324,7 +307,7 @@ class WriteAuditInterceptorTest {
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isNull();
         assertThat(row.getHospitalName()).isNull();
-        verify(assignmentRepository, never()).findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(
+        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }

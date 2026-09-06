@@ -46,18 +46,6 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
 
-    /**
-     * {@link #findFirstByUser_IdAndHospital_IdAndActiveTrue} with {@code hospital}
-     * and {@code role} loaded in the same query. For callers that run outside any
-     * persistence context — a request interceptor's {@code afterCompletion}, a
-     * scheduled job after its transaction — where the lazy {@code hospital} proxy
-     * throws {@code LazyInitializationException} on first touch. The write-audit
-     * interceptor lost every hospital-scoped row that way (dev, 2026-09-05).
-     */
-    @EntityGraph(attributePaths = {"hospital", "role"})
-    Optional<UserRoleHospitalAssignment> findFirstWithHospitalAndRoleByUser_IdAndHospital_IdAndActiveTrue(
-        UUID userId, UUID hospitalId);
-
     List<UserRoleHospitalAssignment> findByUser_IdAndActiveTrue(UUID userId);
 
     Optional<UserRoleHospitalAssignment> findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(UUID userId, String roleCode);
