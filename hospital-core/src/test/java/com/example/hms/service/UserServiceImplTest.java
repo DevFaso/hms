@@ -1232,6 +1232,7 @@ class UserServiceImplTest {
 
             assertThat(target.isActive()).isTrue();
             verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService, never()).renameKey(any(), any());
         }
 
         @Test
@@ -1257,10 +1258,28 @@ class UserServiceImplTest {
 
             userService.updateUser(userId, dto);
 
-            // Read after the rename merge, not before: locking follows the
-            // new username the moment this commits.
+            // Reactivation clears BOTH keys: the new one the account will be
+            // locked under, and the old one, so a later rename cannot carry a
+            // stale record back onto an account that was just switched on.
             verify(loginAttemptService).resetAttempts("renamed");
-            verify(loginAttemptService, never()).resetAttempts("someone");
+            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService, never()).renameKey(any(), any());
+        }
+
+        @Test
+        @DisplayName("a rename without a reactivation carries the lockout across")
+        void renameCarriesTheLockout() {
+            reactivationTarget(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setUsername("renamed");
+
+            userService.updateUser(userId, dto);
+
+            // Otherwise the rename silently voids a live lockout: nothing ever
+            // looks the old key up again, so PUT /users/{id} — which is not
+            // role-gated — becomes a way to free a throttled account.
+            verify(loginAttemptService).renameKey("someone", "renamed");
+            verify(loginAttemptService, never()).resetAttempts(any());
         }
 
         private User reactivationTarget(boolean alreadyActive) {

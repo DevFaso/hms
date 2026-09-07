@@ -61,4 +61,37 @@ class LoginAttemptServiceTest {
         assertThat(service.isLocked("user1")).isTrue();
         assertThat(service.isLocked("USER1")).isTrue();
     }
+
+    @Test
+    void renameKey_carriesALiveLockoutOntoTheNewUsername() {
+        LoginAttemptService svc = service;
+        for (int i = 0; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            svc.recordFailure("someone");
+        }
+        assertThat(svc.isLocked("someone")).isTrue();
+
+        svc.renameKey("someone", "renamed");
+
+        // The whole point: a rename must not be a way to walk free.
+        assertThat(svc.isLocked("renamed")).isTrue();
+        assertThat(svc.isLocked("someone")).isFalse();
+    }
+
+    @Test
+    void renameKey_isANoOpForSameNameBlanksAndUnknownKey() {
+        LoginAttemptService svc = service;
+        for (int i = 0; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            svc.recordFailure("someone");
+        }
+
+        svc.renameKey("someone", "SOMEONE");   // same key, different case
+        assertThat(svc.isLocked("someone")).isTrue();
+
+        svc.renameKey(null, "x");
+        svc.renameKey("someone", "  ");
+        assertThat(svc.isLocked("someone")).isTrue();
+
+        svc.renameKey("nobody", "another");    // nothing under the old key
+        assertThat(svc.isLocked("another")).isFalse();
+    }
 }

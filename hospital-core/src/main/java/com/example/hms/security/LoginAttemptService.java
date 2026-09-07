@@ -47,6 +47,35 @@ public class LoginAttemptService {
     }
 
     /**
+     * Move any throttle state from one username key to another.
+     *
+     * <p>The counter is keyed on the username, so renaming an account
+     * otherwise voids a live lockout — nothing would ever look the old key up
+     * again, and it would sit in the map until eviction while the account
+     * walked free under its new name. That would make a rename a
+     * lockout-clearing primitive on an endpoint that is not role-gated.
+     *
+     * <p>No-op when the names match (case-insensitively) or when the old key
+     * holds nothing. An existing record under the new name is overwritten:
+     * the account being renamed INTO is the one whose history now applies.
+     */
+    public void renameKey(String from, String to) {
+        if (from == null || to == null || from.isBlank() || to.isBlank()) {
+            return;
+        }
+        String oldKey = from.toLowerCase();
+        String newKey = to.toLowerCase();
+        if (oldKey.equals(newKey)) {
+            return;
+        }
+        AttemptRecord carried = attempts.remove(oldKey);
+        if (carried != null) {
+            attempts.put(newKey, carried);
+            log.info("[LOGIN-THROTTLE] Carried throttle state across a rename");
+        }
+    }
+
+    /**
      * Check whether the account is currently locked.
      */
     public boolean isLocked(String username) {

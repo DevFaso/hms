@@ -1065,7 +1065,13 @@ public class UserServiceImpl implements UserService {
 
         String displayName = UserDisplayUtil.resolveDisplayName(user);
         try {
-            emailService.sendAccountRestoredEmail(user.getEmail(), displayName);
+            // After commit, like the reset above: a failure in the staff loop
+            // or at commit would otherwise deliver "your account has been
+            // restored" for a restore that never happened.
+            final String restoredTo = user.getEmail();
+            final String restoredName = displayName;
+            TransactionCallbacks.afterCommit(
+                () -> emailService.sendAccountRestoredEmail(restoredTo, restoredName));
         } catch (Exception e) {
             log.warn("⚠️ Failed to send account-restored notification to '{}': {}",
                     user.getEmail(), e.getMessage());
@@ -1080,6 +1086,8 @@ public class UserServiceImpl implements UserService {
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
+        final String usernameBeforeUpdate = user.getUsername();
+        boolean reactivated = false;
         if (hasText(dto.getUsername())) {
             user.setUsername(dto.getUsername());
         }
@@ -1096,19 +1104,40 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
-            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
+            reactivated = Boolean.TRUE.equals(dto.getActive())
                     && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
-            if (reactivated) {
-                // Read the username AFTER the rename merge above, so a
-                // combined rename + reactivate clears the key the account
-                // will actually be locked under. After commit, so a failed
-                // save cannot leave the counter cleared for an account that
-                // stayed inactive.
-                final String reactivatedUsername = user.getUsername();
-                TransactionCallbacks.afterCommit(
-                    () -> loginAttemptService.resetAttempts(reactivatedUsername));
-            }
+        }
+
+        // One decision about the login throttle, because the two cases
+        // conflict: reactivation clears the counter, a rename carries it
+        // across, and doing both in registration order would carry the old
+        // record back onto the name we had just cleared — re-locking an
+        // account at the moment it was switched on.
+        //
+        // Names are read AFTER the merge above, so the key is the one the
+        // account will actually be locked under. After commit, so a failed
+        // save cannot leave the throttle rewritten for an update that never
+        // happened.
+        final String usernameAfterUpdate = user.getUsername();
+        final boolean renamed = !usernameAfterUpdate.equalsIgnoreCase(usernameBeforeUpdate);
+        if (reactivated) {
+            TransactionCallbacks.afterCommit(() -> {
+                loginAttemptService.resetAttempts(usernameAfterUpdate);
+                if (renamed) {
+                    // Clear the old key too, so a stale record cannot be
+                    // carried back onto an account that was just switched on.
+                    loginAttemptService.resetAttempts(usernameBeforeUpdate);
+                }
+            });
+        } else if (renamed) {
+            // A rename on its own silently voided any live lockout — nothing
+            // would ever look the old key up again, so it sat in the map while
+            // the account walked free under its new name, which would make a
+            // rename a lockout-clearing primitive on an endpoint that is not
+            // role-gated.
+            TransactionCallbacks.afterCommit(
+                () -> loginAttemptService.renameKey(usernameBeforeUpdate, usernameAfterUpdate));
         }
 
         // Password: only update if a new non-blank password is explicitly provided
