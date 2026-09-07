@@ -1075,7 +1075,7 @@ public class UserServiceImpl implements UserService {
         // commit would otherwise deliver "your account has been restored" for a
         // restore that never happened.
         //
-        // The try/catch lives INSIDE the callback, not around the registration.
+        // The try/catch lives INSIDE the callback, not around the restore.
         // Spring propagates after-commit exceptions to whoever called commit(),
         // so a catch around the registration guards nothing once the send moves
         // into the callback — and restoring a phone-first patient (email is
@@ -1100,7 +1100,6 @@ public class UserServiceImpl implements UserService {
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
-        final String usernameBeforeUpdate = user.getUsername();
         boolean reactivated = false;
         if (hasText(dto.getUsername())) {
             user.setUsername(dto.getUsername());
@@ -1123,40 +1122,30 @@ public class UserServiceImpl implements UserService {
             user.setActive(dto.getActive());
         }
 
-        // One decision about the login throttle, because the two cases
-        // conflict: reactivation clears the counter, a rename carries it
-        // across, and doing both in registration order would carry the old
-        // record back onto the name we had just cleared — re-locking an
-        // account at the moment it was switched on.
+        // Reactivation clears the login lockout, so the holder is not refused
+        // at the moment their account is switched on. The name is read AFTER
+        // the merge above, so the key is the one the account will actually be
+        // locked under, and the clear runs after commit so a failed save
+        // cannot free an account that stayed inactive.
         //
-        // The transition guard below is about not clearing on an ordinary
-        // edit; it is NOT an authorization control. PUT /users/{id} has no
+        // ONLY that key. Clearing the pre-rename name too would reach a
+        // different account: the throttle map keys on lowercase while
+        // uq_user_username is case-sensitive, so "Victim" and "victim" are two
+        // accounts sharing one key. That is exactly why carrying throttle
+        // state across a rename was tried and reverted — and nothing writes
+        // the old key any more, so there is nothing there to clean up.
+        //
+        // The transition guard is about not clearing on an ordinary edit; it
+        // is NOT an authorization control. PUT /users/{id} has no
         // @PreAuthorize, so a caller who wants to clear someone's throttle can
-        // still send {active:false} then {active:true} — and that same
-        // endpoint already lets them set the password outright. The gap is the
-        // missing guard on the endpoint, recorded in tasklist.md.
-        //
-        // Names are read AFTER the merge above, so the key is the one the
-        // account will actually be locked under. After commit, so a failed
-        // save cannot leave the throttle rewritten for an update that never
-        // happened.
+        // send {active:false} then {active:true} — and that endpoint already
+        // lets them set the password outright. The gap is the missing guard,
+        // and the rename leak it leaves behind; both are in tasklist.md.
         final String usernameAfterUpdate = user.getUsername();
-        final boolean renamed = !usernameAfterUpdate.equalsIgnoreCase(usernameBeforeUpdate);
         if (reactivated) {
-            TransactionCallbacks.afterCommit(() -> {
-                loginAttemptService.resetAttempts(usernameAfterUpdate);
-                if (renamed) {
-                    loginAttemptService.resetAttempts(usernameBeforeUpdate);
-                }
-            });
+            TransactionCallbacks.afterCommit(
+                () -> loginAttemptService.resetAttempts(usernameAfterUpdate));
         }
-        // A rename on its own leaves the old key's record behind, which voids
-        // any live lockout. Deliberately not handled here: carrying the state
-        // across was tried and reverted, because the throttle map keys on
-        // lowercase while uq_user_username is case-sensitive, so "Victim" and
-        // "victim" share one key — moving state under a rename let one account
-        // clear or inherit another's lockout. The real fix is the missing
-        // @PreAuthorize on PUT /users/{id}; both are in tasklist.md.
 
         // Password: only update if a new non-blank password is explicitly provided
         // and it differs from the current hash.

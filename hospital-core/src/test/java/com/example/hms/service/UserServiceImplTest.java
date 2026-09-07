@@ -1257,13 +1257,13 @@ class UserServiceImplTest {
 
             userService.updateUser(userId, dto);
 
-            // Reactivation clears BOTH keys: the new one the account will be
-            // locked under, and the old one, so a later rename cannot carry a
-            // stale record back onto an account that was just switched on.
+            // The key the account will be locked under from now on — read
+            // after the rename merge, not before. Only that one: the old name
+            // may belong to another account, since the throttle map lowercases
+            // while uq_user_username does not.
             verify(loginAttemptService).resetAttempts("renamed");
-            verify(loginAttemptService).resetAttempts("someone");
+            verify(loginAttemptService, never()).resetAttempts("someone");
         }
-
 
 
         @Test
