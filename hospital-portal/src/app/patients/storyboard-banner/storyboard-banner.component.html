@@ -1,7 +1,14 @@
+<!-- Zero-height probe that stays in normal flow. Once it scrolls out of the
+     `.content` scroll box the banner is pinned, which is the only reliable
+     way to know: CSS has no ":stuck" selector. -->
+@if (patientId()) {
+  <div #stickySentinel class="storyboard__sentinel" aria-hidden="true"></div>
+}
 <section
   class="storyboard"
   data-testid="storyboard-banner"
   *ngIf="patientId()"
+  [class.storyboard--condensed]="condensed()"
   [attr.data-state]="state()"
   [attr.aria-label]="'STORYBOARD.ARIA_LABEL' | translate"
 >
@@ -63,7 +70,31 @@
       </div>
     </header>
 
-    <div class="storyboard__sections">
+    @if (condensed()) {
+      <!-- Pinned: only the facts that change what a clinician does next. -->
+      <div class="storyboard__condensed-flags" data-testid="storyboard-condensed-flags">
+        @if (hasAllergies()) {
+          <span
+            class="storyboard__pill"
+            [ngClass]="
+              s.hasHighSeverityAllergy ? 'storyboard__pill--danger' : 'storyboard__pill--warn'
+            "
+          >
+            {{ 'STORYBOARD.ALLERGIES' | translate }} ({{ s.allergies.length }})
+          </span>
+        } @else {
+          <span class="storyboard__pill storyboard__pill--neutral">
+            {{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}
+          </span>
+        }
+        @if (hasCodeStatus() && s.codeStatus?.status; as codeStatus) {
+          <span class="storyboard__pill" [ngClass]="codeStatusPillClass(codeStatus)">
+            {{ codeStatus | enumLabel: 'status' }}
+          </span>
+        }
+      </div>
+    }
+    <div class="storyboard__sections" [hidden]="condensed()">
       <!-- Allergies -->
       <div
         class="storyboard__section"
