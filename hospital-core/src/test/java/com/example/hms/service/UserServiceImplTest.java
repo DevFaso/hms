@@ -1222,5 +1222,113 @@ class UserServiceImplTest {
             // callback runs inline — the assertion still pins the behaviour.
             verify(loginAttemptService).resetAttempts("someone");
         }
+
+        @Test
+        @DisplayName("updateUser clears it on a false to true transition")
+        void updateClearsOnReactivation() {
+            User target = reactivationTarget(false);
+
+            userService.updateUser(userId, activeFlag(true));
+
+            assertThat(target.isActive()).isTrue();
+            verify(loginAttemptService).resetAttempts("someone");
+        }
+
+        @Test
+        @DisplayName("a new account does not inherit a lockout probed against its name")
+        void creationClearsAnyPreExistingLockout() {
+            when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
+            when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            when(roleRepository.findByCode("ROLE_SUPER_ADMIN")).thenReturn(Optional.of(superAdminRole));
+            when(passwordEncoder.encode(any())).thenReturn("encoded");
+            UserRoleHospitalAssignment created = new UserRoleHospitalAssignment();
+            created.setId(UUID.randomUUID());
+            created.setRole(superAdminRole);
+            created.setActive(false);
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
+                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                .thenReturn(Optional.of(created));
+            when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
+                .thenAnswer(inv -> {
+                    User reloaded = new User();
+                    reloaded.setId(inv.getArgument(0));
+                    return Optional.of(reloaded);
+                });
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("newstaff");
+            req.setEmail("staff@hospital.com");
+            req.setPhoneNumber("+1234567899");
+            req.setFirstName("John");
+            req.setLastName("Doe");
+            req.setPassword("Temp@1234");
+            // SUPER_ADMIN: the one staff role registrable without a hospital
+            // context, which keeps this fixture out of JWT-resolution stubs.
+            req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+
+            userService.createUserWithRolesAndHospital(req);
+
+            // Failures are recorded for usernames that do not exist, and the
+            // lockout check in /auth/login returns 423 before authentication —
+            // so without this the new holder is refused on their first login
+            // with the credentials just mailed to them.
+            verify(loginAttemptService).resetAttempts("newstaff");
+        }
+
+        @Test
+        @DisplayName("updateUser leaves it alone when the account was already active")
+        void updateDoesNotClearWhenAlreadyActive() {
+            reactivationTarget(true);
+
+            userService.updateUser(userId, activeFlag(true));
+
+            // An ordinary profile edit must not silently clear a lockout
+            // somebody else earned — PUT /users/{id} is not role-gated. Only
+            // the never() carries weight here: updateUser sets active from the
+            // DTO either way, so asserting it stayed true proves nothing.
+            verify(loginAttemptService, never()).resetAttempts(any());
+        }
+
+        @Test
+        @DisplayName("updateUser clears the key the account will be locked under after a rename")
+        void updateUsesTheRenamedUsername() {
+            reactivationTarget(false);
+            UpdateUserRequestDTO dto = activeFlag(true);
+            dto.setUsername("renamed");
+
+            userService.updateUser(userId, dto);
+
+            // The key the account will be locked under from now on — read
+            // after the rename merge, not before. Only that one: the old name
+            // may belong to another account, since the throttle map lowercases
+            // while uq_user_username does not.
+            verify(loginAttemptService).resetAttempts("renamed");
+            verify(loginAttemptService, never()).resetAttempts("someone");
+        }
+
+        private User reactivationTarget(boolean alreadyActive) {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("someone");
+            target.setActive(alreadyActive);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findByUser(any())).thenReturn(Set.of());
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+            return target;
+        }
+
+        private UpdateUserRequestDTO activeFlag(boolean active) {
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setActive(active);
+            return dto;
+        }
     }
 }
