@@ -638,6 +638,11 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
 
+        // Failures are recorded for usernames that do not exist, so a name
+        // guessed at before the account was created can already be locked.
+        // Clear it, or the new holder is refused at their first login.
+        loginAttemptService.resetAttempts(username);
+
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
         // EVERY admin-registered account starts inactive - staff exactly like
@@ -1120,6 +1125,13 @@ public class UserServiceImpl implements UserService {
         // across, and doing both in registration order would carry the old
         // record back onto the name we had just cleared — re-locking an
         // account at the moment it was switched on.
+        //
+        // The transition guard below is about not clearing on an ordinary
+        // edit; it is NOT an authorization control. PUT /users/{id} has no
+        // @PreAuthorize, so a caller who wants to clear someone's throttle can
+        // still send {active:false} then {active:true} — and that same
+        // endpoint already lets them set the password outright. The gap is the
+        // missing guard on the endpoint, recorded in tasklist.md.
         //
         // Names are read AFTER the merge above, so the key is the one the
         // account will actually be locked under. After commit, so a failed

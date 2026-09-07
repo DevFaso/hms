@@ -55,9 +55,19 @@ public class LoginAttemptService {
      * walked free under its new name. That would make a rename a
      * lockout-clearing primitive on an endpoint that is not role-gated.
      *
-     * <p>No-op when the names match (case-insensitively) or when the old key
-     * holds nothing. An existing record under the new name is overwritten:
-     * the account being renamed INTO is the one whose history now applies.
+     * <p>No-op when the names match, case-insensitively. Otherwise the
+     * destination is always overwritten — with the renamed account's own
+     * record, or with nothing when it had none. Whatever sat under the new
+     * name belonged to a different account and must not be inherited:
+     * failures are recorded for unknown usernames too, so an unused name can
+     * already be locked, and renaming into it would lock the renamed account
+     * out for up to the lock duration.
+     *
+     * <p>The move is a remove followed by a put, so a failure recorded against
+     * either key in between would be stranded or clobbered. The sweep after
+     * the put folds any such record in, taking whichever of the two is closer
+     * to a lockout. That closes the window on this instance; across instances
+     * the counter is not shared at all (see the standing-debt note).
      */
     public void renameKey(String from, String to) {
         if (from == null || to == null || from.isBlank() || to.isBlank()) {
@@ -70,15 +80,27 @@ public class LoginAttemptService {
         }
         AttemptRecord carried = attempts.remove(oldKey);
         if (carried == null) {
-            // Nothing to carry — but the destination must still be cleared.
-            // Failures are recorded for unknown usernames too, so an unused
-            // name can already be locked; renaming into it would otherwise
-            // lock the renamed account out for up to the lock duration.
             attempts.remove(newKey);
-            return;
+        } else {
+            attempts.put(newKey, carried);
+            log.info("[LOGIN-THROTTLE] Carried throttle state across a rename");
         }
-        attempts.put(newKey, carried);
-        log.info("[LOGIN-THROTTLE] Carried throttle state across a rename");
+        // Anything recorded against the old key while the swap was in flight
+        // would otherwise sit under a key nobody reads again — which is the
+        // lockout-voiding this method exists to prevent, just in a narrower
+        // window.
+        AttemptRecord stranded = attempts.remove(oldKey);
+        if (stranded != null) {
+            attempts.merge(newKey, stranded, LoginAttemptService::closerToLockout);
+        }
+    }
+
+    /** Of two records for the same account, the one nearer a lockout wins. */
+    private static AttemptRecord closerToLockout(AttemptRecord a, AttemptRecord b) {
+        if (a.lockedUntil != b.lockedUntil) {
+            return a.lockedUntil > b.lockedUntil ? a : b;
+        }
+        return a.failures >= b.failures ? a : b;
     }
 
     /**

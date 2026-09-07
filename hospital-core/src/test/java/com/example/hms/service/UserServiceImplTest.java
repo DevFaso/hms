@@ -1299,6 +1299,51 @@ class UserServiceImplTest {
             verify(loginAttemptService).renameKey("someone", "renamed");
         }
 
+        @Test
+        @DisplayName("a new account does not inherit a lockout guessed against its name")
+        void creationClearsAnyPreExistingLockout() {
+            when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
+            when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            when(roleRepository.findByCode("ROLE_SUPER_ADMIN")).thenReturn(Optional.of(superAdminRole));
+            when(passwordEncoder.encode(any())).thenReturn("encoded");
+            UserRoleHospitalAssignment created = new UserRoleHospitalAssignment();
+            created.setId(UUID.randomUUID());
+            created.setRole(superAdminRole);
+            created.setActive(false);
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
+                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                .thenReturn(Optional.of(created));
+            when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
+                .thenAnswer(inv -> {
+                    User reloaded = new User();
+                    reloaded.setId(inv.getArgument(0));
+                    return Optional.of(reloaded);
+                });
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("newstaff");
+            req.setEmail("staff@hospital.com");
+            req.setPhoneNumber("+1234567899");
+            req.setFirstName("John");
+            req.setLastName("Doe");
+            req.setPassword("Temp@1234");
+            // SUPER_ADMIN: the one staff role registrable without a hospital
+            // context, which keeps this fixture out of JWT-resolution stubs.
+            req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+            userService.createUserWithRolesAndHospital(req);
+
+            // Failures are recorded for usernames that do not exist yet, so a
+            // guessed name can already be locked when the account is created.
+            verify(loginAttemptService).resetAttempts("newstaff");
+        }
+
         private User reactivationTarget(boolean alreadyActive) {
             User target = new User();
             target.setId(userId);

@@ -109,4 +109,26 @@ class LoginAttemptServiceTest {
 
         assertThat(svc.isLocked("taken")).isFalse();
     }
+
+    @Test
+    void renameKey_foldsInAFailureRecordedAgainstTheOldKeyDuringTheSwap() {
+        LoginAttemptService svc = service;
+        // Stand in for the race: a failure lands on the old key after the
+        // move has taken its snapshot. It must not be stranded under a key
+        // nobody reads again.
+        for (int i = 0; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            svc.recordFailure("someone");
+        }
+        svc.renameKey("someone", "renamed");
+        assertThat(svc.isLocked("renamed")).isTrue();
+
+        // A straggler arriving after the rename, addressed to the old name.
+        for (int i = 0; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            svc.recordFailure("someone");
+        }
+        svc.renameKey("someone", "renamed");
+
+        assertThat(svc.isLocked("renamed")).isTrue();
+        assertThat(svc.isLocked("someone")).isFalse();
+    }
 }
