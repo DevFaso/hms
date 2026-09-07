@@ -413,7 +413,7 @@ public class UserServiceImpl implements UserService {
             // synchronisation runs on this thread before the controller
             // closes ActivationDeliveryTracker, so the registrar still sees
             // the outcome.
-            afterCommit(() -> {
+            TransactionCallbacks.afterCommit(() -> {
                 try {
                     emailService.sendAdminWelcomeEmail(
                         user.getEmail(), displayName,
@@ -447,27 +447,6 @@ public class UserServiceImpl implements UserService {
         }
 
         return result;
-    }
-
-    /**
-     * Runs {@code action} once the current transaction commits, or immediately
-     * when none is active (unit tests, and any caller outside a transaction).
-     * The callback runs on the calling thread, so request-scoped state such as
-     * {@link com.example.hms.utility.ActivationDeliveryTracker} is still open.
-     */
-    private static void afterCommit(Runnable action) {
-        if (!org.springframework.transaction.support.TransactionSynchronizationManager
-                .isSynchronizationActive()) {
-            action.run();
-            return;
-        }
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */
@@ -658,6 +637,22 @@ public class UserServiceImpl implements UserService {
         u.setFirstName(request.getFirstName());
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
+
+        // Failures are recorded for usernames that do not exist, so a name
+        // probed before the account was created is already locked — and the
+        // lockout check in /auth/login returns 423 BEFORE authentication, so
+        // nothing about being newly created clears it. Without this the holder
+        // is refused on their very first login with the credentials just
+        // mailed to them, for up to the lock duration.
+        //
+        // (An earlier round removed this on the reasoning that the disabled
+        // arm would keep re-locking the key until activation. That arm is
+        // never reached while the account is locked: the 423 comes first.)
+        //
+        // After commit, like every other throttle write here: a licence
+        // conflict in upsertStaff or the transaction timeout would otherwise
+        // clear the counter for a registration that rolled back.
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
@@ -1084,13 +1079,37 @@ public class UserServiceImpl implements UserService {
 
         log.info("♻️ User restored with ID: {}", id);
 
-        String displayName = UserDisplayUtil.resolveDisplayName(user);
-        try {
-            emailService.sendAccountRestoredEmail(user.getEmail(), displayName);
-        } catch (Exception e) {
-            log.warn("⚠️ Failed to send account-restored notification to '{}': {}",
-                    user.getEmail(), e.getMessage());
-        }
+        // After commit, like the reset above: a failure in the staff loop or at
+        // commit would otherwise deliver "your account has been restored" for a
+        // restore that never happened.
+        //
+        // The try/catch lives INSIDE the callback, not around the restore.
+        // Spring propagates after-commit exceptions to whoever called commit(),
+        // so a catch around the registration guards nothing once the send moves
+        // into the callback — and restoring a phone-first patient (email is
+        // nullable since V107) throws on a null recipient, which would turn a
+        // committed restore into a 500.
+        // Residual, and no worse than before: an after-commit callback runs
+        // before the connection is released, so a stalled SMTP host pins a
+        // pool connection for the send timeout. The previous inline send held
+        // the connection AND the transaction, so this is strictly better —
+        // moving mail off the request thread entirely is in tasklist.md.
+        final UUID restoredUserId = user.getId();
+        final String restoredTo = user.getEmail();
+        final String restoredName = UserDisplayUtil.resolveDisplayName(user);
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                emailService.sendAccountRestoredEmail(restoredTo, restoredName);
+            } catch (Exception e) {
+                // Id and exception type only. getMessage() is not safe here:
+                // validateAddresses formats "Invalid email format: <addr>",
+                // and a MailSendException carries the recipient too — so
+                // logging the message would put a contact detail in the log
+                // for exactly the malformed-address case this catches.
+                log.warn("⚠️ Failed to send account-restored notification for user {}: {}",
+                        restoredUserId, e.getClass().getSimpleName());
+            }
+        });
     }
 
     @Override
@@ -1101,6 +1120,7 @@ public class UserServiceImpl implements UserService {
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
+        boolean reactivated = false;
         if (hasText(dto.getUsername())) {
             user.setUsername(dto.getUsername());
         }
@@ -1117,19 +1137,45 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
-            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
+            reactivated = Boolean.TRUE.equals(dto.getActive())
                     && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
-            if (reactivated) {
-                // Read the username AFTER the rename merge above, so a
-                // combined rename + reactivate clears the key the account
-                // will actually be locked under. After commit, so a failed
-                // save cannot leave the counter cleared for an account that
-                // stayed inactive.
-                final String reactivatedUsername = user.getUsername();
-                TransactionCallbacks.afterCommit(
-                    () -> loginAttemptService.resetAttempts(reactivatedUsername));
-            }
+        }
+
+        // Reactivation clears the login lockout, so the holder is not refused
+        // at the moment their account is switched on. The name is read AFTER
+        // the merge above, so the key is the one the account will actually be
+        // locked under, and the clear runs after commit so a failed save
+        // cannot free an account that stayed inactive.
+        //
+        // ONLY that key. A combined rename + reactivate does strand the old
+        // name's record — the lockout collected while the account was inactive
+        // lives under the name it had then, and nothing evicts it until
+        // isLocked() is called for that name after expiry. Clearing it anyway
+        // is the worse trade: the old name may now answer for another account,
+        // since the throttle map lowercases while uq_user_username does not.
+        // The stranded record is covered by the rename entry in tasklist.md.
+        //
+        // Not claimed to be collision-proof. uq_user_username is case
+        // sensitive while the throttle map lowercases, and updateUser applies
+        // no uniqueness check at all, so a rename to a case variant of a live
+        // account is possible on an endpoint with no @PreAuthorize — and that
+        // clears the other account's counter. It also leaves two rows the
+        // case-insensitive findByUsername cannot resolve, which breaks login
+        // for both: the throttle is the smaller half of that bug. The
+        // uniqueness check and the missing guard are the fix; both are in
+        // tasklist.md.
+        //
+        // The transition guard is about not clearing on an ordinary edit; it
+        // is NOT an authorization control. PUT /users/{id} has no
+        // @PreAuthorize, so a caller who wants to clear someone's throttle can
+        // send {active:false} then {active:true} — and that endpoint already
+        // lets them set the password outright. The gap is the missing guard,
+        // and the rename leak it leaves behind; both are in tasklist.md.
+        final String usernameAfterUpdate = user.getUsername();
+        if (reactivated) {
+            TransactionCallbacks.afterCommit(
+                () -> loginAttemptService.resetAttempts(usernameAfterUpdate));
         }
 
         // Password: only update if a new non-blank password is explicitly provided
@@ -1207,8 +1253,15 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         // NOTE: this method has no caller in main — AuthController#verifyEmail
         // implements verification itself and is the path that runs. The reset
-        // is kept so the two stay in step if this one is ever wired up.
-        loginAttemptService.resetAttempts(user.getUsername());
+        // is kept, and deferred like every other one, so wiring this method up
+        // later cannot reintroduce the bug the rest of this class just fixed:
+        // the patient activation below writes after this point, and a rollback
+        // there would otherwise leave the counter cleared for an account that
+        // stayed inactive. (Note for whoever wires it up: unlike
+        // AuthController#verifyEmail this method does NOT activate the user's
+        // ROLE_PATIENT assignments — it only flips the Patient row.)
+        final String verifiedUsername = user.getUsername();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedUsername));
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {

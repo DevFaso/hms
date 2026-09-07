@@ -13,9 +13,25 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * gone.
  *
  * <p>The callback runs on the calling thread, so request-scoped state such as
- * {@link ActivationDeliveryTracker} is still open when it fires. With no
- * transaction active — unit tests, or a caller outside one — the action runs
- * immediately, which is the same ordering guarantee.
+ * {@link ActivationDeliveryTracker} is still open when it fires.
+ *
+ * <p><strong>With no transaction active the action runs immediately</strong> —
+ * inline, before the caller's next statement. That is not the deferral this
+ * class is named for; it is the only thing it can do, since there is no commit
+ * to wait for. It keeps unit tests working, but it also means a caller with no
+ * transaction anywhere up its stack gets no protection here: {@code
+ * AuthController} has no {@code @Transactional} at all, so routing one of its
+ * side effects through this helper would read as deferred and behave as
+ * inline.
+ *
+ * <p>The test is {@code isSynchronizationActive()}, which is thread-bound, not
+ * method-bound — so a private or self-invoked method reached from a
+ * transactional caller further up the stack still gets the deferred path, and
+ * moving a callback into a helper method does not change which branch it
+ * takes. What does change it is there being no transaction on the thread at
+ * all: an entry point that is not transactional, or one whose
+ * {@code @Transactional} never took effect because the call arrived through
+ * self-invocation and bypassed the proxy.
  */
 public final class TransactionCallbacks {
 

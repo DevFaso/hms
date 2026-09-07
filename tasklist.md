@@ -1592,6 +1592,33 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- **Outbound mail is sent on the request thread**, inside or just after the
+  transaction. `TransactionCallbacks.afterCommit` fires before
+  `cleanupAfterCompletion` releases the JDBC connection, so a stalled SMTP host
+  pins a Hikari connection for the full send timeout — on registration, on
+  account restore, and on the assignment notifications. Deferring to after
+  commit (#573) made it strictly better than sending inside the transaction,
+  but the send still owns a connection and a request thread it does not need.
+  The instrument outbox is the pattern to copy: persist the message, dispatch
+  it from a sweep. Surfaced by the #573 review.
+
+- A **rename voids a live login lockout**, and carrying the throttle across a
+  rename is not the fix. `LoginAttemptService` keys on `username.toLowerCase()`
+  while `uq_user_username` (V1_1) indexes the username verbatim, so `Victim` and
+  `victim` are two accounts sharing one throttle key: any move of state under a
+  rename lets one account clear or inherit another's lockout, which is worse
+  than the leak it closes. Tried and reverted in #573. Two things have to change
+  first — an `@PreAuthorize` on `PUT /users/{id}` **and a uniqueness check on
+  `dto.getUsername()`, which `updateUser` does not have at all** (unlike
+  `changeOwnUsername`, whose `findByUsername` is already case-insensitive:
+  `where lower(u.username) = lower(:username)`), and either a case-insensitive
+  unique index on `username` or a throttle keyed on the user id rather than the
+  name. The missing uniqueness check is the more serious half on its own: a
+  rename to a case variant leaves two rows that the case-insensitive
+  `findByUsername` cannot resolve, which breaks login for both accounts.
+  Until then the leak stands, and it is small next to the ungated endpoint that
+  already lets any authenticated caller set another user's password.
+
 - **`/users` is largely ungated.** Only `POST /users/admin-register` and
   `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
   `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and
