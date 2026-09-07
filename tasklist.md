@@ -1801,28 +1801,25 @@ all exist and are reachable.
 
 ## Standing platform debt — owed, not parity
 
-- **Six encounter writes are not hospital-scoped.** `submitTriage`,
-  `completeTriage`, `submitNursingIntake`, `upsertEncounterNote`,
-  `addEncounterNoteAddendum` and `checkOut` all resolve the encounter with a
-  bare `findById` — verified one by one — while
-  `startEncounter`, `completeExamination` and `markReadyForDischarge` on the
-  same controller all resolve a caller hospital and pass it down.
-  ⚠ Do NOT copy the siblings as the model: they use a bare `findById` plus a
-  hand-rolled comparison, and that comparison is written
-  `encounterHospitalId != null && …`, so a null hospital on the encounter
-  bypasses it. `EncounterRepository.findByIdAndHospital_Id` is the scoped
-  lookup, with two callers today (`EncounterFhirWriteService` and
-  `ReceptionServiceImpl`) — use that, and fix the siblings' bypass while you
-  are there. So a nurse or doctor at hospital A holding an encounter id from
-  hospital B can advance that encounter and write vitals, a SOAP note, an
-  addendum, a nursing intake or a checkout onto the patient's chart: a
-  cross-tenant WRITE, reachable today, needing no read access. **Fix all
-  six** — fixing only the two triage methods clears #49's stated block while
-  the note and checkout paths stay open. There is no Hibernate tenant filter behind them and the only
-  registered interceptors are the two audit ones, so nothing catches it. This
-  blocks E8 #49 — widening the read filter on top of an unscoped write turns
-  this into a cross-tenant read as well. Found while walking the check-in →
-  triage → consultation flow, 2026-09-06.
+- **Nothing enforces "every encounter write is scoped".** All ten mutating
+  paths on `EncounterServiceImpl` now go through `requireEncounterInScope`
+  (`deleteEncounter` is `ROLE_SUPER_ADMIN`-only and global by design), but the
+  guard's javadoc is the only thing carrying the invariant — a new write added
+  tomorrow with a bare `findById` reintroduces the hole silently. A marker plus
+  a coverage test is what stops that, and it is the E8 #49 problem in
+  miniature: there is no annotation meaning "this query is tenant-scoped" to
+  scan for.
+- **`getAfterVisitSummary` reads unscoped.** It resolves by bare `findById`
+  with no hospital check, on an endpoint that also admits `ROLE_PATIENT` — so
+  staff at one hospital can read the AVS written by another's checkout. A read,
+  not a write, so it belongs with E8 #49's classification pass rather than the
+  write-scoping fix.
+- **`getEncounterById` keeps the null-hospital bypass on the read side.** Its
+  check reads `activeHospitalId != null && e.getHospital() != null && !equals`,
+  so an encounter with a null hospital passes for any caller — the same shape
+  removed from the three write siblings in #575, left in place here because it
+  is a read. Verified 2026-09-07 while re-landing the #575 round-2 fixes; goes
+  with `getAfterVisitSummary` in E8 #49's read pass.
 
 - **Outbound mail is sent on the request thread**, inside or just after the
   transaction. `TransactionCallbacks.afterCommit` fires before

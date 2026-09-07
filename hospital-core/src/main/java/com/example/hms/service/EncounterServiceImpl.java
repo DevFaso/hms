@@ -349,9 +349,13 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @jakarta.transaction.Transactional(rollbackOn = Exception.class)
-    public EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale) {
-        Encounter existing = encounterRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+    public EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale,
+                                                boolean isSuperAdmin, UUID callerHospitalId) {
+        // Scoped like every other write, and for a sharper reason: mergeEncounter
+        // sets `hospital` unconditionally, so an unscoped update could RE-HOME a
+        // foreign encounter into the caller's tenant — after which all the
+        // guards below would accept it.
+        Encounter existing = requireEncounterInScope(id, isSuperAdmin, callerHospitalId);
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
         // Keep a snapshot before merge for audit
@@ -1990,12 +1994,11 @@ public class EncounterServiceImpl implements EncounterService {
 
     /** The single not-found used by every scoped lookup, so the message never drifts. */
     private ResourceNotFoundException encounterNotFound(UUID encounterId) {
-        // The bundle string is "Encounter with ID {0} was not found." — passing
-        // null args renders a literal {0} in the response body under
-        // always-use-message-format.
-        return new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
-                        org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+        // KEY + args, never resolved prose: the constructor calls
+        // MessageUtil.resolve on its first argument, so handing it an
+        // already-translated sentence produces "[Missing translation] …" in the
+        // response body. The bundle string carries {0}, hence the id.
+        return new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
     }
 
     @Override
