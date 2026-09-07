@@ -18,10 +18,9 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
-import { AuthService } from '../auth/auth.service';
 
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
@@ -59,8 +58,6 @@ export class SlotAdminComponent implements OnInit {
   readonly scopeReady = this.roleContext.hasHospitalScope;
   /** Emits on every scope change so a response for the previous hospital can never land. */
   private readonly scopeChanged$ = new Subject<void>();
-
-  private readonly auth = inject(AuthService);
 
   section = signal<AdminSection>('visit-types');
 
@@ -118,6 +115,7 @@ export class SlotAdminComponent implements OnInit {
     this.visitTypes.set([]);
     this.templates.set([]);
     this.slots.set([]);
+    this.loadedSections.clear();
     // The form's staff and departments are cached per hospital too.
     this.staffOptions.set([]);
     this.departments.set([]);
@@ -131,16 +129,22 @@ export class SlotAdminComponent implements OnInit {
 
   /** Each section fetches lazily and once; a scope change empties them all first. */
   private loadSection(section: AdminSection): void {
-    if (section === 'visit-types' && this.visitTypes().length === 0) {
+    if (this.loadedSections.has(section)) {
+      return;
+    }
+    if (section === 'visit-types') {
       this.loadVisitTypes();
     }
-    if (section === 'templates' && this.templates().length === 0) {
+    if (section === 'templates') {
       this.loadTemplates();
     }
-    if (section === 'slots' && this.slots().length === 0) {
+    if (section === 'slots') {
       this.searchSlots();
     }
   }
+
+  /** Sections fetched for the current scope; an empty answer counts as fetched. */
+  private readonly loadedSections = new Set<AdminSection>();
 
   dayLabel(day: number): string {
     return this.translate.instant('SLOT_ADMIN.DAY_' + day);
@@ -157,10 +161,14 @@ export class SlotAdminComponent implements OnInit {
     this.vtLoading.set(true);
     this.slotService
       .listVisitTypes(this.vtShowInactive())
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.vtLoading.set(false)),
+      )
       .subscribe({
         next: (rows) => {
           this.visitTypes.set(rows);
+          this.loadedSections.add('visit-types');
           this.vtLoading.set(false);
         },
         error: (err) => {
@@ -261,10 +269,14 @@ export class SlotAdminComponent implements OnInit {
     this.tplLoading.set(true);
     this.slotService
       .listTemplates(this.tplShowInactive())
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.tplLoading.set(false)),
+      )
       .subscribe({
         next: (rows) => {
           this.templates.set(rows);
+          this.loadedSections.add('templates');
           this.tplLoading.set(false);
         },
         error: (err) => {
@@ -415,10 +427,14 @@ export class SlotAdminComponent implements OnInit {
         to: this.slotTo || undefined,
         limit: 200,
       })
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.slotsLoading.set(false)),
+      )
       .subscribe({
         next: (rows) => {
           this.slots.set(rows);
+          this.loadedSections.add('slots');
           this.slotsLoading.set(false);
           this.ensureFormOptions();
         },
@@ -482,10 +498,9 @@ export class SlotAdminComponent implements OnInit {
 
   private ensureFormOptions(): void {
     if (this.staffOptions().length === 0) {
-      // The pinned hospital first: a super-admin scoped via the chip must be
-      // offered that hospital's staff, not their own primary hospital's.
-      const hospitalId =
-        this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? undefined;
+      // The pinned hospital: only reachable from buttons that are disabled
+      // while no hospital is in scope, so the id is never absent here.
+      const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.staffOptions.set([]),

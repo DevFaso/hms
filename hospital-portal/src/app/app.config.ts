@@ -9,6 +9,7 @@ import { routes } from './app.routes';
 import { OidcAuthService } from './auth/oidc-auth.service';
 import { apiPrefixInterceptor } from './interceptors/auth.interceptor';
 import { csrfInterceptor } from './interceptors/csrf.interceptor';
+import { hospitalCacheInterceptor } from './interceptors/hospital-cache.interceptor';
 import { errorInterceptor } from './interceptors/error.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 
@@ -46,6 +47,7 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([
         apiPrefixInterceptor,
         csrfInterceptor,
+        hospitalCacheInterceptor,
         // Roadmap row 4 / T-68 — must run BEFORE errorInterceptor so a queued
         // (synthetic 202) response is not treated as a real error and routed
         // through the auth-refresh / toast path. Order is the chain order.

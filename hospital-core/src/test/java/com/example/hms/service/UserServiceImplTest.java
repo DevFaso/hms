@@ -69,6 +69,8 @@ class UserServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private PasswordHistoryService passwordHistoryService;
+    @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
+    @Mock private AssignmentLinkService assignmentLinkService;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -1144,6 +1146,81 @@ class UserServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
 
             verify(userRepository, never()).save(any());
+        }
+    }
+
+    // =========================================================================
+    // soleAssignmentCode — which code the welcome mail is allowed to link
+    // =========================================================================
+
+    @Nested
+    @DisplayName("soleAssignmentCode")
+    class SoleAssignmentCode {
+
+        private UserRoleHospitalAssignment withCode(String code) {
+            var a = new UserRoleHospitalAssignment();
+            a.setAssignmentCode(code);
+            return a;
+        }
+
+        @Test
+        @DisplayName("links the code when there is exactly one assignment")
+        void singleAssignment() {
+            assertThat(UserServiceImpl.soleAssignmentCode(List.of(withCode("A-1")))).isEqualTo("A-1");
+        }
+
+        @Test
+        @DisplayName("links nothing when two roles mean two different codes")
+        void twoAssignmentsAreAmbiguous() {
+            // Each assignment mails its own code and its own link; picking one
+            // here would make the other mail's code fail on the linked screen.
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode("A-1"), withCode("A-2")))).isNull();
+        }
+
+        @Test
+        @DisplayName("treats repeated codes as the one assignment they are")
+        void duplicateCodesCollapse() {
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode("A-1"), withCode("A-1")))).isEqualTo("A-1");
+        }
+
+        @Test
+        @DisplayName("links nothing when no assignment carries a code yet")
+        void noCodes() {
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode(null), withCode("  ")))).isNull();
+            assertThat(UserServiceImpl.soleAssignmentCode(List.of())).isNull();
+            assertThat(UserServiceImpl.soleAssignmentCode(null)).isNull();
+        }
+    }
+
+    // =========================================================================
+    // Reactivation clears the login lockout
+    // =========================================================================
+
+    @Nested
+    @DisplayName("reactivation and the login lockout")
+    class ReactivationLockout {
+
+        @Test
+        @DisplayName("restoreUser clears the lockout the deactivation left behind")
+        void restoreClearsTheLockout() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("someone");
+            target.setActive(false);
+            target.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(target.isActive()).isTrue();
+            // No transaction is active in a unit test, so the after-commit
+            // callback runs inline — the assertion still pins the behaviour.
+            verify(loginAttemptService).resetAttempts("someone");
         }
     }
 }

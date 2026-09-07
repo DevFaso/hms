@@ -14,10 +14,9 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
-import { AuthService } from '../auth/auth.service';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
@@ -62,8 +61,6 @@ export class OnCallComponent implements OnInit {
   readonly scopeReady = this.roleContext.hasHospitalScope;
   /** Emits on every scope change so a response for the previous hospital can never land. */
   private readonly scopeChanged$ = new Subject<void>();
-
-  private readonly auth = inject(AuthService);
 
   entries = signal<OnCallScheduleResponse[]>([]);
   loading = signal(true);
@@ -121,7 +118,10 @@ export class OnCallComponent implements OnInit {
     const to = this.filterTo ? new Date(`${this.filterTo}T23:59:59`).toISOString() : undefined;
     this.onCallService
       .list(from, to)
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (list) => {
           this.entries.set(list);
@@ -238,10 +238,9 @@ export class OnCallComponent implements OnInit {
   /** Staff + department options load once, on first modal open. */
   private ensureFormOptions(): void {
     if (this.staffOptions().length === 0) {
-      // The pinned hospital first: a super-admin scoped via the chip must be
-      // offered that hospital's staff, not their own primary hospital's.
-      const hospitalId =
-        this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? undefined;
+      // The pinned hospital: only reachable from buttons that are disabled
+      // while no hospital is in scope, so the id is never absent here.
+      const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
         next: (staff) => this.staffOptions.set(staff),
         error: () => this.toast.error(this.translate.instant('ON_CALL.STAFF_LOAD_ERROR')),

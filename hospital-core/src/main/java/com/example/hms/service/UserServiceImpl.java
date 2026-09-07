@@ -10,6 +10,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.utility.UserDisplayUtil;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -90,6 +91,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserRoleHospitalAssignmentService assignmentService;
     private final EmailService emailService;
+    private final AssignmentLinkService assignmentLinkService;
+    private final com.example.hms.security.LoginAttemptService loginAttemptService;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
@@ -390,38 +393,81 @@ public class UserServiceImpl implements UserService {
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
                     : null;
-            try {
-                emailService.sendAdminWelcomeEmail(
-                    user.getEmail(), displayName,
-                    user.getUsername(), request.getPassword(),
-                    roleName, hospitalName);
-                log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
-                com.example.hms.utility.ActivationDeliveryTracker.report(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                        .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
-                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                        .build());
-            } catch (Exception e) {
-                log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
-                // Fixed detail: exception messages can embed the raw address
-                // (EmailServiceImpl.validateAddresses does) and this DTO
-                // leaves the server; the transport error stays in the log.
-                com.example.hms.utility.ActivationDeliveryTracker.report(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                        .outcome(emailService.deliversRealEmail()
-                            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
-                            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
-                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                        .detail("send failed — transport error in server logs")
-                        .build());
-            }
+            // The account is inactive until an assignment code is confirmed, so
+            // the welcome mail carries the confirmation screen's address — but
+            // only when there is exactly one assignment to point at. A
+            // two-role registration mails one code per assignment, and
+            // RoleWelcomeComponent validates the typed code against the
+            // assignment named in the URL: linking an arbitrary one would make
+            // the other mail's code look wrong. With several, the mail names
+            // the step and each assignment mail carries its own correct link.
+            final String soleCode = soleAssignmentCode(ensuredAssignments);
+            final String activationUrl = soleCode == null
+                    ? null
+                    : assignmentLinkService.buildProfileCompletionUrl(soleCode);
+            // Deferred to AFTER_COMMIT for the same reason
+            // AssignmentCreatedEventListener exists: this mail now carries an
+            // assignment code in its button, so a rollback after the send
+            // (the 20s transaction timeout is reachable on a slow SMTP hop)
+            // would deliver a link to a code that never existed. The
+            // synchronisation runs on this thread before the controller
+            // closes ActivationDeliveryTracker, so the registrar still sees
+            // the outcome.
+            afterCommit(() -> {
+                try {
+                    emailService.sendAdminWelcomeEmail(
+                        user.getEmail(), displayName,
+                        user.getUsername(), request.getPassword(),
+                        roleName, hospitalName, activationUrl);
+                    log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+                    com.example.hms.utility.ActivationDeliveryTracker.report(
+                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                            .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
+                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                            .build());
+                } catch (Exception e) {
+                    log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+                    // Fixed detail: exception messages can embed the raw address
+                    // (EmailServiceImpl.validateAddresses does) and this DTO
+                    // leaves the server; the transport error stays in the log.
+                    com.example.hms.utility.ActivationDeliveryTracker.report(
+                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                            .outcome(emailService.deliversRealEmail()
+                                ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                                : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
+                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                            .detail("send failed — transport error in server logs")
+                            .build());
+                }
+            });
         }
 
         return result;
+    }
+
+    /**
+     * Runs {@code action} once the current transaction commits, or immediately
+     * when none is active (unit tests, and any caller outside a transaction).
+     * The callback runs on the calling thread, so request-scoped state such as
+     * {@link com.example.hms.utility.ActivationDeliveryTracker} is still open.
+     */
+    private static void afterCommit(Runnable action) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */
@@ -1020,6 +1066,11 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setActive(true);
         userRepository.save(user);
+        // A lockout collected while the account was switched off must not
+        // survive it being switched on. After commit: a rollback must not
+        // leave the counter cleared for an account that stayed deactivated.
+        final String restoredUsername = user.getUsername();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredUsername));
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1066,7 +1117,19 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
+            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
+                    && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
+            if (reactivated) {
+                // Read the username AFTER the rename merge above, so a
+                // combined rename + reactivate clears the key the account
+                // will actually be locked under. After commit, so a failed
+                // save cannot leave the counter cleared for an account that
+                // stayed inactive.
+                final String reactivatedUsername = user.getUsername();
+                TransactionCallbacks.afterCommit(
+                    () -> loginAttemptService.resetAttempts(reactivatedUsername));
+            }
         }
 
         // Password: only update if a new non-blank password is explicitly provided
@@ -1142,6 +1205,10 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        // NOTE: this method has no caller in main — AuthController#verifyEmail
+        // implements verification itself and is the path that runs. The reset
+        // is kept so the two stay in step if this one is ever wired up.
+        loginAttemptService.resetAttempts(user.getUsername());
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
@@ -1309,6 +1376,31 @@ public class UserServiceImpl implements UserService {
             chars[j] = tmp;
         }
         return new String(chars);
+    }
+
+
+    /**
+     * The assignment code the welcome mail may link, or null when there is no
+     * single right answer.
+     *
+     * <p>A two-role registration mails one confirmation code per assignment,
+     * and {@code RoleWelcomeComponent} validates the typed code against the
+     * assignment named in the URL — so linking an arbitrary one would make the
+     * other mail's code look wrong. With several, the welcome mail names the
+     * step instead, and each assignment mail carries its own correct link.
+     *
+     * <p>Visible for testing.
+     */
+    static String soleAssignmentCode(List<UserRoleHospitalAssignment> assignments) {
+        if (assignments == null) {
+            return null;
+        }
+        List<String> codes = assignments.stream()
+                .map(UserRoleHospitalAssignment::getAssignmentCode)
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .toList();
+        return codes.size() == 1 ? codes.get(0) : null;
     }
 
 }

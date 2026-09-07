@@ -23,7 +23,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -75,6 +75,9 @@ export class TransfusionComponent implements OnInit {
   selectedRequest = signal<TransfusionRequestResponse | null>(null);
 
   units = signal<BloodUnitResponse[]>([]);
+  /** "Fetched for the current scope" — an empty list is a valid answer, not "not loaded yet". */
+  readonly requestsLoaded = signal(false);
+  readonly unitsLoaded = signal(false);
   unitStatusFilter = signal<BloodUnitStatus | ''>('');
   assignableUnits = signal<BloodUnitResponse[]>([]);
 
@@ -194,20 +197,18 @@ export class TransfusionComponent implements OnInit {
     this.assignableUnits.set([]);
     this.requests.set([]);
     this.units.set([]);
-    if (this.tab() === 'units') {
-      this.loadUnits();
-    } else {
-      this.loadRequests();
-    }
+    this.requestsLoaded.set(false);
+    this.unitsLoaded.set(false);
+    this.setTab(this.tab());
   }
 
   setTab(tab: Tab): void {
     this.tab.set(tab);
-    // Each tab fetches lazily and once; a scope change empties the hidden one.
-    if (tab === 'units' && this.units().length === 0) {
+    // Each tab fetches lazily and once per scope; a scope change resets both.
+    if (tab === 'units' && !this.unitsLoaded()) {
       this.loadUnits();
     }
-    if (tab === 'requests' && this.requests().length === 0) {
+    if (tab === 'requests' && !this.requestsLoaded()) {
       this.loadRequests();
     }
   }
@@ -224,10 +225,14 @@ export class TransfusionComponent implements OnInit {
     const filter = this.requestStatusFilter();
     this.transfusion
       .listRequests(filter || undefined)
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (list) => {
           this.requests.set(list ?? []);
+          this.requestsLoaded.set(true);
           this.loading.set(false);
         },
         error: () => {
@@ -375,10 +380,14 @@ export class TransfusionComponent implements OnInit {
     const filter = this.unitStatusFilter();
     this.transfusion
       .listUnits(filter || undefined)
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (list) => {
           this.units.set(list ?? []);
+          this.unitsLoaded.set(true);
           this.loading.set(false);
         },
         error: () => {

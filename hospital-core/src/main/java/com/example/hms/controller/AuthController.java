@@ -79,6 +79,18 @@ public class AuthController {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
+    /**
+     * Shown when authentication succeeded but the account is not enabled.
+     * Names both activation routes (the patient's emailed link, the staff
+     * member's role-confirmation code) and the fallback, without disclosing
+     * which one this account is on — see the DisabledException arm of
+     * {@link #login} for why that matters.
+     */
+    private static final String INACTIVE_ACCOUNT_GUIDANCE =
+            "Your account is not active. If you have not activated it yet, use the activation "
+            + "link or confirmation code from the message sent when the account was created. "
+            + "Otherwise, please contact your administrator.";
+
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuthBootstrapService authBootstrapService;
@@ -389,9 +401,36 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
         } catch (DisabledException ex) {
+            // "Please verify your email" named a flow most accounts do not
+            // have — staff activate by confirming a role assignment with an
+            // emailed code — and that dead end is what gets reported as "I
+            // never received an activation email". The wording below covers
+            // both routes without asserting either, and is identical for every
+            // inactive account: DaoAuthenticationProvider checks isEnabled
+            // BEFORE the password, so this arm also answers junk-password
+            // probes, and it must neither vary by activation state nor spend
+            // queries discovering it.
+            //
+            // That this arm differs from bad credentials at all still tells a
+            // prober the username exists and is inactive — inherent to giving
+            // the real holder usable guidance, and unchanged from the previous
+            // wording. It IS counted toward the lockout, so the probe is
+            // throttled like any other failed login. That is only safe because
+            // every activation path clears the counter —
+            // UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
+            // (behind verifyAssignmentByCode, which the holder drives, and
+            // confirmAssignment, which their registrar drives), #verifyEmail
+            // below, which is the endpoint that actually serves verification
+            // (UserServiceImpl#verifyEmail has no caller), and
+            // UserServiceImpl#updateUser / #restoreUser when an administrator
+            // switches an account back on. The welcome mail hands out temp
+            // credentials, so trying them before confirming the code is the
+            // expected mistake, and without those resets the holder would be
+            // locked out at the exact moment activation succeeds.
+            loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User account is disabled. Please verify your email."));
+                    .body(new MessageResponse(INACTIVE_ACCOUNT_GUIDANCE));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),
@@ -429,6 +468,12 @@ public class AuthController {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        // Refusals collected while the account was inactive must not outlive
+        // the activation: the disabled arm of /auth/login counts toward the
+        // lockout, so five attempts before verifying would otherwise leave the
+        // holder locked out at the moment the link finally works. This is the
+        // endpoint that actually runs — UserService#verifyEmail has no caller.
+        loginAttemptService.resetAttempts(user.getUsername());
 
         // 2. Activate all patient role assignments for this user
         var assignments = assignmentRepository.findByUserId(user.getId());
@@ -1177,4 +1222,5 @@ public class AuthController {
 
         return new HospitalContext(primaryId, primaryName, ids.isEmpty() ? null : ids);
     }
+
 }

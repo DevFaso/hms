@@ -1592,6 +1592,52 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- **`/users` is largely ungated.** Only `POST /users/admin-register` and
+  `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
+  `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and
+  `DELETE /users/{id}` have none, and `SecurityConfig` matches only the
+  register path, so they fall through to `anyRequest().authenticated()`. Any
+  authenticated user can therefore list every account and edit any one of
+  them — `PUT` accepts `password` and `active`. `restoreUser` additionally
+  applies no tenant check to its target. Gating this is not a one-liner: the
+  reads are consumed by chat and staff-list for ordinary staff, and
+  `patient-form` calls `DELETE` as a receptionist to compensate a failed
+  patient create, so each verb needs its own role set. Surfaced by the #572
+  review.
+
+- `LoginAttemptService` keeps its counter in a per-JVM `ConcurrentHashMap`, so
+  the login lockout and every `resetAttempts` that clears it are instance-local.
+  On more than one replica a user can be locked on instance A and activate
+  through instance B, and the lock survives — non-deterministically. The
+  activation paths all clear the counter now (#571), which makes this correct
+  on a single instance; making it correct on several needs shared state
+  (the Redis token-blacklist store is already there for the taking). Same class
+  of gap as the `app.redis.token-blacklist.enabled` note in the startup log.
+
+- An **empty** activation delivery report warns nobody. `deliveryWarningKeys`
+  returns `[]` for `[]` by contract ("nothing was attempted"), but on the
+  creation paths that is indistinguishable from "every send failed before it
+  could record an outcome" — `AssignmentCreatedEventListener` swallows a
+  `sendNotifications` failure, and patient registration, creating a user that
+  already exists, and `admin-assignments.submitRegen` produce no other row. All
+  three then show a green success toast over an account nothing ever reached.
+  The fix belongs at the call sites (a creation flow should treat an empty
+  report as "nothing reached them"), not in the shared helper, whose other
+  callers legitimately have nothing to send. Found by the #570 review.
+
+- The email-activation **link** has no landing page. `sendActivationEmail`
+  builds `${app.frontend.base-url}/verify?email=&token=` (public
+  self-registration, and `POST /auth/resend-verification`), but `verify` is not
+  a route in `app.routes.ts` — the `**` fallback redirects it to `/login`, so
+  the link silently does nothing. There is also no "resend activation" control
+  anywhere in the portal, so `/auth/resend-verification` is reachable only by
+  hand. Self-registration itself is 410 Gone, which is why this went unnoticed:
+  the only live producer of that link is the resend endpoint. Either add the
+  `/verify` route (calling `GET /auth/verify-email`) plus a resend affordance
+  on the login screen, or retire the link and move those accounts onto the
+  confirmation-code path everyone else uses. Found by the #569 review while
+  making the disabled-login message name a route that actually exists.
+
 - Hospital scope is applied page by page: after #566, 18 of ~115 staff routes
   carry the scope chip and gate on `RoleContextService.hasHospitalScope`, while
   every other route whose backend calls `requireActiveHospitalId()` (imaging,

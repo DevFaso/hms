@@ -4,6 +4,9 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.NotificationTransportUnavailableException;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
@@ -168,6 +171,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final AssignmentLinkService assignmentLinkService;
 
     private final UserRepository userRepository;
+    private final LoginAttemptService loginAttemptService;
     private final RoleRepository roleRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRoleRepository userRoleRepository;
@@ -791,6 +795,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (user != null && !Boolean.TRUE.equals(user.isActive())) {
             user.setActive(true);
             userRepository.save(user);
+            // Clear any login lockout accumulated while the account was
+            // inactive. The welcome mail hands out temp credentials, so trying
+            // them before confirming the code is the expected mistake, and
+            // those refusals count toward the lockout; without this reset the
+            // holder is locked out at the exact moment activation succeeds.
+            // After commit: confirmAssignment is @Transactional and records an
+            // audit event after this point, so a rollback would otherwise
+            // leave the user inactive with the counter already cleared.
+            final String activatedUsername = user.getUsername();
+            TransactionCallbacks.afterCommit(
+                () -> loginAttemptService.resetAttempts(activatedUsername));
             log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
         }
 
@@ -1616,6 +1631,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                      : NotificationDeliveryStatusDTO.OUTCOME_MOCKED,
                 ActivationDeliveryTracker.maskPhone(phone),
                 real ? null : "SMS transport disabled — mock channel only logs");
+        } catch (NotificationTransportUnavailableException ex) {
+            // "No transport" is not "the send failed" — the registrar's next
+            // move is to have an operator finish the SMS configuration, not
+            // to retry the same registration.
+            log.warn("⚠️ SMS transport unavailable for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
+                ActivationDeliveryTracker.maskPhone(phone), DETAIL_SEE_SERVER_LOGS);
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send confirmation SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
             // detail is a FIXED string: exception messages can embed the raw

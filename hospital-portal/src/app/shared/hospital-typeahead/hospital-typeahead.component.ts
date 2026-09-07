@@ -21,6 +21,7 @@ import {
   catchError,
   debounceTime,
   distinctUntilChanged,
+  map,
   merge,
   of,
   switchMap,
@@ -78,6 +79,8 @@ export class HospitalTypeaheadComponent implements OnInit {
   protected readonly results = signal<HospitalResponse[]>([]);
   protected readonly loading = signal<boolean>(false);
   protected readonly errored = signal<boolean>(false);
+  /** The query the current results answer — not the box, which may be mid-edit. */
+  private readonly fetchedQuery = signal<string>('');
   /** A full page means there are more: say so instead of silently truncating. */
   protected readonly truncated = computed(() => this.results().length >= this.limit);
 
@@ -97,7 +100,7 @@ export class HospitalTypeaheadComponent implements OnInit {
     if (this.results().length === 0) {
       // Nothing typed and nothing back: the tenant has no active hospital,
       // which is not a failed search.
-      return this.query().trim() === ''
+      return this.fetchedQuery() === ''
         ? 'HOSPITAL_SCOPE.NONE_ACTIVE'
         : 'HOSPITAL_SCOPE.NO_MATCHES';
     }
@@ -124,15 +127,17 @@ export class HospitalTypeaheadComponent implements OnInit {
         }),
         switchMap((q) =>
           this.hospitalService.searchHospitals(q, this.limit).pipe(
+            map((rows) => ({ q, rows })),
             catchError(() => {
               this.errored.set(true);
-              return of([] as HospitalResponse[]);
+              return of({ q, rows: [] as HospitalResponse[] });
             }),
           ),
         ),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((rows) => {
+      .subscribe(({ q, rows }) => {
+        this.fetchedQuery.set(q);
         this.results.set(rows);
         this.loading.set(false);
       });

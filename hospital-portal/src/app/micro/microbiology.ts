@@ -6,7 +6,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { LabOrderResponse, LabService } from '../services/lab.service';
@@ -160,7 +160,10 @@ export class MicrobiologyComponent implements OnInit {
     const status = this.statusFilter();
     this.microService
       .list({ status: status || undefined, size: 100 })
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (page) => {
           this.cultures.set(page.content);
