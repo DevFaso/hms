@@ -39,7 +39,8 @@ public interface EncounterService {
                                     Pageable pageable,
                                     Locale locale);
 
-    EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale);
+    EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale,
+                                         boolean isSuperAdmin, UUID callerHospitalId);
 
     void deleteEncounter(UUID id, Locale locale);
 
