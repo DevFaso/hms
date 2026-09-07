@@ -414,10 +414,14 @@ public class AuthController {
             // That this arm differs from bad credentials at all still tells a
             // prober the username exists and is inactive — inherent to giving
             // the real holder usable guidance, and unchanged from the previous
-            // wording. What was missing is the throttle: without recordFailure
-            // the probe never trips the lockout checked above, so failures here
-            // now count like any other.
-            loginAttemptService.recordFailure(loginRequest.getUsername());
+            // wording. It is also NOT counted toward the lockout checked above,
+            // which is deliberate: recordFailure here locks the account for 15
+            // minutes after five attempts, and resetAttempts runs only on a
+            // successful login, so someone who tries the temp credentials from
+            // the welcome mail before confirming their code would be locked out
+            // at the moment they finally activate — a fresh version of the dead
+            // end this change exists to remove. Throttling this arm needs a
+            // reset on successful activation first; recorded in tasklist.md.
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(INACTIVE_ACCOUNT_GUIDANCE));
