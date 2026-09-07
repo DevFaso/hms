@@ -61,5 +61,4 @@ class LoginAttemptServiceTest {
         assertThat(service.isLocked("user1")).isTrue();
         assertThat(service.isLocked("USER1")).isTrue();
     }
-
 }
