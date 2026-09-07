@@ -38,6 +38,18 @@ describe('deliveryWarningKeys', () => {
     ).toEqual(['DELIVERY.NO_ACTIVATION_CHANNEL']);
   });
 
+  it('is not masked by a credentials problem — that says nothing about activation', () => {
+    // The reachable shape on a deployment with no SMS: no email address, so
+    // the credentials fall back to SMS and fail there, while the activation
+    // itself still has no route at all.
+    const keys = deliveryWarningKeys([
+      row({ channel: 'EMAIL', outcome: 'NO_CONTACT' }),
+      row({ channel: 'SMS', purpose: 'CREDENTIALS', outcome: 'NOT_CONFIGURED' }),
+    ]);
+    expect(keys).toContain('DELIVERY.NO_ACTIVATION_CHANNEL');
+    expect(keys).toContain('DELIVERY.CREDENTIALS_NOT_DELIVERED');
+  });
+
   it('does not add the no-channel warning on top of a specific one', () => {
     const keys = deliveryWarningKeys([
       row({ channel: 'EMAIL', outcome: 'NO_CONTACT' }),

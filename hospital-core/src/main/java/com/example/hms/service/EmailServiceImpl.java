@@ -770,28 +770,37 @@ public class EmailServiceImpl implements EmailService {
 
 
     /**
-     * Activation-first call to action. With an activation URL the button goes
-     * to the confirmation screen; without one it still names the step rather
-     * than offering a login the account will refuse. The login link stays as
-     * secondary text so the address is in the mail either way.
+     * Activation-first call to action.
+     *
+     * <p>With an activation URL the button goes to the confirmation screen.
+     * Without one there is NO button: the only address we could offer is
+     * {@code /login}, and the account is inactive, so a prominent button
+     * there leads straight to the rejection this mail exists to prevent —
+     * which is what it used to do. The step is named in prose instead, with
+     * the login address kept as secondary text for after activation.
      */
     private static String ctaBlock(String rawActivationUrl, String rawLoginUrl) {
-        boolean hasActivation = rawActivationUrl != null && !rawActivationUrl.isBlank();
-        String activationUrl = hasActivation ? escapeHtml(rawActivationUrl) : null;
         String loginUrl = escapeHtml(rawLoginUrl);
-        String href = hasActivation ? activationUrl : loginUrl;
-        String label = hasActivation ? "Activate My Account" : "Go to HMS";
-        String secondary = hasActivation
-            ? "Or copy this link:<br/><a href=\"" + activationUrl + "\" style=\"color:#2563eb;\">"
-              + activationUrl + "</a><br/><br/>After activating, sign in at "
-              + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a>"
-            : "Once your role is confirmed, sign in at <a href=\"" + loginUrl
-              + "\" style=\"color:#2563eb;\">" + loginUrl + "</a>";
+        boolean hasActivation = rawActivationUrl != null && !rawActivationUrl.isBlank();
+
+        if (!hasActivation) {
+            return "<p style=\"text-align:center;font-size:14px;color:#475569;margin:28px 0 8px;\">"
+                + "Use the confirmation link in that message to finish activating your account."
+                + "</p>"
+                + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;margin-top:0;\">"
+                + "Once it is confirmed, sign in at "
+                + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>";
+        }
+
+        String activationUrl = escapeHtml(rawActivationUrl);
         return "<p style=\"text-align:center;margin:28px 0;\">"
-            + "<a href=\"" + href + "\" style=\"background:#2563eb;color:#ffffff;"
+            + "<a href=\"" + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
             + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
-            + "font-weight:600;display:inline-block;\">" + label + "</a></p>"
-            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + secondary + "</p>";
+            + "font-weight:600;display:inline-block;\">Activate My Account</a></p>"
+            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">Or copy this link:<br/>"
+            + "<a href=\"" + activationUrl + "\" style=\"color:#2563eb;\">" + activationUrl
+            + "</a><br/><br/>After activating, sign in at "
+            + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>";
     }
 
 }

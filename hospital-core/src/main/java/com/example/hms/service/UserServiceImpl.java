@@ -403,38 +403,69 @@ public class UserServiceImpl implements UserService {
             final String activationUrl = soleCode == null
                     ? null
                     : assignmentLinkService.buildProfileCompletionUrl(soleCode);
-            try {
-                emailService.sendAdminWelcomeEmail(
-                    user.getEmail(), displayName,
-                    user.getUsername(), request.getPassword(),
-                    roleName, hospitalName, activationUrl);
-                log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
-                com.example.hms.utility.ActivationDeliveryTracker.report(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                        .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
-                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                        .build());
-            } catch (Exception e) {
-                log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
-                // Fixed detail: exception messages can embed the raw address
-                // (EmailServiceImpl.validateAddresses does) and this DTO
-                // leaves the server; the transport error stays in the log.
-                com.example.hms.utility.ActivationDeliveryTracker.report(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
-                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
-                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
-                        .outcome(emailService.deliversRealEmail()
-                            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
-                            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
-                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                        .detail("send failed — transport error in server logs")
-                        .build());
-            }
+            // Deferred to AFTER_COMMIT for the same reason
+            // AssignmentCreatedEventListener exists: this mail now carries an
+            // assignment code in its button, so a rollback after the send
+            // (the 20s transaction timeout is reachable on a slow SMTP hop)
+            // would deliver a link to a code that never existed. The
+            // synchronisation runs on this thread before the controller
+            // closes ActivationDeliveryTracker, so the registrar still sees
+            // the outcome.
+            afterCommit(() -> {
+                try {
+                    emailService.sendAdminWelcomeEmail(
+                        user.getEmail(), displayName,
+                        user.getUsername(), request.getPassword(),
+                        roleName, hospitalName, activationUrl);
+                    log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+                    com.example.hms.utility.ActivationDeliveryTracker.report(
+                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                            .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
+                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                            .build());
+                } catch (Exception e) {
+                    log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+                    // Fixed detail: exception messages can embed the raw address
+                    // (EmailServiceImpl.validateAddresses does) and this DTO
+                    // leaves the server; the transport error stays in the log.
+                    com.example.hms.utility.ActivationDeliveryTracker.report(
+                        com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                            .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                            .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                            .outcome(emailService.deliversRealEmail()
+                                ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                                : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
+                            .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                            .detail("send failed — transport error in server logs")
+                            .build());
+                }
+            });
         }
 
         return result;
+    }
+
+    /**
+     * Runs {@code action} once the current transaction commits, or immediately
+     * when none is active (unit tests, and any caller outside a transaction).
+     * The callback runs on the calling thread, so request-scoped state such as
+     * {@link com.example.hms.utility.ActivationDeliveryTracker} is still open.
+     */
+    private static void afterCommit(Runnable action) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */

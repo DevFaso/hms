@@ -336,7 +336,7 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("still names the confirmation step when no activation URL is known")
+        @DisplayName("offers no button at all when no activation URL is known")
         void namesTheStepWithoutAUrl() {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
@@ -347,6 +347,12 @@ class EmailServiceImplTest {
             assertThat(html).contains("confirmation code");
             assertThat(html).doesNotContain("Sign In to Your Account");
             assertThat(html).doesNotContain("You can sign in immediately");
+            // This branch is what a two-role registration gets. A prominent
+            // button is only ever offered for the activation screen: pointing
+            // one at /login would lead straight to the rejection this mail
+            // exists to prevent. The login address stays as secondary text.
+            assertThat(html).doesNotContain("display:inline-block");
+            assertThat(html).contains("/login");
         }
 
         @Test
