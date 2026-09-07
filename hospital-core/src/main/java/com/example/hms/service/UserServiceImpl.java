@@ -640,8 +640,11 @@ public class UserServiceImpl implements UserService {
 
         // Failures are recorded for usernames that do not exist, so a name
         // guessed at before the account was created can already be locked.
-        // Clear it, or the new holder is refused at their first login.
-        loginAttemptService.resetAttempts(username);
+        // Clear it, or the new holder is refused at their first login. After
+        // commit, like every other throttle write here: a licence conflict in
+        // upsertStaff or the 20s transaction timeout would otherwise clear the
+        // counter for a registration that rolled back.
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
@@ -1143,20 +1146,17 @@ public class UserServiceImpl implements UserService {
             TransactionCallbacks.afterCommit(() -> {
                 loginAttemptService.resetAttempts(usernameAfterUpdate);
                 if (renamed) {
-                    // Clear the old key too, so a stale record cannot be
-                    // carried back onto an account that was just switched on.
                     loginAttemptService.resetAttempts(usernameBeforeUpdate);
                 }
             });
-        } else if (renamed) {
-            // A rename on its own silently voided any live lockout — nothing
-            // would ever look the old key up again, so it sat in the map while
-            // the account walked free under its new name, which would make a
-            // rename a lockout-clearing primitive on an endpoint that is not
-            // role-gated.
-            TransactionCallbacks.afterCommit(
-                () -> loginAttemptService.renameKey(usernameBeforeUpdate, usernameAfterUpdate));
         }
+        // A rename on its own leaves the old key's record behind, which voids
+        // any live lockout. Deliberately not handled here: carrying the state
+        // across was tried and reverted, because the throttle map keys on
+        // lowercase while uq_user_username is case-sensitive, so "Victim" and
+        // "victim" share one key — moving state under a rename let one account
+        // clear or inherit another's lockout. The real fix is the missing
+        // @PreAuthorize on PUT /users/{id}; both are in tasklist.md.
 
         // Password: only update if a new non-blank password is explicitly provided
         // and it differs from the current hash.
@@ -1358,17 +1358,9 @@ public class UserServiceImpl implements UserService {
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
             throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
         }
-        final String previousUsername = user.getUsername();
         user.setUsername(newUsername);
         user.setForceUsernameChange(false);
         userRepository.save(user);
-        // The second rename path. The throttle counter is keyed on the
-        // username, and this endpoint is reachable with a valid token while
-        // the account is locked out, so without carrying the state across a
-        // self-service rename would void a live lockout — the same primitive
-        // updateUser closes.
-        TransactionCallbacks.afterCommit(
-            () -> loginAttemptService.renameKey(previousUsername, newUsername));
         log.info("🔑 [CHANGE-USR] Username updated and forceUsernameChange cleared for user={}", userId);
     }
 

@@ -1592,6 +1592,19 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- A **rename voids a live login lockout**, and carrying the throttle across a
+  rename is not the fix. `LoginAttemptService` keys on `username.toLowerCase()`
+  while `uq_user_username` (V1_1) indexes the username verbatim, so `Victim` and
+  `victim` are two accounts sharing one throttle key: any move of state under a
+  rename lets one account clear or inherit another's lockout, which is worse
+  than the leak it closes. Tried and reverted in #573. Two things have to change
+  first — an `@PreAuthorize` on `PUT /users/{id}` (and a uniqueness check on
+  `dto.getUsername()`, which it has none of; `changeOwnUsername`'s check is
+  exact-case and so passes case variants), and either a case-insensitive unique
+  index on `username` or a throttle keyed on the user id rather than the name.
+  Until then the leak stands, and it is small next to the ungated endpoint that
+  already lets any authenticated caller set another user's password.
+
 - **`/users` is largely ungated.** Only `POST /users/admin-register` and
   `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
   `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and

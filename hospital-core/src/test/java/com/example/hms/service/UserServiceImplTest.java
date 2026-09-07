@@ -1232,7 +1232,6 @@ class UserServiceImplTest {
 
             assertThat(target.isActive()).isTrue();
             verify(loginAttemptService).resetAttempts("someone");
-            verify(loginAttemptService, never()).renameKey(any(), any());
         }
 
         @Test
@@ -1263,41 +1262,9 @@ class UserServiceImplTest {
             // stale record back onto an account that was just switched on.
             verify(loginAttemptService).resetAttempts("renamed");
             verify(loginAttemptService).resetAttempts("someone");
-            verify(loginAttemptService, never()).renameKey(any(), any());
         }
 
-        @Test
-        @DisplayName("a rename without a reactivation carries the lockout across")
-        void renameCarriesTheLockout() {
-            reactivationTarget(true);
-            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
-            dto.setUsername("renamed");
 
-            userService.updateUser(userId, dto);
-
-            // Otherwise the rename silently voids a live lockout: nothing ever
-            // looks the old key up again, so PUT /users/{id} — which is not
-            // role-gated — becomes a way to free a throttled account.
-            verify(loginAttemptService).renameKey("someone", "renamed");
-            verify(loginAttemptService, never()).resetAttempts(any());
-        }
-
-        @Test
-        @DisplayName("changeOwnUsername carries the lockout too — it is the second rename path")
-        void selfRenameCarriesTheLockout() {
-            User target = new User();
-            target.setId(userId);
-            target.setUsername("someone");
-            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
-            when(userRepository.findByUsername("renamed")).thenReturn(Optional.empty());
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-
-            userService.changeOwnUsername(userId, "renamed");
-
-            // Reachable with a valid token while the account is locked out, so
-            // without this a self-service rename walks free.
-            verify(loginAttemptService).renameKey("someone", "renamed");
-        }
 
         @Test
         @DisplayName("a new account does not inherit a lockout guessed against its name")
