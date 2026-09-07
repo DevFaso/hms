@@ -1065,9 +1065,6 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setActive(true);
         userRepository.save(user);
-        // Same rule as every other activation: a lockout collected while the
-        // account was switched off must not survive it being switched on.
-        loginAttemptService.resetAttempts(user.getUsername());
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1114,12 +1111,13 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
-            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
-                    && !Boolean.TRUE.equals(user.isActive());
+            // Deliberately does NOT clear the login lockout, unlike the
+            // self-service activation paths: PUT /users/{id} carries no
+            // @PreAuthorize, so any authenticated caller could otherwise
+            // toggle active off/on to clear an account's throttle between
+            // guessing rounds. An administrator who needs it cleared can
+            // wait out the 15 minutes. Same reasoning for restoreUser.
             user.setActive(dto.getActive());
-            if (reactivated) {
-                loginAttemptService.resetAttempts(user.getUsername());
-            }
         }
 
         // Password: only update if a new non-blank password is explicitly provided

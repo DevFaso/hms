@@ -1194,4 +1194,34 @@ class UserServiceImplTest {
             assertThat(UserServiceImpl.soleAssignmentCode(null)).isNull();
         }
     }
+
+    // =========================================================================
+    // Admin reactivation must NOT clear the login lockout
+    // =========================================================================
+
+    @Nested
+    @DisplayName("admin reactivation and the login lockout")
+    class AdminReactivationLockout {
+
+        @Test
+        @DisplayName("restoreUser does not clear the lockout")
+        void restoreDoesNotClearTheLockout() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("someone");
+            target.setActive(false);
+            target.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            // PATCH /users/{id}/restore would otherwise be a repeatable
+            // "clear this account's throttle" primitive. Only the paths the
+            // account holder drives themselves clear it.
+            assertThat(target.isActive()).isTrue();
+            verify(loginAttemptService, never()).resetAttempts(any());
+        }
+    }
 }

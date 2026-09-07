@@ -1592,6 +1592,15 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- `PUT /users/{id}` carries no `@PreAuthorize` and no SecurityConfig matcher —
+  only `POST /users/admin-register` is gated, so the rest of `/users` falls to
+  `anyRequest().authenticated()`. Any authenticated user can therefore edit any
+  account, including its `password` and `active` flag. Surfaced by the #571
+  review, which is why the login-lockout reset was deliberately kept OFF the
+  admin reactivation paths: putting a security control behind that endpoint
+  would have made it a throttle-clearing primitive. The authz gap itself is
+  still open.
+
 - `LoginAttemptService` keeps its counter in a per-JVM `ConcurrentHashMap`, so
   the login lockout and every `resetAttempts` that clears it are instance-local.
   On more than one replica a user can be locked on instance A and activate
