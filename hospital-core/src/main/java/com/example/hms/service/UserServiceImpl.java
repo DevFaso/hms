@@ -638,12 +638,21 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
 
-        // No throttle clear here, deliberately. A name guessed at before the
-        // account existed can be locked, but this account is created INACTIVE
-        // (below), so the disabled arm of /auth/login keeps recording failures
-        // against the same key until the confirmation code is entered — and
-        // activateVerifiedAssignment clears it after commit at that point.
-        // Clearing here would be undone before it mattered.
+        // Failures are recorded for usernames that do not exist, so a name
+        // probed before the account was created is already locked — and the
+        // lockout check in /auth/login returns 423 BEFORE authentication, so
+        // nothing about being newly created clears it. Without this the holder
+        // is refused on their very first login with the credentials just
+        // mailed to them, for up to the lock duration.
+        //
+        // (An earlier round removed this on the reasoning that the disabled
+        // arm would keep re-locking the key until activation. That arm is
+        // never reached while the account is locked: the 423 comes first.)
+        //
+        // After commit, like every other throttle write here: a licence
+        // conflict in upsertStaff or the transaction timeout would otherwise
+        // clear the counter for a registration that rolled back.
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
@@ -1136,9 +1145,13 @@ public class UserServiceImpl implements UserService {
         // locked under, and the clear runs after commit so a failed save
         // cannot free an account that stayed inactive.
         //
-        // ONLY that key: nothing writes the pre-rename name any more, so
-        // there is nothing there to clean up, and touching it would reach
-        // whatever account now answers to it.
+        // ONLY that key. A combined rename + reactivate does strand the old
+        // name's record — the lockout collected while the account was inactive
+        // lives under the name it had then, and nothing evicts it until
+        // isLocked() is called for that name after expiry. Clearing it anyway
+        // is the worse trade: the old name may now answer for another account,
+        // since the throttle map lowercases while uq_user_username does not.
+        // The stranded record is covered by the rename entry in tasklist.md.
         //
         // Not claimed to be collision-proof. uq_user_username is case
         // sensitive while the throttle map lowercases, and updateUser applies

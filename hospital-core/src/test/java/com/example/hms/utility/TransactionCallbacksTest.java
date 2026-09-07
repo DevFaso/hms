@@ -19,6 +19,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * no transaction to the thread, so they all take the inline branch. Swapping
  * an {@code afterCommit(...)} wrapper for a direct call would leave the rest
  * of the suite green — this is the only place that would fail.
+ *
+ * <p>Scope, so nobody reads more into it than it proves: these tests drive the
+ * synchronizations by hand, which pins the CONTRACT the callers rely on, not
+ * the wiring of any particular caller. They do not catch a caller that moves
+ * its own try/catch outside the lambda — that needs a real transaction manager
+ * around the service, which the unit suite does not have. The one behaviour
+ * that makes such a move dangerous is asserted below
+ * ({@code aThrowingActionPropagatesToTheCommitter}); the callers each carry a
+ * comment saying why they guard themselves.
  */
 @DisplayName("TransactionCallbacks")
 class TransactionCallbacksTest {
