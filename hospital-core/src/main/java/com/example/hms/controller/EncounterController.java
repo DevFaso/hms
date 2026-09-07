@@ -214,14 +214,18 @@ public class EncounterController {
         @PathVariable UUID id,
         @Valid @RequestBody EncounterRequestDTO dto,
         Locale locale,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         // For consistency, honor JWT hospital for receptionist (though receptionist isn't allowed here)
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         if (dto.getHospitalId() == null) {
             dto.setHospitalId(jwtHospitalId);
         }
-        return ResponseEntity.ok(encounterService.updateEncounter(id, dto, locale));
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        return ResponseEntity.ok(
+            encounterService.updateEncounter(id, dto, locale, isSuperAdmin, hospitalId));
     }
 
     // ----------------------------------------------------------
@@ -263,11 +267,12 @@ public class EncounterController {
     public ResponseEntity<TriageSubmissionResponseDTO> submitTriage(
         @PathVariable UUID encounterId,
         @Valid @RequestBody TriageSubmissionRequestDTO request,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         String username = auth.getName();
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         TriageSubmissionResponseDTO response =
             encounterService.submitTriage(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
@@ -284,10 +289,11 @@ public class EncounterController {
     )
     public ResponseEntity<EncounterResponseDTO> startEncounter(
         @PathVariable UUID encounterId,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName(), isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -303,10 +309,11 @@ public class EncounterController {
     )
     public ResponseEntity<EncounterResponseDTO> completeTriage(
         @PathVariable UUID encounterId,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterResponseDTO response =
             encounterService.completeTriage(encounterId, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
@@ -324,10 +331,11 @@ public class EncounterController {
     )
     public ResponseEntity<EncounterResponseDTO> completeExamination(
         @PathVariable UUID encounterId,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterResponseDTO response = encounterService.completeExamination(
                 encounterId, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
@@ -344,10 +352,11 @@ public class EncounterController {
     )
     public ResponseEntity<EncounterResponseDTO> markReadyForDischarge(
         @PathVariable UUID encounterId,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterResponseDTO response = encounterService.markReadyForDischarge(
                 encounterId, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
@@ -366,11 +375,12 @@ public class EncounterController {
     public ResponseEntity<NursingIntakeResponseDTO> submitNursingIntake(
         @PathVariable UUID encounterId,
         @Valid @RequestBody NursingIntakeRequestDTO request,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         String username = auth.getName();
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         NursingIntakeResponseDTO response =
             encounterService.submitNursingIntake(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
@@ -394,11 +404,12 @@ public class EncounterController {
     public ResponseEntity<AfterVisitSummaryDTO> checkOut(
         @PathVariable UUID encounterId,
         @Valid @RequestBody CheckOutRequestDTO request,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         String username = auth.getName();
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         AfterVisitSummaryDTO avs =
             encounterService.checkOut(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(avs);
@@ -429,10 +440,11 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         @Valid @RequestBody EncounterNoteRequestDTO request,
         Locale locale,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterNoteResponseDTO response =
             encounterService.upsertEncounterNote(encounterId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
@@ -447,10 +459,11 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         @Valid @RequestBody EncounterNoteAddendumRequestDTO request,
         Locale locale,
-        Authentication auth
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         EncounterNoteAddendumResponseDTO response =
             encounterService.addEncounterNoteAddendum(encounterId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity

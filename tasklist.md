@@ -1592,13 +1592,19 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
-- **`updateEncounter` and `deleteEncounter` are still unscoped.** The other
-  nine mutating paths on `EncounterServiceImpl` now go through
-  `requireEncounterInScope`; these two do not, and nothing enforces the
-  invariant — the guard's javadoc is the only thing carrying it. Same fix,
-  same shape; left out of that PR to keep it reviewable. A marker plus a guard
-  test (the E8 #49 problem in miniature) is what would stop the next one
-  slipping back in.
+- **Nothing enforces "every encounter write is scoped".** All ten mutating
+  paths on `EncounterServiceImpl` now go through `requireEncounterInScope`
+  (`deleteEncounter` is `ROLE_SUPER_ADMIN`-only and global by design), but the
+  guard's javadoc is the only thing carrying the invariant — a new write added
+  tomorrow with a bare `findById` reintroduces the hole silently. A marker plus
+  a coverage test is what stops that, and it is the E8 #49 problem in
+  miniature: there is no annotation meaning "this query is tenant-scoped" to
+  scan for.
+- **`getAfterVisitSummary` reads unscoped.** It resolves by bare `findById`
+  with no hospital check, on an endpoint that also admits `ROLE_PATIENT` — so
+  staff at one hospital can read the AVS written by another's checkout. A read,
+  not a write, so it belongs with E8 #49's classification pass rather than the
+  write-scoping fix.
 
 - **Outbound mail is sent on the request thread**, inside or just after the
   transaction. `TransactionCallbacks.afterCommit` fires before

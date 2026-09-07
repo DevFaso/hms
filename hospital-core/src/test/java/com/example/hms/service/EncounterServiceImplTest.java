@@ -66,6 +66,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -497,8 +498,8 @@ class EncounterServiceImplTest {
         TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
-                .thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -654,8 +655,8 @@ class EncounterServiceImplTest {
         NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder().build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
-                .thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1075,7 +1076,8 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().build();
         assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1", true, null))
@@ -1253,7 +1255,8 @@ class EncounterServiceImplTest {
     void startEncounter_notFound_throws() {
         UUID encounterId = UUID.randomUUID();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, null))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1427,7 +1430,8 @@ class EncounterServiceImplTest {
         encounter.setHospital(hospital);
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.completeExamination(encounterId, false, callerHospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1613,7 +1617,7 @@ class EncounterServiceImplTest {
         when(prescriptionRepository.findByEncounter_Id(org.mockito.ArgumentMatchers.eq(encounterId), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
-        EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale);
+        EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale, true, null);
 
         assertThat(result).isNotNull();
         // checkoutTimestamp should have been backfilled in-flight when the merge had none
@@ -1716,7 +1720,7 @@ class EncounterServiceImplTest {
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
 
-        service.updateEncounter(encounterId, request, locale);
+        service.updateEncounter(encounterId, request, locale, true, null);
 
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
@@ -1820,15 +1824,23 @@ class EncounterServiceImplTest {
         }
 
         @Test
-        @DisplayName("the not-found body carries the id, not a literal {0}")
-        void notFoundMessageIsFormatted() {
+        @DisplayName("the refusal carries the message KEY and the id, not resolved prose")
+        void refusalCarriesKeyAndArgs() {
             Encounter foreign = encounterAt(OTHER_HOSPITAL);
             encounterExists(foreign);
 
-            assertThatThrownBy(() ->
-                    service.completeTriage(foreign.getId(), false, CALLER_HOSPITAL))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageNotContaining("{0}");
+            // ResourceNotFoundException resolves its FIRST argument as a
+            // message key, so handing it an already-translated sentence
+            // produces "[Missing translation] …" in the response body. Assert
+            // on the carried key/args rather than the rendered text: the
+            // messageSource here is an unstubbed mock, so any assertion on the
+            // message itself passes no matter what we do.
+            ResourceNotFoundException thrown = catchThrowableOfType(
+                    () -> service.completeTriage(foreign.getId(), false, CALLER_HOSPITAL),
+                    ResourceNotFoundException.class);
+
+            assertThat(thrown.getMessageKey()).isEqualTo("encounter.notfound");
+            assertThat(thrown.getArgs()).containsExactly(foreign.getId());
         }
 
         @Test
