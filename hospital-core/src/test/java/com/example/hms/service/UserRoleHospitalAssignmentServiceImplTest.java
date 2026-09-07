@@ -52,6 +52,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -195,6 +196,11 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
         assertThat(assignee.isActive()).isTrue();
         verify(userRepository).save(assignee);
+        // The welcome mail hands out temp credentials, so trying them before
+        // confirming this code is the expected mistake — and those refusals
+        // count toward the login lockout. Without clearing the counter here
+        // the holder is locked out at the moment activation succeeds.
+        verify(loginAttemptService).resetAttempts(assignee.getUsername());
     }
 
     // -----------------------------------------------------------------------

@@ -1592,15 +1592,16 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
-- The `DisabledException` arm of `POST /auth/login` is not counted toward the
-  login lockout, so an inactive account can be probed without limit (and the
-  reply differs from bad credentials, which confirms the username exists and is
-  inactive). Counting it needs `LoginAttemptService.resetAttempts` to also run
-  when an account is activated — `verifyAssignmentByCode` / `confirmAssignment`
-  and `verifyEmail` — otherwise a user who tries the temp credentials from the
-  welcome mail five times before confirming is locked out for 15 minutes at the
-  moment activation finally succeeds. Tried and reverted in #569 round 4 for
-  exactly that reason.
+- An **empty** activation delivery report warns nobody. `deliveryWarningKeys`
+  returns `[]` for `[]` by contract ("nothing was attempted"), but on the
+  creation paths that is indistinguishable from "every send failed before it
+  could record an outcome" — `AssignmentCreatedEventListener` swallows a
+  `sendNotifications` failure, and patient registration, creating a user that
+  already exists, and `admin-assignments.submitRegen` produce no other row. All
+  three then show a green success toast over an account nothing ever reached.
+  The fix belongs at the call sites (a creation flow should treat an empty
+  report as "nothing reached them"), not in the shared helper, whose other
+  callers legitimately have nothing to send. Found by the #570 review.
 
 - The email-activation **link** has no landing page. `sendActivationEmail`
   builds `${app.frontend.base-url}/verify?email=&token=` (public

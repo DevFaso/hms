@@ -726,8 +726,10 @@ class AuthControllerTest {
                 .andReturn();
 
         // isEnabled is checked before the password, so this arm answers
-        // unauthenticated probes: it must not look the account up at all.
+        // unauthenticated probes: it must not look the account up at all,
+        // and it must count toward the lockout so the probe is throttled.
         verify(userRepository, never()).findByUsername("someone");
+        verify(loginAttemptService).recordFailure("someone");
         assertThat(result.getResponse().getStatus()).isEqualTo(401);
     }
 }
