@@ -1670,7 +1670,11 @@ all exist and are reachable.
   "being treated here" — so decide explicitly whether it counts, and if it
   does, make sure #52's opt-out reaches it; otherwise it is a second
   authorisation path around the switch. One injectable, one method, one cache per
-  request; no controller may hand-roll it. Decide and write down the decay
+  request; no controller may hand-roll it.
+  ⚠ **Not quite "alone": #52's opt-out is honoured inside this predicate**,
+  not bolted onto each caller, so either build the opt-out flag with #48 or
+  accept reopening #48 when #52 lands. Prefer the former — the predicate is
+  the one place the switch is enforceable. Decide and write down the decay
   rule — a relationship that never expires is not a relationship, and Epic's
   own answer (schedule/admission-bounded, with a tail after discharge) is the
   place to start. This is the item to build first and alone: #49 through #53
@@ -1684,11 +1688,11 @@ all exist and are reachable.
   The new rule: rows from the actor's own hospital as now, PLUS rows from other
   `ROW_LEVEL` hospitals when #48 says a treatment relationship exists. The
   count is the risk.
-  ⚠ **Not all 148 are reads.** Many `isRegisteredInHospital` sites guard
+  ⚠ **Not all ~103 are reads.** Many `isRegisteredInHospital` sites guard
   WRITES — `AdvanceDirective`, `Guarantor`, `PatientRecall`, `IntakeOutput`,
   `SlotInventory`, `NurseTask` create paths among them. A blanket replacement
   widens cross-hospital *writes*, which this decision does not authorise.
-  Classify the 148 first; the write guards stay as they are.
+  Classify the ~103 first; the write guards stay as they are.
   ⚠ **A tenant-filter framework ships, but it does not reach this population
   — and that is the crux of the item.** `TenantRepositoryConfig` sets
   `repositoryBaseClass = TenantAwareJpaRepository`, so all 35 repositories
@@ -1705,7 +1709,7 @@ all exist and are reachable.
   ⚠ **The guard test has no marker to scan for.** `SchedulerLockCoverageTest`
   works because `@Scheduled` is enumerable; nothing means "patient-scoped
   query". Defining that marker is part of this item, or the only stated
-  mitigation for 148 sites does not transfer. Expect the first pass to be a survey:
+  mitigation for ~103 sites does not transfer. Expect the first pass to be a survey:
   some of those 148 are already correct, some are the tenant-isolation bug
   class and must be fixed *first*.
   ⚠ **Blocked on the triage-scoping entry in Standing platform debt.** That
@@ -1728,7 +1732,12 @@ all exist and are reachable.
   from #47, HIV, reproductive health. These do NOT travel on the treatment
   presumption. Needs a category tag on the clinical row (not a guess from the
   ICD code at read time), a default-withhold rule cross-hospital, and a
-  patient-authorised release path — ROI is the existing vehicle. Flagged in the
+  patient-authorised release path. ROI (V151) is the nearest existing
+  vehicle, but the preamble scopes ROI to NON-treating parties while this item
+  would use it for a treating clinician at another hospital. Decide which:
+  widen ROI's stated scope, or give the sensitive-category release its own
+  authorisation record. Leaving both readings standing is how one gets built
+  by accident. Flagged in the
   industry as incompletely solved; scope it to *withhold correctly* first and
   treat granular release as a later pass. Do not ship #49 without at least the
   withhold half, or the first cross-hospital read discloses a category that
@@ -1792,19 +1801,24 @@ all exist and are reachable.
 
 ## Standing platform debt — owed, not parity
 
-- **`submitTriage` and `completeTriage` are not hospital-scoped.** Both resolve
-  the encounter with a bare `findById` and check only its status, while
+- **Six encounter writes are not hospital-scoped.** `submitTriage`,
+  `completeTriage`, `submitNursingIntake`, `upsertEncounterNote`,
+  `addEncounterNoteAddendum` and `checkOut` all resolve the encounter with a
+  bare `findById` — verified one by one — while
   `startEncounter`, `completeExamination` and `markReadyForDischarge` on the
   same controller all resolve a caller hospital and pass it down.
   ⚠ Do NOT copy the siblings as the model: they use a bare `findById` plus a
   hand-rolled comparison, and that comparison is written
   `encounterHospitalId != null && …`, so a null hospital on the encounter
   bypasses it. `EncounterRepository.findByIdAndHospital_Id` is the scoped
-  lookup and has exactly one caller (`EncounterFhirWriteService`) — use that,
-  and fix the siblings' bypass while you are there. So a nurse or doctor at hospital A holding an
-  encounter id from hospital B can advance that encounter and write vitals onto
-  the patient's chart: a cross-tenant WRITE, reachable today, needing no read
-  access. There is no Hibernate tenant filter behind them and the only
+  lookup, with two callers today (`EncounterFhirWriteService` and
+  `ReceptionServiceImpl`) — use that, and fix the siblings' bypass while you
+  are there. So a nurse or doctor at hospital A holding an encounter id from
+  hospital B can advance that encounter and write vitals, a SOAP note, an
+  addendum, a nursing intake or a checkout onto the patient's chart: a
+  cross-tenant WRITE, reachable today, needing no read access. **Fix all
+  six** — fixing only the two triage methods clears #49's stated block while
+  the note and checkout paths stay open. There is no Hibernate tenant filter behind them and the only
   registered interceptors are the two audit ones, so nothing catches it. This
   blocks E8 #49 — widening the read filter on top of an unscoped write turns
   this into a cross-tenant read as well. Found while walking the check-in →
