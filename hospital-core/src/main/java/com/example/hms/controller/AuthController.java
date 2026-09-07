@@ -414,9 +414,14 @@ public class AuthController {
             // That this arm differs from bad credentials at all still tells a
             // prober the username exists and is inactive — inherent to giving
             // the real holder usable guidance, and unchanged from the previous
-            // wording. What was missing is the throttle: without recordFailure
-            // the probe never trips the lockout checked above, so failures here
-            // now count like any other.
+            // wording. It IS counted toward the lockout, so the probe is
+            // throttled like any other failed login. That is only safe because
+            // both activation paths now clear the counter
+            // (UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
+            // and UserServiceImpl#verifyEmail): the welcome mail hands out temp
+            // credentials, so trying them before confirming the code is the
+            // expected mistake, and without that reset the holder would be
+            // locked out at the exact moment activation succeeds.
             loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -47,6 +47,11 @@ export function deliveryWarningKeys(
   // together they mean the account has no way in at all: created inactive,
   // confirmation code sitting in the database. Warn whenever nothing proves
   // an activation went out and nothing already said why.
+  //
+  // The message states only that, never a cause: a swallowed
+  // sendNotifications failure leaves a report with no ACTIVATION row at all,
+  // so "this account has no email or phone" would be wrong for an account
+  // that has both.
   if (!activationProblemReported && !hasActivationSent(report)) {
     keys.add('DELIVERY.NO_ACTIVATION_CHANNEL');
   }

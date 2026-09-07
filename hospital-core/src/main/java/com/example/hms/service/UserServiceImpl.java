@@ -91,6 +91,7 @@ public class UserServiceImpl implements UserService {
     private final UserRoleHospitalAssignmentService assignmentService;
     private final EmailService emailService;
     private final AssignmentLinkService assignmentLinkService;
+    private final com.example.hms.security.LoginAttemptService loginAttemptService;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
@@ -1186,6 +1187,9 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        // Same reason as the assignment-code path: refusals collected while
+        // the account was inactive must not outlive the activation.
+        loginAttemptService.resetAttempts(user.getUsername());
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {

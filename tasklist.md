@@ -1592,6 +1592,17 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- An **empty** activation delivery report warns nobody. `deliveryWarningKeys`
+  returns `[]` for `[]` by contract ("nothing was attempted"), but on the
+  creation paths that is indistinguishable from "every send failed before it
+  could record an outcome" — `AssignmentCreatedEventListener` swallows a
+  `sendNotifications` failure, and patient registration, creating a user that
+  already exists, and `admin-assignments.submitRegen` produce no other row. All
+  three then show a green success toast over an account nothing ever reached.
+  The fix belongs at the call sites (a creation flow should treat an empty
+  report as "nothing reached them"), not in the shared helper, whose other
+  callers legitimately have nothing to send. Found by the #570 review.
+
 - The email-activation **link** has no landing page. `sendActivationEmail`
   builds `${app.frontend.base-url}/verify?email=&token=` (public
   self-registration, and `POST /auth/resend-verification`), but `verify` is not
