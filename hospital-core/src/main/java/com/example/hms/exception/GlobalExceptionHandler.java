@@ -1,5 +1,6 @@
 package com.example.hms.exception;
 
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -298,6 +299,41 @@ public class GlobalExceptionHandler {
         // No stack trace: the gateway already logged which property is missing.
         log.warn("Notification transport unavailable at path {}", request.getDescription(false));
         return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
+    /**
+     * HAPI's {@code BaseServerResponseException} family carries its own HTTP
+     * status, but only HAPI's servlet knows that. Thrown out of a service that
+     * a plain Spring MVC controller calls — {@code PatientRecordExportController}
+     * → {@code PatientEverythingService} is the live case — nothing matched it
+     * and it fell through to {@link #handleRuntimeException}, so every intended
+     * 403 and 404 on those endpoints surfaced as a 500 with the raw internal
+     * message in the body.
+     *
+     * <p>Note this does NOT shadow the FHIR servlet's own handling: HAPI
+     * intercepts these inside its own dispatch and never lets them reach
+     * {@code @ControllerAdvice}. This applies only to the plain-MVC callers.
+     *
+     * <p>The message is echoed only for client errors, which we author
+     * ourselves and word deliberately. Anything 5xx gets the generic text —
+     * a HAPI parser or transport failure can carry internals we must not
+     * return.
+     */
+    @ExceptionHandler(BaseServerResponseException.class)
+    @SuppressWarnings("java:S2629")
+    public ResponseEntity<Object> handleFhirResponseException(
+            BaseServerResponseException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        if (status.is4xxClientError()) {
+            log.warn("FHIR operation refused at path {} with {}: {}",
+                request.getDescription(false), status.value(), ex.getMessage());
+            return buildErrorResponse(status, ex.getMessage(), request);
+        }
+        log.error("FHIR operation failed at path {}", request.getDescription(false), ex);
+        return buildErrorResponse(status, "An unexpected error occurred.", request);
     }
 
     @ExceptionHandler(RuntimeException.class)

@@ -1,6 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -47,7 +47,11 @@ describe('PatientDetailComponent', () => {
   } as any;
 
   beforeEach(async () => {
-    patientServiceSpy = jasmine.createSpyObj('PatientService', ['getById', 'addressHistory']);
+    patientServiceSpy = jasmine.createSpyObj('PatientService', [
+      'getById',
+      'addressHistory',
+      'downloadFhirRecord',
+    ]);
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
@@ -488,6 +492,90 @@ describe('PatientDetailComponent', () => {
 
       expect(component.addressHistoryLoaded()).toBeFalse();
       expect(toastSpy.error).toHaveBeenCalled();
+    });
+  });
+
+  describe('record download failure reporting', () => {
+    // The request is responseType: 'blob', so an error body arrives as a Blob
+    // and err.error.message is always undefined. Before this, every cause —
+    // wrong hospital scope, expired session, backend down — produced the same
+    // "could not be downloaded" toast.
+    // Blob.text() is a real async read, so a single macrotask tick is not
+    // enough and a fixed delay would be flaky. Spin until the toast fires.
+    const settle = async () => {
+      for (let i = 0; i < 50 && !toastSpy.error.calls.any(); i++) {
+        await new Promise((res) => setTimeout(res, 0));
+      }
+    };
+
+    const errorOf = (status: number, body: unknown) =>
+      new HttpErrorResponse({
+        status,
+        error: new Blob([typeof body === 'string' ? body : JSON.stringify(body)], {
+          type: 'application/json',
+        }),
+      });
+
+    it("shows the server's own wording, which names the remedy", async () => {
+      patientServiceSpy.downloadFhirRecord.and.returnValue(
+        throwError(() =>
+          errorOf(404, {
+            message: 'Patient/p1 is not registered at your active hospital.',
+          }),
+        ),
+      );
+
+      component.downloadRecord();
+      await settle();
+
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'Patient/p1 is not registered at your active hospital.',
+      );
+      expect(component.recordDownloadLoading()).toBeFalse();
+    });
+
+    it('falls back to the wrong-hospital key when the 404 body is unparseable', async () => {
+      patientServiceSpy.downloadFhirRecord.and.returnValue(
+        throwError(() => errorOf(404, '<html>gateway</html>')),
+      );
+
+      component.downloadRecord();
+      await settle();
+
+      expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.DOWNLOAD_RECORD_WRONG_HOSPITAL');
+    });
+
+    it('keeps the generic message for a non-404, so a 500 is not blamed on scope', async () => {
+      patientServiceSpy.downloadFhirRecord.and.returnValue(
+        throwError(() => errorOf(500, 'not json')),
+      );
+
+      component.downloadRecord();
+      await settle();
+
+      expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.DOWNLOAD_RECORD_FAILED');
+    });
+
+    it('handles an error with no Blob body at all (network failure)', () => {
+      patientServiceSpy.downloadFhirRecord.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 0, error: new ProgressEvent('error') })),
+      );
+
+      component.downloadRecord();
+
+      expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.DOWNLOAD_RECORD_FAILED');
+      expect(component.recordDownloadLoading()).toBeFalse();
+    });
+
+    it('clears the loading flag so the button is not stuck after a failure', async () => {
+      patientServiceSpy.downloadFhirRecord.and.returnValue(
+        throwError(() => errorOf(404, { message: 'nope' })),
+      );
+
+      component.downloadRecord();
+      await settle();
+
+      expect(component.recordDownloadLoading()).toBeFalse();
     });
   });
 });
