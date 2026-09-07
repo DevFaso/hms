@@ -94,4 +94,19 @@ class LoginAttemptServiceTest {
         svc.renameKey("nobody", "another");    // nothing under the old key
         assertThat(svc.isLocked("another")).isFalse();
     }
+
+    @Test
+    void renameKey_clearsTheDestinationEvenWhenTheOldKeyHoldsNothing() {
+        LoginAttemptService svc = service;
+        // Failures are recorded for unknown usernames too, so an unused name
+        // can already be locked. Renaming into it must not inherit that.
+        for (int i = 0; i < LoginAttemptService.MAX_ATTEMPTS; i++) {
+            svc.recordFailure("taken");
+        }
+        assertThat(svc.isLocked("taken")).isTrue();
+
+        svc.renameKey("nobody", "taken");
+
+        assertThat(svc.isLocked("taken")).isFalse();
+    }
 }

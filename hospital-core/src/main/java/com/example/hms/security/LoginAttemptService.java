@@ -69,10 +69,16 @@ public class LoginAttemptService {
             return;
         }
         AttemptRecord carried = attempts.remove(oldKey);
-        if (carried != null) {
-            attempts.put(newKey, carried);
-            log.info("[LOGIN-THROTTLE] Carried throttle state across a rename");
+        if (carried == null) {
+            // Nothing to carry — but the destination must still be cleared.
+            // Failures are recorded for unknown usernames too, so an unused
+            // name can already be locked; renaming into it would otherwise
+            // lock the renamed account out for up to the lock duration.
+            attempts.remove(newKey);
+            return;
         }
+        attempts.put(newKey, carried);
+        log.info("[LOGIN-THROTTLE] Carried throttle state across a rename");
     }
 
     /**

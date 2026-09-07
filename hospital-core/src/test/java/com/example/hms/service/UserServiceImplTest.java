@@ -1282,6 +1282,23 @@ class UserServiceImplTest {
             verify(loginAttemptService, never()).resetAttempts(any());
         }
 
+        @Test
+        @DisplayName("changeOwnUsername carries the lockout too — it is the second rename path")
+        void selfRenameCarriesTheLockout() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("someone");
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.findByUsername("renamed")).thenReturn(Optional.empty());
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            userService.changeOwnUsername(userId, "renamed");
+
+            // Reachable with a valid token while the account is locked out, so
+            // without this a self-service rename walks free.
+            verify(loginAttemptService).renameKey("someone", "renamed");
+        }
+
         private User reactivationTarget(boolean alreadyActive) {
             User target = new User();
             target.setId(userId);

@@ -1063,19 +1063,25 @@ public class UserServiceImpl implements UserService {
 
         log.info("♻️ User restored with ID: {}", id);
 
-        String displayName = UserDisplayUtil.resolveDisplayName(user);
-        try {
-            // After commit, like the reset above: a failure in the staff loop
-            // or at commit would otherwise deliver "your account has been
-            // restored" for a restore that never happened.
-            final String restoredTo = user.getEmail();
-            final String restoredName = displayName;
-            TransactionCallbacks.afterCommit(
-                () -> emailService.sendAccountRestoredEmail(restoredTo, restoredName));
-        } catch (Exception e) {
-            log.warn("⚠️ Failed to send account-restored notification to '{}': {}",
-                    user.getEmail(), e.getMessage());
-        }
+        // After commit, like the reset above: a failure in the staff loop or at
+        // commit would otherwise deliver "your account has been restored" for a
+        // restore that never happened.
+        //
+        // The try/catch lives INSIDE the callback, not around the registration.
+        // Spring propagates after-commit exceptions to whoever called commit(),
+        // so a catch around the registration guards nothing once the send moves
+        // into the callback — and restoring a phone-first patient (email is
+        // nullable since V107) throws on a null recipient, which would turn a
+        // committed restore into a 500.
+        final String restoredTo = user.getEmail();
+        final String restoredName = UserDisplayUtil.resolveDisplayName(user);
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                emailService.sendAccountRestoredEmail(restoredTo, restoredName);
+            } catch (Exception e) {
+                log.warn("⚠️ Failed to send account-restored notification: {}", e.getMessage());
+            }
+        });
     }
 
     @Override
@@ -1340,9 +1346,17 @@ public class UserServiceImpl implements UserService {
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
             throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
         }
+        final String previousUsername = user.getUsername();
         user.setUsername(newUsername);
         user.setForceUsernameChange(false);
         userRepository.save(user);
+        // The second rename path. The throttle counter is keyed on the
+        // username, and this endpoint is reachable with a valid token while
+        // the account is locked out, so without carrying the state across a
+        // self-service rename would void a live lockout — the same primitive
+        // updateUser closes.
+        TransactionCallbacks.afterCommit(
+            () -> loginAttemptService.renameKey(previousUsername, newUsername));
         log.info("🔑 [CHANGE-USR] Username updated and forceUsernameChange cleared for user={}", userId);
     }
 
