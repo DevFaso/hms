@@ -638,13 +638,12 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
 
-        // Failures are recorded for usernames that do not exist, so a name
-        // guessed at before the account was created can already be locked.
-        // Clear it, or the new holder is refused at their first login. After
-        // commit, like every other throttle write here: a licence conflict in
-        // upsertStaff or the 20s transaction timeout would otherwise clear the
-        // counter for a registration that rolled back.
-        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(username));
+        // No throttle clear here, deliberately. A name guessed at before the
+        // account existed can be locked, but this account is created INACTIVE
+        // (below), so the disabled arm of /auth/login keeps recording failures
+        // against the same key until the confirmation code is entered — and
+        // activateVerifiedAssignment clears it after commit at that point.
+        // Clearing here would be undone before it mattered.
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
