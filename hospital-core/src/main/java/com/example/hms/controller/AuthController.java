@@ -463,6 +463,12 @@ public class AuthController {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+        // Refusals collected while the account was inactive must not outlive
+        // the activation: the disabled arm of /auth/login counts toward the
+        // lockout, so five attempts before verifying would otherwise leave the
+        // holder locked out at the moment the link finally works. This is the
+        // endpoint that actually runs — UserService#verifyEmail has no caller.
+        loginAttemptService.resetAttempts(user.getUsername());
 
         // 2. Activate all patient role assignments for this user
         var assignments = assignmentRepository.findByUserId(user.getId());

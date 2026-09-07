@@ -1065,6 +1065,9 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setActive(true);
         userRepository.save(user);
+        // Same rule as every other activation: a lockout collected while the
+        // account was switched off must not survive it being switched on.
+        loginAttemptService.resetAttempts(user.getUsername());
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1111,7 +1114,12 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
+            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
+                    && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
+            if (reactivated) {
+                loginAttemptService.resetAttempts(user.getUsername());
+            }
         }
 
         // Password: only update if a new non-blank password is explicitly provided

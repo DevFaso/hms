@@ -69,6 +69,7 @@ class UserServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private PasswordHistoryService passwordHistoryService;
+    @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
 
     @InjectMocks
