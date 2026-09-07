@@ -1592,6 +1592,19 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- The email-activation **link** has no landing page. `sendActivationEmail`
+  builds `${app.frontend.base-url}/verify?email=&token=` (public
+  self-registration, and `POST /auth/resend-verification`), but `verify` is not
+  a route in `app.routes.ts` — the `**` fallback redirects it to `/login`, so
+  the link silently does nothing. There is also no "resend activation" control
+  anywhere in the portal, so `/auth/resend-verification` is reachable only by
+  hand. Self-registration itself is 410 Gone, which is why this went unnoticed:
+  the only live producer of that link is the resend endpoint. Either add the
+  `/verify` route (calling `GET /auth/verify-email`) plus a resend affordance
+  on the login screen, or retire the link and move those accounts onto the
+  confirmation-code path everyone else uses. Found by the #569 review while
+  making the disabled-login message name a route that actually exists.
+
 - Hospital scope is applied page by page: after #566, 18 of ~115 staff routes
   carry the scope chip and gate on `RoleContextService.hasHospitalScope`, while
   every other route whose backend calls `requireActiveHospitalId()` (imaging,

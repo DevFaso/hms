@@ -115,16 +115,24 @@ public interface EmailService {
     void sendPasswordRotationForceChangeEmail(String to, String displayName, LocalDate dueOn, long daysOverdue);
 
     /**
-     * Sent to a newly admin-created staff/admin user to welcome them, confirm
-     * the account exists, and provide their temporary login credentials so they
-     * can sign in and change their password on first login.
+     * Sent to a newly admin-created staff/admin user with their temporary
+     * credentials.
      *
-     * @param to           recipient email address
-     * @param displayName  first + last name (or username as fallback)
-     * @param username     the account username
-     * @param tempPassword the plain-text temporary password (shown once)
-     * @param roleName     human-readable role label, e.g. "Hospital Admin"
-     * @param hospitalName hospital the user was assigned to (may be null for global roles)
+     * <p>The account is created INACTIVE (option A, 2026-09-02): the holder
+     * must first confirm the role assignment with the code delivered in the
+     * assignment message. This mail therefore points at activation, not at
+     * the login page — telling an inactive user to "sign in immediately"
+     * sends them to a rejection they cannot act on, which is precisely how a
+     * delivered activation code got reported as "no activation email".
+     *
+     * @param to            recipient email address
+     * @param displayName   first + last name (or username as fallback)
+     * @param username      the account username
+     * @param tempPassword  the plain-text temporary password (shown once)
+     * @param roleName      human-readable role label, e.g. "Hospital Admin"
+     * @param hospitalName  hospital the user was assigned to (may be null for global roles)
+     * @param activationUrl where to enter the confirmation code; null falls back
+     *                      to generic wording that still names the step
      */
     void sendAdminWelcomeEmail(
         String to,
@@ -132,7 +140,8 @@ public interface EmailService {
         String username,
         String tempPassword,
         String roleName,
-        String hospitalName
+        String hospitalName,
+        String activationUrl
     );
 
     /**

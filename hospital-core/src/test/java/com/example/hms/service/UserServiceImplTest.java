@@ -69,6 +69,7 @@ class UserServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private PasswordHistoryService passwordHistoryService;
+    @Mock private AssignmentLinkService assignmentLinkService;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -1144,6 +1145,52 @@ class UserServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
 
             verify(userRepository, never()).save(any());
+        }
+    }
+
+    // =========================================================================
+    // soleAssignmentCode — which code the welcome mail is allowed to link
+    // =========================================================================
+
+    @Nested
+    @DisplayName("soleAssignmentCode")
+    class SoleAssignmentCode {
+
+        private UserRoleHospitalAssignment withCode(String code) {
+            var a = new UserRoleHospitalAssignment();
+            a.setAssignmentCode(code);
+            return a;
+        }
+
+        @Test
+        @DisplayName("links the code when there is exactly one assignment")
+        void singleAssignment() {
+            assertThat(UserServiceImpl.soleAssignmentCode(List.of(withCode("A-1")))).isEqualTo("A-1");
+        }
+
+        @Test
+        @DisplayName("links nothing when two roles mean two different codes")
+        void twoAssignmentsAreAmbiguous() {
+            // Each assignment mails its own code and its own link; picking one
+            // here would make the other mail's code fail on the linked screen.
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode("A-1"), withCode("A-2")))).isNull();
+        }
+
+        @Test
+        @DisplayName("treats repeated codes as the one assignment they are")
+        void duplicateCodesCollapse() {
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode("A-1"), withCode("A-1")))).isEqualTo("A-1");
+        }
+
+        @Test
+        @DisplayName("links nothing when no assignment carries a code yet")
+        void noCodes() {
+            assertThat(UserServiceImpl.soleAssignmentCode(
+                List.of(withCode(null), withCode("  ")))).isNull();
+            assertThat(UserServiceImpl.soleAssignmentCode(List.of())).isNull();
+            assertThat(UserServiceImpl.soleAssignmentCode(null)).isNull();
         }
     }
 }

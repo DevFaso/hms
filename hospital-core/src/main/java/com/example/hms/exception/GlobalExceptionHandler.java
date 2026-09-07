@@ -280,6 +280,26 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
+    /**
+     * A channel with no transport behind it is a deployment gap, not a caller
+     * mistake — 503, and the message reaches the user's screen unprefixed.
+     *
+     * <p>This handler is what makes the 503 real: {@code @ResponseStatus} on
+     * the exception is dead here, because {@link #handleRuntimeException}
+     * below claims every RuntimeException and Spring runs
+     * {@code ExceptionHandlerExceptionResolver} before
+     * {@code ResponseStatusExceptionResolver}. Without this method the
+     * receptionist would read "An unexpected error occurred: SMS
+     * verification is unavailable right now" off a 500.
+     */
+    @ExceptionHandler(NotificationTransportUnavailableException.class)
+    public ResponseEntity<Object> handleNotificationTransportUnavailable(
+            NotificationTransportUnavailableException ex, WebRequest request) {
+        // No stack trace: the gateway already logged which property is missing.
+        log.warn("Notification transport unavailable at path {}", request.getDescription(false));
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     @SuppressWarnings("java:S2629")
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {

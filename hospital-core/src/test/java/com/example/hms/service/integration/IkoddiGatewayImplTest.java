@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -98,15 +99,48 @@ class IkoddiGatewayImplTest {
     }
 
     @Test
-    @DisplayName("unconfigured gateway refuses OTP calls with a clear IllegalStateException")
+    @DisplayName("unconfigured gateway refuses OTP calls without leaking property names to the caller")
     void unconfiguredGatewayRefuses() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
         IkoddiGatewayImpl unconfigured = new IkoddiGatewayImpl(builder.build(), false, "",
             "", "", "HMS", "BF", "226");
 
         assertThat(unconfigured.isConfigured()).isFalse();
+        // 503, not 400: the deployment is incomplete, the caller did nothing
+        // wrong. And the message reaches a receptionist's screen verbatim, so
+        // it must read as guidance — never "Set app.ikoddi.enabled plus
+        // api-key, organization-id and otp-app-id", which is what it used to say.
         assertThatThrownBy(() -> unconfigured.sendOtp("+22670707070", IkoddiGateway.OtpChannel.SMS))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("not configured");
+            .isInstanceOf(NotificationTransportUnavailableException.class)
+            .hasMessageContaining("unavailable")
+            .hasMessageNotContaining("app.ikoddi")
+            .hasMessageNotContaining("api-key");
+    }
+
+    @Test
+    @DisplayName("unconfigured gateway refuses SMS sends the same way")
+    void unconfiguredGatewayRefusesSms() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
+        IkoddiGatewayImpl unconfigured = new IkoddiGatewayImpl(builder.build(), false, "",
+            "", "", "HMS", "BF", "226");
+
+        assertThatThrownBy(() ->
+            unconfigured.sendSms(java.util.List.of("+22670707070"), "hello", null))
+            .isInstanceOf(NotificationTransportUnavailableException.class)
+            .hasMessageNotContaining("app.ikoddi");
+    }
+
+    @Test
+    @DisplayName("credentials present but the switch left off still counts as unavailable")
+    void enabledFlagIsRequired() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
+        IkoddiGatewayImpl offSwitch = new IkoddiGatewayImpl(builder.build(), false, "key",
+            "org", "otp-app", "HMS", "BF", "226");
+
+        // The exact deployment state on dev and prod when this was written:
+        // every credential set, IKODDI_ENABLED never added.
+        assertThat(offSwitch.isConfigured()).isFalse();
+        assertThatThrownBy(() -> offSwitch.sendOtp("+22670707070", IkoddiGateway.OtpChannel.SMS))
+            .isInstanceOf(NotificationTransportUnavailableException.class);
     }
 }

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -12,9 +13,14 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.Session;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
@@ -46,6 +52,40 @@ class EmailServiceImplTest {
      */
     private void stubMailSender() {
         doNothing().when(mailSender).send(any(MimeMessagePreparator.class));
+    }
+
+    /**
+     * Runs the captured preparator against a real (unsent) MimeMessage so a
+     * test can assert on the copy itself. The wording is the product here:
+     * this mail told inactive accounts to sign in immediately, which is how a
+     * delivered activation code got reported as a missing activation email.
+     */
+    private String renderedHtml() {
+        ArgumentCaptor<MimeMessagePreparator> captor =
+            ArgumentCaptor.forClass(MimeMessagePreparator.class);
+        verify(mailSender).send(captor.capture());
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        try {
+            captor.getValue().prepare(message);
+            return message.getSubject() + System.lineSeparator() + collectText(message.getContent());
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not render the prepared message", e);
+        }
+    }
+
+    /** Flattens whatever the helper built (String, or a multipart tree). */
+    private static String collectText(Object content) throws Exception {
+        if (content instanceof String text) {
+            return text;
+        }
+        if (content instanceof jakarta.mail.Multipart multipart) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < multipart.getCount(); i++) {
+                sb.append(collectText(multipart.getBodyPart(i).getContent()));
+            }
+            return sb.toString();
+        }
+        return String.valueOf(content);
     }
 
     // =========================================================================
@@ -250,7 +290,8 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
-                "Temp@1234", "Hospital Admin", "City General Hospital");
+                "Temp@1234", "Hospital Admin", "City General Hospital",
+                "https://portal.example/onboarding/role-welcome?assignment=A-1");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
         }
 
@@ -260,7 +301,8 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", "Jane Doe", "janedoe",
-                "Temp@1234", "Super Admin", null);
+                "Temp@1234", "Super Admin", null,
+                "https://portal.example/onboarding/role-welcome?assignment=A-2");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
         }
 
@@ -270,8 +312,51 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
                 "admin@hospital.com", null, "janedoe",
-                "Temp@1234", "Doctor", "City Hospital");
+                "Temp@1234", "Doctor", "City Hospital", null);
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("points at activation, never at an immediate sign-in the account would refuse")
+        void leadsWithActivationNotLogin() {
+            stubMailSender();
+            String activationUrl = "https://dev.e-keneya.com/onboarding/role-welcome?assignment=A-77";
+            emailService.sendAdminWelcomeEmail(
+                "nurse@hospital.com", "Awa Traore", "atraore",
+                "Temp@1234", "Nurse", "City General Hospital", activationUrl);
+
+            String html = renderedHtml();
+            assertThat(html).contains(activationUrl);
+            assertThat(html).contains("Activate My Account");
+            // The account is inactive at this moment: nothing may promise
+            // sign-in as the next step, and the subject must not claim ready.
+            assertThat(html).doesNotContain("You can sign in immediately");
+            assertThat(html).doesNotContain("Sign In to Your Account");
+            assertThat(html).doesNotContain("Your Account Is Ready");
+        }
+
+        @Test
+        @DisplayName("offers no button at all when no activation URL is known")
+        void namesTheStepWithoutAUrl() {
+            stubMailSender();
+            emailService.sendAdminWelcomeEmail(
+                "nurse@hospital.com", "Awa Traore", "atraore",
+                "Temp@1234", "Nurse", "City General Hospital", null);
+
+            String html = renderedHtml();
+            assertThat(html).contains("confirmation code");
+            assertThat(html).doesNotContain("Sign In to Your Account");
+            assertThat(html).doesNotContain("You can sign in immediately");
+            // This branch is what a two-role registration gets. A prominent
+            // button is only ever offered for the activation screen: pointing
+            // one at /login would lead straight to the rejection this mail
+            // exists to prevent. The login address stays as secondary text.
+            assertThat(html).doesNotContain("display:inline-block");
+            assertThat(html).contains("/login");
+            // Names the code, never a link: a blank profile-completion
+            // template is one of the two ways the URL is null, and in that
+            // configuration the assignment mail carries no link either.
+            assertThat(html).contains("confirmation code in that message");
         }
 
         @Test
@@ -279,7 +364,7 @@ class EmailServiceImplTest {
         void rejectsNullRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital"))
+                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -288,7 +373,7 @@ class EmailServiceImplTest {
         void rejectsInvalidRecipient() {
             assertThatThrownBy(() ->
                 emailService.sendAdminWelcomeEmail(
-                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital"))
+                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital", null))
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }

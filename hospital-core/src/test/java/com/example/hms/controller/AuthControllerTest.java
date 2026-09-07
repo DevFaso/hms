@@ -34,8 +34,10 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -694,5 +696,38 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/auth/token/refresh"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // =====================================================================
+    // Disabled-account guidance
+    // =====================================================================
+
+    @Test
+    void login_disabledAccount_namesBothRoutesAndDisclosesNoState() throws Exception {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new DisabledException("Account is disabled"));
+
+        var result = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "AnyPass1!", null))))
+                .andExpect(status().isUnauthorized())
+                // Both routes named, neither asserted: patients activate with a
+                // link, staff with a role-confirmation code, and a deactivated
+                // account has neither.
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("activation link or confirmation code")))
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("contact your administrator")))
+                // The old text sent everyone to an email-verification flow that
+                // only self-registered patients have.
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("verify your email"))))
+                .andReturn();
+
+        // isEnabled is checked before the password, so this arm answers
+        // unauthenticated probes: it must not look the account up at all.
+        verify(userRepository, never()).findByUsername("someone");
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
     }
 }

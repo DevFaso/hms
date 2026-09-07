@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
@@ -1616,6 +1617,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                      : NotificationDeliveryStatusDTO.OUTCOME_MOCKED,
                 ActivationDeliveryTracker.maskPhone(phone),
                 real ? null : "SMS transport disabled — mock channel only logs");
+        } catch (NotificationTransportUnavailableException ex) {
+            // "No transport" is not "the send failed" — the registrar's next
+            // move is to have an operator finish the SMS configuration, not
+            // to retry the same registration.
+            log.warn("⚠️ SMS transport unavailable for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
+                ActivationDeliveryTracker.maskPhone(phone), DETAIL_SEE_SERVER_LOGS);
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send confirmation SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
             // detail is a FIXED string: exception messages can embed the raw

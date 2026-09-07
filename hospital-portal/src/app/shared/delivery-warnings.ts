@@ -23,8 +23,13 @@ export function deliveryWarningKeys(
 ): string[] {
   if (!report?.length) return [];
   const keys = new Set<string>();
+  // Tracked separately from `keys`: a CREDENTIALS or WELCOME problem says
+  // nothing about whether the activation itself has a route, and using an
+  // empty key set as the trigger let exactly those keys mask the case below.
+  let activationProblemReported = false;
   for (const r of report) {
     if (!PROBLEM_OUTCOMES.includes(r.outcome)) continue;
+    if ((r.purpose ?? 'ACTIVATION') === 'ACTIVATION') activationProblemReported = true;
     // Purpose-specific wording: a failed WELCOME mail next to a delivered
     // activation email must not read as "activation email failed".
     if (r.purpose === 'WELCOME') {
@@ -36,6 +41,14 @@ export function deliveryWarningKeys(
     } else {
       keys.add(r.outcome === 'FAILED' ? 'DELIVERY.SMS_FAILED' : 'DELIVERY.SMS_NOT_CONFIGURED');
     }
+  }
+  // A report made entirely of NO_CONTACT rows produces no key above — each
+  // row is individually unremarkable ("this patient has no email") while
+  // together they mean the account has no way in at all: created inactive,
+  // confirmation code sitting in the database. Warn whenever nothing proves
+  // an activation went out and nothing already said why.
+  if (!activationProblemReported && !hasActivationSent(report)) {
+    keys.add('DELIVERY.NO_ACTIVATION_CHANNEL');
   }
   return [...keys];
 }
