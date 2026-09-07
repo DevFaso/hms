@@ -1662,9 +1662,11 @@ all exist and are reachable.
   registration: ~25 `isRegisteredInHospital` calls ask "is this patient known
   at my hospital", while ~123 `findByPatient_IdAndHospital_Id` calls filter the
   **clinical row's own `hospital_id`** — row provenance, not a relationship.
-  #48's predicate governs the first group; the second is what #49 actually has
-  to rewrite, across 35 entity repositories, and no decision about registration
-  changes it. Registration itself is the weakest carrier — "known here", not
+  #48's predicate governs part of the first group only: roughly 13 of the ~22
+  `isRegisteredInHospital` call sites are WRITE guards, which #49 leaves alone,
+  so the predicate actually lands on ~9. The ~81 `findByPatient_IdAndHospital_Id`
+  call sites across 35 entity repositories are what #49 has to rewrite, and no
+  decision about registration changes them. Registration itself is the weakest carrier — "known here", not
   "being treated here" — so decide explicitly whether it counts, and if it
   does, make sure #52's opt-out reaches it; otherwise it is a second
   authorisation path around the switch. One injectable, one method, one cache per
@@ -1675,6 +1677,10 @@ all exist and are reachable.
   are all consumers of it.
 - [ ] 49. **Replace the hospital-scoped read filter.** Today ~148 call sites
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
+  ⚠ Raw grep says 148, but ~42 of those are the repository declarations
+  themselves and 3 are definitions: the real **call-site** surface is ~103, of
+  which ~81 are the derived finders below. Use the smaller figure when sizing —
+  the inflated one is what the "cannot be hand-edited" argument leaned on.
   The new rule: rows from the actor's own hospital as now, PLUS rows from other
   `ROW_LEVEL` hospitals when #48 says a treatment relationship exists. The
   count is the risk.
@@ -1683,13 +1689,19 @@ all exist and are reachable.
   `SlotInventory`, `NurseTask` create paths among them. A blanket replacement
   widens cross-hospital *writes*, which this decision does not authorise.
   Classify the 148 first; the write guards stay as they are.
-  ⚠ **The shared filter already exists — adopt it, do not invent one.**
-  `TenantAwareJpaRepository`, `TenantScopeSpecification`, `TenantScoped`,
-  `TenantEntityListener` and `TenantContextAccessor` all ship, wired by
-  `TenantRepositoryConfig`; exactly one repository (`PatientRepository`) has
-  adopted them. The item is "extend that predicate with the treatment
-  relationship and roll it out to the rest", a different and better-understood
-  job than building a second mechanism beside it.
+  ⚠ **A tenant-filter framework ships, but it does not reach this population
+  — and that is the crux of the item.** `TenantRepositoryConfig` sets
+  `repositoryBaseClass = TenantAwareJpaRepository`, so all 35 repositories
+  already extend it; opt-in is entity-level (`implements TenantScoped`, carried
+  by 7 entities so far). It intercepts only the `Specification` query paths
+  plus `findById` / `existsById` / `getReferenceById`. **Derived finders and
+  `@Query` methods bypass it entirely** — and every `findByPatient_IdAndHospital_Id`
+  is a derived finder. So "adopt the existing filter" is not a drop-in
+  mitigation for the ~81 sites that matter; the real work is converting those
+  finders to the Specification path (or giving them a marker the base class can
+  act on) so the framework can see them at all. `PatientRepository`'s own
+  reference to the class is the Javadoc on `findByIdUnscoped`, documenting a
+  deliberate bypass — read that before designing around it.
   ⚠ **The guard test has no marker to scan for.** `SchedulerLockCoverageTest`
   works because `@Scheduled` is enumerable; nothing means "patient-scoped
   query". Defining that marker is part of this item, or the only stated
