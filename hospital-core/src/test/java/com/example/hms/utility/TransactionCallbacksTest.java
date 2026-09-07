@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The deferral itself, which every caller's correctness rests on.
@@ -25,9 +24,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * the wiring of any particular caller. They do not catch a caller that moves
  * its own try/catch outside the lambda — that needs a real transaction manager
  * around the service, which the unit suite does not have. The one behaviour
- * that makes such a move dangerous is asserted below
- * ({@code aThrowingActionPropagatesToTheCommitter}); the callers each carry a
- * comment saying why they guard themselves.
+ * that makes such a move dangerous — Spring handing an after-commit failure
+ * to the caller of {@code commit()} — is a framework guarantee
+ * ({@code AbstractPlatformTransactionManager#processCommit} →
+ * {@code triggerAfterCommit}), not something this suite can assert without a
+ * real transaction manager: driving {@code afterCommit()} by hand would only
+ * prove that a throwing Runnable throws. The callers each carry a comment
+ * saying why they guard themselves.
  */
 @DisplayName("TransactionCallbacks")
 class TransactionCallbacksTest {
@@ -91,23 +94,6 @@ class TransactionCallbacksTest {
         commit();
 
         assertThat(order).hasToString("ab");
-    }
-
-    @Test
-    @DisplayName("a throwing action reaches whoever called commit — so callers must guard their own")
-    void aThrowingActionPropagatesToTheCommitter() {
-        TransactionSynchronizationManager.initSynchronization();
-        TransactionCallbacks.afterCommit(() -> {
-            throw new IllegalArgumentException("Recipient address must not be null");
-        });
-
-        // This is why the callers wrap their own body in try/catch INSIDE the
-        // lambda rather than around the registration: Spring hands an
-        // after-commit failure to the caller of commit(), so an unguarded send
-        // would turn an already-committed write into a 500. Restoring a
-        // phone-first patient (email nullable since V107) throws exactly this.
-        assertThatThrownBy(TransactionCallbacksTest::commit)
-            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static void commit() {

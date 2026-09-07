@@ -1101,10 +1101,13 @@ public class UserServiceImpl implements UserService {
             try {
                 emailService.sendAccountRestoredEmail(restoredTo, restoredName);
             } catch (Exception e) {
-                // Id, not the address: this line must stay traceable without
-                // putting a contact detail in the log.
+                // Id and exception type only. getMessage() is not safe here:
+                // validateAddresses formats "Invalid email format: <addr>",
+                // and a MailSendException carries the recipient too — so
+                // logging the message would put a contact detail in the log
+                // for exactly the malformed-address case this catches.
                 log.warn("⚠️ Failed to send account-restored notification for user {}: {}",
-                        restoredUserId, e.getMessage());
+                        restoredUserId, e.getClass().getSimpleName());
             }
         });
     }
