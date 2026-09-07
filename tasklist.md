@@ -1592,6 +1592,16 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- **Outbound mail is sent on the request thread**, inside or just after the
+  transaction. `TransactionCallbacks.afterCommit` fires before
+  `cleanupAfterCompletion` releases the JDBC connection, so a stalled SMTP host
+  pins a Hikari connection for the full send timeout — on registration, on
+  account restore, and on the assignment notifications. Deferring to after
+  commit (#573) made it strictly better than sending inside the transaction,
+  but the send still owns a connection and a request thread it does not need.
+  The instrument outbox is the pattern to copy: persist the message, dispatch
+  it from a sweep. Surfaced by the #573 review.
+
 - A **rename voids a live login lockout**, and carrying the throttle across a
   rename is not the fix. `LoginAttemptService` keys on `username.toLowerCase()`
   while `uq_user_username` (V1_1) indexes the username verbatim, so `Victim` and

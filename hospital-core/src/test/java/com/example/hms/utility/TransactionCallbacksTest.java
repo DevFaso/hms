@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The deferral itself, which every caller's correctness rests on.
@@ -81,6 +82,23 @@ class TransactionCallbacksTest {
         commit();
 
         assertThat(order).hasToString("ab");
+    }
+
+    @Test
+    @DisplayName("a throwing action reaches whoever called commit — so callers must guard their own")
+    void aThrowingActionPropagatesToTheCommitter() {
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionCallbacks.afterCommit(() -> {
+            throw new IllegalArgumentException("Recipient address must not be null");
+        });
+
+        // This is why the callers wrap their own body in try/catch INSIDE the
+        // lambda rather than around the registration: Spring hands an
+        // after-commit failure to the caller of commit(), so an unguarded send
+        // would turn an already-committed write into a 500. Restoring a
+        // phone-first patient (email nullable since V107) throws exactly this.
+        assertThatThrownBy(TransactionCallbacksTest::commit)
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static void commit() {

@@ -1080,6 +1080,11 @@ public class UserServiceImpl implements UserService {
         // into the callback — and restoring a phone-first patient (email is
         // nullable since V107) throws on a null recipient, which would turn a
         // committed restore into a 500.
+        // Residual, and no worse than before: an after-commit callback runs
+        // before the connection is released, so a stalled SMTP host pins a
+        // pool connection for the send timeout. The previous inline send held
+        // the connection AND the transaction, so this is strictly better —
+        // moving mail off the request thread entirely is in tasklist.md.
         final UUID restoredUserId = user.getId();
         final String restoredTo = user.getEmail();
         final String restoredName = UserDisplayUtil.resolveDisplayName(user);
