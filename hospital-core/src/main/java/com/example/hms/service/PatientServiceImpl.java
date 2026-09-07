@@ -8,6 +8,8 @@ import com.example.hms.enums.ProblemChangeType;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.exception.ConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.example.hms.mapper.AdvanceDirectiveMapper;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.mapper.NursingNoteMapper;
@@ -454,6 +456,27 @@ public class PatientServiceImpl implements PatientService {
         // Remove non-cascaded child records before deleting the patient
         patientProxyRepository.deleteByGrantorPatient_Id(id);
         patientRepository.deleteById(id);
+        try {
+            // The flush is what makes this method honest. deleteById only
+            // queues the removal, so without it the DELETE reaches the
+            // database at commit — long after this method returned — and the
+            // foreign keys added in V156 would surface as an unhandled
+            // integrity error on the way out instead of the 409 below.
+            patientRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            // V156 constrains the core clinical tables with RESTRICT, so this
+            // is the chart refusing to be orphaned. Before those keys existed
+            // the delete succeeded and left consultations, admissions and the
+            // rest holding PHI with no patient attached — unattributable in an
+            // audit and unreachable by an ROI or erasure request.
+            //
+            // Deliberately NOT recovered from: the rollback also restores the
+            // patient_proxies rows deleted just above, which is the outcome we
+            // want when the patient survives.
+            log.warn("[deletePatient] Refused — patient {} still has clinical records", id);
+            throw new ConflictException(messageSource.getMessage(
+                "patient.delete.hasclinicalrecords", new Object[]{id}, locale));
+        }
     }
 
     @Override

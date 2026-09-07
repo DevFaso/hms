@@ -1801,6 +1801,27 @@ all exist and are reachable.
 
 ## Standing platform debt — owed, not parity
 
+- **37 more tables carry `patient_id` with no foreign key to
+  `clinical.patients`.** V156 constrained the ten core clinical ones
+  (consultations, admissions, encounters, prescriptions, vital signs,
+  allergies, problems, imaging orders, appointments, lab orders) after a hard
+  `deleteById` orphaned three consultations and an admission on dev
+  (2026-09-07). Of the 82 tables declaring `patient_id`, 35 had a key before
+  V156 and 10 gained one; the rest are still unconstrained — among them
+  `clinical.patient_uploaded_documents`, `clinical.discharge_summaries`,
+  `clinical.nursing_notes`, `clinical.encounter_notes`,
+  `clinical.medication_administration_records`, `clinical.roi_requests` and
+  `billing.billing_invoices`. Each needs its own judgement rather than a
+  blanket sweep: the `*_v2` tables belong to the legacy `patients_v2` orphan
+  stack and should not be constrained at all, and `empi.master_identities`
+  spans identities across tenants by design. The app-level refusal in
+  `deletePatient` covers all of them today, but only for callers that go
+  through the service.
+- **The orphans already on dev are not healed by V156.** NOT VALID leaves
+  them in place; the deploy log names them. Decide per row whether to
+  reconcile to a patient or delete, then
+  `ALTER TABLE … VALIDATE CONSTRAINT …` to close the table for good.
+
 - **Nothing enforces "every encounter write is scoped".** All ten mutating
   paths on `EncounterServiceImpl` now go through `requireEncounterInScope`
   (`deleteEncounter` is `ROLE_SUPER_ADMIN`-only and global by design), but the

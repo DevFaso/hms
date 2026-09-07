@@ -5,10 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
 
-import jakarta.persistence.QueryHint;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +32,6 @@ public interface StaffAvailabilityRepository extends JpaRepository<StaffAvailabi
            "LEFT JOIN FETCH d.departmentTranslations " +
            "LEFT JOIN FETCH sa.hospital " +
            "ORDER BY sa.date DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<StaffAvailability> findAllByOrderByDateDesc(Pageable pageable);
 
     // ── MVP 19: Hospital-scoped leave/absence queries ───────────

@@ -2336,4 +2336,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V156 — the FK that stops a patient delete from orphaning a chart.
+         47 of the 82 tables carrying patient_id had no foreign key to
+         clinical.patients; consultations and admissions were created
+         unconstrained in V1 and a hard deleteById left their PHI behind
+         with no identity attached. NO ACTION (the default) on
+         purpose — a chart must not vanish with the patient row. NOT VALID
+         so pre-existing orphans do not fail the deploy; deletes and new
+         rows are still checked.
+         ================================================================= -->
+    <changeSet id="V156-patient-fk-integrity" author="hms-team" runOnChange="false">
+        <sqlFile path="V156__patient_fk_integrity.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

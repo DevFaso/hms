@@ -16,6 +16,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -269,6 +271,90 @@ class LiquibaseSchemaIT {
                 + "'ADMITTED', NOW(), NOW())"))
                 .as("a registration referencing a non-existent patient must now be rejected")
                 .hasMessageContaining("fk_phr_patient");
+        }
+    }
+
+    /**
+     * V156: every one of the ten patient foreign keys has to exist, block the
+     * delete, and stay NOT VALID.
+     *
+     * <p>The delete behaviour is the whole point. {@code confdeltype = 'a'} is
+     * NO ACTION, which refuses to remove a patient that still has clinical
+     * rows. Anything else would reproduce the original bug: CASCADE would
+     * silently destroy the chart, and SET NULL would keep the PHI while
+     * detaching the identity — exactly the orphaned consultations the dev log
+     * showed on 2026-09-07.
+     */
+    @Test
+    void v156PatientForeignKeysBlockTheDeleteAndAreNotValid() throws Exception {
+        runLiquibaseUpdate();
+
+        record Fk(String schema, String table, String name) {}
+        List<Fk> expected = List.of(
+            new Fk("clinical", "consultations", "fk_consultations_patient"),
+            new Fk("public", "admissions", "fk_admissions_patient"),
+            new Fk("clinical", "encounters", "fk_encounters_patient"),
+            new Fk("clinical", "prescriptions", "fk_prescriptions_patient"),
+            new Fk("clinical", "patient_vital_signs", "fk_patient_vital_signs_patient"),
+            new Fk("clinical", "patient_allergies", "fk_patient_allergies_patient"),
+            new Fk("clinical", "patient_problems", "fk_patient_problems_patient"),
+            new Fk("clinical", "imaging_orders", "fk_imaging_orders_patient"),
+            new Fk("clinical", "appointments", "fk_appointments_patient"),
+            new Fk("lab", "lab_orders", "fk_lab_orders_patient"));
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            for (Fk fk : expected) {
+                try (ResultSet rs = stmt.executeQuery(
+                    "SELECT c.confdeltype, c.convalidated "
+                        + "FROM pg_constraint c "
+                        + "JOIN pg_class t ON t.oid = c.conrelid "
+                        + "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                        + "WHERE c.conname = '" + fk.name() + "' "
+                        + "  AND n.nspname = '" + fk.schema() + "' "
+                        + "  AND t.relname = '" + fk.table() + "'")) {
+
+                    assertThat(rs.next())
+                        .as("%s must exist on %s.%s", fk.name(), fk.schema(), fk.table())
+                        .isTrue();
+                    assertThat(rs.getString("confdeltype"))
+                        .as("%s must be NO ACTION so deleting the patient cannot orphan or "
+                            + "destroy the chart", fk.name())
+                        .isEqualTo("a");
+                    assertThat(rs.getBoolean("convalidated"))
+                        .as("%s must be NOT VALID so a surviving orphan cannot fail the deploy",
+                            fk.name())
+                        .isFalse();
+                }
+            }
+        }
+    }
+
+    /**
+     * Present but unenforced would reproduce the bug with extra steps. NOT
+     * VALID skips only the scan of pre-existing rows — new writes are checked.
+     */
+    @Test
+    void v156RejectsAConsultationForANonExistentPatient() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("INSERT INTO hospital.hospitals "
+                + "(id, name, code, active, created_at, updated_at) "
+                + "VALUES ('a0000000-0000-0000-0000-000000000156', "
+                + "'IT-Hospital-156', 'IT-FK156', TRUE, NOW(), NOW())");
+
+            assertThatCode(() -> stmt.executeUpdate("INSERT INTO clinical.consultations "
+                + "(id, patient_id, hospital_id, requesting_provider_id, specialty_requested, "
+                + " reason_for_consult, consultation_type, status, urgency, "
+                + " requested_at, created_at, updated_at) "
+                + "VALUES ('b0000000-0000-0000-0000-000000000156', "
+                + "'00000000-0000-0000-0000-0000000000fe', "
+                + "'a0000000-0000-0000-0000-000000000156', "
+                + "'c0000000-0000-0000-0000-000000000156', 'CARDIOLOGY', "
+                + "'IT reason', 'INPATIENT', 'REQUESTED', 'ROUTINE', "
+                + "NOW(), NOW(), NOW())"))
+                .as("a consultation referencing a non-existent patient must now be rejected")
+                .hasMessageContaining("fk_consultations_patient");
         }
     }
 

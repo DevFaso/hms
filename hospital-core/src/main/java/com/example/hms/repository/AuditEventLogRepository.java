@@ -7,12 +7,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import com.example.hms.enums.AuditStatus;
 
-import jakarta.persistence.QueryHint;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -35,12 +33,12 @@ public interface AuditEventLogRepository
      * Override the default findAll(Pageable) with an explicit DISTINCT query so that
      * Hibernate does not trigger a secondary unique-key lookup on Staff when the
      * hospital.staff table contains duplicate rows for the same PK.
-     * The passDistinctThrough=false hint removes SQL DISTINCT (which breaks pagination
-     * count) and deduplicates in-memory instead.
+     * (Hibernate 5's passDistinctThrough hint used to keep this DISTINCT out of
+     * the SQL; Hibernate 6 removed the setting, so the hint was dead code
+     * logging HHH90003003 on every call and has been dropped.)
      */
     @Override
     @Query("SELECT DISTINCT a FROM AuditEventLog a ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findAll(Pageable pageable);
 
     /**
@@ -49,7 +47,6 @@ public interface AuditEventLogRepository
      * Hibernate error when navigating to User (which has a OneToOne Staff back-ref).
      */
     @Query("SELECT DISTINCT a FROM AuditEventLog a ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findAllByOrderByEventTimestampDesc(Pageable pageable);
 
     /** Aggregate count of audit events grouped by event type (database-level). */
@@ -119,13 +116,13 @@ public interface AuditEventLogRepository
     /**
      * Date-range query with optional from/to bounds. Both params are nullable —
      * if null the respective bound is ignored, returning all records in the other direction.
-     * passDistinctThrough=false avoids SQL DISTINCT breaking pagination COUNT(*).
+     * (The old passDistinctThrough hint is gone: Hibernate 6 removed the
+     * setting, so it only logged HHH90003003.)
      */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
            "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
            "(:toDate IS NULL OR a.eventTimestamp <= :toDate) " +
            "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findByDateRange(@Param("fromDate") LocalDateTime fromDate,
                                         @Param("toDate") LocalDateTime toDate,
                                         Pageable pageable);
@@ -142,7 +139,6 @@ public interface AuditEventLogRepository
            "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
            "a.eventType IN :eventTypes " +
            "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findByDateRangeAndEventTypeIn(@Param("fromDate") LocalDateTime fromDate,
                                                      @Param("toDate") LocalDateTime toDate,
                                                      @Param("eventTypes") Collection<AuditEventType> eventTypes,
@@ -169,7 +165,6 @@ public interface AuditEventLogRepository
            + "AND (:fromDate IS NULL OR a.eventTimestamp >= :fromDate) "
            + "AND (:toDate IS NULL OR a.eventTimestamp <= :toDate) "
            + "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findDisclosuresForPatient(@Param("patientId") UUID patientId,
                                                   @Param("eventTypes") Collection<AuditEventType> eventTypes,
                                                   @Param("fromDate") LocalDateTime fromDate,
@@ -204,7 +199,6 @@ public interface AuditEventLogRepository
            "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
            "a.eventType NOT IN :eventTypes " +
            "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findByDateRangeAndEventTypeNotIn(@Param("fromDate") LocalDateTime fromDate,
                                                         @Param("toDate") LocalDateTime toDate,
                                                         @Param("eventTypes") Collection<AuditEventType> eventTypes,
