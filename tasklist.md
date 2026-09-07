@@ -1643,7 +1643,9 @@ opt-out national models). **Get counsel and the CIL to confirm that
 treatment-purpose access without patient authorisation is lawful here before
 #49 ships.** If the answer is no, #52 is the escape hatch: it makes the
 posture configurable per hospital, and an opt-in jurisdiction is one setting
-rather than a rewrite. Do #52 before #49 if the legal answer is slow.
+rather than a rewrite. **#52 ships before #49 regardless of how the legal
+answer lands** — the patient opt-out is part of the model, not a contingency
+for a slow lawyer.
 
 Per the lesson at the foot of this page: budget the first pass of each item for
 finding out what already ships. `BreakGlassSession` (V67), the disclosure
@@ -1655,11 +1657,17 @@ all exist and are reachable.
   patient, at the hospital they are acting in?* Carriers already in the schema
   — an `Encounter` in a non-terminal status, an `Appointment` today or
   scheduled, an active `Admission`, a `PanelAssignment` (V149), the ordering /
-  attending staff on an open order, and `PatientHospitalRegistration`, which is
-  what the 148 sites actually test today. Registration is the weakest carrier —
-  it says "known here", not "being treated here" — so decide explicitly whether
-  it counts, and if it does, make sure #52's opt-out reaches it; otherwise it
-  is a second authorisation path around the switch. One injectable, one method, one cache per
+  attending staff on an open order, and `PatientHospitalRegistration`.
+  ⚠ The 148 sites split two ways and only the smaller half is about
+  registration: ~25 `isRegisteredInHospital` calls ask "is this patient known
+  at my hospital", while ~123 `findByPatient_IdAndHospital_Id` calls filter the
+  **clinical row's own `hospital_id`** — row provenance, not a relationship.
+  #48's predicate governs the first group; the second is what #49 actually has
+  to rewrite, across 35 entity repositories, and no decision about registration
+  changes it. Registration itself is the weakest carrier — "known here", not
+  "being treated here" — so decide explicitly whether it counts, and if it
+  does, make sure #52's opt-out reaches it; otherwise it is a second
+  authorisation path around the switch. One injectable, one method, one cache per
   request; no controller may hand-roll it. Decide and write down the decay
   rule — a relationship that never expires is not a relationship, and Epic's
   own answer (schedule/admission-bounded, with a tail after discharge) is the
@@ -1725,8 +1733,8 @@ all exist and are reachable.
   (one home hospital) would silently cut access at facilities that legitimately
   hold their chart. Opt-out must be honoured by
   #48's predicate, not bolted onto each caller.
-  **Build this before #49, unconditionally.** Two earlier notes made it
-  conditional on the legal answer being slow; that is wrong — the patient
+  **Build this before #49, unconditionally.** An earlier draft made it
+  conditional on the legal answer being slow; that was wrong — the patient
   opt-out is not a legal contingency, it is part of the model. A fast legal
   yes must not let an implementer ship the widened filter with no way for a
   patient to decline it.
@@ -1763,7 +1771,11 @@ all exist and are reachable.
   otherwise is the page's own closing lesson repeating itself: check the
   shipped surface before building. Genuinely missing are the
   **chart-restriction flag** (no sensitivity or restricted field exists on the
-  patient row anywhere) and the **review queue**. Matters more once #49 widens the default reach, because
+  patient row anywhere) — and, for the review side, a **portal screen and a
+  reviewed / sign-off state**, not the query: `GET /break-glass/audit` ships
+  admin-only and paginated, most-recent-first, with `auditCount` and revocation
+  fields, documented as being for compliance review screens. That is twice in
+  one item; read the endpoint list before writing the next one. Matters more once #49 widens the default reach, because
   the population of people who can technically reach a given chart grows.
 
 ## Standing platform debt — owed, not parity
