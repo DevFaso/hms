@@ -1196,16 +1196,16 @@ class UserServiceImplTest {
     }
 
     // =========================================================================
-    // Admin reactivation must NOT clear the login lockout
+    // Reactivation clears the login lockout
     // =========================================================================
 
     @Nested
-    @DisplayName("admin reactivation and the login lockout")
-    class AdminReactivationLockout {
+    @DisplayName("reactivation and the login lockout")
+    class ReactivationLockout {
 
         @Test
-        @DisplayName("restoreUser does not clear the lockout")
-        void restoreDoesNotClearTheLockout() {
+        @DisplayName("restoreUser clears the lockout the deactivation left behind")
+        void restoreClearsTheLockout() {
             User target = new User();
             target.setId(userId);
             target.setUsername("someone");
@@ -1217,11 +1217,10 @@ class UserServiceImplTest {
 
             userService.restoreUser(userId);
 
-            // PATCH /users/{id}/restore would otherwise be a repeatable
-            // "clear this account's throttle" primitive. Only the paths the
-            // account holder drives themselves clear it.
             assertThat(target.isActive()).isTrue();
-            verify(loginAttemptService, never()).resetAttempts(any());
+            // No transaction is active in a unit test, so the after-commit
+            // callback runs inline — the assertion still pins the behaviour.
+            verify(loginAttemptService).resetAttempts("someone");
         }
     }
 }

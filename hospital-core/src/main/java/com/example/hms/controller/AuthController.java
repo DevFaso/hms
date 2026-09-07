@@ -416,15 +416,17 @@ public class AuthController {
             // the real holder usable guidance, and unchanged from the previous
             // wording. It IS counted toward the lockout, so the probe is
             // throttled like any other failed login. That is only safe because
-            // the self-service activation paths clear the counter —
+            // every activation path clears the counter —
             // UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
-            // (behind verifyAssignmentByCode and confirmAssignment) and
-            // #verifyEmail below, which is the endpoint that actually serves
-            // verification. The welcome mail hands out temp credentials, so
-            // trying them before confirming the code is the expected mistake,
-            // and without those resets the holder would be locked out at the
-            // exact moment activation succeeds. Admin reactivation deliberately
-            // does NOT clear it; see UserServiceImpl#updateUser.
+            // (behind verifyAssignmentByCode, which the holder drives, and
+            // confirmAssignment, which their registrar drives), #verifyEmail
+            // below, which is the endpoint that actually serves verification
+            // (UserServiceImpl#verifyEmail has no caller), and
+            // UserServiceImpl#updateUser / #restoreUser when an administrator
+            // switches an account back on. The welcome mail hands out temp
+            // credentials, so trying them before confirming the code is the
+            // expected mistake, and without those resets the holder would be
+            // locked out at the exact moment activation succeeds.
             loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
