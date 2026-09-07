@@ -6,6 +6,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.NotificationTransportUnavailableException;
 import com.example.hms.security.LoginAttemptService;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
@@ -799,7 +800,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // them before confirming the code is the expected mistake, and
             // those refusals count toward the lockout; without this reset the
             // holder is locked out at the exact moment activation succeeds.
-            loginAttemptService.resetAttempts(user.getUsername());
+            // After commit: confirmAssignment is @Transactional and records an
+            // audit event after this point, so a rollback would otherwise
+            // leave the user inactive with the counter already cleared.
+            final String activatedUsername = user.getUsername();
+            TransactionCallbacks.afterCommit(
+                () -> loginAttemptService.resetAttempts(activatedUsername));
             log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
         }
 

@@ -732,4 +732,49 @@ class AuthControllerTest {
         verify(loginAttemptService).recordFailure("someone");
         assertThat(result.getResponse().getStatus()).isEqualTo(401);
     }
+
+    @Test
+    void verifyEmail_clearsAnyLockoutCollectedWhileInactive() throws Exception {
+        var user = new com.example.hms.model.User();
+        user.setId(java.util.UUID.randomUUID());
+        user.setUsername("apatient");
+        user.setEmail("apatient@example.com");
+        user.setActive(false);
+        user.setActivationToken("tok-1");
+        user.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(userRepository.findByEmail("apatient@example.com")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(user.getId())).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/auth/verify-email")
+                        .param("email", "apatient@example.com")
+                        .param("token", "tok-1"))
+                .andExpect(status().isOk());
+
+        // The disabled arm of /auth/login counts failures, so trying the
+        // password before verifying accumulates a lockout. Without this reset
+        // the link "works" and the next sign-in is still refused with 423.
+        verify(loginAttemptService).resetAttempts("apatient");
+    }
+
+    @Test
+    void verifyEmail_invalidToken_doesNotClearTheLockout() throws Exception {
+        var user = new com.example.hms.model.User();
+        user.setId(java.util.UUID.randomUUID());
+        user.setUsername("apatient");
+        user.setEmail("apatient@example.com");
+        user.setActive(false);
+        user.setActivationToken("tok-1");
+        user.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(userRepository.findByEmail("apatient@example.com")).thenReturn(java.util.Optional.of(user));
+
+        mockMvc.perform(get("/auth/verify-email")
+                        .param("email", "apatient@example.com")
+                        .param("token", "wrong-token"))
+                .andExpect(status().isBadRequest());
+
+        // Otherwise verification itself becomes a way to clear an account's
+        // throttle without proving anything.
+        verify(loginAttemptService, never()).resetAttempts(any());
+        assertThat(user.isActive()).isFalse();
+    }
 }

@@ -10,6 +10,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
+import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.utility.UserDisplayUtil;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -1065,6 +1066,11 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setActive(true);
         userRepository.save(user);
+        // A lockout collected while the account was switched off must not
+        // survive it being switched on. After commit: a rollback must not
+        // leave the counter cleared for an account that stayed deactivated.
+        final String restoredUsername = user.getUsername();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(restoredUsername));
 
         // Reactivate Staff records that were deactivated when the user was deleted
         List<Staff> staffRecords = staffRepository.findByUserId(id);
@@ -1111,7 +1117,19 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(dto.getPhoneNumber());
         }
         if (dto.getActive() != null) {
+            boolean reactivated = Boolean.TRUE.equals(dto.getActive())
+                    && !Boolean.TRUE.equals(user.isActive());
             user.setActive(dto.getActive());
+            if (reactivated) {
+                // Read the username AFTER the rename merge above, so a
+                // combined rename + reactivate clears the key the account
+                // will actually be locked under. After commit, so a failed
+                // save cannot leave the counter cleared for an account that
+                // stayed inactive.
+                final String reactivatedUsername = user.getUsername();
+                TransactionCallbacks.afterCommit(
+                    () -> loginAttemptService.resetAttempts(reactivatedUsername));
+            }
         }
 
         // Password: only update if a new non-blank password is explicitly provided
@@ -1187,8 +1205,9 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
-        // Same reason as the assignment-code path: refusals collected while
-        // the account was inactive must not outlive the activation.
+        // NOTE: this method has no caller in main — AuthController#verifyEmail
+        // implements verification itself and is the path that runs. The reset
+        // is kept so the two stay in step if this one is ever wired up.
         loginAttemptService.resetAttempts(user.getUsername());
 
         // Activate the Patient entity to match the now-verified User

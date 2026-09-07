@@ -1592,6 +1592,28 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- **`/users` is largely ungated.** Only `POST /users/admin-register` and
+  `PATCH /users/{id}/restore` carry `@PreAuthorize`; `GET /users`,
+  `GET /users/{id}`, `GET /users/search`, `PUT /users/{id}` and
+  `DELETE /users/{id}` have none, and `SecurityConfig` matches only the
+  register path, so they fall through to `anyRequest().authenticated()`. Any
+  authenticated user can therefore list every account and edit any one of
+  them — `PUT` accepts `password` and `active`. `restoreUser` additionally
+  applies no tenant check to its target. Gating this is not a one-liner: the
+  reads are consumed by chat and staff-list for ordinary staff, and
+  `patient-form` calls `DELETE` as a receptionist to compensate a failed
+  patient create, so each verb needs its own role set. Surfaced by the #572
+  review.
+
+- `LoginAttemptService` keeps its counter in a per-JVM `ConcurrentHashMap`, so
+  the login lockout and every `resetAttempts` that clears it are instance-local.
+  On more than one replica a user can be locked on instance A and activate
+  through instance B, and the lock survives — non-deterministically. The
+  activation paths all clear the counter now (#571), which makes this correct
+  on a single instance; making it correct on several needs shared state
+  (the Redis token-blacklist store is already there for the taking). Same class
+  of gap as the `app.redis.token-blacklist.enabled` note in the startup log.
+
 - An **empty** activation delivery report warns nobody. `deliveryWarningKeys`
   returns `[]` for `[]` by contract ("nothing was attempted"), but on the
   creation paths that is indistinguishable from "every send failed before it

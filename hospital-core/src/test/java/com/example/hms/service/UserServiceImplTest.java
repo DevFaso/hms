@@ -69,6 +69,7 @@ class UserServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private PasswordHistoryService passwordHistoryService;
+    @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AssignmentLinkService assignmentLinkService;
 
     @InjectMocks
@@ -1191,6 +1192,35 @@ class UserServiceImplTest {
                 List.of(withCode(null), withCode("  ")))).isNull();
             assertThat(UserServiceImpl.soleAssignmentCode(List.of())).isNull();
             assertThat(UserServiceImpl.soleAssignmentCode(null)).isNull();
+        }
+    }
+
+    // =========================================================================
+    // Reactivation clears the login lockout
+    // =========================================================================
+
+    @Nested
+    @DisplayName("reactivation and the login lockout")
+    class ReactivationLockout {
+
+        @Test
+        @DisplayName("restoreUser clears the lockout the deactivation left behind")
+        void restoreClearsTheLockout() {
+            User target = new User();
+            target.setId(userId);
+            target.setUsername("someone");
+            target.setActive(false);
+            target.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(target));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            assertThat(target.isActive()).isTrue();
+            // No transaction is active in a unit test, so the after-commit
+            // callback runs inline — the assertion still pins the behaviour.
+            verify(loginAttemptService).resetAttempts("someone");
         }
     }
 }
