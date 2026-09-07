@@ -1590,6 +1590,116 @@ that exists rather than inventing one.
   mother (she sees "care team alerted" / "follow-up planned", never a
   number). Bambara/Dioula/Mooré texts need commissioned human translation.
 
+## E8 — Cross-hospital record access, on Epic's treatment-relationship model
+
+**The decision (user, 2026-09-07):** stop treating a patient's consent as the
+gate on one hospital reading another's chart, and adopt the model Epic runs in
+a shared instance — *the record follows the treatment relationship, and access
+is controlled by role security, segmentation and audit rather than by a
+facility-pairing handshake*. Epic does not ask "may hospital B see hospital A's
+notes?"; it asks "is this clinician treating this patient?" and then, second,
+"does this record carry a category that needs its own authorisation?"
+
+**What is NOT being removed.** Consent stays where Epic keeps it, and deleting
+it wholesale would break things that are legally load-bearing:
+
+- `TreatmentConsent` / consent-to-treat at check-in gates **treatment**, never
+  record access. Untouched.
+- ROI requests (V151) stay — that is disclosure to people *outside* the
+  treatment relationship (insurers, lawyers, a non-treating provider), which
+  is exactly the case Epic still requires an authorisation for.
+- Disclosure accounting (V141) stays and gets *more* to record, not less.
+- What goes is consent as a precondition for a treating clinician to see the
+  chart. `ConsentType.REFERRAL` and the per-facility grant idea die with it.
+
+**Applies only to `ROW_LEVEL` tenants.** A `SCHEMA`-isolated hospital (V97 —
+military, foreign-private, regulated jurisdictions) cannot be read across by
+construction, and must not be. For those, sharing remains an explicit export
+via referral or ROI. Every item below is scoped to row-level tenancy and has
+to say so in its guard.
+
+⚠ **Legal sign-off is a prerequisite, not a follow-up.** Epic's model rests on
+HIPAA's treatment-payment-operations provision, which has no Burkinabè
+equivalent that I have verified. Burkina Faso's tradition is French-derived,
+and France's DMP is markedly *more* patient-controlled than the US model —
+document-level masking, access by a matrix of professional categories. The
+opposite pole exists too (UK Summary Care Record, Australia My Health Record:
+opt-out national models). **Get counsel and the CIL to confirm that
+treatment-purpose access without patient authorisation is lawful here before
+#49 ships.** If the answer is no, #52 is the escape hatch: it makes the
+posture configurable per hospital, and an opt-in jurisdiction is one setting
+rather than a rewrite. Do #52 before #49 if the legal answer is slow.
+
+Per the lesson at the foot of this page: budget the first pass of each item for
+finding out what already ships. `BreakGlassSession` (V67), the disclosure
+whitelist (V141), `PatientAccessAuditInterceptor` and `PanelAssignment` (V149)
+all exist and are reachable.
+
+- [ ] 48. **Treatment-relationship resolver.** The single predicate the whole
+  model rests on: *does this actor have a live clinical relationship with this
+  patient, at the hospital they are acting in?* Carriers already in the schema
+  — an `Encounter` in a non-terminal status, an `Appointment` today or
+  scheduled, an active `Admission`, a `PanelAssignment` (V149), the ordering /
+  attending staff on an open order. One injectable, one method, one cache per
+  request; no controller may hand-roll it. Decide and write down the decay
+  rule — a relationship that never expires is not a relationship, and Epic's
+  own answer (schedule/admission-bounded, with a tail after discharge) is the
+  place to start. This is the item to build first and alone: #49 through #53
+  are all consumers of it.
+- [ ] 49. **Replace the hospital-scoped read filter.** Today ~148 call sites
+  gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
+  The new rule: rows from the actor's own hospital as now, PLUS rows from other
+  `ROW_LEVEL` hospitals when #48 says a treatment relationship exists. The
+  count is the risk — this cannot be 148 hand-edits. Land it as one shared
+  specification/filter that the repositories compose, with a guard test that
+  fails when a new patient-scoped query bypasses it (the
+  `SchedulerLockCoverageTest` pattern). Expect the first pass to be a survey:
+  some of those 148 are already correct, some are the tenant-isolation bug
+  class (`completeTriage` / `submitTriage` in **Standing platform debt** take
+  ANY encounter id with no hospital check) and must be fixed *before* the
+  filter widens, not after — widening on top of an unscoped write is how a
+  contained bug becomes a cross-tenant one.
+- [ ] 50. **Provenance on the merged chart ("Happy Together").** Outside data
+  merges into the normal chart surfaces — timeline, results, medications,
+  problems — rather than a separate "other hospitals" tab, because Epic's
+  experience is that clinicians do not open the tab. Every foreign row carries
+  a visible source badge (facility + date) and the chart states plainly when it
+  is showing a partial view. The portal work is the larger half of this item.
+- [ ] 51. **Sensitive-category segmentation.** The carve-out Epic still gates
+  on explicit authorisation: substance use, behavioural health / the EPDS rows
+  from #47, HIV, reproductive health. These do NOT travel on the treatment
+  presumption. Needs a category tag on the clinical row (not a guess from the
+  ICD code at read time), a default-withhold rule cross-hospital, and a
+  patient-authorised release path — ROI is the existing vehicle. Flagged in the
+  industry as incompletely solved; scope it to *withhold correctly* first and
+  treat granular release as a later pass. Do not ship #49 without at least the
+  withhold half, or the first cross-hospital read discloses a category that
+  should never have moved.
+- [ ] 52. **Per-hospital access posture + patient opt-out.** The genuinely
+  Epic-shaped part: two Epic sites run different consent models because it is
+  configuration. A hospital-level setting — `TREATMENT_PRESUMED` (this
+  decision) vs `EXPLICIT_CONSENT` (the opt-in jurisdictions) — plus a patient
+  opt-out flag that excludes their record from cross-hospital reads while
+  leaving their own hospital's access untouched. Opt-out must be honoured by
+  #48's predicate, not bolted onto each caller. Build this BEFORE #49 if the
+  legal answer above has not landed.
+- [ ] 53. **Disclosure accounting for every cross-hospital read.**
+  `PatientAccessAuditInterceptor` already resolves the patient id per request
+  and dedupes; extend it to record the *reach* — actor, actor's hospital, the
+  record's hospital, and the relationship that authorised it. The patient's
+  own disclosure report (#39) then answers "who outside my hospital opened my
+  chart, and why were they allowed to?". Under this model audit stops being
+  a compliance artifact and becomes the only remaining check on access, so it
+  cannot be best-effort: see [[out-of-session-lazy-proxies]] for how these
+  rows were silently dropped once already.
+- [ ] 54. **Break-the-glass for restricted charts.** Distinct from everything
+  above and easy to conflate — this is intra-organisational. VIPs, staff
+  members, a clinician's own record or a family member's: access requires a
+  stated reason, is time-boxed, and is flagged loudly. `BreakGlassSession`
+  (V67) exists and needs its chart-restriction flag, the reason prompt, and
+  the review queue. Matters more once #49 widens the default reach, because
+  the population of people who can technically reach a given chart grows.
+
 ## Standing platform debt — owed, not parity
 
 - **Outbound mail is sent on the request thread**, inside or just after the
