@@ -1610,7 +1610,12 @@ it wholesale would break things that are legally load-bearing:
   is exactly the case Epic still requires an authorisation for.
 - Disclosure accounting (V141) stays and gets *more* to record, not less.
 - What goes is consent as a precondition for a treating clinician to see the
-  chart, and the per-facility grant idea with it. Retiring
+  chart, and the per-facility grant idea with it. ⚠ **Size the superseded
+  surface before committing:** `PatientRecordSharingServiceImpl` is **1648
+  lines** with a live controller and its own DTOs. Read it first and decide
+  what it becomes — the consent-grant half retires, but its cross-hospital
+  *fetch* half is plausibly what #49 should be built on rather than beside.
+  Retiring
   `ConsentType.REFERRAL` is NOT a code deletion: the column is
   `@Enumerated(STRING)` over `VARCHAR(50)` (V33), so existing `'REFERRAL'` rows
   fail enum conversion on load, and the portal hard-codes the value in
@@ -1618,9 +1623,13 @@ it wholesale would break things that are legally load-bearing:
   backfill migration plus both portal edits — or keep the value readable and
   merely stop writing it.
 
-**Applies only to `ROW_LEVEL` tenants.** A `SCHEMA`-isolated hospital (V97 —
-military, foreign-private, regulated jurisdictions) cannot be read across by
-construction, and must not be. For those, sharing remains an explicit export
+**Applies only to `ROW_LEVEL` tenants** — but the carve-out is a *decision*,
+not a mechanism that exists yet. V97 is metadata only: the connection-provider
+plumbing is gated by `app.tenancy.schema-isolation.enabled`, which is set
+nowhere and defaults off (roadmap row 33 is still `started`). A SCHEMA-flagged
+hospital's rows sit in the shared schema today, so #49's widened filter WOULD
+return them. #49 must exclude `isolation_mode = 'SCHEMA'` explicitly; relying
+on "they are in another schema" is relying on something unbuilt. For those, sharing remains an explicit export
 via referral or ROI. Every item below is scoped to row-level tenancy and has
 to say so in its guard.
 
@@ -1646,7 +1655,11 @@ all exist and are reachable.
   patient, at the hospital they are acting in?* Carriers already in the schema
   — an `Encounter` in a non-terminal status, an `Appointment` today or
   scheduled, an active `Admission`, a `PanelAssignment` (V149), the ordering /
-  attending staff on an open order. One injectable, one method, one cache per
+  attending staff on an open order, and `PatientHospitalRegistration`, which is
+  what the 148 sites actually test today. Registration is the weakest carrier —
+  it says "known here", not "being treated here" — so decide explicitly whether
+  it counts, and if it does, make sure #52's opt-out reaches it; otherwise it
+  is a second authorisation path around the switch. One injectable, one method, one cache per
   request; no controller may hand-roll it. Decide and write down the decay
   rule — a relationship that never expires is not a relationship, and Epic's
   own answer (schedule/admission-bounded, with a tail after discharge) is the
@@ -1656,10 +1669,23 @@ all exist and are reachable.
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
   The new rule: rows from the actor's own hospital as now, PLUS rows from other
   `ROW_LEVEL` hospitals when #48 says a treatment relationship exists. The
-  count is the risk — this cannot be 148 hand-edits. Land it as one shared
-  specification/filter that the repositories compose, with a guard test that
-  fails when a new patient-scoped query bypasses it (the
-  `SchedulerLockCoverageTest` pattern). Expect the first pass to be a survey:
+  count is the risk.
+  ⚠ **Not all 148 are reads.** Many `isRegisteredInHospital` sites guard
+  WRITES — `AdvanceDirective`, `Guarantor`, `PatientRecall`, `IntakeOutput`,
+  `SlotInventory`, `NurseTask` create paths among them. A blanket replacement
+  widens cross-hospital *writes*, which this decision does not authorise.
+  Classify the 148 first; the write guards stay as they are.
+  ⚠ **The shared filter already exists — adopt it, do not invent one.**
+  `TenantAwareJpaRepository`, `TenantScopeSpecification`, `TenantScoped`,
+  `TenantEntityListener` and `TenantContextAccessor` all ship, wired by
+  `TenantRepositoryConfig`; exactly one repository (`PatientRepository`) has
+  adopted them. The item is "extend that predicate with the treatment
+  relationship and roll it out to the rest", a different and better-understood
+  job than building a second mechanism beside it.
+  ⚠ **The guard test has no marker to scan for.** `SchedulerLockCoverageTest`
+  works because `@Scheduled` is enumerable; nothing means "patient-scoped
+  query". Defining that marker is part of this item, or the only stated
+  mitigation for 148 sites does not transfer. Expect the first pass to be a survey:
   some of those 148 are already correct, some are the tenant-isolation bug
   class and must be fixed *first*.
   ⚠ **Blocked on the triage-scoping entry in Standing platform debt.** That
@@ -1692,9 +1718,18 @@ all exist and are reachable.
   configuration. A hospital-level setting — `TREATMENT_PRESUMED` (this
   decision) vs `EXPLICIT_CONSENT` (the opt-in jurisdictions) — plus a patient
   opt-out flag that excludes their record from cross-hospital reads while
-  leaving their own hospital's access untouched. Opt-out must be honoured by
-  #48's predicate, not bolted onto each caller. Build this BEFORE #49 if the
-  legal answer above has not landed.
+  leaving in-hospital access untouched. ⚠ "Their own hospital" is singular and
+  the schema is not: a patient holds many `PatientHospitalRegistration` rows.
+  Define it as *every hospital where they are registered keeps its own access;
+  the treatment-relationship widening is what switches off* — the other reading
+  (one home hospital) would silently cut access at facilities that legitimately
+  hold their chart. Opt-out must be honoured by
+  #48's predicate, not bolted onto each caller.
+  **Build this before #49, unconditionally.** Two earlier notes made it
+  conditional on the legal answer being slow; that is wrong — the patient
+  opt-out is not a legal contingency, it is part of the model. A fast legal
+  yes must not let an implementer ship the widened filter with no way for a
+  patient to decline it.
 - [ ] 53. **Disclosure accounting for every cross-hospital read.**
   Record the *reach*: actor, actor's hospital, the record's hospital and the
   relationship that authorised it, so the patient's disclosure report (#39)
@@ -1704,7 +1739,11 @@ all exist and are reachable.
   `afterCompletion` sees the request path, never the response body — and once
   #50 merges foreign rows into the chart, a single response spans several
   facilities while the hook can stamp only the actor's own. The source has to
-  be #49's filter, the one place that knows which hospitals a query reached.
+  be #49's filter — but note it knows which hospitals are *permitted*, not
+  which ones produced rows. Recording the permitted set would over-report on a
+  patient-facing legal document ("hospital C accessed your record" when nothing
+  of C's was returned). The reach must be the distinct hospitals of the rows
+  actually served.
   ⚠ **That interceptor is also best-effort by construction**, which this model
   cannot tolerate once audit is the ONLY remaining check on access: it skips
   principals that are not `CustomUserDetails` (OIDC / `JwtAuthenticationToken`
@@ -1733,8 +1772,12 @@ all exist and are reachable.
   the encounter with a bare `findById` and check only its status, while
   `startEncounter`, `completeExamination` and `markReadyForDischarge` on the
   same controller all resolve a caller hospital and pass it down.
-  `EncounterRepository.findByIdAndHospital_Id` already exists — the scoped
-  lookup the siblings use. So a nurse or doctor at hospital A holding an
+  ⚠ Do NOT copy the siblings as the model: they use a bare `findById` plus a
+  hand-rolled comparison, and that comparison is written
+  `encounterHospitalId != null && …`, so a null hospital on the encounter
+  bypasses it. `EncounterRepository.findByIdAndHospital_Id` is the scoped
+  lookup and has exactly one caller (`EncounterFhirWriteService`) — use that,
+  and fix the siblings' bypass while you are there. So a nurse or doctor at hospital A holding an
   encounter id from hospital B can advance that encounter and write vitals onto
   the patient's chart: a cross-tenant WRITE, reachable today, needing no read
   access. There is no Hibernate tenant filter behind them and the only
