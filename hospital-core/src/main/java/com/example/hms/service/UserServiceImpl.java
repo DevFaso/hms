@@ -413,7 +413,7 @@ public class UserServiceImpl implements UserService {
             // synchronisation runs on this thread before the controller
             // closes ActivationDeliveryTracker, so the registrar still sees
             // the outcome.
-            afterCommit(() -> {
+            TransactionCallbacks.afterCommit(() -> {
                 try {
                     emailService.sendAdminWelcomeEmail(
                         user.getEmail(), displayName,
@@ -447,27 +447,6 @@ public class UserServiceImpl implements UserService {
         }
 
         return result;
-    }
-
-    /**
-     * Runs {@code action} once the current transaction commits, or immediately
-     * when none is active (unit tests, and any caller outside a transaction).
-     * The callback runs on the calling thread, so request-scoped state such as
-     * {@link com.example.hms.utility.ActivationDeliveryTracker} is still open.
-     */
-    private static void afterCommit(Runnable action) {
-        if (!org.springframework.transaction.support.TransactionSynchronizationManager
-                .isSynchronizationActive()) {
-            action.run();
-            return;
-        }
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */
@@ -1207,8 +1186,13 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         // NOTE: this method has no caller in main — AuthController#verifyEmail
         // implements verification itself and is the path that runs. The reset
-        // is kept so the two stay in step if this one is ever wired up.
-        loginAttemptService.resetAttempts(user.getUsername());
+        // is kept, and deferred like every other one, so wiring this method up
+        // later cannot reintroduce the bug the rest of this class just fixed:
+        // the patient-assignment loop below writes after this point, and a
+        // rollback there would otherwise leave the counter cleared for an
+        // account that stayed inactive.
+        final String verifiedUsername = user.getUsername();
+        TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedUsername));
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
