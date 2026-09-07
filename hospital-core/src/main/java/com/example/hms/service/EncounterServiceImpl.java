@@ -458,8 +458,7 @@ public class EncounterServiceImpl implements EncounterService {
             throw new BusinessException(messageSource.getMessage("encounter.note.payload.required", null, locale));
         }
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterNote note = upsertEncounterNoteInternal(encounter, encounter.getStaff(), request, locale, null);
         return encounterMapper.toEncounterNoteResponseDTO(note);
@@ -476,8 +475,7 @@ public class EncounterServiceImpl implements EncounterService {
             throw new BusinessException(messageSource.getMessage("encounter.note.payload.required", null, locale));
         }
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
@@ -1728,9 +1726,7 @@ public class EncounterServiceImpl implements EncounterService {
             boolean isSuperAdmin,
             UUID callerHospitalId) {
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, Locale.getDefault())));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
@@ -1958,7 +1954,10 @@ public class EncounterServiceImpl implements EncounterService {
      * Resolves an encounter for a WRITE, refusing one that belongs to another
      * hospital.
      *
-     * <p>Every mutating path on this service must go through here. Six of them
+     * <p>Every mutating path that resolves an encounter by id goes through
+     * here — with two exceptions still outstanding, {@code updateEncounter} and
+     * {@code deleteEncounter}, which are unscoped and tracked in tasklist.md.
+     * Six paths
      * used a bare {@code findById} with only a status check, so a clinician
      * holding an encounter id from another hospital could advance the
      * encounter, or write vitals, a note, an addendum, a nursing intake or a
@@ -1977,22 +1976,25 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private Encounter requireEncounterInScope(UUID encounterId, boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(this::encounterNotFound);
+                .orElseThrow(() -> encounterNotFound(encounterId));
         if (isSuperAdmin) {
             return encounter;
         }
         UUID encounterHospitalId = encounter.getHospital() != null
                 ? encounter.getHospital().getId() : null;
         if (encounterHospitalId == null || !encounterHospitalId.equals(callerHospitalId)) {
-            throw encounterNotFound();
+            throw encounterNotFound(encounterId);
         }
         return encounter;
     }
 
     /** The single not-found used by every scoped lookup, so the message never drifts. */
-    private ResourceNotFoundException encounterNotFound() {
+    private ResourceNotFoundException encounterNotFound(UUID encounterId) {
+        // The bundle string is "Encounter with ID {0} was not found." — passing
+        // null args renders a literal {0} in the response body under
+        // always-use-message-format.
         return new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
                         org.springframework.context.i18n.LocaleContextHolder.getLocale()));
     }
 

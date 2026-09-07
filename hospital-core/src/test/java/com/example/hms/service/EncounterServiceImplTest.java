@@ -1781,6 +1781,57 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        @DisplayName("upsertEncounterNote refuses a foreign encounter")
+        void noteRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.upsertEncounterNote(
+                    foreign.getId(), new com.example.hms.payload.dto.EncounterNoteRequestDTO(), Locale.ENGLISH,
+                    false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("addEncounterNoteAddendum refuses a foreign encounter")
+        void addendumRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.addEncounterNoteAddendum(
+                    foreign.getId(), new com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO(), Locale.ENGLISH,
+                    false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("checkOut refuses a foreign encounter")
+        void checkOutRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.checkOut(
+                    foreign.getId(), new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(),
+                    "doctor", false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+            // Nothing on the checkout side effects may fire on the way out.
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the not-found body carries the id, not a literal {0}")
+        void notFoundMessageIsFormatted() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() ->
+                    service.completeTriage(foreign.getId(), false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageNotContaining("{0}");
+        }
+
+        @Test
         @DisplayName("an encounter with NO hospital is refused, not waved through")
         void unattributedEncounterIsRefused() {
             // The guard the three scoped siblings carried read

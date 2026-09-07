@@ -1592,6 +1592,14 @@ that exists rather than inventing one.
 
 ## Standing platform debt — owed, not parity
 
+- **`updateEncounter` and `deleteEncounter` are still unscoped.** The other
+  nine mutating paths on `EncounterServiceImpl` now go through
+  `requireEncounterInScope`; these two do not, and nothing enforces the
+  invariant — the guard's javadoc is the only thing carrying it. Same fix,
+  same shape; left out of that PR to keep it reviewable. A marker plus a guard
+  test (the E8 #49 problem in miniature) is what would stop the next one
+  slipping back in.
+
 - **Outbound mail is sent on the request thread**, inside or just after the
   transaction. `TransactionCallbacks.afterCommit` fires before
   `cleanupAfterCompletion` releases the JDBC connection, so a stalled SMTP host
