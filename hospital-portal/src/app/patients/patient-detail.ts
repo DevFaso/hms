@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { VitalSignService, VitalSignResponse } from '../services/vital-sign.service';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
@@ -251,11 +252,45 @@ export class PatientDetailComponent implements OnInit {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.recordDownloadLoading.set(false);
-        this.toast.error(this.translate.instant('PATIENTS.DOWNLOAD_RECORD_FAILED'));
+        this.reportDownloadFailure(err);
       },
     });
+  }
+
+  /**
+   * The request is a `blob` download, so an error body arrives as a Blob and
+   * never as parsed JSON — reading `err.error.message` yields undefined and
+   * the operator is left with "could not be downloaded" for every cause.
+   * The overwhelmingly common failure is a scope mismatch (the chart page
+   * lets a super admin open any patient, while the export stays scoped to
+   * the active hospital), and that one has a remedy the user can act on:
+   * switch hospital with the scope picker.
+   */
+  private reportDownloadFailure(err: HttpErrorResponse): void {
+    const fallback =
+      err.status === 404
+        ? 'PATIENTS.DOWNLOAD_RECORD_WRONG_HOSPITAL'
+        : 'PATIENTS.DOWNLOAD_RECORD_FAILED';
+    if (!(err.error instanceof Blob)) {
+      this.toast.error(this.translate.instant(fallback));
+      return;
+    }
+    err.error
+      .text()
+      .then((text) => {
+        // Show the server's own wording when it sent one; it names the
+        // remedy. Anything unparseable falls back to the translated key.
+        let message = '';
+        try {
+          message = (JSON.parse(text) as { message?: string }).message ?? '';
+        } catch {
+          message = '';
+        }
+        this.toast.error(message || this.translate.instant(fallback));
+      })
+      .catch(() => this.toast.error(this.translate.instant(fallback)));
   }
 
   /* ── Wristband printing (P3 #23b) ── */

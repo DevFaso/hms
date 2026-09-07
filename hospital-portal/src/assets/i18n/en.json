@@ -3747,6 +3747,7 @@
     "DOWNLOAD_RECORD": "Record (FHIR)",
     "DOWNLOAD_RECORD_TITLE": "Download the patient's full record as a FHIR JSON file",
     "DOWNLOAD_RECORD_FAILED": "The record could not be downloaded.",
+    "DOWNLOAD_RECORD_WRONG_HOSPITAL": "This patient is not registered at your current hospital, so their record cannot be exported from here. Switch hospital with the scope selector and try again.",
     "PRINT_WRISTBAND": "Wristband",
     "PRINT_WRISTBAND_TITLE": "Print the patient wristband (QR encodes the patient ID for bedside scanning)",
     "NEWS_BAND_LOW": "Low risk",

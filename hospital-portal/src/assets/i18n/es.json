@@ -3747,6 +3747,7 @@
     "DOWNLOAD_RECORD": "Historia (FHIR)",
     "DOWNLOAD_RECORD_TITLE": "Descargar la historia clínica completa del paciente en formato FHIR JSON",
     "DOWNLOAD_RECORD_FAILED": "No se pudo descargar la historia clínica.",
+    "DOWNLOAD_RECORD_WRONG_HOSPITAL": "Este paciente no está registrado en su hospital actual, por lo que su historia clínica no puede exportarse desde aquí. Cambie de hospital con el selector de ámbito e inténtelo de nuevo.",
     "PRINT_WRISTBAND": "Pulsera",
     "PRINT_WRISTBAND_TITLE": "Imprimir la pulsera del paciente (el QR codifica el ID del paciente para el escaneo junto a la cama)",
     "NEWS_BAND_LOW": "Riesgo bajo",
