@@ -1227,20 +1227,24 @@ class UserServiceImplTest {
         @DisplayName("updateUser clears it on a false to true transition")
         void updateClearsOnReactivation() {
             User target = reactivationTarget(false);
+
             userService.updateUser(userId, activeFlag(true));
 
+            assertThat(target.isActive()).isTrue();
             verify(loginAttemptService).resetAttempts("someone");
         }
 
         @Test
         @DisplayName("updateUser leaves it alone when the account was already active")
         void updateDoesNotClearWhenAlreadyActive() {
-            User target = reactivationTarget(true);
+            reactivationTarget(true);
+
             userService.updateUser(userId, activeFlag(true));
 
             // An ordinary profile edit must not silently clear a lockout
-            // somebody else earned — PUT /users/{id} is not role-gated.
-            assertThat(target.isActive()).isTrue();
+            // somebody else earned — PUT /users/{id} is not role-gated. Only
+            // the never() carries weight here: updateUser sets active from the
+            // DTO either way, so asserting it stayed true proves nothing.
             verify(loginAttemptService, never()).resetAttempts(any());
         }
 

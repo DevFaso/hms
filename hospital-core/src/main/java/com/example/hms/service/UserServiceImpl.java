@@ -1188,9 +1188,11 @@ public class UserServiceImpl implements UserService {
         // implements verification itself and is the path that runs. The reset
         // is kept, and deferred like every other one, so wiring this method up
         // later cannot reintroduce the bug the rest of this class just fixed:
-        // the patient-assignment loop below writes after this point, and a
-        // rollback there would otherwise leave the counter cleared for an
-        // account that stayed inactive.
+        // the patient activation below writes after this point, and a rollback
+        // there would otherwise leave the counter cleared for an account that
+        // stayed inactive. (Note for whoever wires it up: unlike
+        // AuthController#verifyEmail this method does NOT activate the user's
+        // ROLE_PATIENT assignments — it only flips the Patient row.)
         final String verifiedUsername = user.getUsername();
         TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedUsername));
 
