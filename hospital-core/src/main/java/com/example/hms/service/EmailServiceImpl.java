@@ -778,6 +778,12 @@ public class EmailServiceImpl implements EmailService {
      * there leads straight to the rejection this mail exists to prevent —
      * which is what it used to do. The step is named in prose instead, with
      * the login address kept as secondary text for after activation.
+     *
+     * <p>That prose names the <em>code</em>, not a link: one of the two ways
+     * the URL is null is a blank {@code app.portal.profile-completion-url-template},
+     * and in that configuration the assignment mail renders no link section
+     * either — so a link is the one thing the reader might not have. The code
+     * is always in the assignment mail.
      */
     private static String ctaBlock(String rawActivationUrl, String rawLoginUrl) {
         String loginUrl = escapeHtml(rawLoginUrl);
@@ -785,7 +791,7 @@ public class EmailServiceImpl implements EmailService {
 
         if (!hasActivation) {
             return "<p style=\"text-align:center;font-size:14px;color:#475569;margin:28px 0 8px;\">"
-                + "Use the confirmation link in that message to finish activating your account."
+                + "Use the confirmation code in that message to finish activating your account."
                 + "</p>"
                 + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;margin-top:0;\">"
                 + "Once it is confirmed, sign in at "

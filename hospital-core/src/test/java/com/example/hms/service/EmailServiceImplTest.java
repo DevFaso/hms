@@ -353,6 +353,10 @@ class EmailServiceImplTest {
             // exists to prevent. The login address stays as secondary text.
             assertThat(html).doesNotContain("display:inline-block");
             assertThat(html).contains("/login");
+            // Names the code, never a link: a blank profile-completion
+            // template is one of the two ways the URL is null, and in that
+            // configuration the assignment mail carries no link either.
+            assertThat(html).contains("confirmation code in that message");
         }
 
         @Test

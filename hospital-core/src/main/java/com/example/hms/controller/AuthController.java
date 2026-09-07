@@ -405,10 +405,19 @@ public class AuthController {
             // have — staff activate by confirming a role assignment with an
             // emailed code — and that dead end is what gets reported as "I
             // never received an activation email". The wording below covers
-            // both routes without asserting either: DaoAuthenticationProvider
-            // checks isEnabled BEFORE the password, so this arm answers an
-            // unauthenticated prober, and it must not tell them which
-            // activation state an account is in (or run queries to find out).
+            // both routes without asserting either, and is identical for every
+            // inactive account: DaoAuthenticationProvider checks isEnabled
+            // BEFORE the password, so this arm also answers junk-password
+            // probes, and it must neither vary by activation state nor spend
+            // queries discovering it.
+            //
+            // That this arm differs from bad credentials at all still tells a
+            // prober the username exists and is inactive — inherent to giving
+            // the real holder usable guidance, and unchanged from the previous
+            // wording. What was missing is the throttle: without recordFailure
+            // the probe never trips the lockout checked above, so failures here
+            // now count like any other.
+            loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(INACTIVE_ACCOUNT_GUIDANCE));
