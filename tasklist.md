@@ -1598,10 +1598,14 @@ that exists rather than inventing one.
   `victim` are two accounts sharing one throttle key: any move of state under a
   rename lets one account clear or inherit another's lockout, which is worse
   than the leak it closes. Tried and reverted in #573. Two things have to change
-  first — an `@PreAuthorize` on `PUT /users/{id}` (and a uniqueness check on
-  `dto.getUsername()`, which it has none of; `changeOwnUsername`'s check is
-  exact-case and so passes case variants), and either a case-insensitive unique
-  index on `username` or a throttle keyed on the user id rather than the name.
+  first — an `@PreAuthorize` on `PUT /users/{id}` **and a uniqueness check on
+  `dto.getUsername()`, which `updateUser` does not have at all** (unlike
+  `changeOwnUsername`, whose `findByUsername` is already case-insensitive:
+  `where lower(u.username) = lower(:username)`), and either a case-insensitive
+  unique index on `username` or a throttle keyed on the user id rather than the
+  name. The missing uniqueness check is the more serious half on its own: a
+  rename to a case variant leaves two rows that the case-insensitive
+  `findByUsername` cannot resolve, which breaks login for both accounts.
   Until then the leak stands, and it is small next to the ungated endpoint that
   already lets any authenticated caller set another user's password.
 

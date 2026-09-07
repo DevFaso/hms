@@ -1081,13 +1081,17 @@ public class UserServiceImpl implements UserService {
         // into the callback — and restoring a phone-first patient (email is
         // nullable since V107) throws on a null recipient, which would turn a
         // committed restore into a 500.
+        final UUID restoredUserId = user.getId();
         final String restoredTo = user.getEmail();
         final String restoredName = UserDisplayUtil.resolveDisplayName(user);
         TransactionCallbacks.afterCommit(() -> {
             try {
                 emailService.sendAccountRestoredEmail(restoredTo, restoredName);
             } catch (Exception e) {
-                log.warn("⚠️ Failed to send account-restored notification: {}", e.getMessage());
+                // Id, not the address: this line must stay traceable without
+                // putting a contact detail in the log.
+                log.warn("⚠️ Failed to send account-restored notification for user {}: {}",
+                        restoredUserId, e.getMessage());
             }
         });
     }
@@ -1128,12 +1132,19 @@ public class UserServiceImpl implements UserService {
         // locked under, and the clear runs after commit so a failed save
         // cannot free an account that stayed inactive.
         //
-        // ONLY that key. Clearing the pre-rename name too would reach a
-        // different account: the throttle map keys on lowercase while
-        // uq_user_username is case-sensitive, so "Victim" and "victim" are two
-        // accounts sharing one key. That is exactly why carrying throttle
-        // state across a rename was tried and reverted — and nothing writes
-        // the old key any more, so there is nothing there to clean up.
+        // ONLY that key: nothing writes the pre-rename name any more, so
+        // there is nothing there to clean up, and touching it would reach
+        // whatever account now answers to it.
+        //
+        // Not claimed to be collision-proof. uq_user_username is case
+        // sensitive while the throttle map lowercases, and updateUser applies
+        // no uniqueness check at all, so a rename to a case variant of a live
+        // account is possible on an endpoint with no @PreAuthorize — and that
+        // clears the other account's counter. It also leaves two rows the
+        // case-insensitive findByUsername cannot resolve, which breaks login
+        // for both: the throttle is the smaller half of that bug. The
+        // uniqueness check and the missing guard are the fix; both are in
+        // tasklist.md.
         //
         // The transition guard is about not clearing on an ordinary edit; it
         // is NOT an authorization control. PUT /users/{id} has no
