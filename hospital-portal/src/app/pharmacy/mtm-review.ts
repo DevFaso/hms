@@ -3,13 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
-import { AuthService } from '../auth/auth.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
@@ -36,7 +35,6 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 export class MtmReviewComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
-  private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
@@ -67,28 +65,21 @@ export class MtmReviewComponent implements OnInit {
     this.loadReviews();
   }
 
-  /** The pinned scope first; the JWT claim only for staff with several hospitals and no primary one. */
-  private hospitalIdForRequests(): string | null {
-    return this.roleContext.effectiveHospitalIdForRequest() ?? this.auth.getHospitalId() ?? null;
-  }
-
   loadReviews(): void {
-    if (!this.scopeReady()) {
+    // hasHospitalScope is exactly "this is non-null": one gate, no fallback.
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
+    if (hospitalId == null) {
       this.reviews.set([]);
       this.loading.set(false);
-      return;
-    }
-    const hospitalId = this.hospitalIdForRequests();
-    if (!hospitalId) {
-      this.reviews.set([]);
-      this.loading.set(false);
-      this.toast.error('Active hospital context required');
       return;
     }
     this.loading.set(true);
     this.svc
       .listMtmReviewsByHospital(hospitalId, 0, 50)
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (page) => {
           this.reviews.set(page?.content ?? []);
@@ -104,7 +95,7 @@ export class MtmReviewComponent implements OnInit {
   openCreate(): void {
     this.selectedReviewId = null;
     this.form = this.emptyForm();
-    this.form.hospitalId = this.hospitalIdForRequests() ?? '';
+    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.showForm.set(true);
   }
 

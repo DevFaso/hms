@@ -20,7 +20,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -235,7 +235,10 @@ export class BedBoardComponent implements OnInit {
     this.loading.set(true);
     this.boardService
       .getBoard()
-      .pipe(takeUntil(this.scopeChanged$))
+      .pipe(
+        takeUntil(this.scopeChanged$),
+        finalize(() => this.loading.set(false)),
+      )
       .subscribe({
         next: (board) => {
           this.board.set(board);

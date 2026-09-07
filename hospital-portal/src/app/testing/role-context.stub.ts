@@ -20,18 +20,23 @@ export interface RoleContextStubState {
  * `state` live so a test can switch scope before `detectChanges`.
  */
 export function roleContextStub(state: RoleContextStubState): RoleContextService {
-  let selectedHospitalId: string | null = state.hospitalId;
-  let globalView = state.superAdmin && state.hospitalId == null;
+  // Until the chip (or the URL sync) picks, everything derives from `state`
+  // live — so a test may flip `state` after building the stub. A pick sets an
+  // override that, like the real service, moves only the selected hospital.
+  let override: { globalView: boolean; selected: string | null } | null = null;
+  const globalView = (): boolean =>
+    override ? override.globalView : state.superAdmin && state.hospitalId == null;
+  const selected = (): string | null => (override ? override.selected : state.hospitalId);
   const effective = (): string | null => {
     if (state.superAdmin) {
-      return globalView ? null : (selectedHospitalId ?? state.hospitalId);
+      return globalView() ? null : (selected() ?? state.hospitalId);
     }
     return state.hospitalId;
   };
   return {
     isSuperAdmin: () => state.superAdmin,
-    globalView: () => state.superAdmin && globalView,
-    selectedHospitalId: () => (state.superAdmin ? selectedHospitalId : null),
+    globalView: () => state.superAdmin && globalView(),
+    selectedHospitalId: () => (state.superAdmin ? selected() : null),
     effectiveHospitalIdForRequest: effective,
     hasHospitalScope: () => effective() != null,
     get activeHospitalId() {
@@ -39,12 +44,10 @@ export function roleContextStub(state: RoleContextStubState): RoleContextService
     },
     hasAnyActiveRole: (roles: string[]) => roles.some((r) => state.roles.includes(r)),
     enableGlobalView: () => {
-      globalView = true;
-      selectedHospitalId = null;
+      override = { globalView: true, selected: null };
     },
     scopeToHospital: (id: string) => {
-      globalView = false;
-      selectedHospitalId = id;
+      override = { globalView: false, selected: id };
     },
   } as unknown as RoleContextService;
 }

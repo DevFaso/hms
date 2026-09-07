@@ -140,30 +140,30 @@ export class HospitalScopeChipComponent implements OnInit {
   }
 
   protected onSelectAll(): void {
-    if (this.roleContext.globalView()) {
-      // Already global: nothing changed, so no host reload.
-      this.overlayOpen.set(false);
-      return;
-    }
+    const changed = !this.roleContext.globalView();
     this.roleContext.enableGlobalView();
     this._selectedHospitalName.set(null);
     this.overlayOpen.set(false);
-    this.syncUrl(null);
-    this.scopeChange.emit(null);
+    if (changed) {
+      this.syncUrl(null);
+      this.scopeChange.emit(null);
+    }
   }
 
   protected onSelectHospital(hospital: HospitalResponse): void {
-    if (!this.roleContext.globalView() && this.roleContext.selectedHospitalId() === hospital.id) {
-      // Re-picking the pinned hospital changes nothing: hosts must not reload.
-      this._selectedHospitalName.set(hospital.name);
-      this.overlayOpen.set(false);
-      return;
-    }
+    // Hosts key their loads on the effective id, so re-picking the hospital
+    // they already use (the pinned one, or the primary in scoped view) is a
+    // no-op for them: the chip updates its label and closes, nothing else.
+    const changed =
+      this.roleContext.globalView() ||
+      this.roleContext.effectiveHospitalIdForRequest() !== hospital.id;
     this.roleContext.scopeToHospital(hospital.id);
     this._selectedHospitalName.set(hospital.name);
     this.overlayOpen.set(false);
-    this.syncUrl(hospital.id);
-    this.scopeChange.emit(hospital.id);
+    if (changed) {
+      this.syncUrl(hospital.id);
+      this.scopeChange.emit(hospital.id);
+    }
   }
 
   /**
