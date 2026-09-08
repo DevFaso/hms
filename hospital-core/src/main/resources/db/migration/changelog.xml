@@ -2353,4 +2353,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V157 — E8 #48/#52: per-hospital record-access posture
+         (TREATMENT_PRESUMED | EXPLICIT_CONSENT, the legal escape hatch)
+         and the patient opt-out from cross-hospital reads. Both are read
+         inside the access predicate itself, so they must exist before the
+         read filter widens in #49. Plain DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V157-record-access-posture-and-optout" author="hms-team" runOnChange="false">
+        <sqlFile path="V157__record_access_posture_and_optout.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

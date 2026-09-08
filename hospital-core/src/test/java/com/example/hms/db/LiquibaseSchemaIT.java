@@ -359,6 +359,35 @@ class LiquibaseSchemaIT {
     }
 
     /**
+     * V157 (E8 #48/#52): the posture column defaults to TREATMENT_PRESUMED for
+     * every existing hospital, and the opt-out table is constrained to
+     * clinical.patients so an opt-out can never outlive its patient — the
+     * exact orphan shape V156 exists to prevent.
+     */
+    @Test
+    void v157PostureDefaultsAndOptOutIsConstrained() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery(
+                "SELECT column_default, is_nullable FROM information_schema.columns "
+                    + "WHERE table_schema = 'hospital' AND table_name = 'hospitals' "
+                    + "  AND column_name = 'record_access_posture'")) {
+                assertThat(rs.next()).as("hospital.hospitals.record_access_posture must exist").isTrue();
+                assertThat(rs.getString("column_default")).contains("TREATMENT_PRESUMED");
+                assertThat(rs.getString("is_nullable")).isEqualTo("NO");
+            }
+
+            assertThatCode(() -> stmt.executeUpdate("INSERT INTO clinical.patient_record_sharing_optouts "
+                + "(id, patient_id, opted_out_at, created_at, updated_at) "
+                + "VALUES ('b0000000-0000-0000-0000-000000000157', "
+                + "'00000000-0000-0000-0000-0000000000fd', NOW(), NOW(), NOW())"))
+                .as("an opt-out for a non-existent patient must be rejected")
+                .hasMessageContaining("fk_prso_patient");
+        }
+    }
+
+    /**
      * V68 regression: the outbox UNIQUE INDEX uses
      * {@code COALESCE(category_option_combo_uid, '__DEFAULT_COC__')} so two
      * "default-COC" rows for the same (run, period, orgUnit, dataElement)

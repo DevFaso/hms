@@ -50,4 +50,8 @@ public interface PanelAssignmentRepository extends JpaRepository<PanelAssignment
         order by count(a) desc
     """)
     List<Object[]> activePanelSizes(@Param("hospitalId") UUID hospitalId);
+
+    /** E8 #48 — a standing panel assignment at this hospital establishes the relationship. */
+    List<PanelAssignment> findByPatient_IdAndHospital_IdAndStatus(
+        UUID patientId, UUID hospitalId, PanelAssignmentStatus status);
 }

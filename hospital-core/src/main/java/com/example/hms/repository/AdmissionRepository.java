@@ -191,4 +191,7 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
 
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);
+
+    /** E8 #48 — every admission of this patient here; the resolver applies the status/decay rule. */
+    List<Admission> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 }

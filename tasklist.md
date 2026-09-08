@@ -1652,7 +1652,7 @@ finding out what already ships. `BreakGlassSession` (V67), the disclosure
 whitelist (V141), `PatientAccessAuditInterceptor` and `PanelAssignment` (V149)
 all exist and are reachable.
 
-- [ ] 48. **Treatment-relationship resolver.** The single predicate the whole
+- [x] 48. **Treatment-relationship resolver.** _(shipped: `TreatmentRelationshipResolver` + `RecordAccessPolicy`, decay rule in `app.record-access.*`, probe at `GET /patients/{id}/record-access`; nothing consumes it until #49)_ The single predicate the whole
   model rests on: *does this actor have a live clinical relationship with this
   patient, at the hospital they are acting in?* Carriers already in the schema
   — an `Encounter` in a non-terminal status, an `Appointment` today or
@@ -1742,7 +1742,7 @@ all exist and are reachable.
   treat granular release as a later pass. Do not ship #49 without at least the
   withhold half, or the first cross-hospital read discloses a category that
   should never have moved.
-- [ ] 52. **Per-hospital access posture + patient opt-out.** The genuinely
+- [x] 52. **Per-hospital access posture + patient opt-out.** _(shipped API-only in V157: `hospital.hospitals.record_access_posture` + `clinical.patient_record_sharing_optouts`, both honoured inside the predicate; portal toggle lands with #50)_ The genuinely
   Epic-shaped part: two Epic sites run different consent models because it is
   configuration. A hospital-level setting — `TREATMENT_PRESUMED` (this
   decision) vs `EXPLICIT_CONSENT` (the opt-in jurisdictions) — plus a patient
