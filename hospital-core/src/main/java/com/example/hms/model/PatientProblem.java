@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.ProblemSeverity;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.converter.DiagnosisCodesConverter;
@@ -132,4 +133,14 @@ public class PatientProblem extends BaseEntity {
             status = ProblemStatus.ACTIVE;
         }
     }
+
+    /**
+     * E8 #51 — explicit sensitive-category override for this row. NULL means
+     * ordinary clinical information; the effective category is resolved by
+     * {@code SensitivityClassifier}, which falls back to the department's
+     * default where the row has one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 }

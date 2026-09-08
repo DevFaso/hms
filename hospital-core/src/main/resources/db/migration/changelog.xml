@@ -2366,4 +2366,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V158 — E8 #51: the sensitive-category tag (substance use,
+         behavioural health, HIV, reproductive health) on the rows that can
+         carry one independently, plus a per-department default. NULL means
+         ordinary information and travels normally; any category is withheld
+         cross-hospital. Replaces a read-time English-keyword guess that
+         matches nothing a French-speaking clinician writes. Plain DDL.
+         ================================================================= -->
+    <changeSet id="V158-clinical-sensitivity-categories" author="hms-team" runOnChange="false">
+        <sqlFile path="V158__clinical_sensitivity_categories.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
