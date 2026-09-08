@@ -74,14 +74,14 @@ class CrossHospitalReadFilterCoverageTest {
             .as("The finder scan matched nothing — the detection is broken, not the surface")
             .isNotEmpty();
 
-        assertThat(found.size())
+        assertThat(found)
             .as("New patient+hospital finders were added:%n%s%n%n"
                     + "Each one is a decision: does it widen across hospitals "
                     + "(take a Collection<UUID> and resolve it through "
                     + "RecordAccessPolicy.readableHospitalIds) or stay acting-hospital "
                     + "only? Make the call, then update SINGLE_HOSPITAL_FINDER_BUDGET.",
                 String.join("\n", found))
-            .isLessThanOrEqualTo(SINGLE_HOSPITAL_FINDER_BUDGET);
+            .hasSizeLessThanOrEqualTo(SINGLE_HOSPITAL_FINDER_BUDGET);
     }
 
     @Test

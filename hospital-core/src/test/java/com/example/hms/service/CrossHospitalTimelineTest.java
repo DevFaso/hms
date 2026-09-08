@@ -146,7 +146,7 @@ class CrossHospitalTimelineTest {
 
     @Test
     @DisplayName("the disclosure counts rows per foreign source hospital, and ignores local ones")
-    void disclosureCountsPerSource() throws Exception {
+    void disclosureCountsPerSource() {
         List<PatientTimelineEntryDTO> entries = List.of(
             entryFrom(OTHER, true), entryFrom(OTHER, true), entryFrom(ACTING, false));
 
@@ -191,9 +191,9 @@ class CrossHospitalTimelineTest {
     void readableSetGatesTheRow() {
         Set<UUID> readable = Set.of(ACTING);
 
-        assertThat(readable.contains(OTHER))
+        assertThat(readable)
             .as("with the flag off the other hospital is not readable, so its rows never load")
-            .isFalse();
+            .doesNotContain(OTHER);
         assertThat(readable).contains(ACTING);
     }
 }

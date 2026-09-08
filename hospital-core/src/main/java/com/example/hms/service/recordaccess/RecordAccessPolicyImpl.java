@@ -94,22 +94,26 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         }
         for (PatientHospitalRegistration registration : registrationRepository.findByPatientId(patientId)) {
             Hospital source = registration.getHospital();
-            if (source == null || source.getId() == null || readable.contains(source.getId())) {
-                continue;
+            if (disclosesOnTreatmentPresumption(source)) {
+                readable.add(source.getId());
             }
-            if (source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
-                continue;
-            }
-            // The source hospital's own posture governs disclosure of its
-            // records. EXPLICIT_CONSENT there keeps them behind consent even
-            // when the reader's hospital presumes treatment.
-            RecordAccessPosture posture = source.getRecordAccessPosture();
-            if (posture != null && posture != RecordAccessPosture.TREATMENT_PRESUMED) {
-                continue;
-            }
-            readable.add(source.getId());
         }
         return readable;
+    }
+
+    /**
+     * Whether this hospital lets its own records be read on the treatment
+     * presumption. A {@code SCHEMA}-isolated tenant never does, by
+     * construction; {@code EXPLICIT_CONSENT} keeps its records behind consent
+     * even when the reader's hospital presumes treatment.
+     */
+    private static boolean disclosesOnTreatmentPresumption(Hospital source) {
+        if (source == null || source.getId() == null
+            || source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
+            return false;
+        }
+        RecordAccessPosture posture = source.getRecordAccessPosture();
+        return posture == null || posture == RecordAccessPosture.TREATMENT_PRESUMED;
     }
 
     private RecordAccessDecision evaluate(UUID actorUserId, UUID patientId, UUID hospitalId) {

@@ -212,6 +212,10 @@ public class PatientServiceImpl implements PatientService {
     /** E8 #49/#50 — provenance key, written by stampProvenance and read back by
      *  the disclosure accounting. Three uses is Sonar's S1192 threshold. */
     private static final String META_SOURCE_HOSPITAL_ID = "sourceHospitalId";
+    /** Audit entityType for a patient-scoped event. AuditEventLogServiceImpl
+     *  matches this literal case-insensitively to resolve the patient, so the
+     *  spelling is load-bearing — "Patient" would silently disable it. */
+    private static final String AUDIT_ENTITY_PATIENT = "PATIENT";
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
@@ -1744,7 +1748,7 @@ public class PatientServiceImpl implements PatientService {
                     .userId(requesterUserId)
                     .assignmentId(assignment == null ? null : assignment.getId())
                     .patientId(patientId)
-                    .entityType("PATIENT")
+                    .entityType(AUDIT_ENTITY_PATIENT)
                     .resourceId(patientId.toString())
                     .eventDescription("Cross-hospital chart read on the treatment relationship")
                     .details(Map.of(
@@ -2257,7 +2261,7 @@ public class PatientServiceImpl implements PatientService {
                 .hospitalName(assignment.getHospital() != null ? assignment.getHospital().getName() : null)
                 .resourceId(patient.getId() != null ? patient.getId().toString() : null)
                 .resourceName(resolvePatientName(patient))
-                .entityType("PATIENT")
+                .entityType(AUDIT_ENTITY_PATIENT)
                 .eventType(AuditEventType.PATIENT_ACCESS)
                 .status(AuditStatus.SUCCESS)
                 .eventDescription("Doctor record view")
@@ -2518,7 +2522,7 @@ public class PatientServiceImpl implements PatientService {
                 .hospitalName(assignment.getHospital() != null ? assignment.getHospital().getName() : null)
                 .resourceId(patient.getId() != null ? patient.getId().toString() : null)
                 .resourceName(resolvePatientName(patient))
-                .entityType("PATIENT")
+                .entityType(AUDIT_ENTITY_PATIENT)
                 .eventType(AuditEventType.PATIENT_ACCESS)
                 .status(AuditStatus.SUCCESS)
                 .eventDescription("Doctor timeline view")
