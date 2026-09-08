@@ -68,10 +68,7 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
     @Override
     @Transactional(readOnly = true)
     public SensitivityTagResponseDTO getDepartmentDefault(UUID departmentId) {
-        Department d = requireDepartment(departmentId);
-        return new SensitivityTagResponseDTO(d.getId(), d.getDefaultSensitivityCategory(),
-            d.getDefaultSensitivityCategory(), d.getDefaultSensitivityCategory(),
-            classifier.travelsCrossHospital(d.getDefaultSensitivityCategory()));
+        return describeDepartment(requireDepartment(departmentId));
     }
 
     @Override
@@ -81,7 +78,7 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
         Department department = requireDepartment(departmentId);
         SensitivityCategory before = department.getDefaultSensitivityCategory();
         if (before == category) {
-            return getDepartmentDefault(departmentId);
+            return describeDepartment(department);
         }
         department.setDefaultSensitivityCategory(category);
         departmentRepository.save(department);
@@ -91,7 +88,23 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
         audit(AuditEventType.CONFIGURATION_CHANGED, "DEPARTMENT_DEFAULT_SENSITIVITY",
             departmentId, actorUserId, null, before, category);
         log.info("[sensitivity] department {} default {} -> {}", departmentId, before, category);
-        return new SensitivityTagResponseDTO(departmentId, category, category, category,
+        return describeDepartment(department);
+    }
+
+    /**
+     * A department's own default IS its effective category — it has no parent
+     * to inherit from — so all three fields carry the same value.
+     *
+     * <p>Takes the loaded entity rather than an id on purpose. The previous
+     * shape had {@code setDepartmentDefault} call {@code getDepartmentDefault},
+     * which is a {@code @Transactional} self-invocation: the inner
+     * {@code readOnly = true} never applied (Spring's proxy is invocation-time,
+     * so the call bypassed it), and it re-read a row already in the persistence
+     * context. Sonar S2229.
+     */
+    private SensitivityTagResponseDTO describeDepartment(Department department) {
+        SensitivityCategory category = department.getDefaultSensitivityCategory();
+        return new SensitivityTagResponseDTO(department.getId(), category, category, category,
             classifier.travelsCrossHospital(category));
     }
 
