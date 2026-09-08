@@ -5,6 +5,9 @@ import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.exception.ConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.mockito.InOrder;
 import com.example.hms.mapper.AdvanceDirectiveMapper;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.mapper.NursingNoteMapper;
@@ -97,6 +100,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -104,6 +109,11 @@ class PatientServiceImplTest {
 
     @Mock
     private PatientRepository patientRepository;
+
+    /** Needed the moment a test actually reaches deletePatient: it is a
+     *  constructor dependency, so without this @InjectMocks passes null. */
+    @Mock
+    private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
     @Mock
     private com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
     @Mock
@@ -363,6 +373,59 @@ class PatientServiceImplTest {
             .hasMessageContaining("not found");
 
         verify(patientRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deletePatientFlushesSoTheForeignKeyAnswersInsideTheMethod() {
+        // deleteById only queues the removal. Without the flush the DELETE
+        // reaches the database at commit, after this method has returned, and
+        // V156's foreign keys surface as an unhandled integrity error on the
+        // way out instead of a 409. This test is the only thing pinning that
+        // flush in place.
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+
+        patientService.deletePatient(patientId, Locale.ENGLISH);
+
+        InOrder order = inOrder(patientProxyRepository, patientRepository);
+        order.verify(patientProxyRepository).deleteByGrantorPatient_Id(patientId);
+        order.verify(patientRepository).deleteById(patientId);
+        order.verify(patientRepository).flush();
+    }
+
+    @Test
+    void deletePatientRefusesWhenTheChartWouldBeOrphaned() {
+        // The dev log on 2026-09-07 showed three consultations and one
+        // admission left pointing at a deleted patient, still holding PHI with
+        // no identity attached. V156 constrains those tables with RESTRICT;
+        // this turns the resulting integrity error into an actionable 409
+        // instead of letting it escape as a 500.
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        doThrow(new DataIntegrityViolationException("fk_consultations_patient"))
+            .when(patientRepository).flush();
+        when(messageSource.getMessage(eq("patient.delete.hasclinicalrecords"), any(), any()))
+            .thenReturn("Patient has clinical records and cannot be deleted.");
+
+        assertThatThrownBy(() -> patientService.deletePatient(patientId, Locale.ENGLISH))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("cannot be deleted");
+    }
+
+    @Test
+    void deletePatientRefusalUsesTheMessageKeyNotResolvedProse() {
+        // MessageUtil-style resolution happens in the bundle, so the key must
+        // reach messageSource verbatim; handing it an already-translated
+        // sentence is how a response body ends up reading
+        // "[Missing translation] ...".
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        doThrow(new DataIntegrityViolationException("fk_admissions_patient"))
+            .when(patientRepository).flush();
+        when(messageSource.getMessage(anyString(), any(), any())).thenReturn("refused");
+
+        assertThatThrownBy(() -> patientService.deletePatient(patientId, Locale.ENGLISH))
+            .isInstanceOf(ConflictException.class);
+
+        verify(messageSource).getMessage(
+            eq("patient.delete.hasclinicalrecords"), any(), eq(Locale.ENGLISH));
     }
 
     @Test
