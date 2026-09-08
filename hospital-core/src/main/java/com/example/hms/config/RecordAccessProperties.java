@@ -31,6 +31,19 @@ import java.time.Period;
 public class RecordAccessProperties {
 
     /**
+     * E8 #49 — the master switch for cross-hospital reads.
+     *
+     * <p><b>Default false, and it must stay false until the sensitive
+     * categories are actually classified.</b> The withhold rule (#51) can only
+     * withhold what someone has tagged: with no department default set and no
+     * row tagged, turning this on moves every record — psychiatric,
+     * substance-use, HIV — across hospitals with nothing held back. Set a
+     * default category on the departments that need one, then enable this
+     * per environment.
+     */
+    private boolean crossHospitalReadsEnabled = false;
+
+    /**
      * How long after an encounter is checked out, or an admission discharged,
      * the relationship stays live. Covers results review, discharge follow-up
      * and the post-visit call. ISO-8601 duration; days are the intended unit.

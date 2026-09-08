@@ -1679,7 +1679,7 @@ all exist and are reachable.
   own answer (schedule/admission-bounded, with a tail after discharge) is the
   place to start. This is the item to build first and alone: #49 through #53
   are all consumers of it.
-- [ ] 49. **Replace the hospital-scoped read filter.** Today ~148 call sites
+- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, behind `app.record-access.cross-hospital-reads-enabled` (OFF); 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
   ⚠ Raw grep says 148, but ~42 of those are the repository declarations
   themselves and 3 are definitions: the real **call-site** surface is ~103, of
@@ -1759,7 +1759,7 @@ all exist and are reachable.
   opt-out is not a legal contingency, it is part of the model. A fast legal
   yes must not let an implementer ship the widened filter with no way for a
   patient to decline it.
-- [ ] 53. **Disclosure accounting for every cross-hospital read.**
+- [~] 53. **Disclosure accounting for every cross-hospital read.** _(pass 1: the timeline emits one RECORD_SHARE per foreign source hospital with actor, acting hospital, source hospital and rows surfaced; the other read surfaces follow as #49 widens them)_
   Record the *reach*: actor, actor's hospital, the record's hospital and the
   relationship that authorised it, so the patient's disclosure report (#39)
   answers "who outside my hospital opened my chart, and why were they
@@ -1800,6 +1800,31 @@ all exist and are reachable.
   the population of people who can technically reach a given chart grows.
 
 ## Standing platform debt — owed, not parity
+
+- **Allergies, imaging and surgical history cannot cross hospitals, and the
+  reason is structural.** They attach to patient + hospital with no encounter
+  link (`NursingNote`, `PatientVitalSign`, `PatientAllergy`,
+  `ImagingOrder`/`UltrasoundOrder`, `PatientSurgicalHistory`), so #51's
+  sensitivity category cannot be resolved for them: a row whose category nobody
+  can determine must not travel. **Foreign allergies are the painful one** —
+  they are exactly what a clinician wants in an emergency, and they are the one
+  category of outside data whose absence can hurt a patient directly. Fixing it
+  means either an encounter link on those tables or their own sensitivity
+  column (V158 already added one to nursing notes and problems for this reason).
+  Decide per table; do not widen them until then.
+- **26 of the 29 single-hospital patient finders are still unwidened.** Pass 1
+  of #49 routed the doctor timeline only. `CrossHospitalReadFilterCoverageTest`
+  freezes the count so a new one cannot appear unnoticed, but it proves nothing
+  about the 26 — each is a per-query decision still to be made. The chart tabs,
+  the FHIR `$everything` export and the record-sharing surface are the next
+  three worth doing.
+- **The keyword sensitivity heuristic is still live and cannot be retired yet.**
+  The product owner decided (2026-09-08) it goes in #49, but `SENSITIVE_KEYWORDS`
+  still drives the intra-hospital doctor-chart toggle and **nothing is tagged**:
+  0 departments carry a default and 0 encounters are tagged on dev. Retiring it
+  now would make every row read as non-sensitive on a screen clinicians use
+  today. Retire it once the departments are classified — that is a clinical data
+  task, not a code change.
 
 - **37 more tables carry `patient_id` with no foreign key to
   `clinical.patients`.** V156 constrained the ten core clinical ones

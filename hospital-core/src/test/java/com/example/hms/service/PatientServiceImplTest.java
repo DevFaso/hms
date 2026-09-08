@@ -87,6 +87,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -100,6 +101,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
@@ -179,6 +181,14 @@ class PatientServiceImplTest {
     @Mock
     private PhoneVerificationService phoneVerificationService;
 
+    /** E8 #49/#51 — constructor deps; without these @InjectMocks passes null
+     *  and every timeline test NPEs. Defaults below keep pre-E8 behaviour. */
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
+    @Mock
+    private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -191,6 +201,14 @@ class PatientServiceImplTest {
     void setUp() {
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
+
+        // Pre-E8 behaviour by default: only the acting hospital is readable and
+        // nothing is categorised, so no row is foreign and none is withheld.
+        // Tests that exercise the widening override these.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), any(), any()))
+            .thenAnswer(inv -> java.util.Set.of(inv.getArgument(2, UUID.class)));
+        lenient().when(sensitivityClassifier.effectiveCategory(any(com.example.hms.model.Encounter.class)))
+            .thenReturn(null);
 
         patient = new Patient();
         patient.setId(patientId);
@@ -710,7 +728,7 @@ class PatientServiceImplTest {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encounter));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
         when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(allergy));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
