@@ -2336,4 +2336,48 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V156 — the FK that stops a patient delete from orphaning a chart.
+         47 of the 82 tables carrying patient_id had no foreign key to
+         clinical.patients; consultations and admissions were created
+         unconstrained in V1 and a hard deleteById left their PHI behind
+         with no identity attached. NO ACTION (the default) on
+         purpose — a chart must not vanish with the patient row. NOT VALID
+         so pre-existing orphans do not fail the deploy; deletes and new
+         rows are still checked.
+         ================================================================= -->
+    <changeSet id="V156-patient-fk-integrity" author="hms-team" runOnChange="false">
+        <sqlFile path="V156__patient_fk_integrity.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V157 — E8 #48/#52: per-hospital record-access posture
+         (TREATMENT_PRESUMED | EXPLICIT_CONSENT, the legal escape hatch)
+         and the patient opt-out from cross-hospital reads. Both are read
+         inside the access predicate itself, so they must exist before the
+         read filter widens in #49. Plain DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V157-record-access-posture-and-optout" author="hms-team" runOnChange="false">
+        <sqlFile path="V157__record_access_posture_and_optout.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V158 — E8 #51: the sensitive-category tag (substance use,
+         behavioural health, HIV, reproductive health) on the rows that can
+         carry one independently, plus a per-department default. NULL means
+         ordinary information and travels normally; any category is withheld
+         cross-hospital. Replaces a read-time English-keyword guess that
+         matches nothing a French-speaking clinician writes. Plain DDL.
+         ================================================================= -->
+    <changeSet id="V158-clinical-sensitivity-categories" author="hms-team" runOnChange="false">
+        <sqlFile path="V158__clinical_sensitivity_categories.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

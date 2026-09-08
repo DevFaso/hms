@@ -1590,7 +1590,282 @@ that exists rather than inventing one.
   mother (she sees "care team alerted" / "follow-up planned", never a
   number). Bambara/Dioula/Mooré texts need commissioned human translation.
 
+## E8 — Cross-hospital record access, on Epic's treatment-relationship model
+
+**The decision (user, 2026-09-07):** stop treating a patient's consent as the
+gate on one hospital reading another's chart, and adopt the model Epic runs in
+a shared instance — *the record follows the treatment relationship, and access
+is controlled by role security, segmentation and audit rather than by a
+facility-pairing handshake*. Epic does not ask "may hospital B see hospital A's
+notes?"; it asks "is this clinician treating this patient?" and then, second,
+"does this record carry a category that needs its own authorisation?"
+
+**What is NOT being removed.** Consent stays where Epic keeps it, and deleting
+it wholesale would break things that are legally load-bearing:
+
+- `TreatmentConsent` / consent-to-treat at check-in gates **treatment**, never
+  record access. Untouched.
+- ROI requests (V151) stay — that is disclosure to people *outside* the
+  treatment relationship (insurers, lawyers, a non-treating provider), which
+  is exactly the case Epic still requires an authorisation for.
+- Disclosure accounting (V141) stays and gets *more* to record, not less.
+- What goes is consent as a precondition for a treating clinician to see the
+  chart, and the per-facility grant idea with it. ⚠ **Size the superseded
+  surface before committing:** `PatientRecordSharingServiceImpl` is **1648
+  lines** with a live controller and its own DTOs. Read it first and decide
+  what it becomes — the consent-grant half retires, but its cross-hospital
+  *fetch* half is plausibly what #49 should be built on rather than beside.
+  Retiring
+  `ConsentType.REFERRAL` is NOT a code deletion: the column is
+  `@Enumerated(STRING)` over `VARCHAR(50)` (V33), so existing `'REFERRAL'` rows
+  fail enum conversion on load, and the portal hard-codes the value in
+  `consent-management.component.ts` and `record-sharing.service.ts`. Needs a
+  backfill migration plus both portal edits — or keep the value readable and
+  merely stop writing it.
+
+**Applies only to `ROW_LEVEL` tenants** — but the carve-out is a *decision*,
+not a mechanism that exists yet. V97 is metadata only: the connection-provider
+plumbing is gated by `app.tenancy.schema-isolation.enabled`, which is set
+nowhere and defaults off (roadmap row 33 is still `started`). A SCHEMA-flagged
+hospital's rows sit in the shared schema today, so #49's widened filter WOULD
+return them. #49 must exclude `isolation_mode = 'SCHEMA'` explicitly; relying
+on "they are in another schema" is relying on something unbuilt. For those, sharing remains an explicit export
+via referral or ROI. Every item below is scoped to row-level tenancy and has
+to say so in its guard.
+
+⚠ **Legal sign-off is a prerequisite, not a follow-up.** Epic's model rests on
+HIPAA's treatment-payment-operations provision, which has no Burkinabè
+equivalent that I have verified. Burkina Faso's tradition is French-derived,
+and France's DMP is markedly *more* patient-controlled than the US model —
+document-level masking, access by a matrix of professional categories. The
+opposite pole exists too (UK Summary Care Record, Australia My Health Record:
+opt-out national models). **Get counsel and the CIL to confirm that
+treatment-purpose access without patient authorisation is lawful here before
+#49 ships.** If the answer is no, #52 is the escape hatch: it makes the
+posture configurable per hospital, and an opt-in jurisdiction is one setting
+rather than a rewrite. **#52 ships before #49 regardless of how the legal
+answer lands** — the patient opt-out is part of the model, not a contingency
+for a slow lawyer.
+
+Per the lesson at the foot of this page: budget the first pass of each item for
+finding out what already ships. `BreakGlassSession` (V67), the disclosure
+whitelist (V141), `PatientAccessAuditInterceptor` and `PanelAssignment` (V149)
+all exist and are reachable.
+
+- [x] 48. **Treatment-relationship resolver.** _(shipped: `TreatmentRelationshipResolver` + `RecordAccessPolicy`, decay rule in `app.record-access.*`, probe at `GET /patients/{id}/record-access`; nothing consumes it until #49)_ The single predicate the whole
+  model rests on: *does this actor have a live clinical relationship with this
+  patient, at the hospital they are acting in?* Carriers already in the schema
+  — an `Encounter` in a non-terminal status, an `Appointment` today or
+  scheduled, an active `Admission`, a `PanelAssignment` (V149), the ordering /
+  attending staff on an open order, and `PatientHospitalRegistration`.
+  ⚠ The 148 sites split two ways and only the smaller half is about
+  registration: ~25 `isRegisteredInHospital` calls ask "is this patient known
+  at my hospital", while ~123 `findByPatient_IdAndHospital_Id` calls filter the
+  **clinical row's own `hospital_id`** — row provenance, not a relationship.
+  #48's predicate governs part of the first group only: roughly 13 of the ~22
+  `isRegisteredInHospital` call sites are WRITE guards, which #49 leaves alone,
+  so the predicate actually lands on ~9. The ~81 `findByPatient_IdAndHospital_Id`
+  call sites across 35 entity repositories are what #49 has to rewrite, and no
+  decision about registration changes them. Registration itself is the weakest carrier — "known here", not
+  "being treated here" — so decide explicitly whether it counts, and if it
+  does, make sure #52's opt-out reaches it; otherwise it is a second
+  authorisation path around the switch. One injectable, one method, one cache per
+  request; no controller may hand-roll it.
+  ⚠ **Not quite "alone": #52's opt-out is honoured inside this predicate**,
+  not bolted onto each caller, so either build the opt-out flag with #48 or
+  accept reopening #48 when #52 lands. Prefer the former — the predicate is
+  the one place the switch is enforceable. Decide and write down the decay
+  rule — a relationship that never expires is not a relationship, and Epic's
+  own answer (schedule/admission-bounded, with a tail after discharge) is the
+  place to start. This is the item to build first and alone: #49 through #53
+  are all consumers of it.
+- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, behind `app.record-access.cross-hospital-reads-enabled` (OFF); 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
+  gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
+  ⚠ Raw grep says 148, but ~42 of those are the repository declarations
+  themselves and 3 are definitions: the real **call-site** surface is ~103, of
+  which ~81 are the derived finders below. Use the smaller figure when sizing —
+  the inflated one is what the "cannot be hand-edited" argument leaned on.
+  The new rule: rows from the actor's own hospital as now, PLUS rows from other
+  `ROW_LEVEL` hospitals when #48 says a treatment relationship exists. The
+  count is the risk.
+  ⚠ **Not all ~103 are reads.** Many `isRegisteredInHospital` sites guard
+  WRITES — `AdvanceDirective`, `Guarantor`, `PatientRecall`, `IntakeOutput`,
+  `SlotInventory`, `NurseTask` create paths among them. A blanket replacement
+  widens cross-hospital *writes*, which this decision does not authorise.
+  Classify the ~103 first; the write guards stay as they are.
+  ⚠ **A tenant-filter framework ships, but it does not reach this population
+  — and that is the crux of the item.** `TenantRepositoryConfig` sets
+  `repositoryBaseClass = TenantAwareJpaRepository`, so all 35 repositories
+  already extend it; opt-in is entity-level (`implements TenantScoped`, carried
+  by 7 entities so far). It intercepts only the `Specification` query paths
+  plus `findById` / `existsById` / `getReferenceById`. **Derived finders and
+  `@Query` methods bypass it entirely** — and every `findByPatient_IdAndHospital_Id`
+  is a derived finder. So "adopt the existing filter" is not a drop-in
+  mitigation for the ~81 sites that matter; the real work is converting those
+  finders to the Specification path (or giving them a marker the base class can
+  act on) so the framework can see them at all. `PatientRepository`'s own
+  reference to the class is the Javadoc on `findByIdUnscoped`, documenting a
+  deliberate bypass — read that before designing around it.
+  ⚠ **The guard test has no marker to scan for.** `SchedulerLockCoverageTest`
+  works because `@Scheduled` is enumerable; nothing means "patient-scoped
+  query". Defining that marker is part of this item, or the only stated
+  mitigation for ~103 sites does not transfer. Expect the first pass to be a survey:
+  some of those 148 are already correct, some are the tenant-isolation bug
+  class and must be fixed *first*.
+  ⚠ **Blocked on the triage-scoping entry in Standing platform debt.** That
+  hole is NOT "contained pending this item" — it is already cross-tenant for
+  writes today: `submitTriage` / `completeTriage` resolve by `findById` with no
+  hospital check, so a nurse holding an encounter id from another hospital can
+  write vitals into that chart right now, with no read access at all. Fix it on
+  its own schedule, not as part of this epic.
+  ⚠ **Also blocked by #51 (the withhold half) and #52 (posture + opt-out),
+  both numbered after it.** Working top-down through this section ships the
+  widened filter before the sensitive-category withhold exists — do not.
+- [ ] 50. **Provenance on the merged chart ("Happy Together").** Outside data
+  merges into the normal chart surfaces — timeline, results, medications,
+  problems — rather than a separate "other hospitals" tab, because Epic's
+  experience is that clinicians do not open the tab. Every foreign row carries
+  a visible source badge (facility + date) and the chart states plainly when it
+  is showing a partial view. The portal work is the larger half of this item.
+- [~] 51. **Sensitive-category segmentation.** _(withhold half shipped: `SensitivityCategory` + tag on encounters/admissions/consultations/problems/nursing notes + per-department default (V158), `SensitivityClassifier` with default-withhold; ENFORCEMENT lands with #49, and granular ROI-authorised release is the later pass)_ The carve-out Epic still gates
+  on explicit authorisation: substance use, behavioural health / the EPDS rows
+  from #47, HIV, reproductive health. These do NOT travel on the treatment
+  presumption. Needs a category tag on the clinical row (not a guess from the
+  ICD code at read time), a default-withhold rule cross-hospital, and a
+  patient-authorised release path. ROI (V151) is the nearest existing
+  vehicle, but the preamble scopes ROI to NON-treating parties while this item
+  would use it for a treating clinician at another hospital. Decide which:
+  widen ROI's stated scope, or give the sensitive-category release its own
+  authorisation record. Leaving both readings standing is how one gets built
+  by accident. Flagged in the
+  industry as incompletely solved; scope it to *withhold correctly* first and
+  treat granular release as a later pass. Do not ship #49 without at least the
+  withhold half, or the first cross-hospital read discloses a category that
+  should never have moved.
+- [x] 52. **Per-hospital access posture + patient opt-out.** _(shipped API-only in V157: `hospital.hospitals.record_access_posture` + `clinical.patient_record_sharing_optouts`, both honoured inside the predicate; portal toggle lands with #50)_ The genuinely
+  Epic-shaped part: two Epic sites run different consent models because it is
+  configuration. A hospital-level setting — `TREATMENT_PRESUMED` (this
+  decision) vs `EXPLICIT_CONSENT` (the opt-in jurisdictions) — plus a patient
+  opt-out flag that excludes their record from cross-hospital reads while
+  leaving in-hospital access untouched. ⚠ "Their own hospital" is singular and
+  the schema is not: a patient holds many `PatientHospitalRegistration` rows.
+  Define it as *every hospital where they are registered keeps its own access;
+  the treatment-relationship widening is what switches off* — the other reading
+  (one home hospital) would silently cut access at facilities that legitimately
+  hold their chart. Opt-out must be honoured by
+  #48's predicate, not bolted onto each caller.
+  **Build this before #49, unconditionally.** An earlier draft made it
+  conditional on the legal answer being slow; that was wrong — the patient
+  opt-out is not a legal contingency, it is part of the model. A fast legal
+  yes must not let an implementer ship the widened filter with no way for a
+  patient to decline it.
+- [~] 53. **Disclosure accounting for every cross-hospital read.** _(pass 1: the timeline emits one RECORD_SHARE per foreign source hospital with actor, acting hospital, source hospital and rows surfaced; the other read surfaces follow as #49 widens them)_
+  Record the *reach*: actor, actor's hospital, the record's hospital and the
+  relationship that authorised it, so the patient's disclosure report (#39)
+  answers "who outside my hospital opened my chart, and why were they
+  allowed to?".
+  ⚠ **The reach cannot come from `PatientAccessAuditInterceptor`.** Its
+  `afterCompletion` sees the request path, never the response body — and once
+  #50 merges foreign rows into the chart, a single response spans several
+  facilities while the hook can stamp only the actor's own. The source has to
+  be #49's filter — but note it knows which hospitals are *permitted*, not
+  which ones produced rows. Recording the permitted set would over-report on a
+  patient-facing legal document ("hospital C accessed your record" when nothing
+  of C's was returned). The reach must be the distinct hospitals of the rows
+  actually served.
+  ⚠ **That interceptor is also best-effort by construction**, which this model
+  cannot tolerate once audit is the ONLY remaining check on access: it skips
+  principals that are not `CustomUserDetails` (OIDC / `JwtAuthenticationToken`
+  — a case `ControllerAuthUtils` handles precisely because it occurs), dedupes
+  on a 30-minute actor+patient window, returns silently when the audit bean is
+  absent, and swallows failures to a warn. Hardening those four is part of this
+  item, not an assumption behind it — see [[out-of-session-lazy-proxies]] for
+  how these rows were silently dropped once already.
+- [ ] 54. **Break-the-glass for restricted charts.** Distinct from everything
+  above and easy to conflate — this is intra-organisational. VIPs, staff
+  members, a clinician's own record or a family member's: access requires a
+  stated reason, is time-boxed, and is flagged loudly. `BreakGlassSession`
+  (V67) exists.
+  ⚠ **The reason prompt already ships** — `BreakGlassSession.reason` is
+  `nullable=false`, the controller documents the 400, and the portal banner
+  carries a labelled textarea with a ≥10-character check. This entry claiming
+  otherwise is the page's own closing lesson repeating itself: check the
+  shipped surface before building. Genuinely missing are the
+  **chart-restriction flag** (no sensitivity or restricted field exists on the
+  patient row anywhere) — and, for the review side, a **portal screen and a
+  reviewed / sign-off state**, not the query: `GET /break-glass/audit` ships
+  admin-only and paginated, most-recent-first, with `auditCount` and revocation
+  fields, documented as being for compliance review screens. That is twice in
+  one item; read the endpoint list before writing the next one. Matters more once #49 widens the default reach, because
+  the population of people who can technically reach a given chart grows.
+
 ## Standing platform debt — owed, not parity
+
+- **Allergies, imaging and surgical history cannot cross hospitals, and the
+  reason is structural.** They attach to patient + hospital with no encounter
+  link (`NursingNote`, `PatientVitalSign`, `PatientAllergy`,
+  `ImagingOrder`/`UltrasoundOrder`, `PatientSurgicalHistory`), so #51's
+  sensitivity category cannot be resolved for them: a row whose category nobody
+  can determine must not travel. **Foreign allergies are the painful one** —
+  they are exactly what a clinician wants in an emergency, and they are the one
+  category of outside data whose absence can hurt a patient directly. Fixing it
+  means either an encounter link on those tables or their own sensitivity
+  column (V158 already added one to nursing notes and problems for this reason).
+  Decide per table; do not widen them until then.
+- **26 of the 29 single-hospital patient finders are still unwidened.** Pass 1
+  of #49 routed the doctor timeline only. `CrossHospitalReadFilterCoverageTest`
+  freezes the count so a new one cannot appear unnoticed, but it proves nothing
+  about the 26 — each is a per-query decision still to be made. The chart tabs,
+  the FHIR `$everything` export and the record-sharing surface are the next
+  three worth doing.
+- **The keyword sensitivity heuristic is still live and cannot be retired yet.**
+  The product owner decided (2026-09-08) it goes in #49, but `SENSITIVE_KEYWORDS`
+  still drives the intra-hospital doctor-chart toggle and **nothing is tagged**:
+  0 departments carry a default and 0 encounters are tagged on dev. Retiring it
+  now would make every row read as non-sensitive on a screen clinicians use
+  today. Retire it once the departments are classified — that is a clinical data
+  task, not a code change.
+
+- **37 more tables carry `patient_id` with no foreign key to
+  `clinical.patients`.** V156 constrained the ten core clinical ones
+  (consultations, admissions, encounters, prescriptions, vital signs,
+  allergies, problems, imaging orders, appointments, lab orders) after a hard
+  `deleteById` orphaned three consultations and an admission on dev
+  (2026-09-07). Of the 82 tables declaring `patient_id`, 35 had a key before
+  V156 and 10 gained one; the rest are still unconstrained — among them
+  `clinical.patient_uploaded_documents`, `clinical.discharge_summaries`,
+  `clinical.nursing_notes`, `clinical.encounter_notes`,
+  `clinical.medication_administration_records`, `clinical.roi_requests` and
+  `billing.billing_invoices`. Each needs its own judgement rather than a
+  blanket sweep: the `*_v2` tables belong to the legacy `patients_v2` orphan
+  stack and should not be constrained at all, and `empi.master_identities`
+  spans identities across tenants by design. The app-level refusal in
+  `deletePatient` covers all of them today, but only for callers that go
+  through the service.
+- **The orphans already on dev are not healed by V156.** NOT VALID leaves
+  them in place; the deploy log names them. Decide per row whether to
+  reconcile to a patient or delete, then
+  `ALTER TABLE … VALIDATE CONSTRAINT …` to close the table for good.
+
+- **Nothing enforces "every encounter write is scoped".** All ten mutating
+  paths on `EncounterServiceImpl` now go through `requireEncounterInScope`
+  (`deleteEncounter` is `ROLE_SUPER_ADMIN`-only and global by design), but the
+  guard's javadoc is the only thing carrying the invariant — a new write added
+  tomorrow with a bare `findById` reintroduces the hole silently. A marker plus
+  a coverage test is what stops that, and it is the E8 #49 problem in
+  miniature: there is no annotation meaning "this query is tenant-scoped" to
+  scan for.
+- **`getAfterVisitSummary` reads unscoped.** It resolves by bare `findById`
+  with no hospital check, on an endpoint that also admits `ROLE_PATIENT` — so
+  staff at one hospital can read the AVS written by another's checkout. A read,
+  not a write, so it belongs with E8 #49's classification pass rather than the
+  write-scoping fix.
+- **`getEncounterById` keeps the null-hospital bypass on the read side.** Its
+  check reads `activeHospitalId != null && e.getHospital() != null && !equals`,
+  so an encounter with a null hospital passes for any caller — the same shape
+  removed from the three write siblings in #575, left in place here because it
+  is a read. Verified 2026-09-07 while re-landing the #575 round-2 fixes; goes
+  with `getAfterVisitSummary` in E8 #49's read pass.
 
 - **Outbound mail is sent on the request thread**, inside or just after the
   transaction. `TransactionCallbacks.afterCommit` fires before
@@ -1813,6 +2088,15 @@ universal) and both #33 and #34 shipped. **E4–E7 are the remaining Tier 2
 work, all pick-by-demand: E4 (#35–#37), E5 (#38 demographics depth, #39b ROI
 request workflow — #39 and #40 shipped), E6 (#42–#45), E7 (#46, #47); #41
 shipped.**
+
+**E8 (#48–#54) sits outside that ordering.** It is not parity breadth — it is
+the cross-hospital access model, adopted by decision on 2026-09-07, and it
+changes the default reach of every patient read in the product. Take #48
+first and alone; #49 is blocked on three things at once (the triage-scoping
+entry in Standing platform debt, plus #51 and #52 which are numbered after
+it); and the legal question gates the epic, not a follow-up to it — if
+treatment-purpose access without patient authorisation is not lawful here,
+#52 is what makes that a per-hospital setting instead of a rewrite.
 
 One pattern is now consistent enough across #33, #40, #41 and #39 to plan
 around: **the entry describing an item as absent has been wrong every time,

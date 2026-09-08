@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
@@ -176,6 +177,17 @@ public class Hospital extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "isolation_mode", nullable = false, length = 16)
     private TenantIsolationMode isolationMode = TenantIsolationMode.ROW_LEVEL;
+
+    /**
+     * E8 #52 — how this hospital lets clinicians elsewhere read the charts of
+     * patients it has treated. Sits beside {@link #isolationMode} because both
+     * are per-tenant access posture; a SCHEMA-isolated tenant is never readable
+     * across regardless of this value.
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "record_access_posture", nullable = false, length = 32)
+    private RecordAccessPosture recordAccessPosture = RecordAccessPosture.TREATMENT_PRESUMED;
 
     @Pattern(regexp = "^[a-z][a-z0-9_]{0,62}$",
         message = "tenantSchemaName must be a valid PostgreSQL identifier (lowercase, "

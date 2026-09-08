@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationType;
 import com.example.hms.enums.ConsultationUrgency;
@@ -148,4 +149,14 @@ public class Consultation extends BaseEntity {
 
     @Column(name = "decline_reason", columnDefinition = "TEXT")
     private String declineReason;
+
+    /**
+     * E8 #51 — explicit sensitive-category override for this row. NULL means
+     * ordinary clinical information; the effective category is resolved by
+     * {@code SensitivityClassifier}, which falls back to the department's
+     * default where the row has one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 }

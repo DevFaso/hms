@@ -387,4 +387,100 @@ class GlobalExceptionHandlerTest {
             assertThat(annotation.value()).containsExactly(UnauthorizedException.class);
         }
     }
+
+    // =========================================================================
+    // handleFhirResponseException
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleFhirResponseException")
+    class HandleFhirResponseException {
+
+        @Test
+        @DisplayName("maps HAPI's ResourceNotFoundException to 404, not the RuntimeException catch-all's 500")
+        void mapsNotFoundTo404() {
+            // The live bug: PatientRecordExportController is plain Spring MVC,
+            // so HAPI's servlet never sees this exception and its status code
+            // was thrown away. GET /patients/{id}/fhir-record answered 500 for
+            // every patient outside the caller's hospital scope.
+            var ex = new ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException(
+                "Patient/abc is not registered at your active hospital.");
+
+            ResponseEntity<Object> response = handler.handleFhirResponseException(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull()
+                .containsEntry("status", 404)
+                .containsEntry("message", "Patient/abc is not registered at your active hospital.");
+        }
+
+        @Test
+        @DisplayName("maps HAPI's ForbiddenOperationException to 403")
+        void mapsForbiddenTo403() {
+            var ex = new ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException(
+                "An active hospital scope is required.");
+
+            ResponseEntity<Object> response = handler.handleFhirResponseException(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        }
+
+        @Test
+        @DisplayName("maps HAPI's MethodNotAllowedException to 405")
+        void mapsMethodNotAllowedTo405() {
+            var ex = new ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException(
+                "FHIR Patient/{id}/$everything is disabled.");
+
+            ResponseEntity<Object> response = handler.handleFhirResponseException(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        }
+
+        @Test
+        @DisplayName("withholds the message on a 5xx, where it can carry HAPI internals")
+        void hidesTheMessageOnServerErrors() {
+            // Client errors are ours and worded deliberately, so they are
+            // echoed. A 5xx can come from HAPI's parser or transport and must
+            // not be handed back to the caller.
+            var ex = new ca.uhn.fhir.rest.server.exceptions.InternalErrorException(
+                "jdbc:postgresql://internal-host/hms failed");
+
+            ResponseEntity<Object> response = handler.handleFhirResponseException(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull().containsEntry("message", "An unexpected error occurred.");
+            assertThat(body.get("message").toString()).doesNotContain("internal-host");
+        }
+
+        @Test
+        @DisplayName("falls back to 500 when HAPI reports a status Spring cannot resolve")
+        void fallsBackTo500OnAnUnknownStatus() {
+            var ex = new ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException(799, "odd") {};
+
+            ResponseEntity<Object> response = handler.handleFhirResponseException(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        @Test
+        @DisplayName("is declared for the HAPI base type, so every subclass routes here before the RuntimeException catch-all")
+        void isRegisteredForTheHapiBaseType() throws NoSuchMethodException {
+            // The whole family has to be covered by one declaration: a handler
+            // registered for the leaf types alone would leave any HAPI
+            // exception we do not yet throw falling through to the 500.
+            var handlerMethod = GlobalExceptionHandler.class.getMethod(
+                "handleFhirResponseException",
+                ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException.class,
+                WebRequest.class);
+            var annotation = handlerMethod.getAnnotation(
+                org.springframework.web.bind.annotation.ExceptionHandler.class);
+            assertThat(annotation).isNotNull();
+            assertThat(annotation.value()).containsExactly(
+                ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException.class);
+        }
+    }
 }

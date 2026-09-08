@@ -270,7 +270,7 @@ class EncounterNoteSignatureTest {
             .assessment("Revised assessment")
             .build();
 
-        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE))
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("addendum");
     }
@@ -285,7 +285,7 @@ class EncounterNoteSignatureTest {
             .build();
 
         // The pre-V125 path copied these fields straight onto the entity.
-        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE))
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cannot be asserted");
     }
@@ -299,7 +299,7 @@ class EncounterNoteSignatureTest {
             .requiresCosign(false)
             .build();
 
-        service.upsertEncounterNote(encounterId, request, LOCALE);
+        service.upsertEncounterNote(encounterId, request, LOCALE, true, null);
 
         assertThat(note.isRequiresCosign()).isTrue();
     }

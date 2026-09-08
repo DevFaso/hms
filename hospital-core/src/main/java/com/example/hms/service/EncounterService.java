@@ -39,7 +39,8 @@ public interface EncounterService {
                                     Pageable pageable,
                                     Locale locale);
 
-    EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale);
+    EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale,
+                                         boolean isSuperAdmin, UUID callerHospitalId);
 
     void deleteEncounter(UUID id, Locale locale);
 
@@ -48,11 +49,14 @@ public interface EncounterService {
     List<EncounterResponseDTO> getEncountersByPatientIdentifier(String identifier, Locale locale);
     List<EncounterResponseDTO> getEncountersByDoctorId(UUID staffId, Locale locale);
 
-    EncounterNoteResponseDTO upsertEncounterNote(UUID encounterId, EncounterNoteRequestDTO request, Locale locale);
+    EncounterNoteResponseDTO upsertEncounterNote(UUID encounterId, EncounterNoteRequestDTO request, Locale locale,
+                                                 boolean isSuperAdmin, UUID callerHospitalId);
 
     EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
                                                               EncounterNoteAddendumRequestDTO request,
-                                                              Locale locale);
+                                                              Locale locale,
+                                                              boolean isSuperAdmin,
+                                                              UUID callerHospitalId);
 
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
 
@@ -68,7 +72,9 @@ public interface EncounterService {
      */
     TriageSubmissionResponseDTO submitTriage(UUID encounterId,
                                              TriageSubmissionRequestDTO request,
-                                             String actorUsername);
+                                             String actorUsername,
+                                             boolean isSuperAdmin,
+                                             UUID callerHospitalId);
 
     /**
      * MVP 3 — Nursing intake flowsheet: bulk-updates allergies, records medication
@@ -76,7 +82,9 @@ public interface EncounterService {
      */
     NursingIntakeResponseDTO submitNursingIntake(UUID encounterId,
                                                   NursingIntakeRequestDTO request,
-                                                  String actorUsername);
+                                                  String actorUsername,
+                                                  boolean isSuperAdmin,
+                                                  UUID callerHospitalId);
 
     /**
      * MVP 6 — Check-Out & After-Visit Summary: atomically transitions encounter →
@@ -85,7 +93,9 @@ public interface EncounterService {
      */
     AfterVisitSummaryDTO checkOut(UUID encounterId,
                                   CheckOutRequestDTO request,
-                                  String actorUsername);
+                                  String actorUsername,
+                                  boolean isSuperAdmin,
+                                  UUID callerHospitalId);
 
     /**
      * MVP 6 — Retrieve the After-Visit Summary for a completed (checked-out) encounter.
@@ -102,7 +112,7 @@ public interface EncounterService {
     /**
      * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).
      */
-    EncounterResponseDTO completeTriage(UUID encounterId);
+    EncounterResponseDTO completeTriage(UUID encounterId, boolean isSuperAdmin, UUID callerHospitalId);
 
     /**
      * Doctor finishes examining a patient. Transitions IN_PROGRESS →

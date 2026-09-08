@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import java.util.Collection;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Prescription;
 import org.springframework.data.domain.Page;
@@ -60,4 +61,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
 
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);
+
+    /** E8 #49 — the same read across every hospital the caller may read for this patient. */
+    List<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds);
 }

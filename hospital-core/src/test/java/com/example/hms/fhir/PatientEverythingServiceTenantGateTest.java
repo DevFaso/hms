@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -146,13 +147,37 @@ class PatientEverythingServiceTenantGateTest {
 
         assertThatThrownBy(() -> service.everythingForPatient(patientId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("not found at the active hospital scope");
+            .hasMessageContaining("is not registered at your active hospital")
+            // The remedy, not just the refusal: the caller almost always has the
+            // wrong hospital selected, and the portal echoes this wording.
+            .hasMessageContaining("switch your hospital scope");
 
         // CRITICAL: the Patient mapper must NEVER fire for a cross-
         // tenant request — that's the PHI-leak surface the gate
         // closes. If this verify fails, name / DOB / address /
         // phone / email crossed the tenant boundary.
         verify(patientMapper, never()).toFhir(any(Patient.class));
+    }
+
+    @Test
+    @DisplayName("says exactly the same thing whether the patient is unknown or lives at another tenant")
+    void refusalWordingDoesNotDiscloseExistenceElsewhere() {
+        // The gate collapses both causes to one message on purpose. If the
+        // wording ever diverges, the refusal itself tells an outsider that
+        // someone by this id is a patient somewhere in the system — which is
+        // the disclosure the collapse exists to prevent.
+        properties.getEverything().setEnabled(true);
+        setActiveHospital();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        String whenUnknown = catchThrowable(() -> service.everythingForPatient(patientId)).getMessage();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(new Patient()));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
+            .thenReturn(Optional.empty());
+        String whenElsewhere = catchThrowable(() -> service.everythingForPatient(patientId)).getMessage();
+
+        assertThat(whenElsewhere).isEqualTo(whenUnknown);
     }
 
     @Test

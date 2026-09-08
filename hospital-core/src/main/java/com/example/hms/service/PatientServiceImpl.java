@@ -8,6 +8,8 @@ import com.example.hms.enums.ProblemChangeType;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.exception.ConflictException;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.example.hms.mapper.AdvanceDirectiveMapper;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.mapper.NursingNoteMapper;
@@ -207,6 +209,13 @@ public class PatientServiceImpl implements PatientService {
         "clozapine"
     );
     private static final String META_STATUS = "status";
+    /** E8 #49/#50 — provenance key, written by stampProvenance and read back by
+     *  the disclosure accounting. Three uses is Sonar's S1192 threshold. */
+    private static final String META_SOURCE_HOSPITAL_ID = "sourceHospitalId";
+    /** Audit entityType for a patient-scoped event. AuditEventLogServiceImpl
+     *  matches this literal case-insensitively to resolve the patient, so the
+     *  spelling is load-bearing — "Patient" would silently disable it. */
+    private static final String AUDIT_ENTITY_PATIENT = "PATIENT";
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
@@ -225,6 +234,10 @@ public class PatientServiceImpl implements PatientService {
     private final LabResultRepository labResultRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final AuditEventLogService auditEventLogService;
+    /** E8 #49 — which hospitals this caller may read for this patient. */
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    /** E8 #51 — resolves a row's effective sensitive category before it travels. */
+    private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     private final PatientAllergyMapper patientAllergyMapper;
     private final PrescriptionMapper prescriptionMapper;
     private final LabResultMapper labResultMapper;
@@ -454,6 +467,27 @@ public class PatientServiceImpl implements PatientService {
         // Remove non-cascaded child records before deleting the patient
         patientProxyRepository.deleteByGrantorPatient_Id(id);
         patientRepository.deleteById(id);
+        try {
+            // The flush is what makes this method honest. deleteById only
+            // queues the removal, so without it the DELETE reaches the
+            // database at commit — long after this method returned — and the
+            // foreign keys added in V156 would surface as an unhandled
+            // integrity error on the way out instead of the 409 below.
+            patientRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            // V156 constrains the core clinical tables with RESTRICT, so this
+            // is the chart refusing to be orphaned. Before those keys existed
+            // the delete succeeded and left consultations, admissions and the
+            // rest holding PHI with no patient attached — unattributable in an
+            // audit and unreachable by an ROI or erasure request.
+            //
+            // Deliberately NOT recovered from: the rollback also restores the
+            // patient_proxies rows deleted just above, which is the outcome we
+            // want when the patient survives.
+            log.warn("[deletePatient] Refused — patient {} still has clinical records", id);
+            throw new ConflictException(messageSource.getMessage(
+                "patient.delete.hasclinicalrecords", new Object[]{id}, locale));
+        }
     }
 
     @Override
@@ -783,13 +817,25 @@ public class PatientServiceImpl implements PatientService {
         int limit = resolveTimelineLimit(request.getMaxEvents());
         Set<String> categoryFilters = normalizeCategoryFilters(request.getCategories());
 
+        // E8 #49 — the acting hospital plus, when the flag is on and a
+        // treatment relationship exists, the other hospitals that permit
+        // disclosure. Flag off => a one-element set => today's behaviour.
+        Set<UUID> readableHospitalIds =
+            recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
-        aggregatedEntries.addAll(collectEncounterEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        // Not widened: allergies, imaging and surgical history attach to
+        // patient + hospital with no encounter link, so #51's category cannot
+        // be resolved for them. A row whose category nobody can determine must
+        // not travel. Tracked as standing platform debt.
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
-    aggregatedEntries.addAll(collectImagingEntries(patientId, hospitalId, categoryFilters));
-    aggregatedEntries.addAll(collectProcedureEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectImagingEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectProcedureEntries(patientId, hospitalId, categoryFilters));
+
+        recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
 
         List<PatientTimelineEntryDTO> entries = aggregatedEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
@@ -1633,12 +1679,99 @@ public class PatientServiceImpl implements PatientService {
         return trimmed.length() > 2000 ? trimmed.substring(0, 2000) : trimmed;
     }
 
-    private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    /** E8 #49 — is this row's hospital one the caller may read for this patient? */
+    private static boolean isReadableHospital(Set<UUID> readableHospitalIds, Hospital hospital) {
+        return hospital != null && hospital.getId() != null && readableHospitalIds.contains(hospital.getId());
+    }
+
+    /**
+     * E8 #51 — a row from ANOTHER hospital may surface only when it carries no
+     * sensitive category. Rows from the acting hospital are unaffected: this
+     * is about what crosses a hospital boundary, not about what a clinician
+     * sees in their own chart, which the existing includeSensitive toggle
+     * already governs.
+     */
+    private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
+                                      com.example.hms.enums.SensitivityCategory category) {
+        boolean foreign = rowHospital != null && rowHospital.getId() != null
+            && !rowHospital.getId().equals(actingHospitalId);
+        return !foreign || category == null;
+    }
+
+    /**
+     * Provenance for the merged chart (E8 #50's data half). The portal badge is
+     * that item; without the source on the wire it would have nothing to render,
+     * and a clinician cannot tell a foreign result from a local one.
+     */
+    private Map<String, Object> stampProvenance(Map<String, Object> metadata, Hospital rowHospital,
+                                                UUID actingHospitalId) {
+        if (rowHospital == null || rowHospital.getId() == null) {
+            return metadata;
+        }
+        boolean foreign = !rowHospital.getId().equals(actingHospitalId);
+        metadata.put(META_SOURCE_HOSPITAL_ID, rowHospital.getId().toString());
+        putIfNotNull(metadata, "sourceHospitalName", rowHospital.getName());
+        metadata.put("foreign", foreign);
+        return metadata;
+    }
+
+    /**
+     * E8 #53 — account for the reach, not just the access. One row per foreign
+     * source hospital naming the actor, the hospital they acted in, the
+     * hospital whose records they reached and how many rows surfaced, so the
+     * patient's own disclosure report can answer "who outside my hospital
+     * opened my chart".
+     *
+     * <p>Best-effort and after the read: the read already happened, and a
+     * failed audit must not fail it. That is a deliberate asymmetry from the
+     * write path.
+     */
+    private void recordCrossHospitalDisclosure(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
+                                               UserRoleHospitalAssignment assignment,
+                                               List<PatientTimelineEntryDTO> entries) {
+        Map<String, Long> perSource = new HashMap<>();
+        for (PatientTimelineEntryDTO entry : entries) {
+            Map<String, Object> metadata = entry.getMetadata();
+            if (metadata == null || !Boolean.TRUE.equals(metadata.get("foreign"))) {
+                continue;
+            }
+            Object source = metadata.get(META_SOURCE_HOSPITAL_ID);
+            if (source != null) {
+                perSource.merge(source.toString(), 1L, Long::sum);
+            }
+        }
+        for (Map.Entry<String, Long> reach : perSource.entrySet()) {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.RECORD_SHARE)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(requesterUserId)
+                    .assignmentId(assignment == null ? null : assignment.getId())
+                    .patientId(patientId)
+                    .entityType(AUDIT_ENTITY_PATIENT)
+                    .resourceId(patientId.toString())
+                    .eventDescription("Cross-hospital chart read on the treatment relationship")
+                    .details(Map.of(
+                        "actingHospitalId", String.valueOf(actingHospitalId),
+                        META_SOURCE_HOSPITAL_ID, reach.getKey(),
+                        "rowsSurfaced", reach.getValue()))
+                    .build());
+            } catch (RuntimeException ex) {
+                log.warn("[record-access] cross-hospital disclosure audit failed for patient {} source {}: {}",
+                    patientId, reach.getKey(), ex.getMessage());
+            }
+        }
+    }
+
+    private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                  UUID actingHospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ENCOUNTER)) {
             return List.of();
         }
         return encounterRepository.findByPatient_Id(patientId).stream()
-            .filter(encounter -> encounter.getHospital() != null && hospitalId.equals(encounter.getHospital().getId()))
+            .filter(encounter -> isReadableHospital(readableHospitalIds, encounter.getHospital()))
+            .filter(encounter -> maySurface(encounter.getHospital(), actingHospitalId,
+                sensitivityClassifier.effectiveCategory(encounter)))
             .map(encounter -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, encounter.getStatus() != null ? encounter.getStatus().name() : null);
@@ -1651,17 +1784,22 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(encounter.getEncounterDate())
                     .summary(formatEncounterSummary(encounter))
                     .sensitive(isSensitiveEncounter(encounter))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, encounter.getHospital(), actingHospitalId))
                     .build();
             })
             .toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectPrescriptionEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectPrescriptionEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                     UUID actingHospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PRESCRIPTION)) {
             return List.of();
         }
-        return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        return prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
+            // A prescription carries no tag of its own; its category comes
+            // from the encounter that wrote it (E8 #51).
+            .filter(prescription -> maySurface(prescription.getHospital(), actingHospitalId,
+                sensitivityClassifier.effectiveCategory(prescription.getEncounter())))
             .map(prescription -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, prescription.getStatus() != null ? prescription.getStatus().name() : null);
@@ -1674,19 +1812,23 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(coalesce(prescription.getUpdatedAt(), prescription.getCreatedAt()))
                     .summary(formatPrescriptionSummary(prescription))
                     .sensitive(isSensitiveMedication(prescription))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, prescription.getHospital(), actingHospitalId))
                     .build();
             })
             .toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                   UUID actingHospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
         return labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-            .filter(result -> result.getLabOrder() != null && result.getLabOrder().getHospital() != null
-                && hospitalId.equals(result.getLabOrder().getHospital().getId()))
+            .filter(result -> result.getLabOrder() != null
+                && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
+            // Same as prescriptions: the category rides on the lab order's encounter.
+            .filter(result -> maySurface(result.getLabOrder().getHospital(), actingHospitalId,
+                sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter())))
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "unit", result.getResultUnit());
@@ -1699,7 +1841,7 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(result.getResultDate())
                     .summary(summary)
                     .sensitive(isSensitiveLabResult(result))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, result.getLabOrder().getHospital(), actingHospitalId))
                     .build();
             })
             .toList();
@@ -1810,8 +1952,13 @@ public class PatientServiceImpl implements PatientService {
         int requestedLimit
     ) {
         int safeLimit = requestedLimit > 0 ? Math.min(requestedLimit, DEFAULT_RECENT_ENCOUNTER_LIMIT) : DEFAULT_RECENT_ENCOUNTER_LIMIT;
+        // Deliberately NOT widened: this is the chart's "recent encounters"
+        // strip, not the timeline. A single-hospital readable set keeps it
+        // exactly as it was before E8 — no foreign rows, so the category
+        // filter below can never drop anything.
         List<PatientTimelineEntryDTO> encounterEntries = collectEncounterEntries(
             patientId,
+            Set.of(hospitalId),
             hospitalId,
             Collections.emptySet()
         );
@@ -2114,7 +2261,7 @@ public class PatientServiceImpl implements PatientService {
                 .hospitalName(assignment.getHospital() != null ? assignment.getHospital().getName() : null)
                 .resourceId(patient.getId() != null ? patient.getId().toString() : null)
                 .resourceName(resolvePatientName(patient))
-                .entityType("PATIENT")
+                .entityType(AUDIT_ENTITY_PATIENT)
                 .eventType(AuditEventType.PATIENT_ACCESS)
                 .status(AuditStatus.SUCCESS)
                 .eventDescription("Doctor record view")
@@ -2375,7 +2522,7 @@ public class PatientServiceImpl implements PatientService {
                 .hospitalName(assignment.getHospital() != null ? assignment.getHospital().getName() : null)
                 .resourceId(patient.getId() != null ? patient.getId().toString() : null)
                 .resourceName(resolvePatientName(patient))
-                .entityType("PATIENT")
+                .entityType(AUDIT_ENTITY_PATIENT)
                 .eventType(AuditEventType.PATIENT_ACCESS)
                 .status(AuditStatus.SUCCESS)
                 .eventDescription("Doctor timeline view")

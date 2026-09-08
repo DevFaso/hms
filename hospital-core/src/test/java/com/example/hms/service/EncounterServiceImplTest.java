@@ -43,6 +43,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,6 +66,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -473,7 +476,7 @@ class EncounterServiceImplTest {
         when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TriageSubmissionResponseDTO result = service.submitTriage(encounterId, request, "nurse1");
+        TriageSubmissionResponseDTO result = service.submitTriage(encounterId, request, "nurse1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(result.getEncounterStatus()).isEqualTo("WAITING_FOR_PHYSICIAN");
@@ -495,10 +498,10 @@ class EncounterServiceImplTest {
         TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
-                .thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
-        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1"))
+        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -513,7 +516,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1"))
+        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Cannot submit triage");
     }
@@ -543,7 +546,7 @@ class EncounterServiceImplTest {
         when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TriageSubmissionResponseDTO result = service.submitTriage(encounterId, request, "nurse1");
+        TriageSubmissionResponseDTO result = service.submitTriage(encounterId, request, "nurse1", true, null);
 
         assertThat(result.getEncounterStatus()).isEqualTo("WAITING_FOR_PHYSICIAN");
         assertThat(result.getUrgency()).isEqualTo("EMERGENT");
@@ -573,7 +576,7 @@ class EncounterServiceImplTest {
         when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.submitTriage(encounterId, req2, "nurse1").getUrgency()).isEqualTo("URGENT");
+        assertThat(service.submitTriage(encounterId, req2, "nurse1", true, null).getUrgency()).isEqualTo("URGENT");
 
         // Test ESI 4 → LOW
         Encounter enc4 = new Encounter();
@@ -585,7 +588,7 @@ class EncounterServiceImplTest {
         TriageSubmissionRequestDTO req4 = TriageSubmissionRequestDTO.builder().esiScore(4).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc4));
 
-        assertThat(service.submitTriage(encounterId, req4, "nurse1").getUrgency()).isEqualTo("LOW");
+        assertThat(service.submitTriage(encounterId, req4, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
 
         // Test ESI 5 → LOW
         Encounter enc5 = new Encounter();
@@ -597,7 +600,7 @@ class EncounterServiceImplTest {
         TriageSubmissionRequestDTO req5 = TriageSubmissionRequestDTO.builder().esiScore(5).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc5));
 
-        assertThat(service.submitTriage(encounterId, req5, "nurse1").getUrgency()).isEqualTo("LOW");
+        assertThat(service.submitTriage(encounterId, req5, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
     }
 
     // ---------- submitNursingIntake ----------
@@ -634,7 +637,7 @@ class EncounterServiceImplTest {
                 .thenReturn(Optional.of(staff));
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1");
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(result.getEncounterStatus()).isEqualTo("WAITING_FOR_PHYSICIAN");
@@ -652,10 +655,10 @@ class EncounterServiceImplTest {
         NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder().build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
-                .thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
-        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1"))
+        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -670,7 +673,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1"))
+        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Cannot submit nursing intake");
     }
@@ -713,7 +716,7 @@ class EncounterServiceImplTest {
         when(patientAllergyRepository.save(any(com.example.hms.model.PatientAllergy.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1");
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
 
         assertThat(result.getAllergyCount()).isEqualTo(1);
         verify(patientAllergyRepository).save(any(com.example.hms.model.PatientAllergy.class));
@@ -740,7 +743,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1");
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
 
         assertThat(result.getEncounterStatus()).isEqualTo("TRIAGE");
         assertThat(result.isNursingNoteRecorded()).isTrue();
@@ -765,7 +768,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1");
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
 
         assertThat(result.isNursingNoteRecorded()).isFalse();
         assertThat(result.getAllergyCount()).isZero();
@@ -818,7 +821,7 @@ class EncounterServiceImplTest {
         when(checkOutMapper.serializeDiagnoses(List.of("Upper respiratory infection"))).thenReturn("[\"Upper respiratory infection\"]");
         when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any())).thenReturn(avs);
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
@@ -874,7 +877,7 @@ class EncounterServiceImplTest {
         doThrow(new RuntimeException("smtp down")).when(emailService)
             .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
@@ -899,7 +902,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
@@ -943,7 +946,7 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
-        service.checkOut(encounterId, request, "doctor1");
+        service.checkOut(encounterId, request, "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
@@ -972,7 +975,7 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
-        service.checkOut(encounterId, request, "doctor1");
+        service.checkOut(encounterId, request, "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
@@ -985,7 +988,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1");
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
 
         verify(patientRecallRepository, org.mockito.Mockito.never()).save(any());
     }
@@ -1003,7 +1006,7 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
@@ -1026,7 +1029,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
@@ -1043,7 +1046,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
         CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
-        assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1"))
+        assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("COMPLETED");
 
@@ -1061,7 +1064,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
         CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().build();
-        assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1"))
+        assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("CANCELLED");
 
@@ -1073,10 +1076,11 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Encounter not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().build();
-        assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1"))
+        assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1", true, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1102,7 +1106,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
-        service.checkOut(encounterId, request, "doctor1");
+        service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
         verify(appointmentRepository).save(appointment);
@@ -1130,7 +1134,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
-        service.checkOut(encounterId, request, "doctor1");
+        service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
         verify(appointmentRepository, never()).save(any());
@@ -1152,7 +1156,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, null, "doctor1");
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, null, "doctor1", true, null);
 
         assertThat(result).isNotNull();
         assertThat(encounter.getFollowUpInstructions()).isNull();
@@ -1251,7 +1255,8 @@ class EncounterServiceImplTest {
     void startEncounter_notFound_throws() {
         UUID encounterId = UUID.randomUUID();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, null))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1425,7 +1430,8 @@ class EncounterServiceImplTest {
         encounter.setHospital(hospital);
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+        // The not-found refusal now carries the message KEY, not resolved prose,
+        // so no messageSource stub is needed (and strict stubs reject one).
 
         assertThatThrownBy(() -> service.completeExamination(encounterId, false, callerHospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1611,7 +1617,7 @@ class EncounterServiceImplTest {
         when(prescriptionRepository.findByEncounter_Id(org.mockito.ArgumentMatchers.eq(encounterId), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
-        EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale);
+        EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale, true, null);
 
         assertThat(result).isNotNull();
         // checkoutTimestamp should have been backfilled in-flight when the merge had none
@@ -1714,11 +1720,169 @@ class EncounterServiceImplTest {
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
 
-        service.updateEncounter(encounterId, request, locale);
+        service.updateEncounter(encounterId, request, locale, true, null);
 
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
         assertThat(merged.getCheckoutTimestamp()).isNull();
+    }
+
+    // =====================================================================
+    // Tenant scoping on every encounter WRITE
+    // =====================================================================
+
+    @Nested
+    @DisplayName("encounter writes are hospital-scoped")
+    class EncounterWriteTenantScoping {
+
+        private static final UUID CALLER_HOSPITAL = UUID.randomUUID();
+        private static final UUID OTHER_HOSPITAL = UUID.randomUUID();
+
+        private Encounter encounterAt(UUID hospitalId) {
+            Encounter e = new Encounter();
+            e.setId(UUID.randomUUID());
+            e.setStatus(EncounterStatus.ARRIVED);
+            if (hospitalId != null) {
+                Hospital h = new Hospital();
+                h.setId(hospitalId);
+                e.setHospital(h);
+            }
+            return e;
+        }
+
+        private void encounterExists(Encounter e) {
+            when(encounterRepository.findById(e.getId())).thenReturn(Optional.of(e));
+        }
+
+        @Test
+        @DisplayName("submitTriage refuses an encounter belonging to another hospital")
+        void submitTriageRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.submitTriage(
+                    foreign.getId(), new TriageSubmissionRequestDTO(), "nurse",
+                    false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+            // Nothing may be written on the way to the refusal.
+            verify(patientVitalSignRepository, never()).save(any());
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("completeTriage refuses an encounter belonging to another hospital")
+        void completeTriageRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() ->
+                    service.completeTriage(foreign.getId(), false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("upsertEncounterNote refuses a foreign encounter")
+        void noteRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.upsertEncounterNote(
+                    foreign.getId(), new com.example.hms.payload.dto.EncounterNoteRequestDTO(), Locale.ENGLISH,
+                    false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("addEncounterNoteAddendum refuses a foreign encounter")
+        void addendumRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.addEncounterNoteAddendum(
+                    foreign.getId(), new com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO(), Locale.ENGLISH,
+                    false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("checkOut refuses a foreign encounter")
+        void checkOutRefusesForeignEncounter() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            assertThatThrownBy(() -> service.checkOut(
+                    foreign.getId(), new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(),
+                    "doctor", false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+            // Nothing on the checkout side effects may fire on the way out.
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the refusal carries the message KEY and the id, not resolved prose")
+        void refusalCarriesKeyAndArgs() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+
+            // ResourceNotFoundException resolves its FIRST argument as a
+            // message key, so handing it an already-translated sentence
+            // produces "[Missing translation] …" in the response body. Assert
+            // on the carried key/args rather than the rendered text: the
+            // messageSource here is an unstubbed mock, so any assertion on the
+            // message itself passes no matter what we do.
+            ResourceNotFoundException thrown = catchThrowableOfType(
+                    () -> service.completeTriage(foreign.getId(), false, CALLER_HOSPITAL),
+                    ResourceNotFoundException.class);
+
+            assertThat(thrown.getMessageKey()).isEqualTo("encounter.notfound");
+            assertThat(thrown.getArgs()).containsExactly(foreign.getId());
+        }
+
+        @Test
+        @DisplayName("an encounter with NO hospital is refused, not waved through")
+        void unattributedEncounterIsRefused() {
+            // The guard the three scoped siblings carried read
+            // `hospitalId != null && !equals(caller)`, so an encounter with no
+            // hospital passed it. An encounter we cannot place is exactly the
+            // one not to write to.
+            Encounter unattributed = encounterAt(null);
+            encounterExists(unattributed);
+
+            assertThatThrownBy(() ->
+                    service.completeTriage(unattributed.getId(), false, CALLER_HOSPITAL))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the caller's own hospital is allowed through")
+        void ownHospitalPasses() {
+            Encounter mine = encounterAt(CALLER_HOSPITAL);
+            encounterExists(mine);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+            service.completeTriage(mine.getId(), false, CALLER_HOSPITAL);
+
+            assertThat(mine.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
+            verify(encounterRepository).save(mine);
+        }
+
+        @Test
+        @DisplayName("a super admin is not hospital-bound")
+        void superAdminPasses() {
+            Encounter foreign = encounterAt(OTHER_HOSPITAL);
+            encounterExists(foreign);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+            service.completeTriage(foreign.getId(), true, null);
+
+            assertThat(foreign.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        }
     }
 }

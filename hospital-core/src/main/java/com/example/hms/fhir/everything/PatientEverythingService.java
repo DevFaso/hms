@@ -472,7 +472,14 @@ public class PatientEverythingService {
     }
 
     private static ResourceNotFoundException notFoundForPatient(UUID patientId) {
-        String message = PATIENT_PREFIX + patientId + " not found at the active hospital scope.";
+        // Deliberately identical whether the patient does not exist at all or
+        // exists at another tenant — otherwise the wording itself discloses
+        // that someone by this id is a patient somewhere else. The second
+        // sentence is the remedy, because the caller most often just has the
+        // wrong hospital selected.
+        String message = PATIENT_PREFIX + patientId
+            + " is not registered at your active hospital. If you expect this record, "
+            + "switch your hospital scope to one where the patient is registered.";
         OperationOutcome outcome = new OperationOutcome();
         outcome.addIssue()
             .setSeverity(OperationOutcome.IssueSeverity.ERROR)

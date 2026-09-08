@@ -103,6 +103,75 @@ describe('StoryboardBannerComponent', () => {
         ?.textContent?.trim(),
     ).toContain('p-fast');
   });
+
+  describe('collapse when pinned', () => {
+    // The banner is sticky by design (persistent patient identity), but the
+    // full card block is ~230px tall — pinned at that height it takes a
+    // quarter of the chart and everything below reads as sliding under a
+    // bridge. condensed() is what the sentinel's IntersectionObserver drives;
+    // these tests drive it directly, because jsdom has no IntersectionObserver
+    // and the component deliberately degrades to "never condenses" there.
+    const condensedFlags = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-testid="storyboard-condensed-flags"]');
+
+    const sections = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('.storyboard__sections');
+
+    function setCondensed(value: boolean): void {
+      (
+        fixture.componentInstance as unknown as { condensed: { set(v: boolean): void } }
+      ).condensed.set(value);
+      fixture.detectChanges();
+    }
+
+    beforeEach(() => {
+      storyboardSpy.getStoryboard.and.returnValue(of(populatedSummary()));
+      setPatient('p-1');
+    });
+
+    it('shows the full card block and no condensed strip while unpinned', () => {
+      expect(sections()?.hidden).toBeFalse();
+      expect(condensedFlags()).toBeNull();
+      expect(bannerEl()?.classList).not.toContain('storyboard--condensed');
+    });
+
+    it('hides the cards and marks the banner condensed once pinned', () => {
+      setCondensed(true);
+
+      expect(sections()?.hidden).toBeTrue();
+      expect(bannerEl()?.classList).toContain('storyboard--condensed');
+    });
+
+    it('keeps the allergy flag visible when condensed — the point of the banner', () => {
+      setCondensed(true);
+
+      // Losing this on scroll would defeat the reason the banner is sticky at
+      // all: a clinician must not scroll back up to find out about an allergy.
+      expect(condensedFlags()).not.toBeNull();
+      expect(condensedFlags()?.textContent).toContain('1');
+    });
+
+    it('keeps the code status visible when condensed', () => {
+      setCondensed(true);
+
+      expect(condensedFlags()?.textContent?.toUpperCase()).toContain('FULL');
+    });
+
+    it('returns to the full card block when unpinned again', () => {
+      setCondensed(true);
+      setCondensed(false);
+
+      expect(sections()?.hidden).toBeFalse();
+      expect(condensedFlags()).toBeNull();
+    });
+
+    it('renders without an IntersectionObserver (jsdom, SSR) instead of throwing', () => {
+      // ngAfterViewInit already ran in beforeEach under a jsdom with no
+      // IntersectionObserver. Reaching here at all is the assertion.
+      expect(bannerEl()).not.toBeNull();
+      expect(sections()?.hidden).toBeFalse();
+    });
+  });
 });
 
 function populatedSummary(name = 'Aïssata Diallo'): PatientStoryboard {

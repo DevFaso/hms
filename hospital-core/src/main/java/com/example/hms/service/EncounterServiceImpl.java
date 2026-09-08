@@ -349,9 +349,13 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @jakarta.transaction.Transactional(rollbackOn = Exception.class)
-    public EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale) {
-        Encounter existing = encounterRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+    public EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale,
+                                                boolean isSuperAdmin, UUID callerHospitalId) {
+        // Scoped like every other write, and for a sharper reason: mergeEncounter
+        // sets `hospital` unconditionally, so an unscoped update could RE-HOME a
+        // foreign encounter into the caller's tenant — after which all the
+        // guards below would accept it.
+        Encounter existing = requireEncounterInScope(id, isSuperAdmin, callerHospitalId);
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
         // Keep a snapshot before merge for audit
@@ -451,13 +455,14 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public EncounterNoteResponseDTO upsertEncounterNote(UUID encounterId,
                                                         EncounterNoteRequestDTO request,
-                                                        Locale locale) {
+                                                        Locale locale,
+                                                        boolean isSuperAdmin,
+                                                        UUID callerHospitalId) {
         if (request == null) {
             throw new BusinessException(messageSource.getMessage("encounter.note.payload.required", null, locale));
         }
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterNote note = upsertEncounterNoteInternal(encounter, encounter.getStaff(), request, locale, null);
         return encounterMapper.toEncounterNoteResponseDTO(note);
@@ -467,13 +472,14 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
                                                                      EncounterNoteAddendumRequestDTO request,
-                                                                     Locale locale) {
+                                                                     Locale locale,
+                                                                     boolean isSuperAdmin,
+                                                                     UUID callerHospitalId) {
         if (request == null) {
             throw new BusinessException(messageSource.getMessage("encounter.note.payload.required", null, locale));
         }
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
@@ -1417,12 +1423,11 @@ public class EncounterServiceImpl implements EncounterService {
     public com.example.hms.payload.dto.TriageSubmissionResponseDTO submitTriage(
             UUID encounterId,
             com.example.hms.payload.dto.TriageSubmissionRequestDTO request,
-            String actorUsername) {
+            String actorUsername,
+            boolean isSuperAdmin,
+            UUID callerHospitalId) {
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
@@ -1545,12 +1550,11 @@ public class EncounterServiceImpl implements EncounterService {
     public com.example.hms.payload.dto.NursingIntakeResponseDTO submitNursingIntake(
             UUID encounterId,
             com.example.hms.payload.dto.NursingIntakeRequestDTO request,
-            String actorUsername) {
+            String actorUsername,
+            boolean isSuperAdmin,
+            UUID callerHospitalId) {
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         // Guard: intake is allowed for encounters that have been triaged or are waiting
         EncounterStatus current = encounter.getStatus();
@@ -1722,11 +1726,11 @@ public class EncounterServiceImpl implements EncounterService {
     public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO checkOut(
             UUID encounterId,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
-            String actorUsername) {
+            String actorUsername,
+            boolean isSuperAdmin,
+            UUID callerHospitalId) {
 
-        Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, Locale.getDefault())));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
@@ -1950,24 +1954,60 @@ public class EncounterServiceImpl implements EncounterService {
                 .orElse(null);
     }
 
+    /**
+     * Resolves an encounter for a WRITE, refusing one that belongs to another
+     * hospital.
+     *
+     * <p>Every mutating path that resolves an encounter by id goes through
+     * here — with two exceptions still outstanding, {@code updateEncounter} and
+     * {@code deleteEncounter}, which are unscoped and tracked in tasklist.md.
+     * Six paths
+     * used a bare {@code findById} with only a status check, so a clinician
+     * holding an encounter id from another hospital could advance the
+     * encounter, or write vitals, a note, an addendum, a nursing intake or a
+     * checkout onto that patient's chart — a cross-tenant write needing no
+     * read access at all.
+     *
+     * <p>A NULL hospital on the encounter is refused, not waved through. The
+     * three paths that already guarded wrote the test as
+     * {@code encounterHospitalId != null && !equals(caller)}, which passes an
+     * unattributed encounter to any caller; an encounter we cannot place is
+     * exactly the one not to write to.
+     *
+     * <p>Refusal is {@code ResourceNotFoundException}, matching the guards
+     * that existed: a caller outside the hospital learns nothing about whether
+     * the id is real.
+     */
+    private Encounter requireEncounterInScope(UUID encounterId, boolean isSuperAdmin, UUID callerHospitalId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> encounterNotFound(encounterId));
+        if (isSuperAdmin) {
+            return encounter;
+        }
+        UUID encounterHospitalId = encounter.getHospital() != null
+                ? encounter.getHospital().getId() : null;
+        if (encounterHospitalId == null || !encounterHospitalId.equals(callerHospitalId)) {
+            throw encounterNotFound(encounterId);
+        }
+        return encounter;
+    }
+
+    /** The single not-found used by every scoped lookup, so the message never drifts. */
+    private ResourceNotFoundException encounterNotFound(UUID encounterId) {
+        // KEY + args, never resolved prose: the constructor calls
+        // MessageUtil.resolve on its first argument, so handing it an
+        // already-translated sentence produces "[Missing translation] …" in the
+        // response body. The bundle string carries {0}, hence the id.
+        return new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
+    }
+
     @Override
     @Transactional
     public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
                                                 boolean isSuperAdmin, UUID callerHospitalId) {
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        // Hospital scoping: non-super-admin must belong to the encounter's hospital
         if (!isSuperAdmin) {
-            UUID encounterHospitalId = encounter.getHospital() != null
-                    ? encounter.getHospital().getId() : null;
-            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
-            }
 
             // Verify the caller is the assigned staff
             User user = userRepository.findByUsername(actorUsername).orElse(null);
@@ -2005,11 +2045,8 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @Transactional
-    public EncounterResponseDTO completeTriage(UUID encounterId) {
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+    public EncounterResponseDTO completeTriage(UUID encounterId, boolean isSuperAdmin, UUID callerHospitalId) {
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
@@ -2048,21 +2085,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public EncounterResponseDTO completeExamination(UUID encounterId,
                                                      boolean isSuperAdmin, UUID callerHospitalId) {
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
-
-        // Hospital scoping for non-super-admins
-        if (!isSuperAdmin) {
-            UUID encounterHospitalId = encounter.getHospital() != null
-                    ? encounter.getHospital().getId() : null;
-            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
-            }
-        }
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterStatus current = encounter.getStatus();
         // Idempotent: already past examination
@@ -2094,20 +2117,7 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public EncounterResponseDTO markReadyForDischarge(UUID encounterId,
                                                        boolean isSuperAdmin, UUID callerHospitalId) {
-        Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
-
-        if (!isSuperAdmin) {
-            UUID encounterHospitalId = encounter.getHospital() != null
-                    ? encounter.getHospital().getId() : null;
-            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
-                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
-            }
-        }
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         EncounterStatus current = encounter.getStatus();
         // Idempotent
