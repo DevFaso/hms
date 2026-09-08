@@ -1,14 +1,59 @@
 // Persistent Storyboard banner. Designed for narrow viewports first.
+// Zero-height, zero-space probe for the IntersectionObserver in the
+// component. margin-bottom cancels its own height so it cannot shift layout.
+.storyboard__sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+  pointer-events: none;
+}
+
 .storyboard {
   position: sticky;
   top: 0;
-  z-index: 5;
+  // Above the chart cards that scroll beneath it, below the modal layer
+  // (dialogs and the break-glass overlay sit at 1000+). At the previous
+  // value of 5 this was the lowest positioned element on the page.
+  z-index: 20;
   background: var(--surface-1, #ffffff);
   border: 1px solid var(--border, #e2e6ea);
   border-radius: 8px;
   padding: 0.875rem 1rem;
   margin-bottom: 1rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+// Pinned state: drop the four cards, keep identity + safety flags on one
+// line, and lift the shadow so it reads as a deliberate bar rather than a
+// card that happens to be overlapping the page.
+.storyboard--condensed {
+  padding: 0.5rem 1rem;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: padding 120ms ease;
+}
+
+.storyboard--condensed .storyboard__header {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.storyboard--condensed .storyboard__name {
+  font-size: 1rem;
+  margin-bottom: 0;
+}
+
+.storyboard__condensed-flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storyboard--condensed {
+    transition: none;
+  }
 }
 
 .storyboard[data-state='loading'],

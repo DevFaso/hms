@@ -1,6 +1,8 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnChanges,
   OnDestroy,
   SimpleChanges,
@@ -8,6 +10,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -43,9 +46,23 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
   templateUrl: './storyboard-banner.component.html',
   styleUrl: './storyboard-banner.component.scss',
 })
-export class StoryboardBannerComponent implements OnChanges, OnDestroy {
+export class StoryboardBannerComponent implements OnChanges, AfterViewInit, OnDestroy {
   readonly patientId = input<string | null | undefined>(null);
   readonly hospitalId = input<string | null | undefined>(null);
+
+  /**
+   * True once the banner is pinned rather than sitting in its place at the
+   * top of the chart. The full card block is ~230px tall, so leaving it
+   * expanded while pinned costs a quarter of the viewport on every chart and
+   * makes the rest of the page look like it is sliding under a bridge.
+   * Condensed, it keeps the two things that must never scroll away — who the
+   * patient is, and the allergy / code-status flags.
+   */
+  protected readonly condensed = signal(false);
+
+  private readonly sentinel = viewChild<ElementRef<HTMLElement>>('stickySentinel');
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private stickyObserver?: IntersectionObserver;
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly summary = signal<PatientStoryboard | null>(null);
@@ -85,7 +102,26 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
     this.load(id, this.hospitalId() ?? undefined);
   }
 
+  ngAfterViewInit(): void {
+    const sentinel = this.sentinel()?.nativeElement;
+    // Guarded: jsdom/Karma and any SSR pass have no IntersectionObserver, and
+    // the banner must still render there — it just never condenses.
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+    // Observe against the scrolling container, not the viewport. `.content`
+    // sits below a fixed-height topbar, so a viewport-rooted observer would
+    // only fire once the sentinel had scrolled behind the topbar — well after
+    // the banner had already stuck.
+    const root = this.host.nativeElement.closest('.content');
+    this.stickyObserver = new IntersectionObserver(
+      ([entry]) => this.condensed.set(!entry.isIntersecting),
+      { root, threshold: 0 },
+    );
+    this.stickyObserver.observe(sentinel);
+  }
+
   ngOnDestroy(): void {
+    this.stickyObserver?.disconnect();
     this.cancelInFlight();
     this.destroyed$.next();
     this.destroyed$.complete();
