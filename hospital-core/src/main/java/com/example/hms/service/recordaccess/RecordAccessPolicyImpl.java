@@ -49,6 +49,17 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     @Override
     @Transactional(readOnly = true)
     public RecordAccessDecision decide(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
+        return cachedDecision(actorUserId, patientId, actingHospitalId);
+    }
+
+    /**
+     * The cached decision, reachable without going back through the proxy.
+     * {@link #readableHospitalIds} needs the same answer, and calling
+     * {@code decide} from it would be a {@code @Transactional} self-invocation
+     * (Sonar S2229): the inner annotation never applies, because Spring's proxy
+     * is invocation-time.
+     */
+    private RecordAccessDecision cachedDecision(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         String key = CACHE_PREFIX + actorUserId + ":" + patientId + ":" + actingHospitalId;
         RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
         if (attrs != null) {
@@ -78,7 +89,7 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         if (!properties.isCrossHospitalReadsEnabled() || patientId == null || actingHospitalId == null) {
             return readable;
         }
-        if (!decide(actorUserId, patientId, actingHospitalId).permitted()) {
+        if (!cachedDecision(actorUserId, patientId, actingHospitalId).permitted()) {
             return readable;
         }
         for (PatientHospitalRegistration registration : registrationRepository.findByPatientId(patientId)) {

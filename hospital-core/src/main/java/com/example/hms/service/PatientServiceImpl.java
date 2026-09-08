@@ -209,6 +209,9 @@ public class PatientServiceImpl implements PatientService {
         "clozapine"
     );
     private static final String META_STATUS = "status";
+    /** E8 #49/#50 — provenance key, written by stampProvenance and read back by
+     *  the disclosure accounting. Three uses is Sonar's S1192 threshold. */
+    private static final String META_SOURCE_HOSPITAL_ID = "sourceHospitalId";
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
@@ -1702,7 +1705,7 @@ public class PatientServiceImpl implements PatientService {
             return metadata;
         }
         boolean foreign = !rowHospital.getId().equals(actingHospitalId);
-        metadata.put("sourceHospitalId", rowHospital.getId().toString());
+        metadata.put(META_SOURCE_HOSPITAL_ID, rowHospital.getId().toString());
         putIfNotNull(metadata, "sourceHospitalName", rowHospital.getName());
         metadata.put("foreign", foreign);
         return metadata;
@@ -1728,7 +1731,7 @@ public class PatientServiceImpl implements PatientService {
             if (metadata == null || !Boolean.TRUE.equals(metadata.get("foreign"))) {
                 continue;
             }
-            Object source = metadata.get("sourceHospitalId");
+            Object source = metadata.get(META_SOURCE_HOSPITAL_ID);
             if (source != null) {
                 perSource.merge(source.toString(), 1L, Long::sum);
             }
@@ -1746,7 +1749,7 @@ public class PatientServiceImpl implements PatientService {
                     .eventDescription("Cross-hospital chart read on the treatment relationship")
                     .details(Map.of(
                         "actingHospitalId", String.valueOf(actingHospitalId),
-                        "sourceHospitalId", reach.getKey(),
+                        META_SOURCE_HOSPITAL_ID, reach.getKey(),
                         "rowsSurfaced", reach.getValue()))
                     .build());
             } catch (RuntimeException ex) {
