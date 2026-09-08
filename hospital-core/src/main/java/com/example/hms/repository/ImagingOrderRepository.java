@@ -54,4 +54,7 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
 
     /** Unscoped paged variant used when no hospital scope is supplied. */
     Page<ImagingOrder> findByPatient_IdOrderByOrderedAtDesc(UUID patientId, Pageable pageable);
+
+    /** E8 #48 — imaging orders of this patient here; the resolver excludes terminal statuses. */
+    List<ImagingOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 }

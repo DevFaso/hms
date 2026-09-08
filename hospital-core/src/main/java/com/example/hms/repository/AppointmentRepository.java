@@ -154,4 +154,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
         java.util.Collection<com.example.hms.enums.AppointmentStatus> statuses,
         @org.springframework.data.repository.query.Param("fromDate") java.time.LocalDate fromDate,
         @org.springframework.data.repository.query.Param("toDate") java.time.LocalDate toDate);
+
+    /** E8 #48 — appointments of this patient here inside the lookback/lookahead window. */
+    List<Appointment> findByPatient_IdAndHospital_IdAndAppointmentDateBetween(
+        UUID patientId, UUID hospitalId, LocalDate from, LocalDate to);
 }
