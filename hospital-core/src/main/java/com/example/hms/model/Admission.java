@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
@@ -373,4 +374,14 @@ public class Admission {
             "description", description
         ));
     }
+
+    /**
+     * E8 #51 — explicit sensitive-category override for this row. NULL means
+     * ordinary clinical information; the effective category is resolved by
+     * {@code SensitivityClassifier}, which falls back to the department's
+     * default where the row has one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 }

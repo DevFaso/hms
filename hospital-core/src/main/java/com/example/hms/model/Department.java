@@ -1,8 +1,11 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.DepartmentPlatformServiceLink;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -162,4 +165,13 @@ public class Department extends BaseEntity {
         }
     }
 
+
+    /**
+     * E8 #51 — the category every row recorded in this department carries
+     * unless the row overrides it. A psychiatry department tags its encounters
+     * without anyone having to remember.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_sensitivity_category", length = 32)
+    private SensitivityCategory defaultSensitivityCategory;
 }

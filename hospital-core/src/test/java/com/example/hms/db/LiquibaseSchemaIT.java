@@ -388,6 +388,42 @@ class LiquibaseSchemaIT {
     }
 
     /**
+     * V158 (E8 #51): the sensitivity column exists on every row type that can
+     * carry a category independently, and on departments as a default. All
+     * nullable — NULL is ordinary information and travels; anything else is
+     * withheld cross-hospital.
+     */
+    @Test
+    void v158SensitivityColumnsExistAndAreNullable() throws Exception {
+        runLiquibaseUpdate();
+
+        record Col(String schema, String table, String column) {}
+        List<Col> expected = List.of(
+            new Col("hospital", "departments", "default_sensitivity_category"),
+            new Col("clinical", "encounters", "sensitivity_category"),
+            new Col("public", "admissions", "sensitivity_category"),
+            new Col("clinical", "consultations", "sensitivity_category"),
+            new Col("clinical", "patient_problems", "sensitivity_category"),
+            new Col("clinical", "nursing_notes", "sensitivity_category"));
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            for (Col c : expected) {
+                try (ResultSet rs = stmt.executeQuery(
+                    "SELECT is_nullable, character_maximum_length FROM information_schema.columns "
+                        + "WHERE table_schema = '" + c.schema() + "' AND table_name = '" + c.table() + "' "
+                        + "  AND column_name = '" + c.column() + "'")) {
+                    assertThat(rs.next())
+                        .as("%s.%s.%s must exist", c.schema(), c.table(), c.column()).isTrue();
+                    assertThat(rs.getString("is_nullable"))
+                        .as("%s must be nullable — NULL means ordinary information", c.column())
+                        .isEqualTo("YES");
+                    assertThat(rs.getInt("character_maximum_length")).isEqualTo(32);
+                }
+            }
+        }
+    }
+
+    /**
      * V68 regression: the outbox UNIQUE INDEX uses
      * {@code COALESCE(category_option_combo_uid, '__DEFAULT_COC__')} so two
      * "default-COC" rows for the same (run, period, orgUnit, dataElement)

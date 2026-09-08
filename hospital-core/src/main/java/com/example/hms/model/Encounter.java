@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.EncounterUrgency;
@@ -266,4 +267,14 @@ public class Encounter extends BaseEntity {
         if (status == null) status = EncounterStatus.IN_PROGRESS;
     }
 
+
+    /**
+     * E8 #51 — explicit sensitive-category override for this row. NULL means
+     * ordinary clinical information; the effective category is resolved by
+     * {@code SensitivityClassifier}, which falls back to the department's
+     * default where the row has one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 }

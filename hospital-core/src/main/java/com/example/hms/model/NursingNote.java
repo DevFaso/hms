@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.SensitivityCategory;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -216,4 +217,14 @@ public class NursingNote extends BaseEntity {
         addenda.add(addendum);
         addendum.setNote(this);
     }
+
+    /**
+     * E8 #51 — explicit sensitive-category override for this row. NULL means
+     * ordinary clinical information; the effective category is resolved by
+     * {@code SensitivityClassifier}, which falls back to the department's
+     * default where the row has one.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 }

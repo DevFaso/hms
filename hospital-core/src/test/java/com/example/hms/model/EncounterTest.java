@@ -96,7 +96,9 @@ class EncounterTest {
                 "CODE-1",
                 // HL7 ADT visit-sync columns (V99) — externalVisitNumber, externalSendingApplication, externalSendingFacility, externalMessageControlId
                 null, null, null, null,
-                "admin", "admin2", null, assignment, 1L
+                "admin", "admin2", null, assignment, 1L,
+                // E8 #51 — sensitivityCategory, appended last on the entity
+                null
         );
         assertThat(e.getPatient()).isEqualTo(patient);
         assertThat(e.getStaff()).isEqualTo(staff);
@@ -108,6 +110,7 @@ class EncounterTest {
         assertThat(e.getCreatedBy()).isEqualTo("admin");
         assertThat(e.getUpdatedBy()).isEqualTo("admin2");
         assertThat(e.getVersion()).isEqualTo(1L);
+        assertThat(e.getSensitivityCategory()).isNull();
     }
 
     // ─── Getters/Setters ─────────────────────────────────────────

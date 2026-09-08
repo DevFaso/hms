@@ -1727,7 +1727,7 @@ all exist and are reachable.
   experience is that clinicians do not open the tab. Every foreign row carries
   a visible source badge (facility + date) and the chart states plainly when it
   is showing a partial view. The portal work is the larger half of this item.
-- [ ] 51. **Sensitive-category segmentation.** The carve-out Epic still gates
+- [~] 51. **Sensitive-category segmentation.** _(withhold half shipped: `SensitivityCategory` + tag on encounters/admissions/consultations/problems/nursing notes + per-department default (V158), `SensitivityClassifier` with default-withhold; ENFORCEMENT lands with #49, and granular ROI-authorised release is the later pass)_ The carve-out Epic still gates
   on explicit authorisation: substance use, behavioural health / the EPDS rows
   from #47, HIV, reproductive health. These do NOT travel on the treatment
   presumption. Needs a category tag on the clinical row (not a guess from the
