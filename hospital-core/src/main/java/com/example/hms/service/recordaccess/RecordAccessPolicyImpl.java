@@ -4,7 +4,10 @@ import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.model.Hospital;
+import com.example.hms.config.RecordAccessProperties;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
 import com.example.hms.repository.StaffRepository;
 import org.springframework.stereotype.Service;
@@ -12,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -24,15 +29,21 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final PatientRecordSharingOptOutRepository optOutRepository;
     private final StaffRepository staffRepository;
     private final TreatmentRelationshipResolver resolver;
+    private final PatientHospitalRegistrationRepository registrationRepository;
+    private final RecordAccessProperties properties;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
                                   StaffRepository staffRepository,
-                                  TreatmentRelationshipResolver resolver) {
+                                  TreatmentRelationshipResolver resolver,
+                                  PatientHospitalRegistrationRepository registrationRepository,
+                                  RecordAccessProperties properties) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
         this.resolver = resolver;
+        this.registrationRepository = registrationRepository;
+        this.properties = properties;
     }
 
     @Override
@@ -51,6 +62,43 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             attrs.setAttribute(key, decision, RequestAttributes.SCOPE_REQUEST);
         }
         return decision;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
+        Set<UUID> readable = new LinkedHashSet<>();
+        if (actingHospitalId != null) {
+            // The acting hospital is always readable — that is today's
+            // behaviour and it does not depend on the flag, the posture or a
+            // treatment relationship. Turning the flag off must leave the
+            // caller exactly where they were before E8.
+            readable.add(actingHospitalId);
+        }
+        if (!properties.isCrossHospitalReadsEnabled() || patientId == null || actingHospitalId == null) {
+            return readable;
+        }
+        if (!decide(actorUserId, patientId, actingHospitalId).permitted()) {
+            return readable;
+        }
+        for (PatientHospitalRegistration registration : registrationRepository.findByPatientId(patientId)) {
+            Hospital source = registration.getHospital();
+            if (source == null || source.getId() == null || readable.contains(source.getId())) {
+                continue;
+            }
+            if (source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
+                continue;
+            }
+            // The source hospital's own posture governs disclosure of its
+            // records. EXPLICIT_CONSENT there keeps them behind consent even
+            // when the reader's hospital presumes treatment.
+            RecordAccessPosture posture = source.getRecordAccessPosture();
+            if (posture != null && posture != RecordAccessPosture.TREATMENT_PRESUMED) {
+                continue;
+            }
+            readable.add(source.getId());
+        }
+        return readable;
     }
 
     private RecordAccessDecision evaluate(UUID actorUserId, UUID patientId, UUID hospitalId) {

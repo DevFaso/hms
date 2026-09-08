@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,4 +29,20 @@ import java.util.UUID;
 public interface RecordAccessPolicy {
 
     RecordAccessDecision decide(UUID actorUserId, UUID patientId, UUID actingHospitalId);
+
+    /**
+     * E8 #49 — every hospital whose rows this actor may read for this patient,
+     * right now. The acting hospital is always in the set; the others are
+     * added only when {@link #decide} permits and the flag is on.
+     *
+     * <p>The posture is checked at <b>both</b> ends, and they mean different
+     * things. On the acting hospital it asks "does this hospital operate the
+     * treatment-presumed model at all?". On each source hospital it asks "does
+     * this hospital permit its records to be disclosed on that presumption?" —
+     * a hospital set to {@code EXPLICIT_CONSENT} keeps its own records behind
+     * consent even when the reader's hospital presumes treatment. A
+     * {@code SCHEMA}-isolated hospital is excluded from both roles by
+     * construction.
+     */
+    Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId);
 }
