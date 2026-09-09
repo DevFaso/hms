@@ -209,6 +209,9 @@ public class PatientServiceImpl implements PatientService {
         "clozapine"
     );
     private static final String META_STATUS = "status";
+    /** E8 #50 — "who treated the patient", required on every row the chart
+     *  renders so provenance reads as hospital + clinician + date + what. */
+    private static final String META_CLINICIAN = "clinician";
     /** E8 #49/#50 — provenance key, written by stampProvenance and read back by
      *  the disclosure accounting. Three uses is Sonar's S1192 threshold. */
     private static final String META_SOURCE_HOSPITAL_ID = "sourceHospitalId";
@@ -1777,7 +1780,7 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, META_STATUS, encounter.getStatus() != null ? encounter.getStatus().name() : null);
                 putIfNotNull(metadata, "encounterType", encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
                 putIfNotNull(metadata, "department", encounter.getDepartment() != null ? encounter.getDepartment().getName() : null);
-                putIfNotNull(metadata, "clinician", resolveStaffName(encounter));
+                putIfNotNull(metadata, META_CLINICIAN, resolveStaffName(encounter));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(encounter.getId() != null ? encounter.getId().toString() : null)
                     .category(CATEGORY_ENCOUNTER)
@@ -1806,6 +1809,9 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "dosage", prescription.getDosage());
                 putIfNotNull(metadata, "frequency", prescription.getFrequency());
                 putIfNotNull(metadata, "duration", prescription.getDuration());
+                // E8 #50: the prescriber. Without it a foreign prescription
+                // renders with a hospital but nobody attached to it.
+                putIfNotNull(metadata, META_CLINICIAN, resolveStaffDisplayName(prescription.getStaff()));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(prescription.getId() != null ? prescription.getId().toString() : null)
                     .category(CATEGORY_PRESCRIPTION)
@@ -1834,6 +1840,9 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "unit", result.getResultUnit());
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
+                // E8 #50: denormalised on the row already; the ordering
+                // clinician is not reachable without the encounter.
+                putIfNotNull(metadata, META_CLINICIAN, result.getReleasedByDisplay());
                 String summary = formatLabResultSummary(result);
                 return PatientTimelineEntryDTO.builder()
                     .entryId(result.getId() != null ? result.getId().toString() : null)

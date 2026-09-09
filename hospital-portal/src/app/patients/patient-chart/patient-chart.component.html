@@ -280,7 +280,7 @@
       </p>
       <ul class="timeline-list">
         @for (e of tl.entries; track e.entryId) {
-          <li class="timeline-entry">
+          <li class="timeline-entry" [class.foreign]="isForeignEntry(e)">
             <span class="material-symbols-outlined timeline-icon">{{
               timelineIcon(e.category)
             }}</span>
@@ -288,6 +288,30 @@
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
                 {{ e.category }} · {{ e.occurredAt | date: 'medium' }}
+              </div>
+              <!--
+                E8 #50 — hospital, clinician and origin on the row itself, never
+                behind a tooltip: a clinician must never have to work out whether
+                what they are reading came from their own hospital.
+              -->
+              <div class="timeline-provenance">
+                @if (entryHospital(e); as hospital) {
+                  <span class="provenance-hospital">
+                    <span class="material-symbols-outlined" aria-hidden="true">domain</span>
+                    {{ hospital }}
+                  </span>
+                }
+                @if (entryClinician(e); as clinician) {
+                  <span class="provenance-clinician">
+                    <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                    {{ clinician }}
+                  </span>
+                }
+                @if (isForeignEntry(e)) {
+                  <span class="provenance-badge">{{
+                    'CHART.TIMELINE_FROM_OTHER_HOSPITAL' | translate
+                  }}</span>
+                }
               </div>
             </div>
           </li>

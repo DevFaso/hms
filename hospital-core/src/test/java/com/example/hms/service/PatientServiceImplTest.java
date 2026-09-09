@@ -746,7 +746,16 @@ class PatientServiceImplTest {
             request
         );
 
-        assertThat(response.getEntries()).hasSize(4);
+        // E8 #50 — the chart renders hospital + clinician + date + what on every
+        // row, so the prescriber has to reach the wire. Asserting the value and
+        // not merely the key: a null clinician still satisfies containsKey, and
+        // that is exactly the regression this guards.
+        assertThat(response.getEntries())
+            .hasSize(4)
+            .filteredOn(entry -> "PRESCRIPTION".equals(entry.getCategory()))
+            .singleElement()
+            .extracting(entry -> entry.getMetadata().get("clinician"))
+            .isEqualTo("Meredith Grey");
         assertThat(response.getPatientId()).isEqualTo(patientId);
         assertThat(response.getHospitalId()).isEqualTo(hospitalId);
         assertThat(response.isContainsSensitiveData()).isTrue();

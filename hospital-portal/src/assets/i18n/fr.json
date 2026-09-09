@@ -6324,6 +6324,7 @@
     "TIMELINE_ACCESS": "À la chronologie",
     "TIMELINE_ACCESS_HINT": "L'accès à la chronologie du patient est audité. Indiquez un motif clinique.",
     "TIMELINE_LOAD_ERROR": "Échec du chargement de la chronologie",
+    "TIMELINE_FROM_OTHER_HOSPITAL": "Autre hôpital",
     "TIMELINE_PROMPT": "Indiquez un motif d'accès pour charger la chronologie du patient (audité).",
     "TIMELINE_REASON": "Motif d'accès",
     "UPDATES": "Mises à Jour",
