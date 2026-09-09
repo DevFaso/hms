@@ -1856,6 +1856,48 @@ all exist and are reachable.
   `prescription.patient.required`) exist in no bundle. Those reach the API
   client as the error body. It should route through the same resolver as
   `ResourceNotFoundException`.
+- **`hasAuthority(...)` is dead across the whole codebase — 235 clauses, 25
+  distinct permission names, all permanently false.**
+  `CustomUserDetailsService` builds authorities from role codes only
+  (`Role::getCode` → `SimpleGrantedAuthority`); permissions never become
+  authorities. So every `hasAuthority('X') or hasAnyRole(...)` guard silently
+  collapses to its role list, and `VIEW_CONSULTATIONS` is not even in
+  `PermissionCatalog` — a guard on a permission that does not exist. Worse,
+  `PermissionCatalog` IS used, by `DashboardConfigurationServiceImpl`, to
+  decide what the **dashboard shows** — so the catalogue drives the UI while
+  roles drive the API, and the portal offers what the backend refuses. ⚠ **Not
+  a cleanup:** wiring the catalogue into authorities would widen access across
+  235 guards at once, and stripping the dead clauses discards the intent. Needs
+  a decision and its own security review, not a tidy-up PR.
+- **Nurse/midwife read drift beyond what `fix/nurse-role-drift` closed.**
+  That PR granted NURSE the three consultation reads and the imaging version
+  history. Left open, deliberately, each needing a clinical decision:
+  (a) `MeController /critical-alerts` admits DOCTOR, PHYSICIAN, SURGEON and
+  MIDWIFE but **not NURSE**, though nurses are usually first to a critical
+  value; (b) the same three consultation reads exclude **MIDWIFE** while their
+  siblings (`/stats` and the other reads) admit them — identical drift, not
+  fixed because midwife scope was not authorised; (c) a **maternity cluster**
+  (`UltrasoundController`, `MaternalHistoryController`, `BirthPlanController`,
+  `ObgynReferralController`) admits MIDWIFE but not NURSE across ~10 reads,
+  which may be a real credential boundary rather than drift. Decide (c) before
+  touching it.
+- **219 `ResourceNotFoundException` sites still pass prose as the message key.**
+  `fix/resource-not-found-message-keys` converted 100 where an existing key
+  matched; the remainder pass **no argument**, so each needs an identifier
+  resolved in its own scope rather than a rewrite rule. Ratcheted by
+  `NotFoundMessageKeyTest` so the surface cannot grow. Related: `messages_fr`
+  is missing 77 of the 179 base keys and `messages_es` 73 — those fall back to
+  English rather than showing the missing-translation marker, so they are
+  invisible in testing. The backend has **no bundle-parity gate** at all,
+  unlike the portal's strict `i18n:parity`.
+- **The 404 disclosure policy contradicts itself.** `/fhir-record` (#577) says
+  "is not registered at your active hospital — switch your hospital scope",
+  while `PatientChartAccess` deliberately says the opposite in its javadoc:
+  "a caller ... learns nothing, not 'exists elsewhere'". One discloses that the
+  patient exists somewhere; the other refuses to. Both shipped. E8 moved the
+  product toward legitimate cross-hospital reads, which argues for the helpful
+  message — but it is an existence disclosure to any authenticated staff at any
+  hospital, so it needs a decision, not a default.
 
 - **Allergies, imaging and surgical history cannot cross hospitals, and the
   reason is structural.** They attach to patient + hospital with no encounter

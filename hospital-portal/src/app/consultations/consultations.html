@@ -91,14 +91,16 @@
       >
         {{ 'COMMON.COMPLETED' | translate }}
       </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'mine'"
-        (click)="setTab('mine')"
-        [title]="'CONSULTATIONS.ASSIGNED_TO_ME' | translate"
-      >
-        {{ 'CONSULTATIONS.MINE' | translate }}
-      </button>
+      @if (canSeeMyConsultations()) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'mine'"
+          (click)="setTab('mine')"
+          [title]="'CONSULTATIONS.ASSIGNED_TO_ME' | translate"
+        >
+          {{ 'CONSULTATIONS.MINE' | translate }}
+        </button>
+      }
       <button
         class="tab-btn overdue-tab"
         [class.active]="activeTab() === 'overdue'"

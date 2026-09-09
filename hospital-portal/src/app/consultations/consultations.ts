@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -47,6 +47,20 @@ export class ConsultationsComponent implements OnInit {
    */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+
+  /**
+   * "Mine" lists consultations where the caller is the CONSULTANT. A nurse
+   * never is, so the tab would be permanently empty for them — and the
+   * backend refuses GET /consultations/mine outright, so it also 403s. The
+   * other tabs are theirs: ward nurses chase overdue consults and prep the
+   * patient, which is why the read endpoints behind them admit NURSE.
+   *
+   * hasAnyActiveRole, not hasRole: a multi-role user who signed in scoped to
+   * NURSE must not see the doctor's tab.
+   */
+  readonly canSeeMyConsultations = computed(() =>
+    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']),
+  );
 
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
@@ -345,7 +359,11 @@ export class ConsultationsComponent implements OnInit {
   }
 
   setTab(tab: 'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'): void {
-    this.activeTab.set(tab);
+    // Hiding the button is presentation; this is the actual gate. Without it a
+    // stale signal or a restored tab would still call GET /consultations/mine
+    // and render the 403 as an error toast to a nurse who never chose it.
+    const allowed = tab !== 'mine' || this.canSeeMyConsultations();
+    this.activeTab.set(allowed ? tab : 'all');
     this.load();
   }
 

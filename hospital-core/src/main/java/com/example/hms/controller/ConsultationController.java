@@ -87,7 +87,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "List consultations for hospital",
                description = "Filter by status: REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED")
     public ResponseEntity<List<ConsultationResponseDTO>> getConsultationsForHospital(
@@ -99,7 +99,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Get pending consultations requiring action",
                description = "Returns consultations in REQUESTED or ACKNOWLEDGED status")
     public ResponseEntity<List<ConsultationResponseDTO>> getPendingConsultations(@PathVariable UUID hospitalId) {
@@ -108,6 +108,11 @@ public class ConsultationController {
     }
 
     @GetMapping("/mine")
+    // Deliberately NOT widened to NURSE while the sibling reads were. "Mine"
+    // means consultations where the caller is the CONSULTANT, which a nurse
+    // never is — granting it would return an empty list for every nurse,
+    // forever. The portal hides the tab for them instead of rendering one that
+    // exists to show nothing.
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('VIEW_CONSULTATIONS')")
     @Operation(summary = "My consultations", description = "List consultations assigned to the authenticated consultant")
     public ResponseEntity<List<ConsultationResponseDTO>> getMyConsultations(Authentication authentication) {
@@ -117,7 +122,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/overdue")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
         @RequestParam(required = false) UUID hospitalId
