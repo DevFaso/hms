@@ -1,6 +1,7 @@
 package com.example.hms.service.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -239,10 +240,11 @@ class PlatformRegistryServiceImplTest {
 
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> platformRegistryService
-            .linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("hospital.notFound");
+        ResourceNotFoundException thrown = catchThrowableOfType(
+            () -> platformRegistryService.linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH),
+            ResourceNotFoundException.class);
+
+        assertThat(thrown.getMessageKey()).isEqualTo("hospital.notFound");
     }
 
     @Test
@@ -393,10 +395,11 @@ class PlatformRegistryServiceImplTest {
 
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> platformRegistryService
-            .linkDepartmentToService(departmentId, serviceId, null, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("department.notFound");
+        ResourceNotFoundException departmentMissing = catchThrowableOfType(
+            () -> platformRegistryService.linkDepartmentToService(departmentId, serviceId, null, Locale.ENGLISH),
+            ResourceNotFoundException.class);
+
+        assertThat(departmentMissing.getMessageKey()).isEqualTo("department.notFound");
     }
 
     @Test

@@ -1840,9 +1840,20 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "unit", result.getResultUnit());
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
-                // E8 #50: denormalised on the row already; the ordering
-                // clinician is not reachable without the encounter.
-                putIfNotNull(metadata, META_CLINICIAN, result.getReleasedByDisplay());
+                // E8 #50: the ordering clinician, NOT releasedByDisplay. The
+                // releaser is often not a person at all — LabResultServiceImpl
+                // writes the literal "Autoverification" for auto-verified
+                // normals, falls back to "Unknown clinician", and can end up
+                // with a bare email address. Rendering any of those under the
+                // chart's "who treated the patient" label is wrong, and #582
+                // now shares that row across hospitals. orderingStaff is
+                // NOT NULL and the finder's @EntityGraph already fetches
+                // labOrder.orderingStaff.user, so this costs no extra query.
+                putIfNotNull(metadata, META_CLINICIAN,
+                    resolveStaffDisplayName(result.getLabOrder().getOrderingStaff()));
+                // Keep the releaser, under its own name — it is real
+                // information, it just is not the treating clinician.
+                putIfNotNull(metadata, "releasedBy", result.getReleasedByDisplay());
                 String summary = formatLabResultSummary(result);
                 return PatientTimelineEntryDTO.builder()
                     .entryId(result.getId() != null ? result.getId().toString() : null)

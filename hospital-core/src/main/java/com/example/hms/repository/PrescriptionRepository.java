@@ -62,6 +62,14 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);
 
-    /** E8 #49 — the same read across every hospital the caller may read for this patient. */
+    /**
+     * E8 #49 — the same read across every hospital the caller may read for this patient.
+     *
+     * <p>The graph must reach {@code staff.user}, not just {@code staff}: the
+     * timeline renders the prescriber via {@code Staff.getFullName()}, which
+     * dereferences the user, so stopping at {@code staff} would halve the round
+     * trips instead of removing them. Matches the sibling finders above.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "hospital", "encounter"})
     List<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds);
 }

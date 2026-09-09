@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +50,9 @@ class NotFoundMessageKeyTest {
     private static final int PROSE_CALL_BUDGET = 219;
 
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
+
+    /** A {@code '} that is not part of a doubled pair. */
+    private static final Pattern LONE_APOSTROPHE = Pattern.compile("(?<!')'(?!')");
 
     private static ReloadableResourceBundleMessageSource messageSource() {
         // Mirrors LocaleConfig: same basenames, same encoding, no fallback to
@@ -89,6 +93,39 @@ class NotFoundMessageKeyTest {
                 // while rendering "H�pital" to the clinician.
                 .doesNotContain("�");
         }
+    }
+
+    @ParameterizedTest(name = "messages{0}.properties")
+    @ValueSource(strings = {"", "_en", "_fr", "_es"})
+    @DisplayName("no bundle carries a lone apostrophe, which MessageFormat eats")
+    void bundlesAreMessageFormatSafe(String suffix) throws IOException {
+        // LocaleConfig sets alwaysUseMessageFormat(true), so EVERY message is a
+        // MessageFormat pattern and a lone ' opens a quoted run: the apostrophe
+        // disappears and any {0} after it stops substituting. It must be ''.
+        // Missed once already — the base bundle was fixed while messages_en,
+        // which shadows it for the default locale, kept the broken copy.
+        Path bundle = Paths.get("src/main/resources/messages" + suffix + ".properties");
+        List<String> offenders = Files.readAllLines(bundle, StandardCharsets.UTF_8).stream()
+            .map(String::strip)
+            .filter(line -> !line.isEmpty() && !line.startsWith("#") && line.contains("="))
+            .filter(line -> LONE_APOSTROPHE.matcher(line.substring(line.indexOf('=') + 1)).find())
+            .toList();
+
+        assertThat(offenders)
+            .as("Lone apostrophes in %s — double them (''):%n%s",
+                bundle, String.join(System.lineSeparator(), offenders))
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("an apostrophe survives rendering for the default locale")
+    void apostropheSurvivesRendering() {
+        // The end-to-end version of the rule above, on the key that was broken:
+        // the bundle-level check would pass on a file nobody resolves against.
+        String rendered = messageSource().getMessage(
+            "schedule.staff.permissionDenied", new Object[] {}, Locale.ENGLISH);
+
+        assertThat(rendered).contains("member's");
     }
 
     @Test

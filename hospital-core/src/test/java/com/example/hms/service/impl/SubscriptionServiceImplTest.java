@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -335,9 +336,10 @@ class SubscriptionServiceImplTest {
         OrganizationSubscriptionRequestDTO req = OrganizationSubscriptionRequestDTO.builder()
             .planId(UUID.randomUUID()).seatLimit(1).build();
 
-        assertThatThrownBy(() -> service.assignPlan(orgId, req))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("organization.notFound");
+        ResourceNotFoundException thrown = catchThrowableOfType(
+            () -> service.assignPlan(orgId, req), ResourceNotFoundException.class);
+
+        assertThat(thrown.getMessageKey()).isEqualTo("organization.notFound");
     }
 
     @Test
