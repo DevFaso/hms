@@ -508,6 +508,45 @@
       color: #8a8aa3;
       font-size: 0.82rem;
     }
+
+    // E8 #50 — provenance sits on the row, not in a tooltip.
+    .timeline-provenance {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 12px;
+      margin-top: 4px;
+      font-size: 0.82rem;
+      color: #5c5c74;
+
+      .material-symbols-outlined {
+        font-size: 1rem;
+        vertical-align: text-bottom;
+      }
+
+      .provenance-hospital,
+      .provenance-clinician {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .provenance-badge {
+        padding: 1px 8px;
+        border-radius: 10px;
+        background: var(--primary-tint);
+        color: var(--primary-dark);
+        font-weight: 600;
+        font-size: 0.75rem;
+      }
+    }
+
+    // A foreign row is marked structurally as well as by the badge, so the
+    // distinction survives for anyone who cannot resolve the colour.
+    &.foreign {
+      border-left: 3px solid var(--primary);
+      padding-left: 9px;
+    }
   }
 }
 
