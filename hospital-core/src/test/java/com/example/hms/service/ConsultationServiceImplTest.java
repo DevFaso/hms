@@ -8,6 +8,8 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContext;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
@@ -956,14 +958,95 @@ class ConsultationServiceImplTest {
     }
 
     @Test
-    @DisplayName("getOverdueConsultations with null hospitalId returns all")
-    void getOverdueConsultations_nullHospital() {
+    @DisplayName("a caller-supplied hospitalId cannot widen scope — the active hospital wins")
+    void getOverdueConsultations_ignoresCallerSuppliedHospital() {
+        // findOverdueConsultations has NO hospital predicate, so the scope is
+        // whatever the service applies afterwards. Before it was resolved
+        // server-side, the caller chose it: passing another tenant's UUID — or
+        // omitting the optional param entirely — returned that tenant's overdue
+        // consultations with patient name, MRN and reason for consult.
+        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
+
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
+        foreign.setHospital(otherHospital);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(consultationRepository.findOverdueConsultations(any(), any()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(mine, foreign));
 
-        List<ConsultationResponseDTO> result = service.getOverdueConsultations(null);
+        List<ConsultationResponseDTO> asked = service.getOverdueConsultations(otherHospital.getId());
+        List<ConsultationResponseDTO> omitted = service.getOverdueConsultations(null);
 
-        assertThat(result).isEmpty();
+        assertThat(asked).as("asking for another tenant returns only the caller's own").hasSize(1);
+        assertThat(omitted).as("omitting the param must not return every tenant").hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a super-admin in global view may still ask across tenants, or for one")
+    void getOverdueConsultations_superAdminGlobalView() {
+        // The carve-out getAllConsultations documents: a super-admin with no
+        // hospital chip is cross-tenant by design, and the dashboard tile they
+        // sit beside counts the same way. Pinned so the tenant fix above cannot
+        // be "tidied" into scoping them too.
+        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
+
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
+        foreign.setHospital(otherHospital);
+
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        try {
+            when(consultationRepository.findOverdueConsultations(any(), any()))
+                    .thenReturn(List.of(mine, foreign));
+
+            assertThat(service.getOverdueConsultations(null))
+                .as("global view: every tenant")
+                .hasSize(2);
+            assertThat(service.getOverdueConsultations(otherHospital.getId()))
+                .as("global view, narrowed to one tenant on request")
+                .hasSize(1);
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("a super-admin who picked a hospital is scoped to it, not to the query param")
+    void getOverdueConsultations_superAdminWithHeaderOverrideIsScoped() {
+        // isHeaderOverridden means they chose a hospital via the scope chip, so
+        // they are acting inside one tenant and the param must not widen them.
+        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
+
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
+        foreign.setHospital(otherHospital);
+
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(true)
+            .build());
+        try {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(consultationRepository.findOverdueConsultations(any(), any()))
+                    .thenReturn(List.of(mine, foreign));
+
+            assertThat(service.getOverdueConsultations(otherHospital.getId())).hasSize(1);
+        } finally {
+            HospitalContextHolder.clear();
+        }
     }
 
     // ── getStats ─────────────────────────────────────────────────────────────

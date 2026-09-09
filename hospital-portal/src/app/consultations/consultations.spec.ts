@@ -16,6 +16,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
@@ -39,6 +40,7 @@ describe('ConsultationsComponent', () => {
   let consultSpy: jasmine.SpyObj<ConsultationService>;
   let staffSpy: jasmine.SpyObj<StaffService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let activeRoles: string[];
 
   beforeEach(async () => {
     consultSpy = jasmine.createSpyObj('ConsultationService', [
@@ -84,11 +86,16 @@ describe('ConsultationsComponent', () => {
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
-    const roleCtx = {
-      isSuperAdmin: () => false,
-      globalView: () => false,
-      activeHospitalId: 'h1',
-    } as unknown as RoleContextService;
+    // The shared stub, not a hand-rolled object: it reads `state` live, so a
+    // test can flip roles before the first read, and it carries the scope
+    // accessors (hasHospitalScope, effectiveHospitalIdForRequest) this page
+    // will need when it picks up the #566 scope-hint pattern.
+    activeRoles = ['ROLE_DOCTOR'];
+    const roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: activeRoles,
+    });
 
     await TestBed.configureTestingModule({
       imports: [ConsultationsComponent, TranslateModule.forRoot()],
@@ -130,6 +137,35 @@ describe('ConsultationsComponent', () => {
     expect(component.consultations()[0].id).toBe('m1');
     component.setTab('overdue');
     expect(consultSpy.getOverdue).toHaveBeenCalledWith('h1');
+  });
+
+  it('hides the "mine" tab from a nurse — they are never the consultant', () => {
+    activeRoles.length = 0;
+    activeRoles.push('ROLE_NURSE');
+
+    // The backend refuses GET /consultations/mine for nurses, and even if it
+    // did not, "assigned to me as consultant" is empty for every nurse alive.
+    expect(component.canSeeMyConsultations()).toBeFalse();
+  });
+
+  it('a nurse landing on the "mine" tab falls back instead of calling the 403', () => {
+    activeRoles.length = 0;
+    activeRoles.push('ROLE_NURSE');
+    consultSpy.getMine.and.returnValue(of([mockConsult({ id: 'm1' })]));
+
+    component.setTab('mine');
+
+    // Hiding the button is presentation; this is the gate. A stale signal or a
+    // restored tab must not fire the request and toast a 403 at a nurse who
+    // never chose it.
+    expect(consultSpy.getMine).not.toHaveBeenCalled();
+    expect(component.activeTab()).toBe('all');
+  });
+
+  it('still lets a doctor open the "mine" tab', () => {
+    activeRoles = ['ROLE_DOCTOR'];
+
+    expect(component.canSeeMyConsultations()).toBeTrue();
   });
 
   it('pending/active/completed tabs filter client-side', () => {

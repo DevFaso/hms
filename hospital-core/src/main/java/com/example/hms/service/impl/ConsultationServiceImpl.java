@@ -560,12 +560,25 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getOverdueConsultations(UUID hospitalId) {
+        // ── Tenant isolation ──
+        // findOverdueConsultations has NO hospital predicate, and the caller's
+        // hospitalId arrives as an optional @RequestParam — so before this, a
+        // request that simply omitted it returned every tenant's overdue
+        // consultations, PHI included. A caller-supplied tenant id is a claim,
+        // not a scope. Resolve it server-side instead, using the same
+        // super-admin carve-out as getAllConsultations above: a super-admin in
+        // global view may ask across tenants (or for one), everyone else is
+        // pinned to their active hospital and the parameter is ignored.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
+        UUID scope = superAdminGlobal ? hospitalId : roleValidator.requireActiveHospitalId();
+
         List<ConsultationStatus> terminalStatuses = Arrays.asList(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
         List<Consultation> overdue = consultationRepository.findOverdueConsultations(LocalDateTime.now(), terminalStatuses);
-        if (hospitalId != null) {
+        if (scope != null) {
             overdue = overdue.stream()
-                .filter(c -> c.getHospital() != null && hospitalId.equals(c.getHospital().getId()))
+                .filter(c -> c.getHospital() != null && scope.equals(c.getHospital().getId()))
                 .toList();
         }
         return overdue.stream().map(this::toResponseDTO).toList();
