@@ -956,14 +956,31 @@ class ConsultationServiceImplTest {
     }
 
     @Test
-    @DisplayName("getOverdueConsultations with null hospitalId returns all")
-    void getOverdueConsultations_nullHospital() {
+    @DisplayName("a caller-supplied hospitalId cannot widen scope — the active hospital wins")
+    void getOverdueConsultations_ignoresCallerSuppliedHospital() {
+        // findOverdueConsultations has NO hospital predicate, so the scope is
+        // whatever the service applies afterwards. Before it was resolved
+        // server-side, the caller chose it: passing another tenant's UUID — or
+        // omitting the optional param entirely — returned that tenant's overdue
+        // consultations with patient name, MRN and reason for consult.
+        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
+
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
+        foreign.setHospital(otherHospital);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(consultationRepository.findOverdueConsultations(any(), any()))
-                .thenReturn(List.of());
+                .thenReturn(List.of(mine, foreign));
 
-        List<ConsultationResponseDTO> result = service.getOverdueConsultations(null);
+        List<ConsultationResponseDTO> asked = service.getOverdueConsultations(otherHospital.getId());
+        List<ConsultationResponseDTO> omitted = service.getOverdueConsultations(null);
 
-        assertThat(result).isEmpty();
+        assertThat(asked).as("asking for another tenant returns only the caller's own").hasSize(1);
+        assertThat(omitted).as("omitting the param must not return every tenant").hasSize(1);
     }
 
     // ── getStats ─────────────────────────────────────────────────────────────

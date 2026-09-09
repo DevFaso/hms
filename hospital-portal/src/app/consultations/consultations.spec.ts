@@ -16,6 +16,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
@@ -85,15 +86,16 @@ describe('ConsultationsComponent', () => {
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
-    // Default to a doctor so the existing tab tests keep exercising /mine.
-    // activeRoles is mutable so a test can become a nurse mid-spec.
+    // The shared stub, not a hand-rolled object: it reads `state` live, so a
+    // test can flip roles before the first read, and it carries the scope
+    // accessors (hasHospitalScope, effectiveHospitalIdForRequest) this page
+    // will need when it picks up the #566 scope-hint pattern.
     activeRoles = ['ROLE_DOCTOR'];
-    const roleCtx = {
-      isSuperAdmin: () => false,
-      globalView: () => false,
-      activeHospitalId: 'h1',
-      hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
-    } as unknown as RoleContextService;
+    const roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: activeRoles,
+    });
 
     await TestBed.configureTestingModule({
       imports: [ConsultationsComponent, TranslateModule.forRoot()],
@@ -138,7 +140,8 @@ describe('ConsultationsComponent', () => {
   });
 
   it('hides the "mine" tab from a nurse — they are never the consultant', () => {
-    activeRoles = ['ROLE_NURSE'];
+    activeRoles.length = 0;
+    activeRoles.push('ROLE_NURSE');
 
     // The backend refuses GET /consultations/mine for nurses, and even if it
     // did not, "assigned to me as consultant" is empty for every nurse alive.
@@ -146,7 +149,8 @@ describe('ConsultationsComponent', () => {
   });
 
   it('a nurse landing on the "mine" tab falls back instead of calling the 403', () => {
-    activeRoles = ['ROLE_NURSE'];
+    activeRoles.length = 0;
+    activeRoles.push('ROLE_NURSE');
     consultSpy.getMine.and.returnValue(of([mockConsult({ id: 'm1' })]));
 
     component.setTab('mine');

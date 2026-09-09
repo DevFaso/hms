@@ -87,7 +87,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
     @Operation(summary = "List consultations for hospital",
                description = "Filter by status: REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED")
     public ResponseEntity<List<ConsultationResponseDTO>> getConsultationsForHospital(
@@ -99,7 +99,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
     @Operation(summary = "Get pending consultations requiring action",
                description = "Returns consultations in REQUESTED or ACKNOWLEDGED status")
     public ResponseEntity<List<ConsultationResponseDTO>> getPendingConsultations(@PathVariable UUID hospitalId) {
@@ -108,11 +108,17 @@ public class ConsultationController {
     }
 
     @GetMapping("/mine")
-    // Deliberately NOT widened to NURSE while the sibling reads were. "Mine"
-    // means consultations where the caller is the CONSULTANT, which a nurse
-    // never is — granting it would return an empty list for every nurse,
-    // forever. The portal hides the tab for them instead of rendering one that
-    // exists to show nothing.
+    // Deliberately NOT widened to NURSE: "mine" means consultations where the
+    // caller is the CONSULTANT, which a nurse never is.
+    //
+    // It is also empty for DOCTORS today, and not by design: extractUserId
+    // returns a users.id, while findByConsultant_Id matches Consultation
+    // .consultant, which is a Staff. The two ids are never equal (Staff has its
+    // own PK plus a uq_staff_user FK), so this endpoint returns nothing for
+    // anyone. The sibling /assigned-to/{consultantId} correctly takes a staff
+    // id. Recorded as standing debt rather than fixed here — repairing it
+    // changes what doctors see and deserves its own change, not a rider on a
+    // nurse-access PR.
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('VIEW_CONSULTATIONS')")
     @Operation(summary = "My consultations", description = "List consultations assigned to the authenticated consultant")
     public ResponseEntity<List<ConsultationResponseDTO>> getMyConsultations(Authentication authentication) {
@@ -122,6 +128,11 @@ public class ConsultationController {
     }
 
     @GetMapping("/overdue")
+    // NURSE added here and NOT on the two hospital-path reads above. This is
+    // the only consultation list a nurse could not reach: GET /consultations
+    // already admits ROLE_NURSE, and the portal's all/pending/active/completed
+    // tabs all filter that one response client-side. The two /hospital/{id}
+    // reads have no caller in the portal at all.
     @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(

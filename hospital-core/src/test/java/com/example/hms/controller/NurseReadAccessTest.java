@@ -48,13 +48,19 @@ class NurseReadAccessTest {
     void nurseReadsConsultationLists() {
         // /stats has always admitted NURSE. Showing a clinician the number of
         // overdue consults and refusing the list is the drift being closed.
-        assertThat(guardFor(ConsultationController.class, "/stats")).contains("NURSE");
+        assertThat(guardFor(ConsultationController.class, "/stats")).contains("'NURSE'");
 
-        for (String path : new String[] {"/hospital/{hospitalId}", "/hospital/{hospitalId}/pending", "/overdue"}) {
-            assertThat(guardFor(ConsultationController.class, path))
-                .as("GET %s — ward nurses chase overdue consults and prep the patient", path)
-                .contains("NURSE");
-        }
+        // ONLY /overdue. GET /consultations already admitted ROLE_NURSE, and the
+        // portal's all/pending/active/completed tabs filter that one response
+        // client-side — so /overdue was the only list a nurse could not reach.
+        // The two /hospital/{id} reads have no portal caller and take the path
+        // hospital as a trusted claim, so they stay closed.
+        assertThat(guardFor(ConsultationController.class, "/overdue"))
+            .as("ward nurses chase overdue consults and prep the patient")
+            .contains("'NURSE'");
+        assertThat(guardFor(ConsultationController.class, "/hospital/{hospitalId}"))
+            .as("no portal caller, and the path hospital is an unvalidated claim")
+            .doesNotContain("'NURSE'");
     }
 
     @Test
@@ -65,7 +71,7 @@ class NurseReadAccessTest {
         // CONSULTANT, so for a nurse it can only ever be empty. The portal
         // hides the tab rather than rendering one that shows nothing.
         assertThat(guardFor(ConsultationController.class, "/mine"))
-            .doesNotContain("NURSE");
+            .doesNotContain("'NURSE'");
     }
 
     @Test
@@ -78,9 +84,9 @@ class NurseReadAccessTest {
         // — which may itself be PRELIMINARY — while withholding the history
         // never implemented "no unconfirmed reads for non-physicians"; it only
         // hid the corrections.
-        assertThat(latest).contains("NURSE");
+        assertThat(latest).contains("'NURSE'");
         assertThat(history)
             .as("addenda live in the version history")
-            .contains("NURSE");
+            .contains("'NURSE'");
     }
 }

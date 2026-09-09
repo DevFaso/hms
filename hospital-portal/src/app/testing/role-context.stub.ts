@@ -43,6 +43,15 @@ export function roleContextStub(state: RoleContextStubState): RoleContextService
       return state.hospitalId;
     },
     hasAnyActiveRole: (roles: string[]) => roles.some((r) => state.roles.includes(r)),
+    get activeRoles() {
+      return state.roles;
+    },
+    // Mirrors the real service: a single active role is only pinned when the
+    // account holds exactly one. A multi-role user has no active role, and
+    // callers fall back to the full list.
+    get activeRole() {
+      return state.roles.length === 1 ? state.roles[0] : null;
+    },
     enableGlobalView: () => {
       override = { globalView: true, selected: null };
     },

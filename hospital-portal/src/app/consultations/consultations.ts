@@ -17,10 +17,14 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+
+/** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
+const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 
 @Component({
   selector: 'app-consultations',
@@ -49,18 +53,26 @@ export class ConsultationsComponent implements OnInit {
   protected readonly globalView = this.roleContext.globalView;
 
   /**
-   * "Mine" lists consultations where the caller is the CONSULTANT. A nurse
-   * never is, so the tab would be permanently empty for them — and the
-   * backend refuses GET /consultations/mine outright, so it also 403s. The
-   * other tabs are theirs: ward nurses chase overdue consults and prep the
-   * patient, which is why the read endpoints behind them admit NURSE.
+   * "Mine" lists consultations where the caller is the CONSULTANT, so it is a
+   * doctor-facing tab and the backend guard is SUPER_ADMIN/DOCTOR. The other
+   * tabs are a nurse's: ward nurses chase overdue consults and prep the
+   * patient, which is why /overdue admits NURSE.
    *
-   * hasAnyActiveRole, not hasRole: a multi-role user who signed in scoped to
-   * NURSE must not see the doctor's tab.
+   * roleSatisfies, not hasAnyActiveRole: physicians and surgeons ARE doctors
+   * here — JwtTokenProvider adds ROLE_DOCTOR to their authorities, so the
+   * backend serves them — and bare membership would hide a working tab from
+   * them. Falls back to the full role list when no single active role is set,
+   * because activeRole is only assigned for single-role users.
    */
-  readonly canSeeMyConsultations = computed(() =>
-    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']),
-  );
+  readonly canSeeMyConsultations = computed(() => {
+    const active = this.roleContext.activeRole;
+    if (active) {
+      return roleSatisfies(CONSULTANT_TAB_ROLES, active);
+    }
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((role) =>
+      CONSULTANT_TAB_ROLES.includes(role),
+    );
+  });
 
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
