@@ -1746,8 +1746,10 @@ all exist and are reachable.
   already; staff name is present for encounters (`clinician`), imaging
   (`orderedBy` / `scanPerformedBy` / `reportFinalizedBy`) and surgical history
   (`performedBy`), and is **missing for prescriptions and lab results** — both
-  fillable from `Prescription.staff` and `LabResult.releasedByDisplay`, no
-  migration needed.
+  fillable from `Prescription.staff` and `LabOrder.orderingStaff`, no
+  migration needed. ⚠ NOT `LabResult.releasedByDisplay` — that is the
+  releaser, often `"Autoverification"` or a bare email, never the treating
+  clinician.
   ⚠ **Blocking defect:** the portal's `TimelineEntry`
   (`hospital-portal/src/app/services/patient.service.ts:222`) declares no
   `metadata` field, so #582's provenance reaches the wire and is discarded.
@@ -1826,6 +1828,34 @@ all exist and are reachable.
   the population of people who can technically reach a given chart grows.
 
 ## Standing platform debt — owed, not parity
+
+- **Lab results are fetched cross-tenant and filtered in memory.**
+  `collectLabResultEntries` calls `findByLabOrder_Patient_Id(patientId)` with no
+  hospital predicate, then discards unreadable rows in the stream — so every row
+  from a hospital the caller may NOT read is still hydrated with all eight
+  fetch-joins first. The `multi-tenancy-scoping` skill names this entity
+  explicitly ("`LabResult` → `LabOrder.hospital_id` ... the call must scope
+  through the parent"). The finder to add is
+  `findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn`; the sibling
+  `findByLabOrder_Hospital_IdIn` already exists with the same graph. Same call
+  again in the chart-review aggregator, so the fix pays twice.
+- **`messages_en.properties` silently drops the id on three keys.**
+  `patient.notfound`, `staff.notfound` and `hospital.notfound` carry no `{0}`
+  there, while the base, FR and ES bundles all do — and `messages_en` shadows
+  the base for the default locale. So ~25 sites that pass an id render it in
+  French and Spanish and swallow it in English. Not covered by
+  `NotFoundMessageKeyTest.CONVERTED_KEYS`, which lists only the camelCase twins.
+- **46 bundle values carry permanent mojibake** — 19 in `messages_fr`, 27 in
+  `messages_es`, accents already destroyed on disk (U+FFFD), so no runtime
+  charset setting recovers them. Now ratcheted by
+  `NotFoundMessageKeyTest.bundleMojibakeDoesNotSpread` so the count cannot grow;
+  repairing them needs a native speaker per string, not a find-and-replace.
+- **`BusinessException` does not resolve message keys at all**, and ~12 tests
+  pin raw dotted keys as user-visible text — several of which
+  (`empi.alias.orphaned`, `empi.lookup.invalidEmpi`,
+  `prescription.patient.required`) exist in no bundle. Those reach the API
+  client as the error body. It should route through the same resolver as
+  `ResourceNotFoundException`.
 
 - **Allergies, imaging and surgical history cannot cross hospitals, and the
   reason is structural.** They attach to patient + hospital with no encounter

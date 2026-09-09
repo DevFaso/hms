@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -98,9 +99,13 @@ class WristbandPdfServiceTest {
     void wristbandIs404ForAScopedCallerWithoutRegistration() {
         UUID foreignScope = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.generateWristbandPdf(patientId, foreignScope))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("patient.notFound");
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+
+
+            .isThrownBy(() -> service.generateWristbandPdf(patientId, foreignScope))
+
+
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
     }
 
     @Test

@@ -1840,9 +1840,25 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "unit", result.getResultUnit());
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
-                // E8 #50: denormalised on the row already; the ordering
-                // clinician is not reachable without the encounter.
-                putIfNotNull(metadata, META_CLINICIAN, result.getReleasedByDisplay());
+                // E8 #50: the ordering clinician, NOT releasedByDisplay. The
+                // releaser is often not a person at all — LabResultServiceImpl
+                // writes the literal "Autoverification" for auto-verified
+                // normals, falls back to "Unknown clinician", and can end up
+                // with a bare email address. Rendering any of those under the
+                // chart's "who treated the patient" label is wrong, and #582
+                // now shares that row across hospitals. orderingStaff is
+                // NOT NULL and the finder's @EntityGraph already fetches
+                // labOrder.orderingStaff.user, so this costs no extra query.
+                putIfNotNull(metadata, META_CLINICIAN,
+                    resolveStaffDisplayName(result.getLabOrder().getOrderingStaff()));
+                // The releaser is deliberately NOT re-added under another key.
+                // Nothing renders it, and releasedByDisplay is the value this
+                // change exists to get off the chart: it can be a bare email
+                // address, and #582 ships this row to other hospitals. Adding
+                // it back as unread payload would relabel the disclosure, not
+                // remove it. If the releaser is wanted on the chart it needs a
+                // typed field, a label in three bundles, and a decision about
+                // whether it crosses a tenant boundary.
                 String summary = formatLabResultSummary(result);
                 return PatientTimelineEntryDTO.builder()
                     .entryId(result.getId() != null ? result.getId().toString() : null)

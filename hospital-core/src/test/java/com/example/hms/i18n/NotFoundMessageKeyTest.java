@@ -4,15 +4,22 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.context.support.ReloadableResourceBundleMessageSource;
+import org.springframework.context.MessageSource;
+
+import com.example.hms.config.LocaleConfig;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,25 +57,32 @@ class NotFoundMessageKeyTest {
 
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
 
-    private static ReloadableResourceBundleMessageSource messageSource() {
-        // Mirrors LocaleConfig: same basenames, same encoding, no fallback to
-        // the system locale — a test that resolved through the JVM's default
-        // would pass on a developer machine and fail in CI.
-        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
-        source.setBasenames("classpath:messages", "classpath:messages_en",
-            "classpath:messages_fr", "classpath:messages_es");
-        source.setDefaultEncoding(StandardCharsets.UTF_8.name());
-        source.setFallbackToSystemLocale(false);
-        source.setUseCodeAsDefaultMessage(false);
-        source.setAlwaysUseMessageFormat(true);
-        return source;
+    /** Keys already carrying U+FFFD when this guard was added. Lower it, never raise it. */
+    private static final Map<String, Integer> MOJIBAKE_BUDGET =
+        Map.of("", 0, "_en", 0, "_fr", 19, "_es", 27);
+
+    /**
+     * A maximal run of apostrophes. MessageFormat reads a doubled pair as one
+     * literal quote, so an ODD-length run leaves one unpaired — and that one
+     * opens a quoted section which eats the rest of the pattern, {@code {0}}
+     * included. Matching runs rather than single characters is what catches a
+     * run of three, which a naive lookaround pair passes.
+     */
+    private static final Pattern APOSTROPHE_RUN = Pattern.compile("'+");
+
+    private static MessageSource messageSource() {
+        // The production bean itself, not a replica. A copy carries its own
+        // alwaysUseMessageFormat(true) — the setting that makes a lone
+        // apostrophe dangerous — so flipping it in LocaleConfig would leave
+        // these tests green while every clinician saw the broken rendering.
+        return new LocaleConfig().messageSource();
     }
 
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"en", "fr", "es"})
     @DisplayName("every converted key resolves, and renders the id rather than a literal placeholder")
     void keysResolveInEveryLocale(String language) {
-        ReloadableResourceBundleMessageSource source = messageSource();
+        MessageSource source = messageSource();
         Locale locale = Locale.of(language);
 
         for (String key : CONVERTED_KEYS) {
@@ -91,6 +105,58 @@ class NotFoundMessageKeyTest {
         }
     }
 
+    @ParameterizedTest(name = "messages{0}.properties")
+    @ValueSource(strings = {"", "_en", "_fr", "_es"})
+    @DisplayName("no bundle value carries an unpaired apostrophe, which MessageFormat eats")
+    void bundlesAreMessageFormatSafe(String suffix) throws IOException {
+        Properties bundle = load(suffix);
+
+        List<String> offenders = bundle.stringPropertyNames().stream()
+            .filter(key -> hasUnpairedApostrophe(bundle.getProperty(key)))
+            .sorted()
+            .toList();
+
+        assertThat(offenders)
+            .as("Unpaired apostrophes in messages%s.properties — double them:%n%s",
+                suffix, String.join(System.lineSeparator(), offenders))
+            .isEmpty();
+    }
+
+    @ParameterizedTest(name = "messages{0}.properties")
+    @ValueSource(strings = {"", "_en", "_fr", "_es"})
+    @DisplayName("bundle mojibake does not spread")
+    void bundleMojibakeDoesNotSpread(String suffix) throws IOException {
+        // U+FFFD means the file was decoded with the wrong charset and the
+        // accent is gone for good — no runtime setting recovers it. These
+        // counts are damage that predates the guard: French and Spanish
+        // clinicians read a replacement glyph on those keys today. Ratcheted
+        // rather than asserted at zero because repairing them needs a native
+        // speaker per string, not a find-and-replace. It must not grow.
+        Properties bundle = load(suffix);
+
+        List<String> corrupted = bundle.stringPropertyNames().stream()
+            .filter(key -> bundle.getProperty(key).indexOf('�') >= 0)
+            .sorted()
+            .toList();
+
+        assertThat(corrupted)
+            .as("New mojibake in messages%s.properties — copy the value from a "
+                    + "clean source, never from a corrupted neighbour:%n%s",
+                suffix, String.join(System.lineSeparator(), corrupted))
+            .hasSizeLessThanOrEqualTo(MOJIBAKE_BUDGET.get(suffix));
+    }
+
+    @Test
+    @DisplayName("an apostrophe survives rendering for the default locale")
+    void apostropheSurvivesRendering() {
+        // The end-to-end version of the rule above, on the key that was broken:
+        // the bundle-level check would pass on a file nobody resolves against.
+        String rendered = messageSource().getMessage(
+            "schedule.staff.permissionDenied", new Object[] {}, Locale.ENGLISH);
+
+        assertThat(rendered).contains("member's");
+    }
+
     @Test
     @DisplayName("the prose-as-key surface has not grown back")
     void proseSurfaceHasNotGrown() throws IOException {
@@ -108,6 +174,30 @@ class NotFoundMessageKeyTest {
                     + "messages.properties and pass the id as an argument.",
                 String.join("\n", prose.stream().limit(20).toList()))
             .hasSizeLessThanOrEqualTo(PROSE_CALL_BUDGET);
+    }
+
+    private static Properties load(String suffix) throws IOException {
+        // java.util.Properties, not a hand-rolled split: it is the parser Spring
+        // uses, so it agrees about ":" and " " separators, "!" comments,
+        // backslash continuations and duplicate keys — each of which a line
+        // scanner silently skips.
+        Properties bundle = new Properties();
+        try (Reader reader = Files.newBufferedReader(
+                Paths.get("src/main/resources/messages" + suffix + ".properties"),
+                StandardCharsets.UTF_8)) {
+            bundle.load(reader);
+        }
+        return bundle;
+    }
+
+    private static boolean hasUnpairedApostrophe(String value) {
+        Matcher run = APOSTROPHE_RUN.matcher(value);
+        while (run.find()) {
+            if (run.group().length() % 2 != 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** {@code new ResourceNotFoundException("some sentence"...)} — prose, not a key. */

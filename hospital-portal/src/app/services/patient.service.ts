@@ -233,7 +233,12 @@ export interface TimelineEntryMetadata {
   sourceHospitalId?: string;
   /** True when the row came from a hospital other than the caller's active one. */
   foreign?: boolean;
-  /** Who treated the patient: attending, prescriber, or releasing clinician. */
+  /**
+   * Who treated the patient: the attending on an encounter, the prescriber
+   * on a prescription, the ORDERING clinician on a lab result. Never the
+   * releaser — that is often not a person ("Autoverification") and is not
+   * who treated anyone.
+   */
   clinician?: string;
   department?: string;
   status?: string;
