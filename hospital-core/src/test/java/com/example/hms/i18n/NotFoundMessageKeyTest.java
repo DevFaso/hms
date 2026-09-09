@@ -81,7 +81,13 @@ class NotFoundMessageKeyTest {
                 .as("%s in %s", key, language)
                 .contains("THE-ID")
                 .doesNotContain("{0}")
-                .doesNotContain("[Missing translation]");
+                .doesNotContain("[Missing translation]")
+                // U+FFFD means the bundle was decoded with the wrong charset at
+                // some point and the accent is gone for good. Caught exactly
+                // this on hospital.notFound in fr, copied from a corrupted
+                // neighbour — a value that satisfied every other assertion here
+                // while rendering "H�pital" to the clinician.
+                .doesNotContain("�");
         }
     }
 
