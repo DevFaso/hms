@@ -205,7 +205,7 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital not found");
+            .hasMessageContaining("hospital.notFound");
     }
 
     @Test

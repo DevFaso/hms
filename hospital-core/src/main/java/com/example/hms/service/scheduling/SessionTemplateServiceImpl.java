@@ -129,10 +129,10 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
 
     private Staff resolveStaff(UUID staffId, UUID hospitalId) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found with ID: " + staffId));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (staff.getHospital() == null || !hospitalId.equals(staff.getHospital().getId())) {
             // Foreign staff read as absent — the module's 404 idiom.
-            throw new ResourceNotFoundException("Staff not found with ID: " + staffId);
+            throw new ResourceNotFoundException("staff.notFound", staffId);
         }
         return staff;
     }
@@ -143,7 +143,7 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
                 "Department not found with ID: " + departmentId));
         if (department.getHospital() == null
             || !hospitalId.equals(department.getHospital().getId())) {
-            throw new ResourceNotFoundException("Department not found with ID: " + departmentId);
+            throw new ResourceNotFoundException("department.notFound", departmentId);
         }
         return department;
     }

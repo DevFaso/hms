@@ -64,7 +64,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // Validate patient and hospital exist
         patientChartAccess.require(patientId, hospitalId);
         hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         // Fetch prescriptions and pharmacy fills
         List<Prescription> prescriptions = fetchPrescriptions(patientId, hospitalId, startDate, endDate);
@@ -136,9 +136,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
         // Validate required entities
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         // Optional prescription link
         Prescription prescription = null;

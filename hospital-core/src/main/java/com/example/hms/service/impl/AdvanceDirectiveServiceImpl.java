@@ -48,7 +48,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     @Transactional
     public AdvanceDirectiveResponseDTO create(UUID patientId, AdvanceDirectiveRequestDTO request) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital hospital = resolveHospital(request.getHospitalId());
 
@@ -60,7 +60,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // to them; 404 rather than 403, matching loadScoped, so a foreign
         // patient id is indistinguishable from a nonexistent one.
         if (!patient.isRegisteredInHospital(hospital.getId())) {
-            throw new ResourceNotFoundException("Patient not found with ID: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         AdvanceDirective directive = new AdvanceDirective();
@@ -117,7 +117,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
             throw new BusinessException("A hospital is required to record an advance directive.");
         }
         return hospitalRepository.findById(targetId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + targetId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", targetId));
     }
 
     private void applyEditableFields(AdvanceDirective directive, AdvanceDirectiveRequestDTO request) {

@@ -150,7 +150,7 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
             String code, String name, String description, SecurityPolicyType policyType, 
             Integer priority, boolean enforceStrict) {
         Organization organization = organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
 
         return createOrUpdateSecurityPolicyInternal(organization, code, name, description,
             policyType, priority, enforceStrict);
@@ -304,7 +304,7 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
     @Transactional
     public void applyDefaultSecurityPolicies(UUID organizationId, OrganizationType organizationType) {
         Organization organization = organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
 
         log.info("Applying default security policies for organization: {} of type: {}", 
             organization.getCode(), organizationType);

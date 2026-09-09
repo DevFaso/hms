@@ -337,7 +337,7 @@ class SubscriptionServiceImplTest {
 
         assertThatThrownBy(() -> service.assignPlan(orgId, req))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Organization not found");
+            .hasMessageContaining("organization.notFound");
     }
 
     @Test

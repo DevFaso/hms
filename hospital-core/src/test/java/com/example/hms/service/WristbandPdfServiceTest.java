@@ -100,7 +100,7 @@ class WristbandPdfServiceTest {
 
         assertThatThrownBy(() -> service.generateWristbandPdf(patientId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .hasMessageContaining("patient.notFound");
     }
 
     @Test

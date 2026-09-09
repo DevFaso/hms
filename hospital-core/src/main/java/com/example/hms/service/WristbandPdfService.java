@@ -60,11 +60,11 @@ public class WristbandPdfService {
     @Transactional(readOnly = true)
     public byte[] generateWristbandPdf(UUID patientId, UUID hospitalId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         // 404-not-403: a scoped caller printing for an unregistered patient
         // learns nothing.
         if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException("Patient not found with ID: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         String mrn = hospitalId != null ? patient.getMrnForHospital(hospitalId) : null;
 

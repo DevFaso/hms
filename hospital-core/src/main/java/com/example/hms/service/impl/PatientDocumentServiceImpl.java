@@ -181,7 +181,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
             throw new ResourceNotFoundException("Patient not found: null");
         }
         return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
     /**
@@ -261,6 +261,6 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
 
     private User resolveUser(UUID userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
     }
 }

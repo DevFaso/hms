@@ -46,7 +46,7 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         rejectDuplicateCode(hospitalId, request.getCode(), null);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         VisitType entity = VisitType.builder()
             .hospital(hospital)
@@ -122,7 +122,7 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         if (department.getHospital() == null
             || !hospitalId.equals(department.getHospital().getId())) {
             // Foreign departments read as absent — the module's 404 idiom.
-            throw new ResourceNotFoundException("Department not found with ID: " + departmentId);
+            throw new ResourceNotFoundException("department.notFound", departmentId);
         }
         return department;
     }

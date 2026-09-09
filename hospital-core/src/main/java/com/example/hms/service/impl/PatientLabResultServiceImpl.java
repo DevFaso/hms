@@ -62,7 +62,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         List<LabResult> results;
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             results = labResultRepository
                 .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patient.getId(), hospital.getId(), pageable);
         } else {

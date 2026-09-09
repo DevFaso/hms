@@ -478,7 +478,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // 1. Explicit departmentId in the request
         if (request.getDepartmentId() != null) {
             return departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found: " + request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         }
         // 2. departmentCode in the request
         if (request.getDepartmentCode() != null) {

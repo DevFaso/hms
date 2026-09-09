@@ -2696,7 +2696,7 @@ public class PatientServiceImpl implements PatientService {
             .map(p -> p.isRegisteredInHospital(hospitalId))
             .orElse(false);
         if (!visible) {
-            throw new ResourceNotFoundException("Patient not found: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return addressHistoryRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
             .map(h -> com.example.hms.payload.dto.PatientAddressHistoryDTO.builder()

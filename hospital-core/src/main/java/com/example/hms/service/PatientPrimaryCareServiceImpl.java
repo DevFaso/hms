@@ -43,10 +43,10 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Transactional
     public PatientPrimaryCareResponseDTO assignPrimaryCare(UUID patientId, PatientPrimaryCareRequestDTO req) {
         Patient patient = patientRepo.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital hospital = hospitalRepo.findById(req.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + req.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepo.findById(req.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + req.getAssignmentId()));
@@ -85,7 +85,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         // Optionally support hospital/assignment switch
         if (req.getHospitalId() != null && !req.getHospitalId().equals(entity.getHospital().getId())) {
             Hospital h = hospitalRepo.findById(req.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + req.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
             entity.setHospital(h);
         }
         if (req.getAssignmentId() != null && !req.getAssignmentId().equals(entity.getAssignment().getId())) {
