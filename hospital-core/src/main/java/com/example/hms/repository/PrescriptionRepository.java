@@ -68,8 +68,17 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * <p>The graph must reach {@code staff.user}, not just {@code staff}: the
      * timeline renders the prescriber via {@code Staff.getFullName()}, which
      * dereferences the user, so stopping at {@code staff} would halve the round
-     * trips instead of removing them. Matches the sibling finders above.
+     * trips instead of removing them.
+     *
+     * <p>It deliberately does NOT match the sibling finders above. They fetch
+     * {@code encounter.hospital} because their callers render it; this caller
+     * reads {@code prescription.getHospital()} directly, and needs
+     * {@code encounter.department} instead — the sensitivity filter runs
+     * {@code effectiveCategory(getEncounter())}, which falls back to the
+     * department's default, so stopping at {@code encounter} leaves one lazy
+     * load per row. {@code patient} is not fetched: this caller never touches
+     * the association, and the row carries a dozen encrypted columns.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "hospital", "encounter"})
+    @EntityGraph(attributePaths = {"staff", "staff.user", "hospital", "encounter", "encounter.department"})
     List<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds);
 }

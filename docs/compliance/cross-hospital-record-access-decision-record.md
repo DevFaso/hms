@@ -143,7 +143,16 @@ came from their own hospital.
 | Imaging report | `scanPerformedBy`, `reportFinalizedBy` | present |
 | Surgical history | `performedBy` | present |
 | **Prescription** | — | **missing**; available as `Prescription.staff` |
-| **Lab result** | — | **missing**; available as `LabResult.releasedByDisplay` |
+| **Lab result** | `clinician` | shipped from `LabOrder.orderingStaff` |
+
+⚠ **Not `LabResult.releasedByDisplay`**, which an earlier draft of this table
+named. That column is the *releaser*, and it frequently holds no person at
+all: `LabResultServiceImpl` writes the literal `"Autoverification"` for
+auto-verified normals, falls back to `"Unknown clinician"`, and can store a
+bare email address for a staff user with no name set. None of those belong
+under "who treated the patient", least of all on a row that now crosses a
+hospital boundary. `LabOrder.orderingStaff` is `NOT NULL` and already in the
+finder's fetch graph.
 
 Both gaps are fillable from existing entity fields. **No migration required.**
 

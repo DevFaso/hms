@@ -1851,9 +1851,14 @@ public class PatientServiceImpl implements PatientService {
                 // labOrder.orderingStaff.user, so this costs no extra query.
                 putIfNotNull(metadata, META_CLINICIAN,
                     resolveStaffDisplayName(result.getLabOrder().getOrderingStaff()));
-                // Keep the releaser, under its own name — it is real
-                // information, it just is not the treating clinician.
-                putIfNotNull(metadata, "releasedBy", result.getReleasedByDisplay());
+                // The releaser is deliberately NOT re-added under another key.
+                // Nothing renders it, and releasedByDisplay is the value this
+                // change exists to get off the chart: it can be a bare email
+                // address, and #582 ships this row to other hospitals. Adding
+                // it back as unread payload would relabel the disclosure, not
+                // remove it. If the releaser is wanted on the chart it needs a
+                // typed field, a label in three bundles, and a decision about
+                // whether it crosses a tenant boundary.
                 String summary = formatLabResultSummary(result);
                 return PatientTimelineEntryDTO.builder()
                     .entryId(result.getId() != null ? result.getId().toString() : null)

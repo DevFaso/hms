@@ -69,6 +69,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -1612,9 +1613,12 @@ class ReceptionServiceImplTest {
         // actually saw. ResourceNotFoundException takes a KEY.
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getPatientSnapshot(patientId, hospitalId))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("patient.notfound")
-            .hasMessageNotContaining("Patient not found");
+        // Was asserting the RESOLVED English text must not appear, which pinned
+        // the "[Missing translation]" fallback as a requirement: the day
+        // MessageUtil resolves properly this test failed on correct behaviour.
+        // The key is the contract; the rendering is not.
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+            .isThrownBy(() -> service.getPatientSnapshot(patientId, hospitalId))
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("patient.notfound"));
     }
 }

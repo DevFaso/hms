@@ -527,7 +527,7 @@ export class PatientChartComponent implements OnInit {
     return entry.metadata?.sourceHospitalName ?? null;
   }
 
-  /** Attending, prescriber, or the clinician who released the result. */
+  /** Attending, prescriber, or the clinician who ORDERED the result. */
   entryClinician(entry: TimelineEntry): string | null {
     return entry.metadata?.clinician ?? null;
   }

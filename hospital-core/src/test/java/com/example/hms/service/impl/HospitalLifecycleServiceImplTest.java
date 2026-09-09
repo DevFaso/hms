@@ -1,7 +1,7 @@
 package com.example.hms.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -177,15 +177,16 @@ class HospitalLifecycleServiceImplTest {
     @Test
     void getLifecycleThrowsResourceNotFoundForUnknownHospital() {
         UUID unknown = UUID.randomUUID();
-        when(hospitalRepository.findById(unknown)).thenReturn(Optional.empty());
-        ResourceNotFoundException thrown = catchThrowableOfType(
-            () -> service.getLifecycle(unknown), ResourceNotFoundException.class);
-
-        // getMessageKey(), not the rendered message: the message only
+        when(hospitalRepository.findById(unknown)).thenReturn(Optional.empty());        // getMessageKey(), not the rendered message: the message only
         // carries the key when MessageUtil FAILED to resolve it, and
         // MessageUtil holds a shared static that any @SpringBootTest in
         // the same fork (forkEvery=250) fills with the real bundle.
-        assertThat(thrown.getMessageKey()).isEqualTo("hospital.notFound");
+        
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+
+            .isThrownBy(() -> service.getLifecycle(unknown))
+
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("hospital.notFound"));
     }
 
     // ── MFA step-up branches (mirrors OrganizationLifecycleServiceImplTest) ──

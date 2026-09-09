@@ -1,7 +1,7 @@
 package com.example.hms.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -204,10 +204,11 @@ class PatientVitalSignServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
         UUID randomId = UUID.randomUUID();
-        ResourceNotFoundException thrown = catchThrowableOfType(
-            () -> service.recordVital(patientId, request, randomId), ResourceNotFoundException.class);
+        assertThatExceptionOfType(ResourceNotFoundException.class)
 
-        assertThat(thrown.getMessageKey()).isEqualTo("hospital.notFound");
+            .isThrownBy(() -> service.recordVital(patientId, request, randomId))
+
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("hospital.notFound"));
     }
 
     @Test

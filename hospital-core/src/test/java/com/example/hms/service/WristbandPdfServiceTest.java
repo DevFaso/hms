@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -99,10 +99,13 @@ class WristbandPdfServiceTest {
     void wristbandIs404ForAScopedCallerWithoutRegistration() {
         UUID foreignScope = UUID.randomUUID();
 
-        ResourceNotFoundException thrown = catchThrowableOfType(
-            () -> service.generateWristbandPdf(patientId, foreignScope), ResourceNotFoundException.class);
+        assertThatExceptionOfType(ResourceNotFoundException.class)
 
-        assertThat(thrown.getMessageKey()).isEqualTo("patient.notFound");
+
+            .isThrownBy(() -> service.generateWristbandPdf(patientId, foreignScope))
+
+
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
     }
 
     @Test

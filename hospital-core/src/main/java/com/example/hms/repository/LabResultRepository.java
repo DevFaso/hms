@@ -108,6 +108,16 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     /** FHIR DiagnosticReport search (Tier 2 item 42): one query for a whole page of orders. */
     List<LabResult> findByLabOrder_IdIn(Collection<UUID> labOrderIds);
 
+    /**
+     * The doctor timeline's lab rows.
+     *
+     * <p>{@code labOrder.encounter} and its department are fetched because the
+     * E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())} on
+     * every row before any of them is rendered, and that falls back to the
+     * department's default when the encounter carries no explicit tag. Both are
+     * LAZY, so without them the sensitivity check alone costs two selects per
+     * lab order — on what is usually a chart's highest-count category.
+     */
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -115,6 +125,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "labOrder.labTestDefinition",
         "labOrder.orderingStaff",
         "labOrder.orderingStaff.user",
+        "labOrder.encounter",
+        "labOrder.encounter.department",
         "assignment",
         "assignment.user"
     })

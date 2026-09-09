@@ -297,8 +297,9 @@ class ProResponseServiceTest {
             Throwable foreign = catchThrowable(() -> service.record(patientId, dto));
             Throwable absent = catchThrowable(() -> service.record(missing, dto));
 
-            assertThat(foreign).isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("patient.notfound");
+            assertThat(foreign).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(((ResourceNotFoundException) foreign).getMessageKey())
+                .isEqualTo("patient.notfound");
             // An attacker probing ids must not be able to tell "exists elsewhere" from "does not exist".
             assertThat(absent).isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage(foreign.getMessage());
