@@ -40,15 +40,15 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.info("Creating social history for patient: {}", requestDTO.getPatientId());
 
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with id: " + requestDTO.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with id: " + requestDTO.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
 
         Staff recordedBy = null;
         if (requestDTO.getRecordedByStaffId() != null) {
             recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + requestDTO.getRecordedByStaffId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
         }
 
         // If this is a new active record, deactivate previous ones
@@ -90,7 +90,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.debug("Fetching social histories for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientSocialHistory> histories = socialHistoryRepository.findByPatient_IdOrderByRecordedDateDesc(patientId);
@@ -106,7 +106,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.debug("Fetching current social history for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         PatientSocialHistory current = socialHistoryRepository
@@ -128,7 +128,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
             Staff recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + requestDTO.getRecordedByStaffId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
             existingHistory.setRecordedBy(recordedBy);
         }
 

@@ -179,7 +179,7 @@ class HospitalLifecycleServiceImplTest {
         when(hospitalRepository.findById(unknown)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getLifecycle(unknown))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital not found");
+            .hasMessageContaining("hospital.notFound");
     }
 
     // ── MFA step-up branches (mirrors OrganizationLifecycleServiceImplTest) ──

@@ -46,7 +46,7 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         rejectDuplicateCode(hospitalId, request.getCode(), null);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         VisitType entity = VisitType.builder()
             .hospital(hospital)
@@ -117,12 +117,14 @@ public class VisitTypeServiceImpl implements VisitTypeService {
             return null;
         }
         Department department = departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Department not found with ID: " + departmentId));
+            // Same key as the foreign-tenant branch below, deliberately: if the
+            // two rendered differently a caller could tell "exists at another
+            // hospital" from "does not exist" by reading the 404 body.
+            .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
         if (department.getHospital() == null
             || !hospitalId.equals(department.getHospital().getId())) {
             // Foreign departments read as absent — the module's 404 idiom.
-            throw new ResourceNotFoundException("Department not found with ID: " + departmentId);
+            throw new ResourceNotFoundException("department.notFound", departmentId);
         }
         return department;
     }

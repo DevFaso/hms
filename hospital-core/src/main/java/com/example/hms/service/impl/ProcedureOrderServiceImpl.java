@@ -43,10 +43,10 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         Staff orderingProvider = staffRepository.findById(orderingProviderId)
             .orElseThrow(() -> new ResourceNotFoundException("Ordering provider not found with ID: " + orderingProviderId));

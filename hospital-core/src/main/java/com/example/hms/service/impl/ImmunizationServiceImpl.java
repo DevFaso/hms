@@ -44,15 +44,15 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Creating immunization for patient: {}", requestDTO.getPatientId());
 
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with id: " + requestDTO.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with id: " + requestDTO.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
 
         Staff administeredBy = null;
         if (requestDTO.getAdministeredByStaffId() != null) {
             administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + requestDTO.getAdministeredByStaffId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
         }
 
         Encounter encounter = null;
@@ -85,7 +85,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientImmunization> immunizations = 
@@ -102,7 +102,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations by vaccine code {} for patient: {}", vaccineCode, patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientImmunization> immunizations = 
@@ -119,7 +119,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching overdue immunizations for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientImmunization> overdueImmunizations = immunizationRepository.findOverdueImmunizations(patientId);
@@ -135,7 +135,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching upcoming immunizations for patient: {} between {} and {}", patientId, startDate, endDate);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientImmunization> upcomingImmunizations = 
@@ -152,7 +152,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations needing reminders for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found with id: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
         List<PatientImmunization> needingReminders = 
@@ -189,7 +189,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getAdministeredBy() == null || 
              !existingImmunization.getAdministeredBy().getId().equals(requestDTO.getAdministeredByStaffId()))) {
             Staff administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + requestDTO.getAdministeredByStaffId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
             existingImmunization.setAdministeredBy(administeredBy);
         }
 

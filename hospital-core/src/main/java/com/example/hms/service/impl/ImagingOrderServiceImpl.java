@@ -58,10 +58,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     public ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId) {
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
@@ -88,13 +88,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
             order.setPatient(patient);
         }
 
         if (request.getHospitalId() != null && (order.getHospital() == null || !request.getHospitalId().equals(order.getHospital().getId()))) {
             Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
             order.setHospital(hospital);
         }
 

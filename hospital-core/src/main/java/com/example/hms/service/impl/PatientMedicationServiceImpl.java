@@ -59,7 +59,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         List<Prescription> prescriptions;
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId());
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal

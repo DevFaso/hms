@@ -65,14 +65,14 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found with username/email: " + identifier));
         } else {
             patient = patientRepository.findById(dto.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + dto.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
         final Hospital hospital = !isBlank(dto.getHospitalName())
             ? hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with name: " + dto.getHospitalName()))
             : hospitalRepository.findById(dto.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + dto.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         log.info("Hospital retrieved: name={}", hospital.getName());
 

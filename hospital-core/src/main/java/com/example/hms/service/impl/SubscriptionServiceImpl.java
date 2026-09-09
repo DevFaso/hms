@@ -95,7 +95,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         UUID organizationId, OrganizationSubscriptionRequestDTO request
     ) {
         Organization organization = organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
         SubscriptionPlan plan = planRepository.findById(request.getPlanId())
             .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + request.getPlanId()));
 

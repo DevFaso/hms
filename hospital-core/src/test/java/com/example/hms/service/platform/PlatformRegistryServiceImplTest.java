@@ -242,7 +242,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkHospitalToService(hospitalId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Hospital not found");
+            .hasMessageContaining("hospital.notFound");
     }
 
     @Test
@@ -396,7 +396,7 @@ class PlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> platformRegistryService
             .linkDepartmentToService(departmentId, serviceId, null, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Department not found");
+            .hasMessageContaining("department.notFound");
     }
 
     @Test

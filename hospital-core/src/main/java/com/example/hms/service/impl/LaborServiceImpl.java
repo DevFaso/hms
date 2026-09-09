@@ -104,7 +104,7 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("Labor episode payload is required.");
         }
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         PatientHospitalRegistration registration = resolveRegistration(request.getRegistrationId());
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
 
@@ -457,7 +457,7 @@ public class LaborServiceImpl implements LaborService {
     private Hospital resolveHospital(PatientHospitalRegistration registration, UUID requestedHospitalId) {
         if (requestedHospitalId != null) {
             return hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
         }
         if (registration != null && registration.getHospital() != null) {
             return registration.getHospital();

@@ -46,10 +46,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
@@ -91,7 +91,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         // Update hospital if changed
         if (request.getHospitalId() != null && !request.getHospitalId().equals(order.getHospital().getId())) {
             Hospital newHospital = hospitalRepository.findById(request.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
             order.setHospital(newHospital);
         }
 

@@ -251,7 +251,7 @@ public class ProResponseService {
         ProInstrument instrument = instrumentService.requireActive(request.getInstrumentCode());
         ProScoring.ProScoreResult score = ProScoring.score(instrument, request.getAnswers());
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         PostpartumCarePlan plan = activePlan(patient, hospitalId);
 
         LocalDateTime now = LocalDateTime.now(clock);

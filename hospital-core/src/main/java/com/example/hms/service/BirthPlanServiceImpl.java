@@ -264,12 +264,12 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", username));
     }
 
     private Patient getPatientByIdOrThrow(UUID patientId) {
         return patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
     private Patient getPatientByUserOrThrow(User user) {
@@ -279,7 +279,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private Hospital getHospitalByIdOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
     }
 
     private BirthPlan getBirthPlanByIdOrThrow(UUID id) {

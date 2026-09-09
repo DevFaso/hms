@@ -231,7 +231,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         }
 
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         UUID hospitalId = slot.getHospital().getId();
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("The patient is not registered at this hospital.");

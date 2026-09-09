@@ -68,7 +68,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public WardResponseDTO createWard(WardRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, code)) {
@@ -262,10 +262,10 @@ public class BedManagementServiceImpl implements BedManagementService {
             return null;
         }
         Department department = departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Department not found: " + departmentId));
+            .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
         // ── Tenant isolation: a department from another hospital reads as not-found. ──
         if (department.getHospital() == null || !hospitalId.equals(department.getHospital().getId())) {
-            throw new ResourceNotFoundException("Department not found: " + departmentId);
+            throw new ResourceNotFoundException("department.notFound", departmentId);
         }
         return department;
     }
