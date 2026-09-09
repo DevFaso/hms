@@ -1592,6 +1592,15 @@ that exists rather than inventing one.
 
 ## E8 — Cross-hospital record access, on Epic's treatment-relationship model
 
+> ⚠ **The access posture below was revised on 2026-09-08.** The default is now
+> *announced availability plus an explicit pull*, not the silent automatic
+> merge this preamble describes; automatic merge is kept for emergency
+> encounters and for hospitals that have classified their departments. The
+> reasoning — the fail-open classifier default with nothing classified, the
+> French-derived jurisdiction, and how Epic's two mechanisms actually differ —
+> is in `docs/compliance/cross-hospital-record-access-decision-record.md`.
+> Items #48, #51, #52 and #53 are unaffected; #50 is re-scoped in place.
+
 **The decision (user, 2026-09-07):** stop treating a patient's consent as the
 gate on one hospital reading another's chart, and adopt the model Epic runs in
 a shared instance — *the record follows the treatment relationship, and access
@@ -1721,12 +1730,29 @@ all exist and are reachable.
   ⚠ **Also blocked by #51 (the withhold half) and #52 (posture + opt-out),
   both numbered after it.** Working top-down through this section ships the
   widened filter before the sensitive-category withhold exists — do not.
-- [ ] 50. **Provenance on the merged chart ("Happy Together").** Outside data
-  merges into the normal chart surfaces — timeline, results, medications,
-  problems — rather than a separate "other hospitals" tab, because Epic's
-  experience is that clinicians do not open the tab. Every foreign row carries
-  a visible source badge (facility + date) and the chart states plainly when it
-  is showing a partial view. The portal work is the larger half of this item.
+- [ ] 50. **Announced availability + provenance on the chart.** ⚠ **Re-scoped
+  2026-09-08 — see `docs/compliance/cross-hospital-record-access-decision-record.md`.**
+  The default is no longer a silent merge: the chart states that records exist
+  elsewhere (hospital, count, most-recent date — no PHI) and loads them on an
+  explicit click, which writes the `RECORD_SHARE` row. Emergency encounters
+  merge automatically; a hospital whose departments are classified can be moved
+  to automatic merge via `RecordAccessPosture`. Outside rows still land in the
+  normal chart surfaces — timeline, results, medications, problems — never a
+  separate "other hospitals" tab, because Epic's experience is that clinicians
+  do not open the tab.
+  **Row-level provenance contract (mandatory, visible without a click):**
+  hospital name, staff name, date, what happened. Hospital name
+  (`metadata.sourceHospitalName`), date (`occurredAt`) and summary ship
+  already; staff name is present for encounters (`clinician`), imaging
+  (`orderedBy` / `scanPerformedBy` / `reportFinalizedBy`) and surgical history
+  (`performedBy`), and is **missing for prescriptions and lab results** — both
+  fillable from `Prescription.staff` and `LabResult.releasedByDisplay`, no
+  migration needed.
+  ⚠ **Blocking defect:** the portal's `TimelineEntry`
+  (`hospital-portal/src/app/services/patient.service.ts:222`) declares no
+  `metadata` field, so #582's provenance reaches the wire and is discarded.
+  Nothing above can render until that type carries it. The portal work is the
+  larger half of this item.
 - [~] 51. **Sensitive-category segmentation.** _(withhold half shipped: `SensitivityCategory` + tag on encounters/admissions/consultations/problems/nursing notes + per-department default (V158), `SensitivityClassifier` with default-withhold; ENFORCEMENT lands with #49, and granular ROI-authorised release is the later pass)_ The carve-out Epic still gates
   on explicit authorisation: substance use, behavioural health / the EPDS rows
   from #47, HIV, reproductive health. These do NOT travel on the treatment
