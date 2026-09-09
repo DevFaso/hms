@@ -128,11 +128,11 @@ public class ConsultationController {
     }
 
     @GetMapping("/overdue")
-    // NURSE added here and NOT on the two hospital-path reads above. This is
-    // the only consultation list a nurse could not reach: GET /consultations
-    // already admits ROLE_NURSE, and the portal's all/pending/active/completed
-    // tabs all filter that one response client-side. The two /hospital/{id}
-    // reads have no caller in the portal at all.
+    // NURSE is added here and deliberately not on the two hospital-path reads
+    // above. This was the only consultation list a nurse could not reach: the
+    // plain list endpoint already admits ROLE_NURSE, and the portal's four
+    // status tabs all filter that single response client-side. The two
+    // hospital-path reads have no caller in the portal at all.
     @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
