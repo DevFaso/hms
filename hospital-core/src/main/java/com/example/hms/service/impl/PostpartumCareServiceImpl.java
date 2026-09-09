@@ -76,7 +76,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             throw new BusinessException("Postpartum observation request payload is required.");
         }
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
@@ -222,11 +222,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         if (requestedHospitalId != null) {
             return hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + patient.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
         }
         throw new BusinessException("Unable to resolve hospital context for postpartum observation.");
     }

@@ -1207,7 +1207,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Patient patient = findPatient(auth);
 
         User proxyUser = userRepository.findByUsername(dto.getProxyUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + dto.getProxyUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getProxyUsername()));
 
         // Prevent granting proxy to yourself
         if (patient.getUser() != null && patient.getUser().getId().equals(proxyUser.getId())) {

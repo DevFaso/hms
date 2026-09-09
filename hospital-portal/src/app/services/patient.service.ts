@@ -219,12 +219,39 @@ export interface ChartUpdateRequest {
   sections?: ChartUpdateSection[];
 }
 
+/**
+ * Provenance and clinical detail the backend stamps on every timeline row.
+ *
+ * E8 #50: a clinician must be able to tell, without clicking, which hospital a
+ * row came from and who treated the patient. The backend has always sent this;
+ * until now the interface declared no `metadata` field, so it arrived on the
+ * wire and was discarded here.
+ */
+export interface TimelineEntryMetadata {
+  /** Hospital the row belongs to — present on local rows too, not just foreign ones. */
+  sourceHospitalName?: string;
+  sourceHospitalId?: string;
+  /** True when the row came from a hospital other than the caller's active one. */
+  foreign?: boolean;
+  /**
+   * Who treated the patient: the attending on an encounter, the prescriber
+   * on a prescription, the ORDERING clinician on a lab result. Never the
+   * releaser — that is often not a person ("Autoverification") and is not
+   * who treated anyone.
+   */
+  clinician?: string;
+  department?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 export interface TimelineEntry {
   entryId: string;
   category: string;
   occurredAt: string;
   summary: string;
   sensitive: boolean;
+  metadata?: TimelineEntryMetadata;
 }
 
 export interface PatientTimeline {

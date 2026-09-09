@@ -191,7 +191,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     private Hospital loadOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
     }
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {

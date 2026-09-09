@@ -39,6 +39,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import static org.mockito.ArgumentMatchers.any;
@@ -368,9 +369,9 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("patient.notfound");
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+            .isThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("patient.notfound"));
     }
 
     @Test

@@ -700,15 +700,29 @@ class PatientServiceImplTest {
         prescription.setCreatedAt(LocalDateTime.now().minusHours(12));
         prescription.setUpdatedAt(LocalDateTime.now().minusHours(12));
 
+        User orderingUser = new User();
+        orderingUser.setId(UUID.randomUUID());
+        orderingUser.setFirstName("Miranda");
+        orderingUser.setLastName("Bailey");
+        Staff orderingStaff = Staff.builder()
+            .user(orderingUser)
+            .hospital(hospital)
+            .assignment(assignment)
+            .build();
+
         LabOrder labOrder = LabOrder.builder()
             .patient(patient)
             .hospital(hospital)
+            .orderingStaff(orderingStaff)
             .clinicalIndication("HIV Screening")
             .build();
         labOrder.setId(UUID.randomUUID());
 
         LabResult labResult = LabResult.builder()
             .labOrder(labOrder)
+            // Not a person. This is what the chart rendered under
+            // "who treated the patient" before this change.
+            .releasedByDisplay("Autoverification")
             .resultValue("Reactive")
             .resultUnit("IgG")
             .resultDate(LocalDateTime.now().minusHours(6))
@@ -746,7 +760,26 @@ class PatientServiceImplTest {
             request
         );
 
-        assertThat(response.getEntries()).hasSize(4);
+        // E8 #50 — the chart renders hospital + clinician + date + what on every
+        // row, so the prescriber has to reach the wire. Asserting the value and
+        // not merely the key: a null clinician still satisfies containsKey, and
+        // that is exactly the regression this guards.
+        assertThat(response.getEntries())
+            .hasSize(4)
+            .filteredOn(entry -> "PRESCRIPTION".equals(entry.getCategory()))
+            .singleElement()
+            .extracting(entry -> entry.getMetadata().get("clinician"))
+            .isEqualTo("Meredith Grey");
+        // The lab row carries the ORDERING clinician, never releasedByDisplay:
+        // that column holds "Autoverification" for auto-verified results and can
+        // hold a bare email address, and #582 ships this row to other hospitals.
+        assertThat(response.getEntries())
+            .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
+            .singleElement()
+            .satisfies(entry -> assertThat(entry.getMetadata())
+                .containsEntry("clinician", "Miranda Bailey")
+                .doesNotContainKey("releasedBy")
+                .doesNotContainValue("Autoverification"));
         assertThat(response.getPatientId()).isEqualTo(patientId);
         assertThat(response.getHospitalId()).isEqualTo(hospitalId);
         assertThat(response.isContainsSensitiveData()).isTrue();

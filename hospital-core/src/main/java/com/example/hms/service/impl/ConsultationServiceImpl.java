@@ -82,10 +82,10 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
             throw new BusinessException("Patient is not registered with the specified hospital.");

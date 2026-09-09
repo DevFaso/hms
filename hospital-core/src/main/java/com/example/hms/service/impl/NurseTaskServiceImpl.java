@@ -1470,7 +1470,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
 
         User author = userRepository.findById(nurseUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found: " + nurseUserId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", nurseUserId));
 
         NursingNoteTemplate template;
         try {

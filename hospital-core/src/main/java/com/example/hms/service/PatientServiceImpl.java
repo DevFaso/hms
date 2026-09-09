@@ -209,6 +209,9 @@ public class PatientServiceImpl implements PatientService {
         "clozapine"
     );
     private static final String META_STATUS = "status";
+    /** E8 #50 — "who treated the patient", required on every row the chart
+     *  renders so provenance reads as hospital + clinician + date + what. */
+    private static final String META_CLINICIAN = "clinician";
     /** E8 #49/#50 — provenance key, written by stampProvenance and read back by
      *  the disclosure accounting. Three uses is Sonar's S1192 threshold. */
     private static final String META_SOURCE_HOSPITAL_ID = "sourceHospitalId";
@@ -1777,7 +1780,7 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, META_STATUS, encounter.getStatus() != null ? encounter.getStatus().name() : null);
                 putIfNotNull(metadata, "encounterType", encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
                 putIfNotNull(metadata, "department", encounter.getDepartment() != null ? encounter.getDepartment().getName() : null);
-                putIfNotNull(metadata, "clinician", resolveStaffName(encounter));
+                putIfNotNull(metadata, META_CLINICIAN, resolveStaffName(encounter));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(encounter.getId() != null ? encounter.getId().toString() : null)
                     .category(CATEGORY_ENCOUNTER)
@@ -1806,6 +1809,9 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "dosage", prescription.getDosage());
                 putIfNotNull(metadata, "frequency", prescription.getFrequency());
                 putIfNotNull(metadata, "duration", prescription.getDuration());
+                // E8 #50: the prescriber. Without it a foreign prescription
+                // renders with a hospital but nobody attached to it.
+                putIfNotNull(metadata, META_CLINICIAN, resolveStaffDisplayName(prescription.getStaff()));
                 return PatientTimelineEntryDTO.builder()
                     .entryId(prescription.getId() != null ? prescription.getId().toString() : null)
                     .category(CATEGORY_PRESCRIPTION)
@@ -1834,6 +1840,25 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "unit", result.getResultUnit());
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
+                // E8 #50: the ordering clinician, NOT releasedByDisplay. The
+                // releaser is often not a person at all — LabResultServiceImpl
+                // writes the literal "Autoverification" for auto-verified
+                // normals, falls back to "Unknown clinician", and can end up
+                // with a bare email address. Rendering any of those under the
+                // chart's "who treated the patient" label is wrong, and #582
+                // now shares that row across hospitals. orderingStaff is
+                // NOT NULL and the finder's @EntityGraph already fetches
+                // labOrder.orderingStaff.user, so this costs no extra query.
+                putIfNotNull(metadata, META_CLINICIAN,
+                    resolveStaffDisplayName(result.getLabOrder().getOrderingStaff()));
+                // The releaser is deliberately NOT re-added under another key.
+                // Nothing renders it, and releasedByDisplay is the value this
+                // change exists to get off the chart: it can be a bare email
+                // address, and #582 ships this row to other hospitals. Adding
+                // it back as unread payload would relabel the disclosure, not
+                // remove it. If the releaser is wanted on the chart it needs a
+                // typed field, a label in three bundles, and a decision about
+                // whether it crosses a tenant boundary.
                 String summary = formatLabResultSummary(result);
                 return PatientTimelineEntryDTO.builder()
                     .entryId(result.getId() != null ? result.getId().toString() : null)
@@ -2696,7 +2721,7 @@ public class PatientServiceImpl implements PatientService {
             .map(p -> p.isRegisteredInHospital(hospitalId))
             .orElse(false);
         if (!visible) {
-            throw new ResourceNotFoundException("Patient not found: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         return addressHistoryRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
             .map(h -> com.example.hms.payload.dto.PatientAddressHistoryDTO.builder()

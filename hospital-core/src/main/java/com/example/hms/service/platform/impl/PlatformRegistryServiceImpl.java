@@ -70,7 +70,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         }
 
         Organization organization = organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
 
         boolean exists = organizationPlatformServiceRepository
             .existsByOrganizationIdAndServiceType(organizationId, request.getServiceType());
@@ -140,7 +140,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
     Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
             .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND + organizationServiceId));
 
@@ -206,7 +206,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
     Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
 
         Department department = departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Department not found: " + departmentId));
+            .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
 
         OrganizationPlatformService service = organizationPlatformServiceRepository.findById(organizationServiceId)
             .orElseThrow(() -> new ResourceNotFoundException(PLATFORM_SERVICE_NOT_FOUND + organizationServiceId));

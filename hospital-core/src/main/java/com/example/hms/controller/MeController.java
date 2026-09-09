@@ -104,7 +104,7 @@ public class MeController {
                 .orElseThrow(() -> new BusinessException("Unable to resolve hospital from your context."));
 
         Hospital h = hospitalRepository.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         return ResponseEntity.ok(new HospitalMinimalDTO(h.getId(), h.getName()));
     }

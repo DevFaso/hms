@@ -132,7 +132,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             com.example.hms.model.Hospital hospital = null;
             if (dto.getHospitalName() != null && !dto.getHospitalName().isBlank()) {
                 hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-                    .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalName()));
+                    .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalName()));
             }
 
             if (hospital != null) {
@@ -441,10 +441,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             UUID otherUserId = senderId.equals(userId) ? recipientId : senderId;
 
             User otherUser = userRepository.findById(otherUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + otherUserId));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", otherUserId));
 
             User currentUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
             int unreadCount = chatMessageRepository.countBySenderAndRecipientAndReadFalse(otherUser, currentUser);
 

@@ -93,9 +93,9 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         }
 
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findById(effectiveHospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + effectiveHospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", effectiveHospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(requesterUserId, effectiveHospitalId)
             .orElseThrow(() -> new BusinessException("Staff profile not found for authenticated user in hospital."));
@@ -138,7 +138,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             throw new BusinessException("Hospital identifier is required for chart updates.");
         }
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("Patient not found: " + patientId);
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             throw new BusinessException("Patient is not registered in the specified hospital.");

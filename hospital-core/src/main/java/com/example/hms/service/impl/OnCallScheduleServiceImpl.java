@@ -115,7 +115,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private Staff requireStaffInTenant(UUID staffId) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found with ID: " + staffId));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (staff.getHospital() == null
             || !hospitalId.equals(staff.getHospital().getId()))) {
@@ -131,7 +131,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
             return null;
         }
         return departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Department not found with ID: " + departmentId));
+            .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
     }
 
     private void validateWindow(OnCallScheduleRequestDTO request) {

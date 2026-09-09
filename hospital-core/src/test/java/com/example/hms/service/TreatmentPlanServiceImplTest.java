@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -178,9 +179,9 @@ class TreatmentPlanServiceImplTest {
     void create_patientNotFound_throws() {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("patient.notFound");
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(() -> service.create(requestDTO))
+                .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
     }
 
     @Test

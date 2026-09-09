@@ -91,7 +91,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
     @Transactional
     public UserCredentialHealthDTO getCredentialHealth(UUID userId) {
         User user = userRepository.findByIdWithRolesAndProfiles(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
         List<UserMfaEnrollment> enrollments = mfaEnrollmentRepository.findByUserId(userId);
         List<UserRecoveryContact> contacts = recoveryContactRepository.findByUserId(userId);
         return toHealthDto(user, enrollments, contacts);
@@ -298,7 +298,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
 
     private User resolveUser(UUID userId) {
         return userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
     }
 
     private UserCredentialHealthDTO toHealthDto(User user,

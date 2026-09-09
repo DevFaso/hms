@@ -63,7 +63,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
         // active-registration rule below still governs whether we may WRITE.
         Patient patient = patientChartAccess.require(patientId, hospitalId);
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("Patient is not registered at this hospital.");
         }

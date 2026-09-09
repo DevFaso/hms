@@ -17,6 +17,7 @@ import {
   ChartUpdateRequest,
   ChartSectionType,
   PatientTimeline,
+  TimelineEntry,
 } from '../../services/patient.service';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -512,6 +513,27 @@ export class PatientChartComponent implements OnInit {
       default:
         return 'event_note';
     }
+  }
+
+  /**
+   * E8 #50 — provenance a clinician reads without clicking.
+   *
+   * The hospital name is rendered for every row, local ones included: a badge
+   * that appears only on foreign rows makes "no badge" ambiguous between "my
+   * hospital" and "provenance missing", which is exactly the doubt this is
+   * meant to remove.
+   */
+  entryHospital(entry: TimelineEntry): string | null {
+    return entry.metadata?.sourceHospitalName ?? null;
+  }
+
+  /** Attending, prescriber, or the clinician who ORDERED the result. */
+  entryClinician(entry: TimelineEntry): string | null {
+    return entry.metadata?.clinician ?? null;
+  }
+
+  isForeignEntry(entry: TimelineEntry): boolean {
+    return entry.metadata?.foreign === true;
   }
 
   severityClass(severity?: string): string {

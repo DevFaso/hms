@@ -6324,6 +6324,7 @@
     "TIMELINE_ACCESS": "Timeline access",
     "TIMELINE_ACCESS_HINT": "Access to the patient timeline is audited. Provide a clinical reason.",
     "TIMELINE_LOAD_ERROR": "Failed to load timeline",
+    "TIMELINE_FROM_OTHER_HOSPITAL": "Another hospital",
     "TIMELINE_PROMPT": "Provide an access reason to load the patient timeline (audited).",
     "TIMELINE_REASON": "Access reason",
     "UPDATES": "Chart Updates",
