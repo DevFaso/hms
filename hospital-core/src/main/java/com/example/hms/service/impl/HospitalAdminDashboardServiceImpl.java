@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -63,6 +64,8 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
     private final AuditEventLogRepository auditEventLogRepository;
     private final StaffShiftRepository staffShiftRepository;
     private final HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
+    /** Same SLA clock as ConsultationServiceImpl — the overdue count compares against slaDueBy. */
+    private final Clock clock;
 
     @Override
     public HospitalAdminSummaryDTO getSummary(UUID hospitalId, LocalDate asOfDate, int auditLimit) {
@@ -146,7 +149,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         // consultation with a dangling hospital would 500 this dashboard for
         // every tenant — it saw every tenant's rows.
         long overdue = consultationRepository
-            .findOverdueConsultations(LocalDateTime.now(), completedStatuses, hospitalId).size();
+            .findOverdueConsultations(LocalDateTime.now(clock), completedStatuses, hospitalId).size();
 
         return HospitalAdminSummaryDTO.ConsultationMetrics.builder()
             .requested(requested.size())
@@ -261,7 +264,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
             ConsultationStatus.ASSIGNED, ConsultationStatus.SCHEDULED, ConsultationStatus.IN_PROGRESS);
         List<Consultation> backlog = consultationRepository.findByHospitalAndStatuses(hospitalId, pendingStatuses);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         return backlog.stream().map(c -> HospitalAdminSummaryDTO.ConsultBacklogItem.builder()
             .consultationId(c.getId().toString())
             .patientName(c.getPatient() != null

@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import java.time.Clock;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationType;
 import com.example.hms.enums.ConsultationUrgency;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Spy;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,6 +66,8 @@ class ConsultationServiceImplTest {
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
     @Mock private com.example.hms.security.audit.CrossTenantReadAudit crossTenantReadAudit;
+    /** Real system clock — the production bean is Clock.systemDefaultZone(). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private ConsultationServiceImpl service;

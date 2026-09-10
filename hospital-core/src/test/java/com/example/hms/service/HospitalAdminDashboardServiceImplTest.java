@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import java.time.Clock;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.enums.ConsultationStatus;
@@ -39,6 +40,7 @@ import com.example.hms.repository.platform.HospitalPlatformServiceLinkRepository
 import com.example.hms.service.impl.HospitalAdminDashboardServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Spy;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -75,6 +77,8 @@ class HospitalAdminDashboardServiceImplTest {
     @Mock private AuditEventLogRepository auditEventLogRepository;
     @Mock private StaffShiftRepository staffShiftRepository;
     @Mock private HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
+    /** Real system clock — the production bean is Clock.systemDefaultZone(). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks private HospitalAdminDashboardServiceImpl service;
 

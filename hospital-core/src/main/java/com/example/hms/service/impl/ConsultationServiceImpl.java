@@ -39,6 +39,7 @@ import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -66,6 +67,15 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
     private final CrossTenantReadAudit crossTenantReadAudit;
+    /**
+     * The SLA clock. Injected rather than read from {@code LocalDateTime.now()}
+     * so the writer ({@code calculateSlaDueBy}) and every reader that compares
+     * against {@code slaDueBy} share one time source — a split between them
+     * would skew every overdue comparison by the offset. The bean is
+     * {@code Clock.systemDefaultZone()} (TimeConfig), so this is behaviourally
+     * identical to what was here before, and now fixable in a test.
+     */
+    private final Clock clock;
     private final NotificationService notificationService;
 
     @Override
@@ -109,7 +119,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             .currentMedications(request.getCurrentMedications())
             .urgency(request.getUrgency())
             .status(ConsultationStatus.REQUESTED)
-            .requestedAt(LocalDateTime.now())
+            .requestedAt(LocalDateTime.now(clock))
             .slaDueBy(slaDueBy)
             .isCurbside(request.getIsCurbside() != null ? request.getIsCurbside() : Boolean.FALSE)
             .build();
@@ -303,7 +313,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
-        consultation.setAcknowledgedAt(LocalDateTime.now());
+        consultation.setAcknowledgedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} acknowledged by consultant {}", consultationId, consultantId);
@@ -373,7 +383,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.COMPLETED);
-        consultation.setCompletedAt(LocalDateTime.now());
+        consultation.setCompletedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} completed", consultationId);
@@ -410,7 +420,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
-        consultation.setCancelledAt(LocalDateTime.now());
+        consultation.setCancelledAt(LocalDateTime.now(clock));
         consultation.setCancellationReason(cancellationReason);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -452,7 +462,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.IN_PROGRESS);
-        consultation.setStartedAt(LocalDateTime.now());
+        consultation.setStartedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} started", consultationId);
@@ -475,7 +485,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.DECLINED);
-        consultation.setDeclinedAt(LocalDateTime.now());
+        consultation.setDeclinedAt(LocalDateTime.now(clock));
         consultation.setDeclineReason(declineReason);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -497,7 +507,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
-        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedAt(LocalDateTime.now(clock));
         consultation.setAssignedById(assignedById);
         if (assignmentNote != null && !assignmentNote.isBlank()) {
             consultation.setConsultantNote(assignmentNote);
@@ -539,7 +549,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
-        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedAt(LocalDateTime.now(clock));
         consultation.setAssignedById(assignedById);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -595,7 +605,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         List<ConsultationStatus> terminalStatuses = Arrays.asList(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
         List<Consultation> overdue =
-            consultationRepository.findOverdueConsultations(LocalDateTime.now(), terminalStatuses, scope);
+            consultationRepository.findOverdueConsultations(LocalDateTime.now(clock), terminalStatuses, scope);
 
         auditIfCrossTenant(scope, "overdue-consultations", overdue.size());
         return overdue.stream().map(this::toResponseDTO).toList();
@@ -622,7 +632,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         List<ConsultationStatus> terminalStatuses = Arrays.asList(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         long total = all.size();
         long requested = all.stream().filter(c -> c.getStatus() == ConsultationStatus.REQUESTED).count();
@@ -671,7 +681,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         return switch (urgency) {
             case STAT, EMERGENCY -> now.plusHours(2);
             case URGENT -> now.plusHours(24);
