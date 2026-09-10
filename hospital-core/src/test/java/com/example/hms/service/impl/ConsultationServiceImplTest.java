@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import java.time.Clock;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.exception.BusinessException;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Spy;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -53,6 +55,8 @@ class ConsultationServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
+    /** Real system clock — the production bean is Clock.systemDefaultZone(). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks private ConsultationServiceImpl service;
 
@@ -70,10 +74,9 @@ class ConsultationServiceImplTest {
         patient = new Patient(); patient.setId(patientId); patient.setFirstName("John"); patient.setLastName("Doe");
         hospital = new Hospital(); hospital.setId(hospitalId); hospital.setName("General Hospital");
         staff = new Staff(); staff.setId(staffId);
-        // Sonar S6809: production wires `self` via setSelf(@Lazy ...).
-        // Point self at the SUT here so the in-class delegate call
-        // doesn't NPE in the unit test.
-        service.setSelf(service);
+        // The self-proxy this used to wire is gone: getAllConsultations now
+        // calls a private shared body instead of re-entering the public
+        // method, so there is no self-invocation left to route.
     }
 
     @AfterEach

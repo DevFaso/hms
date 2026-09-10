@@ -1870,13 +1870,16 @@ all exist and are reachable.
   235 guards at once, and stripping the dead clauses discards the intent. Needs
   a decision and its own security review, not a tidy-up PR.
 - **Nurse/midwife read drift beyond what `fix/nurse-role-drift` closed.**
-  That PR granted NURSE the three consultation reads and the imaging version
-  history. Left open, deliberately, each needing a clinical decision:
+  That PR granted NURSE `GET /consultations/overdue` and the imaging version
+  history — one consultation read, not three. (This bullet said three until
+  2026-09-09: the first cut widened three, its own review narrowed it to the
+  one endpoint that genuinely refused nurses, and the bullet was not updated.)
+  Left open, deliberately, each needing a clinical decision:
   (a) `MeController /critical-alerts` admits DOCTOR, PHYSICIAN, SURGEON and
   MIDWIFE but **not NURSE**, though nurses are usually first to a critical
-  value; (b) the same three consultation reads exclude **MIDWIFE** while their
-  siblings (`/stats` and the other reads) admit them — identical drift, not
-  fixed because midwife scope was not authorised; (c) a **maternity cluster**
+  value; (b) `/consultations/hospital/{id}` and `/hospital/{id}/pending`
+  exclude **both** NURSE and MIDWIFE while `/stats` and the plain list admit
+  them — identical drift, not fixed because midwife scope was not authorised; (c) a **maternity cluster**
   (`UltrasoundController`, `MaternalHistoryController`, `BirthPlanController`,
   `ObgynReferralController`) admits MIDWIFE but not NURSE across ~10 reads,
   which may be a real credential boundary rather than drift. Decide (c) before
@@ -2205,3 +2208,56 @@ live in the patient portal and omitted the one category it existed for.
 Budget the first pass of any remaining item for *finding out what already
 ships*, not for building — and check the shipped surface before trusting a
 "verified zero code" note.
+
+- **`ctx.isSuperAdmin()` is authority-derived, not JWT-claim-only.**
+  `JwtTokenProvider` builds it as `claim || authorities.anyMatch(ROLE_SUPER_ADMIN)`
+  and the OIDC resolver has no claim to read at all, so every cross-tenant
+  carve-out keyed on it is reachable by an inflated authority list. Comments in
+  `ConsultationServiceImpl` asserted the opposite for months; they are corrected,
+  but the property itself is not. Making the signal genuinely claim-only would
+  revoke global view from real super-admins on the OIDC path, so it needs its
+  own security review rather than a quiet tightening.
+- **`CrossTenantReadAudit` misses the two cases most worth tracing.**
+  It returns early unless `ctx.isSuperAdmin()`, so (a) a REFUSED cross-tenant
+  request from an ordinary caller records nothing — someone enumerating tenant
+  UUIDs against a `?hospitalId=` param is exactly the permission-creep probe the
+  audit exists to surface; and (b) worse, `RoleValidator.requireActiveHospitalId`
+  step 4 grants an unscoped read to a principal whose AUTHORITIES say super-admin
+  while `ctx.isSuperAdmin()` is false, and that is precisely the branch the audit
+  skips. The least-trusted path to a cross-tenant read is the one that leaves no
+  trace. Needs a second entry point, not a widening of this one.
+  Related: `RoleValidator`'s step-1 comment claims the check is "per JWT claim,
+  not authorities" — same false statement corrected in `ConsultationServiceImpl`,
+  still standing there.
+- **The guard drift this keeps re-finding needs a ratchet, not another hand-audit.**
+  Roughly 280 guards list DOCTOR+NURSE and ~68 list DOCTOR without NURSE, with
+  18 controllers carrying both shapes. `WriteAuditCoverageTest`,
+  `SchedulerLockCoverageTest` and `CrossHospitalReadFilterCoverageTest` are the
+  house precedents: scan every `@RestController`, freeze today's exemptions with
+  reasons, and fail an un-reasoned addition. `NurseReadAccessTest` pins four
+  endpoints by hand and cannot see the rest.
+- **`role-context.stub.ts` is not reactive.** Its getters return plain values
+  where the real service returns signals, so any `computed()` over it caches its
+  first read forever. Specs pass today only because they never call
+  `detectChanges()`; adding one to any of the 9 consuming specs would break tests
+  with no production bug present. It also derives `activeRole` from
+  `roles.length === 1`, so a multi-role user pinned to one role — the exact case
+  `hasAnyActiveRole` exists for — is unrepresentable. Backing it with real
+  signals touches every consumer, so it is its own change.
+- **`NurseReadAccessTest.guardFor` reads the raw JDK annotation.**
+  `Method.getAnnotation(GetMapping.class)` does not resolve Spring's `@AliasFor`,
+  so rewriting `@GetMapping("/x")` as `@GetMapping(path = "/x")` — a no-op for
+  Spring — makes the test fail with "endpoint missing". It also matches guards by
+  substring, so `hasAnyRole('NURSE')` and a hypothetical `!hasRole('NURSE')` are
+  indistinguishable to it. Use `AnnotatedElementUtils.findMergedAnnotation`.
+- **`LocalDateTime.now()` vs Sonar S8688 — convert per aggregate, never per line.**
+  The consultation SLA aggregate is DONE (`ConsultationServiceImpl` +
+  `HospitalAdminDashboardServiceImpl` now take the injected `Clock` from
+  `TimeConfig`, writers and readers together). ~400 sites remain elsewhere.
+  The rule that makes this safe: `calculateSlaDueBy` WRITES `slaDueBy` and the
+  overdue queries READ it, so converting only one side would skew every
+  comparison by the offset between the two time sources. Convert both ends of
+  a comparison in the same change, or leave both alone. `TimeConfig` supplies
+  `Clock.systemDefaultZone()`, identical to what `LocalDateTime.now()` used, so
+  a correctly-scoped conversion is behaviour-preserving and makes the aggregate
+  fixable in a test.

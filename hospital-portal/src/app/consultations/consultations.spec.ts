@@ -139,9 +139,14 @@ describe('ConsultationsComponent', () => {
     expect(consultSpy.getOverdue).toHaveBeenCalledWith('h1');
   });
 
-  it('hides the "mine" tab from a nurse — they are never the consultant', () => {
+  /** Replace the roles the stub reads. In place: the stub holds the array. */
+  const setRoles = (...roles: string[]): void => {
     activeRoles.length = 0;
-    activeRoles.push('ROLE_NURSE');
+    activeRoles.push(...roles);
+  };
+
+  it('hides the "mine" tab from a nurse — they are never the consultant', () => {
+    setRoles('ROLE_NURSE');
 
     // The backend refuses GET /consultations/mine for nurses, and even if it
     // did not, "assigned to me as consultant" is empty for every nurse alive.
@@ -149,8 +154,7 @@ describe('ConsultationsComponent', () => {
   });
 
   it('a nurse landing on the "mine" tab falls back instead of calling the 403', () => {
-    activeRoles.length = 0;
-    activeRoles.push('ROLE_NURSE');
+    setRoles('ROLE_NURSE');
     consultSpy.getMine.and.returnValue(of([mockConsult({ id: 'm1' })]));
 
     component.setTab('mine');
@@ -163,7 +167,19 @@ describe('ConsultationsComponent', () => {
   });
 
   it('still lets a doctor open the "mine" tab', () => {
-    activeRoles = ['ROLE_DOCTOR'];
+    // Mutated in place, like the two tests above. Reassigning `activeRoles`
+    // here rebound the local while the stub kept its reference to the array
+    // beforeEach created — so this asserted the beforeEach default and would
+    // have passed with any value on that line, doctor or not.
+    setRoles('ROLE_DOCTOR');
+
+    expect(component.canSeeMyConsultations()).toBeTrue();
+  });
+
+  it('lets a surgeon open it too — the backend expands them to ROLE_DOCTOR', () => {
+    // The branch roleSatisfies exists for. hasAnyActiveRole is bare membership
+    // and would hide the tab from surgeons and physicians the backend serves.
+    setRoles('ROLE_SURGEON');
 
     expect(component.canSeeMyConsultations()).toBeTrue();
   });

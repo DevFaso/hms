@@ -20,6 +20,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.audit.CrossTenantReadAudit;
+import org.springframework.security.access.AccessDeniedException;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
@@ -37,6 +39,7 @@ import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -56,20 +59,6 @@ public class ConsultationServiceImpl implements ConsultationService {
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Consultation";
 
-    /**
-     * Self-reference for proxy-routed internal calls
-     * ({@link #getAllConsultations(ConsultationStatus)}
-     * → {@link #getConsultationsForHospital(UUID, ConsultationStatus)}).
-     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
-     * rationale and pattern docstring.
-     */
-    private ConsultationService self;
-
-    @Autowired
-    public void setSelf(@Lazy ConsultationService self) {
-        this.self = self;
-    }
-
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
@@ -77,6 +66,16 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
+    private final CrossTenantReadAudit crossTenantReadAudit;
+    /**
+     * The SLA clock. Injected rather than read from {@code LocalDateTime.now()}
+     * so the writer ({@code calculateSlaDueBy}) and every reader that compares
+     * against {@code slaDueBy} share one time source — a split between them
+     * would skew every overdue comparison by the offset. The bean is
+     * {@code Clock.systemDefaultZone()} (TimeConfig), so this is behaviourally
+     * identical to what was here before, and now fixable in a test.
+     */
+    private final Clock clock;
     private final NotificationService notificationService;
 
     @Override
@@ -120,7 +119,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             .currentMedications(request.getCurrentMedications())
             .urgency(request.getUrgency())
             .status(ConsultationStatus.REQUESTED)
-            .requestedAt(LocalDateTime.now())
+            .requestedAt(LocalDateTime.now(clock))
             .slaDueBy(slaDueBy)
             .isCurbside(request.getIsCurbside() != null ? request.getIsCurbside() : Boolean.FALSE)
             .build();
@@ -164,6 +163,23 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsForHospital(UUID hospitalId, ConsultationStatus status) {
+        // ── Tenant isolation ──
+        // The hospital arrives as a PATH variable, which made it a trusted
+        // claim: a doctor or hospital-admin at hospital A could read hospital
+        // B's consultations — patient name, MRN, reason for consult — just by
+        // typing B's UUID into the URL. Unlike the optional @RequestParam reads
+        // above, a path hospital is the caller's stated intent, so it is
+        // validated rather than silently replaced: asking for a tenant you are
+        // not in is refused, not quietly answered with your own data.
+        return listForHospital(requireReadableHospital(hospitalId), status);
+    }
+
+    /**
+     * The list itself, for a scope that is ALREADY resolved. Split out so
+     * getAllConsultations — which has just resolved the scope for itself — does
+     * not resolve it a second time by re-entering the public method.
+     */
+    private List<ConsultationResponseDTO> listForHospital(UUID hospitalId, ConsultationStatus status) {
         List<Consultation> consultations;
         if (status != null) {
             consultations = consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(hospitalId, status);
@@ -200,23 +216,25 @@ public class ConsultationServiceImpl implements ConsultationService {
         // getRecentPrescriptions fix and the
         // ConsultationServiceImpl#getRecentForSuperAdmin pattern.
         //
-        // We use ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
-        // RoleValidator.isSuperAdminFromAuth(). Authority-based detection
-        // can be true in impersonation / authority-inflation flows where
-        // the principal holds the ROLE_SUPER_ADMIN authority but the JWT
-        // claim isn't set; trusting it for cross-tenant access would
-        // widen the blast radius of a stolen / inflated authority list.
-        // The JWT claim is the load-bearing signal RoleValidator's own
-        // step 1 trusts (Copilot review on PR fix branch).
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
-        UUID activeHospitalId = superAdminGlobal
-            ? null
-            : roleValidator.requireActiveHospitalId();
+        // A correction to what this comment used to say. It claimed the
+        // carve-out keys on the JWT claim ALONE and deliberately not on
+        // authorities, so that an inflated authority list could not reach a
+        // cross-tenant read. That is not what the code does: JwtTokenProvider
+        // builds the flag as `claim || authorities.anyMatch(ROLE_SUPER_ADMIN)`,
+        // so ctx.isSuperAdmin() is authority-derived too, and the OIDC resolver
+        // has no claim to read at all. The stated guarantee never held, and a
+        // reader relying on it would mis-model the blast radius. Making the
+        // signal genuinely claim-only is a security change of its own — it
+        // would revoke global view from real super-admins on the OIDC path —
+        // so it is recorded as standing debt rather than slipped in here.
+        UUID activeHospitalId = resolveReadScope(null);
         if (activeHospitalId != null) {
-            // Sonar S6809: route through the proxy so the inner
-            // method's @Transactional(readOnly=true) is honored.
-            return self.getConsultationsForHospital(activeHospitalId, status);
+            // The shared body, not the public method: the scope is already
+            // resolved here, and re-entering the public entry point would
+            // resolve it again. A private call also needs no proxy hop — this
+            // method is itself @Transactional(readOnly = true), so the inner
+            // work already runs in that transaction.
+            return listForHospital(activeHospitalId, status);
         }
         List<Consultation> consultations;
         if (status != null) {
@@ -283,12 +301,19 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new BusinessException("Consultation must be in ASSIGNED or REQUESTED status to acknowledge (current: " + consultation.getStatus() + ")");
         }
 
-        Staff consultant = staffRepository.findById(consultantId)
+        // The caller here is the AUTHENTICATED principal, so what arrives is a
+        // users.id — while Staff has its own primary key and a separate user_id
+        // FK. findById(users.id) therefore never matched and this endpoint threw
+        // "Consultant not found" for every real caller: the Acknowledge button
+        // in the portal has been dead. resolveStaff already handles both id
+        // shapes and is what the create path uses.
+        Staff consultant = resolveStaff(consultantId, consultation.getHospital() != null
+                ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
-        consultation.setAcknowledgedAt(LocalDateTime.now());
+        consultation.setAcknowledgedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} acknowledged by consultant {}", consultationId, consultantId);
@@ -358,7 +383,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.COMPLETED);
-        consultation.setCompletedAt(LocalDateTime.now());
+        consultation.setCompletedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} completed", consultationId);
@@ -395,7 +420,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
-        consultation.setCancelledAt(LocalDateTime.now());
+        consultation.setCancelledAt(LocalDateTime.now(clock));
         consultation.setCancellationReason(cancellationReason);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -437,7 +462,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.IN_PROGRESS);
-        consultation.setStartedAt(LocalDateTime.now());
+        consultation.setStartedAt(LocalDateTime.now(clock));
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} started", consultationId);
@@ -460,7 +485,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         consultation.setStatus(ConsultationStatus.DECLINED);
-        consultation.setDeclinedAt(LocalDateTime.now());
+        consultation.setDeclinedAt(LocalDateTime.now(clock));
         consultation.setDeclineReason(declineReason);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -482,7 +507,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
-        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedAt(LocalDateTime.now(clock));
         consultation.setAssignedById(assignedById);
         if (assignmentNote != null && !assignmentNote.isBlank()) {
             consultation.setConsultantNote(assignmentNote);
@@ -524,7 +549,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
-        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedAt(LocalDateTime.now(clock));
         consultation.setAssignedById(assignedById);
 
         Consultation saved = consultationRepository.save(consultation);
@@ -535,6 +560,10 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getPendingConsultations(UUID hospitalId) {
+        // Path-supplied hospital — validated, not trusted. See
+        // getConsultationsForHospital above.
+        hospitalId = requireReadableHospital(hospitalId);
+
         List<Consultation> consultations = consultationRepository.findByHospitalAndStatuses(
             hospitalId,
             Arrays.asList(ConsultationStatus.REQUESTED, ConsultationStatus.ACKNOWLEDGED)
@@ -546,9 +575,16 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ConsultationResponseDTO> getMyConsultations(UUID consultantStaffId) {
-        List<Consultation> consultations = consultationRepository.findByConsultant_IdOrderByRequestedAtDesc(consultantStaffId);
+    public List<ConsultationResponseDTO> getMyConsultations(UUID callerId) {
+        // Same users.id-vs-Staff.id mismatch as acknowledgeConsultation, but it
+        // failed silently: findByConsultant_Id matches a Staff id, the caller
+        // supplies a users.id, so the tab rendered an empty list for everyone
+        // and looked like "you have no consultations" rather than a bug.
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID consultantStaffId = resolveStaff(callerId, activeHospitalId)
+            .map(Staff::getId)
+            .orElse(callerId);
+        List<Consultation> consultations = consultationRepository.findByConsultant_IdOrderByRequestedAtDesc(consultantStaffId);
         if (activeHospitalId != null) {
             consultations = consultations.stream()
                 .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
@@ -561,41 +597,42 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getOverdueConsultations(UUID hospitalId) {
         // ── Tenant isolation ──
-        // findOverdueConsultations has NO hospital predicate, and the caller's
-        // hospitalId arrives as an optional @RequestParam — so before this, a
-        // request that simply omitted it returned every tenant's overdue
-        // consultations, PHI included. A caller-supplied tenant id is a claim,
-        // not a scope. Resolve it server-side instead, using the same
-        // super-admin carve-out as getAllConsultations above: a super-admin in
-        // global view may ask across tenants (or for one), everyone else is
-        // pinned to their active hospital and the parameter is ignored.
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
-        UUID scope = superAdminGlobal ? hospitalId : roleValidator.requireActiveHospitalId();
+        // The caller's hospitalId arrives as an optional @RequestParam, so it
+        // is a claim, not a scope: resolveReadScope decides server-side and the
+        // predicate now lives in the query rather than in a stream filter here.
+        UUID scope = resolveReadScope(hospitalId);
 
         List<ConsultationStatus> terminalStatuses = Arrays.asList(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
-        List<Consultation> overdue = consultationRepository.findOverdueConsultations(LocalDateTime.now(), terminalStatuses);
-        if (scope != null) {
-            overdue = overdue.stream()
-                .filter(c -> c.getHospital() != null && scope.equals(c.getHospital().getId()))
-                .toList();
-        }
+        List<Consultation> overdue =
+            consultationRepository.findOverdueConsultations(LocalDateTime.now(clock), terminalStatuses, scope);
+
+        auditIfCrossTenant(scope, "overdue-consultations", overdue.size());
         return overdue.stream().map(this::toResponseDTO).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ConsultationStatsDTO getStats(UUID hospitalId) {
-        List<Consultation> all = hospitalId != null
-            ? consultationRepository.findAllByOrderByRequestedAtDesc().stream()
-                .filter(c -> c.getHospital() != null && hospitalId.equals(c.getHospital().getId()))
-                .toList()
-            : consultationRepository.findAllByOrderByRequestedAtDesc();
+        // ── Tenant isolation ──
+        // Same rule as getOverdueConsultations, and for the same reason: this
+        // took the caller's hospitalId at face value, so omitting the optional
+        // param aggregated every tenant in the deployment — totals, per-status
+        // counts, SLA averages and the specialty breakdown. Its guard is the
+        // WIDEST of the consultation reads (NURSE, MIDWIFE and DENTIST on top
+        // of the rest), so it was the cheapest of them to reach.
+        UUID scope = resolveReadScope(hospitalId);
+        List<Consultation> all = consultationRepository.findAllByOrderByRequestedAtDesc();
+        if (scope != null) {
+            all = all.stream()
+                .filter(c -> c.getHospital() != null && scope.equals(c.getHospital().getId()))
+                .toList();
+        }
+        auditIfCrossTenant(scope, "consultation-stats", all.size());
 
         List<ConsultationStatus> terminalStatuses = Arrays.asList(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         long total = all.size();
         long requested = all.stream().filter(c -> c.getStatus() == ConsultationStatus.REQUESTED).count();
@@ -644,7 +681,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         return switch (urgency) {
             case STAT, EMERGENCY -> now.plusHours(2);
             case URGENT -> now.plusHours(24);
@@ -659,6 +696,63 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private Staff resolveConsultant(UUID identifier, UUID hospitalId) {
         return resolveStaff(identifier, hospitalId).orElse(null);
+    }
+
+    /**
+     * The hospital a read is allowed to see, for an OPTIONAL caller-supplied id.
+     *
+     * <p>A super-admin in global view may read across tenants, and may narrow to
+     * one by passing an id. Everyone else is pinned to their active hospital and
+     * the parameter is ignored — a caller-supplied tenant id is a claim, not a
+     * scope. Returns null only for the cross-tenant case.
+     *
+     * <p>Note the super-admin signal here is {@code ctx.isSuperAdmin()}, which
+     * JwtTokenProvider sets from the JWT claim OR a ROLE_SUPER_ADMIN authority,
+     * and which the OIDC resolver sets from authorities alone. It is therefore
+     * authority-derived on both paths, whatever the older comment on
+     * getAllConsultations claims.
+     */
+    private UUID resolveReadScope(UUID requestedHospitalId) {
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
+        return superAdminGlobal ? requestedHospitalId : roleValidator.requireActiveHospitalId();
+    }
+
+    /**
+     * The hospital a read is allowed to see, for a REQUIRED path-supplied id.
+     *
+     * <p>Mirrors {@code ImagingReportServiceImpl.requireReadableHospital}: a
+     * mismatch is refused rather than silently rewritten, because the caller
+     * named the tenant explicitly and answering with a different one's data
+     * would be a wrong answer rather than a narrowed one.
+     */
+    private UUID requireReadableHospital(UUID requestedHospitalId) {
+        UUID scope = roleValidator.requireActiveHospitalId();
+        if (scope == null) {
+            if (requestedHospitalId == null) {
+                throw new BusinessException("Hospital ID is required to list consultations.");
+            }
+            return requestedHospitalId;
+        }
+        if (requestedHospitalId != null && !scope.equals(requestedHospitalId)) {
+            throw new AccessDeniedException("Consultations can only be listed for your active hospital.");
+        }
+        return scope;
+    }
+
+    /**
+     * Record a super-admin's cross-tenant read. A null scope is the only way a
+     * read leaves its tenant, so it is the only thing worth tracing here.
+     *
+     * <p>This does NOT trace a rejected foreign-tenant request from an ordinary
+     * caller: CrossTenantReadAudit returns early unless the principal is a
+     * super-admin, so that case needs a different mechanism. Recorded as
+     * standing debt rather than bent into this one.
+     */
+    private void auditIfCrossTenant(UUID scope, String viewLabel, int rowsReturned) {
+        if (scope == null) {
+            crossTenantReadAudit.recordCrossTenantRead("CONSULTATION", viewLabel, rowsReturned);
+        }
     }
 
     private Optional<Staff> resolveStaff(UUID identifier, UUID hospitalId) {

@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import java.time.Clock;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.enums.ConsultationStatus;
@@ -39,6 +40,7 @@ import com.example.hms.repository.platform.HospitalPlatformServiceLinkRepository
 import com.example.hms.service.impl.HospitalAdminDashboardServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Spy;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -75,6 +77,8 @@ class HospitalAdminDashboardServiceImplTest {
     @Mock private AuditEventLogRepository auditEventLogRepository;
     @Mock private StaffShiftRepository staffShiftRepository;
     @Mock private HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
+    /** Real system clock — the production bean is Clock.systemDefaultZone(). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks private HospitalAdminDashboardServiceImpl service;
 
@@ -160,7 +164,7 @@ class HospitalAdminDashboardServiceImplTest {
         when(admissionRepository.findAwaitingDischarge(HOSPITAL_ID)).thenReturn(List.of());
         when(consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(eq(HOSPITAL_ID), any()))
             .thenReturn(List.of());
-        when(consultationRepository.findOverdueConsultations(any(), anyList())).thenReturn(List.of());
+        when(consultationRepository.findOverdueConsultations(any(), anyList(), any())).thenReturn(List.of());
         when(staffRepository.findByHospitalIdAndActiveTrueExcludingDeletedUsers(eq(HOSPITAL_ID), any()))
             .thenReturn(new PageImpl<>(List.of()));
         when(staffAvailabilityRepository.findAll()).thenReturn(List.of());
@@ -531,7 +535,7 @@ class HospitalAdminDashboardServiceImplTest {
             .thenReturn(List.of());
 
         Consultation overdueC = consultation(ConsultationStatus.REQUESTED, ConsultationUrgency.EMERGENCY, LocalDateTime.now().minusHours(2));
-        when(consultationRepository.findOverdueConsultations(any(), anyList()))
+        when(consultationRepository.findOverdueConsultations(any(), anyList(), any()))
             .thenReturn(List.of(overdueC));
 
         HospitalAdminSummaryDTO result = service.getSummary(HOSPITAL_ID, TODAY, 5);
