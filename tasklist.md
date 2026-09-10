@@ -2250,3 +2250,12 @@ ships*, not for building — and check the shipped surface before trusting a
   Spring — makes the test fail with "endpoint missing". It also matches guards by
   substring, so `hasAnyRole('NURSE')` and a hypothetical `!hasRole('NURSE')` are
   indistinguishable to it. Use `AnnotatedElementUtils.findMergedAnnotation`.
+- **`LocalDateTime.now()` is the house idiom (416 sites) and Sonar S8688 wants a
+  zoned Clock.** Do NOT convert call sites piecemeal. Consultation SLA is the
+  worked example: `calculateSlaDueBy` WRITES `slaDueBy` with
+  `LocalDateTime.now()`, so zoning only the read side of
+  `findOverdueConsultations` would make every SLA comparison wrong by the
+  offset between the injected Clock's zone and the system default. A real fix
+  converts writers and readers together, per aggregate. Three files
+  (`SlotFhirMapper`, `SlotFhirResourceProvider`, `TransfusionMapper`) already
+  inject a `Clock`, so the two idioms coexist today.

@@ -1091,7 +1091,7 @@ class ConsultationServiceImplTest {
                     .thenReturn(List.of());
             service.getOverdueConsultations(null);
             verify(crossTenantReadAudit)
-                .recordCrossTenantRead(eq("CONSULTATION"), eq("overdue-consultations"), eq(0));
+                .recordCrossTenantRead("CONSULTATION", "overdue-consultations", 0);
         } finally {
             HospitalContextHolder.clear();
         }
