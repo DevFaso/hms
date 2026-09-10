@@ -70,10 +70,9 @@ class ConsultationServiceImplTest {
         patient = new Patient(); patient.setId(patientId); patient.setFirstName("John"); patient.setLastName("Doe");
         hospital = new Hospital(); hospital.setId(hospitalId); hospital.setName("General Hospital");
         staff = new Staff(); staff.setId(staffId);
-        // Sonar S6809: production wires `self` via setSelf(@Lazy ...).
-        // Point self at the SUT here so the in-class delegate call
-        // doesn't NPE in the unit test.
-        service.setSelf(service);
+        // The self-proxy this used to wire is gone: getAllConsultations now
+        // calls a private shared body instead of re-entering the public
+        // method, so there is no self-invocation left to route.
     }
 
     @AfterEach

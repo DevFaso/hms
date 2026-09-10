@@ -15,9 +15,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Reads a ward nurse must have, and the one they must not.
  *
  * <p>The portal listed Consultations for {@code ROLE_NURSE} and the route guard
- * admitted them, but three of the read endpoints behind it did not — so a nurse
- * saw the consultation COUNT on {@code /stats} and got 403 on every list behind
- * it. The imaging split was worse: {@code GET /order/{id}} admitted nurses and
+ * admitted them, but {@code /overdue} refused them — so a nurse saw the
+ * consultation COUNT on {@code /stats} and got a 403 on the overdue list behind
+ * it. (An earlier version of this doc said three endpoints refused nurses; that
+ * was the first cut of #587, narrowed during its own review to the one endpoint
+ * that genuinely 403'd. The method comments below were correct; this was not.)
+ * The imaging split was worse: {@code GET /order/{id}} admitted nurses and
  * {@code /order/{id}/all} did not, which withholds the addenda — the version
  * carrying "findings revised" — from the people acting on them.
  *

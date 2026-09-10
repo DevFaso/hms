@@ -141,8 +141,12 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
 
         var completedStatuses = List.of(
             ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
-        long overdue = consultationRepository.findOverdueConsultations(LocalDateTime.now(), completedStatuses)
-            .stream().filter(c -> c.getHospital().getId().equals(hospitalId)).count();
+        // Scoped in the query now. The stream filter this replaces also
+        // dereferenced getHospital() with no null guard, so a single
+        // consultation with a dangling hospital would 500 this dashboard for
+        // every tenant — it saw every tenant's rows.
+        long overdue = consultationRepository
+            .findOverdueConsultations(LocalDateTime.now(), completedStatuses, hospitalId).size();
 
         return HospitalAdminSummaryDTO.ConsultationMetrics.builder()
             .requested(requested.size())

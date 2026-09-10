@@ -39,10 +39,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,6 +63,7 @@ class ConsultationServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
+    @Mock private com.example.hms.security.audit.CrossTenantReadAudit crossTenantReadAudit;
 
     @InjectMocks
     private ConsultationServiceImpl service;
@@ -76,6 +83,12 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // HospitalContextHolder is a ThreadLocal and JUnit reuses the thread.
+        // Several tests here read it without setting it, so a context left
+        // behind by a sibling silently flips isSuperAdmin and changes the scope
+        // under them. Clearing per test makes the order irrelevant.
+        HospitalContextHolder.clear();
+
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("John");
@@ -466,6 +479,28 @@ class ConsultationServiceImplTest {
         }
 
         @Test
+        @DisplayName("acknowledges when the caller id is a users.id, as the controller supplies")
+        void acknowledgesWhenCallerIdIsAUserId() {
+            // The regression this covers: the controller derives the caller from
+            // the authenticated principal, which yields a users.id, but Staff
+            // has its own primary key. The sibling test above hands the service
+            // a Staff id, which no real caller does — so it stayed green while
+            // the Acknowledge button 404'd for every doctor in production.
+            UUID callerUserId = UUID.randomUUID();
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(staffRepository.findById(callerUserId)).thenReturn(Optional.empty());
+            when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId))
+                .thenReturn(Optional.of(consultant));
+            when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            ConsultationResponseDTO result = service.acknowledgeConsultation(consultationId, callerUserId);
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
+            assertThat(consultation.getConsultant()).isEqualTo(consultant);
+        }
+
+        @Test
         @DisplayName("throws when already acknowledged")
         void throwsWhenAlreadyAcknowledged() {
             Consultation consultation = buildConsultation(ConsultationStatus.ACKNOWLEDGED);
@@ -621,6 +656,37 @@ class ConsultationServiceImplTest {
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("already cancelled");
         }
+    }
+
+    @Test
+    @DisplayName("a path hospital outside the caller's scope is refused, not answered")
+    void getConsultationsForHospital_refusesForeignTenant() {
+        // The path variable used to be taken on trust: a doctor at hospital A
+        // reading /consultations/hospital/<B> got B's rows. Refused rather than
+        // silently rewritten to A, because the caller named the tenant — an
+        // answer about a different one would be wrong, not merely narrowed.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        UUID foreign = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.getConsultationsForHospital(foreign, null))
+            .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.getPendingConsultations(foreign))
+            .isInstanceOf(AccessDeniedException.class);
+
+        verify(consultationRepository, never()).findByHospital_IdOrderByRequestedAtDesc(foreign);
+        verify(consultationRepository, never()).findByHospitalAndStatuses(eq(foreign), any());
+    }
+
+    @Test
+    @DisplayName("a super-admin in global view may still name a hospital on the path")
+    void getConsultationsForHospital_superAdminGlobalMayNameATenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        UUID other = UUID.randomUUID();
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(other))
+            .thenReturn(List.of());
+
+        assertThat(service.getConsultationsForHospital(other, null)).isEmpty();
+        verify(consultationRepository).findByHospital_IdOrderByRequestedAtDesc(other);
     }
 
     // ── getPendingConsultations ──────────────────────────────────────────────
@@ -945,44 +1011,44 @@ class ConsultationServiceImplTest {
     // ── getOverdueConsultations ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("getOverdueConsultations returns overdue for hospital")
+    @DisplayName("getOverdueConsultations passes the resolved scope to the query")
     void getOverdueConsultations_returnsOverdue() {
+        // This used to leave requireActiveHospitalId unstubbed, so the mock
+        // returned null, the scope was null and the hospital filter was skipped
+        // entirely — the test named "returns overdue for hospital" would have
+        // passed with the scoping deleted. Stub it, and assert the scope
+        // actually reaches the query.
         Consultation c = buildConsultation(ConsultationStatus.REQUESTED);
         c.setSlaDueBy(LocalDateTime.now().minusHours(1));
-        when(consultationRepository.findOverdueConsultations(any(), any()))
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findOverdueConsultations(any(), any(), any()))
                 .thenReturn(List.of(c));
 
         List<ConsultationResponseDTO> result = service.getOverdueConsultations(hospitalId);
 
         assertThat(result).hasSize(1);
+        verify(consultationRepository).findOverdueConsultations(any(), any(), eq(hospitalId));
     }
 
     @Test
     @DisplayName("a caller-supplied hospitalId cannot widen scope — the active hospital wins")
     void getOverdueConsultations_ignoresCallerSuppliedHospital() {
-        // findOverdueConsultations has NO hospital predicate, so the scope is
-        // whatever the service applies afterwards. Before it was resolved
-        // server-side, the caller chose it: passing another tenant's UUID — or
-        // omitting the optional param entirely — returned that tenant's overdue
-        // consultations with patient name, MRN and reason for consult.
-        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
-        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
-
-        Hospital otherHospital = new Hospital();
-        otherHospital.setId(UUID.randomUUID());
-        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
-        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
-        foreign.setHospital(otherHospital);
-
+        // These assert on the scope handed to the QUERY, not on how many rows
+        // came back. Counting rows was too weak: with the old in-memory filter,
+        // inverting the predicate to `!scope.equals(...)` dropped the caller's
+        // own row and kept the foreign one — still exactly one row, still green,
+        // while every nurse read another tenant's overdue list.
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(consultationRepository.findOverdueConsultations(any(), any()))
-                .thenReturn(List.of(mine, foreign));
+        when(consultationRepository.findOverdueConsultations(any(), any(), any()))
+                .thenReturn(List.of());
 
-        List<ConsultationResponseDTO> asked = service.getOverdueConsultations(otherHospital.getId());
-        List<ConsultationResponseDTO> omitted = service.getOverdueConsultations(null);
+        service.getOverdueConsultations(otherHospitalId());
+        service.getOverdueConsultations(null);
 
-        assertThat(asked).as("asking for another tenant returns only the caller's own").hasSize(1);
-        assertThat(omitted).as("omitting the param must not return every tenant").hasSize(1);
+        verify(consultationRepository, times(2))
+            .findOverdueConsultations(any(), any(), eq(hospitalId));
+        verify(consultationRepository, never())
+            .findOverdueConsultations(any(), any(), isNull());
     }
 
     @Test
@@ -992,32 +1058,47 @@ class ConsultationServiceImplTest {
         // hospital chip is cross-tenant by design, and the dashboard tile they
         // sit beside counts the same way. Pinned so the tenant fix above cannot
         // be "tidied" into scoping them too.
-        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
-        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
-
-        Hospital otherHospital = new Hospital();
-        otherHospital.setId(UUID.randomUUID());
-        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
-        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
-        foreign.setHospital(otherHospital);
-
+        UUID other = otherHospitalId();
         HospitalContextHolder.setContext(HospitalContext.builder()
             .superAdmin(true)
             .headerOverridden(false)
             .build());
         try {
-            when(consultationRepository.findOverdueConsultations(any(), any()))
-                    .thenReturn(List.of(mine, foreign));
+            when(consultationRepository.findOverdueConsultations(any(), any(), any()))
+                    .thenReturn(List.of());
 
-            assertThat(service.getOverdueConsultations(null))
-                .as("global view: every tenant")
-                .hasSize(2);
-            assertThat(service.getOverdueConsultations(otherHospital.getId()))
-                .as("global view, narrowed to one tenant on request")
-                .hasSize(1);
+            service.getOverdueConsultations(null);
+            verify(consultationRepository).findOverdueConsultations(any(), any(), isNull());
+
+            service.getOverdueConsultations(other);
+            verify(consultationRepository).findOverdueConsultations(any(), any(), eq(other));
         } finally {
             HospitalContextHolder.clear();
         }
+    }
+
+    @Test
+    @DisplayName("a cross-tenant read is audited; a scoped one is not")
+    void getOverdueConsultations_auditsCrossTenantReadOnly() {
+        // The unscoped branch is the only way a read leaves its tenant, so it
+        // is the one that must leave a trace.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        try {
+            when(consultationRepository.findOverdueConsultations(any(), any(), any()))
+                    .thenReturn(List.of());
+            service.getOverdueConsultations(null);
+            verify(crossTenantReadAudit)
+                .recordCrossTenantRead(eq("CONSULTATION"), eq("overdue-consultations"), eq(0));
+        } finally {
+            HospitalContextHolder.clear();
+        }
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        service.getOverdueConsultations(null);
+        verifyNoMoreInteractions(crossTenantReadAudit);
     }
 
     @Test
@@ -1025,28 +1106,26 @@ class ConsultationServiceImplTest {
     void getOverdueConsultations_superAdminWithHeaderOverrideIsScoped() {
         // isHeaderOverridden means they chose a hospital via the scope chip, so
         // they are acting inside one tenant and the param must not widen them.
-        Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
-        mine.setSlaDueBy(LocalDateTime.now().minusHours(1));
-
-        Hospital otherHospital = new Hospital();
-        otherHospital.setId(UUID.randomUUID());
-        Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
-        foreign.setSlaDueBy(LocalDateTime.now().minusHours(2));
-        foreign.setHospital(otherHospital);
-
         HospitalContextHolder.setContext(HospitalContext.builder()
             .superAdmin(true)
             .headerOverridden(true)
             .build());
         try {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(consultationRepository.findOverdueConsultations(any(), any()))
-                    .thenReturn(List.of(mine, foreign));
+            when(consultationRepository.findOverdueConsultations(any(), any(), any()))
+                    .thenReturn(List.of());
 
-            assertThat(service.getOverdueConsultations(otherHospital.getId())).hasSize(1);
+            service.getOverdueConsultations(otherHospitalId());
+
+            verify(consultationRepository).findOverdueConsultations(any(), any(), eq(hospitalId));
         } finally {
             HospitalContextHolder.clear();
         }
+    }
+
+    /** A tenant that is never the caller's own. */
+    private static UUID otherHospitalId() {
+        return UUID.randomUUID();
     }
 
     // ── getStats ─────────────────────────────────────────────────────────────
@@ -1107,6 +1186,58 @@ class ConsultationServiceImplTest {
 
             assertThat(result.getBySpecialty()).containsEntry("Cardiology", 2L);
             assertThat(result.getBySpecialty()).containsEntry("Neurology", 1L);
+        }
+
+        @Test
+        @DisplayName("a caller-supplied hospitalId cannot widen the aggregate")
+        void ignoresCallerSuppliedHospital() {
+            // The leak this closes: getStats took the optional @RequestParam at
+            // face value, so omitting it aggregated every tenant — totals,
+            // per-status counts, SLA averages and the specialty breakdown — on
+            // the widest guard of the consultation reads (NURSE, MIDWIFE and
+            // DENTIST included). The sibling tests above leave
+            // requireActiveHospitalId unstubbed, so the mock returns null, the
+            // filter is skipped and they would pass with the scoping deleted.
+            Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+
+            Hospital otherHospital = new Hospital();
+            otherHospital.setId(UUID.randomUUID());
+            Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+            foreign.setHospital(otherHospital);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(consultationRepository.findAllByOrderByRequestedAtDesc())
+                    .thenReturn(List.of(mine, foreign));
+
+            assertThat(service.getStats(otherHospital.getId()).getTotal())
+                .as("asking for another tenant counts only the caller's own")
+                .isEqualTo(1);
+            assertThat(service.getStats(null).getTotal())
+                .as("omitting the param must not count every tenant")
+                .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a super-admin in global view still aggregates across tenants")
+        void superAdminGlobalViewAggregatesEverything() {
+            Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);
+            Hospital otherHospital = new Hospital();
+            otherHospital.setId(UUID.randomUUID());
+            Consultation foreign = buildConsultation(ConsultationStatus.REQUESTED);
+            foreign.setHospital(otherHospital);
+
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .superAdmin(true)
+                .headerOverridden(false)
+                .build());
+            try {
+                when(consultationRepository.findAllByOrderByRequestedAtDesc())
+                        .thenReturn(List.of(mine, foreign));
+
+                assertThat(service.getStats(null).getTotal()).isEqualTo(2);
+            } finally {
+                HospitalContextHolder.clear();
+            }
         }
     }
 }

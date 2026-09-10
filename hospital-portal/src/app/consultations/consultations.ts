@@ -343,7 +343,9 @@ export class ConsultationsComponent implements OnInit {
       tab === 'mine'
         ? this.consultService.getMine()
         : tab === 'overdue'
-          ? this.consultService.getOverdue(this.roleContext.activeHospitalId ?? undefined)
+          ? this.consultService.getOverdue(
+              this.roleContext.effectiveHospitalIdForRequest() ?? undefined,
+            )
           : this.consultService.getAll();
 
     source$.subscribe({
@@ -361,13 +363,22 @@ export class ConsultationsComponent implements OnInit {
 
   loadStats(): void {
     this.statsLoading.set(true);
-    this.consultService.getStats(this.roleContext.activeHospitalId ?? undefined).subscribe({
-      next: (s) => {
-        this.stats.set(s);
-        this.statsLoading.set(false);
-      },
-      error: () => this.statsLoading.set(false),
-    });
+    // effectiveHospitalIdForRequest, NOT activeHospitalId: the latter is the
+    // JWT primary hospital and is non-null even for a super-admin in global
+    // view, so it sent ?hospitalId=<primary> while the chip read "All
+    // hospitals" — pinning these two reads to one tenant while every other tab
+    // showed all of them. That is the "tile says 12, list shows 3" mismatch the
+    // getAllConsultations carve-out exists to prevent, reintroduced by the
+    // query param.
+    this.consultService
+      .getStats(this.roleContext.effectiveHospitalIdForRequest() ?? undefined)
+      .subscribe({
+        next: (s) => {
+          this.stats.set(s);
+          this.statsLoading.set(false);
+        },
+        error: () => this.statsLoading.set(false),
+      });
   }
 
   setTab(tab: 'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'): void {

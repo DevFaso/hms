@@ -160,7 +160,7 @@ class HospitalAdminDashboardServiceImplTest {
         when(admissionRepository.findAwaitingDischarge(HOSPITAL_ID)).thenReturn(List.of());
         when(consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(eq(HOSPITAL_ID), any()))
             .thenReturn(List.of());
-        when(consultationRepository.findOverdueConsultations(any(), anyList())).thenReturn(List.of());
+        when(consultationRepository.findOverdueConsultations(any(), anyList(), any())).thenReturn(List.of());
         when(staffRepository.findByHospitalIdAndActiveTrueExcludingDeletedUsers(eq(HOSPITAL_ID), any()))
             .thenReturn(new PageImpl<>(List.of()));
         when(staffAvailabilityRepository.findAll()).thenReturn(List.of());
@@ -531,7 +531,7 @@ class HospitalAdminDashboardServiceImplTest {
             .thenReturn(List.of());
 
         Consultation overdueC = consultation(ConsultationStatus.REQUESTED, ConsultationUrgency.EMERGENCY, LocalDateTime.now().minusHours(2));
-        when(consultationRepository.findOverdueConsultations(any(), anyList()))
+        when(consultationRepository.findOverdueConsultations(any(), anyList(), any()))
             .thenReturn(List.of(overdueC));
 
         HospitalAdminSummaryDTO result = service.getSummary(HOSPITAL_ID, TODAY, 5);

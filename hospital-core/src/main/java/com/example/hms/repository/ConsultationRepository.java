@@ -80,10 +80,27 @@ public interface ConsultationRepository extends JpaRepository<Consultation, UUID
         @Param("statuses") List<ConsultationStatus> statuses
     );
 
-    @Query("SELECT c FROM Consultation c WHERE c.slaDueBy < :now AND c.status NOT IN :completedStatuses")
+    /**
+     * Overdue consultations, scoped to one hospital.
+     *
+     * <p>The hospital predicate is in the query rather than in the callers on
+     * purpose. Both callers are tenant-scoped reads, and when the scoping lived
+     * in a caller-side {@code stream().filter(...)} the database still shipped
+     * every tenant's overdue rows — patient name, MRN and reason-for-consult
+     * included — to whichever service asked. Isolation that depends on each
+     * caller remembering to filter is isolation the next caller will miss.
+     *
+     * <p>{@code hospitalId} is nullable so a super-admin in global view can
+     * still read across tenants; that branch is the one place a caller must
+     * pass null deliberately.
+     */
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
+    @Query("SELECT c FROM Consultation c WHERE c.slaDueBy < :now AND c.status NOT IN :completedStatuses "
+         + "AND (:hospitalId IS NULL OR c.hospital.id = :hospitalId)")
     List<Consultation> findOverdueConsultations(
         @Param("now") LocalDateTime now,
-        @Param("completedStatuses") List<ConsultationStatus> completedStatuses
+        @Param("completedStatuses") List<ConsultationStatus> completedStatuses,
+        @Param("hospitalId") UUID hospitalId
     );
 
     /**

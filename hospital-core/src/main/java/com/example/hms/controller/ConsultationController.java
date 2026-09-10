@@ -111,14 +111,13 @@ public class ConsultationController {
     // Deliberately NOT widened to NURSE: "mine" means consultations where the
     // caller is the CONSULTANT, which a nurse never is.
     //
-    // It is also empty for DOCTORS today, and not by design: extractUserId
-    // returns a users.id, while findByConsultant_Id matches Consultation
-    // .consultant, which is a Staff. The two ids are never equal (Staff has its
-    // own PK plus a uq_staff_user FK), so this endpoint returns nothing for
-    // anyone. The sibling /assigned-to/{consultantId} correctly takes a staff
-    // id. Recorded as standing debt rather than fixed here — repairing it
-    // changes what doctors see and deserves its own change, not a rider on a
-    // nurse-access PR.
+    // This endpoint used to return nothing for anyone, doctors included:
+    // extractUserId yields a users.id while findByConsultant_Id matches a
+    // Staff id, and Staff has its own PK plus a separate user_id FK, so the
+    // two are never equal. The service now resolves the caller to their Staff
+    // row first. A previous version of this comment said the defect was
+    // "recorded as standing debt"; it was not recorded anywhere, which is part
+    // of why it survived — so it is fixed here instead.
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('VIEW_CONSULTATIONS')")
     @Operation(summary = "My consultations", description = "List consultations assigned to the authenticated consultant")
     public ResponseEntity<List<ConsultationResponseDTO>> getMyConsultations(Authentication authentication) {
@@ -132,7 +131,9 @@ public class ConsultationController {
     // above. This was the only consultation list a nurse could not reach: the
     // plain list endpoint already admits ROLE_NURSE, and the portal's four
     // status tabs all filter that single response client-side. The two
-    // hospital-path reads have no caller in the portal at all.
+    // hospital-path reads have no caller in the portal at all — and they now
+    // validate the path hospital against the caller's active one rather than
+    // trusting it, so the reason for keeping them narrow is weaker than it was.
     @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
