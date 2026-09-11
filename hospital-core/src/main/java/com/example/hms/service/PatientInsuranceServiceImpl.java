@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.security.ActingContext;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -46,6 +47,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private final PatientInsuranceMapper patientInsuranceMapper;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final PatientChartAccess patientChartAccess;
 
     @Override
     @Transactional
@@ -81,7 +83,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientInsuranceResponseDTO> getInsurancesByPatientId(UUID patientId, Locale locale) {
-        Patient patient = getPatientOrThrow(patientId, locale);
+        Patient patient = getPatientScoped(patientId);
         enforceSelfAccessIfPatient(patient, locale);
 
         return patientInsuranceRepository.findByPatient_Id(patientId)
@@ -154,6 +156,16 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     }
 
     /* ==================== helpers ==================== */
+
+    /**
+     * Same rule as the chart header: resolve unscoped, then authorize against the
+     * registration table. {@code findById} is tenant-scoped on Patient.hospitalId
+     * — the patient's FIRST hospital — so it 404'd insurance for every
+     * multi-hospital patient viewed from their second hospital.
+     */
+    private Patient getPatientScoped(UUID patientId) {
+        return patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
+    }
 
     private Patient getPatientOrThrow(UUID patientId, Locale locale) {
         return patientRepository.findById(patientId).orElseThrow(() ->

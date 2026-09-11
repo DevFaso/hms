@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContext;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -98,11 +100,33 @@ class PatientChartAccessTest {
     }
 
     @Test
-    @DisplayName("skips the registration check when unscoped (super admin)")
-    void allowsUnscopedCaller() {
+    @DisplayName("skips the registration check when unscoped AND the caller is a super-admin")
+    void allowsUnscopedSuperAdmin() {
+        when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        try {
+            assertThat(access.require(PATIENT_ID, null)).isSameAs(patient);
+            verify(registrationRepository, never())
+                .existsByPatientIdAndHospitalId(any(UUID.class), any(UUID.class));
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("an unscoped read by a NON super-admin is denied, not allowed")
+    void deniesUnscopedOrdinaryCaller() {
+        // The defect this pins. resolveHospitalScope ends in .orElse(null) for an
+        // ordinary caller whose hospital could not be resolved, and null used to
+        // mean "skip the tenant check" — so a ward nurse was served the chart of a
+        // patient registered only at another hospital. This test previously
+        // asserted the opposite and was named "(super admin)" while establishing no
+        // super-admin context at all: it read null as proof of super-admin, which
+        // is exactly the conflation that made the leak invisible.
         when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
 
-        assertThat(access.require(PATIENT_ID, null)).isSameAs(patient);
+        assertThatThrownBy(() -> access.require(PATIENT_ID, null))
+            .isInstanceOf(ResourceNotFoundException.class);
         verify(registrationRepository, never())
             .existsByPatientIdAndHospitalId(any(UUID.class), any(UUID.class));
     }

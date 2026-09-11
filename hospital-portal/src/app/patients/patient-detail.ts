@@ -145,9 +145,23 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.activeHospitalId ?? null;
   }
 
+  /**
+   * The hospital this page's requests are scoped to: the hospital the user
+   * actually picked, not `activeHospitalId`, which is the JWT primary and stays
+   * non-null even when the chip reads "All hospitals".
+   *
+   * Sending the primary here is what let the chart header and the storyboard
+   * answer about one hospital while the FHIR export — which reads the
+   * X-Hospital-Id the interceptor derives from this same signal — answered
+   * about another, on one page, for one patient.
+   */
+  scopedHospitalId(): string | null {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? null;
+  }
+
   loadPatient(id: string): void {
     this.loading.set(true);
-    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
         this.patient.set(p);

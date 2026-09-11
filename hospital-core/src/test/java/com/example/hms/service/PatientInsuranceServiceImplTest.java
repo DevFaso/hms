@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import static org.mockito.ArgumentMatchers.eq;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.enums.ActingMode;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -46,6 +48,7 @@ class PatientInsuranceServiceImplTest {
     @Mock private PatientInsuranceMapper patientInsuranceMapper;
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
+    @Mock private PatientChartAccess patientChartAccess;
 
     @InjectMocks private PatientInsuranceServiceImpl service;
 
@@ -132,7 +135,11 @@ class PatientInsuranceServiceImplTest {
         PatientInsurance ins1 = new PatientInsurance();
         PatientInsuranceResponseDTO dto1 = new PatientInsuranceResponseDTO();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        // The read authorizes through PatientChartAccess now: unscoped lookup plus a
+        // registration check, instead of the tenant-scoped findById that filtered on
+        // Patient.hospitalId — the patient's FIRST hospital — and so 404'd insurance
+        // for every multi-hospital patient viewed from their second hospital.
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of(ins1));
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(ins1)).thenReturn(dto1);
