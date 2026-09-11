@@ -2291,3 +2291,13 @@ ships*, not for building — and check the shipped surface before trusting a
   queries can answer differently. The patient chart also has no
   `<app-hospital-scope-hint>` picker (#566 covered 7 other pages), so a clinician
   cannot correct the guess there.
+- **Insurance WRITES still resolve the patient tenant-scoped; reads no longer do.**
+  `PatientInsuranceServiceImpl` reads now authorize through `PatientChartAccess`
+  (unscoped lookup + registration check) while `addInsuranceToPatient`,
+  `updatePatientInsurance`, `linkPatientInsurance` and both `upsertAndLink*`
+  keep `getPatientOrThrow`, which filters on `Patient.hospitalId`. So a
+  clinician at a patient's SECOND hospital can now read coverage but still
+  cannot create or relink it. That asymmetry is deliberate — putting writes on
+  the registration rule is an authorization change, not the display fix — but
+  it is a split a reader will trip over, and it should be resolved one way or
+  the other with a decision behind it.
