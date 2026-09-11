@@ -1856,6 +1856,51 @@ all exist and are reachable.
   `prescription.patient.required`) exist in no bundle. Those reach the API
   client as the error body. It should route through the same resolver as
   `ResourceNotFoundException`.
+- **`hasAuthority(...)` is dead across the whole codebase — 235 clauses, 25
+  distinct permission names, all permanently false.**
+  `CustomUserDetailsService` builds authorities from role codes only
+  (`Role::getCode` → `SimpleGrantedAuthority`); permissions never become
+  authorities. So every `hasAuthority('X') or hasAnyRole(...)` guard silently
+  collapses to its role list, and `VIEW_CONSULTATIONS` is not even in
+  `PermissionCatalog` — a guard on a permission that does not exist. Worse,
+  `PermissionCatalog` IS used, by `DashboardConfigurationServiceImpl`, to
+  decide what the **dashboard shows** — so the catalogue drives the UI while
+  roles drive the API, and the portal offers what the backend refuses. ⚠ **Not
+  a cleanup:** wiring the catalogue into authorities would widen access across
+  235 guards at once, and stripping the dead clauses discards the intent. Needs
+  a decision and its own security review, not a tidy-up PR.
+- **Nurse/midwife read drift beyond what `fix/nurse-role-drift` closed.**
+  That PR granted NURSE `GET /consultations/overdue` and the imaging version
+  history — one consultation read, not three. (This bullet said three until
+  2026-09-09: the first cut widened three, its own review narrowed it to the
+  one endpoint that genuinely refused nurses, and the bullet was not updated.)
+  Left open, deliberately, each needing a clinical decision:
+  (a) `MeController /critical-alerts` admits DOCTOR, PHYSICIAN, SURGEON and
+  MIDWIFE but **not NURSE**, though nurses are usually first to a critical
+  value; (b) `/consultations/hospital/{id}` and `/hospital/{id}/pending`
+  exclude **both** NURSE and MIDWIFE while `/stats` and the plain list admit
+  them — identical drift, not fixed because midwife scope was not authorised; (c) a **maternity cluster**
+  (`UltrasoundController`, `MaternalHistoryController`, `BirthPlanController`,
+  `ObgynReferralController`) admits MIDWIFE but not NURSE across ~10 reads,
+  which may be a real credential boundary rather than drift. Decide (c) before
+  touching it.
+- **219 `ResourceNotFoundException` sites still pass prose as the message key.**
+  `fix/resource-not-found-message-keys` converted 100 where an existing key
+  matched; the remainder pass **no argument**, so each needs an identifier
+  resolved in its own scope rather than a rewrite rule. Ratcheted by
+  `NotFoundMessageKeyTest` so the surface cannot grow. Related: `messages_fr`
+  is missing 77 of the 179 base keys and `messages_es` 73 — those fall back to
+  English rather than showing the missing-translation marker, so they are
+  invisible in testing. The backend has **no bundle-parity gate** at all,
+  unlike the portal's strict `i18n:parity`.
+- **The 404 disclosure policy contradicts itself.** `/fhir-record` (#577) says
+  "is not registered at your active hospital — switch your hospital scope",
+  while `PatientChartAccess` deliberately says the opposite in its javadoc:
+  "a caller ... learns nothing, not 'exists elsewhere'". One discloses that the
+  patient exists somewhere; the other refuses to. Both shipped. E8 moved the
+  product toward legitimate cross-hospital reads, which argues for the helpful
+  message — but it is an existence disclosure to any authenticated staff at any
+  hospital, so it needs a decision, not a default.
 
 - **Allergies, imaging and surgical history cannot cross hospitals, and the
   reason is structural.** They attach to patient + hospital with no encounter
@@ -2163,3 +2208,96 @@ live in the patient portal and omitted the one category it existed for.
 Budget the first pass of any remaining item for *finding out what already
 ships*, not for building — and check the shipped surface before trusting a
 "verified zero code" note.
+
+- **`ctx.isSuperAdmin()` is authority-derived, not JWT-claim-only.**
+  `JwtTokenProvider` builds it as `claim || authorities.anyMatch(ROLE_SUPER_ADMIN)`
+  and the OIDC resolver has no claim to read at all, so every cross-tenant
+  carve-out keyed on it is reachable by an inflated authority list. Comments in
+  `ConsultationServiceImpl` asserted the opposite for months; they are corrected,
+  but the property itself is not. Making the signal genuinely claim-only would
+  revoke global view from real super-admins on the OIDC path, so it needs its
+  own security review rather than a quiet tightening.
+- **`CrossTenantReadAudit` misses the two cases most worth tracing.**
+  It returns early unless `ctx.isSuperAdmin()`, so (a) a REFUSED cross-tenant
+  request from an ordinary caller records nothing — someone enumerating tenant
+  UUIDs against a `?hospitalId=` param is exactly the permission-creep probe the
+  audit exists to surface; and (b) worse, `RoleValidator.requireActiveHospitalId`
+  step 4 grants an unscoped read to a principal whose AUTHORITIES say super-admin
+  while `ctx.isSuperAdmin()` is false, and that is precisely the branch the audit
+  skips. The least-trusted path to a cross-tenant read is the one that leaves no
+  trace. Needs a second entry point, not a widening of this one.
+  Related: `RoleValidator`'s step-1 comment claims the check is "per JWT claim,
+  not authorities" — same false statement corrected in `ConsultationServiceImpl`,
+  still standing there.
+- **The guard drift this keeps re-finding needs a ratchet, not another hand-audit.**
+  Roughly 280 guards list DOCTOR+NURSE and ~68 list DOCTOR without NURSE, with
+  18 controllers carrying both shapes. `WriteAuditCoverageTest`,
+  `SchedulerLockCoverageTest` and `CrossHospitalReadFilterCoverageTest` are the
+  house precedents: scan every `@RestController`, freeze today's exemptions with
+  reasons, and fail an un-reasoned addition. `NurseReadAccessTest` pins four
+  endpoints by hand and cannot see the rest.
+- **`role-context.stub.ts` is not reactive.** Its getters return plain values
+  where the real service returns signals, so any `computed()` over it caches its
+  first read forever. Specs pass today only because they never call
+  `detectChanges()`; adding one to any of the 9 consuming specs would break tests
+  with no production bug present. It also derives `activeRole` from
+  `roles.length === 1`, so a multi-role user pinned to one role — the exact case
+  `hasAnyActiveRole` exists for — is unrepresentable. Backing it with real
+  signals touches every consumer, so it is its own change.
+- **`NurseReadAccessTest.guardFor` reads the raw JDK annotation.**
+  `Method.getAnnotation(GetMapping.class)` does not resolve Spring's `@AliasFor`,
+  so rewriting `@GetMapping("/x")` as `@GetMapping(path = "/x")` — a no-op for
+  Spring — makes the test fail with "endpoint missing". It also matches guards by
+  substring, so `hasAnyRole('NURSE')` and a hypothetical `!hasRole('NURSE')` are
+  indistinguishable to it. Use `AnnotatedElementUtils.findMergedAnnotation`.
+- **`LocalDateTime.now()` vs Sonar S8688 — convert per aggregate, never per line.**
+  The consultation SLA aggregate is DONE (`ConsultationServiceImpl` +
+  `HospitalAdminDashboardServiceImpl` now take the injected `Clock` from
+  `TimeConfig`, writers and readers together). ~400 sites remain elsewhere.
+  The rule that makes this safe: `calculateSlaDueBy` WRITES `slaDueBy` and the
+  overdue queries READ it, so converting only one side would skew every
+  comparison by the offset between the two time sources. Convert both ends of
+  a comparison in the same change, or leave both alone. `TimeConfig` supplies
+  `Clock.systemDefaultZone()`, identical to what `LocalDateTime.now()` used, so
+  a correctly-scoped conversion is behaviour-preserving and makes the aggregate
+  fixable in a test.
+
+- **Hospital claims in the JWT go stale, and nothing re-issues them.**
+  `JwtAuthenticationFilter` builds `HospitalContext` from the token's claims,
+  which are baked at login: `CLAIM_PERMITTED_HOSPITAL_IDS` and
+  `CLAIM_PRIMARY_HOSPITAL_ID` come from the assignments that existed *then*.
+  Assign a clinician to a hospital and their session keeps the old scope until
+  they happen to log in again. Observed on dev 2026-09-10: a nurse assigned only
+  to Hospital B read a Hospital B patient fine on every endpoint that resolves
+  scope from the live assignment table, and got "not registered at your active
+  hospital" from every endpoint that reads the context — same user, same patient,
+  same page. Fix is to re-issue claims when an assignment changes, or to resolve
+  hospital context from live data rather than from claims. Not done here: it
+  changes how every request establishes scope and needs its own security review.
+- **`ControllerAuthUtils.extractHospitalIdFromJwt` is dead on the primary login path.**
+  It reads the hospital claim only when `auth instanceof JwtAuthenticationToken`
+  — the OIDC resource-server shape. The username/password login builds a
+  `UsernamePasswordAuthenticationToken` (`JwtAuthenticationFilter:139`), so for
+  those callers the method always returns null and `resolveHospitalScope`
+  silently falls through to `fallbackHospitalFromAssignments`, i.e. the first row
+  of a query with no `ORDER BY`. The method reads as "the caller's hospital" and
+  is not that, which is how the token-reading and DB-reading paths drifted apart
+  without anyone noticing.
+- **There is no deterministic "primary hospital".**
+  `CLAIM_PRIMARY_HOSPITAL_ID` is `hospitalIds.iterator().next()` over a
+  LinkedHashSet built from an unordered assignment query, and
+  `UserRoleHospitalAssignment` carries no `primary` flag. For a multi-hospital
+  clinician, "your hospital" is whichever row came back first, and two different
+  queries can answer differently. The patient chart also has no
+  `<app-hospital-scope-hint>` picker (#566 covered 7 other pages), so a clinician
+  cannot correct the guess there.
+- **Insurance WRITES still resolve the patient tenant-scoped; reads no longer do.**
+  `PatientInsuranceServiceImpl` reads now authorize through `PatientChartAccess`
+  (unscoped lookup + registration check) while `addInsuranceToPatient`,
+  `updatePatientInsurance`, `linkPatientInsurance` and both `upsertAndLink*`
+  keep `getPatientOrThrow`, which filters on `Patient.hospitalId`. So a
+  clinician at a patient's SECOND hospital can now read coverage but still
+  cannot create or relink it. That asymmetry is deliberate — putting writes on
+  the registration rule is an authorization change, not the display fix — but
+  it is a split a reader will trip over, and it should be resolved one way or
+  the other with a decision behind it.

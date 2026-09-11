@@ -115,7 +115,13 @@ public class ImagingResultController {
     }
 
     @GetMapping("/order/{orderId}/all")
-    @PreAuthorize("hasAuthority('VIEW_IMAGING_RESULTS') or hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
+    // NURSE reads the history because addenda live in it — "findings revised,
+    // suspicious mass" is exactly the version a ward nurse must act on. The
+    // sibling GET /order/{orderId} has always admitted NURSE and returns the
+    // latest report, which may itself be PRELIMINARY, so withholding the
+    // history never implemented "no unconfirmed reads for non-physicians";
+    // that policy would be a filter on report status, not on this endpoint.
+    @PreAuthorize("hasAuthority('VIEW_IMAGING_RESULTS') or hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST','NURSE')")
     @Operation(summary = "Get all report versions for imaging order",
                description = "Retrieve complete history of report versions (preliminary, final, addenda)")
     public ResponseEntity<List<ImagingReportResponseDTO>> getAllReportsForOrder(@PathVariable UUID orderId) {

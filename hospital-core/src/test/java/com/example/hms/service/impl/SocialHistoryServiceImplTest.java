@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.RoleValidator;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.SocialHistoryMapper;
 import com.example.hms.model.Hospital;
@@ -39,6 +41,8 @@ class SocialHistoryServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private SocialHistoryMapper socialHistoryMapper;
+    @Mock private PatientChartAccess patientChartAccess;
+    @Mock private RoleValidator roleValidator;
 
     @InjectMocks
     private SocialHistoryServiceImpl service;
@@ -124,7 +128,11 @@ class SocialHistoryServiceImplTest {
 
     @Test
     void getSocialHistoriesByPatientId_patientNotFound_throws() {
-        when(patientRepository.existsById(patientId)).thenReturn(false);
+        // The read now authorizes through PatientChartAccess (unscoped lookup +
+        // registration check) instead of the tenant-scoped existsById, which
+        // filtered on Patient.hospitalId — the patient's FIRST hospital.
+        when(patientChartAccess.require(eq(patientId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThatThrownBy(() -> service.getSocialHistoriesByPatientId(patientId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -132,7 +140,7 @@ class SocialHistoryServiceImplTest {
 
     @Test
     void getSocialHistoriesByPatientId_returnsList() {
-        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         PatientSocialHistory entity = new PatientSocialHistory();
         when(socialHistoryRepository.findByPatient_IdOrderByRecordedDateDesc(patientId)).thenReturn(List.of(entity));
         SocialHistoryResponseDTO dto = new SocialHistoryResponseDTO();
@@ -145,7 +153,11 @@ class SocialHistoryServiceImplTest {
 
     @Test
     void getCurrentSocialHistory_patientNotFound_throws() {
-        when(patientRepository.existsById(patientId)).thenReturn(false);
+        // The read now authorizes through PatientChartAccess (unscoped lookup +
+        // registration check) instead of the tenant-scoped existsById, which
+        // filtered on Patient.hospitalId — the patient's FIRST hospital.
+        when(patientChartAccess.require(eq(patientId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThatThrownBy(() -> service.getCurrentSocialHistory(patientId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -153,7 +165,7 @@ class SocialHistoryServiceImplTest {
 
     @Test
     void getCurrentSocialHistory_noCurrent_returnsNull() {
-        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(socialHistoryRepository.findFirstByPatient_IdAndActiveTrueOrderByRecordedDateDesc(patientId))
                 .thenReturn(Optional.empty());
 

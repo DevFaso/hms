@@ -100,19 +100,25 @@ class ConsultationRepositoryEntityGraphTest {
     }
 
     @Test
-    void findOverdueConsultations_isExempt_intentionallyLeftWithoutEntityGraph() throws NoSuchMethodException {
-        // Sanity: findOverdueConsultations is NOT a user-facing list endpoint —
-        // it is consumed by an internal SLA scheduler that does not call the
-        // response mapper. It deliberately has no EntityGraph (avoids loading
-        // associations the SLA job never reads). This test makes the omission
-        // explicit so a future "tidy up — every method should match" refactor
-        // doesn't accidentally fix what isn't broken.
+    void findOverdueConsultations_carriesTheListGraph() throws NoSuchMethodException {
+        // This test used to assert the OPPOSITE, on a premise that was simply
+        // untrue: it said findOverdueConsultations "is NOT a user-facing list
+        // endpoint — it is consumed by an internal SLA scheduler that does not
+        // call the response mapper". There is no such scheduler. Its only two
+        // callers are GET /consultations/overdue (which maps every row through
+        // toResponseDTO, initialising five lazy associations apiece) and the
+        // hospital-admin dashboard. So the one read in this repository without
+        // a graph was the one serving a list endpoint, and the test was
+        // blocking the fix.
         Method method = ConsultationRepository.class.getDeclaredMethod(
-            "findOverdueConsultations", LocalDateTime.class, List.class);
+            "findOverdueConsultations", LocalDateTime.class, List.class, UUID.class);
         EntityGraph graph = method.getAnnotation(EntityGraph.class);
         assertThat(graph)
-            .as("findOverdueConsultations is internal-only; @EntityGraph is intentionally absent")
-            .isNull();
+            .as("findOverdueConsultations backs a user-facing list; it needs the shared graph")
+            .isNotNull();
+        assertThat(graph.attributePaths())
+            .as("same associations toResponseDTO dereferences")
+            .contains("patient", "hospital", "requestingProvider", "consultant", "encounter");
     }
 
     /* ------------------------------------------------------------------ */

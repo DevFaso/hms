@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.security.ActingContext;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -46,6 +47,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private final PatientInsuranceMapper patientInsuranceMapper;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final PatientChartAccess patientChartAccess;
 
     @Override
     @Transactional
@@ -81,7 +83,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientInsuranceResponseDTO> getInsurancesByPatientId(UUID patientId, Locale locale) {
-        Patient patient = getPatientOrThrow(patientId, locale);
+        Patient patient = getPatientScoped(patientId);
         enforceSelfAccessIfPatient(patient, locale);
 
         return patientInsuranceRepository.findByPatient_Id(patientId)
@@ -154,6 +156,24 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     }
 
     /* ==================== helpers ==================== */
+
+    /**
+     * Same rule as the chart header: resolve unscoped, then authorize against the
+     * registration table. {@code findById} is tenant-scoped on Patient.hospitalId
+     * — the patient's FIRST hospital — so it 404'd insurance for every
+     * multi-hospital patient viewed from their second hospital.
+     *
+     * <p>READS only. Every write in this class still resolves through
+     * {@link #getPatientOrThrow}, deliberately: moving a write onto the
+     * registration rule would let a caller at the patient's second hospital
+     * create and relink coverage, which is an authorization decision rather
+     * than the display fix this is. The split is recorded in tasklist.md so it
+     * is a choice, not an oversight — if you are adding a read here, use this
+     * method; if you are adding a write, do not change the rule on your own.
+     */
+    private Patient getPatientScoped(UUID patientId) {
+        return patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
+    }
 
     private Patient getPatientOrThrow(UUID patientId, Locale locale) {
         return patientRepository.findById(patientId).orElseThrow(() ->

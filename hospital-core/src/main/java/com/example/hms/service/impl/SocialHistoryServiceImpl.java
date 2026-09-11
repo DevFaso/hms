@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.RoleValidator;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.SocialHistoryMapper;
 import com.example.hms.model.Hospital;
@@ -31,6 +33,8 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
 
     private final SocialHistoryRepository socialHistoryRepository;
     private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
+    private final RoleValidator roleValidator;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final SocialHistoryMapper socialHistoryMapper;
@@ -89,9 +93,13 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
     public List<SocialHistoryResponseDTO> getSocialHistoriesByPatientId(UUID patientId) {
         log.debug("Fetching social histories for patient: {}", patientId);
 
-        if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
-        }
+        // existsById is the TENANT-SCOPED finder: it filters on Patient.hospitalId,
+        // the patient's FIRST hospital. A patient registered at A and later at B
+        // therefore 404'd here for every caller at B, while the chart header beside
+        // this tab loaded fine — that endpoint resolves unscoped and checks the
+        // registration table. PatientChartAccess is that rule, extracted, so the
+        // tab and the header can no longer disagree.
+        patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
 
         List<PatientSocialHistory> histories = socialHistoryRepository.findByPatient_IdOrderByRecordedDateDesc(patientId);
         
@@ -105,9 +113,13 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
     public SocialHistoryResponseDTO getCurrentSocialHistory(UUID patientId) {
         log.debug("Fetching current social history for patient: {}", patientId);
 
-        if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
-        }
+        // existsById is the TENANT-SCOPED finder: it filters on Patient.hospitalId,
+        // the patient's FIRST hospital. A patient registered at A and later at B
+        // therefore 404'd here for every caller at B, while the chart header beside
+        // this tab loaded fine — that endpoint resolves unscoped and checks the
+        // registration table. PatientChartAccess is that rule, extracted, so the
+        // tab and the header can no longer disagree.
+        patientChartAccess.require(patientId, roleValidator.requireActiveHospitalId());
 
         PatientSocialHistory current = socialHistoryRepository
                 .findFirstByPatient_IdAndActiveTrueOrderByRecordedDateDesc(patientId)
