@@ -74,11 +74,16 @@ describe('PatientDetailComponent', () => {
     ]);
     roleContextSpy = jasmine.createSpyObj(
       'RoleContextService',
-      ['isSuperAdmin', 'hasAnyActiveRole'],
+      ['isSuperAdmin', 'hasAnyActiveRole', 'effectiveHospitalIdForRequest'],
       {
         activeHospitalId: 'h1',
       },
     );
+    // The scope the page's requests actually carry. On the real service this is
+    // a computed that returns null for a super-admin in global view and the
+    // active hospital otherwise; the page reads it instead of activeHospitalId,
+    // which is the JWT primary and stays non-null even when the chip says "All".
+    roleContextSpy.effectiveHospitalIdForRequest.and.returnValue('h1');
     roleContextSpy.hasAnyActiveRole.and.returnValue(false);
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
     const cdsAckSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [

@@ -2261,3 +2261,43 @@ ships*, not for building — and check the shipped surface before trusting a
   `Clock.systemDefaultZone()`, identical to what `LocalDateTime.now()` used, so
   a correctly-scoped conversion is behaviour-preserving and makes the aggregate
   fixable in a test.
+
+- **Hospital claims in the JWT go stale, and nothing re-issues them.**
+  `JwtAuthenticationFilter` builds `HospitalContext` from the token's claims,
+  which are baked at login: `CLAIM_PERMITTED_HOSPITAL_IDS` and
+  `CLAIM_PRIMARY_HOSPITAL_ID` come from the assignments that existed *then*.
+  Assign a clinician to a hospital and their session keeps the old scope until
+  they happen to log in again. Observed on dev 2026-09-10: a nurse assigned only
+  to Hospital B read a Hospital B patient fine on every endpoint that resolves
+  scope from the live assignment table, and got "not registered at your active
+  hospital" from every endpoint that reads the context — same user, same patient,
+  same page. Fix is to re-issue claims when an assignment changes, or to resolve
+  hospital context from live data rather than from claims. Not done here: it
+  changes how every request establishes scope and needs its own security review.
+- **`ControllerAuthUtils.extractHospitalIdFromJwt` is dead on the primary login path.**
+  It reads the hospital claim only when `auth instanceof JwtAuthenticationToken`
+  — the OIDC resource-server shape. The username/password login builds a
+  `UsernamePasswordAuthenticationToken` (`JwtAuthenticationFilter:139`), so for
+  those callers the method always returns null and `resolveHospitalScope`
+  silently falls through to `fallbackHospitalFromAssignments`, i.e. the first row
+  of a query with no `ORDER BY`. The method reads as "the caller's hospital" and
+  is not that, which is how the token-reading and DB-reading paths drifted apart
+  without anyone noticing.
+- **There is no deterministic "primary hospital".**
+  `CLAIM_PRIMARY_HOSPITAL_ID` is `hospitalIds.iterator().next()` over a
+  LinkedHashSet built from an unordered assignment query, and
+  `UserRoleHospitalAssignment` carries no `primary` flag. For a multi-hospital
+  clinician, "your hospital" is whichever row came back first, and two different
+  queries can answer differently. The patient chart also has no
+  `<app-hospital-scope-hint>` picker (#566 covered 7 other pages), so a clinician
+  cannot correct the guess there.
+- **Insurance WRITES still resolve the patient tenant-scoped; reads no longer do.**
+  `PatientInsuranceServiceImpl` reads now authorize through `PatientChartAccess`
+  (unscoped lookup + registration check) while `addInsuranceToPatient`,
+  `updatePatientInsurance`, `linkPatientInsurance` and both `upsertAndLink*`
+  keep `getPatientOrThrow`, which filters on `Patient.hospitalId`. So a
+  clinician at a patient's SECOND hospital can now read coverage but still
+  cannot create or relink it. That asymmetry is deliberate — putting writes on
+  the registration rule is an authorization change, not the display fix — but
+  it is a split a reader will trip over, and it should be resolved one way or
+  the other with a decision behind it.

@@ -4,6 +4,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -57,9 +58,10 @@ public class PatientChartAccess {
      * Resolve a patient the caller is allowed to read in {@code hospitalId}.
      *
      * @param patientId  the patient being charted
-     * @param hospitalId the caller's resolved hospital scope; {@code null} means
-     *                   unscoped (super admin), matching
-     *                   {@code ControllerAuthUtils.resolveHospitalScope}
+     * @param hospitalId the caller's resolved hospital scope. {@code null} is
+     *                   honoured as "global" ONLY for a super-admin; for any
+     *                   other principal it means scope could not be established
+     *                   and the read is denied
      * @throws ResourceNotFoundException if no such patient, or the patient has
      *                                   no registration at {@code hospitalId}
      */
@@ -70,8 +72,24 @@ public class PatientChartAccess {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
-        if (hospitalId != null
-            && !registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
+        if (hospitalId == null) {
+            // Null means "no tenant filter". That is correct for a super-admin in
+            // global view and WRONG for anyone else — but the two arrive here
+            // indistinguishable, because ControllerAuthUtils.resolveHospitalScope
+            // ends in `.orElse(null)` for an ordinary caller whose scope could not
+            // be resolved. A ward nurse whose hospital did not resolve was
+            // therefore handed a chart for a patient registered only at another
+            // hospital: name, MRN, active encounter, attending, department.
+            //
+            // So null is honoured only for a principal the security layer marks a
+            // super-admin. For anyone else it is a failure to establish scope, and
+            // a failure to establish scope denies.
+            if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
+                throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+            }
+            return patient;
+        }
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
         return patient;
