@@ -1936,6 +1936,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   other `TenantScoped` entities (`ImagingOrder`, `ImagingReport`,
   `UltrasoundOrder`, `UltrasoundReport`, `EmpiMasterIdentity`,
   `EmpiMergeEvent`). No migration.
+  _(PR #599 — done in `TenantScopeSpecification` alone: for `Patient` the
+  hospital predicate is EXISTS(registration at a permitted hospital), the
+  organisation predicate the same over the registration's hospital; 87 call
+  sites untouched. The six other entities key on the hospital that WROTE the
+  row, which is provenance, not a stale first hospital — they stay as they are
+  and widen for reads under #59, so the bullet above over-reached.)_
 
 ### Phase 1 — flip the policy
 
