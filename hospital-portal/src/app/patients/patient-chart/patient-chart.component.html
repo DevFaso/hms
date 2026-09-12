@@ -324,6 +324,11 @@
           </li>
         }
       </ul>
+      <!-- E9 #64 — what D3 withheld from this read, never a silent gap. -->
+      <app-restricted-rows
+        [rows]="tl.restrictedRows ?? []"
+        (openWithReason)="openRestricted.emit()"
+      />
       <button type="button" class="btn-secondary btn-sm" (click)="openTimelineReason()">
         {{ 'CHART.RELOAD_TIMELINE' | translate }}
       </button>

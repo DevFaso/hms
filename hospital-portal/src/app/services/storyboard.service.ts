@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { RestrictedRows } from './patient.service';
+
 /**
  * Wire shapes for {@code GET /api/patients/:patientId/storyboard}.
  * The Storyboard banner aggregates allergies, problems, the active
@@ -82,6 +84,8 @@ export interface PatientStoryboard {
   codeStatus?: StoryboardCodeStatus | null;
   hasHighSeverityAllergy: boolean;
   hasChronicProblem: boolean;
+  /** E9 #64 — problems withheld under D3, per recording hospital. */
+  restrictedRows?: RestrictedRows[];
   hospitalId?: string | null;
   hospitalName?: string | null;
   generatedAt?: string | null;

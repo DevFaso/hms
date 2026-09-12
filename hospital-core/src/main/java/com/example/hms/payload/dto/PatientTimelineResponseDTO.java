@@ -48,6 +48,15 @@ public class PatientTimelineResponseDTO {
     @Schema(description = "Total number of entries after applying filters and limits.")
     private int totalEntries;
 
+    /**
+     * E9 #64 — rows this read withheld under decision D3 (foreign, in a
+     * sensitive category, no live break-the-glass session), per recording
+     * hospital and department. Empty in-hospital and under a session.
+     */
+    @Builder.Default
+    @Schema(description = "Rows withheld from this read; they open through break-the-glass.")
+    private List<RestrictedRowsDTO> restrictedRows = Collections.emptyList();
+
     @Schema(description = "Timestamp when the server assembled the response.")
     private LocalDateTime generatedAt;
 }

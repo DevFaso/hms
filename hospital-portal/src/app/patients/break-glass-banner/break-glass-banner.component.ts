@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 import {
@@ -51,6 +51,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   private readonly service = inject(BreakGlassService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   protected readonly state = signal<LoadState>('idle');
   protected readonly mySession = signal<BreakGlassSession | null>(null);
@@ -104,6 +105,30 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   ngOnDestroy(): void {
     this.cancelInFlight();
     this.stopClock();
+  }
+
+  /**
+   * E9 #64 — "Ouvrir avec motif" on a restricted row lands here: the same
+   * declaration, the same reason textarea, whichever row prompted it. Says
+   * why when it cannot open, instead of doing nothing.
+   *
+   * @returns true when the declaration modal opened.
+   */
+  openDeclare(): boolean {
+    if (this.mySession()?.live) {
+      // Already unlocked; the restricted lines clear on the next read.
+      return false;
+    }
+    if (!this.canDeclare()) {
+      this.toast.error(this.translate.instant('BREAK_GLASS.NOT_ALLOWED'));
+      return false;
+    }
+    if (!this.canInvokeDeclare()) {
+      this.toast.error(this.translate.instant('BREAK_GLASS.NEED_HOSPITAL'));
+      return false;
+    }
+    this.openModal();
+    return true;
   }
 
   protected openModal(): void {

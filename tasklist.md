@@ -2064,10 +2064,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   the HOSPITAL_ADMIN screen does not. Add it, put it on the hospital
   onboarding checklist, and delete the keyword sets (English substring
   matching against French text; never fired).
-- [ ] 64. **Restricted rows on the chart (portal).** Foreign rows whose
-  effective category is set render as *Dossier restreint (hôpital,
-  département, n)* with *Ouvrir avec motif*, reusing the break-glass banner
-  and its reason textarea. In-hospital behaviour unchanged.
+- [x] 64. **Restricted rows on the chart (portal).** ✅ DONE 2026-09-12.
+  A read that withholds a row under D3 now says so: `WithheldRows` tallies
+  the refused rows per recording hospital and department and the storyboard
+  and doctor timeline responses carry `restrictedRows` (where and how many,
+  never the row). The portal renders each line as *Dossier restreint
+  (hôpital, département, n)* with one *Ouvrir avec motif* action that opens
+  the existing break-glass banner's declaration modal and its reason
+  textarea; a declared or ended session re-reads the storyboard and the
+  chart. In-hospital behaviour unchanged: the tally is empty, nothing renders.
+  Not counted, by design: the chart's bare-array reads (`/diagnoses`, the
+  doctor record sections) have no envelope for the summary, and the
+  imaging rows withheld on structured high-risk flags carry no category.
+  Previously recorded as: foreign rows whose effective category is set
+  render as *Dossier restreint (hôpital, département, n)* with *Ouvrir avec
+  motif*, reusing the break-glass banner and its reason textarea.
 
 ### Phase 3 — retire the consent grants (D7)
 

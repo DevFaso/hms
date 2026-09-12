@@ -171,6 +171,11 @@
         } @else {
           <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_PROBLEMS' | translate }}</p>
         }
+        <!-- E9 #64 — what D3 withheld, never a silent gap. -->
+        <app-restricted-rows
+          [rows]="s.restrictedRows ?? []"
+          (openWithReason)="openRestricted.emit()"
+        />
       </div>
 
       <!-- Active Encounter -->

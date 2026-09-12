@@ -248,6 +248,19 @@ export interface TimelineEntryMetadata {
   [key: string]: unknown;
 }
 
+/**
+ * E9 #64 — what a read withheld under decision D3: rows recorded at another
+ * hospital in a sensitive category, with no live break-the-glass session.
+ * Only where and how many; the rows themselves stay behind the declaration.
+ */
+export interface RestrictedRows {
+  hospitalId?: string | null;
+  hospitalName?: string | null;
+  /** Absent for rows that carry no department (problems). */
+  departmentName?: string | null;
+  count: number;
+}
+
 export interface TimelineEntry {
   entryId: string;
   category: string;
@@ -264,6 +277,8 @@ export interface PatientTimeline {
   entries: TimelineEntry[];
   totalEntries: number;
   generatedAt: string;
+  /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
+  restrictedRows?: RestrictedRows[];
 }
 
 /** SMS OTP challenge issued by POST /patients/phone-verification. */

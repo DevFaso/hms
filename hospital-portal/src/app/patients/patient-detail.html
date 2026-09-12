@@ -13,10 +13,18 @@
 
   @if (!loading() && patient(); as p) {
     <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
-    <app-storyboard-banner [patientId]="p.id" />
+    <app-storyboard-banner
+      [patientId]="p.id"
+      [refreshToken]="accessEpoch()"
+      (openRestricted)="openRestrictedRows()"
+    />
 
     <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
-    <app-break-glass-banner [patientId]="p.id" [hospitalId]="currentHospitalId()" />
+    <app-break-glass-banner
+      [patientId]="p.id"
+      [hospitalId]="currentHospitalId()"
+      (sessionChanged)="onBreakGlassSessionChanged()"
+    />
 
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
     <app-bpa-panel [patientId]="p.id" />
@@ -234,7 +242,11 @@
 
     <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
-      <app-patient-chart [patientId]="patient()!.id" />
+      <app-patient-chart
+        [patientId]="patient()!.id"
+        [refreshToken]="accessEpoch()"
+        (openRestricted)="openRestrictedRows()"
+      />
     }
 
     <!-- ═══ Medical History Tab (social / family / immunizations) ═══ -->

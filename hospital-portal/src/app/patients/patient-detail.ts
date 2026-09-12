@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -143,6 +143,25 @@ export class PatientDetailComponent implements OnInit {
   /** Active hospital for the caller. Null when no scope is selected (e.g. SUPER_ADMIN unscoped view). */
   currentHospitalId(): string | null {
     return this.roleContext.activeHospitalId ?? null;
+  }
+
+  /** E9 #64 — the break-glass banner, so a restricted line can open its declaration. */
+  private readonly breakGlass = viewChild(BreakGlassBannerComponent);
+
+  /**
+   * E9 #64 — bumped when a break-the-glass session is declared or ends. The
+   * storyboard and the chart take it as an input and re-read on it: what
+   * they withhold depends on the session.
+   */
+  readonly accessEpoch = signal(0);
+
+  /** "Ouvrir avec motif" on any restricted line: one declaration, one reason. */
+  openRestrictedRows(): void {
+    this.breakGlass()?.openDeclare();
+  }
+
+  onBreakGlassSessionChanged(): void {
+    this.accessEpoch.update((n) => n + 1);
   }
 
   /**

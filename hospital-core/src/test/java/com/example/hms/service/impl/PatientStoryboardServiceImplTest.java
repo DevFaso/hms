@@ -357,6 +357,14 @@ class PatientStoryboardServiceImplTest {
         assertThat(sb.getProblems())
             .extracting(PatientStoryboardDTO.ProblemSummaryDTO::getProblemDisplay)
             .containsExactlyInAnyOrder("Sickle cell disease", "Asthme");
+        // E9 #64 — the withheld problem is not a silent gap: the banner is
+        // told where it is and how many, and nothing else about it.
+        assertThat(sb.getRestrictedRows()).singleElement().satisfies(r -> {
+            assertThat(r.getHospitalId()).isEqualTo(other.getId());
+            assertThat(r.getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(r.getDepartmentName()).isNull();
+            assertThat(r.getCount()).isEqualTo(1L);
+        });
         assertThat(sb.getProblems()).filteredOn(p -> "Asthme".equals(p.getProblemDisplay()))
             .singleElement()
             .satisfies(p -> {
