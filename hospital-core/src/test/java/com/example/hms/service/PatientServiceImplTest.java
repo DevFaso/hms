@@ -189,6 +189,13 @@ class PatientServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
 
+    /** E9 #56 — constructor deps for the one-allergy-store change. */
+    @Mock
+    private com.example.hms.service.allergy.LegacyAllergyTextImporter legacyAllergyTextImporter;
+
+    @Mock
+    private com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -744,7 +751,7 @@ class PatientServiceImplTest {
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encounter));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
 
         PatientTimelineAccessRequestDTO request = PatientTimelineAccessRequestDTO.builder()
@@ -910,7 +917,7 @@ class PatientServiceImplTest {
         when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(patientDto);
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
         when(patientRepository.findMrnForHospital(patientId, hospitalId)).thenReturn(Optional.of("MRN001"));
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
         when(patientAllergyMapper.toResponseDto(allergy)).thenReturn(allergyResponse);
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
@@ -1095,4 +1102,101 @@ class PatientServiceImplTest {
         verify(patientRepository, never()).findAllByEmailIgnoreCase(any());
         verify(patientRepository, never()).findAllByPhoneNumberPrimary(any());
     }
+
+    @Test
+    void getPatientAllergiesSurfacesOtherHospitalsRowsAndRecordsTheReach() {
+        // E9 #56 — every active allergy travels; a row recorded elsewhere is
+        // returned with its hospital and accounted as one RECORD_SHARE.
+        UUID requester = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("CHU Yalgado");
+        PatientAllergy here = new PatientAllergy();
+        here.setId(UUID.randomUUID());
+        here.setHospital(hospital);
+        here.setAllergenDisplay("Peanuts");
+        here.setActive(true);
+        PatientAllergy away = new PatientAllergy();
+        away.setId(UUID.randomUUID());
+        away.setHospital(other);
+        away.setAllergenDisplay("Penicillin");
+        away.setActive(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(here, away));
+        when(patientAllergyMapper.toResponseDto(here)).thenReturn(PatientAllergyResponseDTO.builder()
+            .id(here.getId()).hospitalId(hospitalId).allergenDisplay("Peanuts").build());
+        when(patientAllergyMapper.toResponseDto(away)).thenReturn(PatientAllergyResponseDTO.builder()
+            .id(away.getId()).hospitalId(other.getId()).hospitalName("CHU Yalgado").allergenDisplay("Penicillin").build());
+
+        List<PatientAllergyResponseDTO> result = patientService.getPatientAllergies(patientId, hospitalId, requester);
+
+        assertThat(result).extracting(PatientAllergyResponseDTO::getAllergenDisplay)
+            .containsExactlyInAnyOrder("Peanuts", "Penicillin");
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.RECORD_SHARE);
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(String.valueOf(audit.getValue().getDetails()))
+            .contains("sourceHospitalId=" + other.getId())
+            .contains("rowsSurfaced=1");
+    }
+
+    @Test
+    void getPatientAllergiesFromTheRecordingHospitalRecordsNoReach() {
+        UUID requester = UUID.randomUUID();
+        PatientAllergy here = new PatientAllergy();
+        here.setId(UUID.randomUUID());
+        here.setHospital(hospital);
+        here.setAllergenDisplay("Peanuts");
+        here.setActive(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(here));
+        when(patientAllergyMapper.toResponseDto(here)).thenReturn(PatientAllergyResponseDTO.builder()
+            .id(here.getId()).hospitalId(hospitalId).allergenDisplay("Peanuts").build());
+
+        patientService.getPatientAllergies(patientId, hospitalId, requester);
+
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void createPatientImportsFreeTextAllergiesAsStructuredRows() {
+        // E9 #56 — the registration form's free text becomes UNCONFIRMED rows at
+        // the registering hospital; the mapper no longer writes the column.
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .allergies("Pénicilline, arachide")
+            .build();
+        User user = new User();
+        user.setId(userId);
+        Patient savedPatient = new Patient();
+        savedPatient.setId(patientId);
+        savedPatient.setHospitalRegistrations(new java.util.HashSet<>());
+        PatientHospitalRegistration registration = new PatientHospitalRegistration();
+        registration.setPatient(savedPatient);
+        registration.setHospital(hospital);
+        registration.setMrn("HSP0002");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(patientMapper.toPatient(request, user)).thenReturn(savedPatient);
+        when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
+        when(registrationRepository.save(any(PatientHospitalRegistration.class))).thenReturn(registration);
+        when(patientMapper.toPatientDTO(savedPatient, hospitalId)).thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatient(request, Locale.ENGLISH);
+
+        verify(legacyAllergyTextImporter).importFreeText(savedPatient, hospital, null, "Pénicilline, arachide",
+            com.example.hms.service.allergy.LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+    }
+
 }

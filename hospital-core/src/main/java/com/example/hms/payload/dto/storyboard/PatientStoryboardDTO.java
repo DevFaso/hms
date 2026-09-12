@@ -73,6 +73,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Active allergy entry rendered as a chip.")
     public static class AllergySummaryDTO {
         private UUID id;
+        /** Hospital that recorded the allergy (E9 #56 provenance); null only for legacy rows without one. */
+        private UUID hospitalId;
+        private String hospitalName;
         private String allergenDisplay;
         private String allergenCode;
         private String severity;

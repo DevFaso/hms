@@ -67,6 +67,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.service.allergy.LegacyAllergyTextImporter;
+import com.example.hms.service.allergy.PatientAllergySummarySync;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemHistoryRepository;
 import com.example.hms.repository.PatientProblemRepository;
@@ -234,6 +236,8 @@ public class PatientServiceImpl implements PatientService {
     private final PatientVitalSignService patientVitalSignService;
     private final EncounterRepository encounterRepository;
     private final PatientAllergyRepository patientAllergyRepository;
+    private final LegacyAllergyTextImporter legacyAllergyTextImporter;
+    private final PatientAllergySummarySync allergySummarySync;
     private final LabResultRepository labResultRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final AuditEventLogService auditEventLogService;
@@ -353,7 +357,8 @@ public class PatientServiceImpl implements PatientService {
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + dto.getHospitalId()));
 
-        Patient patient = patientRepository.findByUserId(user.getId())
+        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
+        Patient patient = existing
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
         // Mirror User's activation state: patients pending email verification start inactive
@@ -363,6 +368,13 @@ public class PatientServiceImpl implements PatientService {
         }
 
         ensurePatientRegistration(patient, hospital);
+
+        // E9 #56 — the registration form's free-text allergies become structured
+        // rows at the registering hospital; the column is a derived summary now.
+        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+            legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
+                LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+        }
 
         if (dto.getInsurance() != null) {
             PatientInsuranceRequestDTO insuranceDTO = dto.getInsurance();
@@ -594,7 +606,8 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
 
-        Patient patient = patientRepository.findByUserId(user.getId())
+        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
+        Patient patient = existing
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
@@ -615,6 +628,12 @@ public class PatientServiceImpl implements PatientService {
         }
 
         ensurePatientRegistration(patient, hospital);
+
+        // E9 #56 — see createPatient: free-text allergies become structured rows.
+        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+            legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
+                LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+        }
 
         if (dto.getInsurance() != null) {
             PatientInsuranceRequestDTO insuranceDTO = dto.getInsurance();
@@ -930,7 +949,6 @@ public class PatientServiceImpl implements PatientService {
 
         List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patientId,
-            resolvedHospitalId,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -1032,13 +1050,20 @@ public class PatientServiceImpl implements PatientService {
         }
 
         LinkedHashSet<String> sensitiveSections = new LinkedHashSet<>();
-        return collectDoctorRecordAllergies(
+        List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patient.getId(),
-            hospitalId,
             true,
             Integer.MAX_VALUE,
             sensitiveSections
         );
+        // E9 #53/#56 — every cross-hospital read is accounted: one RECORD_SHARE
+        // per source hospital whose rows were surfaced here.
+        Map<String, Long> reach = allergies.stream()
+            .filter(a -> a.getHospitalId() != null && !hospitalId.equals(a.getHospitalId()))
+            .collect(Collectors.groupingBy(a -> a.getHospitalId().toString(), Collectors.counting()));
+        recordCrossHospitalReach(patientId, hospitalId, requesterUserId, null, reach,
+            "Cross-hospital allergy read on the treatment relationship");
+        return allergies;
     }
 
     @Override
@@ -1076,6 +1101,7 @@ public class PatientServiceImpl implements PatientService {
             allergy.setVerificationStatus(AllergyVerificationStatus.UNCONFIRMED);
         }
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("CREATED", patientId, hospitalEntity.getId(), allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
     }
@@ -1107,6 +1133,7 @@ public class PatientServiceImpl implements PatientService {
             allergy.setRecordedDate(LocalDate.now());
         }
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("UPDATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
     }
@@ -1132,6 +1159,7 @@ public class PatientServiceImpl implements PatientService {
         resolveStaffContext(requesterUserId, effectiveHospitalId);
         allergy.setActive(false);
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("DEACTIVATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, normalizedReason);
     }
 
@@ -1743,6 +1771,14 @@ public class PatientServiceImpl implements PatientService {
                 perSource.merge(source.toString(), 1L, Long::sum);
             }
         }
+        recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, perSource,
+            "Cross-hospital chart read on the treatment relationship");
+    }
+
+    /** One RECORD_SHARE per source hospital in {@code perSource} (source hospital id -> rows surfaced). */
+    private void recordCrossHospitalReach(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
+                                          UserRoleHospitalAssignment assignment, Map<String, Long> perSource,
+                                          String description) {
         for (Map.Entry<String, Long> reach : perSource.entrySet()) {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -1753,7 +1789,7 @@ public class PatientServiceImpl implements PatientService {
                     .patientId(patientId)
                     .entityType(AUDIT_ENTITY_PATIENT)
                     .resourceId(patientId.toString())
-                    .eventDescription("Cross-hospital chart read on the treatment relationship")
+                    .eventDescription(description)
                     .details(Map.of(
                         "actingHospitalId", String.valueOf(actingHospitalId),
                         META_SOURCE_HOSPITAL_ID, reach.getKey(),
@@ -1876,7 +1912,7 @@ public class PatientServiceImpl implements PatientService {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)) {
             return List.of();
         }
-        return patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        return patientAllergyRepository.findByPatient_Id(patientId).stream()
             .map(allergy -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "severity", allergy.getSeverity());
@@ -1890,7 +1926,7 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(occurredAt)
                     .summary(formatAllergySummary(allergy))
                     .sensitive(isSensitiveAllergy(allergy))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, allergy.getHospital(), hospitalId))
                     .build();
             })
             .toList();
@@ -1997,14 +2033,19 @@ public class PatientServiceImpl implements PatientService {
             .toList();
     }
 
+    /**
+     * E9 #56 — allergies are a property of the patient, not of the hospital
+     * that happened to record them: every active row travels, and the
+     * response carries {@code hospitalId} / {@code hospitalName} so the
+     * reader sees where each one was recorded.
+     */
     private List<PatientAllergyResponseDTO> collectDoctorRecordAllergies(
         UUID patientId,
-        UUID hospitalId,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patientId);
         Comparator<PatientAllergy> comparator = Comparator
             .comparing((PatientAllergy allergy) -> severityOrder(allergy.getSeverity()))
             .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
