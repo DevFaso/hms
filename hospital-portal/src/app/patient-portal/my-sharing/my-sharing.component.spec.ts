@@ -6,16 +6,17 @@ import {
   AccessLogEntry,
   DisclosureAccounting,
   PatientPortalService,
+  PatientProfileDTO,
+  RecordSharingOptOut,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 
 /**
- * The access-log half of these specs exists because the previous suite
- * stubbed `getMyAccessLog: () => of([])` and never rendered a row. The
- * component's bindings (`accessedBy`, `accessType`, `accessedAt`) matched
- * nothing the backend sends, so every row in "Who viewed my records" was
- * blank — and a test that only ever exercises the empty state cannot see
- * that. Tier 2 item 39.
+ * "Who accessed my record" (E9 #66). The access-log half of these specs
+ * exists because an earlier suite stubbed the log as empty and never
+ * rendered a row, so bindings that matched nothing the backend sent went
+ * unnoticed (Tier 2 item 39). The opt-out half pins the one control the
+ * page still offers.
  */
 describe('MySharingComponent', () => {
   let component: MySharingComponent;
@@ -52,15 +53,17 @@ describe('MySharingComponent', () => {
     ...over,
   });
 
-  let disclosureResponse: () => ReturnType<PatientPortalService['getMyDisclosures']>;
+  const optOutState = (inForce: boolean): RecordSharingOptOut => ({
+    patientId: 'p-1',
+    inForce,
+    optedOutAt: inForce ? '2026-09-12T08:00:00' : null,
+    reason: inForce ? 'Je préfère' : null,
+    revokedAt: null,
+  });
 
-  const mockPortalService = {
-    getMyConsents: () => of([]),
-    getMyDisclosures: () => disclosureResponse(),
-    revokeConsent: () => of({}),
-    grantConsent: () => of({}),
-    getMyProfile: () => of({ hospitalId: 'test-hospital-id' }),
-  };
+  let disclosureResponse: () => ReturnType<PatientPortalService['getMyDisclosures']>;
+  let optOutResponse: () => ReturnType<PatientPortalService['getMyOptOut']>;
+  let portal: jasmine.SpyObj<PatientPortalService>;
 
   const mockToast = {
     success: jasmine.createSpy('success'),
@@ -69,38 +72,117 @@ describe('MySharingComponent', () => {
 
   beforeEach(async () => {
     disclosureResponse = () => of(accounting([]));
+    optOutResponse = () => of(optOutState(false));
+    portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
+      'getMyDisclosures',
+      'getMyProfile',
+      'getMyOptOut',
+      'optOutOfSharing',
+      'revokeOptOut',
+    ]);
+    portal.getMyDisclosures.and.callFake(() => disclosureResponse());
+    portal.getMyProfile.and.returnValue(of({ id: 'p-1' } as PatientProfileDTO));
+    portal.getMyOptOut.and.callFake(() => optOutResponse());
+    portal.optOutOfSharing.and.returnValue(of(optOutState(true)));
+    portal.revokeOptOut.and.returnValue(of(optOutState(false)));
+    mockToast.success.calls.reset();
+    mockToast.error.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [MySharingComponent, TranslateModule.forRoot()],
       providers: [
-        { provide: PatientPortalService, useValue: mockPortalService },
+        { provide: PatientPortalService, useValue: portal },
         { provide: ToastService, useValue: mockToast },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MySharingComponent);
     component = fixture.componentInstance;
+  });
+
+  function el(testId: string): HTMLElement | null {
+    return (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`);
+  }
+
+  // ── Opt-out ──
+
+  it('loads the opt-out for the signed-in patient and offers to close the door', () => {
     fixture.detectChanges();
+
+    expect(portal.getMyOptOut).toHaveBeenCalledOnceWith('p-1');
+    expect(component.optedOut()).toBeFalse();
+    expect(el('opt-out-enable')).not.toBeNull();
+    expect(el('opt-out-revoke')).toBeNull();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  it('asks for a reason, then opts out with the stated reason and shows the new state', () => {
+    fixture.detectChanges();
+
+    el('opt-out-enable')!.click();
+    fixture.detectChanges();
+    expect(el('opt-out-form')).not.toBeNull();
+
+    component.optOutReason = '  Je préfère  ';
+    el('opt-out-confirm')!.click();
+    fixture.detectChanges();
+
+    expect(portal.optOutOfSharing).toHaveBeenCalledOnceWith('p-1', 'Je préfère');
+    expect(component.optedOut()).toBeTrue();
+    expect(el('opt-out-form')).toBeNull();
+    expect(el('opt-out-revoke')).not.toBeNull();
+    expect(mockToast.success).toHaveBeenCalledWith('PORTAL.SHARING.OPT_OUT.SAVED_ON');
   });
 
-  it('should default to consents tab', () => {
-    expect(component.activeTab()).toBe('consents');
+  it('sends no reason when the patient leaves it blank', () => {
+    fixture.detectChanges();
+    component.openOptOutForm();
+    component.confirmOptOut();
+
+    expect(portal.optOutOfSharing).toHaveBeenCalledOnceWith('p-1', null);
   });
 
-  it('should switch to access log tab', () => {
-    component.switchToAccessLog();
-    expect(component.activeTab()).toBe('access-log');
+  it('reopens sharing from an opted-out state', () => {
+    optOutResponse = () => of(optOutState(true));
+    fixture.detectChanges();
+    expect(component.optedOut()).toBeTrue();
+
+    el('opt-out-revoke')!.click();
+    fixture.detectChanges();
+
+    expect(portal.revokeOptOut).toHaveBeenCalledOnceWith('p-1');
+    expect(component.optedOut()).toBeFalse();
+    expect(mockToast.success).toHaveBeenCalledWith('PORTAL.SHARING.OPT_OUT.SAVED_OFF');
   });
 
-  it('should open and close share form', () => {
-    component.openShareForm();
-    expect(component.showShareForm()).toBe(true);
-    component.cancelShare();
-    expect(component.showShareForm()).toBe(false);
+  it('shows a failure instead of "sharing is on" when the opt-out cannot be loaded', () => {
+    optOutResponse = () => throwError(() => new Error('500'));
+    fixture.detectChanges();
+
+    expect(component.optOutFailed()).toBeTrue();
+    expect(el('opt-out-failed')).not.toBeNull();
+    expect(el('opt-out-enable')).toBeNull();
+    expect(el('opt-out-status')).toBeNull();
+  });
+
+  it('keeps the current state and says so when saving fails', () => {
+    portal.optOutOfSharing.and.returnValue(throwError(() => new Error('409')));
+    fixture.detectChanges();
+    component.openOptOutForm();
+    component.confirmOptOut();
+
+    expect(component.optedOut()).toBeFalse();
+    expect(component.optOutSaving()).toBeFalse();
+    expect(mockToast.error).toHaveBeenCalledWith('PORTAL.SHARING.OPT_OUT.FAILED');
+  });
+
+  // ── Access log ──
+
+  it('loads the access log on arrival, without a tab to find first', () => {
+    disclosureResponse = () => of(accounting([entry()]));
+    fixture.detectChanges();
+
+    expect(portal.getMyDisclosures).toHaveBeenCalledTimes(1);
+    expect(component.accessLog().length).toBe(1);
   });
 
   it('renders the name of whoever accessed the record', () => {
@@ -108,7 +190,6 @@ describe('MySharingComponent', () => {
     // title and a bare " · " separator, and the only way to see it was to
     // put a row on the page — which no test did.
     disclosureResponse = () => of(accounting([entry()]));
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -127,7 +208,6 @@ describe('MySharingComponent', () => {
           { countsByCategory: { EMERGENCY_ACCESS: 1, TREATMENT_ACCESS: 1 } },
         ),
       );
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     const emergency = (fixture.nativeElement as HTMLElement).querySelectorAll('.pli-emergency');
@@ -141,7 +221,6 @@ describe('MySharingComponent', () => {
           externalDisclosures: 1,
         }),
       );
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('.pli-external').length).toBe(1);
@@ -152,7 +231,6 @@ describe('MySharingComponent', () => {
     // rendered as "Nobody has accessed your records yet" — a false
     // statement about a privacy-critical fact, not a blank screen.
     disclosureResponse = () => throwError(() => new Error('500'));
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     expect(component.logFailed()).toBe(true);
@@ -161,7 +239,7 @@ describe('MySharingComponent', () => {
 
   it('retries after a failure rather than caching the failure as an answer', () => {
     disclosureResponse = () => throwError(() => new Error('500'));
-    component.switchToAccessLog();
+    fixture.detectChanges();
     expect(component.logFailed()).toBe(true);
 
     disclosureResponse = () => of(accounting([entry()]));
@@ -184,7 +262,6 @@ describe('MySharingComponent', () => {
           totalEvents: 405,
         }),
       );
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     expect(component.emergencyCount()).toBe(2);
@@ -199,7 +276,6 @@ describe('MySharingComponent', () => {
     // A row of zeroes on every ordinary account trains people to skip past
     // the band on the one visit it matters.
     disclosureResponse = () => of(accounting([entry()]));
-    component.switchToAccessLog();
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).querySelector('.access-summary')).toBeNull();
@@ -210,14 +286,9 @@ describe('MySharingComponent', () => {
     // disclosures. Without the note, an empty page reads as "nobody looked"
     // and a populated one reads as "this is everyone who looked" — both
     // false, and about a privacy fact the patient cannot verify elsewhere.
-    //
-    // Pinned across all three states because the plausible regression is
-    // someone tucking the note inside the populated branch, which removes it
-    // from precisely the state where the wrong reading is easiest to form.
     const note = () => (fixture.nativeElement as HTMLElement).querySelector('.access-scope-note');
 
     disclosureResponse = () => of(accounting([]));
-    component.switchToAccessLog();
     fixture.detectChanges();
     expect(note()).withContext('empty state').toBeTruthy();
 

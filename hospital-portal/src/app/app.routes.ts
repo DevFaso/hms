@@ -1186,42 +1186,6 @@ export const routes: Routes = [
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
       },
 
-      // Consent Management
-      {
-        path: 'consent-management',
-        canActivate: [RoleGuard],
-        data: {
-          roles: [
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-            'ROLE_DOCTOR',
-            'ROLE_LAB_DIRECTOR',
-            'ROLE_QUALITY_MANAGER',
-          ],
-        },
-        loadComponent: () =>
-          import('./consent-management/consent-management.component').then(
-            (m) => m.ConsentManagementComponent,
-          ),
-      },
-      {
-        path: 'consent-management/shared-records',
-        canActivate: [RoleGuard],
-        data: {
-          roles: [
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-            'ROLE_DOCTOR',
-            'ROLE_LAB_DIRECTOR',
-            'ROLE_QUALITY_MANAGER',
-          ],
-        },
-        loadComponent: () =>
-          import('./consent-management/shared-records-viewer/shared-records-viewer.component').then(
-            (m) => m.SharedRecordsViewerComponent,
-          ),
-      },
-
       // Reception / Front Desk Cockpit
       {
         path: 'reception',

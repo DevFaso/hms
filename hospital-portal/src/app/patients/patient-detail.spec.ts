@@ -9,8 +9,6 @@ import { PatientService } from '../services/patient.service';
 import { VitalSignService, VitalSignResponse } from '../services/vital-sign.service';
 import { EncounterService } from '../services/encounter.service';
 import { AppointmentService } from '../services/appointment.service';
-import { RecordSharingService } from '../services/record-sharing.service';
-import { HospitalService } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -29,8 +27,6 @@ describe('PatientDetailComponent', () => {
   let vitalServiceSpy: jasmine.SpyObj<VitalSignService>;
   let encounterServiceSpy: jasmine.SpyObj<EncounterService>;
   let appointmentServiceSpy: jasmine.SpyObj<AppointmentService>;
-  let sharingServiceSpy: jasmine.SpyObj<RecordSharingService>;
-  let hospitalServiceSpy: jasmine.SpyObj<HospitalService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
   let permissionSpy: jasmine.SpyObj<PermissionService>;
   let roleContextSpy: jasmine.SpyObj<RoleContextService>;
@@ -55,18 +51,6 @@ describe('PatientDetailComponent', () => {
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
-    sharingServiceSpy = jasmine.createSpyObj('RecordSharingService', [
-      'resolveAndShare',
-      'getPatientRecord',
-      'grantConsent',
-      'revokeConsent',
-      'exportRecord',
-      'listConsents',
-    ]);
-    hospitalServiceSpy = jasmine.createSpyObj('HospitalService', [
-      'list',
-      'getMyHospitalAsResponse',
-    ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warn']);
     permissionSpy = jasmine.createSpyObj('PermissionService', [
       'hasPermission',
@@ -157,8 +141,6 @@ describe('PatientDetailComponent', () => {
         { provide: VitalSignService, useValue: vitalServiceSpy },
         { provide: EncounterService, useValue: encounterServiceSpy },
         { provide: AppointmentService, useValue: appointmentServiceSpy },
-        { provide: RecordSharingService, useValue: sharingServiceSpy },
-        { provide: HospitalService, useValue: hospitalServiceSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: PermissionService, useValue: permissionSpy },
         { provide: RoleContextService, useValue: roleContextSpy },

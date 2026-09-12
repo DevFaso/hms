@@ -222,8 +222,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-medical-history',
         },
         {
-          icon: 'share',
-          label: 'Record Sharing',
+          icon: 'visibility',
+          label: 'Who accessed my record',
           translationKey: 'NAV.RECORD_SHARING',
           route: '/my-sharing',
         },
@@ -1064,25 +1064,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
 
-    // ADMIN removed per role audit C1 — every consent backend call rejects it.
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
-      items.push({
-        icon: 'handshake',
-        label: 'Consent Management',
-        translationKey: 'NAV.CONSENT_MANAGEMENT',
-        route: '/consent-management',
-      });
-    }
-    if (this.hasAnyRole(['ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
-      if (!items.some((i) => i.route === '/consent-management')) {
-        items.push({
-          icon: 'handshake',
-          label: 'Consent Management',
-          translationKey: 'NAV.CONSENT_MANAGEMENT',
-          route: '/consent-management',
-        });
-      }
-    }
     if (
       this.hasAnyRole([
         'ROLE_LAB_SCIENTIST',
