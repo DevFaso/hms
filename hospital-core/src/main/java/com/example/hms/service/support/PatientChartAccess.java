@@ -4,6 +4,8 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -53,6 +55,7 @@ public class PatientChartAccess {
 
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
 
     /**
      * Resolve a patient the caller is allowed to read in {@code hospitalId}.
@@ -64,6 +67,8 @@ public class PatientChartAccess {
      *                   and the read is denied
      * @throws ResourceNotFoundException if no such patient, or the patient has
      *                                   no registration at {@code hospitalId}
+     *                                   and no treatment relationship there
+     *                                   either (E9 #58)
      */
     public Patient require(UUID patientId, UUID hospitalId) {
         if (patientId == null) {
@@ -72,6 +77,7 @@ public class PatientChartAccess {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         if (hospitalId == null) {
             // Null means "no tenant filter". That is correct for a super-admin in
             // global view and WRONG for anyone else — but the two arrive here
@@ -84,14 +90,21 @@ public class PatientChartAccess {
             // So null is honoured only for a principal the security layer marks a
             // super-admin. For anyone else it is a failure to establish scope, and
             // a failure to establish scope denies.
-            if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
+            if (!ctx.isSuperAdmin()) {
                 throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
             }
             return patient;
         }
-        if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        if (registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
+            return patient;
         }
-        return patient;
+        // E9 #58 — not linked by the desk (yet), but the patient may be on this
+        // hospital's schedule, admitted here, or on an open order: the policy's
+        // carriers open the chart for the staff treating them. Refused stays a
+        // 404, indistinguishable from "no such patient".
+        if (recordAccessPolicy.decide(ctx.getPrincipalUserId(), patient.getId(), hospitalId).permitted()) {
+            return patient;
+        }
+        throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }
 }
