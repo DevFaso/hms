@@ -39,7 +39,7 @@ public class ImagingOrderController {
 	private final ImagingOrderService imagingOrderService;
 
 	@PostMapping("/orders")
-	@PreAuthorize("hasAuthority('REQUEST_IMAGING_STUDIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Create a new imaging order")
 	public ResponseEntity<ImagingOrderResponseDTO> createOrder(
 		@Valid @RequestBody ImagingOrderRequestDTO request,
@@ -51,7 +51,7 @@ public class ImagingOrderController {
 	}
 
 	@PutMapping("/orders/{orderId}")
-	@PreAuthorize("hasAuthority('REQUEST_IMAGING_STUDIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Update imaging order details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateOrder(
 		@PathVariable UUID orderId,
@@ -62,7 +62,7 @@ public class ImagingOrderController {
 	}
 
 	@PutMapping("/orders/{orderId}/status")
-	@PreAuthorize("hasAuthority('SCHEDULE_IMAGING_APPOINTMENTS') or hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
 	@Operation(summary = "Update imaging order status, scheduling, or cancellation details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateStatus(
 		@PathVariable UUID orderId,
@@ -73,7 +73,7 @@ public class ImagingOrderController {
 	}
 
 	@PostMapping("/orders/{orderId}/signature")
-	@PreAuthorize("hasAuthority('SIGN_IMAGING_REPORTS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
 	@Operation(summary = "Attach ordering provider signature/attestation")
 	public ResponseEntity<ImagingOrderResponseDTO> captureSignature(
 		@PathVariable UUID orderId,
@@ -84,7 +84,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/{orderId}")
-	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST')")
 	@Operation(summary = "Retrieve imaging order by ID")
 	public ResponseEntity<ImagingOrderResponseDTO> getOrder(@PathVariable UUID orderId) {
 		ImagingOrderResponseDTO responseDTO = imagingOrderService.getOrder(orderId);
@@ -92,7 +92,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}")
-	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
 	@Operation(summary = "List imaging orders for a patient")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByPatient(
 		@PathVariable UUID patientId,
@@ -113,7 +113,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/hospital/{hospitalId}")
-	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE')")
 	@Operation(summary = "List imaging orders for a hospital")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByHospital(
 		@PathVariable UUID hospitalId,
@@ -124,7 +124,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}/duplicates")
-	@PreAuthorize("hasAuthority('REQUEST_IMAGING_STUDIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "Preview potential duplicate imaging orders before submission")
 	public ResponseEntity<List<ImagingOrderDuplicateMatchDTO>> getDuplicatePreview(
 		@PathVariable UUID patientId,

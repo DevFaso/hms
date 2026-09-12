@@ -39,7 +39,7 @@ public class HighRiskPregnancyCarePlanController {
     private final HighRiskPregnancyCarePlanService carePlanService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create a high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> createPlan(
         @Valid @RequestBody HighRiskPregnancyCarePlanRequestDTO request,
@@ -50,7 +50,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PutMapping("/{planId}")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update an existing high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> updatePlan(
         @PathVariable UUID planId,
@@ -62,7 +62,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/{planId}")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Fetch a single high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> getPlan(
         @PathVariable UUID planId,
@@ -73,7 +73,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "List all plans recorded for a patient")
     public ResponseEntity<List<HighRiskPregnancyCarePlanResponseDTO>> getPlansForPatient(
         @PathVariable UUID patientId,
@@ -84,7 +84,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/patient/{patientId}/active")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Retrieve the active high-risk pregnancy care plan for a patient")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> getActivePlan(
         @PathVariable UUID patientId,
@@ -98,7 +98,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/blood-pressure-logs")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Append a blood pressure reading to the care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addBloodPressureLog(
         @PathVariable UUID planId,
@@ -110,7 +110,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/medication-logs")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Record medication adherence for the care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addMedicationLog(
         @PathVariable UUID planId,
@@ -122,7 +122,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/care-team-notes")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Capture a coordination note from the care team or patient")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addCareTeamNote(
         @PathVariable UUID planId,
@@ -134,7 +134,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/milestones/{milestoneId}/complete")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Mark a monitoring milestone as completed")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> markMilestoneComplete(
         @PathVariable UUID planId,

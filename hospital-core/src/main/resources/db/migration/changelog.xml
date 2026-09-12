@@ -2380,4 +2380,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V159 — E9 #68: the role registry catches up with the guards.
+         ROLE_STAFF is admitted by eight guards, inherited by SUPER_ADMIN
+         and assumed by the portal, but only the dev-profile RoleSeeder
+         ever created it. Seven seeded roles no guard admits are retired
+         where nobody holds them. Plain DML, idempotent.
+         ================================================================= -->
+    <changeSet id="V159-role-registry-cleanup" author="hms-team" runOnChange="false">
+        <sqlFile path="V159__role_registry_cleanup.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

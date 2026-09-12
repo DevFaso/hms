@@ -91,7 +91,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE_PRACTITIONER","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -232,7 +232,6 @@ public class RoleValidator {
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
-    public boolean isNursePractitioner(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE_PRACTITIONER"); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
@@ -261,14 +260,12 @@ public class RoleValidator {
     /** E9 #67 (D5): prescribing is a clinical act; a hospital admin no longer passes. */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
-            || isNurse(userId, hospitalId)
-            || isNursePractitioner(userId, hospitalId);
+            || isNurse(userId, hospitalId);
     }
 
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isPhysician(userId, hospitalId)
-            || isNursePractitioner(userId, hospitalId)
             || isNurse(userId, hospitalId);
     }
 

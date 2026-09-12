@@ -50,7 +50,7 @@ public class PrescriptionController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE')")
     @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse, nurse practitioner, or hospital admin).")
     public ResponseEntity<PrescriptionResponseDTO> create(
         @Valid @RequestBody PrescriptionRequestDTO request,
@@ -73,7 +73,7 @@ public class PrescriptionController {
      * check.
      */
     @PostMapping("/{id}/sign")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE_PRACTITIONER')")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Sign a prescription",
         description = "Records the prescriber's signature: signer, timestamp and a digest of the "
             + "signed content. Only the prescribing clinician can sign, and only a DRAFT or "
@@ -87,12 +87,12 @@ public class PrescriptionController {
     /**
      * The co-sign ceremony (P2 #15). Same role note as sign: the annotation is
      * the coarse filter, and the service additionally requires the caller to be
-     * a prescriber OTHER than the prescription's own. (ROLE_NURSE_PRACTITIONER
-     * is kept for parity with sign but is not currently a seeded role — in
-     * practice only doctors can co-sign, a known open decision.)
+     * a prescriber OTHER than the prescription's own. Only doctors can
+     * co-sign: E9 #68 took the never-seeded nurse-practitioner role off
+     * every guard, so the annotation now says what always held.
      */
     @PostMapping("/{id}/cosign")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE_PRACTITIONER')")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Co-sign a prescription that requires it",
         description = "Records a second prescriber's co-signature on a prescription flagged "
             + "requiresCosign. The co-signer must not be the prescribing clinician, and only a "
@@ -152,7 +152,7 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,
@@ -176,7 +176,7 @@ public class PrescriptionController {
     }
 
     @PostMapping("/{id}/dispatch-sms")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_PHARMACIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
     @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
         description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
             + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "

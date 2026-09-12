@@ -29,13 +29,20 @@ import java.util.UUID;
 @RequestMapping()
 @RequiredArgsConstructor
 @Tag(name = "Primary Care Provider (PCP)", description = "Manage patient primary care links")
+// E9 #68: these guards carried bare 'HOSPITAL_ADMIN', 'RECEPTIONIST', 'DOCTOR'
+// and 'NURSE' tokens inside hasAnyAuthority, which compares whole authority
+// strings; every authority is ROLE_-prefixed, so those tokens never matched
+// and only the ROLE_ ones ever admitted anyone. The dead tokens are gone and
+// the effective lists are unchanged. Whether receptionists should assign a
+// PCP and clinicians read one, as the original author evidently meant, is
+// an open decision recorded on the tasklist, not a change made here.
 public class PatientPrimaryCareController {
 
     private final PatientPrimaryCareService service;
 
     @Operation(summary = "Assign a PCP to a patient")
     @PostMapping("/patients/{patientId}/primary-care")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAuthority('ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<PatientPrimaryCareResponseDTO> assign(
         @PathVariable UUID patientId,
         @Valid @RequestBody PatientPrimaryCareRequestDTO request) {
@@ -44,21 +51,21 @@ public class PatientPrimaryCareController {
 
     @Operation(summary = "Get current PCP for a patient")
     @GetMapping("/patients/{patientId}/primary-care/current")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Optional<PatientPrimaryCareResponseDTO>> getCurrent(@PathVariable UUID patientId) {
         return ResponseEntity.ok(service.getCurrentPrimaryCare(patientId));
     }
 
     @Operation(summary = "Get PCP history for a patient")
     @GetMapping("/patients/{patientId}/primary-care/history")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientPrimaryCareResponseDTO>> history(@PathVariable UUID patientId) {
         return ResponseEntity.ok(service.getPrimaryCareHistory(patientId));
     }
 
     @Operation(summary = "Update a PCP link")
     @PutMapping("/primary-care/{pcpId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<PatientPrimaryCareResponseDTO> update(
         @PathVariable UUID pcpId,
         @Valid @RequestBody PatientPrimaryCareRequestDTO request) {
@@ -67,7 +74,7 @@ public class PatientPrimaryCareController {
 
     @Operation(summary = "End a PCP link (set endDate, mark not current)")
     @PatchMapping("/primary-care/{pcpId}/end")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<PatientPrimaryCareResponseDTO> end(
         @PathVariable UUID pcpId,
         @RequestParam(required = false) LocalDate endDate) {
@@ -76,7 +83,7 @@ public class PatientPrimaryCareController {
 
     @Operation(summary = "Delete a PCP link")
     @DeleteMapping("/primary-care/{pcpId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAuthority('ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID pcpId) {
         service.deletePrimaryCare(pcpId);
         return ResponseEntity.noContent().build();

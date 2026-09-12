@@ -38,7 +38,7 @@ public class ProcedureOrderController {
     private final ProcedureOrderService procedureOrderService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('ORDER_PROCEDURES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Create procedure order",
                description = "Order pre-procedure interventions (surgical, diagnostic, therapeutic procedures)")
     public ResponseEntity<ProcedureOrderResponseDTO> createProcedureOrder(
@@ -51,7 +51,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/{orderId}")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','PATIENT')")
     @Operation(summary = "Get procedure order details")
     public ResponseEntity<ProcedureOrderResponseDTO> getProcedureOrder(@PathVariable UUID orderId) {
         ProcedureOrderResponseDTO response = procedureOrderService.getProcedureOrder(orderId);
@@ -59,7 +59,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','PATIENT')")
     @Operation(summary = "List procedure orders for patient")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getProcedureOrdersForPatient(@PathVariable UUID patientId) {
         List<ProcedureOrderResponseDTO> orders = procedureOrderService.getProcedureOrdersForPatient(patientId);
@@ -67,7 +67,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "List procedure orders for hospital",
                description = "Filter by status: ORDERED, SCHEDULED, PRE_OP_CLEARANCE_PENDING, READY_FOR_PROCEDURE, IN_PROGRESS, COMPLETED, CANCELLED")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getProcedureOrdersForHospital(
@@ -79,7 +79,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}/scheduled")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Get procedures scheduled within date range",
                description = "Retrieve procedure schedule for OR planning and resource allocation")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getScheduledProcedures(
@@ -92,7 +92,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending-consent")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Get procedures awaiting consent",
                description = "List scheduled procedures without completed consent forms")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getPendingConsentOrders(@PathVariable UUID hospitalId) {
@@ -101,7 +101,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/ordered-by/{providerId}")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "List procedure orders ordered by provider")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getProcedureOrdersOrderedBy(@PathVariable UUID providerId) {
         List<ProcedureOrderResponseDTO> orders = procedureOrderService.getProcedureOrdersOrderedBy(providerId);
@@ -109,7 +109,7 @@ public class ProcedureOrderController {
     }
 
     @PutMapping("/{orderId}")
-    @PreAuthorize("hasAuthority('UPDATE_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Update procedure order",
                description = "Update scheduling, consent status, site marking, or order status")
     public ResponseEntity<ProcedureOrderResponseDTO> updateProcedureOrder(
@@ -121,7 +121,7 @@ public class ProcedureOrderController {
     }
 
     @PostMapping("/{orderId}/cancel")
-    @PreAuthorize("hasAuthority('CANCEL_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "Cancel procedure order",
                description = "Cancel procedure with reason (patient declined, condition improved, etc.)")
     public ResponseEntity<ProcedureOrderResponseDTO> cancelProcedureOrder(
