@@ -93,7 +93,7 @@
 - [x] 17. Insurance management + multi-hospital registration UI (reception + patient detail) â€” âœ… DONE (`/registrations` admin page w/ multi-hospital panel + Coverage tab on patient detail for insurance link/edit/delete and registration history; fixed the latent findActiveRegistration bare-array bug)
 - [x] 18. Patient education: resource management + assignment/progress views â€” âœ… DONE (`/patient-education` page: resource library CRUD w/ category/type/search filters, evidence & warning-sign flags, view/completion/rating stats; per-patient assignment (POST progress NOT_STARTED) + progress/comprehension tracking w/ provider notes; Q&A + visit-documentation blocks deferred)
 - [x] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines) â€” âœ… DONE (`/admin-assignments`: paged worklist + filters, single/multi-scope create, edit, regenerate-code w/ verification-reset warning, resend, deactivate/delete, CSV bulk import; `/admin-governance` console (SUPER_ADMIN): permission-matrix snapshots w/ prefill+publish+audit trail, security policies/rules CRUD, user CSV import + force-password-reset + rotation health, credential health (read-only, MFA/recovery upserts deferred), baselines + export, rule-set templates/import/simulation)
-- [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
+- [x] 20. ✅ DONE (reconciled 2026-09-12: 5a27d3c3 / PR #408 — `DigitalSignatureController` verify + revoke, `InvoiceEmailController`, `BillingInvoiceController` /search). Digital signatures: sign/verify/revoke flows; billing: invoice email + search
 
 ### Phase 4 â€” Quality floor (P3, parallelizable)
 
@@ -453,41 +453,41 @@ Quality gates (PR #139): 13/13 GitHub CI checks, SonarCloud gate clean (0 PR iss
 
 Top-down priority. Each item ships as one PR per the foundation-pass pattern in [`.claude/skills/pr-review-response/SKILL.md`](.claude/skills/pr-review-response/SKILL.md) + [`.claude/skills/liquibase-migration/SKILL.md`](.claude/skills/liquibase-migration/SKILL.md) (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
 
-- [ ] **P1.1 â€” Terminology binding** (gap #5)
-  - [ ] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI)
+- [ ] **P1.1 â€” Terminology binding** (gap #5) _(reconciled 2026-09-12: LOINC and the FHIR systems ship; ICD curation and ATC/RxNorm are the open half)_
+  - [x] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI) — `loincCode` + `idx_lab_testdef_loinc`
   - [ ] ICD-10/11 on `PatientProblem` (already has `icdVersion` â€” wire validation + admin curation)
   - [ ] WHO ATC + RxNorm on `MedicationCatalogItem`
-  - [ ] Update FHIR mappers to advertise the bound systems (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
+  - [x] Update FHIR mappers to advertise the bound systems — `LabCodes`, `ConditionFhirMapper`, `MedicationRequestFhirMapper` do; (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
 
-- [ ] **P1.2 â€” MLLP / FHIR persistence**
-  - [ ] Resolve OBR-3 â†’ `LabOrder.id` from analyzer messages (with allowlisted facility mapping)
-  - [ ] Persist ORU^R01 results as `LabResult` rows via the existing `LabResultService`
-  - [ ] Project ADT^A01/A04/A08 into `Patient` + `Encounter` via the EMPI service
-  - [ ] Per-facility allowlist (sending facility â†’ hospital)
+- [x] **P1.2 â€” MLLP / FHIR persistence** ✅ DONE (reconciled 2026-09-12: `MllpInboundLabServiceImpl` resolves OBR-3 and persists ORU^R01 as `LabResult` rows, multi-OBX in #484; ADT projection via `Hl7MessageDispatcher` + `AdtVisitSyncProperties`, A40 merge = Tier 2 #41; per-facility allowlist in `MllpProperties`).
+  - [x] Resolve OBR-3 â†’ `LabOrder.id` from analyzer messages (with allowlisted facility mapping)
+  - [x] Persist ORU^R01 results as `LabResult` rows via the existing `LabResultService`
+  - [x] Project ADT^A01/A04/A08 into `Patient` + `Encounter` via the EMPI service
+  - [x] Per-facility allowlist (sending facility â†’ hospital)
 
-- [ ] **P1.3 â€” CDS rule engine** (gap #3 expanded)
-  - [ ] Drug-drug interaction check on `order-sign` (depends on P1.1 RxNorm)
-  - [ ] Duplicate-order detection on `order-sign`
-  - [ ] Pediatric dose check (uses `Patient.dateOfBirth` + bound dose)
-  - [ ] BPA scaffolding for protocol cards (malaria, sepsis, OB hemorrhage)
+- [x] **P1.3 â€” CDS rule engine** (gap #3 expanded) ✅ DONE (reconciled 2026-09-12: `cdshooks/rules` = `DrugDrugInteractionRule`, `DuplicateMedicationOrderRule`, `PediatricDoseRule`; `cdshooks/bpa` = malaria, sepsis qSOFA, OB haemorrhage, NEWS protocol rules).
+  - [x] Drug-drug interaction check on `order-sign` (depends on P1.1 RxNorm)
+  - [x] Duplicate-order detection on `order-sign`
+  - [x] Pediatric dose check (uses `Patient.dateOfBirth` + bound dose)
+  - [x] BPA scaffolding for protocol cards (malaria, sepsis, OB hemorrhage)
 
-- [ ] **P1.4 â€” CPOE order-set builder** (gap #6) â€” versioned templates, search-driven picker
+- [x] **P1.4 â€” CPOE order-set builder** (gap #6) â€” versioned templates, search-driven picker ✅ DONE (reconciled 2026-09-12: PR #161 `feature/p1-cpoe-order-sets`, `OrderSetItemDispatcher`, order-catalog UX 11a5f71b).
 
-- [ ] **P1.5 â€” Storyboard patient banner** (gap #15) â€” persistent allergy / problem / encounter / code-status header on every chart route
+- [x] **P1.5 â€” Storyboard patient banner** (gap #15) â€” persistent allergy / problem / encounter / code-status header on every chart route ✅ DONE (reconciled 2026-09-12: `PatientStoryboardController` + the storyboard banner on the chart).
 
-- [ ] **P1.6 â€” Chart Review tabbed viewer** (gap #16) â€” Encounters / Notes / Results / Meds / Imaging / Procedures with timeline
+- [x] **P1.6 â€” Chart Review tabbed viewer** (gap #16) â€” Encounters / Notes / Results / Meds / Imaging / Procedures with timeline ✅ DONE (reconciled 2026-09-12: `ChartReviewController` + the chart-review tab).
 
-- [ ] **P1.7 â€” Cadence visual scheduling grid** (gap #17) â€” FullCalendar multi-resource block view
+- [x] **P1.7 â€” Cadence visual scheduling grid** (gap #17) â€” FullCalendar multi-resource block view ✅ DONE (reconciled 2026-09-12: `scheduling` module on `@fullcalendar/angular`).
 
-- [ ] **P1.8 â€” Inpatient eMAR** (gap #10) â€” barcode-scan administration loop on top of pharmacy + MAR entities
+- [x] **P1.8 â€” Inpatient eMAR** (gap #10) â€” barcode-scan administration loop on top of pharmacy + MAR entities ✅ DONE (reconciled 2026-09-12: `MedicationAdministrationRecord` + `nurse-station/emar` barcode loop; V139 pharmacist-verification gate in front of it).
 
-- [ ] **P1.9 â€” Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22)
+- [x] **P1.9 â€” Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22) ✅ DONE (reconciled 2026-09-12: break-the-glass = E9 #62 (`BreakGlassGate`, reason-bearing sessions); granular consent scopes WITHDRAWN by decision D7 — the consent-grant machinery was deleted in #617/#618).
 
-- [ ] **P1.10 â€” Telehealth low-bandwidth** (gap #12) â€” audio + photo + chat reusing the chat module
+- [x] **P1.10 â€” Telehealth low-bandwidth** (gap #12) â€” audio + photo + chat reusing the chat module ✅ DONE (reconciled 2026-09-12: merged 2026-05-01, 97a8799e — audio + photo on the chat module).
 
-- [ ] **P1.11 â€” DHIS2 ADX export** (gap #14) â€” immunization, ANC, malaria reporting tied to FHIR `Immunization`
+- [x] **P1.11 â€” DHIS2 ADX export** (gap #14) â€” immunization, ANC, malaria reporting tied to FHIR `Immunization` ✅ DONE (reconciled 2026-09-12: `Dhis2ExportController` + `Dhis2AdminController`, integration schema).
 
-- [ ] **P1.12 â€” Referral lifecycle** (gap #13) â€” accept / decline / complete states on `GeneralReferral`
+- [x] **P1.12 â€” Referral lifecycle** (gap #13) â€” accept / decline / complete states on `GeneralReferral` ✅ DONE (reconciled 2026-09-12: shipped in PRs #139–#141, as the entry itself records).
 
 P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-gaps.md`.
 
@@ -1369,15 +1369,15 @@ Epic calls it Healthy Planet; here it is defaulter tracing and programme
 cohorts. The DHIS2 ADX export is already wired, so these feed a reporting path
 that exists rather than inventing one.
 
-- [ ] 35. **Disease registries / cohorts** — HIV, TB, malaria, hypertension,
+- [x] 35. **Disease registries / cohorts** ✅ DONE (reconciled 2026-09-12: PR #541 `feat/disease-registries` — `ProgramRegistryController`, `CareProgram`, portal `registries`). — HIV, TB, malaria, hypertension,
   diabetes, ANC. Enrolment + status + programme visit cadence.
-- [ ] 36. **Care-gap worklist + defaulter tracing.** A care gap is structurally
+- [x] 36. **Care-gap worklist + defaulter tracing.** ✅ DONE (reconciled 2026-09-12: PR #543 `feat/care-gap-defaulter-tracing` — `CareGapTraceService`, `PatientRecallController`). A care gap is structurally
   the same row as a recall with a rule behind it instead of a clinician, and
   `PatientOutreachNotifier` (#476) is already the transport with preference
   and SMS-guard handling solved.
-- [ ] 37. **Panel management** — provider / CHW panels, empanelment.
-  Verified zero code for all three (`CareGap`, `QualityMeasure`,
-  `PanelManagement`, `Cohort`, `Readmission` all empty).
+- [x] 37. **Panel management** ✅ DONE (reconciled 2026-09-12: PR #549 `feat/panel-management` — `PatientPanelController`, `PanelWorklistController`, portal `panel`). — provider / CHW panels, empanelment.
+  _("Verified zero code for all three" was true when written and stale since
+  #541/#543/#549 — the item-39 lesson: read the shipped surface before sizing.)_
 
 ## E5 — Records, identity, HIM
 
@@ -1529,14 +1529,14 @@ that exists rather than inventing one.
 
 ## E6 — Interop breadth that fits this deployment
 
-- [ ] 42. **FHIR DiagnosticReport + ServiceRequest providers.** Seven providers
+- [x] 42. **FHIR DiagnosticReport + ServiceRequest providers.** ✅ DONE (reconciled 2026-09-12: PR #542 — `DiagnosticReportFhirResourceProvider`, `ServiceRequestFhirResourceProvider`). Seven providers
   exist (Patient, Encounter, Condition, Observation, Immunization,
   MedicationRequest). Orders and reports — labs, the new microbiology cultures,
   the #26 imaging reports — have no FHIR face at all.
-- [ ] 43. **FHIR Appointment + Slot providers.** Newly populatable: V121/V128
+- [x] 43. **FHIR Appointment + Slot providers.** ✅ DONE (reconciled 2026-09-12: PR #544 — `AppointmentFhirResourceProvider`, `SlotFhirResourceProvider`). Newly populatable: V121/V128
   gave slots a real inventory and a booking writer, which is why the audit
   correctly called this absent at the time and why it is now cheap.
-- [ ] 44. **FHIR DocumentReference + patient record download.** The portal is
+- [x] 44. **FHIR DocumentReference + patient record download.** ✅ DONE (reconciled 2026-09-12: PR #548 — `DocumentReferenceFhirResourceProvider`, `PatientRecordExportController`; staff read of patient uploads 39e96a91). The portal is
   print-only. #477's bulk exporter already streams NDJSON through
   patient-scoped queries, so a single-patient download is a narrow lift.
 - [x] 45. **Outbound webhooks / API-key management** for third-party clients.
@@ -1733,7 +1733,7 @@ all exist and are reachable.
   ⚠ **Also blocked by #51 (the withhold half) and #52 (posture + opt-out),
   both numbered after it.** Working top-down through this section ships the
   widened filter before the sensitive-category withhold exists — do not.
-- [ ] 50. **Announced availability + provenance on the chart.** ⚠ **Re-scoped
+- [x] 50. **Announced availability + provenance on the chart.** ⛔ WITHDRAWN 2026-09-12 — E9 (decided 2026-09-11) supersedes announced availability with the same-instance model; the provenance half shipped as E9 #61 (PR #611). ⚠ **Re-scoped
   2026-09-08 — see `docs/compliance/cross-hospital-record-access-decision-record.md`.**
   The default is no longer a silent merge: the chart states that records exist
   elsewhere (hospital, count, most-recent date — no PHI) and loads them on an
@@ -1812,7 +1812,7 @@ all exist and are reachable.
   absent, and swallows failures to a warn. Hardening those four is part of this
   item, not an assumption behind it — see [[out-of-session-lazy-proxies]] for
   how these rows were silently dropped once already.
-- [ ] 54. **Break-the-glass for restricted charts.** Distinct from everything
+- [ ] 54. **Break-the-glass for restricted charts.** _(reconciled 2026-09-12: OPEN = the chart-restriction flag on the patient row + the compliance review screen with a reviewed/sign-off state; the reason prompt and `GET /break-glass/audit` ship.)_ Distinct from everything
   above and easy to conflate — this is intra-organisational. VIPs, staff
   members, a clinician's own record or a family member's: access requires a
   stated reason, is time-boxed, and is flagged loudly. `BreakGlassSession`
@@ -1890,7 +1890,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 0 — prerequisites (same work under any decision)
 
-- [ ] 55. **Live hospital scope.** Permitted / primary hospital ids are baked
+- [x] 55. **Live hospital scope.** ✅ DONE 2026-09-12 (backend, PR #597 79e9f20a; the portal half is 55b, still open). Permitted / primary hospital ids are baked
   into the JWT at login (`CLAIM_PERMITTED_HOSPITAL_IDS`,
   `CLAIM_PRIMARY_HOSPITAL_ID` = first row of an unordered query) and never
   refreshed; `ControllerAuthUtils.resolveHospitalScope` reads the live
@@ -1911,7 +1911,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   assignments, already exists) on bootstrap, MFA challenge, login and
   impersonation; drop the JWT-decoding fallbacks in `auth.service.ts`
   (`getHospitalId`, `getPermittedHospitalIds`) once nothing reads them.
-- [ ] 56. **One allergy store.** Three stores never sync: free-text
+- [x] 56. **One allergy store.** ✅ DONE 2026-09-12 (PR #598 9dd86bfc). Three stores never sync: free-text
   `patients.allergies` (Medical tab, `PatientMapper`), structured
   `patient_allergies` scoped by hospital (storyboard `loadAllergies`), and
   `PatientMedicalHistory.allergies`. "No known allergies" beside "peanuts,
@@ -1929,7 +1929,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   provenance; GET allergies writes RECORD_SHARE for foreign rows. Storyboard
   and chart-review still surface foreign allergies without a ledger row — see
   #60.)_
-- [ ] 57. **Stop keying `Patient` on its first hospital.** `Patient implements
+- [x] 57. **Stop keying `Patient` on its first hospital.** ✅ DONE 2026-09-12 (PR #599 23ae632f). `Patient implements
   TenantScoped` on `hospitalId` (= first registration) makes a multi-hospital
   patient vanish from the second hospital's scoped finders; #591 papered over
   the chart tabs only. Registration-based scope for `Patient` and the six
@@ -1939,7 +1939,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 1 — flip the policy
 
-- [ ] 58. **`RecordAccessPolicy` on the decided rule.** Relationship = active
+- [x] 58. **`RecordAccessPolicy` on the decided rule.** ✅ DONE 2026-09-12 (PR #600 0295d7fc, flag removed). Relationship = active
   registration at the acting hospital, else an E8 resolver carrier, else a
   live `BreakGlassSession` for this patient+hospital. Remove
   `app.record-access.cross-hospital-reads-enabled` (the widening ships behind
@@ -2021,7 +2021,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   export needs an acting hospital, by design. `$export` (bulk) is a hospital's
   own data and stays local by design; uploaded documents are patient-anchored
   (no hospital column) and stay patient-wide.
-- [ ] 61. **Provenance on the row (portal).** `TimelineEntry.metadata` is not
+- [x] 61. **Provenance on the row (portal).** ✅ DONE 2026-09-12 (PR #611 6ecce0b9; the flip was lost in a web-side merge and is restored here). `TimelineEntry.metadata` is not
   declared in `patient.service.ts`, so #582's provenance reaches the wire and
   is discarded — the blocking defect from the E8 record. Type it, render
   hospital · clinician · date on every foreign row in timeline, results,
