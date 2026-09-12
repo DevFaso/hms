@@ -24,6 +24,9 @@ export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING
 
 export interface StoryboardAllergy {
   id: string;
+  /** Hospital that recorded the allergy (E9 #56 provenance). */
+  hospitalId?: string | null;
+  hospitalName?: string | null;
   allergenDisplay: string;
   allergenCode?: string | null;
   severity?: AllergySeverity | null;

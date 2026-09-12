@@ -242,6 +242,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     private final EncounterRepository encounterRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
@@ -1638,6 +1639,10 @@ public class EncounterServiceImpl implements EncounterService {
                     .build();
             patientAllergyRepository.save(allergy);
             count++;
+        }
+        if (count > 0) {
+            // E9 #56 — patients.allergies is the derived summary of the structured rows.
+            allergySummarySync.refresh(encounter.getPatient());
         }
         return count;
     }

@@ -7,6 +7,14 @@ package com.example.hms.enums;
  */
 public enum TreatmentRelationshipKind {
 
+    /**
+     * The patient is registered at this hospital — reception linked them
+     * (E9 #58, decision D1). The automatic relationship: a deliberate act by a
+     * person at a desk, already required for every write, made for every
+     * patient who walks in. Strongest, and it does not lapse.
+     */
+    REGISTRATION,
+
     /** The patient is admitted here now, or was discharged within the tail. */
     ACTIVE_ADMISSION,
 

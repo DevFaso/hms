@@ -89,7 +89,7 @@ class PatientStoryboardServiceImplTest {
         PatientAllergy mild = allergy("Sulfa", AllergySeverity.MILD, true);
         PatientAllergy lifeThreat = allergy("Penicillin", AllergySeverity.LIFE_THREATENING, true);
         PatientAllergy inactive = allergy("Latex", AllergySeverity.SEVERE, false);
-        when(allergyRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
+        when(allergyRepo.findByPatient_Id(PATIENT_ID))
             .thenReturn(List.of(mild, lifeThreat, inactive));
 
         PatientProblem chronic = problem("Sickle cell disease", ProblemStatus.ACTIVE, true);
@@ -139,7 +139,7 @@ class PatientStoryboardServiceImplTest {
 
     @Test
     void emptyChartRendersWithoutCrashing() {
-        when(allergyRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
         when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
@@ -164,7 +164,7 @@ class PatientStoryboardServiceImplTest {
         for (int i = 0; i < PatientStoryboardServiceImpl.MAX_ALLERGIES + 4; i++) {
             many.add(allergy("Allergen " + i, AllergySeverity.MILD, true));
         }
-        when(allergyRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(many);
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(many);
 
         java.util.List<PatientProblem> manyProblems = new java.util.ArrayList<>();
         for (int i = 0; i < PatientStoryboardServiceImpl.MAX_PROBLEMS + 4; i++) {
@@ -276,4 +276,33 @@ class PatientStoryboardServiceImplTest {
         d.setId(UUID.randomUUID());
         return d;
     }
+
+    @Test
+    void listsAllergiesRecordedAtOtherHospitalsWithTheirHospitalName() {
+        // E9 #56 — allergies follow the patient. A penicillin allergy recorded
+        // at another hospital is exactly the row this hospital's ED must see,
+        // and the chip names where it was recorded.
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(UUID.randomUUID());
+        PatientAllergy away = allergy("Penicillin", AllergySeverity.SEVERE, true);
+        away.setHospital(other);
+        PatientAllergy here = allergy("Sulfa", AllergySeverity.MILD, true);
+        here.setHospital(hospital);
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(here, away));
+        when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getAllergies())
+            .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+            .containsExactly("Penicillin", "Sulfa");
+        assertThat(sb.getAllergies().get(0).getHospitalId()).isEqualTo(other.getId());
+        assertThat(sb.getAllergies().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
+        assertThat(sb.getAllergies().get(1).getHospitalId()).isEqualTo(HOSPITAL_ID);
+        assertThat(sb.isHasHighSeverityAllergy()).isTrue();
+    }
+
 }

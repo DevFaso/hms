@@ -79,7 +79,6 @@ class PatientSnapshotServiceImplTest {
         when(p.getLastName()).thenReturn("Wong");
         when(p.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         when(p.getGender()).thenReturn("F");
-        when(p.getAllergies()).thenReturn(null);
         when(p.getChronicConditions()).thenReturn(null);
         return p;
     }
@@ -150,6 +149,30 @@ class PatientSnapshotServiceImplTest {
 
         assertFalse(result.getAllergies().isEmpty());
         assertTrue(result.getAllergies().contains("Penicillin"));
+    }
+
+    @Test
+    void getSnapshot_withBothStores_readsOnlyTheStructuredRows() {
+        // E9 #56 — the free-text column is a derived summary of the rows; reading
+        // both would list every allergy twice.
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+
+        assertEquals(List.of("Penicillin"), result.getAllergies());
+        verify(patient, never()).getAllergies();
     }
 
     @Test

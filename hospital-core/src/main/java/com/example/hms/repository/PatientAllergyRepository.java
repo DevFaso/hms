@@ -14,4 +14,7 @@ public interface PatientAllergyRepository extends JpaRepository<PatientAllergy, 
     List<PatientAllergy> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 
     Optional<PatientAllergy> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
+
+    /** E9 #56 — idempotency guard for the free-text import: has this patient any row from that source? */
+    boolean existsByPatient_IdAndSourceSystem(UUID patientId, String sourceSystem);
 }

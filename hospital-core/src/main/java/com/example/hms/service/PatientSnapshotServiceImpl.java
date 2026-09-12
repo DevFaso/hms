@@ -101,8 +101,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         } catch (Exception e) {
             log.debug("Allergy query error", e);
         }
-        // Include legacy free-text allergies from the patient record.
-        if (patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
+        // E9 #56 — the free-text column is a derived summary of the rows above;
+        // it is read only when there is no structured row at all (a patient the
+        // startup backfill could not place at a hospital), never in addition.
+        if (allergies.isEmpty() && patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
             allergies.add(patient.getAllergies());
         }
         return allergies;

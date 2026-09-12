@@ -272,7 +272,10 @@ public class PatientMapper {
         patient.setEmergencyContactPhone(dto.getEmergencyContactPhone());
         patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
         patient.setBloodType(dto.getBloodType());
-        patient.setAllergies(dto.getAllergies());
+        // E9 #56 — patients.allergies is a derived summary of the structured
+        // patient_allergies rows (PatientAllergySummarySync). The request's free
+        // text is imported as rows at create time by LegacyAllergyTextImporter and
+        // is never written to the column directly.
         patient.setMedicalHistorySummary(dto.getMedicalHistorySummary());
     patient.setPreferredPharmacy(dto.getPreferredPharmacy());
     patient.setCareTeamNotes(dto.getCareTeamNotes());

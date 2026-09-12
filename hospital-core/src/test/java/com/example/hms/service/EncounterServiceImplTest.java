@@ -87,6 +87,7 @@ class EncounterServiceImplTest {
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private EncounterMapper encounterMapper;
+    @Mock private com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
     @Mock private EncounterHistoryRepository encounterHistoryRepository;
