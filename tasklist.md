@@ -2035,11 +2035,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   patient) and the sensitive-row unlock consume `BreakGlassSession`; the
   consent resolver stops being its only consumer. Reads under a session are
   stamped with the session id in the disclosure row. Absorbs E8 #54.
-- [ ] 63. **Department classification screen + heuristic deletion.**
-  `PUT /departments/{id}/default-sensitivity` exists; the HOSPITAL_ADMIN
-  screen does not. Add it, put it on the hospital onboarding checklist, and
-  delete `PatientServiceImpl.SENSITIVE_KEYWORDS` / `SENSITIVE_DEPARTMENTS`
-  (English substring matching against French text; never fired).
+- [x] 63. **Department classification screen + heuristic deletion.** ✅ DONE
+  2026-09-12. The department page carries a "Sensitive category" card for
+  HOSPITAL_ADMIN / SUPER_ADMIN (the four D3 categories or none) on the
+  existing `GET`/`PUT /departments/{id}/default-sensitivity`; the hospital
+  admin's onboarding checklist names the step. `SENSITIVE_KEYWORDS`,
+  `SENSITIVE_DEPARTMENTS` and `HIGH_ALERT_MEDICATION_KEYWORDS` are gone from
+  `PatientServiceImpl`: a row is sensitive when the classifier says so
+  (problems, notes, encounters, and prescriptions/results through their
+  encounter); allergies keep the life-threatening flag and ultrasound rows
+  their structured high-risk/anomaly flags — clinical alerts, not privacy;
+  surgical history and directives carry no tag and are never withheld.
+  Previously recorded as: `PUT /departments/{id}/default-sensitivity` exists;
+  the HOSPITAL_ADMIN screen does not. Add it, put it on the hospital
+  onboarding checklist, and delete the keyword sets (English substring
+  matching against French text; never fired).
 - [ ] 64. **Restricted rows on the chart (portal).** Foreign rows whose
   effective category is set render as *Dossier restreint (hôpital,
   département, n)* with *Ouvrir avec motif*, reusing the break-glass banner
