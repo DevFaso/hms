@@ -453,10 +453,10 @@ Quality gates (PR #139): 13/13 GitHub CI checks, SonarCloud gate clean (0 PR iss
 
 Top-down priority. Each item ships as one PR per the foundation-pass pattern in [`.claude/skills/pr-review-response/SKILL.md`](.claude/skills/pr-review-response/SKILL.md) + [`.claude/skills/liquibase-migration/SKILL.md`](.claude/skills/liquibase-migration/SKILL.md) (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
 
-- [ ] **P1.1 â€” Terminology binding** (gap #5) _(reconciled 2026-09-12: LOINC and the FHIR systems ship; ICD curation and ATC/RxNorm are the open half)_
+- [x] **P1.1 â€” Terminology binding** (gap #5) ✅ DONE (reconciled 2026-09-12, second look: all four ship — LOINC on `LabTestDefinition`; ICD-10/11 validated on every problem write by `PatientServiceImpl.normalizeDiagnosisCode` / `DiagnosisCodeValidator` (a curated ICD catalog would need a WHO-licensed source and is not fabricated here); `atcCode` + `rxnormCode` on `MedicationCatalogItem` since V43; the FHIR mappers advertise the systems).
   - [x] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI) — `loincCode` + `idx_lab_testdef_loinc`
-  - [ ] ICD-10/11 on `PatientProblem` (already has `icdVersion` â€” wire validation + admin curation)
-  - [ ] WHO ATC + RxNorm on `MedicationCatalogItem`
+  - [x] ICD-10/11 on `PatientProblem` (already has `icdVersion` â€” wire validation + admin curation)
+  - [x] WHO ATC + RxNorm on `MedicationCatalogItem`
   - [x] Update FHIR mappers to advertise the bound systems — `LabCodes`, `ConditionFhirMapper`, `MedicationRequestFhirMapper` do; (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
 
 - [x] **P1.2 â€” MLLP / FHIR persistence** ✅ DONE (reconciled 2026-09-12: `MllpInboundLabServiceImpl` resolves OBR-3 and persists ORU^R01 as `LabResult` rows, multi-OBX in #484; ADT projection via `Hl7MessageDispatcher` + `AdtVisitSyncProperties`, A40 merge = Tier 2 #41; per-facility allowlist in `MllpProperties`).
