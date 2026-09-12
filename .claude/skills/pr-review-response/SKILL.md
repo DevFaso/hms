@@ -1248,6 +1248,31 @@ Passing only by class ordering is not passing.
 
 **Caught:** #564 self-review, four angles independently.
 
+### Backend — no generic helper methods
+
+2026-09-12, the user's rule. A helper that takes `<T>` plus a function to
+read it — `reachOf(Collection<T> rows, Function<T, UUID> hospitalIdOf,
+UUID acting)` in `CrossHospitalReachRecorder` (#603) is the example — hides
+at every call site which type is really being read and what is being
+extracted from it; the lambda differs per caller and none of them is
+checked by the compiler beyond "returns a UUID". Write instead:
+
+- a method typed on what it actually needs — here the already-mapped ids,
+  `reachOf(Collection<UUID> sourceHospitalIds, UUID acting)`, with the caller
+  doing `rows.stream().map(r -> hospitalIdOf(r.getHospital())).toList()` in
+  the open; or
+- a small interface the rows implement (`HospitalScoped { UUID hospitalId(); }`)
+  when the same shape recurs across entities; or
+- typed overloads when there are two or three concrete types.
+
+Generic *classes* that exist to be generic (`Page<T>`, `Optional<T>`, a
+repository) are not the target; a generic *helper method* in application
+code is. Spring Data derived finders keep their declared types.
+
+**Caught:** the user, reading #603–#605. The `reachOf` refactor is a
+Standing platform debt bullet in `tasklist.md`; new code follows the rule
+from now.
+
 ## Co-author tag
 
 Every commit Claude authors carries:

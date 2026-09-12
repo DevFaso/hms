@@ -2035,6 +2035,17 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **`CrossHospitalReachRecorder.reachOf` is a generic helper method.** The
+  user's rule (2026-09-12, `pr-review-response` → "no generic helper
+  methods"): `reachOf(Collection<T>, Function<T, UUID>, UUID)` becomes
+  `reachOf(Collection<UUID> sourceHospitalIds, UUID acting)` with every caller
+  mapping its rows to hospital ids in the open. Touches the #603/#604/#605
+  call sites (PatientServiceImpl, storyboard, nursing notes, chart updates,
+  directives, lab/imaging/procedure/consultation/referral, prescriptions,
+  patient medications, medication timeline) — one `refactor(record-access)`
+  PR off develop after #605 merges, no behaviour change, the recorder tests
+  and every follows-the-patient test unchanged in intent.
+
 - **Lab results are fetched cross-tenant and filtered in memory.**
   `collectLabResultEntries` calls `findByLabOrder_Patient_Id(patientId)` with no
   hospital predicate, then discards unreadable rows in the stream — so every row
