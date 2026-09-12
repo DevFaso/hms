@@ -46,6 +46,7 @@ class RecordAccessPolicyImplTest {
     @Mock private PatientRecordSharingOptOutRepository optOutRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private TreatmentRelationshipResolver resolver;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
 
     @InjectMocks private RecordAccessPolicyImpl policy;
 
@@ -153,7 +154,27 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("no carrier → NO_TREATMENT_RELATIONSHIP")
+    @DisplayName("E9 #58 — registration at the acting hospital is the relationship, no carrier needed")
+    void registrationAloneIsTheRelationship() {
+        when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setId(UUID.randomUUID());
+        registration.setRegistrationDate(java.time.LocalDate.of(2026, 9, 1));
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId))
+            .thenReturn(Optional.of(registration));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.REGISTRATION);
+        assertThat(d.relationship().carrierId()).isEqualTo(registration.getId());
+        assertThat(d.relationship().expiresAt()).isNull();
+        verify(resolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("no registration and no carrier → NO_TREATMENT_RELATIONSHIP")
     void noRelationship() {
         when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
 

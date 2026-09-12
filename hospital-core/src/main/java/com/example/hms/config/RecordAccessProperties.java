@@ -41,8 +41,6 @@ public class RecordAccessProperties {
      * default category on the departments that need one, then enable this
      * per environment.
      */
-    private boolean crossHospitalReadsEnabled = false;
-
     /**
      * How long after an encounter is checked out, or an admission discharged,
      * the relationship stays live. Covers results review, discharge follow-up

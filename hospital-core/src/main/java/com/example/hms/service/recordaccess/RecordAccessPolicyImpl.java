@@ -3,6 +3,7 @@ package com.example.hms.service.recordaccess;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
+import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.config.RecordAccessProperties;
 import com.example.hms.model.PatientHospitalRegistration;
@@ -80,13 +81,13 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         Set<UUID> readable = new LinkedHashSet<>();
         if (actingHospitalId != null) {
-            // The acting hospital is always readable — that is today's
-            // behaviour and it does not depend on the flag, the posture or a
-            // treatment relationship. Turning the flag off must leave the
-            // caller exactly where they were before E8.
+            // The acting hospital is always readable — that does not depend
+            // on the posture or a treatment relationship. E9 #58 removed the
+            // feature flag that used to stop here: the widening is the model
+            // now (decision D1), not an experiment.
             readable.add(actingHospitalId);
         }
-        if (!properties.isCrossHospitalReadsEnabled() || patientId == null || actingHospitalId == null) {
+        if (patientId == null || actingHospitalId == null) {
             return readable;
         }
         if (!cachedDecision(actorUserId, patientId, actingHospitalId).permitted()) {
@@ -155,6 +156,22 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         if (!staffHere) {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL, posture);
+        }
+        // E9 #58 (D1) — registration at the acting hospital IS the treatment
+        // relationship. Reception creates it on arrival, every write already
+        // requires it, and it is a deliberate act by a person at a desk. The
+        // resolver's carriers (admission, encounter, appointment window, panel,
+        // open order) remain the second signal for a patient who is scheduled
+        // or admitted here but not yet linked by the desk.
+        Optional<PatientHospitalRegistration> registered =
+            registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId);
+        if (registered.isPresent()) {
+            PatientHospitalRegistration r = registered.get();
+            TreatmentRelationship byRegistration = new TreatmentRelationship(
+                TreatmentRelationshipKind.REGISTRATION, r.getId(), hospitalId, patientId,
+                r.getRegistrationDate() != null ? r.getRegistrationDate().atStartOfDay() : null,
+                null, false);
+            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, byRegistration, posture);
         }
         return resolver.resolve(patientId, hospitalId, actorUserId)
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))

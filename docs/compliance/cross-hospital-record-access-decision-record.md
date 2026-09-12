@@ -1,5 +1,13 @@
 # Cross-hospital record access — decision record
 
+> ⚠ **Superseded on 2026-09-11 by E9 (`tasklist.md`, items #55–#69).** The
+> default is the Epic same-instance model: automatic merge on registration at
+> the acting hospital, no consent gate, sensitive categories behind a stated
+> reason. The "announced availability plus explicit pull" default below is
+> withdrawn; the feature flag it relied on was removed in E9 #58. The Epic
+> comparison, the provenance contract and the "do not rely on the keyword
+> heuristic" sections still apply.
+
 **Status:** decided 2026-09-08. Revises the access posture recorded in the E8
 preamble of `tasklist.md` (2026-09-07). No code shipped with this record; it
 sets the shape of E8 #50 and re-scopes #49's second pass.
