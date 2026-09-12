@@ -83,6 +83,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 
 @Slf4j
@@ -260,6 +261,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
     private final EncounterHistoryRepository encounterHistoryRepository;
     private final EncounterNoteRepository encounterNoteRepository;
     private final EncounterNoteAddendumRepository encounterNoteAddendumRepository;
@@ -1423,9 +1425,10 @@ public class EncounterServiceImpl implements EncounterService {
         }
         UUID requesterUserId = roleValidator.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
         List<Encounter> encounters = encounterRepository
             .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
-            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(e)))
+            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(encounters.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), activeHospitalId),

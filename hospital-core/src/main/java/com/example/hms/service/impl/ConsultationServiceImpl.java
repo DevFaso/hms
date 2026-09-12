@@ -53,6 +53,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 @Slf4j
 @Service
@@ -75,6 +76,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
     /**
      * The SLA clock. Injected rather than read from {@code LocalDateTime.now()}
      * so the writer ({@code calculateSlaDueBy}) and every reader that compares
@@ -169,9 +171,10 @@ public class ConsultationServiceImpl implements ConsultationService {
         // break-the-glass (E9 #62); every foreign row surfaced is accounted.
         UUID requesterUserId = roleValidator.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
         List<Consultation> consultations = consultationRepository
             .findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, readable).stream()
-            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(c)))
+            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(c), unlocked))
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(consultations.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList(), activeHospitalId),

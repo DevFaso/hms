@@ -73,6 +73,7 @@ class ConsultationServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
@@ -757,6 +758,29 @@ class ConsultationServiceImplTest {
         List<ConsultationResponseDTO> result = service.getConsultationsForPatient(patientId);
 
         assertThat(result).extracting(ConsultationResponseDTO::getId).containsExactly(local.getId(), foreign.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    @DisplayName("a live break-the-glass session surfaces the foreign sensitive consultation (E9 #62)")
+    void breakGlassUnlocksTheForeignSensitiveConsultation() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Consultation foreignSensitive = buildConsultation(ConsultationStatus.COMPLETED);
+        foreignSensitive.setId(UUID.randomUUID());
+        foreignSensitive.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(breakGlassGate.isUnlocked(any(), eq(patientId), eq(hospitalId))).thenReturn(true);
+        when(consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(Consultation.class))).thenReturn(SensitivityCategory.HIV);
+
+        assertThat(service.getConsultationsForPatient(patientId)).extracting(ConsultationResponseDTO::getId)
+                .containsExactly(foreignSensitive.getId());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
                 eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }

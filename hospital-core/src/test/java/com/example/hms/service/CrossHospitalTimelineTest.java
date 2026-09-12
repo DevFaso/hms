@@ -68,9 +68,10 @@ class CrossHospitalTimelineTest {
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId, SensitivityCategory category)
             throws Exception {
         Method m = PatientServiceImpl.class.getDeclaredMethod(
-            "maySurface", Hospital.class, UUID.class, SensitivityCategory.class);
+            "maySurface", Hospital.class, UUID.class, SensitivityCategory.class, boolean.class);
         m.setAccessible(true);
-        return (boolean) m.invoke(null, rowHospital, actingHospitalId, category);
+        // E9 #62 — no break-the-glass session in these cases; the unlock has its own tests.
+        return (boolean) m.invoke(null, rowHospital, actingHospitalId, category, false);
     }
 
     @Test
