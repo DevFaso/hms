@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,7 @@ public class BreakGlassGate {
     private static final String CACHE_PREFIX = BreakGlassGate.class.getName() + ":";
 
     private final BreakGlassSessionRepository sessionRepository;
+    private final Clock clock;
 
     /** The cache holder, so an absent session is cached as firmly as a present one. */
     private record Cached(BreakGlassSession session) {
@@ -40,11 +42,11 @@ public class BreakGlassGate {
         }
         String key = CACHE_PREFIX + actorUserId + ":" + patientId + ":" + actingHospitalId;
         RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
-        if (attrs != null && attrs.getAttribute(key, RequestAttributes.SCOPE_REQUEST) instanceof Cached cached) {
-            return Optional.ofNullable(cached.session());
+        if (attrs != null && attrs.getAttribute(key, RequestAttributes.SCOPE_REQUEST) instanceof Cached(BreakGlassSession session)) {
+            return Optional.ofNullable(session);
         }
         Optional<BreakGlassSession> live = sessionRepository
-            .findLiveForUserAndPatient(actorUserId, patientId, LocalDateTime.now()).stream()
+            .findLiveForUserAndPatient(actorUserId, patientId, LocalDateTime.now(clock)).stream()
             .filter(s -> s.getHospital() != null && actingHospitalId.equals(s.getHospital().getId()))
             .findFirst();
         if (attrs != null) {

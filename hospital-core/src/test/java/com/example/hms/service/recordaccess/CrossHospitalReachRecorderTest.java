@@ -25,7 +25,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
 import java.util.Optional;
-import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class CrossHospitalReachRecorderTest {
