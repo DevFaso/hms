@@ -50,6 +50,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.security.context.HospitalContextHolder;
 import java.util.Set;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Aggregates the six clinical sections shown in the Chart Review viewer
@@ -77,6 +78,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional(readOnly = true)
@@ -96,8 +98,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = hospitalId == null ? null
             : recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // encounters the D3 rule withholds; the ledger row names the session.
+        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patient.getId(), hospitalId);
         Map<String, Long> reach = new HashMap<>();
-        List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, effectiveLimit, reach, unlocked);
         List<NoteEntryDTO> notes = loadNotes(encounters);
         List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, effectiveLimit, reach);
@@ -130,13 +135,13 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     /* ------------- per-section loaders ------------------------------- */
 
     private List<EncounterEntryDTO> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                                   int limit, Map<String, Long> reach) {
+                                                   int limit, Map<String, Long> reach, boolean unlocked) {
         Pageable page = PageRequest.of(0, limit);
         List<Encounter> source = readable != null
             ? encounterRepository
                 .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable, page)
                 .getContent().stream()
-                .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e)))
+                .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
                 .toList()
             : encounterRepository
                 .findByPatient_IdOrderByEncounterDateDesc(patientId, page)

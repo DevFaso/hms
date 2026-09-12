@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Patient-compartment {@code $everything} operation (roadmap row 22,
@@ -115,6 +116,7 @@ public class PatientEverythingService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
 
     public PatientEverythingService(
         FhirOperationsProperties operationsProperties,
@@ -137,7 +139,8 @@ public class PatientEverythingService {
         AuditEventLogService auditEventLogService,
         RecordAccessPolicy recordAccessPolicy,
         CrossHospitalReachRecorder reachRecorder,
-        SensitivityClassifier sensitivityClassifier
+        SensitivityClassifier sensitivityClassifier,
+        BreakGlassGate breakGlassGate
     ) {
         this.operationsProperties = operationsProperties;
         this.patientRepository = patientRepository;
@@ -160,6 +163,7 @@ public class PatientEverythingService {
         this.recordAccessPolicy = recordAccessPolicy;
         this.reachRecorder = reachRecorder;
         this.sensitivityClassifier = sensitivityClassifier;
+        this.breakGlassGate = breakGlassGate;
     }
 
     public boolean isEnabled() {
@@ -285,7 +289,10 @@ public class PatientEverythingService {
         UUID requesterUserId = actor != null ? actor.getId()
             : HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, readable, params);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // encounters and conditions the D3 rule withholds; the ledger names it.
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, readable, unlocked, params);
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.SEARCHSET);
 
@@ -380,7 +387,7 @@ public class PatientEverythingService {
             .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(page);
         List<com.example.hms.model.Encounter> surfaced = page.getContent().stream()
-            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(e)))
+            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(e), ctx.unlocked()))
             .toList();
         ctx.account(surfaced.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
         surfaced.forEach(encounter -> {
@@ -425,7 +432,7 @@ public class PatientEverythingService {
         // problem in a sensitive category is withheld (D3).
         List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
-            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c)))
+            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c), ctx.unlocked()))
             .toList();
         ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());
         problems.stream()
@@ -569,27 +576,33 @@ public class PatientEverythingService {
         private final UUID patientId;
         private final UUID hospitalId;
         private final Set<UUID> readable;
+        private final boolean unlocked;
         private final PatientEverythingParams params;
         private final PageRequest pageRequest;
         private final Map<String, Long> reach = new HashMap<>();
         private boolean hasMore;
 
-        private SectionContext(UUID patientId, UUID hospitalId, Set<UUID> readable, PatientEverythingParams params) {
+        private SectionContext(UUID patientId, UUID hospitalId, Set<UUID> readable, boolean unlocked,
+                               PatientEverythingParams params) {
             this.patientId = patientId;
             this.hospitalId = hospitalId;
             this.readable = readable;
+            this.unlocked = unlocked;
             this.params = params;
             this.pageRequest = PageRequest.of(params.cursor(), params.count());
         }
 
-        static SectionContext forRequest(UUID patientId, UUID hospitalId, Set<UUID> readable, PatientEverythingParams params) {
-            return new SectionContext(patientId, hospitalId, readable, params);
+        static SectionContext forRequest(UUID patientId, UUID hospitalId, Set<UUID> readable, boolean unlocked,
+                                         PatientEverythingParams params) {
+            return new SectionContext(patientId, hospitalId, readable, unlocked, params);
         }
 
         UUID patientId() { return patientId; }
         UUID hospitalId() { return hospitalId; }
         /** E9 #60b — the hospitals every section reads (RecordAccessPolicy.readableHospitalIds). */
         Set<UUID> readable() { return readable; }
+        /** E9 #62 — the actor holds a live break-the-glass session for this patient here. */
+        boolean unlocked() { return unlocked; }
         /** E9 #60b — one entry per foreign hospital surfaced on this page, across every section. */
         Map<String, Long> reach() { return reach; }
         void account(List<UUID> sourceHospitalIds) {
