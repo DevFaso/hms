@@ -115,6 +115,9 @@
             @for (a of s.allergies; track a.id) {
               <li class="storyboard__chip" [ngClass]="severityClass(a.severity)">
                 <span class="storyboard__chip-label">{{ a.allergenDisplay }}</span>
+                @if (a.hospitalName && a.hospitalId !== s.hospitalId) {
+                  <span class="storyboard__chip-detail">· {{ a.hospitalName }}</span>
+                }
                 @if (a.reaction) {
                   <span class="storyboard__chip-detail" aria-hidden="false"
                     >— {{ a.reaction }}</span

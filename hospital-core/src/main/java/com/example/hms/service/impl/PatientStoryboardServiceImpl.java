@@ -73,7 +73,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // résumé patient" on a chart that had otherwise rendered).
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
-        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
+        List<AllergySummaryDTO> allergies = loadAllergies(patientId);
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
         CodeStatusDTO codeStatus = loadCodeStatus(patient, hospitalId);
@@ -122,10 +122,14 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .build();
     }
 
-    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
-        List<PatientAllergy> source = hospitalId != null
-            ? allergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
-            : allergyRepository.findByPatient_Id(patientId);
+    /**
+     * E9 #56 — allergies follow the patient: every active row, whichever
+     * hospital recorded it, with that hospital named on the chip. A
+     * penicillin allergy recorded at Hôpital A is exactly the row the ED at
+     * Hôpital B must see.
+     */
+    private List<AllergySummaryDTO> loadAllergies(UUID patientId) {
+        List<PatientAllergy> source = allergyRepository.findByPatient_Id(patientId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator
@@ -200,6 +204,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private AllergySummaryDTO toAllergyDto(PatientAllergy a) {
         return AllergySummaryDTO.builder()
             .id(a.getId())
+            .hospitalId(a.getHospital() != null ? a.getHospital().getId() : null)
+            .hospitalName(a.getHospital() != null ? a.getHospital().getName() : null)
             .allergenDisplay(a.getAllergenDisplay())
             .allergenCode(a.getAllergenCode())
             .severity(a.getSeverity() != null ? a.getSeverity().name() : null)
