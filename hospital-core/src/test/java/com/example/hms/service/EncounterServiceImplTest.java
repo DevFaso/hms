@@ -75,6 +75,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import java.util.Locale;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.enums.SensitivityCategory;
 
 @ExtendWith(MockitoExtension.class)
 class EncounterServiceImplTest {
@@ -90,6 +95,9 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     @Mock private EncounterHistoryRepository encounterHistoryRepository;
     @Mock private EncounterNoteRepository encounterNoteRepository;
     @Mock private EncounterNoteAddendumRepository encounterNoteAddendumRepository;
@@ -1885,5 +1893,33 @@ class EncounterServiceImplTest {
 
             assertThat(foreign.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
         }
+    }
+
+    @Test
+    void getEncountersByPatientId_followThePatientAndWithholdAForeignSensitiveEncounter() {
+        // E9 #59e — the consultation at Hôpital B is on the list at Hôpital A; a
+        // foreign encounter in a sensitive category (D3) is withheld; accounted.
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital local = new Hospital(); local.setId(hospitalId);
+        Hospital other = new Hospital(); other.setId(otherHospitalId);
+        Encounter here = new Encounter(); here.setId(UUID.randomUUID()); here.setHospital(local);
+        Encounter foreign = new Encounter(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
+        Encounter foreignSensitive = new Encounter(); foreignSensitive.setId(UUID.randomUUID()); foreignSensitive.setHospital(other);
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(here, foreign, foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(Encounter.class)))
+            .thenAnswer(inv -> inv.getArgument(0) == foreignSensitive ? SensitivityCategory.HIV : null);
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        assertThat(service.getEncountersByPatientId(patientId, locale)).hasSize(2);
+        verify(encounterRepository, never()).findByPatient_Id(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

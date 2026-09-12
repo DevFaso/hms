@@ -42,6 +42,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.enums.SensitivityCategory;
 
 @ExtendWith(MockitoExtension.class)
 class DischargeSummaryServiceImplTest {
@@ -56,6 +63,8 @@ class DischargeSummaryServiceImplTest {
     @Mock private DischargeApprovalRepository dischargeApprovalRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     /** Real registry so the portal-fetch tests can assert counter values. */
     @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -307,7 +316,8 @@ class DischargeSummaryServiceImplTest {
 
     @Test void getDischargeSummariesByPatient_scoped() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientId, Set.of(hospitalId)))
             .thenReturn(List.of(summary));
         when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
         assertThat(service.getDischargeSummariesByPatient(patientId, Locale.ENGLISH)).hasSize(1);
@@ -525,5 +535,24 @@ class DischargeSummaryServiceImplTest {
             assertThat(result).hasSize(1);
             verify(dischargeSummaryRepository, org.mockito.Mockito.times(1)).save(any());
         }
+    }
+
+    @Test void getDischargeSummariesByPatient_followThePatientAndAccountTheReach() {
+        // E9 #59e — the discharge summary written at Hôpital B is on the list at
+        // Hôpital A when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId);
+        DischargeSummary foreign = DischargeSummary.builder().patient(patient).hospital(other).build();
+        foreign.setId(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(summary, foreign));
+        when(dischargeSummaryMapper.toResponseDTO(any(DischargeSummary.class))).thenReturn(responseDTO);
+
+        assertThat(service.getDischargeSummariesByPatient(patientId, Locale.ENGLISH)).hasSize(2);
+        verify(dischargeSummaryRepository, never()).findByPatient_IdOrderByDischargeDateDesc(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

@@ -89,7 +89,11 @@ class CrossHospitalReadFilterCoverageTest {
         "UltrasoundOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedDateDesc",
         "UltrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc",
         "ImmunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc",
-        "ImmunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc");
+        "ImmunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc",
+        // E9 #59e — discharge and admissions follow the patient.
+        "DischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc",
+        "AdmissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc",
+        "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads
