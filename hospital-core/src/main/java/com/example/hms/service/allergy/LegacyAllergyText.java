@@ -28,9 +28,17 @@ public final class LegacyAllergyText {
     /** Column width of {@code patient_allergies.allergen_display}. */
     static final int MAX_DISPLAY = 255;
 
+    /**
+     * One separator per match and no whitespace in the pattern: tokens are
+     * trimmed afterwards. Putting {@code \s*} on both sides of a class that
+     * itself contains newlines gave the engine two ways to consume the same
+     * run of blanks, which is quadratic on a long one (CodeQL
+     * java/polynomial-redos on #598).
+     */
     private static final Pattern SEPARATOR = Pattern.compile(
-        "\\s*(?:[,;/|\\r\\n]+|\\bet\\b|\\band\\b)\\s*", Pattern.CASE_INSENSITIVE);
+        "[,;/|\\r\\n]|\\b(?:et|and)\\b", Pattern.CASE_INSENSITIVE);
 
+    /** Anchored single pass: strips a trailing full stop or blank run. */
     private static final Pattern TRAILING_PUNCTUATION = Pattern.compile("[.\\s]+$");
 
     /** Phrases that state the ABSENCE of allergies, compared after normalisation. */
