@@ -58,6 +58,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
+import java.util.Set;
 
 class ChartReviewServiceImplTest {
 
@@ -70,6 +76,12 @@ class ChartReviewServiceImplTest {
     private final ImagingReportRepository imagingReportRepo = mock(ImagingReportRepository.class);
     private final ProcedureOrderRepository procedureRepo = mock(ProcedureOrderRepository.class);
     private final HospitalRepository hospitalRepo = mock(HospitalRepository.class);
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy =
+        mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
+    private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder =
+        mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+    private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier =
+        mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
 
     private ChartReviewServiceImpl service;
 
@@ -83,7 +95,11 @@ class ChartReviewServiceImplTest {
     void setUp() {
         service = new ChartReviewServiceImpl(
             patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
-            imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo);
+            imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo,
+            recordAccessPolicy, reachRecorder, sensitivityClassifier);
+        // E9 #60 — the readable set is the acting hospital alone unless a test widens it.
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID));
 
         hospital = Hospital.builder().name("Centre Médical Bobo").build();
         hospital.setId(HOSPITAL_ID);
@@ -101,35 +117,35 @@ class ChartReviewServiceImplTest {
 
         // Default empty results so individual tests only have to populate what they need.
         // All loaders now use paged DB queries, so default to empty Page returns.
-        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(encounterRepo.findByPatient_IdOrderByEncounterDateDesc(
             any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of());
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(List.of());
         when(labResultRepo.findByLabOrder_Patient_Id(any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(prescriptionRepo.findByPatient_IdAndHospital_Id(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(prescriptionRepo.findByPatient_Id(any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(imagingOrderRepo.findByPatient_IdOrderByOrderedAtDesc(
             any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(imagingOrderRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any()))
             .thenReturn(List.of());
         when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of());
         when(procedureRepo.findByPatient_IdOrderByOrderedAtDesc(PATIENT_ID))
             .thenReturn(List.of());
-        when(procedureRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(PATIENT_ID, HOSPITAL_ID))
+        when(procedureRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(PATIENT_ID, Set.of(HOSPITAL_ID)))
             .thenReturn(List.of());
     }
 
@@ -167,8 +183,8 @@ class ChartReviewServiceImplTest {
         Encounter encOld = encounter(EncounterStatus.COMPLETED, now.minusDays(10));
         Encounter encNew = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(2));
         // Returned in DB-sorted order (DESC by encounterDate).
-        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(encNew, encOld)));
 
         // Batch note lookup — only the new encounter has a note.
@@ -177,25 +193,25 @@ class ChartReviewServiceImplTest {
             .thenReturn(List.of(note));
 
         LabResult labResult = labResult(now.minusDays(1), AbnormalFlag.ABNORMAL, "Hemoglobin", "718-7");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(List.of(labResult));
 
         Prescription rx = prescription("Amoxicillin", "RxNorm-723", now.minusDays(2));
-        when(prescriptionRepo.findByPatient_IdAndHospital_Id(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(rx)));
 
         ImagingOrder img = imagingOrder(now.minusDays(3), ImagingModality.XRAY, "Chest XR");
-        when(imagingOrderRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(img)));
         ImagingReport report = imagingReport(img, "No acute cardiopulmonary findings.");
         when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any()))
             .thenReturn(List.of(report));
 
         ProcedureOrder proc = procedure("Lumbar puncture", now.minusDays(4));
-        when(procedureRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(PATIENT_ID, HOSPITAL_ID))
+        when(procedureRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(PATIENT_ID, Set.of(HOSPITAL_ID)))
             .thenReturn(List.of(proc));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
@@ -246,8 +262,8 @@ class ChartReviewServiceImplTest {
             manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
         }
         // Simulate the DB returning the page-size we asked for (pageable filters in SQL).
-        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenAnswer(inv -> {
                 Pageable p = inv.getArgument(2);
                 return new PageImpl<>(manyEnc.subList(0, Math.min(p.getPageSize(), manyEnc.size())));
@@ -290,8 +306,8 @@ class ChartReviewServiceImplTest {
     void notePreviewPicksAssessmentAndTruncatesLongBodies() {
         LocalDateTime now = LocalDateTime.now();
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, now);
-        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(enc)));
 
         EncounterNote note = note(enc, now);
@@ -316,8 +332,8 @@ class ChartReviewServiceImplTest {
         // event summary, which leaked English into FR/ES UIs. Now summary stays null
         // and the UI carries the abnormal flag via the status pill instead.
         LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL, "Glucose", "2345-7");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-            any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(List.of(r));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
@@ -465,5 +481,40 @@ class ChartReviewServiceImplTest {
         s.setUser(u);
         p.setOrderingProvider(s);
         return p;
+    }
+
+    @Test
+    void followsThePatientWithholdsAForeignSensitiveEncounterAndAccountsTheReach() {
+        // E9 #60 (D3): an encounter at Hôpital B is on the review at Hôpital A;
+        // a foreign one in a sensitive category is withheld with its note; the
+        // reach of the whole review is accounted once per source hospital.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(otherHospitalId);
+        LocalDateTime now = LocalDateTime.now();
+        Encounter here = encounter(EncounterStatus.COMPLETED, now.minusDays(1));
+        Encounter away = encounter(EncounterStatus.COMPLETED, now.minusDays(2));
+        away.setHospital(other);
+        Encounter awaySensitive = encounter(EncounterStatus.COMPLETED, now.minusDays(3));
+        awaySensitive.setHospital(other);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, otherHospitalId));
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            eq(PATIENT_ID), eq(Set.of(HOSPITAL_ID, otherHospitalId)), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(here, away, awaySensitive)));
+        when(sensitivityClassifier.effectiveCategory(awaySensitive))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getEncounters()).hasSize(2);
+        verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void hospitalIdNullRecordsNoReach() {
+        service.getChartReview(PATIENT_ID, null, null);
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), any());
     }
 }

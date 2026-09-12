@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import java.util.Map;
 
 /**
  * Aggregates allergies, active problems, the most recent non-terminal encounter,
@@ -70,6 +72,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private final HospitalRepository hospitalRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final SensitivityClassifier sensitivityClassifier;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
@@ -88,6 +91,23 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
         CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
+        // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
+        // directives (#59a); every one of them is accounted, once per source
+        // hospital for the whole banner. #56 and #59a left this ledger row out
+        // because the call carries no requester; the context has one.
+        if (readable != null) {
+            Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(
+                allergies.stream().map(AllergySummaryDTO::getHospitalId).toList(), hospitalId);
+            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+                problems.stream().map(ProblemSummaryDTO::getHospitalId).toList(), hospitalId));
+            if (codeStatus != null && codeStatus.getDirectives() != null) {
+                CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+                    codeStatus.getDirectives().stream().map(DirectiveSummaryDTO::getHospitalId).toList(), hospitalId));
+            }
+            reachRecorder.recordReach(patientId, hospitalId,
+                HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), null, reach,
+                "Cross-hospital storyboard read on the treatment relationship");
+        }
 
         boolean highSeverityAllergy = allergies.stream()
             .anyMatch(a -> a.getSeverity() != null
