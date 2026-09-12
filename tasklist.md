@@ -2042,9 +2042,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   still hold; `CrossHospitalReachRecorder` stamps `breakGlassSessionId` on
   every disclosure row written under a session; the D3 sites already on
   develop (diagnoses, timeline, doctor record, nursing notes, consultations,
-  admissions, encounters) take an `unlocked` flag. **(b) open**: the same
-  flag at the whole-chart sites (storyboard, chart review, snapshot, FHIR
-  `$everything`) once #610/#60b land; the portal's declare flow is #64's.
+  admissions, encounters) take an `unlocked` flag. **(b) shipped 2026-09-12**:
+  the same flag at the whole-chart sites — storyboard problems, chart-review
+  encounters, snapshot encounters and active diagnoses, FHIR `$everything`
+  Encounter and Condition sections (carried on the SectionContext). The
+  portal's declare flow already exists (`break-glass-banner`); the restricted
+  rows UI that tells a clinician something is withheld and offers the
+  declaration is #64. E8 #54 absorbed.
 - [x] 63. **Department classification screen + heuristic deletion.** ✅ DONE
   2026-09-12. The department page carries a "Sensitive category" card for
   HOSPITAL_ADMIN / SUPER_ADMIN (the four D3 categories or none) on the
