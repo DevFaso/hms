@@ -31,10 +31,10 @@ class ClinicalMatrixGapsTest {
     @DisplayName("allergies are readable by the consulting clinicians")
     void allergiesReadableByEveryClinicalRole() {
         String guard = GuardIndex.guardsOf(PatientController.class).get("GET /{id}/allergies");
-        assertThat(guard).as("GET /{id}/allergies is guarded").isNotNull();
-        assertThat(guard).contains("'ROLE_RADIOLOGIST'", "'ROLE_ANESTHESIOLOGIST'", "'ROLE_PHYSIOTHERAPIST'",
-            "'ROLE_DOCTOR'", "'ROLE_NURSE'", "'ROLE_MIDWIFE'", "'ROLE_PHARMACIST'");
-        assertThat(guard).doesNotContain("HOSPITAL_ADMIN");
+        assertThat(guard).as("GET /{id}/allergies is guarded").isNotNull()
+            .contains("'ROLE_RADIOLOGIST'", "'ROLE_ANESTHESIOLOGIST'", "'ROLE_PHYSIOTHERAPIST'",
+                "'ROLE_DOCTOR'", "'ROLE_NURSE'", "'ROLE_MIDWIFE'", "'ROLE_PHARMACIST'")
+            .doesNotContain("HOSPITAL_ADMIN");
     }
 
     @Test

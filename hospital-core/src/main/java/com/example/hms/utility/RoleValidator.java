@@ -257,8 +257,11 @@ public class RoleValidator {
     /* =========================================
        Convenience
        ========================================= */
-    /** E9 #67 (D5): prescribing is a clinical act; a hospital admin no longer passes. */
-    /** E9 #69: midwives prescribe throughout the OB module; parity with nurses. */
+    /**
+     * Prescribing is a clinical act: a hospital admin no longer passes (E9 #67,
+     * D5), and midwives, who prescribe throughout the OB module, have parity
+     * with nurses (E9 #69).
+     */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isNurse(userId, hospitalId)
