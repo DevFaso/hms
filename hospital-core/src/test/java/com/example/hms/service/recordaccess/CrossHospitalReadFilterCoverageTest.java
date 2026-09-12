@@ -93,7 +93,9 @@ class CrossHospitalReadFilterCoverageTest {
         // E9 #59e — discharge and admissions follow the patient.
         "DischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc",
         "AdmissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc",
-        "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc");
+        "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc",
+        // E9 #60 — the whole-chart surfaces.
+        "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads

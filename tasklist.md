@@ -2003,15 +2003,25 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `fhir-record` export (`PatientEverythingService.resolveHospitalScopeOrForbid`
   fails closed on the stale context today), storyboard, chart review, timeline
   (already), snapshot. Every one writes the disclosure row.
-- [x] 61. **Provenance on the row (portal).** ✅ DONE 2026-09-12. The
-  timeline half (`TimelineEntry.metadata` typed; hospital · clinician · origin
-  on every timeline row; prescriber from `Prescription.staff`, lab from
-  `LabOrder.orderingStaff`) had already landed with E8 #50 (fcedca65), and the
-  lab-results list already carried its hospital column. What this closes:
-  a hospital column on the chart tab's allergies, problems and updates, and on
-  the medication-history rows (backend fields from #59a/#59c), with a row from
-  another hospital marked structurally — compared on the id, never the name;
-  no id means local. Absorbed the surviving half of E8 #50.
+  **(a) in-app surfaces shipped 2026-09-12**: storyboard (now writes the
+  RECORD_SHARE row #56/#59a left out — one per source hospital across
+  allergies, problems, directives), chart review (every section on the
+  readable set, D3 on encounters, one ledger row per review), snapshot (every
+  section on the readable set when an acting hospital is given; allergies
+  stay patient-wide per #56; one ledger row per snapshot). Deliberately still
+  local: the storyboard's active-encounter lookup (the acting hospital's
+  tracker question) and the legacy `patient_diagnoses` read (V14-era,
+  read-only). **(b) FHIR `$everything` / `fhir-record` export — OPEN**: the
+  bundle reads `ctx.hospitalId()` alone and `resolveHospitalScopeOrForbid`
+  fails closed with no context; `$export` (bulk) is a hospital's own data and
+  stays local by design.
+- [ ] 61. **Provenance on the row (portal).** `TimelineEntry.metadata` is not
+  declared in `patient.service.ts`, so #582's provenance reaches the wire and
+  is discarded — the blocking defect from the E8 record. Type it, render
+  hospital · clinician · date on every foreign row in timeline, results,
+  medications, problems; fill the two missing staff names (prescription from
+  `Prescription.staff`, lab from `LabOrder.orderingStaff`, NOT
+  `releasedByDisplay`). Absorbs the surviving half of E8 #50.
 
 ### Phase 2 — sensitive categories and break-the-glass
 

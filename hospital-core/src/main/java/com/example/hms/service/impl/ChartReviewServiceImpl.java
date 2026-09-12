@@ -44,6 +44,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.security.context.HospitalContextHolder;
+import java.util.Set;
 
 /**
  * Aggregates the six clinical sections shown in the Chart Review viewer
@@ -68,6 +74,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private final ImagingReportRepository imagingReportRepository;
     private final ProcedureOrderRepository procedureOrderRepository;
     private final HospitalRepository hospitalRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -79,12 +88,25 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
         int effectiveLimit = clampLimit(limit);
 
-        List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, effectiveLimit);
+        // E9 #60 — the chart review follows the patient: with an acting hospital
+        // every section reads the policy's readable set and the reach of the
+        // whole review is accounted once. A foreign encounter in a sensitive
+        // category (D3) is withheld with its note. Without an acting hospital
+        // (super-admin global view) the patient-wide reads stay.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = hospitalId == null ? null
+            : recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospitalId);
+        Map<String, Long> reach = new HashMap<>();
+        List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, effectiveLimit, reach);
         List<NoteEntryDTO> notes = loadNotes(encounters);
-        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, effectiveLimit);
-        List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, effectiveLimit);
-        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, effectiveLimit);
-        List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), hospitalId, effectiveLimit);
+        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), hospitalId, readable, effectiveLimit, reach);
+        if (hospitalId != null) {
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null, reach,
+                "Cross-hospital chart review read on the treatment relationship");
+        }
 
         List<TimelineEventDTO> timeline = buildTimeline(
             encounters, notes, results, medications, imaging, procedures, effectiveLimit);
@@ -107,18 +129,29 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
     /* ------------- per-section loaders ------------------------------- */
 
-    private List<EncounterEntryDTO> loadEncounters(UUID patientId, UUID hospitalId, int limit) {
+    private List<EncounterEntryDTO> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                   int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit);
-        List<Encounter> source = hospitalId != null
+        List<Encounter> source = readable != null
             ? encounterRepository
-                .findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(patientId, hospitalId, page)
-                .getContent()
+                .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable, page)
+                .getContent().stream()
+                .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e)))
+                .toList()
             : encounterRepository
                 .findByPatient_IdOrderByEncounterDateDesc(patientId, page)
                 .getContent();
+        account(reach, hospitalId, source.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
         return source.stream()
             .map(this::toEncounterDto)
             .toList();
+    }
+
+    /** E9 #60 — one row per foreign hospital surfaced, merged into the review's reach. */
+    private static void account(Map<String, Long> reach, UUID actingHospitalId, List<UUID> sourceHospitalIds) {
+        if (actingHospitalId != null) {
+            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(sourceHospitalIds, actingHospitalId));
+        }
     }
 
     /**
@@ -149,40 +182,47 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .toList();
     }
 
-    private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, int limit) {
+    private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                             int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate"));
-        List<LabResult> source = hospitalId != null
-            ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                patientId, hospitalId, page)
+        List<LabResult> source = readable != null
+            ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, page)
             : labResultRepository.findByLabOrder_Patient_Id(patientId, page).getContent();
+        account(reach, hospitalId, source.stream()
+            .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+            .toList());
         return source.stream()
             .map(this::toResultDto)
             .toList();
     }
 
-    private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, int limit) {
+    private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                     int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Prescription> source = hospitalId != null
+        List<Prescription> source = readable != null
             ? prescriptionRepository
-                .findByPatient_IdAndHospital_Id(patientId, hospitalId, page)
+                .findByPatient_IdAndHospital_IdIn(patientId, readable, page)
                 .getContent()
             : prescriptionRepository
                 .findByPatient_Id(patientId, page)
                 .getContent();
+        account(reach, hospitalId, source.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
         return source.stream()
             .map(this::toMedicationDto)
             .toList();
     }
 
-    private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, int limit) {
+    private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                              int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit);
-        List<ImagingOrder> orders = hospitalId != null
+        List<ImagingOrder> orders = readable != null
             ? imagingOrderRepository
-                .findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, hospitalId, page)
+                .findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable, page)
                 .getContent()
             : imagingOrderRepository
                 .findByPatient_IdOrderByOrderedAtDesc(patientId, page)
                 .getContent();
+        account(reach, hospitalId, orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList());
         if (orders.isEmpty()) {
             return List.of();
         }
@@ -240,12 +280,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         return Integer.compare(aValue, bValue);
     }
 
-    private List<ProcedureEntryDTO> loadProcedures(UUID patientId, UUID hospitalId, int limit) {
-        List<ProcedureOrder> orders = hospitalId != null
-            ? procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, hospitalId)
-            : procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
-        return orders.stream()
+    private List<ProcedureEntryDTO> loadProcedures(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                   int limit, Map<String, Long> reach) {
+        List<ProcedureOrder> orders = (readable != null
+            ? procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable)
+            : procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).stream()
             .limit(limit)
+            .toList();
+        account(reach, hospitalId, orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList());
+        return orders.stream()
             .map(this::toProcedureDto)
             .toList();
     }

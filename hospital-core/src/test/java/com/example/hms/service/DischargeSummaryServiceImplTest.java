@@ -48,7 +48,6 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import java.util.Map;
 import java.util.Set;
-import com.example.hms.enums.SensitivityCategory;
 
 @ExtendWith(MockitoExtension.class)
 class DischargeSummaryServiceImplTest {

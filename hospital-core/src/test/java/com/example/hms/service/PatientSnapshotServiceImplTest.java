@@ -52,6 +52,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
+
+import com.example.hms.model.Hospital;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
@@ -66,6 +72,9 @@ class PatientSnapshotServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientDiagnosisRepository patientDiagnosisRepository;
     @Mock private PatientProblemRepository patientProblemRepository;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
 
     @InjectMocks
     private PatientSnapshotServiceImpl service;
@@ -922,5 +931,47 @@ class PatientSnapshotServiceImplTest {
         assertEquals("Unknown", note.getAuthor()); // null staff â†’ Unknown
         assertEquals("Encounter", note.getType()); // null encounterType â†’ Encounter
         assertEquals("", note.getDate()); // null date â†’ empty
+    }
+
+    @Test
+    void getSnapshot_withAnActingHospital_readsTheReadableSetAndAccountsTheReach() {
+        // E9 #60 — the medication started at Hôpital B is on the snapshot at
+        // Hôpital A when the policy reads B for this patient; accounted once.
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Patient patient = stubPatient(patientId);
+        when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        givenPatient(patientId, patient);
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Metformin");
+        rx.setHospital(other);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any()))
+                .thenReturn(new PageImpl<>(List.of(rx)));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, hospitalId);
+
+        assertEquals(1, result.getActiveMedications().size());
+        assertEquals("Metformin", result.getActiveMedications().get(0).getName());
+        verify(prescriptionRepository, never()).findByPatient_Id(any(), any());
+        verify(encounterRepository, never()).findByPatient_Id(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getSnapshot_withoutAnActingHospital_recordsNoReach() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        stubEmptySubQueries(patientId);
+
+        service.getSnapshot(patientId, null);
+
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), any());
     }
 }

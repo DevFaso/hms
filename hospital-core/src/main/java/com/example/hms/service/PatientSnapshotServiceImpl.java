@@ -27,6 +27,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.PatientAllergy;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Builds the patient-snapshot DTO for the chart-summary view.
@@ -52,6 +62,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final EncounterRepository encounterRepository;
     private final PatientDiagnosisRepository patientDiagnosisRepository;
     private final PatientProblemRepository patientProblemRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
@@ -69,22 +82,59 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             throw new com.example.hms.exception.BusinessException("Patient is not registered at this hospital.");
         }
 
-        return PatientSnapshotDTO.builder()
+        // E9 #60 — the snapshot follows the patient: with an acting hospital every
+        // section reads the policy's readable set (allergies stay patient-wide,
+        // #56) and every foreign row surfaced is accounted once for the whole
+        // snapshot. Without one (super-admin global view) the patient-wide reads
+        // stay. A foreign encounter in a sensitive category (D3) is withheld.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = hospitalId == null ? null
+                : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        Map<String, Long> reach = new HashMap<>();
+        List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach);
+        PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
                 .name(patient.getFirstName() + " " + patient.getLastName())
                 .age(computeAge(patient))
                 .sex(patient.getGender())
                 .mrn(patient.getId().toString())
                 .codeStatus(patient.getCodeStatus())
-                .allergies(buildAllergies(patientId, patient))
-                .activeDiagnoses(buildActiveDiagnoses(patientId, patient))
-                .activeMedications(buildActiveMedications(patientId))
-                .recentVitals(buildRecentVitals(patientId))
-                .latestLabs(buildLatestLabs(patientId))
-                .pendingOrders(buildPendingOrders(patientId))
-                .recentNotes(buildRecentNotes(patientId))
-                .careTeam(buildCareTeam(patientId))
+                .allergies(buildAllergies(patientId, patient, hospitalId, reach))
+                .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach))
+                .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
+                .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
+                .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach))
+                .pendingOrders(buildPendingOrders(patientId, hospitalId, readable, reach))
+                .recentNotes(buildRecentNotes(encounters))
+                .careTeam(buildCareTeam(encounters))
                 .build();
+        if (hospitalId != null) {
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
+                    "Cross-hospital patient snapshot read on the treatment relationship");
+        }
+        return snapshot;
+    }
+
+    /** E9 #60 — one row per foreign hospital surfaced, merged into the snapshot's reach. */
+    private static void account(Map<String, Long> reach, UUID actingHospitalId, List<UUID> sourceHospitalIds) {
+        if (actingHospitalId != null) {
+            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(sourceHospitalIds, actingHospitalId));
+        }
+    }
+
+    private List<Encounter> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable, Map<String, Long> reach) {
+        try {
+            List<Encounter> rows = readable == null
+                    ? encounterRepository.findByPatient_Id(patientId)
+                    : encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
+                        .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e)))
+                        .toList();
+            account(reach, hospitalId, rows.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
+            return rows;
+        } catch (Exception e) {
+            log.debug("Encounter query error: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private int computeAge(Patient patient) {
@@ -93,11 +143,12 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 : 0;
     }
 
-    private List<String> buildAllergies(UUID patientId, Patient patient) {
+    private List<String> buildAllergies(UUID patientId, Patient patient, UUID hospitalId, Map<String, Long> reach) {
         List<String> allergies = new ArrayList<>();
         try {
-            patientAllergyRepository.findByPatient_Id(patientId)
-                    .forEach(a -> allergies.add(a.getAllergenDisplay()));
+            List<PatientAllergy> rows = patientAllergyRepository.findByPatient_Id(patientId);
+            rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
+            account(reach, hospitalId, rows.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
         } catch (Exception e) {
             log.debug("Allergy query error", e);
         }
@@ -120,12 +171,18 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
      * patient had no structured diagnoses at all. {@code patient_diagnoses}
      * is still read for V14-era rows and is read-only legacy.
      */
-    private List<String> buildActiveDiagnoses(UUID patientId, Patient patient) {
+    private List<String> buildActiveDiagnoses(UUID patientId, Patient patient, UUID hospitalId,
+                                              Set<UUID> readable, Map<String, Long> reach) {
         List<String> diagnoses = new ArrayList<>();
         try {
-            patientProblemRepository
-                    .findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE)
-                    .stream()
+            List<com.example.hms.model.PatientProblem> problems = readable == null
+                    ? patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE)
+                    : patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
+                        .filter(p -> p.getStatus() == ProblemStatus.ACTIVE)
+                        .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(p)))
+                        .toList();
+            account(reach, hospitalId, problems.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
+            problems.stream()
                     .map(p -> formatDiagnosis(p.getProblemCode(), p.getProblemDisplay()))
                     .forEach(diagnoses::add);
             List<PatientDiagnosis> legacy = patientDiagnosisRepository
@@ -163,11 +220,16 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         }
     }
 
-    private List<PatientSnapshotDTO.MedicationItem> buildActiveMedications(UUID patientId) {
+    private List<PatientSnapshotDTO.MedicationItem> buildActiveMedications(UUID patientId, UUID hospitalId,
+                                                                          Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
-            prescriptionRepository.findByPatient_Id(patientId, PageRequest.of(0, 10))
-                    .forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
+            List<com.example.hms.model.Prescription> rows = (readable == null
+                    ? prescriptionRepository.findByPatient_Id(patientId, PageRequest.of(0, 10))
+                    : prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10)))
+                    .getContent();
+            account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
+            rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
                             .name(rx.getMedicationName())
                             .dose(rx.getDosage())
                             .frequency(rx.getFrequency())
@@ -178,11 +240,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return medications;
     }
 
-    private List<PatientSnapshotDTO.VitalItem> buildRecentVitals(UUID patientId) {
+    private List<PatientSnapshotDTO.VitalItem> buildRecentVitals(UUID patientId, UUID hospitalId,
+                                                                Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.VitalItem> vitals = new ArrayList<>();
         try {
-            patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 5))
-                    .forEach(v -> vitals.add(PatientSnapshotDTO.VitalItem.builder()
+            List<PatientVitalSign> rows = readable == null
+                    ? patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 5))
+                    : patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, PageRequest.of(0, 5));
+            account(reach, hospitalId, rows.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
+            rows.forEach(v -> vitals.add(PatientSnapshotDTO.VitalItem.builder()
                             .type("Vitals")
                             .value(summarizeVitals(v))
                             .timestamp(v.getRecordedAt() != null ? v.getRecordedAt().format(DATE_FMT) : "")
@@ -204,15 +270,19 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return s.toString().trim();
     }
 
-    private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId) {
+    private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,
+                                                            Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.LabItem> labs = new ArrayList<>();
         try {
-            // Use the Pageable variant so the limit is applied at the DB
-            // (LabResultRepository#findByLabOrder_Patient_Id(UUID, Pageable))
-            // instead of loading the patient's full lab-result history into
-            // memory and trimming to 10 after the fact.
-            labResultRepository.findByLabOrder_Patient_Id(patientId, PageRequest.of(0, 10))
-                    .forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
+            // Paged at the DB so the patient's full lab history is never loaded
+            // to trim to 10 after the fact.
+            List<LabResult> rows = readable == null
+                    ? labResultRepository.findByLabOrder_Patient_Id(patientId, PageRequest.of(0, 10)).getContent()
+                    : labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, PageRequest.of(0, 10));
+            account(reach, hospitalId, rows.stream()
+                    .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+                    .toList());
+            rows.forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
                                     : "Lab Test")
@@ -233,10 +303,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return r.isAcknowledged() ? FLAG_NORMAL : FLAG_REVIEW;
     }
 
-    private List<PatientSnapshotDTO.OrderItem> buildPendingOrders(UUID patientId) {
+    private List<PatientSnapshotDTO.OrderItem> buildPendingOrders(UUID patientId, UUID hospitalId,
+                                                                 Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.OrderItem> pendingOrders = new ArrayList<>();
         try {
-            labOrderRepository.findByPatient_Id(patientId).stream()
+            List<com.example.hms.model.LabOrder> rows = readable == null
+                    ? labOrderRepository.findByPatient_Id(patientId)
+                    : labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            account(reach, hospitalId, rows.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList());
+            rows.stream()
                     .filter(o -> o.getStatus() == com.example.hms.enums.LabOrderStatus.PENDING
                             || o.getStatus() == com.example.hms.enums.LabOrderStatus.IN_PROGRESS)
                     .limit(10)
@@ -251,10 +326,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return pendingOrders;
     }
 
-    private List<PatientSnapshotDTO.CareTeamMember> buildCareTeam(UUID patientId) {
+    private List<PatientSnapshotDTO.CareTeamMember> buildCareTeam(List<Encounter> encounters) {
         List<PatientSnapshotDTO.CareTeamMember> careTeam = new ArrayList<>();
         try {
-            encounterRepository.findByPatient_Id(patientId).stream()
+            encounters.stream()
                     .filter(e -> e.getStaff() != null)
                     .map(e -> PatientSnapshotDTO.CareTeamMember.builder()
                             .role(e.getStaff().getJobTitle() != null ? e.getStaff().getJobTitle().name() : "Staff")
@@ -269,10 +344,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return careTeam;
     }
 
-    private List<PatientSnapshotDTO.NoteItem> buildRecentNotes(UUID patientId) {
+    private List<PatientSnapshotDTO.NoteItem> buildRecentNotes(List<Encounter> encounters) {
         List<PatientSnapshotDTO.NoteItem> recentNotes = new ArrayList<>();
         try {
-            encounterRepository.findByPatient_Id(patientId).stream()
+            encounters.stream()
                     .filter(e -> e.getNotes() != null && !e.getNotes().isBlank())
                     .sorted(java.util.Comparator.comparing(
                             e -> e.getEncounterDate() != null ? e.getEncounterDate() : java.time.LocalDateTime.MIN,
