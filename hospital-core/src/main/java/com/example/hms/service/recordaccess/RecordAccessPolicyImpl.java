@@ -30,17 +30,20 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final StaffRepository staffRepository;
     private final TreatmentRelationshipResolver resolver;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final BreakGlassGate breakGlassGate;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
                                   StaffRepository staffRepository,
                                   TreatmentRelationshipResolver resolver,
-                                  PatientHospitalRegistrationRepository registrationRepository) {
+                                  PatientHospitalRegistrationRepository registrationRepository,
+                                  BreakGlassGate breakGlassGate) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
         this.resolver = resolver;
         this.registrationRepository = registrationRepository;
+        this.breakGlassGate = breakGlassGate;
     }
 
     @Override
@@ -169,7 +172,18 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                 null, false);
             return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, byRegistration, posture);
         }
-        return resolver.resolve(patientId, hospitalId, actorUserId)
+        Optional<TreatmentRelationship> carried = resolver.resolve(patientId, hospitalId, actorUserId);
+        if (carried.isPresent()) {
+            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, carried.get(), posture);
+        }
+        // E9 #62 (decision D2, Tier B) — no registration and no carrier: a live
+        // break-the-glass session the actor declared for this patient at this
+        // hospital stands in for the relationship. Opt-out and the staff gate
+        // above still hold; the session is time-boxed, audited on declaration,
+        // and every disclosure row it enables carries its id.
+        return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+            .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
             .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, posture));

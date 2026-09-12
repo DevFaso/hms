@@ -85,6 +85,8 @@ class NursingNoteServiceImplTest {
     private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock
+    private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
 
     @InjectMocks
     private NursingNoteServiceImpl nursingNoteService;

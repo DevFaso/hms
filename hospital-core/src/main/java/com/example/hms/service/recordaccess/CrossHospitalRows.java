@@ -11,7 +11,9 @@ import java.util.UUID;
  * surfaces; a foreign row surfaces only when its effective sensitivity
  * category is unset. A foreign row that IS categorised (HIV, behavioural
  * health, substance use, reproductive health) is withheld — it opens through
- * break-the-glass with a stated reason (E9 #62), never automatically.
+ * break-the-glass with a stated reason (E9 #62), never automatically: the
+ * {@code unlocked} overloads take that session's presence, resolved once per
+ * read by {@link BreakGlassGate}.
  *
  * <p>Untagged travels. That is Epic's behaviour and it is what the decision
  * chose; the classification is by department default and is the hospital's
@@ -27,7 +29,18 @@ public final class CrossHospitalRows {
     }
 
     public static boolean maySurface(UUID rowHospitalId, UUID actingHospitalId, SensitivityCategory category) {
+        return maySurface(rowHospitalId, actingHospitalId, category, false);
+    }
+
+    /** E9 #62 — the same rule with a live break-the-glass session: a foreign sensitive row surfaces. */
+    public static boolean maySurface(Hospital rowHospital, UUID actingHospitalId, SensitivityCategory category,
+                                     boolean unlocked) {
+        return maySurface(rowHospital != null ? rowHospital.getId() : null, actingHospitalId, category, unlocked);
+    }
+
+    public static boolean maySurface(UUID rowHospitalId, UUID actingHospitalId, SensitivityCategory category,
+                                     boolean unlocked) {
         boolean foreign = rowHospitalId != null && !rowHospitalId.equals(actingHospitalId);
-        return !foreign || category == null;
+        return !foreign || category == null || unlocked;
     }
 }

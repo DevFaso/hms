@@ -32,6 +32,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.model.BreakGlassSession;
 
 /**
  * The gates, in the order they close. Each test opens every earlier gate and
@@ -47,6 +48,7 @@ class RecordAccessPolicyImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private TreatmentRelationshipResolver resolver;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private BreakGlassGate breakGlassGate;
 
     @InjectMocks private RecordAccessPolicyImpl policy;
 
@@ -207,5 +209,38 @@ class RecordAccessPolicyImplTest {
 
         assertThat(policy.decide(actor, patient, hospitalId).permitted()).isTrue();
         assertThat(policy.decide(actor, other, hospitalId).permitted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("E9 #62 (Tier B): no registration and no carrier, but a live break-the-glass session here — permitted, kind BREAK_GLASS")
+    void breakGlassStandsInForTheRelationship() {
+        when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.empty());
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        session.setStartedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        session.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().carrierId()).isEqualTo(session.getId());
+        assertThat(d.relationship().expiresAt()).isEqualTo(session.getExpiresAt());
+        assertThat(d.relationship().actorDirectlyAttached()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a break-the-glass session does not bypass the opt-out or the staff gate")
+    void breakGlassDoesNotBypassEarlierGates() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(new BreakGlassSession()));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
+        verify(breakGlassGate, never()).liveSession(any(), any(), any());
     }
 }

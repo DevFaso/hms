@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import com.example.hms.model.Hospital;
+import java.util.Optional;
 
 /**
  * E8 #53 / E9 — accounts for the REACH of a cross-hospital read, not just the
@@ -37,8 +38,11 @@ public class CrossHospitalReachRecorder {
     static final String DETAIL_ACTING_HOSPITAL_ID = "actingHospitalId";
     static final String DETAIL_SOURCE_HOSPITAL_ID = "sourceHospitalId";
     static final String DETAIL_ROWS_SURFACED = "rowsSurfaced";
+    /** E9 #62 — present when the read ran under a live break-the-glass session. */
+    static final String DETAIL_BREAK_GLASS_SESSION_ID = "breakGlassSessionId";
 
     private final AuditEventLogService auditEventLogService;
+    private final BreakGlassGate breakGlassGate;
 
     /**
      * Count the source hospitals in {@code sourceHospitalIds} that are not
@@ -81,7 +85,15 @@ public class CrossHospitalReachRecorder {
         if (perSource == null || perSource.isEmpty() || patientId == null) {
             return;
         }
+        // E9 #62 — a read under break-the-glass names the session on every row
+        // it enabled, so the patient's disclosure report can say why.
+        Optional<UUID> breakGlassSessionId = breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId);
         for (Map.Entry<String, Long> reach : perSource.entrySet()) {
+            Map<String, Object> details = new HashMap<>();
+            details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
+            details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
+            details.put(DETAIL_ROWS_SURFACED, reach.getValue());
+            breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.RECORD_SHARE)
@@ -92,10 +104,7 @@ public class CrossHospitalReachRecorder {
                     .entityType(ENTITY_TYPE_PATIENT)
                     .resourceId(patientId.toString())
                     .eventDescription(description)
-                    .details(Map.of(
-                        DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId),
-                        DETAIL_SOURCE_HOSPITAL_ID, reach.getKey(),
-                        DETAIL_ROWS_SURFACED, reach.getValue()))
+                    .details(details)
                     .build());
             } catch (RuntimeException ex) {
                 log.warn("[record-access] cross-hospital disclosure audit failed for patient {} source {}: {}",

@@ -117,6 +117,7 @@ import java.security.SecureRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 @Service
 @RequiredArgsConstructor
@@ -223,6 +224,7 @@ public class PatientServiceImpl implements PatientService {
     private final UltrasoundMapper ultrasoundMapper;
     private final NursingNoteRepository nursingNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final BreakGlassGate breakGlassGate;
     private final NursingNoteMapper nursingNoteMapper;
     private final StaffRepository staffRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -808,18 +810,21 @@ public class PatientServiceImpl implements PatientService {
         // disclosure. Flag off => a one-element set => today's behaviour.
         Set<UUID> readableHospitalIds =
             recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // rows the D3 rule withholds; the ledger rows name the session.
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
 
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
-        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
+        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         // Not widened: allergies attach to patient + hospital with no encounter
         // link, so #51's category cannot be resolved for them. A row whose
         // category nobody can determine must not travel. Tracked as standing
         // platform debt. Imaging and surgical history read the readable set
         // (E9 #59d, #59a); a foreign row the heuristic marks sensitive is withheld.
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
@@ -923,10 +928,14 @@ public class PatientServiceImpl implements PatientService {
         // the whole record is accounted once at the end.
         Set<UUID> readableHospitalIds =
             recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, resolvedHospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // rows every collector below withholds (D3); the ledger names the session.
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, resolvedHospitalId);
         List<PrescriptionResponseDTO> medications = collectDoctorRecordMedications(
             patientId,
             resolvedHospitalId,
             readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -942,6 +951,7 @@ public class PatientServiceImpl implements PatientService {
             patientId,
             resolvedHospitalId,
             readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -950,6 +960,7 @@ public class PatientServiceImpl implements PatientService {
             patientId,
             resolvedHospitalId,
             readableHospitalIds,
+            unlocked,
             includeSensitive,
             notesLimit,
             sensitiveSections
@@ -958,6 +969,7 @@ public class PatientServiceImpl implements PatientService {
             patientId,
             resolvedHospitalId,
             readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems
         );
@@ -1176,11 +1188,12 @@ public class PatientServiceImpl implements PatientService {
         // sensitivity category is withheld (D3) and opens via break-the-glass.
         UUID requesterUserId = roleValidator.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         List<PatientProblemResponseDTO> diagnoses = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
             .filter(problem -> includeHistorical || isActiveDiagnosis(problem))
             .filter(problem -> maySurface(problem.getHospital(), hospitalId,
-                sensitivityClassifier.effectiveCategory(problem)))
+                sensitivityClassifier.effectiveCategory(problem), unlocked))
             .sorted(problemComparator)
             .map(patientProblemMapper::toResponseDto)
             .toList();
@@ -1725,8 +1738,8 @@ public class PatientServiceImpl implements PatientService {
      * already governs.
      */
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
-                                      com.example.hms.enums.SensitivityCategory category) {
-        return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category);
+                                      com.example.hms.enums.SensitivityCategory category, boolean unlocked) {
+        return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category, unlocked);
     }
 
     /**
@@ -1784,14 +1797,15 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                  UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                  UUID actingHospitalId, Set<String> categoryFilters,
+                                                                  boolean unlocked) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ENCOUNTER)) {
             return List.of();
         }
         return encounterRepository.findByPatient_Id(patientId).stream()
             .filter(encounter -> isReadableHospital(readableHospitalIds, encounter.getHospital()))
             .filter(encounter -> maySurface(encounter.getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(encounter)))
+                sensitivityClassifier.effectiveCategory(encounter), unlocked))
             .map(encounter -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, encounter.getStatus() != null ? encounter.getStatus().name() : null);
@@ -1811,7 +1825,8 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectPrescriptionEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                     UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                     UUID actingHospitalId, Set<String> categoryFilters,
+                                                                     boolean unlocked) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PRESCRIPTION)) {
             return List.of();
         }
@@ -1819,7 +1834,7 @@ public class PatientServiceImpl implements PatientService {
             // A prescription carries no tag of its own; its category comes
             // from the encounter that wrote it (E8 #51).
             .filter(prescription -> maySurface(prescription.getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(prescription.getEncounter())))
+                sensitivityClassifier.effectiveCategory(prescription.getEncounter()), unlocked))
             .map(prescription -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, prescription.getStatus() != null ? prescription.getStatus().name() : null);
@@ -1842,7 +1857,8 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                   UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                   UUID actingHospitalId, Set<String> categoryFilters,
+                                                                   boolean unlocked) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
@@ -1851,7 +1867,7 @@ public class PatientServiceImpl implements PatientService {
                 && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> maySurface(result.getLabOrder().getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter())))
+                sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()), unlocked))
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "unit", result.getResultUnit());
@@ -1914,7 +1930,8 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectImagingEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                UUID hospitalId, Set<String> categoryFilters) {
+                                                                UUID hospitalId, Set<String> categoryFilters,
+                                                                boolean unlocked) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_IMAGING)) {
             return List.of();
         }
@@ -1929,7 +1946,7 @@ public class PatientServiceImpl implements PatientService {
             .orElse(List.of());
 
         Stream<PatientTimelineEntryDTO> orderEntries = orders.stream()
-            .filter(order -> isLocalRow(order.getHospital(), hospitalId) || !isSensitiveUltrasoundOrder(order))
+            .filter(order -> unlocked || isLocalRow(order.getHospital(), hospitalId) || !isSensitiveUltrasoundOrder(order))
             .map(order -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "orderedBy", order.getOrderedBy());
@@ -1948,7 +1965,7 @@ public class PatientServiceImpl implements PatientService {
             });
 
         Stream<PatientTimelineEntryDTO> reportEntries = reports.stream()
-            .filter(report -> isLocalRow(report.getHospital(), hospitalId) || !isSensitiveUltrasoundReport(report))
+            .filter(report -> unlocked || isLocalRow(report.getHospital(), hospitalId) || !isSensitiveUltrasoundReport(report))
             .map(report -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "scanPerformedBy", report.getScanPerformedBy());
@@ -2009,7 +2026,8 @@ public class PatientServiceImpl implements PatientService {
             patientId,
             Set.of(hospitalId),
             hospitalId,
-            Collections.emptySet()
+            Collections.emptySet(),
+            false
         );
         return encounterEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
@@ -2055,6 +2073,7 @@ public class PatientServiceImpl implements PatientService {
         UUID patientId,
         UUID hospitalId,
         Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
@@ -2072,7 +2091,7 @@ public class PatientServiceImpl implements PatientService {
             .anyMatch(p -> isLocalRow(p.getHospital(), hospitalId) && isSensitiveMedication(p));
         List<PrescriptionResponseDTO> responses = prescriptions.stream()
             .sorted(comparator)
-            .filter(prescription -> !isSensitiveMedication(prescription)
+            .filter(prescription -> !isSensitiveMedication(prescription) || unlocked
                 || (includeSensitive && isLocalRow(prescription.getHospital(), hospitalId)))
             .map(prescriptionMapper::toResponseDTO)
             .limit(limit)
@@ -2112,6 +2131,7 @@ public class PatientServiceImpl implements PatientService {
         UUID patientId,
         UUID hospitalId,
         Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
@@ -2127,7 +2147,7 @@ public class PatientServiceImpl implements PatientService {
         boolean ordersSensitive = orders.stream()
             .anyMatch(order -> isLocalRow(order.getHospital(), hospitalId) && isSensitiveUltrasoundOrder(order));
         List<UltrasoundOrderResponseDTO> orderDtos = orders.stream()
-            .filter(order -> !isSensitiveUltrasoundOrder(order)
+            .filter(order -> !isSensitiveUltrasoundOrder(order) || unlocked
                 || (includeSensitive && isLocalRow(order.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toOrderResponseDTO)
             .limit(limit)
@@ -2140,7 +2160,7 @@ public class PatientServiceImpl implements PatientService {
         boolean reportsSensitive = reports.stream()
             .anyMatch(report -> isLocalRow(report.getHospital(), hospitalId) && isSensitiveUltrasoundReport(report));
         List<UltrasoundReportResponseDTO> reportDtos = reports.stream()
-            .filter(report -> !isSensitiveUltrasoundReport(report)
+            .filter(report -> !isSensitiveUltrasoundReport(report) || unlocked
                 || (includeSensitive && isLocalRow(report.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toReportResponseDTO)
             .limit(limit)
@@ -2163,13 +2183,14 @@ public class PatientServiceImpl implements PatientService {
         UUID patientId,
         UUID hospitalId,
         Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
         List<NursingNote> notes = nursingNoteRepository
             .findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readableHospitalIds).stream()
-            .filter(note -> maySurface(note.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(note)))
+            .filter(note -> maySurface(note.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(note), unlocked))
             .toList();
         boolean sectionSensitive = notes.stream().anyMatch(this::isSensitiveNursingNote);
         List<NursingNoteResponseDTO> responses = notes.stream()
@@ -2187,13 +2208,14 @@ public class PatientServiceImpl implements PatientService {
         UUID patientId,
         UUID hospitalId,
         Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit
     ) {
         List<PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
             .filter(problem -> maySurface(problem.getHospital(), hospitalId,
-                sensitivityClassifier.effectiveCategory(problem)))
+                sensitivityClassifier.effectiveCategory(problem), unlocked))
             .toList();
         Comparator<PatientProblem> problemComparator = Comparator
             .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
