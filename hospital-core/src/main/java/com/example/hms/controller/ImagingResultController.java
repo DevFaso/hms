@@ -50,7 +50,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyAuthority('VIEW_IMAGING_RESULTS','CREATE_RADIOLOGY_REPORTS','SIGN_IMAGING_REPORTS',"
     + "'ACKNOWLEDGE_CRITICAL_RESULTS') "
-    + "or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+    + "or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
 @Tag(name = "Imaging Results", description = "Author, sign, and read radiology reports; acknowledge critical findings")
 public class ImagingResultController {
 
@@ -130,7 +130,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_IMAGING_RESULTS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','RADIOLOGIST')")
+    @PreAuthorize("hasAuthority('VIEW_IMAGING_RESULTS') or hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST')")
     @Operation(summary = "List imaging reports for hospital",
                description = "Filter by status (e.g., PRELIMINARY, FINAL) or modality (CT, MRI, X-RAY). "
                    + "The path hospital must be the caller's active hospital; super-admins may name any.")

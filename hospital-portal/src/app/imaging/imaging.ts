@@ -154,7 +154,6 @@ export class ImagingComponent implements OnInit {
   readonly canSeeResults = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_RADIOLOGIST',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */

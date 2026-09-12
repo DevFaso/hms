@@ -334,6 +334,51 @@ class BirthPlanServiceImplTest {
     }
 
     @Test
+    void getBirthPlanById_asSuperAdmin_bypassesThePerRoleChecks() {
+        // E9 #67 (D5): the platform operator is the only role that skips the
+        // per-role checks; no patient lookup is made on the way through.
+        User superAdmin = new User();
+        superAdmin.setId(UUID.randomUUID());
+        superAdmin.setUsername("ops@test.com");
+        superAdmin.setUserRoles(createUserRoles("ROLE_SUPER_ADMIN"));
+
+        when(userRepository.findByUsername(superAdmin.getUsername()))
+            .thenReturn(Optional.of(superAdmin));
+        when(birthPlanRepository.findById(birthPlan.getId()))
+            .thenReturn(Optional.of(birthPlan));
+        when(birthPlanMapper.toResponseDTO(birthPlan))
+            .thenReturn(responseDTO);
+
+        BirthPlanResponseDTO result = birthPlanService.getBirthPlanById(birthPlan.getId(), superAdmin.getUsername());
+
+        assertEquals(responseDTO.getId(), result.getId());
+        verify(patientRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    void getBirthPlanById_asHospitalAdmin_throwsAccessDenied() {
+        // E9 #67 (D5): a hospital admin no longer bypasses the access check.
+        // The controller refuses the role first; this pins the service gate
+        // so an annotation drift alone cannot reopen the chart.
+        User hospitalAdmin = new User();
+        hospitalAdmin.setId(UUID.randomUUID());
+        hospitalAdmin.setUsername("admin@test.com");
+        hospitalAdmin.setUserRoles(createUserRoles("ROLE_HOSPITAL_ADMIN"));
+
+        when(userRepository.findByUsername(hospitalAdmin.getUsername()))
+            .thenReturn(Optional.of(hospitalAdmin));
+        when(birthPlanRepository.findById(birthPlan.getId()))
+            .thenReturn(Optional.of(birthPlan));
+
+        UUID birthPlanId = birthPlan.getId();
+        String username = hospitalAdmin.getUsername();
+        assertThrows(AccessDeniedException.class, () ->
+            birthPlanService.getBirthPlanById(birthPlanId, username)
+        );
+        verify(birthPlanMapper, never()).toResponseDTO(any());
+    }
+
+    @Test
     void getBirthPlansByPatientId_asDoctor_success() {
         // Given
         List<BirthPlan> plans = Arrays.asList(birthPlan);

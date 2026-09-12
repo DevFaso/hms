@@ -46,7 +46,7 @@ public class PostpartumCareController {
 
     @PostMapping("/observations")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Record a postpartum observation",
         description = "Creates a postpartum observation entry capturing vitals, uterine assessments, education, and follow-up actions.",
@@ -76,7 +76,7 @@ public class PostpartumCareController {
     }
 
     @GetMapping("/observations/recent")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "List recent postpartum observations",
         description = "Returns the most recent postpartum observations for the patient, including schedule snapshot.",
@@ -102,7 +102,7 @@ public class PostpartumCareController {
     }
 
     @GetMapping("/observations")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Search postpartum observations",
         description = "Returns a paginated set of postpartum observations filtered by time window and care plan context.",
@@ -137,7 +137,7 @@ public class PostpartumCareController {
     }
 
     @GetMapping("/schedule")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "View postpartum monitoring schedule",
         description = "Returns the active postpartum schedule including next due observation and overdue status.",

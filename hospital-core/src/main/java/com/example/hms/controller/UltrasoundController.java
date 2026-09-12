@@ -75,7 +75,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/orders/{orderId}")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "Retrieve a single ultrasound order by ID")
     public ResponseEntity<UltrasoundOrderResponseDTO> getOrderById(
         @PathVariable UUID orderId,
@@ -86,7 +86,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/orders/patient/{patientId}")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "List all ultrasound orders for a patient")
     public ResponseEntity<List<UltrasoundOrderResponseDTO>> getOrdersByPatientId(
         @PathVariable UUID patientId,
@@ -103,7 +103,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/orders/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
     @Operation(summary = "List all ultrasound orders for a hospital")
     public ResponseEntity<List<UltrasoundOrderResponseDTO>> getOrdersByHospitalId(
         @PathVariable UUID hospitalId,
@@ -114,7 +114,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/orders/hospital/{hospitalId}/pending")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
     @Operation(summary = "List pending ultrasound orders for a hospital (ordered or scheduled status)")
     public ResponseEntity<List<UltrasoundOrderResponseDTO>> getPendingOrders(
         @PathVariable UUID hospitalId,
@@ -125,7 +125,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/orders/hospital/{hospitalId}/high-risk")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
     @Operation(summary = "List high-risk pregnancy ultrasound orders for a hospital")
     public ResponseEntity<List<UltrasoundOrderResponseDTO>> getHighRiskOrders(
         @PathVariable UUID hospitalId,
@@ -172,7 +172,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/reports/{reportId}")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "Retrieve ultrasound report by report ID")
     public ResponseEntity<UltrasoundReportResponseDTO> getReportById(
         @PathVariable UUID reportId,
@@ -183,7 +183,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/reports/order/{orderId}")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "Retrieve ultrasound report by order ID")
     public ResponseEntity<UltrasoundReportResponseDTO> getReportByOrderId(
         @PathVariable UUID orderId,
@@ -194,7 +194,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/reports/hospital/{hospitalId}/follow-up-required")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
     @Operation(summary = "List ultrasound reports requiring follow-up for a hospital")
     public ResponseEntity<List<UltrasoundReportResponseDTO>> getReportsRequiringFollowUp(
         @PathVariable UUID hospitalId,
@@ -205,7 +205,7 @@ public class UltrasoundController {
     }
 
     @GetMapping("/reports/hospital/{hospitalId}/anomalies")
-    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("hasAuthority('PERFORM_ULTRASOUND_SCANS') or hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
     @Operation(summary = "List ultrasound reports with detected anomalies for a hospital")
     public ResponseEntity<List<UltrasoundReportResponseDTO>> getReportsWithAnomalies(
         @PathVariable UUID hospitalId,

@@ -93,7 +93,7 @@ public class LabResultController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated list of lab results. Hospital-scoped for tenant roles; SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
@@ -144,7 +144,7 @@ public class LabResultController {
     }
 
     @PostMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged.")
     public ResponseEntity<Void> acknowledgeLabResult(
             @PathVariable UUID id,
@@ -165,7 +165,7 @@ public class LabResultController {
      * back the wrong value is exactly the event worth having on the record.
      */
     @PostMapping("/{id}/critical-read-back")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Read back a critical lab value",
         description = "The receiving clinician repeats the value back; a match acknowledges the "
             + "result and stops escalation, a mismatch is rejected and recorded.")
@@ -212,7 +212,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Critical Lab Results", description = "Retrieves all critical lab results for a hospital since a specified time.")
     public ResponseEntity<List<LabResultResponseDTO>> getCriticalResults(
             @PathVariable UUID hospitalId,
@@ -224,7 +224,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical/unacknowledged")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Unacknowledged Critical Results", description = "Retrieves critical lab results that require acknowledgment - used for alert dashboards.")
     public ResponseEntity<List<LabResultResponseDTO>> getUnacknowledgedCriticalResults(
             @PathVariable UUID hospitalId,

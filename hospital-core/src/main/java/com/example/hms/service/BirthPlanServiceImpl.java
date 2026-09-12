@@ -51,7 +51,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private final CrossHospitalReachRecorder reachRecorder;
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
-    private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     private static final String ROLE_NURSE = "ROLE_NURSE";
@@ -223,12 +222,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         // Check access - only providers can search across patients
         checkProviderAccess(user);
 
-        // If hospital admin, limit to their hospital
-        if (hasRole(user, ROLE_HOSPITAL_ADMIN) && hospitalId == null) {
-            // Get user's assigned hospital from context
-            hospitalId = getUserHospitalId(user);
-        }
-
         Page<BirthPlan> birthPlans = birthPlanRepository.searchBirthPlans(
             hospitalId,
             patientId,
@@ -284,11 +277,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         // Only providers can view pending reviews
         checkProviderReviewAccess(user);
 
-        // If hospital admin, limit to their hospital
-        if (hasRole(user, ROLE_HOSPITAL_ADMIN) && hospitalId == null) {
-            hospitalId = getUserHospitalId(user);
-        }
-
         if (hospitalId == null) {
             throw new BusinessException("Hospital ID is required to view pending reviews");
         }
@@ -330,7 +318,9 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     }
 
     private void checkBirthPlanAccess(User user, BirthPlan birthPlan) {
-        if (hasRole(user, ROLE_SUPER_ADMIN) || hasRole(user, ROLE_HOSPITAL_ADMIN)) {
+        // E9 #67 (D5): a hospital admin is refused at the controller; only the
+        // platform operator bypasses the per-role checks below.
+        if (hasRole(user, ROLE_SUPER_ADMIN)) {
             return;
         }
 
@@ -348,7 +338,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private void checkProviderAccess(User user) {
         if (!hasRole(user, ROLE_SUPER_ADMIN) &&
-            !hasRole(user, ROLE_HOSPITAL_ADMIN) &&
             !hasRole(user, ROLE_DOCTOR) &&
             !hasRole(user, ROLE_MIDWIFE) &&
             !hasRole(user, ROLE_NURSE)) {
@@ -358,7 +347,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private void checkProviderReviewAccess(User user) {
         if (!hasRole(user, ROLE_SUPER_ADMIN) &&
-            !hasRole(user, ROLE_HOSPITAL_ADMIN) &&
             !hasRole(user, ROLE_DOCTOR) &&
             !hasRole(user, ROLE_MIDWIFE)) {
             throw new AccessDeniedException("Only doctors and midwives can review birth plans");

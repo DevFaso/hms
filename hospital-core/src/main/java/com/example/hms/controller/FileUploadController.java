@@ -125,7 +125,7 @@ public class FileUploadController {
         description = "Upload supporting documentation for OB-GYN referrals"
     )
     @PostMapping(value = "/referral-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Object> uploadReferralAttachment(
         @RequestParam("file") MultipartFile file,
         @RequestParam(value = "category", required = false) ReferralAttachmentCategory category,
@@ -166,7 +166,7 @@ public class FileUploadController {
         description = "Upload supplemental documents for patient chart updates"
     )
     @PostMapping(value = "/chart-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
     public ResponseEntity<Object> uploadChartAttachment(
         @RequestParam("file") MultipartFile file,
         @RequestParam(value = "label", required = false) String label,

@@ -50,7 +50,6 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private static final Logger log = LoggerFactory.getLogger(HighRiskPregnancyCarePlanServiceImpl.class);
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
-    private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_NURSE = "ROLE_NURSE";
     private static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
@@ -354,7 +353,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     }
 
     private void assertReadAccess(User user, HighRiskPregnancyCarePlan plan) {
-        if (isProvider(user) || isHospitalAdmin(user)) {
+        if (isProvider(user) || isSuperAdmin(user)) {
             return;
         }
         if (isPatient(user)) {
@@ -367,7 +366,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     }
 
     private void assertReadAccess(User user, Patient patient) {
-        if (isProvider(user) || isHospitalAdmin(user)) {
+        if (isProvider(user) || isSuperAdmin(user)) {
             return;
         }
         if (isPatient(user)) {
@@ -399,8 +398,9 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
             || hasRole(user, ROLE_NURSE);
     }
 
-    private boolean isHospitalAdmin(User user) {
-        return hasRole(user, ROLE_HOSPITAL_ADMIN) || hasRole(user, ROLE_SUPER_ADMIN);
+    /** E9 #67 (D5): only the platform operator bypasses the provider/patient checks. */
+    private boolean isSuperAdmin(User user) {
+        return hasRole(user, ROLE_SUPER_ADMIN);
     }
 
     private boolean isPatient(User user) {

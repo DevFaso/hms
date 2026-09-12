@@ -56,7 +56,7 @@ import java.util.UUID;
 @Validated
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyAuthority('REQUEST_BLOOD_PRODUCTS','VIEW_LAB_RESULTS') "
-    + "or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
+    + "or hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
     + "'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
 @Tag(name = "Transfusion", description = "Type and screen, blood units, crossmatch, administration, reactions")
 public class TransfusionController {
@@ -75,7 +75,7 @@ public class TransfusionController {
 
     /** Who may read the record. */
     private static final String READER =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
             + "'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')";
 
     private final TransfusionService transfusionService;

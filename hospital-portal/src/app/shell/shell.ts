@@ -469,7 +469,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Procedure Orders',
         translationKey: 'NAV.PROCEDURE_ORDERS',
         route: '/procedure-orders',
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'how_to_reg',
@@ -506,13 +506,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Disease Registries',
         translationKey: 'NAV.REGISTRIES',
         route: '/registries',
-        roles: [
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_DOCTOR',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
       },
       {
         // Tier 2 item 37. Same mirroring rule as /registries.
@@ -571,7 +565,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -643,7 +636,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -670,7 +662,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHYSIOTHERAPIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -718,7 +709,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -738,7 +728,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -999,7 +988,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/pharmacy/checkout',
       });
     }
-    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'clinical_notes',
         label: 'MTM Review',
@@ -1141,7 +1130,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_LAB_TECHNICIAN',
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
-        'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1164,7 +1152,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_DOCTOR',
         'ROLE_NURSE',
         'ROLE_MIDWIFE',
-        'ROLE_HOSPITAL_ADMIN',
         'ROLE_PHARMACIST',
         'ROLE_SUPER_ADMIN',
       ])

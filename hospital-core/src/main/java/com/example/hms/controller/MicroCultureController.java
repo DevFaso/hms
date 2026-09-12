@@ -61,7 +61,7 @@ public class MicroCultureController {
 
     private static final String READ_ROLES =
         "hasAnyAuthority('ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR',"
-            + "'ROLE_QUALITY_MANAGER','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
+            + "'ROLE_QUALITY_MANAGER','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
             + "'ROLE_PHARMACIST','ROLE_SUPER_ADMIN')";
 
     private final MicroCultureService microCultureService;

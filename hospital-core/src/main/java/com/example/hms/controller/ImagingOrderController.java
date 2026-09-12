@@ -103,7 +103,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders")
-	@PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+	@PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
 	@Operation(summary = "List all imaging orders")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getAllOrders(
 		@RequestParam(required = false) ImagingOrderStatus status
@@ -113,7 +113,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/hospital/{hospitalId}")
-	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RADIOLOGIST','DOCTOR','NURSE')")
+	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE')")
 	@Operation(summary = "List imaging orders for a hospital")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByHospital(
 		@PathVariable UUID hospitalId,

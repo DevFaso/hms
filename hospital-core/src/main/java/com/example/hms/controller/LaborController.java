@@ -40,7 +40,7 @@ import java.util.UUID;
 public class LaborController {
 
     private static final String CLINICAL_ROLES =
-        "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')";
 
     private static final int DEFAULT_EPISODE_LIMIT = 10;
     private static final int MAX_EPISODE_LIMIT = 50;

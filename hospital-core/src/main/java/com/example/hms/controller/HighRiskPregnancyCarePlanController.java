@@ -62,7 +62,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/{planId}")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Fetch a single high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> getPlan(
         @PathVariable UUID planId,
@@ -73,7 +73,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "List all plans recorded for a patient")
     public ResponseEntity<List<HighRiskPregnancyCarePlanResponseDTO>> getPlansForPatient(
         @PathVariable UUID patientId,
@@ -84,7 +84,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @GetMapping("/patient/{patientId}/active")
-    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("hasAuthority('MANAGE_HIGH_RISK_PREGNANCIES') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Retrieve the active high-risk pregnancy care plan for a patient")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> getActivePlan(
         @PathVariable UUID patientId,

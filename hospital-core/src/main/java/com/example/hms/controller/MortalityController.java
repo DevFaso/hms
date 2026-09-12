@@ -54,7 +54,7 @@ public class MortalityController {
 
     /** Who may certify or record a death. */
     private static final String RECORDER =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
 
     /** Who may read the register and individual records. */
     private static final String READER =

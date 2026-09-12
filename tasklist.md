@@ -2118,7 +2118,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 4 — role hygiene (independent of the model)
 
-- [ ] 67. **D5 + D6.** HOSPITAL_ADMIN off the clinical chart (one constant per
+- [x] 67. **D5 + D6.** ✅ DONE 2026-09-12 (three PRs, below). HOSPITAL_ADMIN off the clinical chart (one constant per
   surface: `CLINICAL_CHART_ROLES`); one SUPER_ADMIN inheritance list shared by
   `JwtTokenProvider` and `SecurityConfig.authoritiesMapper`; a guard test that
   fails when the two lists diverge. Needs `/security-review`.
@@ -2144,10 +2144,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `HospitalAdminOffChartTest` (annotations, with the keeps asserted too) and
   `SecurityConfigChartMatcherTest`. Keeps: demographics, registration,
   coverage, photo, wristband, documents, catalogs, ops sweeps, break-glass.
-  **(b2) open**: orders, results, imaging, medications, maternity, procedures,
-  transfusion, signatures, panels/registries/PRO and their pages, plus the
-  service-level gates (`RoleValidator.canCreatePrescription`, `BirthPlan` /
-  `HighRiskPregnancyCarePlan` scope widening). D6 is PR #619.
+  **(b2) D5 shipped 2026-09-12** — orders, results, imaging, medications,
+  maternity care, procedures, transfusion, report signatures, per-patient
+  panels and programmes, PRO responses, chart attachments: 108 guards across
+  30 controllers, the eight clinical lab matchers, the three service-level
+  gates (`RoleValidator.canCreatePrescription`, `BirthPlanServiceImpl`,
+  `HighRiskPregnancyCarePlanServiceImpl`), and the portal mirrors (directive,
+  maternity, imaging, lab, lab-results, prescriptions, mortality role lists;
+  ten route guards and nav entries). Pinned by `HospitalAdminOffOrdersTest` +
+  `SecurityConfigLabMatcherTest`. Keeps, asserted: the two escalation sweeps,
+  the delete-only corrections, the mortality register, signature governance,
+  admin panel views, prenatal and recall scheduling, catalogs, tagging,
+  labels, lookups, lab configuration. D6 is PR #619. With b2, item 67 is
+  complete except the dead HOSPITAL_ADMIN branch in
+  `ControllerAuthUtils.resolveHospitalScope` (identical to the fallthrough).
 - [ ] 68. **Dead tokens and phantom roles.** Strip the 111 permission tokens
   from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
   235 guards at once — not this item); seed or remove `ROLE_STAFF` (18
