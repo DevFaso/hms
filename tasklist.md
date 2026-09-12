@@ -1957,6 +1957,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   and admissions. Write guards untouched. Each PR: the finder, the service,
   the `RECORD_SHARE` row, a tenancy test that fails when the widening is
   reverted.
+  **(a) chart shipped 2026-09-12 (PR #603)**: problems, surgical history,
+  directives, nursing notes, chart updates; `CrossHospitalRows.maySurface` is
+  D3 in code and `CrossHospitalReachRecorder` the one ledger writer. **(b)
+  orders and results shipped 2026-09-12**: lab orders, lab results (patient
+  path), imaging orders, procedure orders, consultations (D3 applied),
+  referrals (originating hospital). ⚠ The ratchet is a CEILING and walks the
+  repository subfolders — 28 single-hospital finders remain, not the 26 this
+  bullet first counted; a widened finder whose single sibling still has a
+  caller (CDS hooks, FHIR `$everything`, bulk export, record sharing) stays
+  until #60/#65 retire the caller. ⚠ Lab and imaging rows carry NO sensitivity
+  tag (V158 tagged encounters, admissions, consultations, problems, notes
+  only), so an HIV viral load travels cross-hospital today — that is #63's
+  department classification, or a tag on `LabTestDefinition`, to decide.
 - [ ] 60. **Whole-chart surfaces on the readable set.** ⚠ Since #56 the
   storyboard and chart review already surface foreign ALLERGY rows with no
   `RECORD_SHARE` (those calls carry no requester); wiring the ledger through

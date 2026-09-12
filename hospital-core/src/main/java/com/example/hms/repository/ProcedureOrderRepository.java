@@ -16,6 +16,9 @@ public interface ProcedureOrderRepository extends JpaRepository<ProcedureOrder, 
 
     List<ProcedureOrder> findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(UUID patientId, UUID hospitalId);
 
+    /** E9 #59b — procedure orders across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<ProcedureOrder> findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     List<ProcedureOrder> findByHospital_IdAndStatusOrderByScheduledDatetimeAsc(UUID hospitalId, ProcedureOrderStatus status);
 
     List<ProcedureOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<ProcedureOrderStatus> statuses);

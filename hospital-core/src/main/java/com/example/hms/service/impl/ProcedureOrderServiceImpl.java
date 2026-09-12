@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -39,6 +42,8 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
@@ -108,7 +113,14 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ProcedureOrder> orders;
         if (activeHospitalId != null) {
-            orders = procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, activeHospitalId);
+            // E9 #59b — procedure orders follow the patient across the
+            // readable hospitals (untagged, V158); every foreign row is accounted.
+            UUID requesterUserId = roleValidator.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            orders = procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
+            reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), activeHospitalId),
+                "Cross-hospital procedure order read on the treatment relationship");
         } else {
             orders = procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
         }

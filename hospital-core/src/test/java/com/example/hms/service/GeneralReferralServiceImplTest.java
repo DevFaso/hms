@@ -36,6 +36,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class GeneralReferralServiceImplTest {
@@ -49,6 +54,8 @@ class GeneralReferralServiceImplTest {
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.service.ReferralEventRecorder eventRecorder;
     @Mock private com.example.hms.repository.ReferralEventRepository eventRepository;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private GeneralReferralServiceImpl service;
@@ -363,6 +370,30 @@ class GeneralReferralServiceImplTest {
         List<GeneralReferralResponseDTO> result = service.getReferralsByPatient(patientId);
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getReferralsByPatient follows the patient across the readable hospitals and accounts the reach")
+    void getReferralsByPatientFollowsThePatient() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        other.setName("Hôpital B");
+        GeneralReferral local = buildReferral();
+        GeneralReferral foreign = buildReferral();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(local, foreign));
+
+        List<GeneralReferralResponseDTO> result = service.getReferralsByPatient(patientId);
+
+        assertThat(result).extracting(GeneralReferralResponseDTO::getId).containsExactly(referralId, foreign.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 
     @Test

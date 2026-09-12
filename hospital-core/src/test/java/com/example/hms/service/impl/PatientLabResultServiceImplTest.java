@@ -34,6 +34,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
+import java.util.Set;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
@@ -43,6 +49,8 @@ class PatientLabResultServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private LabResultMapper labResultMapper;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private PatientLabResultServiceImpl service;
 
@@ -56,6 +64,9 @@ class PatientLabResultServiceImplTest {
         hospitalId = UUID.randomUUID();
         patient = new Patient(); patient.setId(patientId);
         hospital = new Hospital(); hospital.setId(hospitalId);
+        // E9 #59b — the read spans the readable set; by default just the acting hospital.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId));
     }
 
     private LabResult buildLabResult(String value, String unit, boolean released, boolean acknowledged) {
@@ -72,7 +83,7 @@ class PatientLabResultServiceImplTest {
     @Test void getLabResults_success_empty() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of());
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10)).isEmpty();
     }
@@ -94,7 +105,7 @@ class PatientLabResultServiceImplTest {
     @Test void getLabResults_defaultLimit() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of());
         // passing 0 should use default limit of 25
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 0)).isEmpty();
@@ -103,7 +114,7 @@ class PatientLabResultServiceImplTest {
     @Test void getLabResults_exceedsMaxLimit() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of());
         // passing 999 should be clamped to 100
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 999)).isEmpty();
@@ -121,7 +132,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -144,7 +155,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -161,7 +172,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -178,7 +189,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -195,7 +206,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -212,7 +223,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -230,7 +241,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -249,7 +260,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -264,7 +275,7 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -284,10 +295,36 @@ class PatientLabResultServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results.get(0).getPerformedBy()).isEqualTo("Jane Doe");
+    }
+
+    @Test void getLabResults_followsThePatientWithProvenanceAndAccountsTheReach() {
+        // E9 #59b — a result released at Hôpital B is on the list at Hôpital A
+        // with its hospital on the row, and the disclosure is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hôpital B");
+        LabOrder localOrder = new LabOrder(); localOrder.setHospital(hospital);
+        LabOrder foreignOrder = new LabOrder(); foreignOrder.setHospital(other);
+        LabResult local = buildLabResult("5.1", "mmol/L", true, false); local.setLabOrder(localOrder);
+        LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(local, foreign));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, otherHospitalId);
+        assertThat(results.get(1).getHospitalName()).isEqualTo("Hôpital B");
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

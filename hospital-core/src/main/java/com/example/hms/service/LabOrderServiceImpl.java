@@ -46,6 +46,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 
 @Slf4j
 @Service
@@ -67,6 +69,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
@@ -240,7 +244,17 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+            // E9 #59b — lab orders follow the patient: the acting hospital plus
+            // every hospital the policy lets this caller read for this patient.
+            // Lab orders carry no sensitivity tag (V158), so every foreign row
+            // travels; each one surfaced is accounted.
+            UUID requesterUserId = roleValidator.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+            List<LabOrder> orders = labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), hospitalId),
+                "Cross-hospital lab order read on the treatment relationship");
+            return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }

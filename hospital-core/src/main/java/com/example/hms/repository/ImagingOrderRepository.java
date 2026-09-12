@@ -57,4 +57,11 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
 
     /** E8 #48 — imaging orders of this patient here; the resolver excludes terminal statuses. */
     List<ImagingOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+    /** E9 #59b — imaging orders across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<ImagingOrder> findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59b — the status-filtered sibling of the finder above. */
+    List<ImagingOrder> findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, ImagingOrderStatus status);
 }

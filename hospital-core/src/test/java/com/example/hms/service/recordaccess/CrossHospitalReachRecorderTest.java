@@ -23,6 +23,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.model.Hospital;
 
 @ExtendWith(MockitoExtension.class)
 class CrossHospitalReachRecorderTest {
@@ -48,6 +49,16 @@ class CrossHospitalReachRecorderTest {
 
         assertThat(reach).containsOnly(Map.entry(a.toString(), 2L), Map.entry(b.toString(), 1L));
         assertThat(CrossHospitalReachRecorder.reachOf(null, Row::hospitalId, acting)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("hospitalIdOf reads the id off the association and tolerates its absence")
+    void hospitalIdOfTolerantOfNull() {
+        Hospital hospital = new Hospital();
+        UUID id = UUID.randomUUID();
+        hospital.setId(id);
+        assertThat(CrossHospitalReachRecorder.hospitalIdOf(hospital)).isEqualTo(id);
+        assertThat(CrossHospitalReachRecorder.hospitalIdOf(null)).isNull();
     }
 
     @Test

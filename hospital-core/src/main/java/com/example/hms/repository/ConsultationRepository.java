@@ -40,6 +40,10 @@ public interface ConsultationRepository extends JpaRepository<Consultation, UUID
     @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByPatient_IdOrderByRequestedAtDesc(UUID patientId);
 
+    /** E9 #59b — consultations across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
+    List<Consultation> findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByHospital_IdAndStatusOrderByRequestedAtDesc(UUID hospitalId, ConsultationStatus status);
 
