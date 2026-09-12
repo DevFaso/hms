@@ -42,6 +42,12 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
     List<DischargeSummary> findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(
             UUID patientId, UUID hospitalId);
 
+    /** E9 #60b — the readable-set sibling, for FHIR {@code $everything}. */
+    @org.springframework.data.jpa.repository.EntityGraph(
+        attributePaths = {"patient", "encounter", "hospital", "dischargingProvider"})
+    List<DischargeSummary> findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(
+            UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     /**
      * Find all discharge summaries for a hospital within a date range
      */

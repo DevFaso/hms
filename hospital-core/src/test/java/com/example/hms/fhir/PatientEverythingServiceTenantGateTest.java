@@ -36,6 +36,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.springframework.data.domain.PageImpl;
 
 /**
  * Unit tests focused on the PR #352 Copilot finding (High):
@@ -61,6 +68,10 @@ class PatientEverythingServiceTenantGateTest {
     private com.example.hms.repository.UserRepository userRepository;
     private PatientFhirMapper patientMapper;
     private AuditEventLogService auditService;
+    private EncounterFhirMapper encounterMapper;
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     private PatientEverythingService service;
 
     private final UUID activeHospitalId = UUID.randomUUID();
@@ -79,6 +90,10 @@ class PatientEverythingServiceTenantGateTest {
         userRepository = mock(com.example.hms.repository.UserRepository.class);
         patientMapper = mock(PatientFhirMapper.class);
         auditService = mock(AuditEventLogService.class);
+        encounterMapper = mock(EncounterFhirMapper.class);
+        recordAccessPolicy = mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
+        reachRecorder = mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        sensitivityClassifier = mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
         service = new PatientEverythingService(
             properties,
             patientRepository,
@@ -92,12 +107,15 @@ class PatientEverythingServiceTenantGateTest {
             mock(com.example.hms.repository.DischargeSummaryRepository.class),
             userRepository,
             patientMapper,
-            mock(EncounterFhirMapper.class),
+            encounterMapper,
             mock(ObservationFhirMapper.class),
             mock(ConditionFhirMapper.class),
             mock(MedicationRequestFhirMapper.class),
             mock(com.example.hms.fhir.mapper.DocumentReferenceFhirMapper.class),
-            auditService
+            auditService,
+            recordAccessPolicy,
+            reachRecorder,
+            sensitivityClassifier
         );
     }
 
@@ -217,9 +235,9 @@ class PatientEverythingServiceTenantGateTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(new Patient()));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
             .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
-        when(encounterRepository.findByPatient_IdAndHospital_Id(
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
                 org.mockito.ArgumentMatchers.eq(patientId),
-                org.mockito.ArgumentMatchers.eq(activeHospitalId),
+                any(),
                 any(org.springframework.data.domain.PageRequest.class)))
             .thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(
                 java.util.List.of(new com.example.hms.model.Encounter()),
@@ -263,11 +281,11 @@ class PatientEverythingServiceTenantGateTest {
     private void stubEmptyPage() {
         org.mockito.stubbing.Answer<Object> empty = inv -> new org.springframework.data.domain.PageImpl<>(
             java.util.List.of(), inv.getArgument(2), 0);
-        when(vitalSignRepository.findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
+        when(vitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
             any(), any(), any())).thenAnswer(empty);
-        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
             any(), any(), any())).thenAnswer(empty);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(
             any(), any(), any(org.springframework.data.domain.PageRequest.class))).thenAnswer(empty);
         when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
             any(), any())).thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(
@@ -278,5 +296,49 @@ class PatientEverythingServiceTenantGateTest {
         HospitalContextHolder.setContext(HospitalContext.builder()
             .activeHospitalId(activeHospitalId)
             .build());
+    }
+
+    @Test
+    @DisplayName("the bundle follows the patient: a foreign encounter is rendered, a foreign sensitive one withheld, the reach accounted")
+    void bundleFollowsThePatientAndAccountsTheReach() {
+        properties.getEverything().setEnabled(true);
+        setActiveHospital();
+        UUID otherHospitalId = UUID.randomUUID();
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(otherHospitalId);
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        com.example.hms.model.Encounter away = new com.example.hms.model.Encounter();
+        away.setId(UUID.randomUUID());
+        away.setHospital(other);
+        com.example.hms.model.Encounter awaySensitive = new com.example.hms.model.Encounter();
+        awaySensitive.setId(UUID.randomUUID());
+        awaySensitive.setHospital(other);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
+            .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+        when(patientMapper.toFhir(any(Patient.class))).thenReturn(new org.hl7.fhir.r4.model.Patient());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospitalId)))
+            .thenReturn(Set.of(activeHospitalId, otherHospitalId));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(eq(patientId), eq(Set.of(activeHospitalId, otherHospitalId)), any()))
+            .thenReturn(new PageImpl<>(List.of(away, awaySensitive)));
+        when(sensitivityClassifier.effectiveCategory(awaySensitive)).thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(encounterMapper.toFhir(any())).thenReturn(new org.hl7.fhir.r4.model.Encounter());
+        when(vitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        org.hl7.fhir.r4.model.Bundle bundle = service.everythingForPatient(patientId);
+
+        verify(encounterMapper).toFhir(away);
+        verify(encounterMapper, never()).toFhir(awaySensitive);
+        assertThat(bundle.getTotal()).isEqualTo(2);
+        verify(reachRecorder).recordReach(eq(patientId), eq(activeHospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

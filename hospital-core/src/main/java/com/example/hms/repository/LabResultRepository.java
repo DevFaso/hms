@@ -226,6 +226,23 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         Pageable pageable
     );
 
+    /** E9 #60b — the paged readable-set sibling, for FHIR {@code $everything}. */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    Page<LabResult> findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+        UUID patientId,
+        Collection<UUID> hospitalIds,
+        Pageable pageable
+    );
+
     /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
     long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
 
