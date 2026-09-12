@@ -24,6 +24,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
+import java.util.Optional;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class CrossHospitalReachRecorderTest {
@@ -33,6 +35,9 @@ class CrossHospitalReachRecorderTest {
 
     @Mock
     private AuditEventLogService auditEventLogService;
+
+    @Mock
+    private BreakGlassGate breakGlassGate;
 
     @InjectMocks
     private CrossHospitalReachRecorder recorder;
@@ -120,5 +125,31 @@ class CrossHospitalReachRecorderTest {
             Map.of("a", 1L, "b", 2L), "x");
 
         verify(auditEventLogService, times(2)).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("a read under a live break-the-glass session names the session on every row (E9 #62)")
+    void stampsTheBreakGlassSession() {
+        UUID patient = UUID.randomUUID();
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID session = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(actor, patient, acting)).thenReturn(Optional.of(session));
+
+        recorder.recordReach(patient, acting, actor, null, Map.of(UUID.randomUUID().toString(), 1L), "x");
+
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        assertThat(String.valueOf(captor.getValue().getDetails())).contains("breakGlassSessionId=" + session);
+    }
+
+    @Test
+    @DisplayName("without a session the row carries no session key")
+    void noSessionNoStamp() {
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenReturn(Optional.empty());
+        recorder.recordReach(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, Map.of("s", 1L), "x");
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        assertThat(String.valueOf(captor.getValue().getDetails())).doesNotContain("breakGlassSessionId");
     }
 }

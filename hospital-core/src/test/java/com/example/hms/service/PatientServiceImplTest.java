@@ -193,6 +193,7 @@ class PatientServiceImplTest {
     /** E9 #59 — the reach ledger is a component now. */
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
 
     /** E9 #56 — constructor deps for the one-allergy-store change. */
     @Mock

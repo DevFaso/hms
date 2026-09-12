@@ -41,6 +41,7 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Implementation of AdmissionService
@@ -78,6 +79,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional
@@ -298,9 +300,10 @@ public class AdmissionServiceImpl implements AdmissionService {
         // break-the-glass (E9 #62); every foreign row surfaced is accounted.
         UUID requesterUserId = roleValidator.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
         List<Admission> admissions = admissionRepository
             .findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(patientId, readable).stream()
-            .filter(a -> CrossHospitalRows.maySurface(a.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(a)))
+            .filter(a -> CrossHospitalRows.maySurface(a.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(a), unlocked))
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(admissions.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList(), activeHospitalId),

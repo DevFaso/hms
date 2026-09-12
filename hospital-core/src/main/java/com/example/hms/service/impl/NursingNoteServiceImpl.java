@@ -54,6 +54,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 @Service
 @RequiredArgsConstructor
@@ -76,6 +77,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final SensitivityClassifier sensitivityClassifier;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional
@@ -182,10 +184,11 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         // foreign note with a sensitivity category is withheld (D3) and opens
         // via break-the-glass. Every foreign note surfaced is accounted.
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(actorUserId, patientId, resolvedHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(actorUserId, patientId, resolvedHospitalId);
         List<NursingNoteResponseDTO> responses = nursingNoteRepository
             .findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream()
             .filter(note -> CrossHospitalRows.maySurface(note.getHospital(), resolvedHospitalId,
-                sensitivityClassifier.effectiveCategory(note)))
+                sensitivityClassifier.effectiveCategory(note), unlocked))
             .limit(effectiveLimit)
             .map(nursingNoteMapper::toResponse)
             .toList();

@@ -47,6 +47,7 @@ class ReadableHospitalIdsTest {
     @Mock private StaffRepository staffRepository;
     @Mock private TreatmentRelationshipResolver resolver;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private BreakGlassGate breakGlassGate;
 
     private RecordAccessPolicyImpl policy;
 
@@ -59,7 +60,7 @@ class ReadableHospitalIdsTest {
     @BeforeEach
     void setUp() {
         policy = new RecordAccessPolicyImpl(hospitalRepository, optOutRepository, staffRepository,
-            resolver, registrationRepository);
+            resolver, registrationRepository, breakGlassGate);
 
         Hospital acting = hospital(actingId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
         other = hospital(otherId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);

@@ -45,4 +45,17 @@ class CrossHospitalRowsTest {
         assertThat(CrossHospitalRows.maySurface(other, ACTING, SensitivityCategory.SUBSTANCE_USE)).isFalse();
         assertThat(CrossHospitalRows.maySurface(other, ACTING, null)).isTrue();
     }
+
+    @Test
+    @DisplayName("a live break-the-glass session surfaces a foreign sensitive row (E9 #62); local rows are unaffected")
+    void unlockedSurfacesForeignSensitiveRows() {
+        for (SensitivityCategory category : SensitivityCategory.values()) {
+            assertThat(CrossHospitalRows.maySurface(OTHER, ACTING, category, true)).as(category.name()).isTrue();
+            assertThat(CrossHospitalRows.maySurface(OTHER, ACTING, category, false)).as(category.name()).isFalse();
+        }
+        Hospital other = new Hospital();
+        other.setId(OTHER);
+        assertThat(CrossHospitalRows.maySurface(other, ACTING, SensitivityCategory.HIV, true)).isTrue();
+        assertThat(CrossHospitalRows.maySurface(ACTING, ACTING, SensitivityCategory.HIV, false)).isTrue();
+    }
 }

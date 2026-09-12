@@ -98,6 +98,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
     @Mock private EncounterHistoryRepository encounterHistoryRepository;
     @Mock private EncounterNoteRepository encounterNoteRepository;
     @Mock private EncounterNoteAddendumRepository encounterNoteAddendumRepository;

@@ -2017,6 +2017,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   patient) and the sensitive-row unlock consume `BreakGlassSession`; the
   consent resolver stops being its only consumer. Reads under a session are
   stamped with the session id in the disclosure row. Absorbs E8 #54.
+  **(a) shipped 2026-09-12**: `BreakGlassGate` (one live-session question,
+  request-cached, a session declared at another hospital does not count);
+  `RecordAccessPolicy` grants a Tier B relationship of kind `BREAK_GLASS`
+  when no registration and no carrier exist — opt-out and the staff gate
+  still hold; `CrossHospitalReachRecorder` stamps `breakGlassSessionId` on
+  every disclosure row written under a session; the D3 sites already on
+  develop (diagnoses, timeline, doctor record, nursing notes, consultations,
+  admissions, encounters) take an `unlocked` flag. **(b) open**: the same
+  flag at the whole-chart sites (storyboard, chart review, snapshot, FHIR
+  `$everything`) once #610/#60b land; the portal's declare flow is #64's.
 - [ ] 63. **Department classification screen + heuristic deletion.**
   `PUT /departments/{id}/default-sensitivity` exists; the HOSPITAL_ADMIN
   screen does not. Add it, put it on the hospital onboarding checklist, and
