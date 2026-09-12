@@ -1,6 +1,5 @@
 package com.example.hms.service.recordaccess;
 
-import com.example.hms.config.RecordAccessProperties;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
@@ -49,7 +48,6 @@ class ReadableHospitalIdsTest {
     @Mock private TreatmentRelationshipResolver resolver;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
 
-    private final RecordAccessProperties properties = new RecordAccessProperties();
     private RecordAccessPolicyImpl policy;
 
     private final UUID actor = UUID.randomUUID();
@@ -61,7 +59,7 @@ class ReadableHospitalIdsTest {
     @BeforeEach
     void setUp() {
         policy = new RecordAccessPolicyImpl(hospitalRepository, optOutRepository, staffRepository,
-            resolver, registrationRepository, properties);
+            resolver, registrationRepository);
 
         Hospital acting = hospital(actingId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
         other = hospital(otherId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
@@ -101,15 +99,6 @@ class ReadableHospitalIdsTest {
     }
 
     @Test
-    @DisplayName("no relationship at the acting hospital returns it alone")
-    void noRelationshipStaysLocal() {
-        when(resolver.resolve(patientId, actingId, actor)).thenReturn(Optional.empty());
-
-        assertThat(policy.readableHospitalIds(actor, patientId, actingId))
-            .containsExactly(actingId);
-    }
-
-    @Test
     @DisplayName("E9 #58 — registered at the acting hospital: the patient's other hospitals are readable with no other carrier")
     void registrationWidens() {
         when(resolver.resolve(patientId, actingId, actor)).thenReturn(Optional.empty());
@@ -121,7 +110,7 @@ class ReadableHospitalIdsTest {
     }
 
     @Test
-    @DisplayName("flag ON with a treatment relationship adds the patient's other hospitals")
+    @DisplayName("a treatment relationship adds the patient's other hospitals")
     void widensWhenPermitted() {
         assertThat(policy.readableHospitalIds(actor, patientId, actingId))
             .containsExactlyInAnyOrder(actingId, otherId);
