@@ -39,11 +39,11 @@ public class IsolationController {
 
     /** Nursing raises and lifts precautions in practice, so NURSE and MIDWIFE are included. */
     static final String CLINICAL_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE')";
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')";
 
     /** Reads additionally reach the desk — placement decisions are made there. */
     private static final String READ_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')";
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')";
 
     private final IsolationService isolationService;
 

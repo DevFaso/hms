@@ -37,7 +37,7 @@ public class GrowthChartController {
     private final ControllerAuthUtils authUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Anthropometric growth series for a patient",
         description = "Weight, height and head-circumference points over age, seeded with the linked "

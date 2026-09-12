@@ -34,7 +34,7 @@ import java.util.UUID;
 public class CdsAcknowledgementController {
 
     private static final String CLINICIAN_ROLES =
-        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')";
 
     private final CdsAcknowledgementService service;
 

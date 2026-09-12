@@ -55,7 +55,7 @@ public class GeneralReferralController {
     }
 
     @GetMapping("/{referralId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
     @Operation(summary = "Get referral", description = "Retrieve referral by ID")
     public ResponseEntity<GeneralReferralResponseDTO> getReferral(@PathVariable UUID referralId) {
         return ResponseEntity.ok(referralService.getReferral(referralId));
@@ -118,7 +118,7 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/cancel")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Cancel referral", description = "Cancel referral with reason")
     public ResponseEntity<Void> cancelReferral(
         @PathVariable UUID referralId,
@@ -129,7 +129,7 @@ public class GeneralReferralController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
     @Operation(summary = "Get referrals by patient", description = "Retrieve all referrals for a patient")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getReferralsByPatient(@PathVariable UUID patientId) {
         return ResponseEntity.ok(referralService.getReferralsByPatient(patientId));
@@ -150,7 +150,7 @@ public class GeneralReferralController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get referrals by hospital", description = "Retrieve referrals for hospital with optional status filter")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getReferralsByHospital(
         @PathVariable UUID hospitalId,
@@ -160,7 +160,7 @@ public class GeneralReferralController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "List all referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getAllReferrals(
         @RequestParam(required = false) String status
@@ -169,14 +169,14 @@ public class GeneralReferralController {
     }
 
     @GetMapping("/overdue")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get overdue referrals", description = "Retrieve all overdue referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getOverdueReferrals() {
         return ResponseEntity.ok(referralService.getOverdueReferrals());
     }
 
     @GetMapping("/{referralId}/events")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Get referral state-machine audit trail",
         description = "Chronological list of every transition (submit / acknowledge / schedule / "

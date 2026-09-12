@@ -861,14 +861,7 @@ export const routes: Routes = [
         path: 'encounters',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_DOCTOR',
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
       },
@@ -878,14 +871,7 @@ export const routes: Routes = [
         path: 'admissions',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_DOCTOR',
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./admissions/admissions').then((m) => m.AdmissionsComponent),
       },
@@ -964,13 +950,7 @@ export const routes: Routes = [
         path: 'discharge',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_DOCTOR',
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./discharge/discharge').then((m) => m.DischargeComponent),
       },
@@ -1078,7 +1058,6 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_MANAGER',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1111,13 +1090,7 @@ export const routes: Routes = [
         path: 'consultations',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_DOCTOR',
-            'ROLE_NURSE',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./consultations/consultations').then((m) => m.ConsultationsComponent),
@@ -1157,7 +1130,6 @@ export const routes: Routes = [
             // 2026-08-23 role audit: OB-GYN referrals are an explicit midwife
             // duty in the backend role model — the guard was the outlier.
             'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],

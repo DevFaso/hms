@@ -461,7 +461,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
 @GetMapping("/{id}/allergies")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PHARMACIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     public ResponseEntity<List<PatientAllergyResponseDTO>> getPatientAllergies(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -566,7 +566,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/{id}/diagnoses")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_HOSPITAL_ADMIN','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<PatientProblemResponseDTO>> listPatientDiagnoses(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -667,7 +667,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/{id}/chart-updates")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<Page<PatientChartUpdateResponseDTO>> listPatientChartUpdates(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -693,7 +693,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/{patientId}/chart-updates/{updateId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<PatientChartUpdateResponseDTO> getPatientChartUpdate(
         @PathVariable UUID patientId,
         @PathVariable UUID updateId,

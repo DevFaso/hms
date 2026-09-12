@@ -45,7 +45,7 @@ public class InBasketController {
     // List items (paged, filtered by type / status)
     // ----------------------------------------------------------
     @GetMapping(consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List In-Basket items", description = "Returns paginated In-Basket items for the current user, ordered by priority then date.")
     public ResponseEntity<Page<InBasketItemDTO>> list(
             @RequestParam(required = false) InBasketItemType type,
@@ -74,7 +74,7 @@ public class InBasketController {
     // Unread count summary
     // ----------------------------------------------------------
     @GetMapping(value = "/summary", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get In-Basket unread summary", description = "Returns unread counts grouped by item type.")
     public ResponseEntity<InBasketSummaryDTO> summary(
             @RequestParam(required = false) UUID hospitalId,
@@ -99,7 +99,7 @@ public class InBasketController {
     // Mark as read
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}/read", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Mark item as read")
     public ResponseEntity<InBasketItemDTO> markAsRead(
             @PathVariable UUID id,
@@ -114,7 +114,7 @@ public class InBasketController {
     // Acknowledge
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}/acknowledge", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Acknowledge an In-Basket item")
     public ResponseEntity<InBasketItemDTO> acknowledge(
             @PathVariable UUID id,

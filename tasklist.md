@@ -2129,25 +2129,25 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `JwtTokenProvider.getAuthenticationFromJwt` and
   `SecurityConfig.authoritiesMapper`; `RoleExpansionTest` fails the build if
   either file grows a list of its own again.
-  **(b) D5 open, sized 2026-09-12**: 281 of the 627 `@PreAuthorize` guards
-  naming HOSPITAL_ADMIN are clinical-chart surfaces across ~60 controllers,
-  behind a second layer (`SecurityConfig` matchers, `GET /patients/**` at
-  L426 blankets every chart sub-resource), three service-level gates
-  (`RoleValidator.isStaffOrAdminFromAuth` inside `canViewPatient`,
-  `RoleValidator.canCreatePrescription`, `BirthPlanServiceImpl` /
-  `HighRiskPregnancyCarePlanServiceImpl` scope widening) and ~20 portal
-  mirrors (`chart-access.ts`, `patient-detail.canView*`, the `/patients`
-  route guard, shell nav, per-page `hasAnyActiveRole`). `CLINICAL_ROLES` is
-  already taken with five different values, so the shared constant needs a
-  distinct name in `SecurityConstants`. Ships in slices: (b1) the patient
-  chart page — `/patients/**` reads, storyboard, chart review, vitals,
-  encounters, notes, admissions, discharge, consultations, referrals,
-  in-basket — backend + matchers + service gates + the patient-detail /
-  route / nav mirrors together; (b2) orders, results, imaging, medications,
-  maternity, procedures, transfusion, signatures with their pages. Keeps by
-  design: break-glass, registration, coverage, disclosure oversight,
-  department/config catalogs, ops sweeps. Item 69 widens the same guards
-  and edits the same constant.
+  **(b1) D5 shipped 2026-09-12** — the patient chart page and what it opens
+  onto: the `/patients/{id}` clinical sub-resources (allergies, diagnoses,
+  chart updates, storyboard, chart review, vitals, lab results, medications,
+  micro-cultures, FHIR record, growth, intake/output), encounters and their
+  treatments and notes, nursing notes, admissions (not the order-set catalog),
+  applying an order set, discharge summaries and approvals, transfers,
+  isolation, consultations, referrals (not the expire-overdue sweep or the OB
+  reports summary), the in-basket, CDS acknowledgements — 89 guards across 24
+  controllers, with the matcher layer narrowed the same way (chart patterns
+  matched ahead of the `/patients/**` blanket, vitals POST/GET) and the portal
+  mirrors (`chart-access.ts`, patient-detail growth/fluid/download/micro, the
+  six route guards and nav entries, discharge page). Pinned by
+  `HospitalAdminOffChartTest` (annotations, with the keeps asserted too) and
+  `SecurityConfigChartMatcherTest`. Keeps: demographics, registration,
+  coverage, photo, wristband, documents, catalogs, ops sweeps, break-glass.
+  **(b2) open**: orders, results, imaging, medications, maternity, procedures,
+  transfusion, signatures, panels/registries/PRO and their pages, plus the
+  service-level gates (`RoleValidator.canCreatePrescription`, `BirthPlan` /
+  `HighRiskPregnancyCarePlan` scope widening). D6 is PR #619.
 - [ ] 68. **Dead tokens and phantom roles.** Strip the 111 permission tokens
   from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
   235 guards at once — not this item); seed or remove `ROLE_STAFF` (18

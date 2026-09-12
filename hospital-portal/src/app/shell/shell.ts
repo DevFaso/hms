@@ -393,14 +393,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/encounters',
         permission: 'Create Encounters',
         // Mirrors the /encounters RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'hotel',
@@ -409,14 +402,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admissions',
         permission: 'Admit Patients',
         // Mirrors the /admissions RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'grid_view',
@@ -504,13 +490,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Discharge',
         translationKey: 'NAV.DISCHARGE',
         route: '/discharge',
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'school',
@@ -648,7 +628,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_LAB_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -676,13 +655,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/consultations',
         permission: 'Request Consultations',
         // Mirrors the /consultations RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'assignment',
@@ -709,14 +682,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/referrals',
         permission: 'Create Referrals',
         // Mirrors the /referrals RoleGuard (midwife added there in this change).
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'receipt_long',

@@ -1,21 +1,17 @@
 /**
  * Role lists mirroring the backend @PreAuthorize gates on the patient-chart
  * endpoints (allergies / diagnoses / chart-updates / doctor-timeline).
+ * E9 #67 (D5): HOSPITAL_ADMIN is administrative-only on the chart — it keeps
+ * demographics, coverage and registration, none of the lists below.
  * Single source of truth for PatientChartComponent and the Chart tab gate in
  * PatientDetailComponent — update here when the backend gates change.
  */
 export const CHART_ROLES = {
-  viewAllergies: [
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_PHARMACIST',
-  ],
+  viewAllergies: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   editAllergies: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
-  viewProblems: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN'],
+  viewProblems: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   editProblems: ['ROLE_DOCTOR'],
-  viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN'],
+  viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   createUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   viewTimeline: ['ROLE_DOCTOR'],
 } as const;
@@ -42,7 +38,6 @@ export const VITALS_VIEW_ROLES: string[] = [
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
   'ROLE_DOCTOR',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_RADIOLOGIST',
   'ROLE_ANESTHESIOLOGIST',
   'ROLE_PHYSIOTHERAPIST',
@@ -54,7 +49,6 @@ export const ENCOUNTER_VIEW_ROLES: string[] = [
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_RADIOLOGIST',
   'ROLE_ANESTHESIOLOGIST',
   'ROLE_PHYSIOTHERAPIST',
@@ -75,7 +69,6 @@ export const CHART_REVIEW_VIEW_ROLES: string[] = [
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_RECEPTIONIST',
   'ROLE_PHARMACIST',
   'ROLE_LAB_SCIENTIST',

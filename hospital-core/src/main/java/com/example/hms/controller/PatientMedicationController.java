@@ -37,7 +37,7 @@ public class PatientMedicationController {
     private final ControllerAuthUtils authUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "List patient medications",
         description = "Returns simplified medication summaries for the selected patient, scoped to the caller's hospital context.",
