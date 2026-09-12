@@ -77,7 +77,7 @@ public class ConsultationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "List all consultations")
     public ResponseEntity<List<ConsultationResponseDTO>> getAllConsultations(
         @RequestParam(required = false) ConsultationStatus status
@@ -87,7 +87,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "List consultations for hospital",
                description = "Filter by status: REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED")
     public ResponseEntity<List<ConsultationResponseDTO>> getConsultationsForHospital(
@@ -99,7 +99,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "Get pending consultations requiring action",
                description = "Returns consultations in REQUESTED or ACKNOWLEDGED status")
     public ResponseEntity<List<ConsultationResponseDTO>> getPendingConsultations(@PathVariable UUID hospitalId) {
@@ -134,7 +134,7 @@ public class ConsultationController {
     // hospital-path reads have no caller in the portal at all — and they now
     // validate the path hospital against the caller's active one rather than
     // trusting it, so the reason for keeping them narrow is weaker than it was.
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
         @RequestParam(required = false) UUID hospitalId
@@ -144,7 +144,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','DENTIST')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','DENTIST')")
     @Operation(summary = "Consultation statistics", description = "Aggregated counts and averages for analytics")
     public ResponseEntity<ConsultationStatsDTO> getStats(
         @RequestParam(required = false) UUID hospitalId
@@ -253,7 +253,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/assign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
     @Operation(summary = "Assign consultation to consultant",
                description = "Assign a REQUESTED consultation to a specific consultant; status changes to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> assignConsultation(
@@ -268,7 +268,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/reassign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
     @Operation(summary = "Reassign consultation to a different consultant",
                description = "Reassign a consultation to a different consultant with a required reason; status reverts to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> reassignConsultation(

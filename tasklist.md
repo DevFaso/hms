@@ -2122,6 +2122,25 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   surface: `CLINICAL_CHART_ROLES`); one SUPER_ADMIN inheritance list shared by
   `JwtTokenProvider` and `SecurityConfig.authoritiesMapper`; a guard test that
   fails when the two lists diverge. Needs `/security-review`.
+  **(b1) D5 shipped 2026-09-12** — the patient chart page and what it opens
+  onto: the `/patients/{id}` clinical sub-resources (allergies, diagnoses,
+  chart updates, storyboard, chart review, vitals, lab results, medications,
+  micro-cultures, FHIR record, growth, intake/output), encounters and their
+  treatments and notes, nursing notes, admissions (not the order-set catalog),
+  applying an order set, discharge summaries and approvals, transfers,
+  isolation, consultations, referrals (not the expire-overdue sweep or the OB
+  reports summary), the in-basket, CDS acknowledgements — 89 guards across 24
+  controllers, with the matcher layer narrowed the same way (chart patterns
+  matched ahead of the `/patients/**` blanket, vitals POST/GET) and the portal
+  mirrors (`chart-access.ts`, patient-detail growth/fluid/download/micro, the
+  six route guards and nav entries, discharge page). Pinned by
+  `HospitalAdminOffChartTest` (annotations, with the keeps asserted too) and
+  `SecurityConfigChartMatcherTest`. Keeps: demographics, registration,
+  coverage, photo, wristband, documents, catalogs, ops sweeps, break-glass.
+  **(b2) open**: orders, results, imaging, medications, maternity, procedures,
+  transfusion, signatures, panels/registries/PRO and their pages, plus the
+  service-level gates (`RoleValidator.canCreatePrescription`, `BirthPlan` /
+  `HighRiskPregnancyCarePlan` scope widening). D6 is PR #619.
 - [ ] 68. **Dead tokens and phantom roles.** Strip the 111 permission tokens
   from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
   235 guards at once — not this item); seed or remove `ROLE_STAFF` (18

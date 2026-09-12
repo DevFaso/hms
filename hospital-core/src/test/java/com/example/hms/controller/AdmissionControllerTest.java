@@ -231,7 +231,7 @@ class AdmissionControllerTest {
     class UpdateAdmission {
 
         @Test
-        @WithMockUser(authorities = "ROLE_HOSPITAL_ADMIN")
+        @WithMockUser(authorities = "ROLE_DOCTOR")
         @DisplayName("returns 200 OK with updated admission")
         void updateAdmission_ok() throws Exception {
             UUID id = UUID.randomUUID();
@@ -303,7 +303,7 @@ class AdmissionControllerTest {
     class CancelAdmission {
 
         @Test
-        @WithMockUser(authorities = "ROLE_HOSPITAL_ADMIN")
+        @WithMockUser(authorities = "ROLE_DOCTOR")
         @DisplayName("returns 204 NO CONTENT")
         void cancelAdmission_noContent() throws Exception {
             UUID id = UUID.randomUUID();
@@ -382,7 +382,7 @@ class AdmissionControllerTest {
     class GetAdmissionsByHospital {
 
         @Test
-        @WithMockUser(authorities = "ROLE_HOSPITAL_ADMIN")
+        @WithMockUser(authorities = "ROLE_DOCTOR")
         @DisplayName("returns 200 OK with filtered admissions — all params")
         void getAdmissionsByHospital_allParams() throws Exception {
             UUID hospitalId = UUID.randomUUID();

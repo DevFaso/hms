@@ -201,7 +201,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
       'ROLE_DOCTOR',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -212,7 +211,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
       'ROLE_DOCTOR',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -242,7 +240,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -350,7 +347,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
       'ROLE_LAB_SCIENTIST',
       'ROLE_LAB_TECHNICIAN',

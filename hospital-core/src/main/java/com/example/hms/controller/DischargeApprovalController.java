@@ -32,14 +32,14 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Create a discharge approval request (nurse)")
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> requestDischarge(@Valid @RequestBody DischargeApprovalRequestDTO request) {
         return ResponseEntity.ok(service.requestDischarge(request));
     }
 
     @Operation(summary = "Approve a discharge request (doctor)")
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> approve(
         @PathVariable UUID id,
         @Valid @RequestBody DischargeApprovalDecisionDTO decision
@@ -49,7 +49,7 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Reject a discharge request (doctor)")
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> reject(
         @PathVariable UUID id,
         @Valid @RequestBody DischargeApprovalDecisionDTO decision
@@ -59,7 +59,7 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Cancel a pending discharge request (nurse)")
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> cancel(
         @PathVariable UUID id,
         @RequestParam UUID staffId,
@@ -70,28 +70,28 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Get discharge approval by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(service.getById(id));
     }
 
     @Operation(summary = "List active discharge approvals for a patient")
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<DischargeApprovalResponseDTO>> getActiveForPatient(@PathVariable UUID patientId) {
         return ResponseEntity.ok(service.getActiveForPatient(patientId));
     }
 
     @Operation(summary = "List pending discharge approvals for a hospital")
     @GetMapping("/hospital/{hospitalId}/pending")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<List<DischargeApprovalResponseDTO>> getPendingForHospital(@PathVariable UUID hospitalId) {
         return ResponseEntity.ok(service.getPendingForHospital(hospitalId));
     }
 
     @Operation(summary = "List discharge approvals for a hospital by status")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<DischargeApprovalResponseDTO>> getByHospital(
         @PathVariable UUID hospitalId,
         @RequestParam(required = false) DischargeStatus status

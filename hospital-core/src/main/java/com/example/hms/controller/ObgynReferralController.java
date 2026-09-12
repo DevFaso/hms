@@ -69,7 +69,7 @@ public class ObgynReferralController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
     @Operation(summary = "List referrals for hospital")
     public ResponseEntity<Page<ObgynReferralResponseDTO>> getReferralsForHospital(
         @PathVariable UUID hospitalId,

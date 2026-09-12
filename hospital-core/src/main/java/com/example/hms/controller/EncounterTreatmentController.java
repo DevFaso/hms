@@ -63,7 +63,7 @@ public class EncounterTreatmentController {
             }
     )
         @PostMapping
-        @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+        @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
         public ResponseEntity<EncounterTreatmentResponseDTO> addTreatmentToEncounter(
             @Valid @RequestBody EncounterTreatmentRequestDTO dto) {
         return ResponseEntity.ok(encounterTreatmentService.addTreatmentToEncounter(dto));
@@ -96,7 +96,7 @@ public class EncounterTreatmentController {
             }
     )
         @GetMapping("/by-encounter/{encounterId}")
-        @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+        @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
         public ResponseEntity<List<EncounterTreatmentResponseDTO>> getTreatmentsByEncounter(
             @PathVariable UUID encounterId) {
         return ResponseEntity.ok(encounterTreatmentService.getTreatmentsByEncounter(encounterId));

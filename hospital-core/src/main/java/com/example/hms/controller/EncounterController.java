@@ -68,7 +68,7 @@ public class EncounterController {
      * do not open visits.
      */
     private static final String ENCOUNTER_CREATE_ROLES =
-        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')";
+        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
 
     /**
      * Encounter list READ — the visit history panel on the patient chart. This
@@ -78,13 +78,13 @@ public class EncounterController {
      * audit D7.
      */
     private static final String ENCOUNTER_LIST_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
     /** As above, plus ROLE_PATIENT for their own encounter. */
     private static final String ENCOUNTER_DETAIL_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT',"
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PATIENT',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
@@ -207,7 +207,7 @@ public class EncounterController {
     // Update
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Update an encounter (super-admin, doctor, nurse, midwife, hospital-admin)")
     public ResponseEntity<EncounterResponseDTO> update(
         @PathVariable UUID id,
@@ -242,7 +242,7 @@ public class EncounterController {
     // By Doctor
     // ----------------------------------------------------------
     @GetMapping(value = "/doctor/{identifier}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounters by doctor (UUID | username | email | license)")
     public ResponseEntity<List<EncounterResponseDTO>> byDoctor(
         @PathVariable String identifier,
@@ -393,7 +393,7 @@ public class EncounterController {
     // MVP 6 — Check-Out & After-Visit Summary
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
         description = "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
@@ -418,7 +418,7 @@ public class EncounterController {
     // MVP 6 — Retrieve After-Visit Summary for a completed encounter
     // ----------------------------------------------------------
     @GetMapping(value = "/{encounterId}/avs", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_PATIENT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_PATIENT')")
     @Operation(
         summary = "Get After-Visit Summary for a completed encounter (MVP 6)",
         description = "Returns the AVS for a previously checked-out encounter. "
@@ -432,7 +432,7 @@ public class EncounterController {
         return ResponseEntity.ok(avs);
     }
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Create or update encounter note (super-admin, doctor, nurse, midwife, hospital-admin)", 
                description = "Creates or updates the encounter note with SOAP/narrative documentation")
     public ResponseEntity<EncounterNoteResponseDTO> upsertEncounterNote(
@@ -509,7 +509,7 @@ public class EncounterController {
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounter note history",
                description = "Returns the audit trail of all changes to the encounter note, " +
                            "including original creation, updates, and addendums.")

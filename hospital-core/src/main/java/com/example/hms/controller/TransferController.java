@@ -42,11 +42,11 @@ public class TransferController {
      * read the worklist to know which beds are spoken for.
      */
     static final String WARD_TEAM =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')";
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')";
 
     /** Ordering and executing a move is clinical; the desk does not do it. */
     private static final String CLINICAL_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE')";
+        "hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')";
 
     private final TransferService transferService;
 

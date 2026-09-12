@@ -36,7 +36,7 @@ import java.util.UUID;
 public class PatientRecordExportController {
 
     static final String EXPORT_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')";
 
     private final PatientEverythingService everythingService;
     private final FhirContext fhirContext;

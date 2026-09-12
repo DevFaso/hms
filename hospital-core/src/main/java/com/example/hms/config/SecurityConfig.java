@@ -87,6 +87,24 @@ public class SecurityConfig {
 
     private static final String API_PATIENT_VITALS = "/patients/*/vitals";
     private static final String API_PATIENT_VITALS_PATTERN = API_PATIENT_VITALS + "/**";
+    /**
+     * E9 #67 (D5) — the clinical sub-resources of a patient. Matched ahead of
+     * the /patients/** blanket so HOSPITAL_ADMIN keeps the demographics the
+     * blanket admits and none of these; the controller annotations stay the
+     * precise gate per surface.
+     */
+    static final String[] API_PATIENT_CHART_PATTERNS = {
+        "/patients/*/allergies", "/patients/*/allergies/**",
+        "/patients/*/diagnoses", "/patients/*/diagnoses/**",
+        "/patients/*/chart-updates", "/patients/*/chart-updates/**",
+        "/patients/*/storyboard", "/patients/*/chart-review",
+        "/patients/*/lab-results", "/patients/*/lab-results/**",
+        "/patients/*/medications", "/patients/*/medications/**",
+        "/patients/*/micro-cultures", "/patients/*/micro-cultures/**",
+        "/patients/*/fhir-record",
+        "/patients/*/growth-chart", "/patients/*/growth-chart/**",
+        "/patients/*/intake-output", "/patients/*/intake-output/**"
+    };
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -410,6 +428,16 @@ public class SecurityConfig {
                 .requestMatchers("/patients/phone-verification", "/patients/phone-verification/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // -------------------- Patient chart (E9 #67, D5) --------------------
+                // First match wins: the chart sub-resources sit ahead of the
+                // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
+                // for demographics. Same list as the blanket minus those two.
+                .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
                 // backs pharmacist-reachable pages such as /medication-history.
@@ -433,14 +461,14 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
-                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
 
                 // Consulting clinicians READ vitals (pre-operative assessment,
                 // exercise tolerance before therapy) but never write them —
                 // the POST matcher above stays narrow. Role audit D7.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_RADIOLOGIST,
-                        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PUT, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)

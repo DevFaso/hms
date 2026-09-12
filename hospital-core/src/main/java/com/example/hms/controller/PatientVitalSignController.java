@@ -44,7 +44,7 @@ public class PatientVitalSignController {
      * stays with the bedside roles on the POST above.
      */
     private static final String VITALS_READ_ROLES = "hasAnyAuthority("
-        + "'ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN',"
+        + "'ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
@@ -58,7 +58,7 @@ public class PatientVitalSignController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Record vital signs for a patient",
         description = "Creates a new vital sign record scoped to the caller's hospital context.",
