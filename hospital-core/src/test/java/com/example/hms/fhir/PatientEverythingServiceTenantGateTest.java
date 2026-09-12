@@ -72,6 +72,7 @@ class PatientEverythingServiceTenantGateTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
     private PatientEverythingService service;
 
     private final UUID activeHospitalId = UUID.randomUUID();
@@ -94,6 +95,7 @@ class PatientEverythingServiceTenantGateTest {
         recordAccessPolicy = mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
         reachRecorder = mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
         sensitivityClassifier = mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
+        breakGlassGate = mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
         service = new PatientEverythingService(
             properties,
             patientRepository,
@@ -115,7 +117,8 @@ class PatientEverythingServiceTenantGateTest {
             auditService,
             recordAccessPolicy,
             reachRecorder,
-            sensitivityClassifier
+            sensitivityClassifier,
+            breakGlassGate
         );
     }
 
@@ -340,5 +343,43 @@ class PatientEverythingServiceTenantGateTest {
         assertThat(bundle.getTotal()).isEqualTo(2);
         verify(reachRecorder).recordReach(eq(patientId), eq(activeHospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    @DisplayName("under a live break-the-glass session the foreign sensitive encounter is rendered (E9 #62)")
+    void breakGlassRendersTheForeignSensitiveEncounter() {
+        properties.getEverything().setEnabled(true);
+        setActiveHospital();
+        UUID otherHospitalId = UUID.randomUUID();
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(otherHospitalId);
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        com.example.hms.model.Encounter awaySensitive = new com.example.hms.model.Encounter();
+        awaySensitive.setId(UUID.randomUUID());
+        awaySensitive.setHospital(other);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
+            .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+        when(patientMapper.toFhir(any(Patient.class))).thenReturn(new org.hl7.fhir.r4.model.Patient());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospitalId)))
+            .thenReturn(Set.of(activeHospitalId, otherHospitalId));
+        when(breakGlassGate.isUnlocked(any(), eq(patientId), eq(activeHospitalId))).thenReturn(true);
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(eq(patientId), eq(Set.of(activeHospitalId, otherHospitalId)), any()))
+            .thenReturn(new PageImpl<>(List.of(awaySensitive)));
+        when(sensitivityClassifier.effectiveCategory(awaySensitive)).thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(encounterMapper.toFhir(any())).thenReturn(new org.hl7.fhir.r4.model.Encounter());
+        when(vitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(any(), any(), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(any(), any()))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        service.everythingForPatient(patientId);
+
+        verify(encounterMapper).toFhir(awaySensitive);
     }
 }

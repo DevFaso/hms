@@ -75,6 +75,7 @@ class PatientSnapshotServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
 
     @InjectMocks
     private PatientSnapshotServiceImpl service;

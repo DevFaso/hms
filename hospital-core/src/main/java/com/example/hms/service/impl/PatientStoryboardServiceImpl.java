@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import java.util.Map;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Aggregates allergies, active problems, the most recent non-terminal encounter,
@@ -73,6 +74,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final SensitivityClassifier sensitivityClassifier;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional(readOnly = true)
@@ -85,10 +87,14 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // E9 #59 — the hospitals this caller may read for this patient; the
         // acting hospital alone when the policy says so, more when the patient
         // is registered here. Null scope (super-admin global view) reads all.
-        Set<UUID> readable = hospitalId == null ? null : recordAccessPolicy.readableHospitalIds(
-            HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = hospitalId == null ? null
+            : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // problems the D3 rule withholds; the ledger row names the session.
+        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         List<AllergySummaryDTO> allergies = loadAllergies(patientId);
-        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable);
+        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
         CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
         // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
@@ -104,8 +110,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
                 CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
                     codeStatus.getDirectives().stream().map(DirectiveSummaryDTO::getHospitalId).toList(), hospitalId));
             }
-            reachRecorder.recordReach(patientId, hospitalId,
-                HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), null, reach,
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
                 "Cross-hospital storyboard read on the treatment relationship");
         }
 
@@ -177,13 +182,13 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      * with the recording hospital on the chip. A foreign problem carrying a
      * sensitivity category is withheld (D3); it opens via break-the-glass.
      */
-    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable) {
+    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable, boolean unlocked) {
         List<PatientProblem> source = readable != null
             ? problemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable)
             : problemRepository.findByPatient_Id(patientId);
         return source.stream()
             .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId,
-                sensitivityClassifier.effectiveCategory(p)))
+                sensitivityClassifier.effectiveCategory(p), unlocked))
             .filter(p -> p.getStatus() == null
                 || p.getStatus() == ProblemStatus.ACTIVE
                 || p.getStatus() == ProblemStatus.RECURRENCE)
