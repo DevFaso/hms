@@ -119,12 +119,10 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       'sessionBootstrap',
       'setUserProfile',
       'getUserProfile',
-      'getPermittedHospitalIds',
       'resolveLandingPath',
       'formatRole',
     ]);
     authSpy.getRoles.and.returnValue(['ROLE_SUPER_ADMIN']);
-    authSpy.getPermittedHospitalIds.and.returnValue([primaryHospitalId, otherHospitalId]);
     authSpy.getUserProfile.and.returnValue(null);
     authSpy.resolveLandingPath.and.returnValue('/dashboard');
     authSpy.formatRole.and.callFake((r: string) => r);

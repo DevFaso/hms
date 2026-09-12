@@ -103,7 +103,7 @@ export class RoleContextService {
     this._activeRole.set(role);
   }
 
-  /** All hospital IDs this user is permitted to access, decoded from the JWT. */
+  /** All hospital IDs this user is permitted to access, as the session states them (E9 #55b). */
   get permittedHospitalIds(): string[] {
     return this._permittedHospitalIds();
   }

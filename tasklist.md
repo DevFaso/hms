@@ -1902,7 +1902,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `resolveHospitalScope` and `HospitalContextHolder` ONE resolver, and delete
   the dead `extractHospitalIdFromJwt`. No migration. Needs `/security-review`.
   _(backend half in PR #597; the portal half is 55b)_
-- [ ] 55b. **Portal rehydrates scope from the session, not the token.**
+- [x] 55b. **Portal rehydrates scope from the session, not the token.** ✅ DONE 2026-09-12 — `SessionScopeService.hydrate()` (GET `/auth/session/bootstrap`) on app bootstrap, login, MFA completion, the OIDC redirect and impersonation start/stop; the stored profile is the only fallback; `getPermittedHospitalIds()` and the JWT branch of `getHospitalId()` deleted; non-admins keep every permitted hospital.
   `app.component.ts` decodes the stored JWT on every bootstrap for
   `permittedHospitalIds` / `primaryHospitalId` and, for non-admin roles,
   collapses the list to ONE hospital ("non-admin staff always get exactly one
