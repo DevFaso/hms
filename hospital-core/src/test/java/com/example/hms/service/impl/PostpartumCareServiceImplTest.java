@@ -51,6 +51,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
 class PostpartumCareServiceImplTest {
@@ -71,6 +76,10 @@ class PostpartumCareServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
     private com.example.hms.service.pro.ProResponseService proResponseService;
 
@@ -93,7 +102,9 @@ class PostpartumCareServiceImplTest {
             userRepository,
             notificationService,
             new PostpartumObservationMapper(),
-            proResponseService
+            proResponseService,
+            recordAccessPolicy,
+            reachRecorder
         );
 
         patientId = UUID.randomUUID();
@@ -288,5 +299,20 @@ class PostpartumCareServiceImplTest {
     void recordObservationWithNullRequestThrowsBusinessException() {
         assertThrows(BusinessException.class, () -> service.recordObservation(patientId, null, recorderId));
         verify(observationRepository, never()).save(any());
+    }
+
+    @Test
+    void getRecentObservationsWithoutALocalPlanReadTheReadableSet() {
+        // E9 #59d — no local care plan: the observations span the policy's
+        // readable set at the database.
+        UUID otherHospitalId = UUID.randomUUID();
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(observationRepository.findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc(
+                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(List.of());
+
+        assertThat(service.getRecentObservations(patientId, hospitalId, null, 5)).isEmpty();
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(), eq(Map.of()), anyString());
     }
 }

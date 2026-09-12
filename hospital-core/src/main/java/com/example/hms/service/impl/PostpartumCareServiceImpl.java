@@ -42,6 +42,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +70,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final PostpartumObservationMapper mapper;
     /** Tier 2 item 47: the mental-health screen rides on the schedule. */
     private final com.example.hms.service.pro.ProResponseService proResponseService;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -113,8 +119,17 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             observations = observationRepository.findByCarePlan_IdOrderByObservationTimeDesc(
                 plan.getId(), PageRequest.of(0, effectiveLimit));
         } else if (hospitalId != null) {
-            observations = observationRepository.findByPatient_IdAndHospital_IdOrderByObservationTimeDesc(
-                patientId, hospitalId, PageRequest.of(0, effectiveLimit));
+            // E9 #59d — with no local care plan the observations follow the
+            // patient across the readable hospitals; accounted. A local plan
+            // keeps the by-plan read above: the plan is the acting hospital's
+            // care-management object, not a record that travels.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+            observations = observationRepository.findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc(
+                patientId, readable, PageRequest.of(0, effectiveLimit));
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(observations.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), hospitalId),
+                "Cross-hospital postpartum observation read on the treatment relationship");
         } else {
             observations = observationRepository.findWithinRange(
                 patientId, null, null, null, PageRequest.of(0, effectiveLimit));

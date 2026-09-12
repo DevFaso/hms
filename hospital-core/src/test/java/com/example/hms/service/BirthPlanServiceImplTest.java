@@ -48,6 +48,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class BirthPlanServiceImplTest {
@@ -66,6 +73,11 @@ class BirthPlanServiceImplTest {
 
     @Mock
     private BirthPlanMapper birthPlanMapper;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private BirthPlanServiceImpl birthPlanService;
@@ -538,5 +550,74 @@ class BirthPlanServiceImplTest {
         assertThrows(AccessDeniedException.class, () ->
             birthPlanService.getPendingReviews(hospitalId, pageable, username)
         );
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getBirthPlansByPatientIdFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — a doctor acting at Hôpital A sees the plan written at
+        // Hôpital B when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        BirthPlan foreign = new BirthPlan();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(doctorUser.getId())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
+            .thenReturn(Set.of(hospital.getId(), otherHospitalId));
+        when(birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+            .thenReturn(List.of(birthPlan, foreign));
+        when(birthPlanMapper.toResponseDTO(any(BirthPlan.class))).thenReturn(responseDTO);
+
+        List<BirthPlanResponseDTO> result = birthPlanService.getBirthPlansByPatientId(patient.getId(), doctorUser.getUsername());
+
+        assertThat(result).hasSize(2);
+        verify(birthPlanRepository, never()).findByPatientIdOrderByCreatedAtDesc(any());
+        verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getActiveBirthPlanFollowsThePatientWhenActingInAHospital() {
+        // E9 #59d — the most recent plan across the readable set, here the one
+        // written at Hôpital B; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        BirthPlan foreign = new BirthPlan();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(doctorUser.getId())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
+            .thenReturn(Set.of(hospital.getId(), otherHospitalId));
+        when(birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+            .thenReturn(Optional.of(foreign));
+        when(birthPlanMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
+
+        assertThat(birthPlanService.getActiveBirthPlan(patient.getId(), doctorUser.getUsername())).isEqualTo(responseDTO);
+        verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

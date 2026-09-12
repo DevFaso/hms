@@ -16,5 +16,12 @@ public interface HighRiskPregnancyCarePlanRepository extends JpaRepository<HighR
 
     Optional<HighRiskPregnancyCarePlan> findFirstByPatient_IdAndActiveTrueOrderByCreatedAtDesc(UUID patientId);
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<HighRiskPregnancyCarePlan> findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    Optional<HighRiskPregnancyCarePlan> findFirstByPatient_IdAndHospital_IdInAndActiveTrueOrderByCreatedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     long countByHospital_IdAndCreatedAtBetween(UUID hospitalId, LocalDate start, LocalDate end);
 }

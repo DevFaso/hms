@@ -73,7 +73,23 @@ class CrossHospitalReadFilterCoverageTest {
         // E9 #59c — medications follow the patient (PrescriptionRepository's In
         // finder, listed above, gained a paged overload).
         "PharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc",
-        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc");
+        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc",
+        // E9 #59d — maternity and immunizations follow the patient.
+        "LaborEpisodeRepository.findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc",
+        "NewbornAssessmentRepository.findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc",
+        "PostpartumObservationRepository.findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc",
+        "BirthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "BirthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "HighRiskPregnancyCarePlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "HighRiskPregnancyCarePlanRepository.findFirstByPatient_IdAndHospital_IdInAndActiveTrueOrderByCreatedAtDesc",
+        "MaternalHistoryRepository.findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",
+        "MaternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",
+        "ObgynReferralRepository.findByPatient_IdAndHospital_IdIn",
+        "UltrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc",
+        "UltrasoundOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedDateDesc",
+        "UltrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc",
+        "ImmunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc",
+        "ImmunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads

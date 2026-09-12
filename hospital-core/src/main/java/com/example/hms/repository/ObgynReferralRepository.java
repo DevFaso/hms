@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface ObgynReferralRepository extends JpaRepository<ObgynReferral, UUID> {
     Page<ObgynReferral> findByPatient_Id(UUID patientId, Pageable pageable);
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    Page<ObgynReferral> findByPatient_IdAndHospital_IdIn(UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
     Page<ObgynReferral> findByHospital_Id(UUID hospitalId, Pageable pageable);
     Page<ObgynReferral> findByObgyn_Id(UUID userId, Pageable pageable);
 

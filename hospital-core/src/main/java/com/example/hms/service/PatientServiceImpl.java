@@ -852,12 +852,13 @@ public class PatientServiceImpl implements PatientService {
         aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        // Not widened: allergies, imaging and surgical history attach to
-        // patient + hospital with no encounter link, so #51's category cannot
-        // be resolved for them. A row whose category nobody can determine must
-        // not travel. Tracked as standing platform debt.
+        // Not widened: allergies attach to patient + hospital with no encounter
+        // link, so #51's category cannot be resolved for them. A row whose
+        // category nobody can determine must not travel. Tracked as standing
+        // platform debt. Imaging and surgical history read the readable set
+        // (E9 #59d, #59a); a foreign row the heuristic marks sensitive is withheld.
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectImagingEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
@@ -979,6 +980,7 @@ public class PatientServiceImpl implements PatientService {
         ImagingBundle imagingBundle = collectDoctorRecordImaging(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -1049,6 +1051,7 @@ public class PatientServiceImpl implements PatientService {
             medicalHistory.advanceDirectives().stream().map(AdvanceDirectiveResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
             notes.stream().map(NursingNoteResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, imagingBundle.reach());
         recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
             "Cross-hospital doctor record read on the treatment relationship");
         return response;
@@ -1949,17 +1952,23 @@ public class PatientServiceImpl implements PatientService {
             .toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectImagingEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectImagingEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                UUID hospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_IMAGING)) {
             return List.of();
         }
-        List<UltrasoundOrder> orders = Optional.ofNullable(ultrasoundOrderRepository.findAllByPatientId(patientId))
+        // E9 #59d — read the readable set at the database (this used to load
+        // every tenant's rows and keep the acting hospital's in memory). A
+        // foreign row the heuristic marks sensitive is withheld (decision D3).
+        List<UltrasoundOrder> orders = Optional
+            .ofNullable(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, readableHospitalIds))
             .orElse(List.of());
-        List<UltrasoundReport> reports = Optional.ofNullable(ultrasoundReportRepository.findAllByPatientId(patientId))
+        List<UltrasoundReport> reports = Optional
+            .ofNullable(ultrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(patientId, readableHospitalIds))
             .orElse(List.of());
 
         Stream<PatientTimelineEntryDTO> orderEntries = orders.stream()
-            .filter(order -> order.getHospital() != null && hospitalId.equals(order.getHospital().getId()))
+            .filter(order -> isLocalRow(order.getHospital(), hospitalId) || !isSensitiveUltrasoundOrder(order))
             .map(order -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "orderedBy", order.getOrderedBy());
@@ -1973,12 +1982,12 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(order.getOrderedDate())
                     .summary(formatImagingOrderSummary(order))
                     .sensitive(isSensitiveUltrasoundOrder(order))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, order.getHospital(), hospitalId))
                     .build();
             });
 
         Stream<PatientTimelineEntryDTO> reportEntries = reports.stream()
-            .filter(report -> report.getHospital() != null && hospitalId.equals(report.getHospital().getId()))
+            .filter(report -> isLocalRow(report.getHospital(), hospitalId) || !isSensitiveUltrasoundReport(report))
             .map(report -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "scanPerformedBy", report.getScanPerformedBy());
@@ -1991,7 +2000,7 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(toDateTime(report.getScanDate()))
                     .summary(formatImagingReportSummary(report))
                     .sensitive(isSensitiveUltrasoundReport(report))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, report.getHospital(), hospitalId))
                     .build();
             });
 
@@ -2141,28 +2150,37 @@ public class PatientServiceImpl implements PatientService {
     private ImagingBundle collectDoctorRecordImaging(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<UltrasoundOrder> orders = ultrasoundOrderRepository.findAllByPatientId(patientId).stream()
-            .filter(order -> order.getHospital() != null && hospitalId.equals(order.getHospital().getId()))
+        // E9 #59d — imaging follows the patient on the record's readable set,
+        // read at the database. A FOREIGN row the heuristic marks sensitive is
+        // withheld whatever the caller asked for and does not flag the section
+        // (decision D3); a local one keeps the includeSensitive behaviour.
+        List<UltrasoundOrder> orders = ultrasoundOrderRepository
+            .findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, readableHospitalIds).stream()
             .sorted(Comparator.comparing(UltrasoundOrder::getOrderedDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
-        boolean ordersSensitive = orders.stream().anyMatch(this::isSensitiveUltrasoundOrder);
+        boolean ordersSensitive = orders.stream()
+            .anyMatch(order -> isLocalRow(order.getHospital(), hospitalId) && isSensitiveUltrasoundOrder(order));
         List<UltrasoundOrderResponseDTO> orderDtos = orders.stream()
-            .filter(order -> includeSensitive || !isSensitiveUltrasoundOrder(order))
+            .filter(order -> !isSensitiveUltrasoundOrder(order)
+                || (includeSensitive && isLocalRow(order.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toOrderResponseDTO)
             .limit(limit)
             .toList();
 
-        List<UltrasoundReport> reports = ultrasoundReportRepository.findAllByPatientId(patientId).stream()
-            .filter(report -> report.getHospital() != null && hospitalId.equals(report.getHospital().getId()))
+        List<UltrasoundReport> reports = ultrasoundReportRepository
+            .findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(patientId, readableHospitalIds).stream()
             .sorted(Comparator.comparing(UltrasoundReport::getScanDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
-        boolean reportsSensitive = reports.stream().anyMatch(this::isSensitiveUltrasoundReport);
+        boolean reportsSensitive = reports.stream()
+            .anyMatch(report -> isLocalRow(report.getHospital(), hospitalId) && isSensitiveUltrasoundReport(report));
         List<UltrasoundReportResponseDTO> reportDtos = reports.stream()
-            .filter(report -> includeSensitive || !isSensitiveUltrasoundReport(report))
+            .filter(report -> !isSensitiveUltrasoundReport(report)
+                || (includeSensitive && isLocalRow(report.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toReportResponseDTO)
             .limit(limit)
             .toList();
@@ -2171,7 +2189,13 @@ public class PatientServiceImpl implements PatientService {
         if (sectionSensitive) {
             sensitiveSections.add(SECTION_IMAGING);
         }
-        return new ImagingBundle(orderDtos, reportDtos, sectionSensitive);
+        // The reach is counted on the rows that surfaced, from the entities —
+        // the report DTO carries no hospital id.
+        Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(
+            orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), hospitalId);
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            reports.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), hospitalId));
+        return new ImagingBundle(orderDtos, reportDtos, sectionSensitive, reach);
     }
 
     private List<NursingNoteResponseDTO> collectDoctorRecordNursingNotes(
@@ -2400,7 +2424,8 @@ public class PatientServiceImpl implements PatientService {
     private record ImagingBundle(
         List<UltrasoundOrderResponseDTO> orders,
         List<UltrasoundReportResponseDTO> reports,
-        boolean sensitive
+        boolean sensitive,
+        Map<String, Long> reach
     ) {}
 
     private boolean shouldIncludeCategory(Set<String> filters, String category) {
