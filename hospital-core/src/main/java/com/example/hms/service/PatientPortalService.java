@@ -9,7 +9,6 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
@@ -143,12 +142,6 @@ public interface PatientPortalService {
 
     // ── Reschedule own appointment ───────────────────────────────────────
     AppointmentResponseDTO rescheduleMyAppointment(Authentication auth, RescheduleAppointmentRequestDTO dto, Locale locale);
-
-    // ── Grant data-sharing consent ───────────────────────────────────────
-    PatientConsentResponseDTO grantMyConsent(Authentication auth, PortalConsentRequestDTO dto);
-
-    // ── Revoke data-sharing consent ──────────────────────────────────────
-    void revokeMyConsent(Authentication auth, UUID fromHospitalId, UUID toHospitalId);
 
     // ── Record home vital sign ───────────────────────────────────────────
     PatientVitalSignResponseDTO recordHomeVital(Authentication auth, HomeVitalReadingDTO dto);

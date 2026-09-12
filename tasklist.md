@@ -2082,25 +2082,30 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 3 — retire the consent grants (D7)
 
-- [ ] 65. **Backend removal.** `PatientConsentController` grant/revoke,
+- [x] 65. **Backend removal.** ✅ DONE 2026-09-12. Gone: `PatientConsentController`
+  grant / revoke / active / from-hospital / to-hospital, `ConsentResolutionService`
+  and its three tiers, `PatientRecordSharingController` with
+  `/records/share|resolve|aggregate|export` and the 1,648-line
+  `PatientRecordSharingServiceImpl`, `ShareScope`, the share and consent request
+  DTOs, `POST/DELETE /me/patient/consents`. Kept one release, read-only:
+  `GET /patient-consents`, `GET /patient-consents/patient/{id}`,
+  `GET /me/patient/consents`, the super-admin dashboard feed, the entity,
+  repository, table and `ConsentType` (REFERRAL rows exist). ROI and treatment
+  consent untouched. Residuals: the portal's Consent Management pages, the
+  patient-detail Sharing tab and the patient portal's grant/revoke still call
+  the removed endpoints until #66 (do not sync main between the two); the
+  Android/iOS patient apps call `/me/patient/consents` grant/revoke and need
+  the same pruning; `BreakGlassService.consumeIfLive` lost its only production
+  caller (the resolver) and is dead behind its tests.
+  Previously recorded as: `PatientConsentController` grant/revoke,
   `ConsentResolutionService` tiers, `/records/share|resolve|aggregate|export`,
   `PatientRecordSharingServiceImpl` (1,648 lines), `POST/DELETE
-  /me/patient/consents`. Read endpoints for existing consent rows may stay one
-  release for the disclosure report. ROI and treatment consent untouched.
-  ⚠ `ConsentType.REFERRAL` rows exist; keep the enum value readable.
-- [x] 66. **Portal removal.** ✅ DONE 2026-09-12. Gone: the Consent Management
-  pages and their routes/nav, `record-sharing.service.ts`, the patient-detail
-  Sharing tab (resolve / grant / export) and its styles, the e2e spec, the
-  `CONSENT.*` and `SHARED_RECORDS.*` trees and the `PATIENTS.SHARING*` keys in
-  EN/FR/ES. Patient "Record Sharing" is now "Who accessed my record": the
-  opt-out card on the V157 API (`/patients/{id}/record-sharing/opt-out`,
-  patient-scoped) above the disclosure list; the consent list and grant form
-  are gone (`/me/patient/consents` GET stays server-side one release, #65).
-  Release of Information keeps its own pages (`/roi`). Residual: the
-  Android/iOS patient apps still carry the consent screens (#65 note).
-  Previously recorded as: Consent Management becomes Release of Information
-  only; patient "Record Sharing" becomes "Who accessed my record" plus the
-  opt-out toggle (V157, API shipped, no UI yet); the two i18n trees pruned.
+  /me/patient/consents`; read endpoints for existing consent rows may stay one
+  release; ⚠ `ConsentType.REFERRAL` rows exist; keep the enum value readable.
+- [ ] 66. **Portal removal.** Consent Management becomes Release of
+  Information only; patient "Record Sharing" becomes "Who accessed my record"
+  plus the opt-out toggle (V157, API shipped, no UI yet); the two i18n trees
+  pruned in EN/FR/ES.
 
 ### Phase 4 — role hygiene (independent of the model)
 

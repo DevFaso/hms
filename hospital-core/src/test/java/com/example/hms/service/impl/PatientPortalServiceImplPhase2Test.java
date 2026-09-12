@@ -13,8 +13,6 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
-import com.example.hms.payload.dto.PatientConsentRequestDTO;
-import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
@@ -27,7 +25,6 @@ import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.model.Department;
@@ -52,7 +49,6 @@ import com.example.hms.service.DischargeSummaryService;
 import com.example.hms.service.EncounterService;
 import com.example.hms.service.GeneralReferralService;
 import com.example.hms.service.ImmunizationService;
-import com.example.hms.service.PatientConsentService;
 import com.example.hms.service.PatientLabResultService;
 import com.example.hms.service.PatientMedicationService;
 import com.example.hms.service.PatientPrimaryCareService;
@@ -94,7 +90,7 @@ import static org.mockito.Mockito.doThrow;
 
 /**
  * Unit tests for Phase 2 patient portal service methods.
- * Tests cover: cancel/reschedule appointments, consent management,
+ * Tests cover: cancel/reschedule appointments,
  * home vitals, medication refills, after-visit summaries, care team, access log.
  */
 @ExtendWith(MockitoExtension.class)
@@ -106,7 +102,6 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private PatientLabResultService labResultService;
     @Mock private PatientMedicationService medicationService;
     @Mock private PatientVitalSignService vitalSignService;
-    @Mock private PatientConsentService consentService;
     @Mock private ImmunizationService immunizationService;
     @Mock private BillingInvoiceService billingInvoiceService;
     @Mock private EncounterService encounterService;
@@ -536,65 +531,6 @@ class PatientPortalServiceImplPhase2Test {
                     .hasMessageContaining("End time must be after start time");
 
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Grant / Revoke Consent
-    // ══════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("consent management")
-    class ConsentManagement {
-
-        @Test
-        @DisplayName("grantMyConsent — should auto-fill patientId and delegate")
-        void grantConsent_autoFillsPatientId() {
-            stubPatientResolution();
-            UUID from = UUID.randomUUID();
-            UUID to = UUID.randomUUID();
-
-            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(any(UUID.class), any(UUID.class)))
-                    .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
-
-            PortalConsentRequestDTO portalDto = PortalConsentRequestDTO.builder()
-                    .fromHospitalId(from)
-                    .toHospitalId(to)
-                    .purpose("Treatment")
-                    .build();
-
-            PatientConsentResponseDTO expectedResponse = new PatientConsentResponseDTO();
-            when(consentService.grantConsent(any(PatientConsentRequestDTO.class)))
-                    .thenReturn(expectedResponse);
-
-            PatientConsentResponseDTO result = service.grantMyConsent(auth, portalDto);
-
-            assertThat(result).isEqualTo(expectedResponse);
-
-            ArgumentCaptor<PatientConsentRequestDTO> captor =
-                    ArgumentCaptor.forClass(PatientConsentRequestDTO.class);
-            verify(consentService).grantConsent(captor.capture());
-
-            PatientConsentRequestDTO captured = captor.getValue();
-            assertThat(captured.getPatientId()).isEqualTo(patientId);
-            assertThat(captured.getFromHospitalId()).isEqualTo(from);
-            assertThat(captured.getToHospitalId()).isEqualTo(to);
-            assertThat(captured.getPurpose()).isEqualTo("Treatment");
-        }
-
-        @Test
-        @DisplayName("revokeMyConsent — should resolve patientId and delegate")
-        void revokeConsent_delegatesToService() {
-            stubPatientResolution();
-            UUID from = UUID.randomUUID();
-            UUID to = UUID.randomUUID();
-
-            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(any(UUID.class), any(UUID.class)))
-                    .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
-
-            service.revokeMyConsent(auth, from, to);
-
-            verify(consentService).revokeConsent(patientId, from, to);
         }
     }
 

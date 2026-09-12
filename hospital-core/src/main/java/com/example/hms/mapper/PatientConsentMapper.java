@@ -1,38 +1,22 @@
 package com.example.hms.mapper;
 
-import com.example.hms.enums.ConsentType;
-import com.example.hms.model.Hospital;
-import com.example.hms.model.Patient;
 import com.example.hms.model.PatientConsent;
 import com.example.hms.payload.dto.HospitalResponseDTO;
-import com.example.hms.payload.dto.PatientConsentRequestDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * Entity to response only, since E9 #65: nothing builds a {@link PatientConsent}
+ * from a request any more.
+ */
 @Component
 @RequiredArgsConstructor
 public class PatientConsentMapper {
 
     private final PatientMapper patientMapper;
     private final HospitalMapper hospitalMapper;
-
-    /**
-     * Converts a PatientConsentRequestDTO to a PatientConsent entity.
-     */
-    public PatientConsent toEntity(PatientConsentRequestDTO dto, Patient patient, Hospital fromHospital, Hospital toHospital) {
-        return PatientConsent.builder()
-                .patient(patient)
-                .fromHospital(fromHospital)
-                .toHospital(toHospital)
-                .consentGiven(true)
-                .consentExpiration(dto.getConsentExpiration())
-                .purpose(dto.getPurpose())
-                .consentType(dto.getConsentType() != null ? dto.getConsentType() : ConsentType.TREATMENT)
-                .scope(dto.getScope())
-                .build();
-    }
 
     /**
      * Converts a PatientConsent entity to PatientConsentResponseDTO including full patient and hospital info.
