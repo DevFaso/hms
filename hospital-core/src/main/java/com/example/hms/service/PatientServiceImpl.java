@@ -174,45 +174,6 @@ public class PatientServiceImpl implements PatientService {
     private static final String SECTION_NOTES = "NOTES";
     private static final String SECTION_MEDICAL_HISTORY = "MEDICAL_HISTORY";
     private static final int DEFAULT_RECENT_ENCOUNTER_LIMIT = 10;
-    private static final Set<String> SENSITIVE_KEYWORDS = Set.of(
-        "mental health",
-        "psychiatry",
-        "substance",
-        "rehab",
-        "dependency",
-        "opioid",
-        "hiv",
-        "aids",
-        "sexual health",
-        "reproductive",
-        "fertility",
-        "abortion",
-        "oncology",
-        "chemotherapy",
-        "radiation",
-        "gender affirming",
-        "domestic violence",
-        "assault",
-        "trauma"
-    );
-    private static final Set<String> SENSITIVE_DEPARTMENTS = Set.of(
-        "behavioral health",
-        "mental health",
-        "psychiatry",
-        "addiction medicine",
-        "oncology",
-        "infectious disease"
-    );
-    private static final Set<String> HIGH_ALERT_MEDICATION_KEYWORDS = Set.of(
-        "opioid",
-        "fentanyl",
-        "oxycodone",
-        "hydromorphone",
-        "buprenorphine",
-        "methadone",
-        "ketamine",
-        "clozapine"
-    );
     private static final String META_STATUS = "status";
     /** E8 #50 — "who treated the patient", required on every row the chart
      *  renders so provenance reads as hospital + clinician + date + what. */
@@ -2043,7 +2004,7 @@ public class PatientServiceImpl implements PatientService {
                     .category(CATEGORY_PROCEDURE)
                     .occurredAt(toDateTime(history.getProcedureDate()))
                     .summary(formatProcedureSummary(history))
-                    .sensitive(isSensitiveSurgicalHistory(history))
+                    .sensitive(false)
                     .metadata(stampProvenance(metadata, history.getHospital(), actingHospitalId))
                     .build();
             })
@@ -2272,10 +2233,8 @@ public class PatientServiceImpl implements PatientService {
         Comparator<PatientSurgicalHistory> surgicalComparator = Comparator
             .comparing(PatientSurgicalHistory::getProcedureDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientSurgicalHistory::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean surgicalSensitive = surgicalHistory.stream().anyMatch(this::isSensitiveSurgicalHistory);
         List<PatientSurgicalHistoryResponseDTO> surgicalDtos = surgicalHistory.stream()
             .sorted(surgicalComparator)
-            .filter(history -> includeSensitive || !isSensitiveSurgicalHistory(history))
             .map(patientSurgicalHistoryMapper::toResponseDto)
             .limit(limit)
             .toList();
@@ -2285,15 +2244,14 @@ public class PatientServiceImpl implements PatientService {
         Comparator<AdvanceDirective> directiveComparator = Comparator
             .comparing(AdvanceDirective::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(AdvanceDirective::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean directiveSensitive = directives.stream().anyMatch(this::isSensitiveAdvanceDirective);
         List<AdvanceDirectiveResponseDTO> directiveDtos = directives.stream()
             .sorted(directiveComparator)
-            .filter(directive -> includeSensitive || !isSensitiveAdvanceDirective(directive))
             .map(advanceDirectiveMapper::toResponseDto)
             .limit(limit)
             .toList();
 
-        boolean sectionSensitive = problemSensitive || surgicalSensitive || directiveSensitive;
+        // Surgical history and directives carry no tag (E9 #63): only the problems can flag the section.
+        boolean sectionSensitive = problemSensitive;
         return new MedicalHistoryBundle(problemDtos, surgicalDtos, directiveDtos, sectionSensitive);
     }
 
@@ -2304,66 +2262,32 @@ public class PatientServiceImpl implements PatientService {
         return resolveTimelineLimit(requestedLimit);
     }
 
+    /*
+     * E9 #63 — what "sensitive" means on this chart. A row is sensitive when the
+     * classifier says so: its own tag, or its encounter's tag, or that
+     * encounter's department default (E8 #51). The English keyword lists that
+     * used to sit here matched substrings against French clinical text; they
+     * never fired, and "trauma" would have made an orthopaedic note sensitive.
+     * Two structured flags stay because they are clinical alerts the
+     * includeSensitive toggle has always gated, not privacy categories: a
+     * life-threatening allergy, and a high-risk or anomalous ultrasound.
+     */
     private boolean isSensitiveProblem(PatientProblem problem) {
-        if (problem == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(problem.getProblemDisplay())
-            || containsSensitiveKeyword(problem.getNotes());
-    }
-
-    private boolean isSensitiveSurgicalHistory(PatientSurgicalHistory history) {
-        if (history == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(history.getProcedureDisplay())
-            || containsSensitiveKeyword(history.getNotes());
-    }
-
-    private boolean isSensitiveAdvanceDirective(AdvanceDirective directive) {
-        if (directive == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(directive.getDescription());
+        return problem != null && sensitivityClassifier.effectiveCategory(problem) != null;
     }
 
     private boolean isSensitiveNursingNote(NursingNote note) {
-        if (note == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(note.getNarrative())
-            || containsSensitiveKeyword(note.getDataSubjective())
-            || containsSensitiveKeyword(note.getDataObjective())
-            || containsSensitiveKeyword(note.getDataAssessment())
-            || containsSensitiveKeyword(note.getDataPlan())
-            || containsSensitiveKeyword(note.getDataImplementation())
-            || containsSensitiveKeyword(note.getDataEvaluation())
-            || containsSensitiveKeyword(note.getActionSummary())
-            || containsSensitiveKeyword(note.getResponseSummary())
-            || containsSensitiveKeyword(note.getEducationSummary());
+        return note != null && sensitivityClassifier.effectiveCategory(note) != null;
     }
 
     private boolean isSensitiveUltrasoundOrder(UltrasoundOrder order) {
-        if (order == null) {
-            return false;
-        }
-        return Boolean.TRUE.equals(order.getIsHighRiskPregnancy())
-            || containsSensitiveKeyword(order.getClinicalIndication())
-            || containsSensitiveKeyword(order.getHighRiskNotes())
-            || containsSensitiveKeyword(order.getSpecialInstructions());
+        return order != null && Boolean.TRUE.equals(order.getIsHighRiskPregnancy());
     }
 
     private boolean isSensitiveUltrasoundReport(UltrasoundReport report) {
-        if (report == null) {
-            return false;
-        }
-        return Boolean.TRUE.equals(report.getAnomaliesDetected())
-            || Boolean.TRUE.equals(report.getSpecialistReferralNeeded())
-            || containsSensitiveKeyword(report.getFindingsSummary())
-            || containsSensitiveKeyword(report.getInterpretation())
-            || containsSensitiveKeyword(report.getAnomalyDescription())
-            || containsSensitiveKeyword(report.getFollowUpRecommendations())
-            || containsSensitiveKeyword(report.getGeneticScreeningType());
+        return report != null
+            && (Boolean.TRUE.equals(report.getAnomaliesDetected())
+                || Boolean.TRUE.equals(report.getSpecialistReferralNeeded()));
     }
 
     private void logDoctorRecordAudit(
@@ -2534,16 +2458,7 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private boolean isSensitiveEncounter(Encounter encounter) {
-        if (encounter == null) {
-            return false;
-        }
-        if (encounter.getDepartment() != null && encounter.getDepartment().getName() != null) {
-            String deptName = encounter.getDepartment().getName().toLowerCase(Locale.ROOT);
-            if (SENSITIVE_DEPARTMENTS.contains(deptName)) {
-                return true;
-            }
-        }
-        return containsSensitiveKeyword(encounter.getNotes());
+        return encounter != null && sensitivityClassifier.effectiveCategory(encounter) != null;
     }
 
     /** A row with no hospital, or the acting hospital's own, is local (mirrors {@code CrossHospitalRows}). */
@@ -2551,50 +2466,20 @@ public class PatientServiceImpl implements PatientService {
         return rowHospital == null || rowHospital.getId() == null || rowHospital.getId().equals(actingHospitalId);
     }
 
+    /** A prescription carries no tag of its own; its category rides on the encounter that wrote it. */
     private boolean isSensitiveMedication(Prescription prescription) {
-        if (prescription == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(prescription.getMedicationName())
-            || containsSensitiveKeyword(prescription.getMedicationDisplayName())
-            || containsSensitiveKeyword(prescription.getNotes())
-            || containsHighAlertKeyword(prescription.getMedicationName());
+        return prescription != null && prescription.getEncounter() != null
+            && sensitivityClassifier.effectiveCategory(prescription.getEncounter()) != null;
     }
 
+    /** Same as prescriptions: the category rides on the lab order's encounter. */
     private boolean isSensitiveLabResult(LabResult result) {
-        if (result == null) {
-            return false;
-        }
-        String clinicalContext = Optional.ofNullable(result.getLabOrder())
-            .map(LabOrder::getClinicalIndication)
-            .orElse(null);
-        return containsSensitiveKeyword(clinicalContext) || containsSensitiveKeyword(result.getNotes());
+        return result != null && result.getLabOrder() != null && result.getLabOrder().getEncounter() != null
+            && sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()) != null;
     }
 
     private boolean isSensitiveAllergy(PatientAllergy allergy) {
-        if (allergy == null) {
-            return false;
-        }
-        if (allergy.getSeverity() == AllergySeverity.LIFE_THREATENING) {
-            return true;
-        }
-        return containsSensitiveKeyword(allergy.getReaction()) || containsSensitiveKeyword(allergy.getReactionNotes());
-    }
-
-    private boolean containsHighAlertKeyword(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String normalized = text.toLowerCase(Locale.ROOT);
-        return HIGH_ALERT_MEDICATION_KEYWORDS.stream().anyMatch(normalized::contains);
-    }
-
-    private boolean containsSensitiveKeyword(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String normalized = text.toLowerCase(Locale.ROOT);
-        return SENSITIVE_KEYWORDS.stream().anyMatch(normalized::contains);
+        return allergy != null && allergy.getSeverity() == AllergySeverity.LIFE_THREATENING;
     }
 
     private String resolveStaffName(Encounter encounter) {

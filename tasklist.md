@@ -2042,18 +2042,24 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   still hold; `CrossHospitalReachRecorder` stamps `breakGlassSessionId` on
   every disclosure row written under a session; the D3 sites already on
   develop (diagnoses, timeline, doctor record, nursing notes, consultations,
-  admissions, encounters) take an `unlocked` flag. **(b) shipped 2026-09-12**:
-  the same flag at the whole-chart sites — storyboard problems, chart-review
-  encounters, snapshot encounters and active diagnoses, FHIR `$everything`
-  Encounter and Condition sections (carried on the SectionContext). The
-  portal's declare flow already exists (`break-glass-banner`); the restricted
-  rows UI that tells a clinician something is withheld and offers the
-  declaration is #64. E8 #54 absorbed.
-- [ ] 63. **Department classification screen + heuristic deletion.**
-  `PUT /departments/{id}/default-sensitivity` exists; the HOSPITAL_ADMIN
-  screen does not. Add it, put it on the hospital onboarding checklist, and
-  delete `PatientServiceImpl.SENSITIVE_KEYWORDS` / `SENSITIVE_DEPARTMENTS`
-  (English substring matching against French text; never fired).
+  admissions, encounters) take an `unlocked` flag. **(b) open**: the same
+  flag at the whole-chart sites (storyboard, chart review, snapshot, FHIR
+  `$everything`) once #610/#60b land; the portal's declare flow is #64's.
+- [x] 63. **Department classification screen + heuristic deletion.** ✅ DONE
+  2026-09-12. The department page carries a "Sensitive category" card for
+  HOSPITAL_ADMIN / SUPER_ADMIN (the four D3 categories or none) on the
+  existing `GET`/`PUT /departments/{id}/default-sensitivity`; the hospital
+  admin's onboarding checklist names the step. `SENSITIVE_KEYWORDS`,
+  `SENSITIVE_DEPARTMENTS` and `HIGH_ALERT_MEDICATION_KEYWORDS` are gone from
+  `PatientServiceImpl`: a row is sensitive when the classifier says so
+  (problems, notes, encounters, and prescriptions/results through their
+  encounter); allergies keep the life-threatening flag and ultrasound rows
+  their structured high-risk/anomaly flags — clinical alerts, not privacy;
+  surgical history and directives carry no tag and are never withheld.
+  Previously recorded as: `PUT /departments/{id}/default-sensitivity` exists;
+  the HOSPITAL_ADMIN screen does not. Add it, put it on the hospital
+  onboarding checklist, and delete the keyword sets (English substring
+  matching against French text; never fired).
 - [ ] 64. **Restricted rows on the chart (portal).** Foreign rows whose
   effective category is set render as *Dossier restreint (hôpital,
   département, n)* with *Ouvrir avec motif*, reusing the break-glass banner
