@@ -38,8 +38,6 @@ public final class LegacyAllergyText {
     private static final Pattern SEPARATOR = Pattern.compile(
         "[,;/|\\r\\n]|\\b(?:et|and)\\b", Pattern.CASE_INSENSITIVE);
 
-    /** Anchored single pass: strips a trailing full stop or blank run. */
-    private static final Pattern TRAILING_PUNCTUATION = Pattern.compile("[.\\s]+$");
 
     /** Phrases that state the ABSENCE of allergies, compared after normalisation. */
     private static final Set<String> NONE_PHRASES = Set.of(
@@ -64,7 +62,7 @@ public final class LegacyAllergyText {
         Set<String> seen = new LinkedHashSet<>();
         List<String> out = new ArrayList<>();
         for (String raw : SEPARATOR.split(text)) {
-            String token = TRAILING_PUNCTUATION.matcher(raw.trim()).replaceAll("");
+            String token = stripTrailingPunctuation(raw);
             if (token.isEmpty()) {
                 continue;
             }
@@ -83,6 +81,20 @@ public final class LegacyAllergyText {
     /** True when the text is non-blank but names no allergen (a "no known allergies" statement). */
     public static boolean statesNone(String text) {
         return text != null && !text.isBlank() && tokens(text).isEmpty();
+    }
+
+    /**
+     * Trim, then drop trailing full stops and the blanks around them. A loop
+     * rather than {@code [.\s]+$}: an anchored class with a quantifier is
+     * quadratic on a long run of blanks (CodeQL java/polynomial-redos), and
+     * this text is user-provided.
+     */
+    private static String stripTrailingPunctuation(String raw) {
+        String token = raw.strip();
+        while (token.endsWith(".")) {
+            token = token.substring(0, token.length() - 1).strip();
+        }
+        return token;
     }
 
     /** Lower-cased, whitespace-collapsed key used for de-duplication and the none-phrase check. */
