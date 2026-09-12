@@ -1901,6 +1901,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   request-cached), keep `X-Hospital-Id` validated against that live set, make
   `resolveHospitalScope` and `HospitalContextHolder` ONE resolver, and delete
   the dead `extractHospitalIdFromJwt`. No migration. Needs `/security-review`.
+  _(backend half in PR #597; the portal half is 55b)_
+- [ ] 55b. **Portal rehydrates scope from the session, not the token.**
+  `app.component.ts` decodes the stored JWT on every bootstrap for
+  `permittedHospitalIds` / `primaryHospitalId` and, for non-admin roles,
+  collapses the list to ONE hospital ("non-admin staff always get exactly one
+  permitted hospital"), so the picker shows a stale or truncated set the
+  server now ignores. Hydrate from `GET /auth/session/bootstrap` (live
+  assignments, already exists) on bootstrap, MFA challenge, login and
+  impersonation; drop the JWT-decoding fallbacks in `auth.service.ts`
+  (`getHospitalId`, `getPermittedHospitalIds`) once nothing reads them.
 - [ ] 56. **One allergy store.** Three stores never sync: free-text
   `patients.allergies` (Medical tab, `PatientMapper`), structured
   `patient_allergies` scoped by hospital (storyboard `loadAllergies`), and
