@@ -40,8 +40,7 @@ class RoleRegistryTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Path MIGRATIONS = Paths.get("src/main/resources/db/migration");
 
-    private static final Pattern PRE_AUTHORIZE =
-        Pattern.compile("@PreAuthorize\\(((?:\"[^\"]*\"\\s*\\+?\\s*|[A-Za-z_.]+\\s*\\+?\\s*)+)\\)");
+    private static final String PRE_AUTHORIZE = "@PreAuthorize(";
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
     private static final Pattern ROLE_CALL = Pattern.compile("has(?:Any)?Role\\(([^)]*)\\)");
     private static final Pattern ROLE_LITERAL = Pattern.compile("'(ROLE_[A-Z_]+)'");
@@ -95,15 +94,59 @@ class RoleRegistryTest {
         }
     }
 
+    /** One {@code @PreAuthorize(...)} argument as written, with the line it starts on. */
+    record Guard(int line, String body) { }
+
+    /**
+     * Every {@code @PreAuthorize(...)} argument in a source file. A scanner
+     * rather than a regex: the argument holds nested parentheses
+     * ({@code hasAnyRole(...)}) and string literals joined with {@code +}, and
+     * a pattern expressing that backtracks super-linearly (Sonar S8786).
+     * Parentheses inside string literals do not count.
+     */
+    static List<Guard> guards(String src) {
+        List<Guard> guards = new ArrayList<>();
+        int from = 0;
+        while (true) {
+            int at = src.indexOf(PRE_AUTHORIZE, from);
+            if (at < 0) {
+                return guards;
+            }
+            int start = at + PRE_AUTHORIZE.length();
+            int depth = 1;
+            boolean inString = false;
+            int i = start;
+            while (i < src.length() && depth > 0) {
+                char c = src.charAt(i);
+                if (inString) {
+                    if (c == '\\') {
+                        i++;
+                    } else if (c == '"') {
+                        inString = false;
+                    }
+                } else if (c == '"') {
+                    inString = true;
+                } else if (c == '(') {
+                    depth++;
+                } else if (c == ')') {
+                    depth--;
+                }
+                i++;
+            }
+            int line = src.substring(0, at).split("\n", -1).length;
+            guards.add(new Guard(line, src.substring(start, i - 1)));
+            from = i;
+        }
+    }
+
     /** role token → first file that names it, from every guard, the constants and the validator. */
     static Map<String, String> referencedRoles() throws IOException {
         Map<String, String> refs = new TreeMap<>();
         for (Path p : mainSources()) {
             String src = Files.readString(p, StandardCharsets.UTF_8);
             String where = p.getFileName().toString();
-            Matcher ann = PRE_AUTHORIZE.matcher(src);
-            while (ann.find()) {
-                String body = ann.group(1);
+            for (Guard guard : guards(src)) {
+                String body = guard.body();
                 Matcher call = ROLE_CALL.matcher(body);
                 while (call.find()) {
                     Matcher tok = QUOTED.matcher(call.group(1));
@@ -142,9 +185,10 @@ class RoleRegistryTest {
     @DisplayName("the registry parse sees V159: ROLE_STAFF seeded, ROLE_USER retired")
     void registryParseReflectsTheMigrations() throws IOException {
         Set<String> seeded = seededRoles();
-        assertThat(seeded).contains("ROLE_STAFF", "ROLE_DOCTOR", "ROLE_PATIENT", "ROLE_SUPER_ADMIN");
-        assertThat(seeded).doesNotContain("ROLE_USER", "ROLE_MODERATOR", "ROLE_TECHNICIAN", "ROLE_CLEANER",
-            "ROLE_SECURITY", "ROLE_SUPPORT", "ROLE_MANAGER");
+        assertThat(seeded)
+            .contains("ROLE_STAFF", "ROLE_DOCTOR", "ROLE_PATIENT", "ROLE_SUPER_ADMIN")
+            .doesNotContain("ROLE_USER", "ROLE_MODERATOR", "ROLE_TECHNICIAN", "ROLE_CLEANER",
+                "ROLE_SECURITY", "ROLE_SUPPORT", "ROLE_MANAGER");
     }
 
     @Test
@@ -153,14 +197,12 @@ class RoleRegistryTest {
         List<String> offenders = new ArrayList<>();
         for (Path p : mainSources()) {
             String src = Files.readString(p, StandardCharsets.UTF_8);
-            Matcher ann = PRE_AUTHORIZE.matcher(src);
-            while (ann.find()) {
-                String outsideRoleCalls = ROLE_CALL.matcher(ann.group(1)).replaceAll("");
+            for (Guard guard : guards(src)) {
+                String outsideRoleCalls = ROLE_CALL.matcher(guard.body()).replaceAll("");
                 Matcher tok = QUOTED.matcher(outsideRoleCalls);
                 while (tok.find()) {
                     if (!tok.group(1).startsWith("ROLE_")) {
-                        int line = src.substring(0, ann.start()).split("\n", -1).length;
-                        offenders.add(p.getFileName() + ":" + line + " '" + tok.group(1) + "'");
+                        offenders.add(p.getFileName() + ":" + guard.line() + " '" + tok.group(1) + "'");
                     }
                 }
             }
