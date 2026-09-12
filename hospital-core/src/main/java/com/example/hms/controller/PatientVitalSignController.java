@@ -44,7 +44,7 @@ public class PatientVitalSignController {
      * stays with the bedside roles on the POST above.
      */
     private static final String VITALS_READ_ROLES = "hasAnyAuthority("
-        + "'ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR',"
+        + "'ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_PHARMACIST',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 

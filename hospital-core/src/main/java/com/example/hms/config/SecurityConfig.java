@@ -443,8 +443,9 @@ public class SecurityConfig {
                 // Consulting clinicians READ vitals (pre-operative assessment,
                 // exercise tolerance before therapy) but never write them —
                 // the POST matcher above stays narrow. Role audit D7.
+                // E9 #69: the pharmacist reads vitals to verify a prescription.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
-                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_RADIOLOGIST,
+                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_RADIOLOGIST,
                         ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PUT, API_PATIENTS_PATTERN)
@@ -665,10 +666,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // E9 #69: PHARMACIST reads results (renal function before verifying, V139).
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
 
                 // Technicians can enter preliminary results; scientists/managers verify/release
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)

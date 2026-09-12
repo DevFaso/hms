@@ -2194,7 +2194,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   admitted them — admit via `hasAnyRole` if wanted; `StaffRepository`'s
   provider query lost a dead `ROLE_SPECIALIST` literal and may have meant
   PHYSICIAN/SURGEON.
-- [ ] 69. **Patient-safety gaps in the matrix.** Allergies readable by every
+- [x] 69. **Patient-safety gaps in the matrix.** ✅ DONE 2026-09-12 — allergies GET admits RADIOLOGIST/ANESTHESIOLOGIST/PHYSIOTHERAPIST (`ALLERGY_READ_ROLES`); PHARMACIST reads diagnoses, vitals (annotation + matcher), lab results (get/list/patient path + matcher) and the chart itself (`PATIENT_READ_ROLES`, portal /patients); MIDWIFE gains every NURSE-admitted medication and consultation guard (prescription create/update/dispatch-sms + `canCreatePrescription`, patient medications, medication history ×3, dispenses by patient, MTM reads, catalog and registry reads, overdue consultations); pinned by `ClinicalMatrixGapsTest` + `SecurityConfigPharmacistReadMatcherTest`. Allergies readable by every
   clinical role (today DOCTOR/NURSE/MIDWIFE/HOSPITAL_ADMIN/PHARMACIST only —
   anaesthesiologists and radiologists cannot read them); PHARMACIST reads
   diagnoses, vitals and lab results (verification gate V139 without renal
