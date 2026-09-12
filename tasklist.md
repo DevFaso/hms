@@ -2122,6 +2122,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   surface: `CLINICAL_CHART_ROLES`); one SUPER_ADMIN inheritance list shared by
   `JwtTokenProvider` and `SecurityConfig.authoritiesMapper`; a guard test that
   fails when the two lists diverge. Needs `/security-review`.
+  **(a) D6 shipped 2026-09-12**: `RoleExpansion` (security) is the one place a
+  principal's roles widen — `SUPER_ADMIN_INHERITS` (the JWT path's seven; the
+  login path's fourteen never reached a token, only the login role picker,
+  which now shows the same eight) and doctor equivalence — called by both
+  `JwtTokenProvider.getAuthenticationFromJwt` and
+  `SecurityConfig.authoritiesMapper`; `RoleExpansionTest` fails the build if
+  either file grows a list of its own again.
   **(b1) D5 shipped 2026-09-12** — the patient chart page and what it opens
   onto: the `/patients/{id}` clinical sub-resources (allergies, diagnoses,
   chart updates, storyboard, chart review, vitals, lab results, medications,

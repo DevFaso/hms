@@ -62,8 +62,9 @@ public class RoleValidator {
      *
      * <p>Why this matters: {@code JwtTokenProvider.getAuthenticationFromJwt}
      * inflates a real super-admin's {@code ROLE_SUPER_ADMIN} authority to
-     * also carry {@code ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, …}
-     * so per-hospital staff checks "just work". An impersonation context
+     * also carry {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}
+     * (the one list both auth paths share since E9 #67) so per-hospital
+     * staff checks "just work". An impersonation context
      * (or any future code path that copies authorities verbatim) could
      * therefore present {@code ROLE_SUPER_ADMIN} in {@code authorities}
      * without the principal actually being a super-admin. The discrete
