@@ -63,17 +63,15 @@ public final class LegacyAllergyText {
         List<String> out = new ArrayList<>();
         for (String raw : SEPARATOR.split(text)) {
             String token = stripTrailingPunctuation(raw);
-            if (token.isEmpty()) {
-                continue;
-            }
             if (token.length() > MAX_DISPLAY) {
                 token = token.substring(0, MAX_DISPLAY).trim();
             }
-            String key = normalise(token);
-            if (NONE_PHRASES.contains(key) || !seen.add(key)) {
-                continue;
+            // Null key for an empty token, so it never reaches seen.add: the
+            // first blank would otherwise claim the empty key for itself.
+            String key = token.isEmpty() ? null : normalise(token);
+            if (key != null && !NONE_PHRASES.contains(key) && seen.add(key)) {
+                out.add(token);
             }
-            out.add(token);
         }
         return List.copyOf(out);
     }

@@ -5,7 +5,6 @@ import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
-import com.example.hms.config.RecordAccessProperties;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -31,20 +30,17 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final StaffRepository staffRepository;
     private final TreatmentRelationshipResolver resolver;
     private final PatientHospitalRegistrationRepository registrationRepository;
-    private final RecordAccessProperties properties;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
                                   StaffRepository staffRepository,
                                   TreatmentRelationshipResolver resolver,
-                                  PatientHospitalRegistrationRepository registrationRepository,
-                                  RecordAccessProperties properties) {
+                                  PatientHospitalRegistrationRepository registrationRepository) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
         this.resolver = resolver;
         this.registrationRepository = registrationRepository;
-        this.properties = properties;
     }
 
     @Override
