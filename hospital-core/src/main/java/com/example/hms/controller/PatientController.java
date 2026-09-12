@@ -3,7 +3,6 @@ package com.example.hms.controller;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.model.Hospital;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.DoctorPatientRecordDTO;
 import com.example.hms.payload.dto.DoctorPatientRecordRequestDTO;

@@ -2,9 +2,6 @@ package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.model.Hospital;
-import com.example.hms.model.Role;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.NurseDashboardService;
@@ -23,7 +20,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

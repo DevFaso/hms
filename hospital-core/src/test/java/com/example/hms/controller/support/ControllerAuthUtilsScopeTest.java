@@ -68,7 +68,9 @@ class ControllerAuthUtilsScopeTest {
         context(HOSPITAL_A, false, false);
         when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(false);
 
-        assertThatThrownBy(() -> authUtils.resolveHospitalScope(auth("ROLE_DOCTOR"), HOSPITAL_B, false))
+        Authentication doctor = auth("ROLE_DOCTOR");
+
+        assertThatThrownBy(() -> authUtils.resolveHospitalScope(doctor, HOSPITAL_B, false))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -124,7 +126,9 @@ class ControllerAuthUtilsScopeTest {
     void receptionistWithoutAnyScopeIsRefused() {
         when(assignmentRepository.findAllDetailedByUserId(USER_ID)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> authUtils.resolveHospitalScope(auth("ROLE_RECEPTIONIST"), null, true))
+        Authentication receptionist = auth("ROLE_RECEPTIONIST");
+
+        assertThatThrownBy(() -> authUtils.resolveHospitalScope(receptionist, null, true))
             .isInstanceOf(BusinessException.class);
     }
 

@@ -28,6 +28,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ControllerAuthUtils {
 
+    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     /**
@@ -92,7 +94,7 @@ public class ControllerAuthUtils {
      */
     private Optional<UUID> validateAndPreferHospital(Authentication auth, UUID requestedHospitalId, UUID contextHospitalId) {
         if (requestedHospitalId != null) {
-            if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+            if (hasAuthority(auth, ROLE_SUPER_ADMIN)) {
                 return Optional.of(requestedHospitalId);
             }
             UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
@@ -142,7 +144,7 @@ public class ControllerAuthUtils {
                                      boolean requiredForReceptionist) {
         UUID contextHospitalId = contextHospitalId();
 
-        if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+        if (hasAuthority(auth, ROLE_SUPER_ADMIN)) {
             // SUPER_ADMIN: only scope when explicitly requested.
             // When no hospitalId is provided, return null = global/all.
             return requestedHospitalId;
@@ -222,7 +224,7 @@ public class ControllerAuthUtils {
      */
     public UUID currentHospitalId(Authentication auth) {
         UUID fromContext = contextHospitalId();
-        if (fromContext != null || hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+        if (fromContext != null || hasAuthority(auth, ROLE_SUPER_ADMIN)) {
             return fromContext;
         }
         return fallbackHospitalFromAssignments(auth).orElse(null);
