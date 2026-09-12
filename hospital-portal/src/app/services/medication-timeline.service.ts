@@ -56,6 +56,9 @@ export interface MedicationTimelineEntry {
   quantityDispensed?: number;
   quantityUnit?: string;
   source?: string;
+  /** E9 #61 — the hospital that prescribed or dispensed; equals the active hospital for a local entry. */
+  hospitalId?: string;
+  hospitalName?: string;
   prescriberName?: string;
   pharmacyName?: string;
   /** PrescriptionStatus name for RX rows; always 'DISPENSED' for fills. */

@@ -536,6 +536,17 @@ export class PatientChartComponent implements OnInit {
     return entry.metadata?.foreign === true;
   }
 
+  /**
+   * E9 #61 — provenance on the allergies, problems and updates rows, the way
+   * the timeline already shows it: the hospital name on every row, and a row
+   * from another hospital marked structurally. The comparison is on the id,
+   * never the name; a row with no hospital id is local, not foreign.
+   */
+  isForeignRow(row: { hospitalId?: string }): boolean {
+    const mine = this.hospitalId();
+    return !!row.hospitalId && !!mine && row.hospitalId !== mine;
+  }
+
   severityClass(severity?: string): string {
     switch (severity) {
       case 'LIFE_THREATENING':
