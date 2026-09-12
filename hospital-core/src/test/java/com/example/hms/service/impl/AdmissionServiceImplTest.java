@@ -37,6 +37,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.enums.SensitivityCategory;
 
 @ExtendWith(MockitoExtension.class)
 class AdmissionServiceImplTest {
@@ -51,6 +58,9 @@ class AdmissionServiceImplTest {
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private AdmissionMapper admissionMapper;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
 
     @InjectMocks
     private AdmissionServiceImpl service;
@@ -354,5 +364,29 @@ class AdmissionServiceImplTest {
         service.unassignBed(admissionId);
 
         verify(bedAssignmentService).unassignBed(admission);
+    }
+
+    @Test
+    void getAdmissionsByPatient_followThePatientAndWithholdAForeignSensitiveAdmission() {
+        // E9 #59e — the admission at Hôpital B is on the list at Hôpital A; a
+        // foreign admission in a sensitive category (D3) is withheld; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().build(); other.setId(otherHospitalId);
+        Admission local = new Admission(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
+        Admission foreign = new Admission(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
+        Admission foreignSensitive = new Admission(); foreignSensitive.setId(UUID.randomUUID()); foreignSensitive.setHospital(other);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(admissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(local, foreign, foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(Admission.class)))
+            .thenAnswer(inv -> inv.getArgument(0) == foreignSensitive ? SensitivityCategory.BEHAVIOURAL_HEALTH : null);
+        when(admissionMapper.toResponseDTO(any(Admission.class))).thenReturn(response);
+
+        assertThat(service.getAdmissionsByPatient(patientId)).hasSize(2);
+        verify(admissionRepository, never()).findByPatientIdOrderByAdmissionDateTimeDesc(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

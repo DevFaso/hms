@@ -171,6 +171,8 @@ class TenantIsolationTest {
         @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
         @Mock private DischargeApprovalRepository dischargeApprovalRepository;
         @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+        @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
         @InjectMocks private DischargeSummaryServiceImpl service;
 
@@ -209,7 +211,8 @@ class TenantIsolationTest {
         @DisplayName("listByPatient — SQL-scoped to hospital A")
         void listByPatient_scoped() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
-            when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientA.getId(), HOSPITAL_A_ID))
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(patientA.getId()), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientA.getId(), Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of(summaryA));
             DischargeSummaryResponseDTO dto = new DischargeSummaryResponseDTO();
             dto.setId(summaryA.getId());
@@ -222,8 +225,10 @@ class TenantIsolationTest {
         @Test
         @DisplayName("listByPatient — patient B, user scoped A → empty")
         void listByPatient_crossTenant() {
+            // E9 #59e — B does not disclose this patient to A: readable set is A alone.
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
-            when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientB.getId(), HOSPITAL_A_ID))
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(patientB.getId()), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientB.getId(), Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of());
             assertThat(service.getDischargeSummariesByPatient(patientB.getId(), Locale.ENGLISH)).isEmpty();
         }

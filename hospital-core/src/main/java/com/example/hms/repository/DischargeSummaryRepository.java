@@ -30,6 +30,9 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
 
     List<DischargeSummary> findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(UUID patientId, UUID hospitalId);
 
+    /** E9 #59e — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<DischargeSummary> findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     /**
      * FHIR read path: same rows, with the mapper-walked associations fetched
      * up front (the DocumentReference mapper dereferences all four).

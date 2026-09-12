@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 
 /**
  * Implementation of DischargeSummaryService
@@ -69,6 +71,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final DischargeApprovalRepository dischargeApprovalRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     /**
      * Optional Micrometer registry. Auto-configured by spring-boot-starter-actuator in
@@ -304,7 +308,14 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<DischargeSummary> summaries;
         if (activeHospitalId != null) {
-            summaries = dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, activeHospitalId);
+            // E9 #59e — discharge summaries follow the patient across the
+            // readable hospitals (untagged, V158); every foreign row is accounted.
+            UUID requesterUserId = roleValidator.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            summaries = dischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(patientId, readable);
+            reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(summaries.stream().map(s -> CrossHospitalReachRecorder.hospitalIdOf(s.getHospital())).toList(), activeHospitalId),
+                "Cross-hospital discharge summary read on the treatment relationship");
         } else {
             summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         }

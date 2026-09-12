@@ -1948,7 +1948,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   portal. `PatientChartAccess.require` delegates to the policy for reads: 404
   only when there is neither registration nor session. Supersedes E8 #49's
   gating and #52's posture toggle.
-- [ ] 59. **Widen the read finders, one domain per PR.** The 26 unwidened
+- [x] 59. **Widen the read finders, one domain per PR.** ✅ DONE 2026-09-12 — all five domains shipped (a #603, b #604, c #605, d, e); the residuals are listed inline below. The 26 unwidened
   patient+hospital finders (`CrossHospitalReadFilterCoverageTest` budget → 0)
   become `…HospitalIdIn(readable)` on READ paths only: (a) chart — problems,
   allergies, vitals, notes, chart updates; (b) orders and results — lab,
@@ -1981,7 +1981,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   and the postpartum care-plan resolver (the plan is the acting hospital's
   object). Maternity rows carry no sensitivity tag; D3's "reproductive
   health" is #63's department classification (family planning), not
-  pregnancy care as such — pregnancy care travels by design. ⚠ The ratchet is
+  pregnancy care as such — pregnancy care travels by design. **(e) discharge
+  and admissions shipped 2026-09-12**: discharge summaries; admissions and
+  encounters by patient (both read EVERY tenant before and both carry a
+  sensitivity category, so D3 applies through the classifier). Deliberately
+  still local: the current-admission lookup (the acting hospital's bed/tracker
+  question, not a record that travels). Still unscoped, for #60: the
+  storyboard's, snapshot's and mortality service's encounter reads. ⚠ The ratchet is
   a CEILING and walks the
   repository subfolders — 28 single-hospital finders remain, not the 26 this
   bullet first counted; a widened finder whose single sibling still has a
