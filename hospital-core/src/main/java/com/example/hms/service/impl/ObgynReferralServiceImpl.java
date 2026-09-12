@@ -43,6 +43,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Slf4j
 @Service
@@ -65,6 +70,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final UserRepository userRepository;
     private final ObgynReferralMapper referralMapper;
     private final ObjectMapper objectMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public ObgynReferralResponseDTO createReferral(ObgynReferralCreateRequestDTO request, String username) {
@@ -115,8 +122,21 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     @Override
     @Transactional(readOnly = true)
     public Page<ObgynReferralResponseDTO> getReferralsForPatient(UUID patientId, Pageable pageable) {
-        return referralRepository.findByPatient_Id(patientId, pageable)
-            .map(referralMapper::toResponseDTO);
+        // E9 #59d — OB/GYN referrals follow the patient across the readable
+        // hospitals when the caller acts in one (keyed on the referring hospital).
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return referralRepository.findByPatient_Id(patientId, pageable)
+                .map(referralMapper::toResponseDTO);
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        Page<ObgynReferral> rows = referralRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital OB/GYN referral read on the treatment relationship");
+        return rows.map(referralMapper::toResponseDTO);
     }
 
     @Override

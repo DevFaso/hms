@@ -928,9 +928,9 @@ class PatientServiceImplTest {
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(labResultResponse);
-        when(ultrasoundOrderRepository.findAllByPatientId(patientId)).thenReturn(List.of(ultrasoundOrder));
+        when(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(ultrasoundOrder));
         when(ultrasoundMapper.toOrderResponseDTO(ultrasoundOrder)).thenReturn(orderResponse);
-        when(ultrasoundReportRepository.findAllByPatientId(patientId)).thenReturn(List.of(ultrasoundReport));
+        when(ultrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(ultrasoundReport));
         when(ultrasoundMapper.toReportResponseDTO(ultrasoundReport)).thenReturn(reportResponse);
         when(nursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(note));
         when(nursingNoteMapper.toResponse(note)).thenReturn(noteResponse);

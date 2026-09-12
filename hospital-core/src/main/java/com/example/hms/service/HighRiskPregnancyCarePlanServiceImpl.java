@@ -36,6 +36,11 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -73,6 +78,8 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private final UserRepository userRepository;
     private final HighRiskPregnancyCarePlanMapper mapper;
     private final Clock clock;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
@@ -136,7 +143,22 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND));
         assertReadAccess(user, patient);
 
-        return carePlanRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
+        // E9 #59d — high-risk care plans follow the patient across the
+        // readable hospitals when the caller acts in one.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return carePlanRepository.findByPatient_IdOrderByCreatedAtDesc(patientId).stream()
+                .map(plan -> mapper.toResponse(plan, computeAlerts(plan)))
+                .toList();
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<HighRiskPregnancyCarePlan> plans = carePlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(plans.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital high-risk pregnancy care plan read on the treatment relationship");
+        return plans.stream()
             .map(plan -> mapper.toResponse(plan, computeAlerts(plan)))
             .toList();
     }
@@ -150,8 +172,23 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND));
         assertReadAccess(user, patient);
 
-        return carePlanRepository.findFirstByPatient_IdAndActiveTrueOrderByCreatedAtDesc(patientId)
+        // E9 #59d — the active plan across the readable hospitals.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return carePlanRepository.findFirstByPatient_IdAndActiveTrueOrderByCreatedAtDesc(patientId)
+                .map(plan -> mapper.toResponse(plan, computeAlerts(plan)))
+                .orElse(null);
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<HighRiskPregnancyCarePlan> active = carePlanRepository.findFirstByPatient_IdAndHospital_IdInAndActiveTrueOrderByCreatedAtDesc(patientId, readable).stream().toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(active.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital high-risk pregnancy care plan read on the treatment relationship");
+        return active.stream()
             .map(plan -> mapper.toResponse(plan, computeAlerts(plan)))
+            .findFirst()
             .orElse(null);
     }
 

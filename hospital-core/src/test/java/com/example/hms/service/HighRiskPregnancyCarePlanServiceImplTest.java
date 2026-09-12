@@ -39,6 +39,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class HighRiskPregnancyCarePlanServiceImplTest {
@@ -57,6 +66,11 @@ class HighRiskPregnancyCarePlanServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
     private Clock fixedClock;
 
     private HighRiskPregnancyCarePlanServiceImpl service;
@@ -71,7 +85,9 @@ class HighRiskPregnancyCarePlanServiceImplTest {
             hospitalRepository,
             userRepository,
             mapper,
-            fixedClock
+            fixedClock,
+            recordAccessPolicy,
+            reachRecorder
         );
     }
 
@@ -212,5 +228,38 @@ class HighRiskPregnancyCarePlanServiceImplTest {
         user.getUserRoles().add(link);
         role.getUserRoles().add(link);
         return user;
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getPlansForPatientReadsTheReadableSetWhenActingInAHospital() {
+        // E9 #59d — acting in a hospital, the plans span the policy's readable
+        // set at the database; the unscoped finder is never touched.
+        User user = providerUser();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(user.getId())
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(user.getId(), patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(carePlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of());
+
+        assertThat(service.getPlansForPatient(patientId, user.getUsername())).isEmpty();
+        verify(carePlanRepository, never()).findByPatient_IdOrderByCreatedAtDesc(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(user.getId()), isNull(), eq(Map.of()), anyString());
     }
 }

@@ -44,6 +44,14 @@ public interface MaternalHistoryRepository extends JpaRepository<MaternalHistory
     """)
     List<MaternalHistory> findByPatientIdOrderByVersionDesc(@Param("patientId") UUID patientId, Pageable pageable);
     
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<MaternalHistory> findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59d — the current (highest-version) history across the readable hospitals. */
+    Optional<MaternalHistory> findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     default Optional<MaternalHistory> findCurrentByPatientId(UUID patientId) {
         List<MaternalHistory> results = findByPatientIdOrderByVersionDesc(patientId, Pageable.ofSize(1));
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));

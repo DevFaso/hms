@@ -26,6 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 /**
  * Service implementation for managing maternal history documentation.
@@ -50,6 +55,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final MaternalHistoryMapper maternalHistoryMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public MaternalHistoryResponseDTO createMaternalHistory(MaternalHistoryRequestDTO request, String username) {
@@ -153,10 +160,26 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     public MaternalHistoryResponseDTO getCurrentMaternalHistoryByPatientId(UUID patientId, String username) {
         log.debug("Retrieving current maternal history for patient ID: {}", patientId);
         
-        MaternalHistory maternalHistory = maternalHistoryRepository.findCurrentByPatientId(patientId)
+        // E9 #59d — the current history across the readable hospitals when the
+        // caller acts in one; a super-admin in global view keeps the unscoped read.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            MaternalHistory maternalHistory = maternalHistoryRepository.findCurrentByPatientId(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_FOR_PATIENT, patientId));
-        
-        return maternalHistoryMapper.toResponseDTO(maternalHistory);
+            return maternalHistoryMapper.toResponseDTO(maternalHistory);
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<MaternalHistory> current = maternalHistoryRepository
+            .findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(patientId, readable).stream().toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(current.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital maternal history read on the treatment relationship");
+        return current.stream()
+            .map(maternalHistoryMapper::toResponseDTO)
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_FOR_PATIENT, patientId));
     }
 
     @Override
@@ -164,8 +187,21 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     public List<MaternalHistoryResponseDTO> getAllVersionsByPatientId(UUID patientId, String username) {
         log.debug("Retrieving all maternal history versions for patient ID: {}", patientId);
         
-        List<MaternalHistory> histories = maternalHistoryRepository.findAllVersionsByPatientId(patientId);
-        
+        // E9 #59d — every version across the readable hospitals when the caller acts in one.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return maternalHistoryRepository.findAllVersionsByPatientId(patientId).stream()
+                .map(maternalHistoryMapper::toResponseDTO)
+                .toList();
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<MaternalHistory> histories = maternalHistoryRepository
+            .findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(patientId, readable);
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(histories.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital maternal history read on the treatment relationship");
         return histories.stream()
                 .map(maternalHistoryMapper::toResponseDTO)
                 .toList();

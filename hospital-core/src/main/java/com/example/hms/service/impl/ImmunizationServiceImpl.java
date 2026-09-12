@@ -23,6 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +43,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final ImmunizationMapper immunizationMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public ImmunizationResponseDTO createImmunization(ImmunizationRequestDTO requestDTO) {
@@ -88,8 +95,22 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
-        List<PatientImmunization> immunizations = 
-                immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patientId);
+        // E9 #59d — the immunization record follows the patient across the
+        // readable hospitals when the caller acts in one; a super-admin in
+        // global view keeps the unscoped read. Foreign rows are accounted.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        List<PatientImmunization> immunizations;
+        if (actingHospitalId == null) {
+            immunizations = immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patientId);
+        } else {
+            UUID requesterUserId = ctx.getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+            immunizations = immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, readable);
+            reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
+                "Cross-hospital immunization read on the treatment relationship");
+        }
         
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
@@ -105,8 +126,21 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
-        List<PatientImmunization> immunizations = 
-                immunizationRepository.findByPatient_IdAndVaccineCodeOrderByAdministrationDateDesc(patientId, vaccineCode);
+        // E9 #59d — see getImmunizationsByPatientId.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        List<PatientImmunization> immunizations;
+        if (actingHospitalId == null) {
+            immunizations = immunizationRepository.findByPatient_IdAndVaccineCodeOrderByAdministrationDateDesc(patientId, vaccineCode);
+        } else {
+            UUID requesterUserId = ctx.getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+            immunizations = immunizationRepository
+                .findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(patientId, readable, vaccineCode);
+            reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(immunizations.stream().map(i -> CrossHospitalReachRecorder.hospitalIdOf(i.getHospital())).toList(), actingHospitalId),
+                "Cross-hospital immunization read on the treatment relationship");
+        }
         
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)

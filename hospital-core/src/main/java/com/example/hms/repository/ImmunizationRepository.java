@@ -24,6 +24,14 @@ public interface ImmunizationRepository extends JpaRepository<PatientImmunizatio
     List<PatientImmunization> findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(
             UUID patientId, UUID hospitalId);
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<PatientImmunization> findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(
+            UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59d — the vaccine-code sibling of the finder above. */
+    List<PatientImmunization> findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(
+            UUID patientId, java.util.Collection<UUID> hospitalIds, String vaccineCode);
+
     /**
      * Find immunizations by status
      */

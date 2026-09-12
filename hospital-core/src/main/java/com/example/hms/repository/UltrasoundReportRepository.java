@@ -30,6 +30,10 @@ public interface UltrasoundReportRepository extends JpaRepository<UltrasoundRepo
     @Query("SELECT r FROM UltrasoundReport r WHERE r.ultrasoundOrder.patient.id = :patientId ORDER BY r.scanDate DESC")
     List<UltrasoundReport> findAllByPatientId(@Param("patientId") UUID patientId);
 
+    /** E9 #59d — reports across the readable hospitals, keyed on the REPORT's hospital ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<UltrasoundReport> findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     /**
      * Find reports by finding category.
      */

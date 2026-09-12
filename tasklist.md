@@ -1970,7 +1970,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   Deliberately still local: the MTM polypharmacy count (a write-path
   derivation, no row surfaced — widening it means a RECORD_SHARE on review
   creation, decide with #60) and the CDS/BPA rule engines (#60). eMAR has no
-  patient-list read to widen. ⚠ The ratchet is a CEILING and walks the
+  patient-list read to widen. **(d) maternity and immunizations shipped
+  2026-09-12**: labour episodes, newborn assessments, postpartum observations
+  (no local plan), birth plans, high-risk care plans, maternal history, OB/GYN
+  referrals, ultrasound orders, the doctor record's and timeline's imaging,
+  immunizations (list + by vaccine). Seven of those read EVERY tenant before
+  (no hospital predicate at all) — brought onto the policy. Still
+  patient-wide, recorded here: the immunization schedule reads (overdue,
+  upcoming, reminders, incomplete series — JPQL with no hospital predicate)
+  and the postpartum care-plan resolver (the plan is the acting hospital's
+  object). Maternity rows carry no sensitivity tag; D3's "reproductive
+  health" is #63's department classification (family planning), not
+  pregnancy care as such — pregnancy care travels by design. ⚠ The ratchet is
+  a CEILING and walks the
   repository subfolders — 28 single-hospital finders remain, not the 26 this
   bullet first counted; a widened finder whose single sibling still has a
   caller (CDS hooks, FHIR `$everything`, bulk export, record sharing) stays

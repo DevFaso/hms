@@ -27,6 +27,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 /**
  * Service implementation for Birth Plan operations.
@@ -42,6 +47,8 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final BirthPlanMapper birthPlanMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
@@ -143,7 +150,22 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
         }
 
-        List<BirthPlan> birthPlans = birthPlanRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
+        // E9 #59d — birth plans follow the patient across the readable
+        // hospitals when the caller acts in one; a super-admin in global view
+        // (and a patient reading their own) keeps the unscoped read.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return birthPlanRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+                .map(birthPlanMapper::toResponseDTO)
+                .toList();
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<BirthPlan> birthPlans = birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(birthPlans.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital birth plan read on the treatment relationship");
         return birthPlans.stream()
             .map(birthPlanMapper::toResponseDTO)
             .toList();
@@ -165,8 +187,23 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
         }
 
-        return birthPlanRepository.findActiveBirthPlanByPatientId(patientId)
+        // E9 #59d — the most recent plan across the readable hospitals.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return birthPlanRepository.findActiveBirthPlanByPatientId(patientId)
+                .map(birthPlanMapper::toResponseDTO)
+                .orElse(null);
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<BirthPlan> active = birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream().toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(active.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital birth plan read on the treatment relationship");
+        return active.stream()
             .map(birthPlanMapper::toResponseDTO)
+            .findFirst()
             .orElse(null);
     }
 

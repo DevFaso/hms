@@ -42,6 +42,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class UltrasoundServiceImplTest {
@@ -58,6 +66,11 @@ class UltrasoundServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private UltrasoundMapper ultrasoundMapper;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private UltrasoundServiceImpl ultrasoundService;
@@ -622,5 +635,41 @@ class UltrasoundServiceImplTest {
         assertThatThrownBy(() -> ultrasoundService.getReportByOrderId(orderId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Ultrasound report not found for order");
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getOrdersByPatientIdFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — the scan ordered at Hôpital B is on the list at Hôpital A
+        // when the policy reads B for this patient; accounted. The unscoped
+        // finder (every tenant) is never touched.
+        UUID requesterId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        UltrasoundOrder foreign = new UltrasoundOrder();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        UltrasoundOrderResponseDTO dto = UltrasoundOrderResponseDTO.builder().id(foreign.getId()).build();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(requesterId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(recordAccessPolicy.readableHospitalIds(requesterId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(orderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(foreign));
+        when(ultrasoundMapper.toOrderResponseDTO(foreign)).thenReturn(dto);
+
+        assertThat(ultrasoundService.getOrdersByPatientId(patientId)).containsExactly(dto);
+        verify(orderRepository, never()).findAllByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

@@ -34,6 +34,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +70,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final NewbornAssessmentMapper mapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public NewbornAssessmentResponseDTO recordAssessment(UUID patientId,
@@ -104,8 +110,15 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         int effectiveLimit = sanitizeLimit(limit, DEFAULT_RECENT_LIMIT, MAX_RECENT_LIMIT);
         List<NewbornAssessment> assessments;
         if (hospitalId != null) {
-            assessments = assessmentRepository.findByPatient_IdAndHospital_IdOrderByAssessmentTimeDesc(
-                patientId, hospitalId, PageRequest.of(0, effectiveLimit));
+            // E9 #59d — newborn assessments follow the patient across the
+            // readable hospitals; every foreign row surfaced is accounted.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+            assessments = assessmentRepository.findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc(
+                patientId, readable, PageRequest.of(0, effectiveLimit));
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(assessments.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList(), hospitalId),
+                "Cross-hospital newborn assessment read on the treatment relationship");
         } else {
             assessments = assessmentRepository.findWithinRange(
                 patientId, null, null, null, PageRequest.of(0, effectiveLimit));

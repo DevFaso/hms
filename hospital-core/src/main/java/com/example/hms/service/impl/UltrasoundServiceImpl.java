@@ -27,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +47,8 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final UltrasoundMapper ultrasoundMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId) {
@@ -132,15 +139,39 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundOrderResponseDTO> getOrdersByPatientId(UUID patientId) {
-        return orderRepository.findAllByPatientId(patientId).stream()
-            .map(ultrasoundMapper::toOrderResponseDTO)
-            .toList();
+        return readOrders(patientId, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<UltrasoundOrderResponseDTO> getOrdersByPatientIdAndStatus(UUID patientId, UltrasoundOrderStatus status) {
-        return orderRepository.findByPatientIdAndStatus(patientId, status).stream()
+        return readOrders(patientId, status);
+    }
+
+    /**
+     * E9 #59d — ultrasound orders follow the patient across the readable
+     * hospitals when the caller acts in one; a super-admin in global view
+     * keeps the unscoped read. Every foreign row surfaced is accounted.
+     */
+    private List<UltrasoundOrderResponseDTO> readOrders(UUID patientId, UltrasoundOrderStatus status) {
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        List<UltrasoundOrder> orders;
+        if (actingHospitalId == null) {
+            orders = status == null
+                ? orderRepository.findAllByPatientId(patientId)
+                : orderRepository.findByPatientIdAndStatus(patientId, status);
+        } else {
+            UUID requesterUserId = ctx.getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+            orders = status == null
+                ? orderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, readable)
+                : orderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedDateDesc(patientId, readable, status);
+            reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), actingHospitalId),
+                "Cross-hospital ultrasound order read on the treatment relationship");
+        }
+        return orders.stream()
             .map(ultrasoundMapper::toOrderResponseDTO)
             .toList();
     }
