@@ -2165,6 +2165,22 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `ROLE_DENTIST`, `ROLE_ADMINISTRATIVE_STAFF`, `ROLE_CASHIER`; retire the nine
   seeded-but-unused roles; sidebar visibility decided on the same role lists
   as the API.
+  **(b) portal shipped 2026-09-12** — sidebar visibility is decided on the route
+  guards' role lists: `shell.spec.ts` gained a behavioural parity suite (for
+  every role the routes name, the sidebar rendered with every permission
+  granted contains no route whose `RoleGuard` refuses that role; conditional
+  gates included). It found, and the same PR fixed: `/nurse-station` and
+  `/hospitals` were permission-gated only (a hospital admin holds 'Access
+  Nurse Station' and landed on 403); the pharmacy group gate showed the
+  catalog, registry, dispensing and stock-routing entries to INVENTORY_CLERK
+  and STORE_MANAGER, whose guards refuse them; the `/medication-catalog` route
+  now admits STORE_MANAGER (on every `MedicationCatalogController` read all
+  along); the `/pharmacy-registry` route drops HOSPITAL_ADMIN (the API dropped
+  it in #67); ROLE_IT_STAFF and ROLE_CASHIER, never seeded, are off the
+  webhooks and checkout route + nav. Residual for the route-vs-API layer:
+  `/prescriptions` route admits PHARMACY_VERIFIER, which the API admits only
+  on POST verify. **(a) backend open**: the 106 permission tokens, ROLE_STAFF
+  seed (V159), the phantom-role references, the dead seeded roles.
 - [ ] 69. **Patient-safety gaps in the matrix.** Allergies readable by every
   clinical role (today DOCTOR/NURSE/MIDWIFE/HOSPITAL_ADMIN/PHARMACIST only —
   anaesthesiologists and radiologists cannot read them); PHARMACIST reads

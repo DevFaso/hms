@@ -582,6 +582,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.NURSE_STATION',
         route: '/nurse-station',
         permission: 'Access Nurse Station',
+        // Mirrors the /nurse-station RoleGuard (E9 #68). HOSPITAL_ADMIN holds
+        // 'Access Nurse Station' in the static map but the guard refuses it.
+        roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'qr_code_scanner',
@@ -754,6 +757,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Hospitals',
         translationKey: 'NAV.HOSPITALS',
         route: '/hospitals',
+        // Mirrors the /hospitals RoleGuard (E9 #68).
+        roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_SUPER_ADMIN',
+        ],
       });
     }
     // PR #225 review: gate the admin-items group via the active-role-aware
@@ -838,8 +849,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // API keys + outbound webhooks (Tier 2 item 45) — mirrors the
-    // /api-keys and /webhook-endpoints controller gates exactly.
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'])) {
+    // /api-keys and /webhook-endpoints controller gates exactly
+    // (ROLE_IT_STAFF dropped in E9 #68: never seeded).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'webhook',
         label: 'API & Webhooks',
@@ -895,12 +907,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Medication Catalog',
           translationKey: 'NAV.MEDICATION_CATALOG',
           route: '/medication-catalog',
+          // Mirrors the /medication-catalog RoleGuard (E9 #68): the catalog
+          // API admits the store manager on every read but not the clerk.
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'local_pharmacy',
           label: 'Pharmacy Registry',
           translationKey: 'NAV.PHARMACY_REGISTRY',
           route: '/pharmacy-registry',
+          // Mirrors the /pharmacy-registry RoleGuard (E9 #68); the /pharmacies
+          // API admits clinicians and pharmacists only since E9 #67.
+          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         {
           icon: 'inventory_2',
@@ -925,12 +949,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
           route: '/pharmacy/dispensing',
+          // Mirrors the /pharmacy/dispensing RoleGuard (E9 #68): the group gate
+          // above admits the clerk and the store manager for the stock pages.
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'alt_route',
           label: 'Stock Routing',
           translationKey: 'NAV.STOCK_ROUTING',
           route: '/pharmacy/stock-routing',
+          // Mirrors the /pharmacy/stock-routing RoleGuard (E9 #68).
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
       );
     }
@@ -975,7 +1014,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (
       this.hasAnyRole([
         'ROLE_PHARMACIST',
-        'ROLE_CASHIER',
         'ROLE_BILLING_SPECIALIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
