@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Route } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
@@ -16,6 +16,8 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 import { navGroupForRoute } from './nav-groups';
+import { routes } from '../app.routes';
+import { roleSatisfies } from '../core/role-equivalence';
 
 interface NavItem {
   route: string;
@@ -577,6 +579,71 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     component.clearNavSearch();
     expect(component.navSearchEmpty()).toBeFalse();
     expect(component.navGroups().length).toBeGreaterThan(0);
+  });
+  // ---------------------------------------------------------------------------
+  // E9 #68: sidebar visibility is decided on the same role lists as the route
+  // guards. For every role the routes name, render the sidebar with every
+  // permission granted (the widest the static map can ever give) and assert
+  // that no visible entry leads to a route whose RoleGuard would send that
+  // role to /error/403. The check is behavioural — it runs the real
+  // baseNavItems, so the conditional `if (this.hasAnyRole(...))` gates are
+  // covered as well as the `roles:` mirrors.
+  // ---------------------------------------------------------------------------
+  describe('nav/route role parity (E9 #68)', () => {
+    /**
+     * Full route path → the roles the nearest RoleGuard (own or ancestor)
+     * requires, or null when nothing on the path names a role list. First
+     * definition wins, as in the router.
+     */
+    function guardedRoutes(): Map<string, string[] | null> {
+      const map = new Map<string, string[] | null>();
+      const walk = (nodes: Route[], prefix: string, inherited: string[] | null): void => {
+        for (const node of nodes) {
+          const path = [prefix, node.path ?? ''].filter((p) => p !== '').join('/');
+          const own = (node.data?.['roles'] as string[] | undefined) ?? null;
+          const effective = own ?? inherited;
+          if (!map.has(path)) map.set(path, effective);
+          if (node.children) walk(node.children, path, effective);
+        }
+      };
+      walk(routes, '', null);
+      return map;
+    }
+
+    const guards = guardedRoutes();
+    const portalRoles = [...new Set([...guards.values()].flatMap((r) => r ?? []))].sort();
+
+    it('derives the role set from the route guards', () => {
+      expect(portalRoles).toContain('ROLE_DOCTOR');
+      expect(portalRoles).toContain('ROLE_PATIENT');
+      expect(portalRoles).toContain('ROLE_SUPER_ADMIN');
+    });
+
+    for (const role of portalRoles) {
+      it(`${role}: no sidebar entry leads to a route whose guard refuses it`, () => {
+        const { items } = createComponent({
+          activeRole: role,
+          roles: [role],
+          wildcardPermission: true,
+        });
+        const unknown: string[] = [];
+        const refused: string[] = [];
+        for (const route of items.map((i) => i.route)) {
+          const key = route.replace(/^\//, '').split('?')[0];
+          if (!guards.has(key)) {
+            unknown.push(route);
+            continue;
+          }
+          const required = guards.get(key);
+          if (required && !roleSatisfies(required, role)) refused.push(route);
+        }
+        // Joined so a failure names the routes, not just a length.
+        expect(unknown.join(' '))
+          .withContext(`${role}: sidebar routes that are not routes`)
+          .toBe('');
+        expect(refused.join(' ')).withContext(`${role}: sidebar routes the guard 403s`).toBe('');
+      });
+    }
   });
 });
 

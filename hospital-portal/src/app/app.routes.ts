@@ -389,12 +389,13 @@ export const routes: Routes = [
       },
 
       // API keys + outbound webhooks (Tier 2 item 45) — mirrors
-      // ApiKeyController / WebhookEndpointController exactly.
+      // ApiKeyController / WebhookEndpointController exactly. ROLE_IT_STAFF
+      // was never seeded by any migration (E9 #68): dropped here and there.
       {
         path: 'webhooks',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'],
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
       },
@@ -1188,7 +1189,15 @@ export const routes: Routes = [
         path: 'medication-catalog',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_PHARMACIST', 'ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          // E9 #68: the store manager is on every MedicationCatalogController read;
+          // the guard refused a role the API admits.
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         loadComponent: () =>
           import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
@@ -1216,7 +1225,9 @@ export const routes: Routes = [
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          // E9 #68: mirrors PharmacyDirectoryController, which admits clinicians and
+          // pharmacists only since E9 #67 (D5).
+          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),
@@ -1323,9 +1334,10 @@ export const routes: Routes = [
         path: 'pharmacy/checkout',
         canActivate: [RoleGuard],
         data: {
+          // ROLE_CASHIER was never seeded by any migration (E9 #68); the
+          // caisse is BILLING_SPECIALIST / ACCOUNTANT work on this platform.
           roles: [
             'ROLE_PHARMACIST',
-            'ROLE_CASHIER',
             'ROLE_BILLING_SPECIALIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
