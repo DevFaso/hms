@@ -34,6 +34,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -49,6 +52,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final PharmacyFillMapper pharmacyFillMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
@@ -66,9 +71,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
-        // Fetch prescriptions and pharmacy fills
-        List<Prescription> prescriptions = fetchPrescriptions(patientId, hospitalId, startDate, endDate);
-        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, hospitalId, startDate, endDate);
+        // E9 #59c — the timeline follows the patient: prescriptions and fills
+        // across the readable hospitals, each entry carrying its hospital, and
+        // the reach of the whole timeline accounted once below.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        List<Prescription> prescriptions = fetchPrescriptions(patientId, readable, startDate, endDate);
+        List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
 
@@ -84,6 +93,10 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             if (e2.getStartDate() == null) return -1;
             return e1.getStartDate().compareTo(e2.getStartDate());
         });
+
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(timeline, MedicationTimelineEntryDTO::getHospitalId, hospitalId),
+            "Cross-hospital medication timeline read on the treatment relationship");
 
         // Run overlap detection
         detectOverlaps(timeline);
@@ -167,7 +180,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     @Override
     @Transactional(readOnly = true)
     public List<PharmacyFillResponseDTO> getPharmacyFillsByPatient(UUID patientId, UUID hospitalId, Locale locale) {
-        List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdOrderByFillDateDesc(patientId, hospitalId);
+        // E9 #59c — fills follow the patient across the readable hospitals.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readable);
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(fills, f -> CrossHospitalReachRecorder.hospitalIdOf(f.getHospital()), hospitalId),
+            "Cross-hospital pharmacy fill read on the treatment relationship");
         return fills.stream()
             .map(pharmacyFillMapper::toResponseDTO)
             .toList();
@@ -204,8 +223,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
     // ========== Helper Methods ==========
 
-    private List<Prescription> fetchPrescriptions(UUID patientId, UUID hospitalId, LocalDate startDate, LocalDate endDate) {
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+    private List<Prescription> fetchPrescriptions(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
+        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         
         // Filter by date range if provided
         if (startDate != null || endDate != null) {
@@ -217,11 +236,12 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return prescriptions;
     }
 
-    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, UUID hospitalId, LocalDate startDate, LocalDate endDate) {
+    private List<PharmacyFill> fetchPharmacyFills(UUID patientId, Set<UUID> readableHospitalIds, LocalDate startDate, LocalDate endDate) {
         if (startDate != null && endDate != null) {
-            return pharmacyFillRepository.findByPatientAndDateRange(patientId, startDate, endDate);
+            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
+                patientId, readableHospitalIds, startDate, endDate);
         } else {
-            return pharmacyFillRepository.findByPatient_IdAndHospital_IdOrderByFillDateDesc(patientId, hospitalId);
+            return pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readableHospitalIds);
         }
     }
 
@@ -269,6 +289,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .interactingWith(new ArrayList<>())
             .prescriptionId(rx.getId())
             .documentedAt(rx.getCreatedAt())
+            .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital()))
+            .hospitalName(rx.getHospital() != null ? rx.getHospital().getName() : null)
             .build();
     }
 
@@ -310,6 +332,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .pharmacyName(fill.getPharmacyName())
             .status("DISPENSED")
             .controlledSubstance(fill.isControlledSubstance())
+            .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(fill.getHospital()))
+            .hospitalName(fill.getHospital() != null ? fill.getHospital().getName() : null)
             .hasOverlap(false)
             .overlappingWith(new ArrayList<>())
             .hasInteraction(false)

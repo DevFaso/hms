@@ -69,7 +69,11 @@ class CrossHospitalReadFilterCoverageTest {
         "ImagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc",
         "ProcedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
         "ConsultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc",
-        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc");
+        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        // E9 #59c — medications follow the patient (PrescriptionRepository's In
+        // finder, listed above, gained a paged overload).
+        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc",
+        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads

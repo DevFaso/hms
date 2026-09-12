@@ -79,6 +79,10 @@ public class MedicationTimelineEntryDTO {
     private UUID prescriptionId;
     private UUID pharmacyFillId;
 
+    /** E9 provenance — the hospital that prescribed or dispensed; equals the acting hospital for a local entry. */
+    private UUID hospitalId;
+    private String hospitalName;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime documentedAt;
 }

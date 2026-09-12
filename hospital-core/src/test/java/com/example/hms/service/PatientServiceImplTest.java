@@ -924,7 +924,7 @@ class PatientServiceImplTest {
         when(patientRepository.findMrnForHospital(patientId, hospitalId)).thenReturn(Optional.of("MRN001"));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
         when(patientAllergyMapper.toResponseDto(allergy)).thenReturn(allergyResponse);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(labResultResponse);
