@@ -2082,12 +2082,26 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 3 — retire the consent grants (D7)
 
-- [ ] 65. **Backend removal.** `PatientConsentController` grant/revoke,
+- [x] 65. **Backend removal.** ✅ DONE 2026-09-12. Gone: `PatientConsentController`
+  grant / revoke / active / from-hospital / to-hospital, `ConsentResolutionService`
+  and its three tiers, `PatientRecordSharingController` with
+  `/records/share|resolve|aggregate|export` and the 1,648-line
+  `PatientRecordSharingServiceImpl`, `ShareScope`, the share and consent request
+  DTOs, `POST/DELETE /me/patient/consents`. Kept one release, read-only:
+  `GET /patient-consents`, `GET /patient-consents/patient/{id}`,
+  `GET /me/patient/consents`, the super-admin dashboard feed, the entity,
+  repository, table and `ConsentType` (REFERRAL rows exist). ROI and treatment
+  consent untouched. Residuals: the portal's Consent Management pages, the
+  patient-detail Sharing tab and the patient portal's grant/revoke still call
+  the removed endpoints until #66 (do not sync main between the two); the
+  Android/iOS patient apps call `/me/patient/consents` grant/revoke and need
+  the same pruning; `BreakGlassService.consumeIfLive` lost its only production
+  caller (the resolver) and is dead behind its tests.
+  Previously recorded as: `PatientConsentController` grant/revoke,
   `ConsentResolutionService` tiers, `/records/share|resolve|aggregate|export`,
   `PatientRecordSharingServiceImpl` (1,648 lines), `POST/DELETE
-  /me/patient/consents`. Read endpoints for existing consent rows may stay one
-  release for the disclosure report. ROI and treatment consent untouched.
-  ⚠ `ConsentType.REFERRAL` rows exist; keep the enum value readable.
+  /me/patient/consents`; read endpoints for existing consent rows may stay one
+  release; ⚠ `ConsentType.REFERRAL` rows exist; keep the enum value readable.
 - [ ] 66. **Portal removal.** Consent Management becomes Release of
   Information only; patient "Record Sharing" becomes "Who accessed my record"
   plus the opt-out toggle (V157, API shipped, no UI yet); the two i18n trees

@@ -1,7 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.AppointmentResponseDTO;
-import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
@@ -11,7 +10,6 @@ import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
@@ -53,15 +51,12 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -232,90 +227,6 @@ class PatientPortalControllerPhase2Test {
             mockMvc.perform(put("/me/patient/appointments/reschedule")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(dto))
-                            .principal(auth))
-                    .andExpect(status().isBadRequest());
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Grant Consent
-    // ══════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("POST /me/patient/consents")
-    class GrantConsent {
-
-        @Test
-        @DisplayName("should return 201 with granted consent")
-        void grantConsent_success() throws Exception {
-            UUID fromHospital = UUID.randomUUID();
-            UUID toHospital = UUID.randomUUID();
-
-            PortalConsentRequestDTO dto = PortalConsentRequestDTO.builder()
-                    .fromHospitalId(fromHospital)
-                    .toHospitalId(toHospital)
-                    .purpose("Treatment coordination")
-                    .build();
-
-            PatientConsentResponseDTO response = new PatientConsentResponseDTO();
-            when(portalService.grantMyConsent(any(Authentication.class),
-                    any(PortalConsentRequestDTO.class)))
-                    .thenReturn(response);
-
-            mockMvc.perform(post("/me/patient/consents")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(dto))
-                            .principal(auth))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.success").value(true));
-        }
-
-        @Test
-        @DisplayName("should return 400 when hospital IDs missing")
-        void grantConsent_missingFields_returns400() throws Exception {
-            PortalConsentRequestDTO dto = PortalConsentRequestDTO.builder()
-                    .purpose("No hospitals")
-                    .build();
-
-            mockMvc.perform(post("/me/patient/consents")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(dto))
-                            .principal(auth))
-                    .andExpect(status().isBadRequest());
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // Revoke Consent
-    // ══════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("DELETE /me/patient/consents")
-    class RevokeConsent {
-
-        @Test
-        @DisplayName("should return 200 on successful revocation")
-        void revokeConsent_success() throws Exception {
-            UUID from = UUID.randomUUID();
-            UUID to = UUID.randomUUID();
-
-            doNothing().when(portalService).revokeMyConsent(any(Authentication.class),
-                    eq(from), eq(to));
-
-            mockMvc.perform(delete("/me/patient/consents")
-                            .param("fromHospitalId", from.toString())
-                            .param("toHospitalId", to.toString())
-                            .principal(auth))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.data").value(nullValue()));
-        }
-
-        @Test
-        @DisplayName("should return 400 when fromHospitalId missing")
-        void revokeConsent_missingParam_returns400() throws Exception {
-            mockMvc.perform(delete("/me/patient/consents")
-                            .param("toHospitalId", UUID.randomUUID().toString())
                             .principal(auth))
                     .andExpect(status().isBadRequest());
         }

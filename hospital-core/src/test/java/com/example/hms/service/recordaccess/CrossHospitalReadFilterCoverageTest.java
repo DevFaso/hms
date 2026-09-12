@@ -106,7 +106,7 @@ class CrossHospitalReadFilterCoverageTest {
      * noticing is not — and since the assertion is a ceiling, this number is
      * kept at the EXACT current count so that a removed finder is noticed too.
      * 29 at #49-pass-1; 28 after E9 #59a — the chart domain widened beside the
-     * single finders that CDS, FHIR, bulk export and consent sharing still
+     * single finders that CDS, FHIR and bulk export still
      * call, and only the chart-update page finder had no caller left.
      */
     private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 28;
