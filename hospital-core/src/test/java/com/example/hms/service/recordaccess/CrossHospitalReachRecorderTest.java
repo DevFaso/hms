@@ -48,7 +48,7 @@ class CrossHospitalReachRecorderTest {
         Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(rows, Row::hospitalId, acting);
 
         assertThat(reach).containsOnly(Map.entry(a.toString(), 2L), Map.entry(b.toString(), 1L));
-        assertThat(CrossHospitalReachRecorder.reachOf(null, Row::hospitalId, acting)).isEmpty();
+        assertThat(CrossHospitalReachRecorder.reachOf(List.of(), Row::hospitalId, acting)).isEmpty();
     }
 
     @Test

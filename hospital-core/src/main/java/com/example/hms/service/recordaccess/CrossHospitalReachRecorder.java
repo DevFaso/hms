@@ -44,12 +44,11 @@ public class CrossHospitalReachRecorder {
     /**
      * Count the rows in {@code rows} whose hospital is not {@code actingHospitalId},
      * keyed by source hospital id. Rows with no hospital are not foreign.
+     * {@code rows} is a repository result and never null — a null guard here
+     * taught Sonar that every caller's list might be null (S2259).
      */
     public static <T> Map<String, Long> reachOf(Collection<T> rows, Function<T, UUID> hospitalIdOf, UUID actingHospitalId) {
         Map<String, Long> perSource = new HashMap<>();
-        if (rows == null) {
-            return perSource;
-        }
         for (T row : rows) {
             UUID source = hospitalIdOf.apply(row);
             if (source != null && !source.equals(actingHospitalId)) {
