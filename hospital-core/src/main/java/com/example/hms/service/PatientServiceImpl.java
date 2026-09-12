@@ -2091,9 +2091,9 @@ public class PatientServiceImpl implements PatientService {
     ) {
         // E9 #59c — medications follow the patient. A FOREIGN prescription the
         // keyword heuristic marks sensitive is withheld whatever the caller
-        // asked for (decision D3; it opens through break-the-glass, E9 #62), and
-        // does not flag the section — that would reveal it exists. A local one
-        // keeps the includeSensitive behaviour.
+        // asked for: decision D3, and it opens through break-the-glass in E9
+        // #62. It does not flag the section either, which would reveal that it
+        // exists. A local one keeps the includeSensitive behaviour.
         List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
