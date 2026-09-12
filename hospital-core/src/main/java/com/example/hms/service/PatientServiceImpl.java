@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.enums.AuditEventType;
@@ -259,6 +261,7 @@ public class PatientServiceImpl implements PatientService {
     private final UltrasoundReportRepository ultrasoundReportRepository;
     private final UltrasoundMapper ultrasoundMapper;
     private final NursingNoteRepository nursingNoteRepository;
+    private final CrossHospitalReachRecorder reachRecorder;
     private final NursingNoteMapper nursingNoteMapper;
     private final StaffRepository staffRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -855,7 +858,7 @@ public class PatientServiceImpl implements PatientService {
         // not travel. Tracked as standing platform debt.
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectImagingEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectProcedureEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
 
@@ -974,9 +977,15 @@ public class PatientServiceImpl implements PatientService {
             maxItems,
             sensitiveSections
         );
+        // E9 #59 — the doctor record follows the patient: one readable set for
+        // the whole record, every collector reads across it, and the reach of
+        // the whole record is accounted once at the end.
+        Set<UUID> readableHospitalIds =
+            recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, resolvedHospitalId);
         List<NursingNoteResponseDTO> notes = collectDoctorRecordNursingNotes(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
             includeSensitive,
             notesLimit,
             sensitiveSections
@@ -984,6 +993,7 @@ public class PatientServiceImpl implements PatientService {
         MedicalHistoryBundle medicalHistory = collectDoctorRecordMedicalHistory(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
             includeSensitive,
             maxItems
         );
@@ -1025,6 +1035,19 @@ public class PatientServiceImpl implements PatientService {
             .build();
 
         logDoctorRecordAudit(patient, requesterUserId, assignment, reason, includeSensitive, response, sensitiveSections);
+        Map<String, Long> reach = new HashMap<>();
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            allergies, PatientAllergyResponseDTO::getHospitalId, resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.problems(), PatientProblemResponseDTO::getHospitalId, resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.surgicalHistory(), PatientSurgicalHistoryResponseDTO::getHospitalId, resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.advanceDirectives(), AdvanceDirectiveResponseDTO::getHospitalId, resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            notes, NursingNoteResponseDTO::getHospitalId, resolvedHospitalId));
+        recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
+            "Cross-hospital doctor record read on the treatment relationship");
         return response;
     }
 
@@ -1181,11 +1204,23 @@ public class PatientServiceImpl implements PatientService {
             .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
-        return patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        // E9 #59 — diagnoses follow the patient. Every hospital the policy lets
+        // this caller read contributes its rows; a foreign row with a
+        // sensitivity category is withheld (D3) and opens via break-the-glass.
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        List<PatientProblemResponseDTO> diagnoses = patientProblemRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
             .filter(problem -> includeHistorical || isActiveDiagnosis(problem))
+            .filter(problem -> maySurface(problem.getHospital(), hospitalId,
+                sensitivityClassifier.effectiveCategory(problem)))
             .sorted(problemComparator)
             .map(patientProblemMapper::toResponseDto)
             .toList();
+        reachRecorder.record(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(diagnoses, PatientProblemResponseDTO::getHospitalId, hospitalId),
+            "Cross-hospital diagnosis read on the treatment relationship");
+        return diagnoses;
     }
 
     @Override
@@ -1724,9 +1759,7 @@ public class PatientServiceImpl implements PatientService {
      */
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
                                       com.example.hms.enums.SensitivityCategory category) {
-        boolean foreign = rowHospital != null && rowHospital.getId() != null
-            && !rowHospital.getId().equals(actingHospitalId);
-        return !foreign || category == null;
+        return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category);
     }
 
     /**
@@ -1779,27 +1812,8 @@ public class PatientServiceImpl implements PatientService {
     private void recordCrossHospitalReach(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
                                           UserRoleHospitalAssignment assignment, Map<String, Long> perSource,
                                           String description) {
-        for (Map.Entry<String, Long> reach : perSource.entrySet()) {
-            try {
-                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.RECORD_SHARE)
-                    .status(AuditStatus.SUCCESS)
-                    .userId(requesterUserId)
-                    .assignmentId(assignment == null ? null : assignment.getId())
-                    .patientId(patientId)
-                    .entityType(AUDIT_ENTITY_PATIENT)
-                    .resourceId(patientId.toString())
-                    .eventDescription(description)
-                    .details(Map.of(
-                        "actingHospitalId", String.valueOf(actingHospitalId),
-                        META_SOURCE_HOSPITAL_ID, reach.getKey(),
-                        "rowsSurfaced", reach.getValue()))
-                    .build());
-            } catch (RuntimeException ex) {
-                log.warn("[record-access] cross-hospital disclosure audit failed for patient {} source {}: {}",
-                    patientId, reach.getKey(), ex.getMessage());
-            }
-        }
+        reachRecorder.record(patientId, actingHospitalId, requesterUserId,
+            assignment == null ? null : assignment.getId(), perSource, description);
     }
 
     private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, Set<UUID> readableHospitalIds,
@@ -1981,12 +1995,13 @@ public class PatientServiceImpl implements PatientService {
         return Stream.concat(orderEntries, reportEntries).toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectProcedureEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectProcedureEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                  UUID actingHospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PROCEDURE)) {
             return List.of();
         }
         List<PatientSurgicalHistory> procedures = Optional
-            .ofNullable(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .ofNullable(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds))
             .orElse(List.of());
         return procedures.stream()
             .map(history -> {
@@ -2000,7 +2015,7 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(toDateTime(history.getProcedureDate()))
                     .summary(formatProcedureSummary(history))
                     .sensitive(isSensitiveSurgicalHistory(history))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, history.getHospital(), actingHospitalId))
                     .build();
             })
             .toList();
@@ -2151,12 +2166,15 @@ public class PatientServiceImpl implements PatientService {
     private List<NursingNoteResponseDTO> collectDoctorRecordNursingNotes(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
         List<NursingNote> notes = nursingNoteRepository
-            .findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId);
+            .findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readableHospitalIds).stream()
+            .filter(note -> maySurface(note.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(note)))
+            .toList();
         boolean sectionSensitive = notes.stream().anyMatch(this::isSensitiveNursingNote);
         List<NursingNoteResponseDTO> responses = notes.stream()
             .filter(note -> includeSensitive || !isSensitiveNursingNote(note))
@@ -2172,10 +2190,15 @@ public class PatientServiceImpl implements PatientService {
     private MedicalHistoryBundle collectDoctorRecordMedicalHistory(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
         boolean includeSensitive,
         int limit
     ) {
-        List<PatientProblem> problems = patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<PatientProblem> problems = patientProblemRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
+            .filter(problem -> maySurface(problem.getHospital(), hospitalId,
+                sensitivityClassifier.effectiveCategory(problem)))
+            .toList();
         Comparator<PatientProblem> problemComparator = Comparator
             .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
@@ -2188,7 +2211,7 @@ public class PatientServiceImpl implements PatientService {
             .toList();
 
         List<PatientSurgicalHistory> surgicalHistory = patientSurgicalHistoryRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId);
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<PatientSurgicalHistory> surgicalComparator = Comparator
             .comparing(PatientSurgicalHistory::getProcedureDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientSurgicalHistory::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
@@ -2200,7 +2223,8 @@ public class PatientServiceImpl implements PatientService {
             .limit(limit)
             .toList();
 
-        List<AdvanceDirective> directives = advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<AdvanceDirective> directives = advanceDirectiveRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<AdvanceDirective> directiveComparator = Comparator
             .comparing(AdvanceDirective::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(AdvanceDirective::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));

@@ -21,6 +21,8 @@ public class PatientChartUpdateResponseDTO {
     private UUID id;
     private UUID patientId;
     private UUID hospitalId;
+    /** Hospital that recorded the update (E9 #59 provenance). */
+    private String hospitalName;
     private Integer versionNumber;
     private String updateReason;
     private String summary;

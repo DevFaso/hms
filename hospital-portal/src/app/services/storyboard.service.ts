@@ -36,6 +36,9 @@ export interface StoryboardAllergy {
 
 export interface StoryboardProblem {
   id: string;
+  /** Hospital that recorded the problem (E9 #59 provenance). */
+  hospitalId?: string | null;
+  hospitalName?: string | null;
   problemDisplay: string;
   problemCode?: string | null;
   icdVersion?: string | null;

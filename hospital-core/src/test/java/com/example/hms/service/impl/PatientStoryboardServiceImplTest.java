@@ -52,6 +52,10 @@ class PatientStoryboardServiceImplTest {
     private final EncounterRepository encounterRepo = mock(EncounterRepository.class);
     private final AdvanceDirectiveRepository directiveRepo = mock(AdvanceDirectiveRepository.class);
     private final HospitalRepository hospitalRepo = mock(HospitalRepository.class);
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy =
+        mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
+    private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier =
+        mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
 
     private PatientStoryboardServiceImpl service;
 
@@ -64,7 +68,11 @@ class PatientStoryboardServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PatientStoryboardServiceImpl(
-            patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo);
+            patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo,
+            recordAccessPolicy, sensitivityClassifier);
+        // E9 #59 — the readable set is the acting hospital alone unless a test widens it.
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID));
 
         hospital = Hospital.builder().name("Centre Médical Bobo").build();
         hospital.setId(HOSPITAL_ID);
@@ -95,7 +103,7 @@ class PatientStoryboardServiceImplTest {
         PatientProblem chronic = problem("Sickle cell disease", ProblemStatus.ACTIVE, true);
         PatientProblem acute = problem("Malaria — uncomplicated", ProblemStatus.ACTIVE, false);
         PatientProblem resolved = problem("Otitis media", ProblemStatus.RESOLVED, false);
-        when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID)))
             .thenReturn(List.of(acute, chronic, resolved));
 
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusHours(2));
@@ -105,7 +113,7 @@ class PatientStoryboardServiceImplTest {
             .thenReturn(List.of(enc, completed));
 
         AdvanceDirective dnr = directive(AdvanceDirectiveType.DO_NOT_RESUSCITATE, AdvanceDirectiveStatus.ACTIVE);
-        when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID)))
             .thenReturn(List.of(dnr));
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
@@ -140,10 +148,10 @@ class PatientStoryboardServiceImplTest {
     @Test
     void emptyChartRendersWithoutCrashing() {
         when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
-        when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
-        when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
         // Patient with no code status either
         Patient bare = buildPatient("MRN-9999", null);
         when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(bare);
@@ -170,11 +178,11 @@ class PatientStoryboardServiceImplTest {
         for (int i = 0; i < PatientStoryboardServiceImpl.MAX_PROBLEMS + 4; i++) {
             manyProblems.add(problem("Problem " + i, ProblemStatus.ACTIVE, false));
         }
-        when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(manyProblems);
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(manyProblems);
 
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
-        when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 
@@ -289,10 +297,10 @@ class PatientStoryboardServiceImplTest {
         PatientAllergy here = allergy("Sulfa", AllergySeverity.MILD, true);
         here.setHospital(hospital);
         when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(here, away));
-        when(problemRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
-        when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
 
         PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 
@@ -303,6 +311,54 @@ class PatientStoryboardServiceImplTest {
         assertThat(sb.getAllergies().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
         assertThat(sb.getAllergies().get(1).getHospitalId()).isEqualTo(HOSPITAL_ID);
         assertThat(sb.isHasHighSeverityAllergy()).isTrue();
+    }
+
+    @Test
+    void listsProblemsAndDirectivesFromOtherHospitalsAndWithholdsForeignSensitiveOnes() {
+        // E9 #59 (D1 + D3): the chart follows the patient. A problem recorded
+        // elsewhere shows with its hospital; one carrying a sensitivity category
+        // stays behind break-the-glass; a directive made elsewhere binds here.
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, other.getId()));
+
+        PatientProblem local = problem("Sickle cell disease", ProblemStatus.ACTIVE, true);
+        local.setHospital(hospital);
+        PatientProblem away = problem("Asthme", ProblemStatus.ACTIVE, false);
+        away.setHospital(other);
+        PatientProblem awaySensitive = problem("Infection VIH", ProblemStatus.ACTIVE, true);
+        awaySensitive.setHospital(other);
+        when(sensitivityClassifier.effectiveCategory(awaySensitive))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of(local, away, awaySensitive));
+
+        AdvanceDirective dnr = new AdvanceDirective();
+        dnr.setId(UUID.randomUUID());
+        dnr.setHospital(other);
+        dnr.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of(dnr));
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getProblems())
+            .extracting(PatientStoryboardDTO.ProblemSummaryDTO::getProblemDisplay)
+            .containsExactlyInAnyOrder("Sickle cell disease", "Asthme");
+        assertThat(sb.getProblems()).filteredOn(p -> "Asthme".equals(p.getProblemDisplay()))
+            .singleElement()
+            .satisfies(p -> {
+                assertThat(p.getHospitalId()).isEqualTo(other.getId());
+                assertThat(p.getHospitalName()).isEqualTo("CHU Yalgado");
+            });
+        assertThat(sb.getCodeStatus()).isNotNull();
+        assertThat(sb.getCodeStatus().getDirectives())
+            .singleElement()
+            .satisfies(d -> assertThat(d.getHospitalName()).isEqualTo("CHU Yalgado"));
     }
 
 }

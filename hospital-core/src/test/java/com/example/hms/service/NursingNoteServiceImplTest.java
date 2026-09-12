@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import java.util.Set;
 import com.example.hms.enums.JobTitle;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -78,6 +79,12 @@ class NursingNoteServiceImplTest {
     private AuditEventLogService auditEventLogService;
     @Mock
     private NursingNoteMapper nursingNoteMapper;
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private NursingNoteServiceImpl nursingNoteService;
@@ -815,7 +822,8 @@ class NursingNoteServiceImplTest {
         when(roleValidator.isNurse(actorUserId, hospitalId)).thenReturn(false);
         when(roleValidator.isDoctor(actorUserId, hospitalId)).thenReturn(true);
 
-        when(nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId))
+        when(recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId)).thenReturn(Set.of(hospitalId));
+        when(nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId)))
             .thenReturn(notes);
         when(nursingNoteMapper.toResponse(any(NursingNote.class))).thenAnswer(invocation -> {
             NursingNote note = invocation.getArgument(0);
@@ -827,7 +835,7 @@ class NursingNoteServiceImplTest {
         assertEquals(1, responses.size());
         assertEquals(noteOne.getId(), responses.get(0).getId());
         verify(nursingNoteRepository)
-            .findTop50ByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId);
+            .findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId));
     }
 
     @Test
@@ -935,4 +943,55 @@ class NursingNoteServiceImplTest {
         }
         return Math.max(count, 1);
     }
+
+    @Test
+    void getRecentNotes_followsThePatientAndWithholdsForeignSensitiveNotes() {
+        // E9 #59 (D1 + D3): a note written at another hospital is returned with
+        // its hospital; one carrying a sensitivity category is withheld; the
+        // reach is accounted.
+        UUID actorUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        Hospital here = new Hospital();
+        here.setId(hospitalId);
+        Hospital other = new Hospital();
+        other.setId(otherId);
+        other.setName("CHU Yalgado");
+
+        NursingNote local = new NursingNote();
+        local.setId(UUID.randomUUID());
+        local.setHospital(here);
+        NursingNote foreign = new NursingNote();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        NursingNote foreignSensitive = new NursingNote();
+        foreignSensitive.setId(UUID.randomUUID());
+        foreignSensitive.setHospital(other);
+
+        when(roleValidator.getCurrentUserId()).thenReturn(actorUserId);
+        when(roleValidator.isNurse(actorUserId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherId));
+        when(nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId, otherId)))
+            .thenReturn(List.of(local, foreign, foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(NursingNote.class)))
+            .thenAnswer(inv -> inv.getArgument(0) == foreignSensitive
+                ? com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH : null);
+        when(nursingNoteMapper.toResponse(any(NursingNote.class))).thenAnswer(invocation -> {
+            NursingNote note = invocation.getArgument(0);
+            return NursingNoteResponseDTO.builder().id(note.getId())
+                .hospitalId(note.getHospital().getId()).hospitalName(note.getHospital().getName()).build();
+        });
+
+        List<NursingNoteResponseDTO> responses = nursingNoteService.getRecentNotes(patientId, hospitalId, 10, Locale.US);
+
+        assertEquals(2, responses.size());
+        assertEquals(local.getId(), responses.get(0).getId());
+        assertEquals(foreign.getId(), responses.get(1).getId());
+        assertEquals("CHU Yalgado", responses.get(1).getHospitalName());
+        verify(nursingNoteMapper, never()).toResponse(foreignSensitive);
+        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(actorUserId), org.mockito.ArgumentMatchers.isNull(),
+            eq(java.util.Map.of(otherId.toString(), 1L)), anyString());
+    }
+
 }

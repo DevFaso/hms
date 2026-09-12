@@ -45,22 +45,34 @@ class CrossHospitalReadFilterCoverageTest {
      * Finders actually routed through {@link RecordAccessPolicy#readableHospitalIds}
      * — they take a collection of hospital ids rather than one.
      *
-     * <p>Only one so far. The encounter and lab-result paths widen too, but they
-     * filter in memory over an already patient-scoped query, so they have no
-     * hospital-taking finder to list here. Allergies, imaging and surgical
-     * history are NOT widened: they attach to patient + hospital with no
-     * encounter link, so #51's category cannot be resolved for them, and a row
-     * whose category nobody can determine must not cross a hospital boundary.
+     * <p>The encounter and lab-result paths widen too, but they filter in memory
+     * over an already patient-scoped query, so they have no hospital-taking
+     * finder to list here. Allergies went patient-wide in E9 #56 (decision D3:
+     * untagged travels); the chart domain — problems, surgical history,
+     * directives, nursing notes, chart updates — in E9 #59a. Problems and
+     * nursing notes carry a sensitivity tag and are filtered through
+     * {@code CrossHospitalRows.maySurface}; the rest are untagged and travel.
      */
     private static final Set<String> WIDENED = Set.of(
-        "PrescriptionRepository.findByPatient_IdAndHospital_IdIn");
+        "PrescriptionRepository.findByPatient_IdAndHospital_IdIn",
+        // E9 #59a — the chart domain follows the patient.
+        "PatientProblemRepository.findByPatient_IdAndHospital_IdIn",
+        "PatientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn",
+        "AdvanceDirectiveRepository.findByPatient_IdAndHospital_IdIn",
+        "NursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "NursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "PatientChartUpdateRepository.findByPatient_IdAndHospital_IdIn");
 
     /**
-     * Single-hospital patient finders as of PR #49-pass-1. Every one of these
-     * still reads the acting hospital only. Growing this list is fine; doing it
-     * without noticing is not.
+     * Single-hospital patient finders still declared. Every one of these reads
+     * the acting hospital only. Growing this list is fine; doing it without
+     * noticing is not — and since the assertion is a ceiling, this number is
+     * kept at the EXACT current count so that a removed finder is noticed too.
+     * 29 at #49-pass-1; 28 after E9 #59a — the chart domain widened beside the
+     * single finders that CDS, FHIR, bulk export and consent sharing still
+     * call, and only the chart-update page finder had no caller left.
      */
-    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 29;
+    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 28;
 
     @Test
     @DisplayName("the single-hospital patient-read surface has not grown unnoticed")

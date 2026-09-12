@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import static org.mockito.ArgumentMatchers.isNull;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.ProblemStatus;
@@ -188,6 +189,10 @@ class PatientServiceImplTest {
 
     @Mock
     private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+
+    /** E9 #59 — the reach ledger is a component now. */
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     /** E9 #56 — constructor deps for the one-allergy-store change. */
     @Mock
@@ -927,13 +932,13 @@ class PatientServiceImplTest {
         when(ultrasoundMapper.toOrderResponseDTO(ultrasoundOrder)).thenReturn(orderResponse);
         when(ultrasoundReportRepository.findAllByPatientId(patientId)).thenReturn(List.of(ultrasoundReport));
         when(ultrasoundMapper.toReportResponseDTO(ultrasoundReport)).thenReturn(reportResponse);
-        when(nursingNoteRepository.findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId)).thenReturn(List.of(note));
+        when(nursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospitalId))).thenReturn(List.of(note));
         when(nursingNoteMapper.toResponse(note)).thenReturn(noteResponse);
-        when(patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(problem));
+        when(patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(problem));
         when(patientProblemMapper.toResponseDto(problem)).thenReturn(problemResponse);
-        when(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(surgicalHistory));
+        when(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(surgicalHistory));
         when(patientSurgicalHistoryMapper.toResponseDto(surgicalHistory)).thenReturn(surgicalResponse);
-        when(advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(directive));
+        when(advanceDirectiveRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(directive));
         when(advanceDirectiveMapper.toResponseDto(directive)).thenReturn(directiveResponse);
     when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(recentEncounter));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
@@ -1133,14 +1138,8 @@ class PatientServiceImplTest {
 
         assertThat(result).extracting(PatientAllergyResponseDTO::getAllergenDisplay)
             .containsExactlyInAnyOrder("Peanuts", "Penicillin");
-        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
-            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-        verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.RECORD_SHARE);
-        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
-        assertThat(String.valueOf(audit.getValue().getDetails()))
-            .contains("sourceHospitalId=" + other.getId())
-            .contains("rowsSurfaced=1");
+        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+            eq(java.util.Map.of(other.getId().toString(), 1L)), anyString());
     }
 
     @Test
@@ -1159,7 +1158,9 @@ class PatientServiceImplTest {
 
         patientService.getPatientAllergies(patientId, hospitalId, requester);
 
-        verify(auditEventLogService, never()).logEvent(any());
+        // Every read reports its reach; a local-only read reports an empty one.
+        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+            eq(java.util.Map.of()), anyString());
     }
 
     @Test
@@ -1197,6 +1198,53 @@ class PatientServiceImplTest {
 
         verify(legacyAllergyTextImporter).importFreeText(savedPatient, hospital, null, "Pénicilline, arachide",
             com.example.hms.service.allergy.LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+    }
+
+    @Test
+    void listPatientDiagnosesFollowsThePatientAndWithholdsForeignSensitiveRows() {
+        // E9 #59 (D1 + D3): a diagnosis recorded at another hospital is returned
+        // with its hospital; a foreign one carrying a sensitivity category is
+        // withheld; and the reach is accounted.
+        UUID requester = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherId);
+        other.setName("CHU Yalgado");
+        PatientProblem local = new PatientProblem();
+        local.setId(UUID.randomUUID());
+        local.setHospital(hospital);
+        local.setProblemDisplay("Hypertension");
+        PatientProblem foreign = new PatientProblem();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        foreign.setProblemDisplay("Asthme");
+        PatientProblem foreignSensitive = new PatientProblem();
+        foreignSensitive.setId(UUID.randomUUID());
+        foreignSensitive.setHospital(other);
+        foreignSensitive.setProblemDisplay("Infection VIH");
+        foreignSensitive.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+
+        when(roleValidator.getCurrentUserId()).thenReturn(requester);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(requester, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherId));
+        when(patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherId)))
+            .thenReturn(List.of(local, foreign, foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(PatientProblem.class)))
+            .thenAnswer(inv -> inv.getArgument(0) == foreignSensitive ? com.example.hms.enums.SensitivityCategory.HIV : null);
+        when(patientProblemMapper.toResponseDto(local)).thenReturn(PatientProblemResponseDTO.builder()
+            .id(local.getId()).hospitalId(hospitalId).problemDisplay("Hypertension").build());
+        when(patientProblemMapper.toResponseDto(foreign)).thenReturn(PatientProblemResponseDTO.builder()
+            .id(foreign.getId()).hospitalId(otherId).hospitalName("CHU Yalgado").problemDisplay("Asthme").build());
+
+        List<PatientProblemResponseDTO> result = patientService.listPatientDiagnoses(patientId, hospitalId, true);
+
+        assertThat(result).extracting(PatientProblemResponseDTO::getProblemDisplay)
+            .containsExactlyInAnyOrder("Hypertension", "Asthme");
+        verify(patientProblemMapper, never()).toResponseDto(foreignSensitive);
+        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+            eq(java.util.Map.of(otherId.toString(), 1L)), anyString());
     }
 
 }

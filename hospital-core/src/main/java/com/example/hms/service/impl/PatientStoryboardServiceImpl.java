@@ -1,5 +1,9 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.enums.AdvanceDirectiveStatus;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.EncounterStatus;
@@ -64,6 +68,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private final EncounterRepository encounterRepository;
     private final AdvanceDirectiveRepository advanceDirectiveRepository;
     private final HospitalRepository hospitalRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final SensitivityClassifier sensitivityClassifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,10 +79,15 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // résumé patient" on a chart that had otherwise rendered).
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
+        // E9 #59 — the hospitals this caller may read for this patient; the
+        // acting hospital alone when the policy says so, more when the patient
+        // is registered here. Null scope (super-admin global view) reads all.
+        Set<UUID> readable = hospitalId == null ? null : recordAccessPolicy.readableHospitalIds(
+            HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         List<AllergySummaryDTO> allergies = loadAllergies(patientId);
-        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId);
+        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
-        CodeStatusDTO codeStatus = loadCodeStatus(patient, hospitalId);
+        CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
 
         boolean highSeverityAllergy = allergies.stream()
             .anyMatch(a -> a.getSeverity() != null
@@ -141,11 +152,18 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .toList();
     }
 
-    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId) {
-        List<PatientProblem> source = hospitalId != null
-            ? problemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
+    /**
+     * E9 #59 — problems follow the patient across the readable hospitals,
+     * with the recording hospital on the chip. A foreign problem carrying a
+     * sensitivity category is withheld (D3); it opens via break-the-glass.
+     */
+    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable) {
+        List<PatientProblem> source = readable != null
+            ? problemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable)
             : problemRepository.findByPatient_Id(patientId);
         return source.stream()
+            .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId,
+                sensitivityClassifier.effectiveCategory(p)))
             .filter(p -> p.getStatus() == null
                 || p.getStatus() == ProblemStatus.ACTIVE
                 || p.getStatus() == ProblemStatus.RECURRENCE)
@@ -179,9 +197,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .orElse(null);
     }
 
-    private CodeStatusDTO loadCodeStatus(Patient patient, UUID hospitalId) {
-        List<AdvanceDirective> directives = hospitalId != null
-            ? advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)
+    /** E9 #59 — a code status is a property of the patient; directives travel with them. */
+    private CodeStatusDTO loadCodeStatus(Patient patient, Set<UUID> readable) {
+        List<AdvanceDirective> directives = readable != null
+            ? advanceDirectiveRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable)
             : advanceDirectiveRepository.findByPatient_Id(patient.getId());
         List<DirectiveSummaryDTO> activeDirectives = directives.stream()
             .filter(d -> d.getStatus() == null || d.getStatus() == AdvanceDirectiveStatus.ACTIVE)
@@ -217,6 +236,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private ProblemSummaryDTO toProblemDto(PatientProblem p) {
         return ProblemSummaryDTO.builder()
             .id(p.getId())
+            .hospitalId(p.getHospital() != null ? p.getHospital().getId() : null)
+            .hospitalName(p.getHospital() != null ? p.getHospital().getName() : null)
             .problemDisplay(p.getProblemDisplay())
             .problemCode(p.getProblemCode())
             .icdVersion(p.getIcdVersion())
@@ -244,6 +265,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private DirectiveSummaryDTO toDirectiveDto(AdvanceDirective d) {
         return DirectiveSummaryDTO.builder()
             .id(d.getId())
+            .hospitalId(d.getHospital() != null ? d.getHospital().getId() : null)
+            .hospitalName(d.getHospital() != null ? d.getHospital().getName() : null)
             .directiveType(d.getDirectiveType() != null ? d.getDirectiveType().name() : null)
             .status(d.getStatus() != null ? d.getStatus().name() : null)
             .effectiveDate(d.getEffectiveDate())

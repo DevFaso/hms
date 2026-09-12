@@ -1,5 +1,9 @@
 package com.example.hms.service;
 
+import java.util.Set;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientChartUpdateMapper;
@@ -45,14 +49,25 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
     private final StaffRepository staffRepository;
     private final PatientChartUpdateMapper patientChartUpdateMapper;
     private final ObjectMapper objectMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientChartUpdateResponseDTO> listPatientChartUpdates(UUID patientId, UUID hospitalId, Pageable pageable) {
         validatePatientHospitalContext(patientId, hospitalId);
-        return patientChartUpdateRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)
+        // E9 #59 — chart updates follow the patient across the readable
+        // hospitals (untagged, so they travel); every foreign row surfaced on
+        // this page is accounted.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        Page<PatientChartUpdateResponseDTO> page = patientChartUpdateRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
             .map(patientChartUpdateMapper::toResponseDto);
+        reachRecorder.record(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(page.getContent(), PatientChartUpdateResponseDTO::getHospitalId, hospitalId),
+            "Cross-hospital chart update read on the treatment relationship");
+        return page;
     }
 
     @Override

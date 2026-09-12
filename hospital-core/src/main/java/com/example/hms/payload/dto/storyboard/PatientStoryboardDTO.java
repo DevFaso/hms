@@ -92,6 +92,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Active problem-list entry rendered as a chip.")
     public static class ProblemSummaryDTO {
         private UUID id;
+        /** Hospital that recorded the row (E9 #59 provenance). */
+        private UUID hospitalId;
+        private String hospitalName;
         private String problemDisplay;
         private String problemCode;
         private String icdVersion;
@@ -143,6 +146,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Advance directive surfaced alongside the code status.")
     public static class DirectiveSummaryDTO {
         private UUID id;
+        /** Hospital that recorded the row (E9 #59 provenance). */
+        private UUID hospitalId;
+        private String hospitalName;
         private String directiveType;
         private String status;
         private LocalDate effectiveDate;
