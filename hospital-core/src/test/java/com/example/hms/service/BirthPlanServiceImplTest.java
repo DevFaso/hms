@@ -589,4 +589,35 @@ class BirthPlanServiceImplTest {
         verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void getActiveBirthPlanFollowsThePatientWhenActingInAHospital() {
+        // E9 #59d — the most recent plan across the readable set, here the one
+        // written at Hôpital B; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        BirthPlan foreign = new BirthPlan();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(doctorUser.getId())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
+            .thenReturn(Set.of(hospital.getId(), otherHospitalId));
+        when(birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+            .thenReturn(Optional.of(foreign));
+        when(birthPlanMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
+
+        assertThat(birthPlanService.getActiveBirthPlan(patient.getId(), doctorUser.getUsername())).isEqualTo(responseDTO);
+        verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
 }

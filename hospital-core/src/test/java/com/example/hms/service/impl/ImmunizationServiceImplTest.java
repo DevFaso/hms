@@ -268,4 +268,33 @@ class ImmunizationServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void getImmunizationsByVaccineCodeFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — the vaccine-code sibling reads the same readable set; accounted.
+        UUID requesterId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().build();
+        other.setId(otherHospitalId);
+        PatientImmunization foreign = new PatientImmunization();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        ImmunizationResponseDTO dto = new ImmunizationResponseDTO();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(requesterId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(requesterId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(immunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(
+                patientId, Set.of(hospitalId, otherHospitalId), "BCG")).thenReturn(List.of(foreign));
+        when(immunizationMapper.toResponseDTO(foreign)).thenReturn(dto);
+
+        assertThat(service.getImmunizationsByVaccineCode(patientId, "BCG")).containsExactly(dto);
+        verify(immunizationRepository, never()).findByPatient_IdAndVaccineCodeOrderByAdministrationDateDesc(any(), any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
 }

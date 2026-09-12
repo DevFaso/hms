@@ -572,4 +572,29 @@ class MaternalHistoryServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void getAllVersionsFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — every version across the readable set; the foreign one is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        MaternalHistory foreign = MaternalHistory.builder().patient(patient).hospital(other).versionNumber(2).build();
+        foreign.setId(UUID.randomUUID());
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(recordAccessPolicy.readableHospitalIds(userId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(maternalHistoryRepository.findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+                patientId, Set.of(hospitalId, otherHospitalId))).thenReturn(List.of(foreign, maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(any(MaternalHistory.class))).thenReturn(responseDTO);
+
+        assertThat(maternalHistoryService.getAllVersionsByPatientId(patientId, username)).hasSize(2);
+        verify(maternalHistoryRepository, never()).findAllVersionsByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
 }
