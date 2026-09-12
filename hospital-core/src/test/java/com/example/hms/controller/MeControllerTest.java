@@ -38,6 +38,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
@@ -47,6 +49,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,6 +62,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -621,21 +625,32 @@ class MeControllerTest {
         Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
                 .header("alg", "none")
                 .claim("sub", testUserId.toString())
-                .claim("hospitalId", testHospitalId.toString())
                 .build();
         JwtAuthenticationToken receptionistAuth = new JwtAuthenticationToken(jwt,
                 List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST)));
 
         when(hospitalRepository.findById(testHospitalId)).thenReturn(Optional.of(hospital));
 
-        // Act
-        ResponseEntity<MeController.HospitalMinimalDTO> response = controller.myHospital(receptionistAuth);
+        // E9 #55: the active hospital comes from the request context the JWT
+        // filter populated (live permitted set + X-Hospital-Id), not from a
+        // claim on the token.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(testHospitalId)
+                .permittedHospitalIds(Set.of(testHospitalId))
+                .build());
+        try {
+            // Act
+            ResponseEntity<MeController.HospitalMinimalDTO> response = controller.myHospital(receptionistAuth);
 
-        // Assert
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        MeController.HospitalMinimalDTO body = requireBody(response);
-        assertEquals(testHospitalId, body.id());
-        assertEquals(HOSPITAL_NAME_TEST, body.name());
+            // Assert
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+            MeController.HospitalMinimalDTO body = requireBody(response);
+            assertEquals(testHospitalId, body.id());
+            assertEquals(HOSPITAL_NAME_TEST, body.name());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+        verifyNoInteractions(assignmentRepository);
     }
 
     @Test
