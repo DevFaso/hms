@@ -5,6 +5,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from './auth/auth.service';
 import { RoleContextService } from './core/role-context.service';
+import { SessionScopeService } from './core/session-scope.service';
 import { AnalyticsService } from './core/services/analytics.service';
 import { environment } from '../environments/environment';
 
@@ -27,6 +28,7 @@ export class AppComponent implements OnInit {
 
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly sessionScope = inject(SessionScopeService);
   private readonly http = inject(HttpClient);
   private readonly translate = inject(TranslateService);
   private readonly analytics = inject(AnalyticsService);
@@ -49,45 +51,16 @@ export class AppComponent implements OnInit {
         },
       });
 
-    // Re-hydrate role context from the stored JWT on every app bootstrap
-    // (covers hard refresh, direct URL navigation, and tab re-open).
+    // Re-hydrate the session on every app bootstrap (hard refresh, direct
+    // URL, tab re-open). E9 #55b: the roles come from the token synchronously
+    // so the route guards can run at once; the hospital scope comes from the
+    // live session. The stored profile — the last thing the server said —
+    // fills the gap until the server replies, and stays if it cannot.
     const token = this.auth.getToken();
     if (token && !this.auth.isExpired(token)) {
-      const roles = this.auth.getRoles();
-      this.roleContext.setRoles(roles);
-
-      let permittedIds = this.auth.getPermittedHospitalIds();
-
-      // Fallback: if JWT claims don't contain hospital IDs (e.g. assignment was
-      // added after the JWT was issued), try the stored user profile which was
-      // populated from the login response body (authoritative, DB-fresh data).
-      if (permittedIds.length === 0) {
-        const profile = this.auth.getUserProfile();
-        if (profile?.hospitalIds?.length) {
-          permittedIds = profile.hospitalIds;
-        }
-      }
-
-      this.roleContext.setPermittedHospitalIds(permittedIds);
-
-      // Non-admin staff always get exactly one permitted hospital (their primary).
-      // Admin roles may have multiple; for single-hospital admins we still pre-lock.
-      if (permittedIds.length === 1) {
-        this.roleContext.activeHospitalId = permittedIds[0];
-      } else if (permittedIds.length > 1) {
-        // Multi-hospital admin: pre-select the primary from stored profile
-        const profile = this.auth.getUserProfile();
-        if (profile?.primaryHospitalId) {
-          this.roleContext.activeHospitalId = profile.primaryHospitalId;
-        }
-      }
-
-      // Cross-tenant: super-admins land on every list page in "all
-      // hospitals" mode by default (design call #5 in
-      // docs/super-admin-cross-tenant-design.md). Defaulting to their
-      // primary hospital here would silently re-introduce the bug we
-      // are fixing. No-op for non-super-admin roles.
-      this.roleContext.markSuperAdminGlobalDefaults();
+      this.roleContext.setRoles(this.auth.getRoles());
+      this.sessionScope.applyStoredProfile();
+      this.sessionScope.hydrate().subscribe();
     }
   }
 }

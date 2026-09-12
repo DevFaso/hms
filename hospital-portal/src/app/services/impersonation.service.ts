@@ -4,6 +4,7 @@ import { Observable, tap } from 'rxjs';
 
 import { AuthService, JwtPayload, LoginUserProfile } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { SessionScopeService } from '../core/session-scope.service';
 import {
   ImpersonationActiveResponse,
   ImpersonationStartRequest,
@@ -50,6 +51,7 @@ export class ImpersonationService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly sessionScope = inject(SessionScopeService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly active = signal<ImpersonationActiveResponse | null>(null);
@@ -109,10 +111,13 @@ export class ImpersonationService {
           //    Copilot review #2).
           this.auth.setToken(response.accessToken, /* remember */ false);
 
-          // 3. Re-hydrate RoleContext + profile from the new claims so the
-          //    shell, role guards, and side-nav reflect the impersonated
-          //    identity immediately (closes Copilot review #1 + #3).
+          // 3. Roles from the new token at once so the shell, the guards and
+          //    the side-nav reflect the impersonated identity immediately;
+          //    the hospital scope and the full profile come from the live
+          //    session as the target (E9 #55b) — the token's hospital
+          //    claims are never read.
           this.hydrateFromImpersonationToken(response.accessToken, response);
+          this.sessionScope.hydrate().subscribe();
 
           this.active.set({
             impersonating: true,
@@ -246,27 +251,27 @@ export class ImpersonationService {
     }
     sessionStorage.removeItem(ORIGINAL_REMEMBER_KEY);
 
-    // Restore profile + role context from the snapshot taken at start().
-    // If snapshot is missing (legacy session), fall back to decoding the
-    // restored token so role state isn't left mid-impersonation stale.
+    // Restore profile + role context from the snapshot taken at start(),
+    // then re-hydrate from the live session as the original user (E9
+    // #55b). Without a snapshot (legacy session) the stored profile and
+    // the restored token's roles stand in until the server answers.
     const snapshot = sessionStorage.getItem(ORIGINAL_PROFILE_KEY);
     if (snapshot) {
       try {
         const profile = JSON.parse(snapshot) as LoginUserProfile;
         this.auth.setUserProfile(profile);
         this.roleContext.setRoles(profile.roles ?? []);
-        const ids = profile.hospitalIds ?? [];
-        this.roleContext.setPermittedHospitalIds(ids);
-        if (profile.primaryHospitalId) {
-          this.roleContext.activeHospitalId = profile.primaryHospitalId;
-        }
+        this.sessionScope.applyScope(profile.hospitalIds ?? [], profile.primaryHospitalId ?? null);
       } catch {
-        // Snapshot corrupt — fall back to token decode
-        this.hydrateFromCurrentToken();
+        // Snapshot corrupt — the stored profile and the token's roles stand in
+        this.sessionScope.applyStoredProfile();
       }
       sessionStorage.removeItem(ORIGINAL_PROFILE_KEY);
     } else if (original) {
-      this.hydrateFromCurrentToken();
+      this.sessionScope.applyStoredProfile();
+    }
+    if (original) {
+      this.sessionScope.hydrate().subscribe();
     }
 
     this.active.set({ ...response, impersonating: false });
@@ -290,35 +295,11 @@ export class ImpersonationService {
       email: '',
       roles,
       active: true,
-      primaryHospitalId: this.firstString(claims?.['primaryHospitalId']),
-      hospitalIds: this.stringArray(claims?.['hospitalIds']),
     };
     this.auth.setUserProfile(profile);
-
-    const permittedIds = profile.hospitalIds ?? [];
-    this.roleContext.setPermittedHospitalIds(permittedIds);
-    if (profile.primaryHospitalId) {
-      this.roleContext.activeHospitalId = profile.primaryHospitalId;
-    } else if (permittedIds.length === 1) {
-      this.roleContext.activeHospitalId = permittedIds[0];
-    } else {
-      this.roleContext.activeHospitalId = null;
-    }
-  }
-
-  private hydrateFromCurrentToken(): void {
-    const token = this.auth.getToken();
-    if (!token) return;
-    const claims = this.decodeJwt(token);
-    if (!claims) return;
-    const roles = this.normalizeRoles(claims.roles);
-    this.roleContext.setRoles(roles);
-    const permittedIds = this.stringArray(claims['hospitalIds']) ?? [];
-    this.roleContext.setPermittedHospitalIds(permittedIds);
-    const primary = this.firstString(claims['primaryHospitalId']);
-    if (primary) {
-      this.roleContext.activeHospitalId = primary;
-    }
+    // No hospital scope until the session answers: an impersonated
+    // request must not go out under the super admin's hospital.
+    this.sessionScope.applyScope([], null);
   }
 
   private decodeJwt(token: string): JwtPayload | null {
@@ -337,14 +318,5 @@ export class ImpersonationService {
   private normalizeRoles(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.filter((r): r is string => typeof r === 'string');
-  }
-
-  private stringArray(value: unknown): string[] | undefined {
-    if (!Array.isArray(value)) return undefined;
-    return value.filter((v): v is string => typeof v === 'string');
-  }
-
-  private firstString(value: unknown): string | undefined {
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
   }
 }
