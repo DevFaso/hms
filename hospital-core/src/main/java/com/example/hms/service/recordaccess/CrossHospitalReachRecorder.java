@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import com.example.hms.model.Hospital;
 
 /**
@@ -42,15 +41,16 @@ public class CrossHospitalReachRecorder {
     private final AuditEventLogService auditEventLogService;
 
     /**
-     * Count the rows in {@code rows} whose hospital is not {@code actingHospitalId},
-     * keyed by source hospital id. Rows with no hospital are not foreign.
-     * {@code rows} is a repository result and never null — a null guard here
-     * taught Sonar that every caller's list might be null (S2259).
+     * Count the source hospitals in {@code sourceHospitalIds} that are not
+     * {@code actingHospitalId}, keyed by source hospital id — one entry per row
+     * surfaced, mapped by the caller in the open ({@link #hospitalIdOf} for an
+     * entity, {@code getHospitalId} for a DTO). A null id is a row with no
+     * hospital, which is not foreign. The list is never null — a null guard
+     * here taught Sonar that every caller's list might be null (S2259).
      */
-    public static <T> Map<String, Long> reachOf(Collection<T> rows, Function<T, UUID> hospitalIdOf, UUID actingHospitalId) {
+    public static Map<String, Long> reachOf(Collection<UUID> sourceHospitalIds, UUID actingHospitalId) {
         Map<String, Long> perSource = new HashMap<>();
-        for (T row : rows) {
-            UUID source = hospitalIdOf.apply(row);
+        for (UUID source : sourceHospitalIds) {
             if (source != null && !source.equals(actingHospitalId)) {
                 perSource.merge(source.toString(), 1L, Long::sum);
             }

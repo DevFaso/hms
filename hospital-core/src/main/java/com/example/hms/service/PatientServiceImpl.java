@@ -1038,17 +1038,17 @@ public class PatientServiceImpl implements PatientService {
         logDoctorRecordAudit(patient, requesterUserId, assignment, reason, includeSensitive, response, sensitiveSections);
         Map<String, Long> reach = new HashMap<>();
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            allergies, PatientAllergyResponseDTO::getHospitalId, resolvedHospitalId));
+            allergies.stream().map(PatientAllergyResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            medications, PrescriptionResponseDTO::getHospitalId, resolvedHospitalId));
+            medications.stream().map(PrescriptionResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            medicalHistory.problems(), PatientProblemResponseDTO::getHospitalId, resolvedHospitalId));
+            medicalHistory.problems().stream().map(PatientProblemResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            medicalHistory.surgicalHistory(), PatientSurgicalHistoryResponseDTO::getHospitalId, resolvedHospitalId));
+            medicalHistory.surgicalHistory().stream().map(PatientSurgicalHistoryResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            medicalHistory.advanceDirectives(), AdvanceDirectiveResponseDTO::getHospitalId, resolvedHospitalId));
+            medicalHistory.advanceDirectives().stream().map(AdvanceDirectiveResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
-            notes, NursingNoteResponseDTO::getHospitalId, resolvedHospitalId));
+            notes.stream().map(NursingNoteResponseDTO::getHospitalId).toList(), resolvedHospitalId));
         recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
             "Cross-hospital doctor record read on the treatment relationship");
         return response;
@@ -1221,7 +1221,7 @@ public class PatientServiceImpl implements PatientService {
             .map(patientProblemMapper::toResponseDto)
             .toList();
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(diagnoses, PatientProblemResponseDTO::getHospitalId, hospitalId),
+            CrossHospitalReachRecorder.reachOf(diagnoses.stream().map(PatientProblemResponseDTO::getHospitalId).toList(), hospitalId),
             "Cross-hospital diagnosis read on the treatment relationship");
         return diagnoses;
     }

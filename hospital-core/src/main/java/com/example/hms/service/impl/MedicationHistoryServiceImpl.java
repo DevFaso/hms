@@ -95,7 +95,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         });
 
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(timeline, MedicationTimelineEntryDTO::getHospitalId, hospitalId),
+            CrossHospitalReachRecorder.reachOf(timeline.stream().map(MedicationTimelineEntryDTO::getHospitalId).toList(), hospitalId),
             "Cross-hospital medication timeline read on the treatment relationship");
 
         // Run overlap detection
@@ -185,7 +185,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, readable);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(fills, f -> CrossHospitalReachRecorder.hospitalIdOf(f.getHospital()), hospitalId),
+            CrossHospitalReachRecorder.reachOf(fills.stream().map(f -> CrossHospitalReachRecorder.hospitalIdOf(f.getHospital())).toList(), hospitalId),
             "Cross-hospital pharmacy fill read on the treatment relationship");
         return fills.stream()
             .map(pharmacyFillMapper::toResponseDTO)

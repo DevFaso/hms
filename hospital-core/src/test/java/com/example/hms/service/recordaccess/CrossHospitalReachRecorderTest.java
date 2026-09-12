@@ -45,10 +45,10 @@ class CrossHospitalReachRecorderTest {
         UUID b = UUID.randomUUID();
         List<Row> rows = List.of(new Row(acting), new Row(a), new Row(a), new Row(b), new Row(null));
 
-        Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(rows, Row::hospitalId, acting);
+        Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(rows.stream().map(Row::hospitalId).toList(), acting);
 
         assertThat(reach).containsOnly(Map.entry(a.toString(), 2L), Map.entry(b.toString(), 1L));
-        assertThat(CrossHospitalReachRecorder.reachOf(List.of(), Row::hospitalId, acting)).isEmpty();
+        assertThat(CrossHospitalReachRecorder.reachOf(List.of(), acting)).isEmpty();
     }
 
     @Test

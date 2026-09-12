@@ -174,7 +174,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(c)))
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(consultations, c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital()), activeHospitalId),
+            CrossHospitalReachRecorder.reachOf(consultations.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList(), activeHospitalId),
             "Cross-hospital consultation read on the treatment relationship");
         return consultations.stream()
             .map(this::toResponseDTO)

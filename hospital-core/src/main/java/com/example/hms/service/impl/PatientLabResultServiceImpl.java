@@ -77,7 +77,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             results = labResultRepository
                 .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(results, r -> hospitalIdOf(r.getLabOrder()), hospital.getId()),
+                CrossHospitalReachRecorder.reachOf(results.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospital.getId()),
                 "Cross-hospital lab result read on the treatment relationship");
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal

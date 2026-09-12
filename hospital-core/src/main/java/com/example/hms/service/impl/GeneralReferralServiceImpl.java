@@ -301,7 +301,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
             referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(referrals, r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital()), activeHospitalId),
+                CrossHospitalReachRecorder.reachOf(referrals.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital referral read on the treatment relationship");
         } else {
             referrals = referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
