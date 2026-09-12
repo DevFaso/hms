@@ -2031,7 +2031,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ### Phase 2 — sensitive categories and break-the-glass
 
-- [ ] 62. **Break-the-glass wired into the policy.** Tier B (unregistered
+- [x] 62. **Break-the-glass wired into the policy.** ✅ DONE 2026-09-12 — (a) and (b) below. Tier B (unregistered
   patient) and the sensitive-row unlock consume `BreakGlassSession`; the
   consent resolver stops being its only consumer. Reads under a session are
   stamped with the session id in the disclosure row. Absorbs E8 #54.
@@ -2042,9 +2042,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   still hold; `CrossHospitalReachRecorder` stamps `breakGlassSessionId` on
   every disclosure row written under a session; the D3 sites already on
   develop (diagnoses, timeline, doctor record, nursing notes, consultations,
-  admissions, encounters) take an `unlocked` flag. **(b) open**: the same
-  flag at the whole-chart sites (storyboard, chart review, snapshot, FHIR
-  `$everything`) once #610/#60b land; the portal's declare flow is #64's.
+  admissions, encounters) take an `unlocked` flag. **(b) shipped 2026-09-12**:
+  the same flag at the whole-chart sites — storyboard problems, chart-review
+  encounters, snapshot encounters and active diagnoses, FHIR `$everything`
+  Encounter and Condition sections (carried on the SectionContext). The
+  portal's declare flow already exists (`break-glass-banner`); the restricted
+  rows UI that tells a clinician something is withheld and offers the
+  declaration is #64. E8 #54 absorbed.
 - [ ] 63. **Department classification screen + heuristic deletion.**
   `PUT /departments/{id}/default-sensitivity` exists; the HOSPITAL_ADMIN
   screen does not. Add it, put it on the hospital onboarding checklist, and

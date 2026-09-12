@@ -37,6 +37,7 @@ import com.example.hms.model.PatientAllergy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Builds the patient-snapshot DTO for the chart-summary view.
@@ -65,6 +66,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
@@ -90,8 +92,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = hospitalId == null ? null
                 : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // rows the D3 rule withholds; the ledger row names the session.
+        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         Map<String, Long> reach = new HashMap<>();
-        List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach);
+        List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
                 .name(patient.getFirstName() + " " + patient.getLastName())
@@ -100,7 +105,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .mrn(patient.getId().toString())
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
-                .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach))
+                .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
                 .latestLabs(buildLatestLabs(patientId, hospitalId, readable, reach))
@@ -122,12 +127,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         }
     }
 
-    private List<Encounter> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable, Map<String, Long> reach) {
+    private List<Encounter> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable, Map<String, Long> reach,
+                                           boolean unlocked) {
         try {
             List<Encounter> rows = readable == null
                     ? encounterRepository.findByPatient_Id(patientId)
                     : encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
-                        .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e)))
+                        .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
                         .toList();
             account(reach, hospitalId, rows.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
             return rows;
@@ -172,14 +178,14 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
      * is still read for V14-era rows and is read-only legacy.
      */
     private List<String> buildActiveDiagnoses(UUID patientId, Patient patient, UUID hospitalId,
-                                              Set<UUID> readable, Map<String, Long> reach) {
+                                              Set<UUID> readable, Map<String, Long> reach, boolean unlocked) {
         List<String> diagnoses = new ArrayList<>();
         try {
             List<com.example.hms.model.PatientProblem> problems = readable == null
                     ? patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE)
                     : patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
                         .filter(p -> p.getStatus() == ProblemStatus.ACTIVE)
-                        .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(p)))
+                        .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(p), unlocked))
                         .toList();
             account(reach, hospitalId, problems.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
             problems.stream()

@@ -62,6 +62,8 @@ class PatientStoryboardServiceImplTest {
         mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
     private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder =
         mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+    private final com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate =
+        mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
 
     private PatientStoryboardServiceImpl service;
 
@@ -75,7 +77,7 @@ class PatientStoryboardServiceImplTest {
     void setUp() {
         service = new PatientStoryboardServiceImpl(
             patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo,
-            recordAccessPolicy, sensitivityClassifier, reachRecorder);
+            recordAccessPolicy, sensitivityClassifier, reachRecorder, breakGlassGate);
         // E9 #59 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -393,5 +395,32 @@ class PatientStoryboardServiceImplTest {
 
         verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
             eq(Map.of(other.getId().toString(), 2L)), anyString());
+    }
+
+    @Test
+    void aLiveBreakGlassSessionSurfacesTheForeignSensitiveProblem() {
+        // E9 #62 — the HIV problem recorded elsewhere is withheld by D3 until the
+        // clinician declares a session; then it shows, and the ledger names it.
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, other.getId()));
+        when(breakGlassGate.isUnlocked(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+        PatientProblem awaySensitive = problem("Infection VIH", ProblemStatus.ACTIVE, true);
+        awaySensitive.setHospital(other);
+        when(sensitivityClassifier.effectiveCategory(awaySensitive))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of(awaySensitive));
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getProblems()).extracting(PatientStoryboardDTO.ProblemSummaryDTO::getProblemDisplay)
+            .containsExactly("Infection VIH");
     }
 }

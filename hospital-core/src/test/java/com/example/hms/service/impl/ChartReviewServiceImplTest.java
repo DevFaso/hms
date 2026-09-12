@@ -82,6 +82,8 @@ class ChartReviewServiceImplTest {
         mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
     private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier =
         mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
+    private final com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate =
+        mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
 
     private ChartReviewServiceImpl service;
 
@@ -96,7 +98,7 @@ class ChartReviewServiceImplTest {
         service = new ChartReviewServiceImpl(
             patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
             imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo,
-            recordAccessPolicy, reachRecorder, sensitivityClassifier);
+            recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate);
         // E9 #60 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -516,5 +518,28 @@ class ChartReviewServiceImplTest {
     void hospitalIdNullRecordsNoReach() {
         service.getChartReview(PATIENT_ID, null, null);
         verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void aLiveBreakGlassSessionSurfacesTheForeignSensitiveEncounter() {
+        // E9 #62 — the same review as above, under a declared session: the
+        // withheld encounter is on the page.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(otherHospitalId);
+        Encounter awaySensitive = encounter(EncounterStatus.COMPLETED, LocalDateTime.now().minusDays(3));
+        awaySensitive.setHospital(other);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, otherHospitalId));
+        when(breakGlassGate.isUnlocked(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            eq(PATIENT_ID), eq(Set.of(HOSPITAL_ID, otherHospitalId)), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(awaySensitive)));
+        when(sensitivityClassifier.effectiveCategory(awaySensitive))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getEncounters()).hasSize(1);
     }
 }
