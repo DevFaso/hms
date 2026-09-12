@@ -58,7 +58,6 @@ import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
-import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 @Slf4j
@@ -689,32 +688,10 @@ public class JwtTokenProvider {
             .map(this::ensureRolePrefix)
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        if (normalizedRoles.contains(ROLE_SUPER_ADMIN)) {
-            List<String> inherited = List.of(
-                ROLE_HOSPITAL_ADMIN,
-                ROLE_RECEPTIONIST,
-                ROLE_DOCTOR,
-                ROLE_NURSE,
-                "ROLE_LAB_SCIENTIST",
-                "ROLE_STAFF",
-                ROLE_PATIENT
-            );
-            inherited.stream()
-                .map(String::trim)
-                .filter(r -> !r.isEmpty())
-                .forEach(normalizedRoles::add);
-        }
-
-        // Doctor equivalence (2026-08-23 role audit, C2): physicians and
-        // surgeons ARE doctors — every matcher and @PreAuthorize naming
-        // ROLE_DOCTOR admits them through this expansion instead of each
-        // list carrying three role names. Mirrored in
-        // SecurityConfig.authoritiesMapper for the session-auth path.
-        if (normalizedRoles.contains("ROLE_PHYSICIAN") || normalizedRoles.contains("ROLE_SURGEON")) {
-            normalizedRoles.add(ROLE_DOCTOR);
-        }
-
-        List<SimpleGrantedAuthority> authorities = normalizedRoles.stream()
+        // E9 #67 (D6): super-admin inheritance and doctor equivalence live in
+        // RoleExpansion, shared with SecurityConfig.authoritiesMapper so the
+        // two auth paths cannot drift again.
+        List<SimpleGrantedAuthority> authorities = RoleExpansion.expand(normalizedRoles).stream()
             .map(SimpleGrantedAuthority::new)
             .toList();
 

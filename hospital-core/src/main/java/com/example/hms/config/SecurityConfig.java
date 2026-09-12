@@ -2,6 +2,7 @@ package com.example.hms.config;
 
 import com.example.hms.security.JwtAuthenticationEntryPoint;
 import com.example.hms.security.JwtAuthenticationFilter;
+import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
@@ -23,8 +24,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,10 +39,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
@@ -207,34 +203,16 @@ public class SecurityConfig {
     }
 
     /**
-     * Expand ROLE_SUPER_ADMIN with operational roles so existing checks remain simple.
-     * NOTE: Authorization/tenant isolation must still be enforced at service layer.
+     * E9 #67 (D6): the password-login path widens a super-admin and a
+     * doctor-like role through {@link RoleExpansion}, the same rule the JWT
+     * path applies per request. This used to carry a fourteen-role list of
+     * its own against the JWT path's seven; the login role picker showed the
+     * difference. Authorization and tenant isolation are still enforced at
+     * the service layer.
      */
     @Bean
     public GrantedAuthoritiesMapper authoritiesMapper() {
-        final Set<String> inherited = Set.of(
-            ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-            ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-            ROLE_STAFF, ROLE_PATIENT, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT
-        );
-        return (Collection<? extends GrantedAuthority> authorities) -> {
-            boolean isSuper = authorities.stream().anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
-            // Doctor equivalence (2026-08-23 role audit, C2): physicians and
-            // surgeons ARE doctors. Mirrors JwtTokenProvider's per-request
-            // expansion so both auth paths agree.
-            boolean isDoctorLike = authorities.stream().anyMatch(a ->
-                "ROLE_PHYSICIAN".equals(a.getAuthority()) || "ROLE_SURGEON".equals(a.getAuthority()));
-            if (!isSuper && !isDoctorLike) return authorities;
-            var extended = new HashSet<GrantedAuthority>(authorities);
-            if (isSuper) {
-                inherited.forEach(r -> extended.add(new SimpleGrantedAuthority(r)));
-            }
-            if (isDoctorLike) {
-                extended.add(new SimpleGrantedAuthority(ROLE_DOCTOR));
-            }
-            return extended;
-        };
+        return RoleExpansion.authoritiesMapper();
     }
 
     @Bean

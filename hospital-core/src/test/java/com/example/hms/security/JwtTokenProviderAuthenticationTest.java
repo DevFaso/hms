@@ -111,6 +111,24 @@ class JwtTokenProviderAuthenticationTest {
         assertThat(auth.getPrincipal()).isSameAs(details);
     }
 
+    @Test
+    @DisplayName("a super-admin's request authorities are exactly RoleExpansion's — the JWT path has no list of its own")
+    void superAdminAuthoritiesComeFromRoleExpansion() {
+        UUID userId = UUID.randomUUID();
+        String username = "platform.admin";
+        String token = provider.generateAccessToken(
+            new TokenUserDescriptor(userId, username, List.of("ROLE_SUPER_ADMIN")));
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(new StubHospitalUserDetails(
+            userId, username, true, List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        lenient().when(tenantRoleAssignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of());
+
+        Authentication auth = provider.getAuthenticationFromJwt(token);
+
+        assertThat(auth.getAuthorities())
+            .extracting(GrantedAuthority::getAuthority)
+            .containsExactlyElementsOf(RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")));
+    }
+
     /**
      * Minimal HospitalUserDetails stub. Building the full Spring Security UserDetails
      * surface as a Mockito mock is unwieldy — Mockito would have to stub each of the

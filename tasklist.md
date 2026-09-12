@@ -2122,6 +2122,32 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   surface: `CLINICAL_CHART_ROLES`); one SUPER_ADMIN inheritance list shared by
   `JwtTokenProvider` and `SecurityConfig.authoritiesMapper`; a guard test that
   fails when the two lists diverge. Needs `/security-review`.
+  **(a) D6 shipped 2026-09-12**: `RoleExpansion` (security) is the one place a
+  principal's roles widen — `SUPER_ADMIN_INHERITS` (the JWT path's seven; the
+  login path's fourteen never reached a token, only the login role picker,
+  which now shows the same eight) and doctor equivalence — called by both
+  `JwtTokenProvider.getAuthenticationFromJwt` and
+  `SecurityConfig.authoritiesMapper`; `RoleExpansionTest` fails the build if
+  either file grows a list of its own again.
+  **(b) D5 open, sized 2026-09-12**: 281 of the 627 `@PreAuthorize` guards
+  naming HOSPITAL_ADMIN are clinical-chart surfaces across ~60 controllers,
+  behind a second layer (`SecurityConfig` matchers, `GET /patients/**` at
+  L426 blankets every chart sub-resource), three service-level gates
+  (`RoleValidator.isStaffOrAdminFromAuth` inside `canViewPatient`,
+  `RoleValidator.canCreatePrescription`, `BirthPlanServiceImpl` /
+  `HighRiskPregnancyCarePlanServiceImpl` scope widening) and ~20 portal
+  mirrors (`chart-access.ts`, `patient-detail.canView*`, the `/patients`
+  route guard, shell nav, per-page `hasAnyActiveRole`). `CLINICAL_ROLES` is
+  already taken with five different values, so the shared constant needs a
+  distinct name in `SecurityConstants`. Ships in slices: (b1) the patient
+  chart page — `/patients/**` reads, storyboard, chart review, vitals,
+  encounters, notes, admissions, discharge, consultations, referrals,
+  in-basket — backend + matchers + service gates + the patient-detail /
+  route / nav mirrors together; (b2) orders, results, imaging, medications,
+  maternity, procedures, transfusion, signatures with their pages. Keeps by
+  design: break-glass, registration, coverage, disclosure oversight,
+  department/config catalogs, ops sweeps. Item 69 widens the same guards
+  and edits the same constant.
 - [ ] 68. **Dead tokens and phantom roles.** Strip the 111 permission tokens
   from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
   235 guards at once — not this item); seed or remove `ROLE_STAFF` (18
