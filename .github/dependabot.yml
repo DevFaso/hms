@@ -1,0 +1,77 @@
+version: 2
+
+# WHY THIS FILE EXISTS (2026-09-12)
+#
+# Two defects, both visible on PRs #592-#595:
+#
+# 1. Angular packages are released in lockstep and peer-depend on each other
+#    at the EXACT same version, and this project pins them exactly (no caret).
+#    Ungrouped, Dependabot opened one PR per package, each bumping a single
+#    @angular/* to 20.3.28+ while the lockfile held 20.3.27 for the rest. Every
+#    one of those PRs failed `npm ci` with ERESOLVE before a test ever ran —
+#    not flaky, unresolvable by construction. Four security fixes (SSR XSS and
+#    SSRF in @angular/platform-server, sanitization bypass in core/compiler,
+#    HttpTransferCache info leak in common) sat unmergeable for a day because
+#    of it. The `groups` below make the family one PR.
+#
+# 2. Dependabot targets the default branch, which here is `main`, and main
+#    auto-deploys to production (see .github/workflows/deploy.yml). A dependency
+#    bump merged there reaches patients without ever passing through develop.
+#    `target-branch: develop` puts them back in the normal flow.
+updates:
+  - package-ecosystem: npm
+    directory: /hospital-portal
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # The framework proper: lockstep peer deps, exact pins. Never split.
+      angular:
+        patterns:
+          - "@angular/*"
+        exclude-patterns:
+          - "@angular/cdk"
+          - "@angular/material"
+      # CDK and Material share their own version line (20.2.x here) and
+      # peer-depend on each other; same argument, separate track.
+      angular-components:
+        patterns:
+          - "@angular/cdk"
+          - "@angular/material"
+      # Everything else, batched so a quiet week is one PR rather than twelve.
+      portal-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /scripts/keycloak-migration
+    target-branch: develop
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+
+  - package-ecosystem: gradle
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+          - "io.spring*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
