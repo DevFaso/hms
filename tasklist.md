@@ -1921,6 +1921,14 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   but is no longer written), point Medical tab / storyboard / FHIR
   AllergyIntolerance / mapper at the one store. Patient-safety fix, and the
   first thing that travels cross-hospital by construction.
+  _(PR #598 — NO migration after all: the column is encrypted at rest, so the
+  backfill is a Java startup runner (`LegacyAllergyTextBackfill`, one
+  transaction per patient, idempotent) rather than SQL; structured rows are the
+  truth, the column is a derived summary kept by `PatientAllergySummarySync`;
+  storyboard / GET allergies / doctor record / timeline read patient-wide with
+  provenance; GET allergies writes RECORD_SHARE for foreign rows. Storyboard
+  and chart-review still surface foreign allergies without a ledger row — see
+  #60.)_
 - [ ] 57. **Stop keying `Patient` on its first hospital.** `Patient implements
   TenantScoped` on `hospitalId` (= first registration) makes a multi-hospital
   patient vanish from the second hospital's scoped finders; #591 papered over
@@ -1949,7 +1957,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   and admissions. Write guards untouched. Each PR: the finder, the service,
   the `RECORD_SHARE` row, a tenancy test that fails when the widening is
   reverted.
-- [ ] 60. **Whole-chart surfaces on the readable set.** FHIR `$everything` /
+- [ ] 60. **Whole-chart surfaces on the readable set.** ⚠ Since #56 the
+  storyboard and chart review already surface foreign ALLERGY rows with no
+  `RECORD_SHARE` (those calls carry no requester); wiring the ledger through
+  these surfaces is part of this item, not optional. FHIR `$everything` /
   `fhir-record` export (`PatientEverythingService.resolveHospitalScopeOrForbid`
   fails closed on the stale context today), storyboard, chart review, timeline
   (already), snapshot. Every one writes the disclosure row.
