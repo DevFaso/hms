@@ -66,19 +66,9 @@ class PatientControllerTest {
     }
 
     @Test
-    void receptionistFallsBackToAssignmentHospital() {
+    void listsPatientsInTheScopeAuthUtilsResolves() {
         UUID userId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        Hospital hospital = new Hospital();
-        hospital.setId(hospitalId);
-
-        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
-        assignment.setHospital(hospital);
-    Role receptionistRole = new Role();
-    receptionistRole.setCode(ROLE_RECEPTIONIST_CODE);
-    assignment.setRole(receptionistRole);
-        when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, ROLE_RECEPTIONIST_CODE))
-            .thenReturn(Optional.of(assignment));
 
         List<PatientResponseDTO> expected = List.of(PatientResponseDTO.builder().id(UUID.randomUUID()).build());
         when(patientService.getAllPatients(eq(hospitalId), any(Locale.class))).thenReturn(expected);
@@ -90,24 +80,18 @@ class PatientControllerTest {
         JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
             List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
 
-        // stub authUtils calls used by resolveHospitalScope path
-        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
-        when(authUtils.hasAuthority(auth, ROLE_RECEPTIONIST_CODE)).thenReturn(true);
-        when(authUtils.extractHospitalIdFromJwt(auth)).thenReturn(null);
-        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        // E9 #55: the controller no longer resolves scope itself — one resolver.
+        when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
 
-    ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
+        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
 
         assertEquals(expected, response.getBody());
         verify(patientService).getAllPatients(eq(hospitalId), any(Locale.class));
     }
 
     @Test
-    void receptionistWithoutAssignmentThrowsBusinessException() {
+    void propagatesTheResolverRefusal() {
         UUID userId = UUID.randomUUID();
-
-        when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, ROLE_RECEPTIONIST_CODE))
-            .thenReturn(Optional.empty());
 
         Jwt jwt = Jwt.withTokenValue("token")
             .header("alg", "none")
@@ -116,11 +100,8 @@ class PatientControllerTest {
         JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
             List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
 
-        // stub authUtils calls used by resolveHospitalScope path
-        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
-        when(authUtils.hasAuthority(auth, ROLE_RECEPTIONIST_CODE)).thenReturn(true);
-        when(authUtils.extractHospitalIdFromJwt(auth)).thenReturn(null);
-        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, true))
+            .thenThrow(new BusinessException("Receptionist must be affiliated with a hospital."));
 
         assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, auth));
     }

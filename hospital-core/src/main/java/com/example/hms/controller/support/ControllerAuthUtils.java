@@ -3,6 +3,7 @@ package com.example.hms.controller.support;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -89,7 +90,7 @@ public class ControllerAuthUtils {
     /**
      * Return the requested hospital ID if it belongs to the user or if they are SUPER_ADMIN.
      */
-    private Optional<UUID> validateAndPreferHospital(Authentication auth, UUID requestedHospitalId, UUID jwtHospitalId) {
+    private Optional<UUID> validateAndPreferHospital(Authentication auth, UUID requestedHospitalId, UUID contextHospitalId) {
         if (requestedHospitalId != null) {
             if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
                 return Optional.of(requestedHospitalId);
@@ -101,8 +102,8 @@ public class ControllerAuthUtils {
                 throw new com.example.hms.exception.BusinessException("Access Denied: You do not have an active role in the requested hospital.");
             }
         }
-        if (jwtHospitalId != null) {
-            return Optional.of(jwtHospitalId);
+        if (contextHospitalId != null) {
+            return Optional.of(contextHospitalId);
         }
         return Optional.empty();
     }
@@ -112,9 +113,24 @@ public class ControllerAuthUtils {
      * <p>
      * Rules:
      * <ul>
-     *   <li>SUPER_ADMIN / HOSPITAL_ADMIN / default: prefer requested → JWT → assignment fallback</li>
-     *   <li>RECEPTIONIST: enforce JWT hospital; if absent, allow requested or assignment; throw if required</li>
+     *   <li>SUPER_ADMIN: the requested hospital or {@code null} (global)</li>
+     *   <li>RECEPTIONIST: the requested hospital when assigned there, else the
+     *       active hospital of the request context, else the assignment
+     *       fallback; throw if required and none resolves</li>
+     *   <li>everyone else: requested (validated against the caller's
+     *       assignments) → active hospital of the request context →
+     *       assignment fallback</li>
      * </ul>
+     * <p>
+     * "Active hospital of the request context" is {@link HospitalContextHolder}:
+     * the live permitted set recomputed by {@code JwtTokenProvider} on every
+     * request, with the {@code X-Hospital-Id} header applied. It is the SAME
+     * value {@code RoleValidator.requireActiveHospitalId()} returns, so a
+     * controller-resolved scope and a service-resolved scope can no longer
+     * disagree (E9 #55). The pre-#55 code read a claim off a
+     * {@code JwtAuthenticationToken} here, which the username/password login
+     * never produces, so that branch was dead and every caller silently took
+     * the first row of an unordered assignment query.
      *
      * @param auth                       current authentication
      * @param requestedHospitalId        the caller-supplied hospital ID (nullable)
@@ -124,7 +140,7 @@ public class ControllerAuthUtils {
     public UUID resolveHospitalScope(Authentication auth,
                                      UUID requestedHospitalId,
                                      boolean requiredForReceptionist) {
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
+        UUID contextHospitalId = contextHospitalId();
 
         if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
             // SUPER_ADMIN: only scope when explicitly requested.
@@ -133,37 +149,45 @@ public class ControllerAuthUtils {
         }
 
         if (hasAuthority(auth, "ROLE_RECEPTIONIST")) {
-            return resolveReceptionistScope(auth, requestedHospitalId, jwtHospitalId, requiredForReceptionist);
+            return resolveReceptionistScope(auth, requestedHospitalId, contextHospitalId, requiredForReceptionist);
         }
 
         if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return validateAndPreferHospital(auth, requestedHospitalId, jwtHospitalId)
+            return validateAndPreferHospital(auth, requestedHospitalId, contextHospitalId)
                 .or(() -> fallbackHospitalFromAssignments(auth))
                 .orElse(null);
         }
 
-        return validateAndPreferHospital(auth, requestedHospitalId, jwtHospitalId)
+        return validateAndPreferHospital(auth, requestedHospitalId, contextHospitalId)
             .or(() -> fallbackHospitalFromAssignments(auth))
             .orElse(null);
     }
 
     /**
      * Resolve hospital for RECEPTIONIST role.
+     * <p>
+     * A receptionist assigned to more than one hospital may name one
+     * explicitly (validated against their assignments — the value is a claim
+     * until checked); otherwise the active hospital of the request context
+     * wins, then the assignment fallback. Folds in the variant
+     * {@code PatientController} used to carry privately, so the front desk
+     * resolves scope the same way on every endpoint.
      */
     public UUID resolveReceptionistScope(Authentication auth,
                                          UUID requestedHospitalId,
-                                         UUID jwtHospitalId,
+                                         UUID contextHospitalId,
                                          boolean required) {
-        if (jwtHospitalId != null) {
-            return jwtHospitalId;
-        }
-        if (requestedHospitalId != null) {
-            // Must validate receptionist's requested hospital ID
+        if (requestedHospitalId != null && !requestedHospitalId.equals(contextHospitalId)) {
             UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
-            if (!assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
-                throw new com.example.hms.exception.BusinessException("Access Denied: You do not have an active role in the requested hospital.");
+            if (assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
+                return requestedHospitalId;
             }
-            return requestedHospitalId;
+            if (contextHospitalId == null) {
+                throw new BusinessException("Access Denied: You do not have an active role in the requested hospital.");
+            }
+        }
+        if (contextHospitalId != null) {
+            return contextHospitalId;
         }
         Optional<UUID> assignmentHospital = fallbackHospitalFromAssignments(auth);
         if (assignmentHospital.isPresent()) {
@@ -171,22 +195,37 @@ public class ControllerAuthUtils {
         }
         if (required) {
             throw new BusinessException(
-                "Receptionist must be affiliated with a hospital (provide hospitalId in token or request).");
+                "Receptionist must be affiliated with a hospital (select an active hospital or provide hospitalId).");
         }
         return null;
     }
 
     /**
-     * Return the first non-null hospital ID.
+     * The active hospital of the current request, as the security layer
+     * resolved it: live permitted set + {@code X-Hospital-Id} override. For a
+     * super-admin only an explicit header scope counts — without one they are
+     * global, and {@code null} is the right answer (mirrors
+     * {@code RoleValidator.requireActiveHospitalId()} step 1).
+     *
+     * @return the active hospital id, or {@code null} when the context carries
+     *         none (no filter ran, or a super-admin in global view)
      */
-    public Optional<UUID> preferHospital(UUID requestedHospitalId, UUID jwtHospitalId) {
-        if (requestedHospitalId != null) {
-            return Optional.of(requestedHospitalId);
+    public UUID contextHospitalId() {
+        return HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
+    }
+
+    /**
+     * {@link #contextHospitalId()} with the assignment fallback for callers
+     * that reach a controller without the JWT filter having populated the
+     * context (tests, edge entry points). Super-admins are never "fallen back"
+     * onto a hospital: global stays global.
+     */
+    public UUID currentHospitalId(Authentication auth) {
+        UUID fromContext = contextHospitalId();
+        if (fromContext != null || hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+            return fromContext;
         }
-        if (jwtHospitalId != null) {
-            return Optional.of(jwtHospitalId);
-        }
-        return Optional.empty();
+        return fallbackHospitalFromAssignments(auth).orElse(null);
     }
 
     /**
@@ -211,45 +250,6 @@ public class ControllerAuthUtils {
         }
         return auth.getAuthorities().stream()
             .anyMatch(granted -> authority.equalsIgnoreCase(granted.getAuthority()));
-    }
-
-    /**
-     * Extract {@code hospitalId} from JWT claims.
-     */
-    public UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            for (String claimKey : List.of("primaryHospitalId", "hospitalId")) {
-                UUID result = tryParseUuidClaim(jwt, claimKey);
-                if (result != null) {
-                    return result;
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Attempt to extract a UUID from a single JWT claim, trying string-claim,
-     * raw-UUID, and raw-String representations in turn.
-     */
-    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
-        String direct = jwt.getClaimAsString(claimKey);
-        if (direct != null && !direct.isBlank()) {
-            try {
-                return UUID.fromString(direct);
-            } catch (IllegalArgumentException ignored) { /* try raw */ }
-        }
-        Object raw = jwt.getClaims().get(claimKey);
-        if (raw instanceof UUID uuid) {
-            return uuid;
-        }
-        if (raw instanceof String str && !str.isBlank()) {
-            try {
-                return UUID.fromString(str);
-            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
-        }
-        return null;
     }
 
     /**

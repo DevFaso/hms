@@ -55,7 +55,7 @@ public class PatientEducationController {
     public ResponseEntity<EducationResourceResponseDTO> createResource(
             @Valid @RequestBody EducationResourceRequestDTO requestDTO,
             Authentication auth) {
-        UUID hospitalId = getRequiredHospitalId(auth);
+        UUID hospitalId = getRequiredHospitalId();
         EducationResourceResponseDTO response = educationService.createResource(requestDTO, hospitalId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -83,7 +83,7 @@ public class PatientEducationController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get all education resources")
     public ResponseEntity<List<EducationResourceResponseDTO>> getAllResources(Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.getAllResources(hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -94,7 +94,7 @@ public class PatientEducationController {
     public ResponseEntity<List<EducationResourceResponseDTO>> searchResources(
             @RequestParam String query,
             Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.searchResources(query, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -105,7 +105,7 @@ public class PatientEducationController {
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByCategory(
             @PathVariable EducationCategory category,
             Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.getResourcesByCategory(category, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -116,7 +116,7 @@ public class PatientEducationController {
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByType(
             @PathVariable EducationResourceType type,
             Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.getResourcesByType(type, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -127,7 +127,7 @@ public class PatientEducationController {
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByLanguage(
             @PathVariable String languageCode,
             Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.getResourcesByLanguage(languageCode, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -138,7 +138,7 @@ public class PatientEducationController {
     public ResponseEntity<List<EducationResourceResponseDTO>> getPopularResourcesByCategory(
             @PathVariable EducationCategory category,
             Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<EducationResourceResponseDTO> response = educationService.getPopularResourcesByCategory(category, hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -161,7 +161,7 @@ public class PatientEducationController {
             @RequestParam UUID patientId,
             @Valid @RequestBody PatientEducationProgressRequestDTO requestDTO,
             Authentication auth) {
-        UUID hospitalId = getRequiredHospitalId(auth);
+        UUID hospitalId = getRequiredHospitalId();
         PatientEducationProgressResponseDTO response = educationService.trackProgress(patientId, requestDTO, hospitalId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -238,7 +238,7 @@ public class PatientEducationController {
             @Valid @RequestBody VisitEducationDocumentationRequestDTO requestDTO,
             Authentication auth) {
         UUID providerId = getRequiredUserId(auth);
-        UUID hospitalId = getRequiredHospitalId(auth);
+        UUID hospitalId = getRequiredHospitalId();
         VisitEducationDocumentationResponseDTO response = educationService.documentVisitEducation(
             providerId, requestDTO, hospitalId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -302,7 +302,7 @@ public class PatientEducationController {
             @RequestParam UUID patientId,
             @Valid @RequestBody PatientEducationQuestionRequestDTO requestDTO,
             Authentication auth) {
-        UUID hospitalId = getRequiredHospitalId(auth);
+        UUID hospitalId = getRequiredHospitalId();
         PatientEducationQuestionResponseDTO response = educationService.submitQuestion(patientId, requestDTO, hospitalId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -351,7 +351,7 @@ public class PatientEducationController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get all unanswered questions")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getUnansweredQuestions(Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<PatientEducationQuestionResponseDTO> response = educationService.getUnansweredQuestions(hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -360,7 +360,7 @@ public class PatientEducationController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get urgent questions")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getUrgentQuestions(Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<PatientEducationQuestionResponseDTO> response = educationService.getUrgentQuestions(hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -369,7 +369,7 @@ public class PatientEducationController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get questions requiring in-person appointment")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getQuestionsRequiringAppointment(Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+        UUID hospitalId = resolveHospitalScope();
         List<PatientEducationQuestionResponseDTO> response = educationService.getQuestionsRequiringAppointment(hospitalId);
         return ResponseEntity.ok(response);
     }
@@ -377,20 +377,18 @@ public class PatientEducationController {
     // ==================== Helper Methods ====================
 
     /**
-     * Resolve the caller's hospital scope. Falls back from the JWT claims
-     * (OIDC path) to RoleValidator, which resolves the legacy-auth
-     * HospitalContext and returns null for a super-admin in global view
-     * (= all hospitals). Previously this threw 403 for super-admins, whose
-     * assignments are global and therefore carry no hospital claim.
+     * Resolve the caller's hospital scope from the request context (live
+     * permitted set + {@code X-Hospital-Id}); {@code null} only for a
+     * super-admin in global view (= all hospitals). The JWT-claim branch this
+     * used to try first never fired for the username/password login (E9 #55).
      */
-    private UUID resolveHospitalScope(Authentication auth) {
-        UUID hospitalId = authUtils.extractHospitalIdFromJwt(auth);
-        return hospitalId != null ? hospitalId : roleValidator.requireActiveHospitalId();
+    private UUID resolveHospitalScope() {
+        return roleValidator.requireActiveHospitalId();
     }
 
     /** Writes need a concrete hospital: super-admins must pin one via X-Hospital-Id. */
-    private UUID getRequiredHospitalId(Authentication auth) {
-        UUID hospitalId = resolveHospitalScope(auth);
+    private UUID getRequiredHospitalId() {
+        UUID hospitalId = resolveHospitalScope();
         if (hospitalId == null) {
             throw new AccessDeniedException(
                 "Select a hospital (X-Hospital-Id) before performing this action");

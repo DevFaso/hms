@@ -4,6 +4,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
@@ -58,8 +59,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Me", description = "Endpoints for the current authenticated user")
 public class MeController {
-
-    private static final String[] HOSPITAL_ID_CLAIMS = {"primaryHospitalId", "hospitalId"};
 
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
@@ -274,45 +273,15 @@ public class MeController {
 
     /* ---------- Resolution chain ---------- */
     private Optional<UUID> resolveHospitalId(Authentication auth) {
-        // 1) Try JWT hospitalId claim
-        Optional<UUID> fromClaim = extractHospitalIdFromJwt(auth);
-        if (fromClaim.isPresent())
-            return fromClaim;
-
-        // 2) Try last active assignment using userId
+        // 1) The request context: live permitted set + X-Hospital-Id (E9 #55).
+        //    A super-admin in global view carries no active hospital here on
+        //    purpose; only an explicit header scope pins them.
+        UUID active = HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
+        if (active != null) {
+            return Optional.of(active);
+        }
+        // 2) Most recent active assignment for the user
         return activeAssignmentHospital(auth);
-    }
-
-    private Optional<UUID> extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            for (String claimKey : HOSPITAL_ID_CLAIMS) {
-                UUID result = tryParseUuidClaim(jwt, claimKey);
-                if (result != null) {
-                    return Optional.of(result);
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
-        String direct = jwt.getClaimAsString(claimKey);
-        if (direct != null && !direct.isBlank()) {
-            try {
-                return UUID.fromString(direct);
-            } catch (IllegalArgumentException ignored) { /* try raw */ }
-        }
-        Object raw = jwt.getClaims().get(claimKey);
-        if (raw instanceof UUID uuid) {
-            return uuid;
-        }
-        if (raw instanceof String str && !str.isBlank()) {
-            try {
-                return UUID.fromString(str);
-            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
-        }
-        return null;
     }
 
     private Optional<UUID> activeAssignmentHospital(Authentication auth) {

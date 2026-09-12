@@ -64,7 +64,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -144,7 +143,7 @@ public class PatientController {
         if (assignedTo != null && assignedTo.equalsIgnoreCase("me")) {
             UUID nurseId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user identifier for nurse dashboard filtering."));
-            UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+            UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
             if (resolvedHospitalId == null) {
                 throw new BusinessException("Hospital context required when filtering by assigned nurse.");
             }
@@ -153,7 +152,7 @@ public class PatientController {
                 .getPatientsForNurse(nurseId, resolvedHospitalId, inhouseDate);
             return ResponseEntity.ok(patients);
         }
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, true);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, true);
         return ResponseEntity.ok(patientService.getAllPatients(resolvedHospitalId, locale));
     }
 
@@ -180,7 +179,7 @@ public class PatientController {
         Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, dto.getHospitalId(), true);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, dto.getHospitalId(), true);
         dto.setHospitalId(resolvedHospitalId); // enforce scoping
         PatientResponseDTO created = patientService.createPatientByStaff(dto, locale);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
@@ -209,7 +208,7 @@ public class PatientController {
         Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         return ResponseEntity.ok(patientService.getPatientById(id, resolvedHospitalId, locale));
     }
 
@@ -237,7 +236,7 @@ public class PatientController {
         Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, dto.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, dto.getHospitalId(), false);
         dto.setHospitalId(resolvedHospitalId);
         return ResponseEntity.ok(patientService.updatePatient(id, dto, locale));
     }
@@ -252,7 +251,7 @@ public class PatientController {
         Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, null, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));
     }
 
@@ -310,7 +309,7 @@ public class PatientController {
         Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
             .mrn(mrn)
             .name(name)
@@ -350,7 +349,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         Locale locale = parseLocale(lang);
         String effectiveMrn = (mrn != null && !mrn.isBlank()) ? mrn : legacyMri;
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         List<PatientResponseDTO> list =
             patientService.lookupPatients(identifier, email, phone, username, effectiveMrn, resolvedHospitalId, locale);
         return ResponseEntity.ok(list);
@@ -379,7 +378,7 @@ public class PatientController {
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, resolvedHospitalId));
     }
 
@@ -399,7 +398,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Doctor record requests require an explicit hospital context.");
         }
@@ -425,7 +424,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Doctor timeline requests require an explicit hospital context.");
         }
@@ -450,7 +449,7 @@ public class PatientController {
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view address history.");
         }
@@ -472,7 +471,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated clinician context."));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view allergy history.");
         }
@@ -496,7 +495,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {
             throw new BusinessException("Hospital context is required to add allergies.");
@@ -523,7 +522,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {
             throw new BusinessException("Hospital context is required to update allergies.");
@@ -551,7 +550,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to deactivate allergies.");
         }
@@ -576,7 +575,7 @@ public class PatientController {
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view diagnoses.");
         }
@@ -600,7 +599,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {
             throw new BusinessException("Hospital context is required to add diagnoses.");
@@ -627,7 +626,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {
             throw new BusinessException("Hospital context is required to update diagnoses.");
@@ -655,7 +654,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to remove diagnoses.");
         }
@@ -679,7 +678,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user context."));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view chart updates.");
         }
@@ -705,7 +704,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user context."));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view chart updates.");
         }
@@ -730,7 +729,7 @@ public class PatientController {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated clinician context."));
-        UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null && request.getHospitalId() == null) {
             throw new BusinessException("Hospital context is required to create chart updates.");
         }
@@ -807,74 +806,6 @@ public class PatientController {
         }
     }
 
-    /**
-     * Resolve hospital scoping for the current request.
-     * Rules:
-     * - RECEPTIONIST: prefer hospitalId from JWT; else use provided hospitalId; else error if required.
-     * - HOSPITAL_ADMIN / SUPER_ADMIN: use provided hospitalId if any; else JWT; else null (global).
-     * - Others (DOCTOR/NURSE): use provided hospitalId if any; else JWT; else null.
-     */
-    private UUID resolveHospitalScope(Authentication auth, UUID requestedHospitalId, boolean requiredForReceptionist) {
-        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
-
-        if (authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            // SUPER_ADMIN: only scope when explicitly requested.
-            // When no hospitalId is provided, return null = global/all.
-            return requestedHospitalId;
-        }
-
-        if (authUtils.hasAuthority(auth, ROLE_RECEPTIONIST)) {
-            return resolveReceptionistScope(auth, requestedHospitalId, jwtHospitalId, requiredForReceptionist);
-        }
-
-        if (authUtils.hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
-            .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
-            .orElse(null);
-    }
-
-    private UUID resolveReceptionistScope(Authentication auth, UUID requestedHospitalId, UUID jwtHospitalId, boolean requiredForReceptionist) {
-        UUID enforcedFromJwt = jwtHospitalId;
-        if (enforcedFromJwt != null) {
-            if (requestedHospitalId != null && !requestedHospitalId.equals(enforcedFromJwt)
-                && isReceptionistAssignedToHospital(auth, requestedHospitalId)) {
-                return requestedHospitalId;
-            }
-            return enforcedFromJwt;
-        }
-
-        if (requestedHospitalId != null) {
-            if (isReceptionistAssignedToHospital(auth, requestedHospitalId)) {
-                return requestedHospitalId;
-            }
-            throw new BusinessException("Receptionist is not assigned to the requested hospital.");
-        }
-
-        Optional<UUID> assignmentHospital = receptionistAssignmentHospital(auth);
-        if (assignmentHospital.isPresent()) {
-            return assignmentHospital.get();
-        }
-
-        if (requiredForReceptionist) {
-            throw new BusinessException("Receptionist must be affiliated with a hospital (provide hospitalId in token or request).");
-        }
-        return null;
-    }
-
-    private Optional<UUID> receptionistAssignmentHospital(Authentication auth) {
-        return authUtils.resolveUserId(auth)
-            .flatMap(userId -> assignmentRepository
-                .findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, ROLE_RECEPTIONIST))
-            .map(UserRoleHospitalAssignment::getHospital)
-            .filter(Objects::nonNull)
-            .map(Hospital::getId);
-    }
-
     private UserRoleHospitalAssignment resolveDoctorAssignment(UUID userId, UUID hospitalId) {
         return assignmentRepository
             .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, "ROLE_DOCTOR")
@@ -895,13 +826,4 @@ public class PatientController {
         throw new BusinessException("No active clinician assignment found for requested hospital context.");
     }
 
-    private boolean isReceptionistAssignedToHospital(Authentication auth, UUID hospitalId) {
-        if (hospitalId == null) {
-            return false;
-        }
-        return authUtils.resolveUserId(auth)
-            .map(userId -> assignmentRepository
-                .existsByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, ROLE_RECEPTIONIST))
-            .orElse(false);
-    }
 }
