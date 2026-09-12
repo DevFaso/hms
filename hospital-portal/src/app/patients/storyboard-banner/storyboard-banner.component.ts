@@ -9,6 +9,7 @@ import {
   computed,
   inject,
   input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -22,6 +23,7 @@ import {
   StoryboardService,
 } from '../../services/storyboard.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -41,7 +43,7 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
 @Component({
   selector: 'app-storyboard-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './storyboard-banner.component.html',
   styleUrl: './storyboard-banner.component.scss',
@@ -49,6 +51,15 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
 export class StoryboardBannerComponent implements OnChanges, AfterViewInit, OnDestroy {
   readonly patientId = input<string | null | undefined>(null);
   readonly hospitalId = input<string | null | undefined>(null);
+  /**
+   * E9 #64 — bumped by the host when a break-the-glass session is declared
+   * or ends. Any change re-reads the storyboard: what it withholds depends
+   * on the session.
+   */
+  readonly refreshToken = input<number>(0);
+
+  /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
+  readonly openRestricted = output<void>();
 
   /**
    * True once the banner is pinned rather than sitting in its place at the
@@ -174,6 +185,7 @@ export class StoryboardBannerComponent implements OnChanges, AfterViewInit, OnDe
             !s ||
             ((s.allergies?.length ?? 0) === 0 &&
               (s.problems?.length ?? 0) === 0 &&
+              (s.restrictedRows?.length ?? 0) === 0 &&
               !s.activeEncounter &&
               !(s.codeStatus?.status || (s.codeStatus?.directives?.length ?? 0) > 0));
           this.state.set(empty ? 'empty' : 'ready');

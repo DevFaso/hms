@@ -813,7 +813,8 @@
     "REASON_LABEL": "Justificación clínica",
     "REASON_PLACEHOLDER": "Ej.: Paciente inconsciente, sin familia localizable; necesito alergias/medicación.",
     "TTL_LABEL": "Duración",
-    "CONFIRM": "Activar acceso"
+    "CONFIRM": "Activar acceso",
+    "NOT_ALLOWED": "Su rol no permite declarar un acceso de emergencia."
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
@@ -8730,5 +8731,12 @@
     "ACTION_FAILED": "No se pudo completar la acción.",
     "COUNTS_UNAVAILABLE": "Recuentos no disponibles — se muestran los últimos valores conocidos.",
     "SHOWING_FIRST": "Mostrando las primeras {{shown}} inscripciones de {{total}}."
+  },
+  "RECORD_ACCESS": {
+    "RESTRICTED_ARIA": "Historiales restringidos",
+    "RESTRICTED_ROW": "Historial restringido ({{hospital}}, {{count}})",
+    "RESTRICTED_ROW_DEPT": "Historial restringido ({{hospital}}, {{department}}, {{count}})",
+    "OPEN_WITH_REASON": "Abrir con motivo",
+    "RESTRICTED_HINT": "Los registros de otro hospital en una categoría sensible permanecen cerrados hasta que declare un acceso de emergencia con motivo. Cada lectura queda auditada."
   }
 }

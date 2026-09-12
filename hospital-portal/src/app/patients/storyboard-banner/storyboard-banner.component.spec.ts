@@ -81,6 +81,35 @@ describe('StoryboardBannerComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="storyboard-error"]')).not.toBeNull();
   });
 
+  it('E9 #64 — a chart with only restricted rows is not empty, and the open action reaches the host', () => {
+    const summary = emptySummary();
+    summary.restrictedRows = [
+      { hospitalId: 'h-2', hospitalName: 'CHU Yalgado', departmentName: 'Psychiatrie', count: 2 },
+    ];
+    storyboardSpy.getStoryboard.and.returnValue(of(summary));
+    const emitted = jasmine.createSpy('openRestricted');
+    fixture.componentInstance.openRestricted.subscribe(emitted);
+
+    setPatient('p-restricted');
+
+    expect(bannerEl()?.dataset['state']).toBe('ready');
+    const block = fixture.nativeElement.querySelector('[data-testid="restricted-rows"]');
+    expect(block).not.toBeNull();
+    (block.querySelector('[data-testid="restricted-open"]') as HTMLButtonElement).click();
+    expect(emitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('E9 #64 — re-reads the storyboard when the access epoch changes', () => {
+    storyboardSpy.getStoryboard.and.returnValue(of(emptySummary()));
+    setPatient('p-1');
+    expect(storyboardSpy.getStoryboard).toHaveBeenCalledTimes(1);
+
+    fixture.componentRef.setInput('refreshToken', 1);
+    fixture.detectChanges();
+
+    expect(storyboardSpy.getStoryboard).toHaveBeenCalledTimes(2);
+  });
+
   it('cancels the previous request when patientId changes mid-flight (clinical-safety)', () => {
     const firstStream = new Subject<PatientStoryboard>();
     storyboardSpy.getStoryboard.and.returnValue(firstStream.asObservable());

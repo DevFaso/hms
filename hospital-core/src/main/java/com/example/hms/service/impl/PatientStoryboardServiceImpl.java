@@ -2,7 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
-import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.WithheldRows;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.enums.AdvanceDirectiveStatus;
 import com.example.hms.enums.AllergySeverity;
@@ -88,7 +88,9 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         Set<UUID> readable = hospitalId == null ? null : recordAccessPolicy.readableHospitalIds(
             HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         List<AllergySummaryDTO> allergies = loadAllergies(patientId);
-        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable);
+        // E9 #64 — what D3 withholds is counted, so the banner can say so.
+        WithheldRows withheld = new WithheldRows();
+        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, withheld);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
         CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
         // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
@@ -122,6 +124,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .codeStatus(codeStatus)
             .hasHighSeverityAllergy(highSeverityAllergy)
             .hasChronicProblem(chronicProblem)
+            .restrictedRows(withheld.summaries())
             .hospitalId(hospitalId)
             .hospitalName(resolveHospitalName(hospitalId))
             .generatedAt(LocalDateTime.now())
@@ -175,14 +178,16 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     /**
      * E9 #59 — problems follow the patient across the readable hospitals,
      * with the recording hospital on the chip. A foreign problem carrying a
-     * sensitivity category is withheld (D3); it opens via break-the-glass.
+     * sensitivity category is withheld (D3) and counted (#64); it opens via
+     * break-the-glass.
      */
-    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable) {
+    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                 WithheldRows withheld) {
         List<PatientProblem> source = readable != null
             ? problemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable)
             : problemRepository.findByPatient_Id(patientId);
         return source.stream()
-            .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId,
+            .filter(p -> withheld.admit(p.getHospital(), null, hospitalId,
                 sensitivityClassifier.effectiveCategory(p)))
             .filter(p -> p.getStatus() == null
                 || p.getStatus() == ProblemStatus.ACTIVE

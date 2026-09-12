@@ -813,7 +813,8 @@
     "REASON_LABEL": "Clinical justification",
     "REASON_PLACEHOLDER": "e.g. Patient unconscious, no proxy reachable; need allergy/med history.",
     "TTL_LABEL": "Duration",
-    "CONFIRM": "Declare access"
+    "CONFIRM": "Declare access",
+    "NOT_ALLOWED": "Your role cannot declare emergency access."
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
@@ -8730,5 +8731,12 @@
     "ACTION_FAILED": "The action could not be completed.",
     "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
     "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
+  },
+  "RECORD_ACCESS": {
+    "RESTRICTED_ARIA": "Restricted records",
+    "RESTRICTED_ROW": "Restricted record ({{hospital}}, {{count}})",
+    "RESTRICTED_ROW_DEPT": "Restricted record ({{hospital}}, {{department}}, {{count}})",
+    "OPEN_WITH_REASON": "Open with a reason",
+    "RESTRICTED_HINT": "Records from another hospital in a sensitive category stay closed until you declare emergency access with a reason. Every read is audited."
   }
 }

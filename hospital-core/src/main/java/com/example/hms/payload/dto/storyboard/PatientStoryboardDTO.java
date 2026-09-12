@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.storyboard;
 
+import com.example.hms.payload.dto.RestrictedRowsDTO;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -34,6 +35,12 @@ public class PatientStoryboardDTO {
     private List<ProblemSummaryDTO> problems;
     private ActiveEncounterDTO activeEncounter;
     private CodeStatusDTO codeStatus;
+    /**
+     * E9 #64 — problems this read withheld under decision D3, per recording
+     * hospital; the banner renders them as restricted and offers
+     * break-the-glass. Empty in-hospital.
+     */
+    private List<RestrictedRowsDTO> restrictedRows;
 
     /** Convenience flags so the UI can render badges without re-deriving them. */
     private boolean hasHighSeverityAllergy;

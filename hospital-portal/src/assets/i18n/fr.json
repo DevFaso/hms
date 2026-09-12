@@ -813,7 +813,8 @@
     "REASON_LABEL": "Justification clinique",
     "REASON_PLACEHOLDER": "Ex. : Patient inconscient, aucun proche joignable ; besoin des allergies/médicaments.",
     "TTL_LABEL": "Durée",
-    "CONFIRM": "Activer l'accès"
+    "CONFIRM": "Activer l'accès",
+    "NOT_ALLOWED": "Votre rôle ne permet pas de déclarer un accès d’urgence."
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
@@ -8730,5 +8731,12 @@
     "ACTION_FAILED": "L'action n'a pas pu être effectuée.",
     "COUNTS_UNAVAILABLE": "Comptes indisponibles — dernières valeurs connues affichées.",
     "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}."
+  },
+  "RECORD_ACCESS": {
+    "RESTRICTED_ARIA": "Dossiers restreints",
+    "RESTRICTED_ROW": "Dossier restreint ({{hospital}}, {{count}})",
+    "RESTRICTED_ROW_DEPT": "Dossier restreint ({{hospital}}, {{department}}, {{count}})",
+    "OPEN_WITH_REASON": "Ouvrir avec motif",
+    "RESTRICTED_HINT": "Les dossiers d’un autre hôpital relevant d’une catégorie sensible restent fermés tant que vous n’avez pas déclaré un accès d’urgence avec motif. Chaque lecture est journalisée."
   }
 }

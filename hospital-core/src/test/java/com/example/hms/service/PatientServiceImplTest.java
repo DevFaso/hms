@@ -48,6 +48,7 @@ import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
 import com.example.hms.payload.dto.PatientTimelineAccessRequestDTO;
+import com.example.hms.payload.dto.PatientTimelineEntryDTO;
 import com.example.hms.payload.dto.PatientTimelineResponseDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO;
@@ -797,6 +798,101 @@ class PatientServiceImplTest {
         assertThat(response.getHospitalId()).isEqualTo(hospitalId);
         assertThat(response.isContainsSensitiveData()).isTrue();
         verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void getDoctorTimelineReportsTheRowsItWithheld() {
+        // E9 #64 — a foreign encounter in a sensitive department is withheld
+        // (D3) AND counted, so the chart can render "Dossier restreint
+        // (hôpital, département, n)" instead of a gap; an untagged foreign
+        // encounter travels and is not counted.
+        UUID doctorId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("CHU Yalgado");
+        com.example.hms.model.Department psychiatry = new com.example.hms.model.Department();
+        psychiatry.setName("Psychiatrie");
+
+        Encounter withheld = Encounter.builder()
+            .patient(patient)
+            .hospital(other)
+            .department(psychiatry)
+            .encounterDate(LocalDateTime.now().minusDays(2))
+            .encounterType(EncounterType.CONSULTATION)
+            .build();
+        withheld.setId(UUID.randomUUID());
+        Encounter travelling = Encounter.builder()
+            .patient(patient)
+            .hospital(other)
+            .encounterDate(LocalDateTime.now().minusDays(1))
+            .encounterType(EncounterType.CONSULTATION)
+            .build();
+        travelling.setId(UUID.randomUUID());
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(doctorId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(withheld, travelling));
+        when(sensitivityClassifier.effectiveCategory(withheld))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
+            patientId, hospitalId, doctorId, assignment,
+            PatientTimelineAccessRequestDTO.builder().accessReason("Suivi clinique").includeSensitiveData(true).build());
+
+        assertThat(response.getEntries())
+            .extracting(PatientTimelineEntryDTO::getEntryId)
+            .containsExactly(travelling.getId().toString());
+        assertThat(response.getRestrictedRows()).singleElement().satisfies(r -> {
+            assertThat(r.getHospitalId()).isEqualTo(other.getId());
+            assertThat(r.getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(r.getDepartmentName()).isEqualTo("Psychiatrie");
+            assertThat(r.getCount()).isEqualTo(1L);
+        });
+    }
+
+    @Test
+    void getDoctorTimelineNamesNothingRestrictedUnderALiveSession() {
+        // E9 #64 — under break-the-glass the row surfaces, so there is
+        // nothing to call restricted.
+        UUID doctorId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("CHU Yalgado");
+        Encounter sensitive = Encounter.builder()
+            .patient(patient)
+            .hospital(other)
+            .encounterDate(LocalDateTime.now().minusDays(2))
+            .encounterType(EncounterType.CONSULTATION)
+            .build();
+        sensitive.setId(UUID.randomUUID());
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(doctorId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+        when(breakGlassGate.isUnlocked(doctorId, patientId, hospitalId)).thenReturn(true);
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(sensitive));
+        when(sensitivityClassifier.effectiveCategory(sensitive))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
+            patientId, hospitalId, doctorId, assignment,
+            PatientTimelineAccessRequestDTO.builder().accessReason("Urgence").includeSensitiveData(true).build());
+
+        assertThat(response.getEntries()).extracting(PatientTimelineEntryDTO::getEntryId)
+            .containsExactly(sensitive.getId().toString());
+        assertThat(response.getRestrictedRows()).isEmpty();
     }
 
     @Test

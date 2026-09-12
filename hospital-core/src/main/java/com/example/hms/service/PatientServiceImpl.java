@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.WithheldRows;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.AllergyVerificationStatus;
@@ -22,6 +23,7 @@ import com.example.hms.mapper.PatientSurgicalHistoryMapper;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.AdvanceDirective;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
@@ -852,11 +854,14 @@ public class PatientServiceImpl implements PatientService {
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // rows the D3 rule withholds; the ledger rows name the session.
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        // E9 #64 — what D3 withholds is counted per hospital and department,
+        // so the chart can say "Dossier restreint" and offer the declaration.
+        WithheldRows withheld = new WithheldRows();
 
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
-        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
-        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
+        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
         // Not widened: allergies attach to patient + hospital with no encounter
         // link, so #51's category cannot be resolved for them. A row whose
         // category nobody can determine must not travel. Tracked as standing
@@ -894,6 +899,7 @@ public class PatientServiceImpl implements PatientService {
             .sensitiveCategories(sensitiveCategories)
             .containsSensitiveData(!sensitiveCategories.isEmpty())
             .totalEntries(entries.size())
+            .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
             .build();
 
@@ -1776,6 +1782,11 @@ public class PatientServiceImpl implements PatientService {
      * sees in their own chart, which the existing includeSensitive toggle
      * already governs.
      */
+    /** The department a prescription or lab order belongs to: its encounter's, when it has one. */
+    private static Department departmentOf(Encounter encounter) {
+        return encounter != null ? encounter.getDepartment() : null;
+    }
+
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
                                       com.example.hms.enums.SensitivityCategory category, boolean unlocked) {
         return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category, unlocked);
@@ -1837,13 +1848,13 @@ public class PatientServiceImpl implements PatientService {
 
     private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, Set<UUID> readableHospitalIds,
                                                                   UUID actingHospitalId, Set<String> categoryFilters,
-                                                                  boolean unlocked) {
+                                                                  boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ENCOUNTER)) {
             return List.of();
         }
         return encounterRepository.findByPatient_Id(patientId).stream()
             .filter(encounter -> isReadableHospital(readableHospitalIds, encounter.getHospital()))
-            .filter(encounter -> maySurface(encounter.getHospital(), actingHospitalId,
+            .filter(encounter -> withheld.admit(encounter.getHospital(), encounter.getDepartment(), actingHospitalId,
                 sensitivityClassifier.effectiveCategory(encounter), unlocked))
             .map(encounter -> {
                 Map<String, Object> metadata = new HashMap<>();
@@ -1865,15 +1876,15 @@ public class PatientServiceImpl implements PatientService {
 
     private List<PatientTimelineEntryDTO> collectPrescriptionEntries(UUID patientId, Set<UUID> readableHospitalIds,
                                                                      UUID actingHospitalId, Set<String> categoryFilters,
-                                                                     boolean unlocked) {
+                                                                     boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PRESCRIPTION)) {
             return List.of();
         }
         return prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
             // A prescription carries no tag of its own; its category comes
             // from the encounter that wrote it (E8 #51).
-            .filter(prescription -> maySurface(prescription.getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(prescription.getEncounter()), unlocked))
+            .filter(prescription -> withheld.admit(prescription.getHospital(), departmentOf(prescription.getEncounter()),
+                actingHospitalId, sensitivityClassifier.effectiveCategory(prescription.getEncounter()), unlocked))
             .map(prescription -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, prescription.getStatus() != null ? prescription.getStatus().name() : null);
@@ -1897,7 +1908,7 @@ public class PatientServiceImpl implements PatientService {
 
     private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
                                                                    UUID actingHospitalId, Set<String> categoryFilters,
-                                                                   boolean unlocked) {
+                                                                   boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
@@ -1905,7 +1916,8 @@ public class PatientServiceImpl implements PatientService {
             .filter(result -> result.getLabOrder() != null
                 && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
             // Same as prescriptions: the category rides on the lab order's encounter.
-            .filter(result -> maySurface(result.getLabOrder().getHospital(), actingHospitalId,
+            .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
+                departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
                 sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()), unlocked))
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
@@ -2066,7 +2078,8 @@ public class PatientServiceImpl implements PatientService {
             Set.of(hospitalId),
             hospitalId,
             Collections.emptySet(),
-            false
+            false,
+            new WithheldRows()
         );
         return encounterEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())

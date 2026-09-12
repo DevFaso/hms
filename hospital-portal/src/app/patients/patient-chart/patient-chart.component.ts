@@ -1,4 +1,13 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnChanges,
+  OnInit,
+  SimpleChanges,
+  inject,
+  output,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -23,18 +32,28 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline';
 
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
   styleUrl: './patient-chart.component.scss',
 })
-export class PatientChartComponent implements OnInit {
+export class PatientChartComponent implements OnInit, OnChanges {
   @Input({ required: true }) patientId = '';
+  /**
+   * E9 #64 — bumped by the host when a break-the-glass session is declared
+   * or ends. A loaded timeline re-reads with its stated reason; the other
+   * sections re-read on their next visit.
+   */
+  @Input() refreshToken = 0;
+
+  /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
+  readonly openRestricted = output<void>();
 
   private readonly patientService = inject(PatientService);
   private readonly auth = inject(AuthService);
@@ -135,6 +154,12 @@ export class PatientChartComponent implements OnInit {
       this.section.set(this.canViewProblems ? 'problems' : 'updates');
     }
     this.loadCurrentSection();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    const token = changes['refreshToken'];
+    if (!token || token.firstChange) return;
+    this.refreshAfterAccessChange();
   }
 
   private hospitalId(): string {
@@ -487,8 +512,12 @@ export class PatientChartComponent implements OnInit {
       return;
     }
     this.showTimelineReason.set(false);
+    this.loadTimeline(this.timelineReason.trim());
+  }
+
+  private loadTimeline(reason: string): void {
     this.timelineLoading.set(true);
-    this.patientService.getDoctorTimeline(this.patientId, this.timelineReason.trim()).subscribe({
+    this.patientService.getDoctorTimeline(this.patientId, reason).subscribe({
       next: (timeline) => {
         this.timeline.set(timeline);
         this.timelineLoading.set(false);
@@ -498,6 +527,21 @@ export class PatientChartComponent implements OnInit {
         this.timelineLoading.set(false);
       },
     });
+  }
+
+  /**
+   * E9 #64 — a break-the-glass session was declared or ended, so what this
+   * chart may show has changed. The timeline already holds a stated reason
+   * and re-reads with it; the cached sections are dropped so each re-reads
+   * when next shown, and the one on screen re-reads now.
+   */
+  private refreshAfterAccessChange(): void {
+    const reason = this.timelineReason.trim();
+    if (this.timeline() && reason) this.loadTimeline(reason);
+    this.allergies.set([]);
+    this.problems.set([]);
+    this.updates.set([]);
+    if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 
   timelineIcon(category: string): string {

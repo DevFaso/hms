@@ -1,0 +1,62 @@
+.restricted {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--warning, #c47d00);
+  border-radius: 8px;
+  background: var(--warning-soft, #fff7e6);
+  color: var(--warning-strong, #6c4500);
+  font-size: 0.8125rem;
+}
+
+.restricted__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.restricted__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+}
+
+.restricted__icon {
+  font-size: 1rem;
+}
+
+.restricted__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.restricted__btn {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--warning, #c47d00);
+  background: var(--surface-1, #ffffff);
+  color: var(--warning-strong, #6c4500);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--warning-soft, #fff7e6);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary, #0e7c6b);
+    outline-offset: 2px;
+  }
+}
+
+.restricted__hint {
+  color: var(--text-muted, #495057);
+  font-weight: 400;
+}
