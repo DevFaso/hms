@@ -346,13 +346,7 @@ export const routes: Routes = [
         path: 'registries',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_DOCTOR',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
       },
@@ -536,7 +530,6 @@ export const routes: Routes = [
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
@@ -555,7 +548,6 @@ export const routes: Routes = [
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_LAB_DIRECTOR',
@@ -583,7 +575,6 @@ export const routes: Routes = [
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -606,7 +597,6 @@ export const routes: Routes = [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
             'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_PHARMACIST',
             'ROLE_SUPER_ADMIN',
           ],
@@ -992,7 +982,6 @@ export const routes: Routes = [
             // the guard rejected it, so the role that exists to do this job
             // could not reach the page it is done on.
             'ROLE_PHARMACY_VERIFIER',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -1077,7 +1066,6 @@ export const routes: Routes = [
             // order creation and listing — the guard was the outlier.
             'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -1110,7 +1098,6 @@ export const routes: Routes = [
             // Role audit decision C4: writing treatment plans is the
             // physiotherapist's core duty — admitted end-to-end.
             'ROLE_PHYSIOTHERAPIST',
-            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -1327,7 +1314,7 @@ export const routes: Routes = [
         path: 'pharmacy/mtm',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./pharmacy/mtm-review').then((m) => m.MtmReviewComponent),
       },
@@ -1566,12 +1553,11 @@ export const routes: Routes = [
       },
 
       // Procedure orders (order → consent → schedule → complete/cancel).
-      // HOSPITAL_ADMIN is read-only (backend allows lists but not writes).
       {
         path: 'procedure-orders',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./procedure-orders/procedure-orders').then((m) => m.ProcedureOrdersComponent),

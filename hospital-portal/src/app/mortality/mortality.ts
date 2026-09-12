@@ -53,7 +53,6 @@ export class MortalityComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_SURGEON',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 

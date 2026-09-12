@@ -50,7 +50,7 @@ public class PrescriptionController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER')")
     @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse, nurse practitioner, or hospital admin).")
     public ResponseEntity<PrescriptionResponseDTO> create(
         @Valid @RequestBody PrescriptionRequestDTO request,
@@ -112,7 +112,7 @@ public class PrescriptionController {
      * learn about the rule.
      */
     @PostMapping("/{id}/pharmacist-verify")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Verify a prescription as a pharmacist",
         description = "Records the pharmacist check that a controlled or co-sign-required "
             + "prescription needs before a nurse may administer it. Server identity and server "
@@ -129,7 +129,7 @@ public class PrescriptionController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_PATIENT')")
     @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID.")
     public ResponseEntity<PrescriptionResponseDTO> getById(
         @PathVariable UUID id,
@@ -138,7 +138,7 @@ public class PrescriptionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search/List Prescriptions", description = "List prescriptions with optional filters + pagination. SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<Page<PrescriptionResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
@@ -152,7 +152,7 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,
@@ -176,7 +176,7 @@ public class PrescriptionController {
     }
 
     @PostMapping("/{id}/dispatch-sms")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_PHARMACIST')")
     @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
         description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
             + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "

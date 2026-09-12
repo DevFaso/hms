@@ -67,7 +67,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "List procedure orders for hospital",
                description = "Filter by status: ORDERED, SCHEDULED, PRE_OP_CLEARANCE_PENDING, READY_FOR_PROCEDURE, IN_PROGRESS, COMPLETED, CANCELLED")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getProcedureOrdersForHospital(
@@ -79,7 +79,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}/scheduled")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Get procedures scheduled within date range",
                description = "Retrieve procedure schedule for OR planning and resource allocation")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getScheduledProcedures(
@@ -92,7 +92,7 @@ public class ProcedureOrderController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending-consent")
-    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAuthority('VIEW_PROCEDURE_ORDERS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Get procedures awaiting consent",
                description = "List scheduled procedures without completed consent forms")
     public ResponseEntity<List<ProcedureOrderResponseDTO>> getPendingConsentOrders(@PathVariable UUID hospitalId) {

@@ -38,7 +38,7 @@ import java.util.UUID;
 public class AdvanceDirectiveController {
 
     private static final String CLINICAL_ROLES =
-        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')";
 
     private final AdvanceDirectiveService advanceDirectiveService;
 

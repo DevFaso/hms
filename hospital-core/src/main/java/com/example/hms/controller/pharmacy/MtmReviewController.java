@@ -39,14 +39,14 @@ public class MtmReviewController {
     private final MtmReviewService mtmReviewService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Start a new MTM review")
     public ResponseEntity<MtmReviewResponseDTO> start(@Valid @RequestBody MtmReviewRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(mtmReviewService.startReview(dto));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update an in-progress MTM review (intervention, status, follow-up)")
     public ResponseEntity<MtmReviewResponseDTO> update(
             @PathVariable UUID id,
@@ -56,14 +56,14 @@ public class MtmReviewController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE',"
-            + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+            + "'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get an MTM review by ID")
     public ResponseEntity<MtmReviewResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(mtmReviewService.getReview(id));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List MTM reviews for the active hospital")
     public ResponseEntity<Page<MtmReviewResponseDTO>> listByHospital(
             @RequestParam UUID hospitalId,
@@ -73,7 +73,7 @@ public class MtmReviewController {
 
     @GetMapping("/by-patient/{patientId}")
     @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE',"
-            + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+            + "'ROLE_SUPER_ADMIN')")
     @Operation(summary = "List MTM reviews for a specific patient")
     public ResponseEntity<Page<MtmReviewResponseDTO>> listByPatient(
             @PathVariable UUID patientId,

@@ -51,7 +51,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can create.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -69,7 +69,7 @@ public class LabOrderController {
      * Doctors, Nurses, Lab staff, Staff, and Admins can view.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'SUPER_ADMIN')")
     @Operation(summary = "Get Lab Order by ID", description = "Fetches a lab order by its ID")
     @ApiResponse(responseCode = "200", description = "Lab order retrieved successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")
@@ -86,7 +86,7 @@ public class LabOrderController {
      * Doctors, Nurses, Lab staff, Staff, and Admins can view.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'SUPER_ADMIN')")
     @Operation(summary = "List Lab Orders", description = "Retrieves paginated list of lab orders")
     @ApiResponse(responseCode = "200", description = "Lab orders retrieved successfully")
     public ResponseEntity<ApiResponseWrapper<Page<LabOrderResponseDTO>>> getAllLabOrders(
@@ -105,7 +105,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can update.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Update Lab Order", description = "Updates a lab order by ID, including diagnosis, order-channel, and standing-order attestations")
     @ApiResponse(responseCode = "200", description = "Lab order updated successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")
@@ -141,7 +141,7 @@ public class LabOrderController {
      * Allowed roles vary by target status (see LabOrderServiceImpl for rules).
      */
     @PostMapping("/{id}/transition")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
     @Operation(summary = "Transition Lab Order Status",
                description = "Advances a lab order through its lifecycle: ORDERED → PENDING → COLLECTED → RECEIVED → IN_PROGRESS → RESULTED → VERIFIED → COMPLETED. Role-based guards are enforced per transition.")
     @ApiResponse(responseCode = "200", description = "Lab order transitioned successfully")

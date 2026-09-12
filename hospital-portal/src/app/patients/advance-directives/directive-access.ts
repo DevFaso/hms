@@ -10,6 +10,5 @@ export const DIRECTIVE_ROLES: string[] = [
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_SUPER_ADMIN',
 ];

@@ -640,7 +640,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_STAFF,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 // Workflow sub-resources FIRST (first-match-wins): the state
                 // machine requires lab staff for every step past PENDING
@@ -657,19 +657,19 @@ public class SecurityConfig {
                         API_LAB_ORDERS + "/*/specimens")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
-                // Only providers (doctors, nurses, admins) can place orders.
+                // Only providers (doctors, nurses, midwives) can place orders (E9 #67: no admins).
                 // Exact path only — a /** pattern here is what swallowed the
                 // workflow sub-resources above; future sub-resources ride
                 // anyRequest().authenticated() + their own @PreAuthorize.
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
-                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 // Technicians can enter preliminary results; scientists/managers verify/release
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)
@@ -684,21 +684,21 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS + "/*/acknowledge")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR,
                         ROLE_QUALITY_MANAGER, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 // ---- Specimen endpoints (POST /lab-orders/{id}/specimens has its own matcher above) ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 // ---- QC Events ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_QC_EVENTS, API_LAB_QC_EVENTS_PATTERN)

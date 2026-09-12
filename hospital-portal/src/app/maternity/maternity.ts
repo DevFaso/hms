@@ -105,10 +105,7 @@ export class MaternityComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canMessage = this.canCreateReferral;
-  readonly canListHospitalReferrals = this.roleContext.hasAnyActiveRole([
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canListHospitalReferrals = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
   readonly canListAssigned = this.canDecideReferral;
 
   /* ── Tab visibility (effective backend role lists per domain) ── */
@@ -116,20 +113,17 @@ export class MaternityComponent implements OnInit {
     'ROLE_MIDWIFE',
     'ROLE_DOCTOR',
     'ROLE_NURSE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canSeeUltrasound = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canSeeBirthPlans = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canSeePrenatal = this.roleContext.hasAnyActiveRole([
