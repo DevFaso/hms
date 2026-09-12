@@ -43,6 +43,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
 
 class PatientStoryboardServiceImplTest {
 
@@ -56,6 +61,8 @@ class PatientStoryboardServiceImplTest {
         mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
     private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier =
         mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
+    private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder =
+        mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
 
     private PatientStoryboardServiceImpl service;
 
@@ -69,7 +76,7 @@ class PatientStoryboardServiceImplTest {
     void setUp() {
         service = new PatientStoryboardServiceImpl(
             patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo,
-            recordAccessPolicy, sensitivityClassifier);
+            recordAccessPolicy, sensitivityClassifier, reachRecorder);
         // E9 #59 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -361,4 +368,31 @@ class PatientStoryboardServiceImplTest {
             .satisfies(d -> assertThat(d.getHospitalName()).isEqualTo("CHU Yalgado"));
     }
 
+
+    @Test
+    void accountsTheReachOfForeignRowsOnceForTheWholeBanner() {
+        // E9 #60 — #56 and #59a left the storyboard's ledger row out because
+        // the call carries no requester; the context has one. One RECORD_SHARE
+        // per source hospital covering allergies, problems and directives.
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, other.getId()));
+        PatientAllergy awayAllergy = allergy("Penicillin", AllergySeverity.SEVERE, true);
+        awayAllergy.setHospital(other);
+        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(awayAllergy));
+        PatientProblem away = problem("Asthme", ProblemStatus.ACTIVE, false);
+        away.setHospital(other);
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of(away));
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
+            .thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+
+        service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(other.getId().toString(), 2L)), anyString());
+    }
 }

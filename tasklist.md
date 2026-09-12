@@ -2003,6 +2003,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `fhir-record` export (`PatientEverythingService.resolveHospitalScopeOrForbid`
   fails closed on the stale context today), storyboard, chart review, timeline
   (already), snapshot. Every one writes the disclosure row.
+  **(a) in-app surfaces shipped 2026-09-12**: storyboard (now writes the
+  RECORD_SHARE row #56/#59a left out — one per source hospital across
+  allergies, problems, directives), chart review (every section on the
+  readable set, D3 on encounters, one ledger row per review), snapshot (every
+  section on the readable set when an acting hospital is given; allergies
+  stay patient-wide per #56; one ledger row per snapshot). Deliberately still
+  local: the storyboard's active-encounter lookup (the acting hospital's
+  tracker question) and the legacy `patient_diagnoses` read (V14-era,
+  read-only). **(b) FHIR `$everything` / `fhir-record` export — OPEN**: the
+  bundle reads `ctx.hospitalId()` alone and `resolveHospitalScopeOrForbid`
+  fails closed with no context; `$export` (bulk) is a hospital's own data and
+  stays local by design.
 - [ ] 61. **Provenance on the row (portal).** `TimelineEntry.metadata` is not
   declared in `patient.service.ts`, so #582's provenance reaches the wire and
   is discarded — the blocking defect from the E8 record. Type it, render
