@@ -7,13 +7,6 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { VitalSignService, VitalSignResponse } from '../services/vital-sign.service';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
-import {
-  RecordSharingService,
-  RecordShareResult,
-  ShareScope,
-  ConsentGrantRequest,
-} from '../services/record-sharing.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -56,8 +49,7 @@ type TabKey =
   | 'encounters'
   | 'appointments'
   | 'directives'
-  | 'documents'
-  | 'sharing';
+  | 'documents';
 
 @Component({
   selector: 'app-patient-detail',
@@ -93,8 +85,6 @@ export class PatientDetailComponent implements OnInit {
   private readonly vitalService = inject(VitalSignService);
   private readonly encounterService = inject(EncounterService);
   private readonly appointmentService = inject(AppointmentService);
-  private readonly sharingService = inject(RecordSharingService);
-  private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   protected readonly permissions = inject(PermissionService);
@@ -112,21 +102,6 @@ export class PatientDetailComponent implements OnInit {
   encountersLoading = signal(false);
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
-
-  /* Sharing tab */
-  hospitals = signal<HospitalResponse[]>([]);
-  hospitalsLoading = signal(false);
-  selectedHospitalId = signal('');
-  sharingResult = signal<RecordShareResult | null>(null);
-  sharingLoading = signal(false);
-  sharingError = signal('');
-  /** Grant consent modal */
-  showGrantModal = signal(false);
-  grantFromHospitalId = signal('');
-  grantToHospitalId = signal('');
-  grantPurpose = signal('');
-  grantExpiry = signal('');
-  grantLoading = signal(false);
 
   private patientId = '';
 
@@ -455,30 +430,12 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.hasAnyActiveRole(DIRECTIVE_ROLES);
   }
 
-  /** Whether the current user can view the Record Sharing tab */
-  canViewSharing(): boolean {
-    return this.permissions.hasAnyPermission('View Record Sharing', 'Manage Patient Consents', '*');
-  }
-
-  /** Whether the current user can grant or revoke patient consents */
-  canManageConsents(): boolean {
-    return this.permissions.hasPermission('Manage Patient Consents');
-  }
-
   setTab(tab: TabKey): void {
-    // Prevent navigating to the sharing tab when the user lacks permission.
-    // Falls back to the overview tab so component state is never left on an
-    // unauthorised panel, even when setTab() is called programmatically.
-    if (tab === 'sharing' && !this.canViewSharing()) {
-      this.activeTab.set('overview');
-      return;
-    }
     this.activeTab.set(tab);
     if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
-    if (tab === 'sharing' && this.hospitals().length === 0) this.loadHospitals();
   }
 
   private loadVitals(): void {
@@ -523,133 +480,7 @@ export class PatientDetailComponent implements OnInit {
     });
   }
 
-  private loadHospitals(): void {
-    this.hospitalsLoading.set(true);
-    // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
-    if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe({
-        next: (h) => {
-          this.hospitals.set(h);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => {
-          this.toast.error('Failed to load hospitals');
-          this.hospitalsLoading.set(false);
-        },
-      });
-    } else {
-      this.hospitalService.getMyHospitalAsResponse().subscribe({
-        next: (h) => {
-          this.hospitals.set([h]);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => {
-          this.toast.error('Failed to load hospital');
-          this.hospitalsLoading.set(false);
-        },
-      });
-    }
-  }
-
-  // ── Sharing actions ──────────────────────────────────────────────────────
-
-  requestRecords(): void {
-    const hospitalId = this.selectedHospitalId();
-    if (!hospitalId) {
-      this.toast.error('Please select a hospital first.');
-      return;
-    }
-    this.sharingLoading.set(true);
-    this.sharingError.set('');
-    this.sharingResult.set(null);
-    this.sharingService.resolveAndShare(this.patientId, hospitalId).subscribe({
-      next: (result) => {
-        this.sharingResult.set(result);
-        this.sharingLoading.set(false);
-      },
-      error: (err) => {
-        const msg = err?.error?.message ?? 'Failed to resolve patient records.';
-        this.sharingError.set(msg);
-        this.sharingLoading.set(false);
-      },
-    });
-  }
-
-  openGrantModal(): void {
-    this.grantPurpose.set('');
-    this.grantExpiry.set('');
-    this.showGrantModal.set(true);
-  }
-
-  closeGrantModal(): void {
-    this.showGrantModal.set(false);
-  }
-
-  submitGrant(): void {
-    const from = this.grantFromHospitalId();
-    const to = this.grantToHospitalId();
-    if (!from || !to) {
-      this.toast.error('Please select both source and target hospitals.');
-      return;
-    }
-    this.grantLoading.set(true);
-    const req: ConsentGrantRequest = {
-      patientId: this.patientId,
-      fromHospitalId: from,
-      toHospitalId: to,
-      purpose: this.grantPurpose() || undefined,
-      consentExpiration: this.grantExpiry() || undefined,
-    };
-    this.sharingService.grantConsent(req).subscribe({
-      next: () => {
-        this.toast.success('Consent granted successfully.');
-        this.grantLoading.set(false);
-        this.closeGrantModal();
-      },
-      error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to grant consent.');
-        this.grantLoading.set(false);
-      },
-    });
-  }
-
-  exportRecord(format: 'pdf' | 'csv'): void {
-    const result = this.sharingResult();
-    if (!result) return;
-    this.sharingService
-      .exportRecord(
-        this.patientId,
-        result.resolvedFromHospitalId,
-        result.requestingHospitalId,
-        format,
-      )
-      .subscribe({
-        next: (blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `patient_record_${this.patientId}.${format}`;
-          a.click();
-          URL.revokeObjectURL(url);
-        },
-        error: () => this.toast.error(`Failed to export record as ${format.toUpperCase()}.`),
-      });
-  }
-
   // ── Helpers ──────────────────────────────────────────────────────────────
-
-  scopeBadgeClass(scope: ShareScope): string {
-    switch (scope) {
-      case 'SAME_HOSPITAL':
-        return 'badge-scope same-hospital';
-      case 'INTRA_ORG':
-        return 'badge-scope intra-org';
-      case 'CROSS_ORG':
-        return 'badge-scope cross-org';
-      default:
-        return 'badge-scope';
-    }
-  }
 
   getInitials(p: PatientResponse): string {
     return `${p.firstName?.charAt(0) ?? ''}${p.lastName?.charAt(0) ?? ''}`.toUpperCase();
