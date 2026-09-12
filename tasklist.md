@@ -2158,7 +2158,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   labels, lookups, lab configuration. D6 is PR #619. With b2, item 67 is
   complete except the dead HOSPITAL_ADMIN branch in
   `ControllerAuthUtils.resolveHospitalScope` (identical to the fallthrough).
-- [ ] 68. **Dead tokens and phantom roles.** Strip the 111 permission tokens
+- [x] 68. **Dead tokens and phantom roles.** ✅ DONE 2026-09-12 (two PRs, below). Strip the 111 permission tokens
   from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
   235 guards at once — not this item); seed or remove `ROLE_STAFF` (18
   endpoints), `ROLE_IT_STAFF` (12 + webhooks route), `ROLE_NURSE_PRACTITIONER`,
@@ -2179,8 +2179,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   it in #67); ROLE_IT_STAFF and ROLE_CASHIER, never seeded, are off the
   webhooks and checkout route + nav. Residual for the route-vs-API layer:
   `/prescriptions` route admits PHARMACY_VERIFIER, which the API admits only
-  on POST verify. **(a) backend open**: the 106 permission tokens, ROLE_STAFF
-  seed (V159), the phantom-role references, the dead seeded roles.
+  on POST verify. **(a) backend shipped 2026-09-12 (V159)** — the 106
+  permission tokens are out of 102 guards in ten controllers (authorities are
+  roles only, so none was load-bearing); the same defect in another coat,
+  bare role names inside `hasAnyAuthority` on `PatientPrimaryCareController`
+  (six) and `StaffAvailabilityController` (one), is gone with the effective
+  lists unchanged; every reference to IT_STAFF, NURSE_PRACTITIONER, DENTIST,
+  ADMINISTRATIVE_STAFF (→ STAFF), CASHIER, SPECIALIST and SUPPORT_STAFF is
+  removed; V159 seeds ROLE_STAFF and retires the seven V2 roles nothing
+  admits (USER, MODERATOR, TECHNICIAN, CLEANER, SECURITY, SUPPORT, MANAGER)
+  where nobody holds them; `RoleRegistryTest` reads every guard against the
+  migration SQL. Open decisions, not changes: `PatientPrimaryCareController`
+  named RECEPTIONIST (assign) and DOCTOR/NURSE (current, history) but never
+  admitted them — admit via `hasAnyRole` if wanted; `StaffRepository`'s
+  provider query lost a dead `ROLE_SPECIALIST` literal and may have meant
+  PHYSICIAN/SURGEON.
 - [ ] 69. **Patient-safety gaps in the matrix.** Allergies readable by every
   clinical role (today DOCTOR/NURSE/MIDWIFE/HOSPITAL_ADMIN/PHARMACIST only —
   anaesthesiologists and radiologists cannot read them); PHARMACIST reads

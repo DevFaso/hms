@@ -42,7 +42,7 @@ public class StaffAvailabilityController {
             content = @Content)
     @ApiResponse(responseCode = "404", description = "Staff member not found.", content = @Content)
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<StaffAvailabilityResponseDTO> create(
             @Parameter(description = "Availability request payload", required = true)
             @RequestBody @Valid StaffAvailabilityRequestDTO dto,

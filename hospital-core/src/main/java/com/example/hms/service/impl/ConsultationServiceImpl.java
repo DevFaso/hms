@@ -643,8 +643,8 @@ public class ConsultationServiceImpl implements ConsultationService {
         // took the caller's hospitalId at face value, so omitting the optional
         // param aggregated every tenant in the deployment — totals, per-status
         // counts, SLA averages and the specialty breakdown. Its guard is the
-        // WIDEST of the consultation reads (NURSE, MIDWIFE and DENTIST on top
-        // of the rest), so it was the cheapest of them to reach.
+        // WIDEST of the consultation reads (NURSE and MIDWIFE on top of the
+        // rest), so it was the cheapest of them to reach.
         UUID scope = resolveReadScope(hospitalId);
         List<Consultation> all = consultationRepository.findAllByOrderByRequestedAtDesc();
         if (scope != null) {

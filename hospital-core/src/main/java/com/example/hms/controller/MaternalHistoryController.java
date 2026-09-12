@@ -40,7 +40,7 @@ public class MaternalHistoryController {
     private final MaternalHistoryService maternalHistoryService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('MANAGE_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Create a new maternal history record",
                description = "Creates a comprehensive maternal history record for a patient with version 1")
     public ResponseEntity<MaternalHistoryResponseDTO> createMaternalHistory(
@@ -53,7 +53,7 @@ public class MaternalHistoryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('MANAGE_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update a maternal history record",
                description = "Creates a new version of the maternal history record")
     public ResponseEntity<MaternalHistoryResponseDTO> updateMaternalHistory(
@@ -67,7 +67,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get maternal history by ID",
                description = "Retrieves a specific maternal history record by its ID")
     public ResponseEntity<MaternalHistoryResponseDTO> getMaternalHistoryById(
@@ -80,7 +80,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/patient/{patientId}/current")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get current maternal history for patient",
                description = "Retrieves the latest version of maternal history for a patient")
     public ResponseEntity<MaternalHistoryResponseDTO> getCurrentMaternalHistory(
@@ -93,7 +93,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/patient/{patientId}/versions")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get all versions of maternal history",
                description = "Retrieves all historical versions of maternal history for a patient")
     public ResponseEntity<List<MaternalHistoryResponseDTO>> getAllVersionsByPatient(
@@ -106,7 +106,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/patient/{patientId}/version/{versionNumber}")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get specific version of maternal history",
                description = "Retrieves a specific version of maternal history for a patient")
     public ResponseEntity<MaternalHistoryResponseDTO> getMaternalHistoryVersion(
@@ -120,7 +120,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/hospital/{hospitalId}/search")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search maternal history records",
                description = "Search maternal history records with multiple criteria")
     public ResponseEntity<Page<MaternalHistoryResponseDTO>> searchMaternalHistory(
@@ -143,7 +143,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/hospital/{hospitalId}/high-risk")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get high-risk maternal histories",
                description = "Retrieves all high-risk maternal history records for a hospital")
     public ResponseEntity<Page<MaternalHistoryResponseDTO>> getHighRiskMaternities(
@@ -157,7 +157,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/hospital/{hospitalId}/pending-review")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get maternal histories pending review",
                description = "Retrieves maternal histories created in the last 48 hours pending review")
     public ResponseEntity<Page<MaternalHistoryResponseDTO>> getPendingReview(
@@ -171,7 +171,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/hospital/{hospitalId}/specialist-referral")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get cases requiring specialist referral",
                description = "Retrieves maternal histories requiring specialist referral")
     public ResponseEntity<Page<MaternalHistoryResponseDTO>> getRequiringSpecialistReferral(
@@ -185,7 +185,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/hospital/{hospitalId}/psychosocial-concerns")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get cases with psychosocial concerns",
                description = "Retrieves maternal histories with psychosocial risk factors")
     public ResponseEntity<Page<MaternalHistoryResponseDTO>> getWithPsychosocialConcerns(
@@ -199,7 +199,7 @@ public class MaternalHistoryController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('MANAGE_MATERNAL_HISTORY', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
     @Operation(summary = "Delete a maternal history record",
                description = "Soft deletes a maternal history record (marks as inactive)")
     public ResponseEntity<Void> deleteMaternalHistory(
@@ -212,7 +212,7 @@ public class MaternalHistoryController {
     }
 
     @PostMapping("/{id}/mark-reviewed")
-    @PreAuthorize("hasAnyAuthority('MANAGE_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Mark maternal history as reviewed",
                description = "Marks a maternal history record as reviewed by a provider")
     public ResponseEntity<MaternalHistoryResponseDTO> markAsReviewed(
@@ -225,7 +225,7 @@ public class MaternalHistoryController {
     }
 
     @PostMapping("/{id}/calculate-risk")
-    @PreAuthorize("hasAnyAuthority('MANAGE_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Calculate risk score",
                description = "Manually calculates/recalculates the risk score for a maternal history record")
     public ResponseEntity<MaternalHistoryResponseDTO> calculateRiskScore(

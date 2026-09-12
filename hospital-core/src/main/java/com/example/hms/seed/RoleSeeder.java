@@ -83,19 +83,12 @@ public class RoleSeeder implements CommandLineRunner {
         roles.put("ROLE_PHARMACIST",         "Licensed pharmacist handling medication dispensing, drug interaction checks, and inventory management");
         roles.put("ROLE_RECEPTIONIST",       "Front-desk receptionist managing patient check-in, appointments, and visitor coordination");
         roles.put("ROLE_ADMIN",              "General administrative user with elevated operational privileges");
-        roles.put("ROLE_USER",               "Standard system user with basic access permissions");
-        roles.put("ROLE_MODERATOR",          "Content and activity moderator with oversight and review capabilities");
         roles.put("ROLE_PATIENT",            "Registered patient with self-service access to medical records, appointments, and prescriptions");
         roles.put("ROLE_ACCOUNTANT",         "Financial accountant managing ledger entries, expense tracking, and financial reconciliation");
-        roles.put("ROLE_TECHNICIAN",         "Medical or IT technician responsible for equipment maintenance and technical support");
         roles.put("ROLE_RADIOLOGIST",        "Imaging specialist interpreting X-rays, CT scans, MRIs, and generating radiology reports");
         roles.put("ROLE_SURGEON",            "Surgical specialist performing operations, managing surgical plans, and post-operative care");
         roles.put("ROLE_BILLING_SPECIALIST", "Billing specialist handling invoicing, insurance claims, payment processing, and financial reports");
         roles.put("ROLE_PHYSIOTHERAPIST",    "Physical therapist designing rehabilitation programs, therapy sessions, and mobility assessments");
-        roles.put("ROLE_CLEANER",            "Facility maintenance staff responsible for sanitation and cleanliness of hospital premises");
-        roles.put("ROLE_SECURITY",           "Security personnel managing access control, surveillance, and facility safety protocols");
-        roles.put("ROLE_SUPPORT",            "Technical or customer support staff assisting users with system issues and inquiries");
-        roles.put("ROLE_MANAGER",            "Department or operational manager overseeing staff coordination and resource planning");
         // 2026-08-23 role audit (C7 + role-model findings): these roles were
         // referenced by security gates and route guards but never seeded, so
         // no real user could hold them without a hand-written role row.

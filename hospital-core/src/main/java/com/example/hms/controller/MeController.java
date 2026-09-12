@@ -110,7 +110,7 @@ public class MeController {
 
     @Operation(summary = "Get unified clinical dashboard data for current clinical user")
     @GetMapping("/clinical-dashboard")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DENTIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<ApiResponseWrapper<ClinicalDashboardResponseDTO>> getClinicalDashboard(Authentication auth) {
         UUID userId = resolveUserId(auth);
         ClinicalDashboardResponseDTO dashboard = clinicalDashboardService.getClinicalDashboard(userId);

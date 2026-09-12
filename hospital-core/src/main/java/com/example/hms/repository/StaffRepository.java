@@ -161,7 +161,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.department.id = :departmentId
           AND s.active = true
           AND s.user.isDeleted = false
-          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_SPECIALIST')
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE')
         ORDER BY s.name ASC
     """)
     List<Staff> findActiveProvidersByHospitalAndDepartment(

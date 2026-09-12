@@ -55,9 +55,7 @@ import java.util.UUID;
 @RequestMapping("/transfusions")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('REQUEST_BLOOD_PRODUCTS','VIEW_LAB_RESULTS') "
-    + "or hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
-    + "'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE','LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
 @Tag(name = "Transfusion", description = "Type and screen, blood units, crossmatch, administration, reactions")
 public class TransfusionController {
 

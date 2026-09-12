@@ -41,7 +41,7 @@ public class ObgynReferralController {
     private final ObgynReferralService referralService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Create OB-GYN referral")
     public ResponseEntity<ObgynReferralResponseDTO> createReferral(
         @Valid @RequestBody ObgynReferralCreateRequestDTO request,
@@ -52,14 +52,14 @@ public class ObgynReferralController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get referral detail")
     public ResponseEntity<ObgynReferralResponseDTO> getReferral(@PathVariable UUID id) {
         return ResponseEntity.ok(referralService.getReferral(id));
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List referrals for patient")
     public ResponseEntity<Page<ObgynReferralResponseDTO>> getReferralsForPatient(
         @PathVariable UUID patientId,
@@ -69,7 +69,7 @@ public class ObgynReferralController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN')")
     @Operation(summary = "List referrals for hospital")
     public ResponseEntity<Page<ObgynReferralResponseDTO>> getReferralsForHospital(
         @PathVariable UUID hospitalId,
@@ -79,7 +79,7 @@ public class ObgynReferralController {
     }
 
     @GetMapping("/assigned/{obgynUserId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List referrals assigned to OB-GYN")
     public ResponseEntity<Page<ObgynReferralResponseDTO>> getReferralsForObgyn(
         @PathVariable UUID obgynUserId,
@@ -89,7 +89,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Acknowledge referral")
     public ResponseEntity<ObgynReferralResponseDTO> acknowledgeReferral(
         @PathVariable UUID id,
@@ -100,7 +100,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/start")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Start referral consultation",
         description = "Move ACKNOWLEDGED → IN_PROGRESS once the receiving midwife begins "
@@ -116,7 +116,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/complete")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Complete referral")
     public ResponseEntity<ObgynReferralResponseDTO> completeReferral(
         @PathVariable UUID id,
@@ -127,7 +127,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Cancel referral")
     public ResponseEntity<ObgynReferralResponseDTO> cancelReferral(
         @PathVariable UUID id,
@@ -138,7 +138,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/messages")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Add threaded message")
     public ResponseEntity<ObgynReferralMessageDTO> addMessage(
         @PathVariable UUID id,
@@ -150,14 +150,14 @@ public class ObgynReferralController {
     }
 
     @GetMapping("/{id}/messages")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List messages for referral")
     public ResponseEntity<List<ObgynReferralMessageDTO>> getMessages(@PathVariable UUID id) {
         return ResponseEntity.ok(referralService.getMessages(id));
     }
 
     @GetMapping("/reports/summary")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','VIEW_OBGYN_REFERRAL')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE')")
     @Operation(summary = "Referral KPI summary")
     public ResponseEntity<ReferralStatusSummaryDTO> getSummary() {
         return ResponseEntity.ok(referralService.getStatusSummary());

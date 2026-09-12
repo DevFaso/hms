@@ -1261,8 +1261,8 @@ class ConsultationServiceImplTest {
             // The leak this closes: getStats took the optional @RequestParam at
             // face value, so omitting it aggregated every tenant — totals,
             // per-status counts, SLA averages and the specialty breakdown — on
-            // the widest guard of the consultation reads (NURSE, MIDWIFE and
-            // DENTIST included). The sibling tests above leave
+            // the widest guard of the consultation reads (NURSE and MIDWIFE
+            // included). The sibling tests above leave
             // requireActiveHospitalId unstubbed, so the mock returns null, the
             // filter is skipped and they would pass with the scoping deleted.
             Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);

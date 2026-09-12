@@ -31,7 +31,7 @@ public class PrenatalSchedulingController {
     private final PrenatalSchedulingService prenatalSchedulingService;
 
     @PostMapping("/schedule")
-    @PreAuthorize("hasAuthority('SCHEDULE_PRENATAL_APPOINTMENTS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
     @Operation(summary = "Generate prenatal appointment plan", description = "Calculates recommended prenatal visit cadence and maps existing appointments.")
     public ResponseEntity<PrenatalScheduleResponseDTO> generateSchedule(
         @Valid @RequestBody PrenatalScheduleRequestDTO request,
@@ -44,7 +44,7 @@ public class PrenatalSchedulingController {
     }
 
     @PutMapping("/appointments/reschedule")
-    @PreAuthorize("hasAuthority('SCHEDULE_PRENATAL_APPOINTMENTS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
     @Operation(summary = "Reschedule prenatal appointment", description = "Adjusts a prenatal appointment's time and staff assignment while preserving prenatal metadata.")
     public ResponseEntity<AppointmentResponseDTO> reschedulePrenatalAppointment(
         @Valid @RequestBody PrenatalRescheduleRequestDTO request,
@@ -57,7 +57,7 @@ public class PrenatalSchedulingController {
     }
 
     @PostMapping("/reminders")
-    @PreAuthorize("hasAuthority('SCHEDULE_PRENATAL_APPOINTMENTS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
     @Operation(summary = "Create prenatal reminder", description = "Schedules a reminder notification for the patient's upcoming prenatal appointment.")
     public ResponseEntity<Void> createReminder(
         @Valid @RequestBody PrenatalReminderRequestDTO request,
