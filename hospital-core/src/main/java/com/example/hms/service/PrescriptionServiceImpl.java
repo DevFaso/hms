@@ -44,6 +44,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Locale;
 import java.util.Optional;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +73,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final CdsRuleEngine cdsRuleEngine;
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional
@@ -392,8 +397,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         if (patientId != null) {
             if (hospitalId != null) {
-                return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)
-                    .map(prescriptionMapper::toResponseDTO);
+                // E9 #59c — the prescription list follows the patient across
+                // the readable hospitals; every foreign row on the page is
+                // accounted. Prescriptions carry no sensitivity tag (V158).
+                UUID requesterUserId = authService.getCurrentUserId();
+                Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+                Page<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
+                reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                    CrossHospitalReachRecorder.reachOf(rows.getContent(), p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospitalId),
+                    "Cross-hospital prescription read on the treatment relationship");
+                return rows.map(prescriptionMapper::toResponseDTO);
             }
             return prescriptionRepository.findByPatient_Id(patientId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
@@ -494,7 +507,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+            // E9 #59c — see list(): the same widening, unpaged.
+            UUID requesterUserId = authService.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+            List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(rows, p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospitalId),
+                "Cross-hospital prescription read on the treatment relationship");
+            return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)
                 .toList();
         }

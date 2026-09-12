@@ -30,6 +30,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +48,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final RefillRequestRepository refillRequestRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
@@ -60,7 +66,14 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId());
+            // E9 #59c — medications follow the patient across the readable
+            // hospitals; every foreign row surfaced is accounted.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
+            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable);
+            reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(prescriptions, p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospital.getId()),
+                "Cross-hospital medication read on the treatment relationship");
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal
             prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
@@ -131,6 +144,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
             .refillProviderNotes(latestRefill != null ? latestRefill.getProviderNotes() : null)
             .refillRequestOpen(isAwaitingDecision(latestRefill))
+            .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(prescription.getHospital()))
+            .hospitalName(prescription.getHospital() != null ? prescription.getHospital().getName() : null)
             .build();
     }
 

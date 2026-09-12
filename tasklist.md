@@ -1962,7 +1962,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   D3 in code and `CrossHospitalReachRecorder` the one ledger writer. **(b)
   orders and results shipped 2026-09-12**: lab orders, lab results (patient
   path), imaging orders, procedure orders, consultations (D3 applied),
-  referrals (originating hospital). ⚠ The ratchet is a CEILING and walks the
+  referrals (originating hospital). **(c) medications shipped 2026-09-12**:
+  prescription list + page, patient medications, medication timeline
+  (prescriptions + pharmacy fills; the date-ranged fill query had NO hospital
+  predicate at all — fixed), doctor-record medications (a foreign
+  keyword-sensitive prescription is withheld and does not flag the section).
+  Deliberately still local: the MTM polypharmacy count (a write-path
+  derivation, no row surfaced — widening it means a RECORD_SHARE on review
+  creation, decide with #60) and the CDS/BPA rule engines (#60). eMAR has no
+  patient-list read to widen. ⚠ The ratchet is a CEILING and walks the
   repository subfolders — 28 single-hospital finders remain, not the 26 this
   bullet first counted; a widened finder whose single sibling still has a
   caller (CDS hooks, FHIR `$everything`, bulk export, record sharing) stays

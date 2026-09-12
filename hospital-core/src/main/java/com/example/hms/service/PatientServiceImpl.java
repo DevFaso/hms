@@ -956,9 +956,15 @@ public class PatientServiceImpl implements PatientService {
             maxItems,
             sensitiveSections
         );
+        // E9 #59 — the doctor record follows the patient: one readable set for
+        // the whole record, every collector reads across it, and the reach of
+        // the whole record is accounted once at the end.
+        Set<UUID> readableHospitalIds =
+            recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, resolvedHospitalId);
         List<PrescriptionResponseDTO> medications = collectDoctorRecordMedications(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -977,11 +983,6 @@ public class PatientServiceImpl implements PatientService {
             maxItems,
             sensitiveSections
         );
-        // E9 #59 — the doctor record follows the patient: one readable set for
-        // the whole record, every collector reads across it, and the reach of
-        // the whole record is accounted once at the end.
-        Set<UUID> readableHospitalIds =
-            recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, resolvedHospitalId);
         List<NursingNoteResponseDTO> notes = collectDoctorRecordNursingNotes(
             patientId,
             resolvedHospitalId,
@@ -1038,6 +1039,8 @@ public class PatientServiceImpl implements PatientService {
         Map<String, Long> reach = new HashMap<>();
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
             allergies, PatientAllergyResponseDTO::getHospitalId, resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medications, PrescriptionResponseDTO::getHospitalId, resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
             medicalHistory.problems(), PatientProblemResponseDTO::getHospitalId, resolvedHospitalId));
         CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
@@ -2081,18 +2084,26 @@ public class PatientServiceImpl implements PatientService {
     private List<PrescriptionResponseDTO> collectDoctorRecordMedications(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        // E9 #59c — medications follow the patient. A FOREIGN prescription the
+        // keyword heuristic marks sensitive is withheld whatever the caller
+        // asked for (decision D3; it opens through break-the-glass, E9 #62), and
+        // does not flag the section — that would reveal it exists. A local one
+        // keeps the includeSensitive behaviour.
+        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
                 Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean sectionSensitive = prescriptions.stream().anyMatch(this::isSensitiveMedication);
+        boolean sectionSensitive = prescriptions.stream()
+            .anyMatch(p -> isLocalRow(p.getHospital(), hospitalId) && isSensitiveMedication(p));
         List<PrescriptionResponseDTO> responses = prescriptions.stream()
             .sorted(comparator)
-            .filter(prescription -> includeSensitive || !isSensitiveMedication(prescription))
+            .filter(prescription -> !isSensitiveMedication(prescription)
+                || (includeSensitive && isLocalRow(prescription.getHospital(), hospitalId)))
             .map(prescriptionMapper::toResponseDTO)
             .limit(limit)
             .toList();
@@ -2486,6 +2497,11 @@ public class PatientServiceImpl implements PatientService {
             }
         }
         return containsSensitiveKeyword(encounter.getNotes());
+    }
+
+    /** A row with no hospital, or the acting hospital's own, is local (mirrors {@code CrossHospitalRows}). */
+    private static boolean isLocalRow(Hospital rowHospital, UUID actingHospitalId) {
+        return rowHospital == null || rowHospital.getId() == null || rowHospital.getId().equals(actingHospitalId);
     }
 
     private boolean isSensitiveMedication(Prescription prescription) {
