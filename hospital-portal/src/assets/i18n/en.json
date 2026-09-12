@@ -2091,8 +2091,19 @@
       "LOAD_FAILED": "Failed to load departments",
       "NOT_FOUND": "Department not found",
       "DELETED": "Department deleted",
-      "DELETE_FAILED": "Failed to delete department"
-    }
+      "DELETE_FAILED": "Failed to delete department",
+      "SENSITIVITY_SAVED": "Sensitive category saved.",
+      "SENSITIVITY_FAILED": "Couldn’t save the sensitive category.",
+      "SENSITIVITY_LOAD_FAILED": "Couldn’t load the sensitive category."
+    },
+    "DEFAULT_SENSITIVITY": "Sensitive category",
+    "DEFAULT_SENSITIVITY_HINT": "Records written in this department inherit this category. Across hospitals they stay behind break-the-glass; untagged records travel with the patient.",
+    "DEFAULT_SENSITIVITY_LABEL": "Default category for this department",
+    "SENSITIVITY_NONE": "None (records travel)",
+    "SENSITIVITY_SUBSTANCE_USE": "Substance use",
+    "SENSITIVITY_BEHAVIOURAL_HEALTH": "Behavioural health",
+    "SENSITIVITY_HIV": "HIV",
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Reproductive health"
   },
   "COST_PANEL": {
     "TITLE": "Per-tenant cost rollup",

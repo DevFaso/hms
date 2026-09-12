@@ -2045,11 +2045,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   admissions, encounters) take an `unlocked` flag. **(b) open**: the same
   flag at the whole-chart sites (storyboard, chart review, snapshot, FHIR
   `$everything`) once #610/#60b land; the portal's declare flow is #64's.
-- [ ] 63. **Department classification screen + heuristic deletion.**
-  `PUT /departments/{id}/default-sensitivity` exists; the HOSPITAL_ADMIN
-  screen does not. Add it, put it on the hospital onboarding checklist, and
-  delete `PatientServiceImpl.SENSITIVE_KEYWORDS` / `SENSITIVE_DEPARTMENTS`
-  (English substring matching against French text; never fired).
+- [x] 63. **Department classification screen + heuristic deletion.** ✅ DONE
+  2026-09-12. The department page carries a "Sensitive category" card for
+  HOSPITAL_ADMIN / SUPER_ADMIN (the four D3 categories or none) on the
+  existing `GET`/`PUT /departments/{id}/default-sensitivity`; the hospital
+  admin's onboarding checklist names the step. `SENSITIVE_KEYWORDS`,
+  `SENSITIVE_DEPARTMENTS` and `HIGH_ALERT_MEDICATION_KEYWORDS` are gone from
+  `PatientServiceImpl`: a row is sensitive when the classifier says so
+  (problems, notes, encounters, and prescriptions/results through their
+  encounter); allergies keep the life-threatening flag and ultrasound rows
+  their structured high-risk/anomaly flags — clinical alerts, not privacy;
+  surgical history and directives carry no tag and are never withheld.
+  Previously recorded as: `PUT /departments/{id}/default-sensitivity` exists;
+  the HOSPITAL_ADMIN screen does not. Add it, put it on the hospital
+  onboarding checklist, and delete the keyword sets (English substring
+  matching against French text; never fired).
 - [x] 64. **Restricted rows on the chart (portal).** ✅ DONE 2026-09-12.
   A read that withholds a row under D3 now says so: `WithheldRows` tallies
   the refused rows per recording hospital and department and the storyboard

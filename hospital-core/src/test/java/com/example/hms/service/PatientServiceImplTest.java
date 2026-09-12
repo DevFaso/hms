@@ -1008,6 +1008,15 @@ class PatientServiceImplTest {
         recentEncounter.setEncounterType(EncounterType.CONSULTATION);
         recentEncounter.setNotes("Trauma counseling follow-up");
 
+        // E9 #63 — sensitivity comes from the classifier, not from words in the
+        // fixtures: the note, the problem and the recent encounter are tagged;
+        // the prescription and the result have no encounter and are not.
+        when(sensitivityClassifier.effectiveCategory(note))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
+        when(sensitivityClassifier.effectiveCategory(problem))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(sensitivityClassifier.effectiveCategory(recentEncounter))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
         DoctorPatientRecordRequestDTO request = DoctorPatientRecordRequestDTO.builder()
             .hospitalId(hospitalId)
             .accessReason("Pre-op review")
@@ -1064,10 +1073,10 @@ class PatientServiceImplTest {
         assertThat(response.getSurgicalHistory()).containsExactly(surgicalResponse);
         assertThat(response.getAdvanceDirectives()).containsExactly(directiveResponse);
         assertThat(response.isContainsSensitiveData()).isTrue();
+        // The life-threatening allergy and the high-risk / anomalous ultrasound
+        // are clinical alerts; the rest come from the classifier stubs above.
         assertThat(response.getSensitiveSections()).containsExactly(
             "ALLERGIES",
-            "MEDICATIONS",
-            "LABS",
             "IMAGING",
             "NOTES",
             "MEDICAL_HISTORY",
