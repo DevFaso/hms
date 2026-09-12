@@ -69,7 +69,7 @@ public class CrossHospitalReachRecorder {
      * @param assignmentId the actor's assignment at the acting hospital when
      *                     the caller has it, else {@code null}
      */
-    public void record(UUID patientId, UUID actingHospitalId, UUID requesterUserId, UUID assignmentId,
+    public void recordReach(UUID patientId, UUID actingHospitalId, UUID requesterUserId, UUID assignmentId,
                        Map<String, Long> perSource, String description) {
         if (perSource == null || perSource.isEmpty() || patientId == null) {
             return;

@@ -1138,7 +1138,7 @@ class PatientServiceImplTest {
 
         assertThat(result).extracting(PatientAllergyResponseDTO::getAllergenDisplay)
             .containsExactlyInAnyOrder("Peanuts", "Penicillin");
-        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requester), isNull(),
             eq(java.util.Map.of(other.getId().toString(), 1L)), anyString());
     }
 
@@ -1159,7 +1159,7 @@ class PatientServiceImplTest {
         patientService.getPatientAllergies(patientId, hospitalId, requester);
 
         // Every read reports its reach; a local-only read reports an empty one.
-        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requester), isNull(),
             eq(java.util.Map.of()), anyString());
     }
 
@@ -1243,7 +1243,7 @@ class PatientServiceImplTest {
         assertThat(result).extracting(PatientProblemResponseDTO::getProblemDisplay)
             .containsExactlyInAnyOrder("Hypertension", "Asthme");
         verify(patientProblemMapper, never()).toResponseDto(foreignSensitive);
-        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(requester), isNull(),
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requester), isNull(),
             eq(java.util.Map.of(otherId.toString(), 1L)), anyString());
     }
 

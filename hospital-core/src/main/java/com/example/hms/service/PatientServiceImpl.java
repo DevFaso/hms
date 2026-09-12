@@ -1217,7 +1217,7 @@ public class PatientServiceImpl implements PatientService {
             .sorted(problemComparator)
             .map(patientProblemMapper::toResponseDto)
             .toList();
-        reachRecorder.record(patientId, hospitalId, requesterUserId, null,
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(diagnoses, PatientProblemResponseDTO::getHospitalId, hospitalId),
             "Cross-hospital diagnosis read on the treatment relationship");
         return diagnoses;
@@ -1812,7 +1812,7 @@ public class PatientServiceImpl implements PatientService {
     private void recordCrossHospitalReach(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
                                           UserRoleHospitalAssignment assignment, Map<String, Long> perSource,
                                           String description) {
-        reachRecorder.record(patientId, actingHospitalId, requesterUserId,
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId,
             assignment == null ? null : assignment.getId(), perSource, description);
     }
 

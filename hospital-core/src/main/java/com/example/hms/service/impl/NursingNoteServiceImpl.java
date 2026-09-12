@@ -189,7 +189,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
             .limit(effectiveLimit)
             .map(nursingNoteMapper::toResponse)
             .toList();
-        reachRecorder.record(patientId, resolvedHospitalId, actorUserId, null,
+        reachRecorder.recordReach(patientId, resolvedHospitalId, actorUserId, null,
             CrossHospitalReachRecorder.reachOf(responses, NursingNoteResponseDTO::getHospitalId, resolvedHospitalId),
             "Cross-hospital nursing note read on the treatment relationship");
         return responses;

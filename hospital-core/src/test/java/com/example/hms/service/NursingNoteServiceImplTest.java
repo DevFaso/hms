@@ -990,7 +990,7 @@ class NursingNoteServiceImplTest {
         assertEquals(foreign.getId(), responses.get(1).getId());
         assertEquals("CHU Yalgado", responses.get(1).getHospitalName());
         verify(nursingNoteMapper, never()).toResponse(foreignSensitive);
-        verify(reachRecorder).record(eq(patientId), eq(hospitalId), eq(actorUserId), org.mockito.ArgumentMatchers.isNull(),
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(actorUserId), org.mockito.ArgumentMatchers.isNull(),
             eq(java.util.Map.of(otherId.toString(), 1L)), anyString());
     }
 

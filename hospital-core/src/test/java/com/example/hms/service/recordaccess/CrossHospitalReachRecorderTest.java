@@ -70,7 +70,7 @@ class CrossHospitalReachRecorderTest {
         UUID assignment = UUID.randomUUID();
         UUID source = UUID.randomUUID();
 
-        recorder.record(patient, acting, actor, assignment, Map.of(source.toString(), 3L), "Cross-hospital test read");
+        recorder.recordReach(patient, acting, actor, assignment, Map.of(source.toString(), 3L), "Cross-hospital test read");
 
         ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(captor.capture());
@@ -91,9 +91,9 @@ class CrossHospitalReachRecorderTest {
     @Test
     @DisplayName("an empty reach records nothing, so callers can pass it unconditionally")
     void emptyReachRecordsNothing() {
-        recorder.record(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, Map.of(), "x");
-        recorder.record(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, "x");
-        recorder.record(null, UUID.randomUUID(), UUID.randomUUID(), null, Map.of("s", 1L), "x");
+        recorder.recordReach(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, Map.of(), "x");
+        recorder.recordReach(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, "x");
+        recorder.recordReach(null, UUID.randomUUID(), UUID.randomUUID(), null, Map.of("s", 1L), "x");
 
         verify(auditEventLogService, never()).logEvent(any());
     }
@@ -105,7 +105,7 @@ class CrossHospitalReachRecorderTest {
             .thenThrow(new IllegalStateException("ledger down"))
             .thenReturn(null);
 
-        recorder.record(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+        recorder.recordReach(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
             Map.of("a", 1L, "b", 2L), "x");
 
         verify(auditEventLogService, times(2)).logEvent(any());
