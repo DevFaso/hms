@@ -197,6 +197,13 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "organization_id")
     private UUID organizationId;
 
+    /**
+     * The FIRST hospital this patient was registered at. Informational since
+     * E9 #57: the tenant filter scopes a patient by their registrations
+     * ({@code TenantScopeSpecification#patientScope}), so a patient linked to a
+     * second hospital is visible there without this column changing. Do not
+     * key any access rule on it.
+     */
     @Column(name = "hospital_id")
     private UUID hospitalId;
 
