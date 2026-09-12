@@ -1,5 +1,10 @@
 package com.example.hms.service.impl;
 
+import java.util.Set;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -68,6 +73,9 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final NursingNoteMapper nursingNoteMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final SensitivityClassifier sensitivityClassifier;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional
@@ -170,13 +178,21 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         ensureCanView(actorUserId, resolvedHospitalId, locale != null ? locale : Locale.getDefault());
 
         int effectiveLimit = limit <= 0 || limit > MAX_RESULTS ? MAX_RESULTS : limit;
-        List<NursingNote> notes = nursingNoteRepository
-            .findTop50ByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, resolvedHospitalId);
-
-        return notes.stream()
+        // E9 #59 — notes follow the patient across the readable hospitals; a
+        // foreign note with a sensitivity category is withheld (D3) and opens
+        // via break-the-glass. Every foreign note surfaced is accounted.
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(actorUserId, patientId, resolvedHospitalId);
+        List<NursingNoteResponseDTO> responses = nursingNoteRepository
+            .findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream()
+            .filter(note -> CrossHospitalRows.maySurface(note.getHospital(), resolvedHospitalId,
+                sensitivityClassifier.effectiveCategory(note)))
             .limit(effectiveLimit)
             .map(nursingNoteMapper::toResponse)
             .toList();
+        reachRecorder.recordReach(patientId, resolvedHospitalId, actorUserId, null,
+            CrossHospitalReachRecorder.reachOf(responses, NursingNoteResponseDTO::getHospitalId, resolvedHospitalId),
+            "Cross-hospital nursing note read on the treatment relationship");
+        return responses;
     }
 
     @Override

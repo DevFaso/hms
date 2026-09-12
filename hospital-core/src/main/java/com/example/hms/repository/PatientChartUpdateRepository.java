@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import java.util.Collection;
 import com.example.hms.model.chart.PatientChartUpdate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,5 +18,6 @@ public interface PatientChartUpdateRepository extends JpaRepository<PatientChart
 
     List<PatientChartUpdate> findByPatient_IdAndHospital_IdOrderByVersionNumberDesc(UUID patientId, UUID hospitalId);
 
-    Page<PatientChartUpdate> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
+    /** E9 #59 — the readable set from {@code RecordAccessPolicy.readableHospitalIds}. */
+    Page<PatientChartUpdate> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 }

@@ -154,6 +154,9 @@
             @for (p of s.problems; track p.id) {
               <li class="storyboard__chip" [class.storyboard__chip--info]="p.chronic">
                 <span class="storyboard__chip-label">{{ p.problemDisplay }}</span>
+                @if (p.hospitalName && p.hospitalId !== s.hospitalId) {
+                  <span class="storyboard__chip-detail">· {{ p.hospitalName }}</span>
+                }
                 @if (p.problemCode) {
                   <span class="storyboard__chip-detail">{{ p.problemCode }}</span>
                 }

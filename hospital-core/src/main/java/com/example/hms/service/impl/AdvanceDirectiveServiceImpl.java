@@ -1,5 +1,8 @@
 package com.example.hms.service.impl;
 
+import java.util.Set;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.enums.AdvanceDirectiveStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -33,15 +36,30 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     private final HospitalRepository hospitalRepository;
     private final AdvanceDirectiveMapper mapper;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
     public List<AdvanceDirectiveResponseDTO> listForPatient(UUID patientId) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<AdvanceDirective> directives = activeHospitalId == null
-            ? directiveRepository.findByPatient_Id(patientId)
-            : directiveRepository.findByPatient_IdAndHospital_Id(patientId, activeHospitalId);
-        return directives.stream().map(mapper::toResponseDto).toList();
+        if (activeHospitalId == null) {
+            // Super-admin global view: every directive, no reach to account.
+            return directiveRepository.findByPatient_Id(patientId).stream().map(mapper::toResponseDto).toList();
+        }
+        // E9 #59 — a directive is a property of the patient (a DNR made at
+        // Hôpital A binds at Hôpital B); it follows them across the readable
+        // hospitals and every foreign row surfaced is accounted.
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        List<AdvanceDirectiveResponseDTO> directives = directiveRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
+            .map(mapper::toResponseDto)
+            .toList();
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(directives, AdvanceDirectiveResponseDTO::getHospitalId, activeHospitalId),
+            "Cross-hospital advance directive read on the treatment relationship");
+        return directives;
     }
 
     @Override

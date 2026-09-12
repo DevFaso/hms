@@ -44,6 +44,8 @@ class AdvanceDirectiveServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private AdvanceDirectiveServiceImpl service;
 
@@ -56,7 +58,7 @@ class AdvanceDirectiveServiceImplTest {
     void setUp() {
         service = new AdvanceDirectiveServiceImpl(
             directiveRepository, patientRepository, hospitalRepository,
-            new AdvanceDirectiveMapper(), roleValidator);
+            new AdvanceDirectiveMapper(), roleValidator, recordAccessPolicy, reachRecorder);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
