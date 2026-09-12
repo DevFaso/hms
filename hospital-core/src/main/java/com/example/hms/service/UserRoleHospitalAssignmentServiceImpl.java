@@ -149,6 +149,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             "Review visitor intake checklist",
             "Confirm escalation procedures"
         )),
+        Map.entry("ROLE_HOSPITAL_ADMIN", List.of(
+            "Classify the sensitive departments (psychiatry, addiction, HIV, family planning) so their records stay behind break-the-glass across hospitals",
+            "Review the hospital's record-access posture and opt-out register",
+            "Verify critical incident escalation contacts"
+        )),
         Map.entry(ROLE_SUPER_ADMIN, List.of(
             "Enable multi-factor authentication",
             "Review organization level notification settings",

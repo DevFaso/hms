@@ -2090,8 +2090,19 @@
       "LOAD_FAILED": "Error al cargar los departamentos",
       "NOT_FOUND": "Departamento no encontrado",
       "DELETED": "Departamento eliminado",
-      "DELETE_FAILED": "Error al eliminar el departamento"
-    }
+      "DELETE_FAILED": "Error al eliminar el departamento",
+      "SENSITIVITY_SAVED": "Categoría sensible guardada.",
+      "SENSITIVITY_FAILED": "No se pudo guardar la categoría sensible.",
+      "SENSITIVITY_LOAD_FAILED": "No se pudo cargar la categoría sensible."
+    },
+    "DEFAULT_SENSITIVITY": "Categoría sensible",
+    "DEFAULT_SENSITIVITY_HINT": "Los registros creados en este servicio heredan esta categoría. Entre hospitales quedan detrás del acceso de emergencia; los registros sin categoría viajan con el paciente.",
+    "DEFAULT_SENSITIVITY_LABEL": "Categoría por defecto de este servicio",
+    "SENSITIVITY_NONE": "Ninguna (los registros viajan)",
+    "SENSITIVITY_SUBSTANCE_USE": "Adicciones",
+    "SENSITIVITY_BEHAVIOURAL_HEALTH": "Salud mental",
+    "SENSITIVITY_HIV": "VIH",
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Salud reproductiva"
   },
   "COST_PANEL": {
     "TITLE": "Distribución de costos por tenant",

@@ -2090,8 +2090,19 @@
       "LOAD_FAILED": "Échec du chargement des départements",
       "NOT_FOUND": "Département introuvable",
       "DELETED": "Département supprimé",
-      "DELETE_FAILED": "Échec de la suppression du département"
-    }
+      "DELETE_FAILED": "Échec de la suppression du département",
+      "SENSITIVITY_SAVED": "Catégorie sensible enregistrée.",
+      "SENSITIVITY_FAILED": "Impossible d’enregistrer la catégorie sensible.",
+      "SENSITIVITY_LOAD_FAILED": "Impossible de charger la catégorie sensible."
+    },
+    "DEFAULT_SENSITIVITY": "Catégorie sensible",
+    "DEFAULT_SENSITIVITY_HINT": "Les dossiers rédigés dans ce service héritent de cette catégorie. Entre établissements, ils restent derrière le bris de glace ; les dossiers non classés suivent le patient.",
+    "DEFAULT_SENSITIVITY_LABEL": "Catégorie par défaut de ce service",
+    "SENSITIVITY_NONE": "Aucune (les dossiers suivent le patient)",
+    "SENSITIVITY_SUBSTANCE_USE": "Addictologie",
+    "SENSITIVITY_BEHAVIOURAL_HEALTH": "Santé mentale",
+    "SENSITIVITY_HIV": "VIH",
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Santé reproductive"
   },
   "COST_PANEL": {
     "TITLE": "Répartition des coûts par tenant",
