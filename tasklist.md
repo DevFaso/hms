@@ -2003,13 +2003,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `fhir-record` export (`PatientEverythingService.resolveHospitalScopeOrForbid`
   fails closed on the stale context today), storyboard, chart review, timeline
   (already), snapshot. Every one writes the disclosure row.
-- [ ] 61. **Provenance on the row (portal).** `TimelineEntry.metadata` is not
-  declared in `patient.service.ts`, so #582's provenance reaches the wire and
-  is discarded — the blocking defect from the E8 record. Type it, render
-  hospital · clinician · date on every foreign row in timeline, results,
-  medications, problems; fill the two missing staff names (prescription from
-  `Prescription.staff`, lab from `LabOrder.orderingStaff`, NOT
-  `releasedByDisplay`). Absorbs the surviving half of E8 #50.
+- [x] 61. **Provenance on the row (portal).** ✅ DONE 2026-09-12. The
+  timeline half (`TimelineEntry.metadata` typed; hospital · clinician · origin
+  on every timeline row; prescriber from `Prescription.staff`, lab from
+  `LabOrder.orderingStaff`) had already landed with E8 #50 (fcedca65), and the
+  lab-results list already carried its hospital column. What this closes:
+  a hospital column on the chart tab's allergies, problems and updates, and on
+  the medication-history rows (backend fields from #59a/#59c), with a row from
+  another hospital marked structurally — compared on the id, never the name;
+  no id means local. Absorbed the surviving half of E8 #50.
 
 ### Phase 2 — sensitive categories and break-the-glass
 

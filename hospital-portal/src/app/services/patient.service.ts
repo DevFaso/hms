@@ -208,6 +208,9 @@ export interface ChartUpdate {
   recordedAt: string;
   recordedByName?: string;
   recordedByRole?: string;
+  /** E9 #61 — the hospital that recorded the update; equals the active hospital for a local one. */
+  hospitalId?: string;
+  hospitalName?: string;
   sections?: (ChartUpdateSection & { id: string })[];
 }
 

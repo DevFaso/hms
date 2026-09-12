@@ -95,6 +95,15 @@ export class MedicationHistoryComponent implements OnInit {
     this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
   }
 
+  /**
+   * E9 #61 — provenance on the timeline row: the hospital that prescribed or
+   * dispensed is on every row, and one from another hospital is marked
+   * structurally. Compared on the id, never the name; no id means local.
+   */
+  isForeignRow(row: { hospitalId?: string }): boolean {
+    return !!row.hospitalId && !!this.hospitalId && row.hospitalId !== this.hospitalId;
+  }
+
   private todayIso(): string {
     const d = new Date();
     const pad = (n: number): string => String(n).padStart(2, '0');

@@ -68,6 +68,7 @@
               <th scope="col">{{ 'CHART.REACTION' | translate }}</th>
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
               @if (canEditAllergies) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
@@ -75,7 +76,7 @@
           </thead>
           <tbody>
             @for (a of allergies(); track a.id) {
-              <tr [class.inactive-row]="a.active === false">
+              <tr [class.inactive-row]="a.active === false" [class.foreign-row]="isForeignRow(a)">
                 <td>
                   <strong>{{ a.allergenDisplay }}</strong>
                 </td>
@@ -95,6 +96,7 @@
                 <td>
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
                 </td>
+                <td class="hospital-cell">{{ a.hospitalName || '—' }}</td>
                 @if (canEditAllergies) {
                   <td>
                     <div class="action-group">
@@ -156,6 +158,7 @@
               <th scope="col">{{ 'CHART.SEVERITY' | translate }}</th>
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'CHART.CHRONIC' | translate }}</th>
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
               @if (canEditProblems) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
@@ -163,7 +166,7 @@
           </thead>
           <tbody>
             @for (p of problems(); track p.id) {
-              <tr>
+              <tr [class.foreign-row]="isForeignRow(p)">
                 <td>
                   <strong>{{ p.problemDisplay }}</strong>
                   @if (p.notes) {
@@ -183,6 +186,7 @@
                 </td>
                 <td>{{ p.onsetDate ? (p.onsetDate | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
+                <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
                 @if (canEditProblems) {
                   <td>
                     <div class="action-group">
@@ -230,12 +234,15 @@
     } @else {
       <div class="updates-list">
         @for (u of updates(); track u.id) {
-          <div class="update-card">
+          <div class="update-card" [class.foreign-row]="isForeignRow(u)">
             <button type="button" class="update-header" (click)="toggleUpdate(u)">
               <span class="update-version">v{{ u.versionNumber }}</span>
               <span class="update-reason">{{ u.updateReason }}</span>
               <span class="update-meta">
                 {{ u.recordedByName }} — {{ u.recordedAt | date: 'short' }}
+                @if (u.hospitalName) {
+                  <span class="update-hospital">· {{ u.hospitalName }}</span>
+                }
               </span>
               <span class="material-symbols-outlined">
                 {{ expandedUpdateId() === u.id ? 'expand_less' : 'expand_more' }}

@@ -554,3 +554,16 @@
   display: flex;
   gap: 6px;
 }
+
+// E9 #61 — a row from another hospital is marked structurally in the
+// allergies, problems and updates sections too, as the timeline already is.
+tr.foreign-row td:first-child,
+.update-card.foreign-row {
+  border-left: 3px solid var(--primary);
+}
+
+.hospital-cell,
+.update-hospital {
+  color: #5c5c74;
+  font-size: 0.85rem;
+}
