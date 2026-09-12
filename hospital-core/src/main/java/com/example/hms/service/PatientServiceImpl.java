@@ -1743,14 +1743,14 @@ public class PatientServiceImpl implements PatientService {
      * sees in their own chart, which the existing includeSensitive toggle
      * already governs.
      */
-    /** The department a prescription or lab order belongs to: its encounter's, when it has one. */
-    private static Department departmentOf(Encounter encounter) {
-        return encounter != null ? encounter.getDepartment() : null;
-    }
-
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
                                       com.example.hms.enums.SensitivityCategory category, boolean unlocked) {
         return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category, unlocked);
+    }
+
+    /** The department a prescription or lab order belongs to: its encounter's, when it has one. */
+    private static Department departmentOf(Encounter encounter) {
+        return encounter != null ? encounter.getDepartment() : null;
     }
 
     /**
