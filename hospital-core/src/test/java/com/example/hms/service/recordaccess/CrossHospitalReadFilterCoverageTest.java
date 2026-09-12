@@ -95,7 +95,10 @@ class CrossHospitalReadFilterCoverageTest {
         "AdmissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc",
         "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc",
         // E9 #60 — the whole-chart surfaces.
-        "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc");
+        "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
+        "PatientVitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
+        "LabResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn",
+        "DischargeSummaryRepository.findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads

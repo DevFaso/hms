@@ -42,6 +42,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Patient-compartment {@code $everything} operation (roadmap row 22,
@@ -104,6 +112,9 @@ public class PatientEverythingService {
     private final MedicationRequestFhirMapper medicationRequestMapper;
     private final DocumentReferenceFhirMapper documentReferenceMapper;
     private final AuditEventLogService auditEventLogService;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
 
     public PatientEverythingService(
         FhirOperationsProperties operationsProperties,
@@ -123,7 +134,10 @@ public class PatientEverythingService {
         ConditionFhirMapper conditionMapper,
         MedicationRequestFhirMapper medicationRequestMapper,
         DocumentReferenceFhirMapper documentReferenceMapper,
-        AuditEventLogService auditEventLogService
+        AuditEventLogService auditEventLogService,
+        RecordAccessPolicy recordAccessPolicy,
+        CrossHospitalReachRecorder reachRecorder,
+        SensitivityClassifier sensitivityClassifier
     ) {
         this.operationsProperties = operationsProperties;
         this.patientRepository = patientRepository;
@@ -143,6 +157,9 @@ public class PatientEverythingService {
         this.medicationRequestMapper = medicationRequestMapper;
         this.documentReferenceMapper = documentReferenceMapper;
         this.auditEventLogService = auditEventLogService;
+        this.recordAccessPolicy = recordAccessPolicy;
+        this.reachRecorder = reachRecorder;
+        this.sensitivityClassifier = sensitivityClassifier;
     }
 
     public boolean isEnabled() {
@@ -259,7 +276,16 @@ public class PatientEverythingService {
         UUID hospitalId = resolveHospitalScopeOrForbid();
         Patient patient = loadAndVerifyTenantOwnedPatient(patientId, hospitalId);
 
-        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, params);
+        // E9 #60b — the bundle follows the patient: every section reads the
+        // policy's readable set for this patient (the acting hospital alone
+        // when the policy says so), a foreign encounter or condition in a
+        // sensitive category is withheld (D3), and the reach of the page is
+        // accounted once per source hospital beside the export audit.
+        User actor = resolveExportActor();
+        UUID requesterUserId = actor != null ? actor.getId()
+            : HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, readable, params);
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.SEARCHSET);
 
@@ -277,6 +303,8 @@ public class PatientEverythingService {
                 .setUrl(nextLink(patientId, params, ctx.nextCursor()));
         }
 
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, ctx.reach(),
+            "Cross-hospital FHIR $everything read on the treatment relationship");
         emitAudit(patient, describe(patientId, params, bundle.getTotal()));
         return bundle;
     }
@@ -296,10 +324,11 @@ public class PatientEverythingService {
         // Discharge summaries are few per patient — unpaged, first page only
         // (same rule as the Condition section).
         if (ctx.isFirstPage()) {
-            dischargeSummaryRepository
-                .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(
-                    ctx.patientId(), ctx.hospitalId())
-                .stream()
+            List<com.example.hms.model.discharge.DischargeSummary> summaries = dischargeSummaryRepository
+                .findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc(
+                    ctx.patientId(), ctx.readable());
+            ctx.account(summaries.stream().map(s -> CrossHospitalReachRecorder.hospitalIdOf(s.getHospital())).toList());
+            summaries.stream()
                 .filter(sSummary -> ctx.passesSinceFilter(sSummary.getUpdatedAt()))
                 .forEach(sSummary -> addEntry(bundle, documentReferenceMapper.toFhir(sSummary)));
         }
@@ -347,11 +376,14 @@ public class PatientEverythingService {
 
     private void appendEncounterSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("Encounter")) return;
-        Page<?> page = encounterRepository
-            .findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+        Page<com.example.hms.model.Encounter> page = encounterRepository
+            .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(page);
-        page.forEach(e -> {
-            var encounter = (com.example.hms.model.Encounter) e;
+        List<com.example.hms.model.Encounter> surfaced = page.getContent().stream()
+            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(e)))
+            .toList();
+        ctx.account(surfaced.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
+        surfaced.forEach(encounter -> {
             if (ctx.passesSinceFilter(encounter.getUpdatedAt())) {
                 addEntry(bundle, encounterMapper.toFhir(encounter));
             }
@@ -361,18 +393,22 @@ public class PatientEverythingService {
     private void appendObservationSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("Observation")) return;
         Page<com.example.hms.model.PatientVitalSign> vitals = vitalSignRepository
-            .findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
-                ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+            .findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
+                ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(vitals);
+        ctx.account(vitals.getContent().stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
         vitals.forEach(v -> {
             if (ctx.passesSinceFilter(v.getUpdatedAt())) {
                 observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o));
             }
         });
         Page<com.example.hms.model.LabResult> labResults = labResultRepository
-            .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+            .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+                ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(labResults);
+        ctx.account(labResults.getContent().stream()
+            .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
+            .toList());
         labResults.forEach(r -> {
             if (ctx.passesSinceFilter(r.getUpdatedAt())) {
                 addEntry(bundle, observationMapper.toFhir(r));
@@ -385,12 +421,14 @@ public class PatientEverythingService {
         // iteration repeats the complete problem list (duplicate entries in
         // paged responses and in the merged download alike).
         if (!ctx.includes("Condition") || !ctx.isFirstPage()) return;
-        // Hospital-scoped per Copilot review (PR copilot-review) — the
-        // previous findByPatient_Id call could leak problems recorded
-        // at other hospitals for the same patient into a
-        // hospital-scoped $everything response.
-        patientProblemRepository.findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId())
-            .stream()
+        // The readable set, not the acting hospital alone (E9 #60b); a foreign
+        // problem in a sensitive category is withheld (D3).
+        List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
+            .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
+            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c)))
+            .toList();
+        ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());
+        problems.stream()
             .filter(c -> ctx.passesSinceFilter(c.getUpdatedAt()))
             .forEach(c -> addEntry(bundle, conditionMapper.toFhir(c)));
     }
@@ -398,8 +436,9 @@ public class PatientEverythingService {
     private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("MedicationRequest")) return;
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
-            .findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+            .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
+        ctx.account(prescriptions.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
         prescriptions.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {
                 addEntry(bundle, medicationRequestMapper.toFhir(p));
@@ -529,23 +568,33 @@ public class PatientEverythingService {
     private static final class SectionContext {
         private final UUID patientId;
         private final UUID hospitalId;
+        private final Set<UUID> readable;
         private final PatientEverythingParams params;
         private final PageRequest pageRequest;
+        private final Map<String, Long> reach = new HashMap<>();
         private boolean hasMore;
 
-        private SectionContext(UUID patientId, UUID hospitalId, PatientEverythingParams params) {
+        private SectionContext(UUID patientId, UUID hospitalId, Set<UUID> readable, PatientEverythingParams params) {
             this.patientId = patientId;
             this.hospitalId = hospitalId;
+            this.readable = readable;
             this.params = params;
             this.pageRequest = PageRequest.of(params.cursor(), params.count());
         }
 
-        static SectionContext forRequest(UUID patientId, UUID hospitalId, PatientEverythingParams params) {
-            return new SectionContext(patientId, hospitalId, params);
+        static SectionContext forRequest(UUID patientId, UUID hospitalId, Set<UUID> readable, PatientEverythingParams params) {
+            return new SectionContext(patientId, hospitalId, readable, params);
         }
 
         UUID patientId() { return patientId; }
         UUID hospitalId() { return hospitalId; }
+        /** E9 #60b — the hospitals every section reads (RecordAccessPolicy.readableHospitalIds). */
+        Set<UUID> readable() { return readable; }
+        /** E9 #60b — one entry per foreign hospital surfaced on this page, across every section. */
+        Map<String, Long> reach() { return reach; }
+        void account(List<UUID> sourceHospitalIds) {
+            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(sourceHospitalIds, hospitalId));
+        }
         PageRequest pageRequest() { return pageRequest; }
         boolean isFirstPage() { return params.cursor() == 0; }
         boolean includes(String type) { return params.includes(type); }

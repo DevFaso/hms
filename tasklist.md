@@ -1996,7 +1996,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   tag (V158 tagged encounters, admissions, consultations, problems, notes
   only), so an HIV viral load travels cross-hospital today — that is #63's
   department classification, or a tag on `LabTestDefinition`, to decide.
-- [ ] 60. **Whole-chart surfaces on the readable set.** ⚠ Since #56 the
+- [x] 60. **Whole-chart surfaces on the readable set.** ✅ DONE 2026-09-12 — (a) in-app surfaces and (b) FHIR `$everything` both on the readable set with a ledger row each; residuals inline below. ⚠ Since #56 the
   storyboard and chart review already surface foreign ALLERGY rows with no
   `RECORD_SHARE` (those calls carry no requester); wiring the ledger through
   these surfaces is part of this item, not optional. FHIR `$everything` /
@@ -2011,10 +2011,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   stay patient-wide per #56; one ledger row per snapshot). Deliberately still
   local: the storyboard's active-encounter lookup (the acting hospital's
   tracker question) and the legacy `patient_diagnoses` read (V14-era,
-  read-only). **(b) FHIR `$everything` / `fhir-record` export — OPEN**: the
-  bundle reads `ctx.hospitalId()` alone and `resolveHospitalScopeOrForbid`
-  fails closed with no context; `$export` (bulk) is a hospital's own data and
-  stays local by design.
+  read-only). **(b) FHIR `$everything` / `fhir-record` export shipped
+  2026-09-12**: every section (Encounter, Observation — vitals and results,
+  Condition, MedicationRequest, DocumentReference — discharge summaries) reads
+  the readable set through the SectionContext; a foreign encounter or
+  condition in a sensitive category is withheld (D3); one RECORD_SHARE per
+  source hospital per page, beside the PATIENT_EXPORT audit.
+  `resolveHospitalScopeOrForbid` still fails closed with no context — an
+  export needs an acting hospital, by design. `$export` (bulk) is a hospital's
+  own data and stays local by design; uploaded documents are patient-anchored
+  (no hospital column) and stay patient-wide.
 - [ ] 61. **Provenance on the row (portal).** `TimelineEntry.metadata` is not
   declared in `patient.service.ts`, so #582's provenance reaches the wire and
   is discarded — the blocking defect from the E8 record. Type it, render
