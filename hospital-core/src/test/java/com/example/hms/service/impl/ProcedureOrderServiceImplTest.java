@@ -31,6 +31,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class ProcedureOrderServiceImplTest {
@@ -41,6 +47,8 @@ class ProcedureOrderServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private ProcedureOrderServiceImpl service;
 
@@ -197,12 +205,33 @@ class ProcedureOrderServiceImplTest {
         assertThat(result).isNotNull();
     }
 
-    @Test void getProcedureOrdersForPatient_scopedToHospital() {
+    @Test void getProcedureOrdersForPatient_scopedToTheReadableSet() {
         UUID activeHospId = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
-        when(procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, activeHospId)).thenReturn(List.of());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospId))).thenReturn(Set.of(activeHospId));
+        when(procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, Set.of(activeHospId))).thenReturn(List.of());
 
         assertThat(service.getProcedureOrdersForPatient(patientId)).isEmpty();
+    }
+
+    @Test void getProcedureOrdersForPatient_followsThePatientAndAccountsTheReach() {
+        // E9 #59b — an appendectomy ordered at Hôpital B is on the list at
+        // Hôpital A when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hôpital B");
+        ProcedureOrder foreign = ProcedureOrder.builder()
+            .patient(patient).hospital(other).orderingProvider(staff)
+            .procedureName("Appendectomy").status(ProcedureOrderStatus.COMPLETED).build();
+        foreign.setId(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(buildOrder(ProcedureOrderStatus.ORDERED), foreign));
+
+        assertThat(service.getProcedureOrdersForPatient(patientId)).extracting(ProcedureOrderResponseDTO::getId)
+            .containsExactly(orderId, foreign.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 
     @Test void getProcedureOrdersForHospital_scopedOverridesParam() {

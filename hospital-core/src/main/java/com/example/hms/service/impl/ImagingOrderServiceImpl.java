@@ -27,6 +27,9 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +57,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     private final HospitalRepository hospitalRepository;
     private final ImagingOrderMapper imagingOrderMapper;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     public ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId) {
@@ -179,15 +184,23 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ImagingOrder> orders;
-        if (status != null) {
+        if (activeHospitalId != null) {
+            // E9 #59b — imaging orders follow the patient: read across the
+            // readable hospitals at the database, where this used to load the
+            // patient's whole history and keep the acting hospital's rows in
+            // memory. Untagged (V158), so every foreign row travels; accounted.
+            UUID requesterUserId = roleValidator.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            orders = status != null
+                ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
+                : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
+            reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), activeHospitalId),
+                "Cross-hospital imaging order read on the treatment relationship");
+        } else if (status != null) {
             orders = imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status);
         } else {
             orders = imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
-        }
-        if (activeHospitalId != null) {
-            orders = orders.stream()
-                .filter(o -> o.getHospital() != null && activeHospitalId.equals(o.getHospital().getId()))
-                .toList();
         }
         return orders.stream()
             .map(imagingOrderMapper::toResponseDTO)

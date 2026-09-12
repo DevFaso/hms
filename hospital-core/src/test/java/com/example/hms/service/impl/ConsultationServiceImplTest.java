@@ -43,6 +43,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class ConsultationServiceImplTest {
@@ -55,6 +56,9 @@ class ConsultationServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
@@ -255,11 +259,17 @@ class ConsultationServiceImplTest {
         Consultation otherHospConsult = Consultation.builder().patient(patient).hospital(otherHosp).status(ConsultationStatus.REQUESTED).build();
         otherHospConsult.setId(UUID.randomUUID());
 
+        // E9 #59b — the scope is the policy's readable set, resolved at the
+        // database; a hospital outside it is never loaded, let alone filtered.
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId)).thenReturn(List.of(ownHosp, otherHospConsult));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, Set.of(hospitalId)))
+            .thenReturn(List.of(ownHosp));
 
         List<ConsultationResponseDTO> result = service.getConsultationsForPatient(patientId);
         assertThat(result).hasSize(1);
+        verify(consultationRepository, never()).findByPatient_IdOrderByRequestedAtDesc(any());
+        assertThat(otherHospConsult.getHospital().getId()).isNotEqualTo(hospitalId);
     }
 
     @Test void getConsultationsForPatient_superAdmin_noFilter() {

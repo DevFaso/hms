@@ -48,6 +48,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
 
 @Slf4j
 @Service
@@ -67,6 +72,9 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
     private final CrossTenantReadAudit crossTenantReadAudit;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
     /**
      * The SLA clock. Injected rather than read from {@code LocalDateTime.now()}
      * so the writer ({@code calculateSlaDueBy}) and every reader that compares
@@ -149,12 +157,25 @@ public class ConsultationServiceImpl implements ConsultationService {
     public List<ConsultationResponseDTO> getConsultationsForPatient(UUID patientId) {
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<Consultation> consultations = consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId);
-        if (activeHospitalId != null) {
-            consultations = consultations.stream()
-                .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
+        if (activeHospitalId == null) {
+            return consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
                 .toList();
         }
+        // E9 #59b — consultations follow the patient across the readable
+        // hospitals, at the database rather than by loading every tenant's
+        // rows and keeping the acting hospital's. A foreign consultation in a
+        // sensitive category (decision D3) is withheld here and opens through
+        // break-the-glass (E9 #62); every foreign row surfaced is accounted.
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        List<Consultation> consultations = consultationRepository
+            .findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, readable).stream()
+            .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(c)))
+            .toList();
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(consultations, c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital()), activeHospitalId),
+            "Cross-hospital consultation read on the treatment relationship");
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();

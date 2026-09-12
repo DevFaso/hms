@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import com.example.hms.model.Hospital;
 
 /**
  * E8 #53 / E9 — accounts for the REACH of a cross-hospital read, not just the
@@ -22,7 +23,9 @@ import java.util.function.Function;
  *
  * <p>Extracted from {@code PatientServiceImpl} in E9 #59 so every surface that
  * now returns foreign rows — diagnoses, nursing notes, chart updates, advance
- * directives, the doctor record — records reach the same way instead of each
+ * directives, the doctor record, and since #59b lab and imaging orders, lab
+ * results, procedure orders, consultations and referrals — records reach the
+ * same way instead of each
  * carrying its own copy. A failure to audit is logged and never fails the read:
  * the row was already authorised by the policy; the ledger is the second line.
  */
@@ -41,12 +44,11 @@ public class CrossHospitalReachRecorder {
     /**
      * Count the rows in {@code rows} whose hospital is not {@code actingHospitalId},
      * keyed by source hospital id. Rows with no hospital are not foreign.
+     * {@code rows} is a repository result and never null — a null guard here
+     * taught Sonar that every caller's list might be null (S2259).
      */
     public static <T> Map<String, Long> reachOf(Collection<T> rows, Function<T, UUID> hospitalIdOf, UUID actingHospitalId) {
         Map<String, Long> perSource = new HashMap<>();
-        if (rows == null) {
-            return perSource;
-        }
         for (T row : rows) {
             UUID source = hospitalIdOf.apply(row);
             if (source != null && !source.equals(actingHospitalId)) {
@@ -54,6 +56,11 @@ public class CrossHospitalReachRecorder {
             }
         }
         return perSource;
+    }
+
+    /** The id of an entity's {@code hospital} association, or {@code null} when it has none. */
+    public static UUID hospitalIdOf(Hospital hospital) {
+        return hospital == null ? null : hospital.getId();
     }
 
     /** Merge {@code more} into {@code into}, summing counts per source hospital. */

@@ -39,6 +39,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
 
 /**
  * Service implementation for multi-specialty general referrals
@@ -60,6 +63,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final RoleValidator roleValidator;
     private final ReferralEventRecorder eventRecorder;
     private final ReferralEventRepository eventRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional
@@ -290,7 +295,14 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<GeneralReferral> referrals;
         if (activeHospitalId != null) {
-            referrals = referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, activeHospitalId);
+            // E9 #59b — referrals follow the patient across the readable
+            // hospitals (untagged, V158); every foreign row is accounted.
+            UUID requesterUserId = roleValidator.getCurrentUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+            reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(referrals, r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital()), activeHospitalId),
+                "Cross-hospital referral read on the treatment relationship");
         } else {
             referrals = referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
         }

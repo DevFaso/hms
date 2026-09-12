@@ -61,7 +61,15 @@ class CrossHospitalReadFilterCoverageTest {
         "AdvanceDirectiveRepository.findByPatient_IdAndHospital_IdIn",
         "NursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
         "NursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
-        "PatientChartUpdateRepository.findByPatient_IdAndHospital_IdIn");
+        "PatientChartUpdateRepository.findByPatient_IdAndHospital_IdIn",
+        // E9 #59b — orders and results follow the patient.
+        "LabOrderRepository.findByPatient_IdAndHospital_IdIn",
+        "LabResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn",
+        "ImagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
+        "ImagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc",
+        "ProcedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
+        "ConsultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc",
+        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc");
 
     /**
      * Single-hospital patient finders still declared. Every one of these reads

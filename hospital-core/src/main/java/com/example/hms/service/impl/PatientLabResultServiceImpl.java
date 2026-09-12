@@ -28,6 +28,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -46,6 +50,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final LabResultMapper labResultMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional(readOnly = true)
@@ -63,8 +69,16 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+            // E9 #59b — results follow the patient across the readable
+            // hospitals (lab rows carry no sensitivity tag, V158); every
+            // foreign row surfaced is accounted.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             results = labResultRepository
-                .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patient.getId(), hospital.getId(), pageable);
+                .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
+            reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(results, r -> hospitalIdOf(r.getLabOrder()), hospital.getId()),
+                "Cross-hospital lab result read on the treatment relationship");
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal
             results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
@@ -106,7 +120,14 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .category(testDefinition != null ? testDefinition.getCategory() : null)
             .notes(result.getNotes())
+            .hospitalId(hospitalIdOf(labOrder))
+            .hospitalName(labOrder != null && labOrder.getHospital() != null ? labOrder.getHospital().getName() : null)
             .build();
+    }
+
+    /** Provenance (E9): the hospital that resulted the row, off the order that owns it. */
+    private static UUID hospitalIdOf(LabOrder order) {
+        return order == null ? null : CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
     }
 
     private String resolveUnit(LabResult result, LabTestDefinition definition) {

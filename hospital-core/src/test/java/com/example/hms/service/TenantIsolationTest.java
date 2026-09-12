@@ -23,6 +23,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import java.util.Set;
 
 /**
  * Tenant Isolation Test Suite — Batch 3
@@ -54,6 +55,8 @@ class TenantIsolationTest {
         @Mock private StaffRepository staffRepository;
         @Mock private EncounterRepository encounterRepository;
         @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+        @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
         @InjectMocks private ProcedureOrderServiceImpl service;
 
@@ -107,7 +110,8 @@ class TenantIsolationTest {
         @DisplayName("listByPatient — SQL-scoped returns only hospital A data")
         void listByPatient_scoped() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
-            when(procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientA.getId(), HOSPITAL_A_ID))
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(patientA.getId()), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientA.getId(), Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of(orderA));
             assertThat(service.getProcedureOrdersForPatient(patientA.getId())).hasSize(1);
         }
@@ -115,8 +119,11 @@ class TenantIsolationTest {
         @Test
         @DisplayName("listByPatient — patient in B, user scoped to A → empty (SQL returns nothing)")
         void listByPatient_crossTenant() {
+            // E9 #59b — B does not disclose this patient to A, so the policy's
+            // readable set is A alone and the SQL returns nothing.
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
-            when(procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientB.getId(), HOSPITAL_A_ID))
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(patientB.getId()), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientB.getId(), Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of());
             assertThat(service.getProcedureOrdersForPatient(patientB.getId())).isEmpty();
         }
@@ -247,6 +254,8 @@ class TenantIsolationTest {
         @Mock private StaffRepository staffRepository;
         @Mock private DepartmentRepository departmentRepository;
         @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+        @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
         @InjectMocks private GeneralReferralServiceImpl service;
 
@@ -289,7 +298,8 @@ class TenantIsolationTest {
         @DisplayName("listByPatient — SQL-scoped to hospital A")
         void listByPatient_scoped() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
-            when(referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientA.getId(), HOSPITAL_A_ID))
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(patientA.getId()), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientA.getId(), Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of(referralA));
             // Service uses private toResponse() — no mapper mock needed
             assertThat(service.getReferralsByPatient(patientA.getId())).hasSize(1);
@@ -300,7 +310,9 @@ class TenantIsolationTest {
         void listByPatient_crossTenant() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_A_ID);
             UUID crossPatientId = UUID.randomUUID();
-            when(referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(crossPatientId, HOSPITAL_A_ID))
+            // E9 #59b — no disclosure to A for this patient: readable set is A alone.
+            when(recordAccessPolicy.readableHospitalIds(any(), eq(crossPatientId), eq(HOSPITAL_A_ID))).thenReturn(Set.of(HOSPITAL_A_ID));
+            when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(crossPatientId, Set.of(HOSPITAL_A_ID)))
                 .thenReturn(List.of());
             assertThat(service.getReferralsByPatient(crossPatientId)).isEmpty();
         }
