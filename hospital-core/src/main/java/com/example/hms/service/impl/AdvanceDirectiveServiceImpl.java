@@ -57,7 +57,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
             .map(mapper::toResponseDto)
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(directives, AdvanceDirectiveResponseDTO::getHospitalId, activeHospitalId),
+            CrossHospitalReachRecorder.reachOf(directives.stream().map(AdvanceDirectiveResponseDTO::getHospitalId).toList(), activeHospitalId),
             "Cross-hospital advance directive read on the treatment relationship");
         return directives;
     }

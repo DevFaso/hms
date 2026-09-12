@@ -195,7 +195,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
                 ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), activeHospitalId),
+                CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital imaging order read on the treatment relationship");
         } else if (status != null) {
             orders = imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status);

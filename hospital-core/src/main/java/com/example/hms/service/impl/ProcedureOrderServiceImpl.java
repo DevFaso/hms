@@ -119,7 +119,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
             orders = procedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), activeHospitalId),
+                CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital procedure order read on the treatment relationship");
         } else {
             orders = procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);

@@ -65,7 +65,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             .findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
             .map(patientChartUpdateMapper::toResponseDto);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-            CrossHospitalReachRecorder.reachOf(page.getContent(), PatientChartUpdateResponseDTO::getHospitalId, hospitalId),
+            CrossHospitalReachRecorder.reachOf(page.getContent().stream().map(PatientChartUpdateResponseDTO::getHospitalId).toList(), hospitalId),
             "Cross-hospital chart update read on the treatment relationship");
         return page;
     }

@@ -404,7 +404,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
                 Page<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
                 reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                    CrossHospitalReachRecorder.reachOf(rows.getContent(), p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospitalId),
+                    CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                     "Cross-hospital prescription read on the treatment relationship");
                 return rows.map(prescriptionMapper::toResponseDTO);
             }
@@ -512,7 +512,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(rows, p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospitalId),
+                CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
                 "Cross-hospital prescription read on the treatment relationship");
             return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)

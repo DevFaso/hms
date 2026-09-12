@@ -252,7 +252,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             List<LabOrder> orders = labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(orders, o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()), hospitalId),
+                CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), hospitalId),
                 "Cross-hospital lab order read on the treatment relationship");
             return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)

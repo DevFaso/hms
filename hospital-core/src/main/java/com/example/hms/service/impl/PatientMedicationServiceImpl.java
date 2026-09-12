@@ -72,7 +72,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable);
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(prescriptions, p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital()), hospital.getId()),
+                CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal
