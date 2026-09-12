@@ -2,8 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
+import { of } from 'rxjs';
+
 import { ImpersonationService } from './impersonation.service';
-import { AuthService, LoginUserProfile } from '../auth/auth.service';
+import { AuthService, LoginUserProfile, SessionBootstrapResponse } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
 const ORIGINAL_TOKEN_KEY = 'auth_token_pre_impersonation';
@@ -21,6 +23,31 @@ function fakeJwt(payload: Record<string, unknown>): string {
 }
 
 describe('ImpersonationService', () => {
+  function bootstrapForCurrentToken(): SessionBootstrapResponse {
+    const parts = (storedToken ?? '').split('.');
+    const payload =
+      parts.length === 3
+        ? (JSON.parse(atob(parts[1].replaceAll('-', '+').replaceAll('_', '/'))) as Record<
+            string,
+            unknown
+          >)
+        : null;
+    const roles = (payload?.['roles'] as string[] | undefined) ?? storedProfile?.roles ?? [];
+    return {
+      userId: (payload?.['uid'] as string | undefined) ?? storedProfile?.id ?? 'u',
+      username: (payload?.['sub'] as string | undefined) ?? storedProfile?.username ?? 'u',
+      email: '',
+      authSource: 'internal',
+      roles,
+      superAdmin: roles.includes('ROLE_SUPER_ADMIN'),
+      hospitalAdmin: false,
+      primaryHospitalId:
+        (payload?.['primaryHospitalId'] as string | undefined) ?? storedProfile?.primaryHospitalId,
+      permittedHospitalIds:
+        (payload?.['hospitalIds'] as string[] | undefined) ?? storedProfile?.hospitalIds ?? [],
+    };
+  }
+
   let service: ImpersonationService;
   let http: HttpTestingController;
   let auth: jasmine.SpyObj<AuthService>;
@@ -48,6 +75,8 @@ describe('ImpersonationService', () => {
       'isTokenRemembered',
       'getUserProfile',
       'setUserProfile',
+      'getRoles',
+      'sessionBootstrap',
     ]);
     auth.getToken.and.callFake(() => storedToken);
     auth.setToken.and.callFake((token: string, remember = true) => {
@@ -62,10 +91,16 @@ describe('ImpersonationService', () => {
     auth.setUserProfile.and.callFake((p: LoginUserProfile) => {
       storedProfile = p;
     });
+    auth.getRoles.and.callFake(() => storedProfile?.roles ?? []);
+    // E9 #55b: the hospital scope comes from GET /auth/session/bootstrap as
+    // the CURRENT token's user; the stub answers with what that user's
+    // token carries, which is what the live assignment table would say.
+    auth.sessionBootstrap.and.callFake(() => of(bootstrapForCurrentToken()));
 
     roleContext = jasmine.createSpyObj<RoleContextService>('RoleContextService', [
       'setRoles',
       'setPermittedHospitalIds',
+      'markSuperAdminGlobalDefaults',
     ]);
     // activeHospitalId is a setter — install it as a spied property
     Object.defineProperty(roleContext, 'activeHospitalId', {

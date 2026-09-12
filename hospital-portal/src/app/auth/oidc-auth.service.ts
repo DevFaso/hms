@@ -5,6 +5,7 @@ import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 import { environment } from '../../environments/environment';
 import { AuthService, LoginUserProfile } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { SessionScopeService } from '../core/session-scope.service';
 
 /**
  * KC-2b — Keycloak / OIDC Authorization Code + PKCE driver for the portal.
@@ -29,6 +30,7 @@ export class OidcAuthService {
   private readonly oauth = inject(OAuthService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly sessionScope = inject(SessionScopeService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
@@ -180,20 +182,11 @@ export class OidcAuthService {
 
     this.auth.setUserProfile(profile);
 
-    // Mirror the bootstrap logic in AppComponent so role guards and the
-    // X-Hospital-Id interceptor work immediately after Keycloak redirect.
+    // E9 #55b: roles from the claims at once (the guards run on the
+    // redirect), the hospital scope from the live session; the profile just
+    // stored is the fallback until the server answers.
     this.roleContext.setRoles(roles);
-    const permittedIds = this.auth.getPermittedHospitalIds();
-    this.roleContext.setPermittedHospitalIds(permittedIds);
-    if (permittedIds.length === 1) {
-      this.roleContext.activeHospitalId = permittedIds[0];
-    } else if (permittedIds.length > 1 && primaryHospitalId) {
-      this.roleContext.activeHospitalId = primaryHospitalId;
-    }
-
-    // Cross-tenant: super-admins land on every list page in "all
-    // hospitals" mode by default — see AppComponent for the rationale
-    // and docs/super-admin-cross-tenant-design.md design call #5.
-    this.roleContext.markSuperAdminGlobalDefaults();
+    this.sessionScope.applyStoredProfile();
+    this.sessionScope.hydrate().subscribe();
   }
 }

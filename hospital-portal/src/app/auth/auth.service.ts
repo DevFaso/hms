@@ -59,7 +59,7 @@ export interface LoginUserProfile {
   primaryHospitalId?: string;
   /** Display name of the primary hospital. */
   primaryHospitalName?: string;
-  /** All hospital IDs this user is permitted to access. */
+  /** All hospital IDs this user is permitted to access, as the session last reported them. */
   hospitalIds?: string[];
 }
 
@@ -399,51 +399,14 @@ export class AuthService {
     return roles.some((r) => r === 'ROLE_SUPER_ADMIN' || r === 'ROLE_HOSPITAL_ADMIN');
   }
 
-  getHospitalId(): string | null {
-    const ctx = this.roleContext.activeHospitalId;
-    if (ctx) return ctx;
-    const p = this.decodePayload();
-    return (
-      (p?.['primaryHospitalId'] as string) ??
-      (p?.hospitalId as string) ??
-      // Keycloak custom claim (snake_case via the hms-claims scope mapper).
-      (p?.['hospital_id'] as string) ??
-      null
-    );
-  }
-
   /**
-   * Returns the hospital IDs this user is permitted to access.
-   *
-   * - Admin roles (SUPER_ADMIN, HOSPITAL_ADMIN): returns the full `hospitalIds[]`
-   *   array from the JWT so they can manage/switch between hospitals.
-   * - All other roles (receptionist, doctor, nurse, …): always returns only
-   *   `[primaryHospitalId]`.  These users are locked to the hospital they signed
-   *   into and must never see or select a different one.
+   * The working hospital: the active one when set, else the primary the
+   * session last reported (stored profile). E9 #55b: the token's hospital
+   * claims are never consulted — they are frozen at login while the server
+   * resolves the scope live.
    */
-  getPermittedHospitalIds(): string[] {
-    const p = this.decodePayload();
-    if (!p) return [];
-
-    const primary =
-      (p['primaryHospitalId'] as string) ??
-      (p.hospitalId as string) ??
-      // Keycloak custom claim from the hms-claims scope.
-      (p['hospital_id'] as string) ??
-      null;
-
-    // Non-admin staff are always locked to exactly one hospital — their primary.
-    if (!this.isAdminRole()) {
-      return primary ? [primary] : [];
-    }
-
-    // Admin roles get the full list so they can operate across hospitals.
-    const raw = p['hospitalIds'];
-    if (Array.isArray(raw)) {
-      const list = raw.filter((v): v is string => typeof v === 'string');
-      if (list.length > 0) return list;
-    }
-    return primary ? [primary] : [];
+  getHospitalId(): string | null {
+    return this.roleContext.activeHospitalId ?? this.getUserProfile()?.primaryHospitalId ?? null;
   }
 
   hasAnyRole(expected: string[]): boolean {
