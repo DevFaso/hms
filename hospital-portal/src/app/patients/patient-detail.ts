@@ -13,6 +13,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
+  APPOINTMENT_VIEW_ROLES,
   CHART_REVIEW_VIEW_ROLES,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
@@ -236,6 +237,10 @@ export class PatientDetailComponent implements OnInit {
    *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
     return this.roleContext.hasAnyActiveRole(ENCOUNTER_VIEW_ROLES);
+  }
+  /** Mirrors AppointmentController's per-patient READ gate (E9 #69). */
+  canViewAppointments(): boolean {
+    return this.roleContext.hasAnyActiveRole(APPOINTMENT_VIEW_ROLES);
   }
 
   /** Chart Review is its own backend (ChartReviewController) with its own,

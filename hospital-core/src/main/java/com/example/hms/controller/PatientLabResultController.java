@@ -36,7 +36,7 @@ public class PatientLabResultController {
     private final ControllerAuthUtils authUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_LAB_SCIENTIST','ROLE_SUPER_ADMIN','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_LAB_SCIENTIST','ROLE_SUPER_ADMIN','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     @Operation(
         summary = "List patient lab results",
         description = "Returns simplified lab result summaries for the selected patient, scoped to the caller's hospital context.",

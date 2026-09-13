@@ -97,6 +97,10 @@ public class PatientController {
         + "'ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
+        // E9 #69: the pharmacist reads the chart (diagnoses, vitals, results) to
+        // verify a prescription; the picker, the medication tab and chart review
+        // already assumed it while this list refused the demographics page.
+        + "'ROLE_PHARMACIST',"
         + "'ROLE_SUPER_ADMIN')";
 
     /**
@@ -110,6 +114,17 @@ public class PatientController {
     private static final String PATIENT_PICKER_ROLES = "hasAnyAuthority("
         + "'ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')";
+
+    /**
+     * E9 #69 — allergies are readable by every clinical role. A radiologist
+     * planning contrast, an anaesthetist planning induction and a
+     * physiotherapist planning a session each need the allergy list; before
+     * this only the chart-owning roles and the pharmacist could read it.
+     * Writes stay with the roles that record allergies.
+     */
+    private static final String ALLERGY_READ_ROLES = "hasAnyAuthority("
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ")";
 
     private final PatientService patientService;
     private final NurseDashboardService nurseDashboardService;
@@ -481,7 +496,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
 @GetMapping("/{id}/allergies")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_READ_ROLES)
     public ResponseEntity<List<PatientAllergyResponseDTO>> getPatientAllergies(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -586,7 +601,8 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/{id}/diagnoses")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // E9 #69: the pharmacist verifying a prescription (V139) reads the problem list.
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     public ResponseEntity<List<PatientProblemResponseDTO>> listPatientDiagnoses(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,

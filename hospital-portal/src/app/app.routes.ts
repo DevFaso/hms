@@ -263,6 +263,8 @@ export const routes: Routes = [
             // guard was the only rejecting layer.
             'ROLE_LAB_TECHNICIAN',
             'ROLE_QUALITY_MANAGER',
+            // E9 #69: the pharmacist reads the chart to verify a prescription.
+            'ROLE_PHARMACIST',
             // Role audit D7: consulting clinicians read the chart. Admitted
             // only once ALL five backend layers the page calls were widened
             // (patient read, vitals, encounters, appointments, hospital

@@ -31,12 +31,15 @@ class PatientControllerAuthorizationTest {
         List.of("ROLE_PHARMACIST", "ROLE_RADIOLOGIST", "ROLE_PHYSIOTHERAPIST");
 
     /**
-     * Of those, only the pharmacist looks patients up WITHOUT reading the
-     * chart. The radiologist and physiotherapist gained chart access in role
-     * audit D7 once all five of the chart page's layers were widened together
-     * (see ConsultingClinicianChartAccessTest).
+     * All three read the chart now. The radiologist and physiotherapist gained
+     * it in role audit D7 once all five of the chart page's layers were widened
+     * together (see ConsultingClinicianChartAccessTest); the pharmacist in E9
+     * #69, because the verification gate (V139) needs the problem list, the
+     * vitals and the results — renal function decides doses — and the picker,
+     * the medication tab and chart review had assumed the pharmacist on the
+     * chart all along while this list refused the demographics page.
      */
-    private static final List<String> PICKER_BUT_NOT_CHART = List.of("ROLE_PHARMACIST");
+    private static final List<String> CHART_READERS_FROM_THE_PICKER = PICKER_ROLES;
 
     private static String preAuthorizeOf(String methodName) {
         return Arrays.stream(PatientController.class.getDeclaredMethods())
@@ -67,14 +70,15 @@ class PatientControllerAuthorizationTest {
     }
 
     @Test
-    @DisplayName("looking patients up is not the same as reading the chart")
-    void pharmacistLooksUpWithoutReadingTheChart() {
-        // The SecurityConfig GET /patients matcher must admit every picker role
-        // — it also covers /patients/search and /patients/lookup — so the
-        // controller is the layer that keeps the chart itself narrower. A
-        // pharmacist resolves a patient to dispense against; that is not a
-        // reason to hand them the whole record.
-        assertThat(preAuthorizeOf("getAllPatients")).doesNotContain(PICKER_BUT_NOT_CHART);
+    @DisplayName("every picker role reads the chart it resolves a patient into")
+    void pickerRolesReadTheChart() {
+        // The SecurityConfig GET /patients matcher admits every picker role — it
+        // also covers /patients/search and /patients/lookup — and since E9 #69
+        // the controller does too: a role that can find a patient can open the
+        // record it needs for its own act (report, session, verification). The
+        // chart's own sub-resources stay gated per surface (ClinicalMatrixGapsTest).
+        assertThat(preAuthorizeOf("getAllPatients")).contains(CHART_READERS_FROM_THE_PICKER);
+        assertThat(preAuthorizeOf("getPatientById")).contains(CHART_READERS_FROM_THE_PICKER);
     }
 
     @Test

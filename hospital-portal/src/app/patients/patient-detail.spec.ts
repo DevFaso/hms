@@ -206,41 +206,20 @@ describe('PatientDetailComponent', () => {
     expect(component.canViewEncounters()).toBeFalse();
   });
 
-  it('turns a 403 CHART_RESTRICTED into the declaration prompt instead of the not-found redirect (E8 #54)', () => {
-    patientServiceSpy.getById.and.returnValue(
-      throwError(() => new HttpErrorResponse({ status: 403, error: { code: 'CHART_RESTRICTED' } })),
-    );
-    fixture.detectChanges();
-
-    expect(component.restricted()).toBeTrue();
-    expect(toastSpy.error).not.toHaveBeenCalledWith('Patient not found');
-    expect(fixture.nativeElement.querySelector('[data-testid="restricted-chart"]')).toBeTruthy();
-  });
-
-  it('offers the restriction card to the hospital administrator only (E8 #54)', () => {
+  it('gates the Appointments tab on the per-patient appointment read roles', () => {
+    // E9 #69: the pharmacist reaches the chart now but AppointmentController's
+    // per-patient read does not admit them (nor the lab roles); the tab used
+    // to be unconditional and clicked into a 403 card.
     roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
-      roles.includes('ROLE_HOSPITAL_ADMIN'),
+      roles.includes('ROLE_PHARMACIST'),
     );
-    expect(component.canManageRestriction()).toBeTrue();
+    expect(component.canViewAppointments()).toBeFalse();
+    expect(component.canViewChartReview()).toBeTrue();
+
     roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
-      roles.includes('ROLE_DOCTOR'),
+      roles.includes('ROLE_RECEPTIONIST'),
     );
-    expect(component.canManageRestriction()).toBeFalse();
-  });
-
-  it('restricts a chart with a reason and shows the chip (E8 #54)', () => {
-    patientServiceSpy.setChartRestriction = jasmine
-      .createSpy('setChartRestriction')
-      .and.returnValue(
-        of({ ...mockPatient, chartRestricted: true, chartRestrictionReason: 'Staff member' }),
-      );
-    fixture.detectChanges();
-    component.restrictionReason.set('Staff member');
-    component.setChartRestriction(true);
-
-    expect(patientServiceSpy.setChartRestriction).toHaveBeenCalledWith('p1', true, 'Staff member');
-    expect(component.patient()?.chartRestricted).toBeTrue();
-    expect(toastSpy.success).toHaveBeenCalled();
+    expect(component.canViewAppointments()).toBeTrue();
   });
 
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {

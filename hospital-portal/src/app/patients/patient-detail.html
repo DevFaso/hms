@@ -232,14 +232,16 @@
           {{ 'PATIENTS.ENCOUNTERS_TAB' | translate }}
         </button>
       }
-      <button
-        class="tab"
-        [class.active]="activeTab() === 'appointments'"
-        (click)="setTab('appointments')"
-        [title]="'PATIENTS.APPOINTMENTS_TITLE' | translate"
-      >
-        {{ 'PATIENTS.APPOINTMENTS_TAB' | translate }}
-      </button>
+      @if (canViewAppointments()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'appointments'"
+          (click)="setTab('appointments')"
+          [title]="'PATIENTS.APPOINTMENTS_TITLE' | translate"
+        >
+          {{ 'PATIENTS.APPOINTMENTS_TAB' | translate }}
+        </button>
+      }
       @if (canViewDirectives()) {
         <button
           class="tab"

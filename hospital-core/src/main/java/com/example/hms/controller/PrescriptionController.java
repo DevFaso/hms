@@ -50,8 +50,8 @@ public class PrescriptionController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE')")
-    @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse, nurse practitioner, or hospital admin).")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse or midwife).")
     public ResponseEntity<PrescriptionResponseDTO> create(
         @Valid @RequestBody PrescriptionRequestDTO request,
         Locale locale) {
@@ -152,7 +152,7 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,
@@ -176,7 +176,7 @@ public class PrescriptionController {
     }
 
     @PostMapping("/{id}/dispatch-sms")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
         description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
             + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "

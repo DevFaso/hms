@@ -270,7 +270,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Patient Records',
         // Mirrors the /patients RoleGuard list — without it, ten roles whose
         // static permission map grants 'View Patient Records' (accountant,
-        // billing specialist, pharmacist, …) saw a nav entry that landed on
+        // billing specialist, …) saw a nav entry that landed on
         // the 403 page because the guard rejects them.
         roles: [
           'ROLE_DOCTOR',
@@ -289,6 +289,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_RADIOLOGIST',
           'ROLE_ANESTHESIOLOGIST',
           'ROLE_PHYSIOTHERAPIST',
+          'ROLE_PHARMACIST',
         ],
       },
       {
