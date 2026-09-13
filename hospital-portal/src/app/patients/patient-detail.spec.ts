@@ -206,6 +206,22 @@ describe('PatientDetailComponent', () => {
     expect(component.canViewEncounters()).toBeFalse();
   });
 
+  it('gates the Appointments tab on the per-patient appointment read roles', () => {
+    // E9 #69: the pharmacist reaches the chart now but AppointmentController's
+    // per-patient read does not admit them (nor the lab roles); the tab used
+    // to be unconditional and clicked into a 403 card.
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_PHARMACIST'),
+    );
+    expect(component.canViewAppointments()).toBeFalse();
+    expect(component.canViewChartReview()).toBeTrue();
+
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RECEPTIONIST'),
+    );
+    expect(component.canViewAppointments()).toBeTrue();
+  });
+
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {
     // The D5/D6 resolution: they read results and imaging from the patient's
     // record, not from /lab and /imaging, which are order-entry workbenches.

@@ -84,7 +84,7 @@ public class LabResultController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'PHARMACIST')")
     @Operation(summary = "Get Lab Result by ID", description = "Fetches a lab result by its ID.")
     public ResponseEntity<LabResultResponseDTO> getLabResultById(
             @PathVariable UUID id,
@@ -93,7 +93,7 @@ public class LabResultController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PHARMACIST', 'SUPER_ADMIN')")
     @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated list of lab results. Hospital-scoped for tenant roles; SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,

@@ -134,7 +134,7 @@ public class ConsultationController {
     // hospital-path reads have no caller in the portal at all — and they now
     // validate the path hospital against the caller's active one rather than
     // trusting it, so the reason for keeping them narrow is weaker than it was.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
     public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
         @RequestParam(required = false) UUID hospitalId

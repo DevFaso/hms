@@ -55,7 +55,7 @@ public class MtmReviewController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE',"
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
             + "'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get an MTM review by ID")
     public ResponseEntity<MtmReviewResponseDTO> getById(@PathVariable UUID id) {
@@ -72,7 +72,7 @@ public class MtmReviewController {
     }
 
     @GetMapping("/by-patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE',"
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
             + "'ROLE_SUPER_ADMIN')")
     @Operation(summary = "List MTM reviews for a specific patient")
     public ResponseEntity<Page<MtmReviewResponseDTO>> listByPatient(
