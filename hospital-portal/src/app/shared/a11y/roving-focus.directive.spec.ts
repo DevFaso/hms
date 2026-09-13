@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { RovingFocusDirective } from './roving-focus.directive';
@@ -21,6 +21,7 @@ import { RovingFocusDirective } from './roving-focus.directive';
 @Component({
   standalone: true,
   imports: [RovingFocusDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <ul appRovingFocus="li.item" [orientation]="orientation" [modifier]="modifier" [wrap]="wrap">
       <li class="item" data-id="0">a</li>

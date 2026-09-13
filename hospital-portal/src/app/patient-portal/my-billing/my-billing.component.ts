@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -14,6 +14,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, DatePipe, CurrencyPipe, FormsModule, EnumLabelPipe, TranslateModule],
   templateUrl: './my-billing.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-billing.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyBillingComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -24,6 +24,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './treatment-plans.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './treatment-plans.scss',
 })
 export class TreatmentPlansComponent implements OnInit {

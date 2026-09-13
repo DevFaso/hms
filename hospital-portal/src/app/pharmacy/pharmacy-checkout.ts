@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -25,6 +25,7 @@ import { ToastService } from '../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, DatePipe, DecimalPipe],
   templateUrl: './pharmacy-checkout.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',
 })
 export class PharmacyCheckoutComponent {

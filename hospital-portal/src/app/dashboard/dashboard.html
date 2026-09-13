@@ -671,8 +671,11 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
-              <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
+              <span>{{ $safeNavigationMigration(paymentTrend()[0]?.date) | date: 'MMM d' }}</span>
+              <span>{{
+                $safeNavigationMigration(paymentTrend()[paymentTrend().length - 1]?.date)
+                  | date: 'MMM d'
+              }}</span>
             </div>
           </div>
         </section>
@@ -2196,7 +2199,10 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value">
-                  @if (labDirectorDashboard()?.avgTurnaroundMinutesToday !== null) {
+                  @if (
+                    $safeNavigationMigration(labDirectorDashboard()?.avgTurnaroundMinutesToday) !==
+                    null
+                  ) {
                     {{ labDirectorDashboard()!.avgTurnaroundMinutesToday! | number: '1.0-0' }}
                   } @else {
                     N/A
@@ -2323,7 +2329,9 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
-                  @if (qualityManagerDashboard()?.qualityPassRate !== null) {
+                  @if (
+                    $safeNavigationMigration(qualityManagerDashboard()?.qualityPassRate) !== null
+                  ) {
                     {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
                   } @else {
                     N/A

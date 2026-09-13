@@ -1,6 +1,6 @@
 import { ApplicationConfig, provideAppInitializer, inject } from '@angular/core';
 import { provideRouter, withNavigationErrorHandler, NavigationError } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideOAuthClient } from 'angular-oauth2-oidc';
@@ -44,6 +44,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withNavigationErrorHandler(handleChunkLoadNavigationError)),
     provideHttpClient(
+      withXhr(),
       withInterceptors([
         apiPrefixInterceptor,
         csrfInterceptor,

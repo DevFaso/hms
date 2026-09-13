@@ -39,7 +39,7 @@
       <p class="opt-out-status" data-testid="opt-out-status">
         @if (optedOut()) {
           {{ 'PORTAL.SHARING.OPT_OUT.STATUS_ON' | translate }}
-          {{ optOut()?.optedOutAt | date: 'mediumDate' }}
+          {{ $safeNavigationMigration(optOut()?.optedOutAt) | date: 'mediumDate' }}
         } @else {
           {{ 'PORTAL.SHARING.OPT_OUT.STATUS_OFF' | translate }}
         }

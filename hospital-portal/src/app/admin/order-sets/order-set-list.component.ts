@@ -38,64 +38,66 @@ import { AuthService } from '../../auth/auth.service';
         (ngModelChange)="onSearch($event)"
       />
 
-      <p *ngIf="loading()" data-testid="order-set-admin-loading">
-        {{ 'ORDER_SETS.SEARCHING' | translate }}
-      </p>
+      @if (loading()) {
+        <p data-testid="order-set-admin-loading">
+          {{ 'ORDER_SETS.SEARCHING' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="order-set-admin__error" data-testid="order-set-admin-error">
-        {{ 'ORDER_SETS.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="order-set-admin__error" data-testid="order-set-admin-error">
+          {{ 'ORDER_SETS.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        class="data-table"
-        *ngIf="!loading() && !error() && rows().length > 0"
-        data-testid="order-set-admin-table"
-      >
-        <thead>
-          <tr>
-            <th>{{ 'ORDER_SETS.COL_NAME' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_VERSION' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_ITEM_COUNT' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_TYPE' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_LAST_MODIFIED' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let os of rows(); trackBy: trackById" [attr.data-os-id]="os.id">
-            <td>{{ os.name }}</td>
-            <td>v{{ os.version }}</td>
-            <td>{{ os.orderCount }}</td>
-            <td>{{ os.admissionType }}</td>
-            <td>{{ os.updatedAt | date: 'short' }}</td>
-            <td class="actions">
-              <a
-                class="action-link"
-                [routerLink]="['/admin/order-sets', os.id]"
-                data-testid="order-set-admin-edit"
-              >
-                {{ 'COMMON.EDIT' | translate }}
-              </a>
-              <button
-                type="button"
-                class="action-link delete-link"
-                (click)="deactivate(os)"
-                data-testid="order-set-admin-deactivate"
-              >
-                {{ 'ORDER_SETS.DEACTIVATE' | translate }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!loading() && !error() && rows().length > 0) {
+        <table class="data-table" data-testid="order-set-admin-table">
+          <thead>
+            <tr>
+              <th>{{ 'ORDER_SETS.COL_NAME' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_VERSION' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_ITEM_COUNT' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_TYPE' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_LAST_MODIFIED' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (os of rows(); track trackById($index, os)) {
+              <tr [attr.data-os-id]="os.id">
+                <td>{{ os.name }}</td>
+                <td>v{{ os.version }}</td>
+                <td>{{ os.orderCount }}</td>
+                <td>{{ os.admissionType }}</td>
+                <td>{{ os.updatedAt | date: 'short' }}</td>
+                <td class="actions">
+                  <a
+                    class="action-link"
+                    [routerLink]="['/admin/order-sets', os.id]"
+                    data-testid="order-set-admin-edit"
+                  >
+                    {{ 'COMMON.EDIT' | translate }}
+                  </a>
+                  <button
+                    type="button"
+                    class="action-link delete-link"
+                    (click)="deactivate(os)"
+                    data-testid="order-set-admin-deactivate"
+                  >
+                    {{ 'ORDER_SETS.DEACTIVATE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!loading() && !error() && rows().length === 0"
-        class="order-set-admin__empty"
-        data-testid="order-set-admin-empty"
-      >
-        {{ 'ORDER_SETS.NO_RESULTS' | translate }}
-      </p>
+      @if (!loading() && !error() && rows().length === 0) {
+        <p class="order-set-admin__empty" data-testid="order-set-admin-empty">
+          {{ 'ORDER_SETS.NO_RESULTS' | translate }}
+        </p>
+      }
     </section>
   `,
   styles: [

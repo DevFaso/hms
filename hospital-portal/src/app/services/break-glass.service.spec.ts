@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import {
   BreakGlassService,
@@ -30,7 +30,7 @@ describe('BreakGlassService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [BreakGlassService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [BreakGlassService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(BreakGlassService);
     httpMock = TestBed.inject(HttpTestingController);

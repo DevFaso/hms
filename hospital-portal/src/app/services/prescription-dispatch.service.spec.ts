@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { PrescriptionService, CommunityPharmacyService } from './prescription.service';
 
@@ -9,7 +9,7 @@ describe('PrescriptionService.dispatchSms', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [PrescriptionService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [PrescriptionService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(PrescriptionService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -65,7 +65,11 @@ describe('CommunityPharmacyService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [CommunityPharmacyService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        CommunityPharmacyService,
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+      ],
     });
     service = TestBed.inject(CommunityPharmacyService);
     httpMock = TestBed.inject(HttpTestingController);

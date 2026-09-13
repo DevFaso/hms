@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, LabResultSummary } from '../../services/patient-portal.service';
@@ -9,6 +9,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-lab-results.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-lab-results.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyLabResultsComponent implements OnInit {

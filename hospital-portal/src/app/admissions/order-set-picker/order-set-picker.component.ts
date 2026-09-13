@@ -10,7 +10,7 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -45,7 +45,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
 @Component({
   selector: 'app-order-set-picker',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [FormsModule, TranslateModule, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-picker" data-testid="order-set-picker" [attr.data-state]="state()">
@@ -71,98 +71,91 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         (ngModelChange)="onSearch($event)"
       />
 
-      <ul
-        class="order-set-picker__list"
-        data-testid="order-set-picker-list"
-        *ngIf="state() === 'ready' && results().length > 0"
-      >
-        <li
-          *ngFor="let os of results(); trackBy: trackById"
-          role="button"
-          tabindex="0"
-          [class.order-set-picker__item--selected]="selected()?.id === os.id"
-          (click)="select(os)"
-          (keydown.enter)="select(os)"
-          (keydown.space)="select(os); $event.preventDefault()"
-          data-testid="order-set-picker-item"
-        >
-          <div class="order-set-picker__item-name">
-            {{ os.name }} <small>v{{ os.version }}</small>
-          </div>
-          <div class="order-set-picker__item-meta">
-            {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} · {{ os.admissionType }}
-          </div>
-        </li>
-      </ul>
-
-      <p
-        *ngIf="state() === 'ready' && results().length === 0"
-        class="order-set-picker__empty"
-        data-testid="order-set-picker-empty"
-      >
-        {{ 'ORDER_SETS.NO_RESULTS' | translate }}
-      </p>
-
-      <p
-        *ngIf="state() === 'searching'"
-        class="order-set-picker__loading"
-        data-testid="order-set-picker-loading"
-      >
-        {{ 'ORDER_SETS.SEARCHING' | translate }}
-      </p>
-
-      <p
-        *ngIf="state() === 'error'"
-        class="order-set-picker__error"
-        data-testid="order-set-picker-error"
-      >
-        {{ 'ORDER_SETS.ERROR' | translate }}
-      </p>
-
-      <section
-        *ngIf="selected() as sel"
-        class="order-set-picker__preview"
-        data-testid="order-set-picker-preview"
-      >
-        <h3>{{ sel.name }}</h3>
-        <p *ngIf="sel.description">{{ sel.description }}</p>
-        <ul>
-          <li *ngFor="let item of sel.orderItems; let i = index">
-            <strong>{{ orderItemType(item) }}</strong
-            >: {{ orderItemLabel(item) }}
-          </li>
+      @if (state() === 'ready' && results().length > 0) {
+        <ul class="order-set-picker__list" data-testid="order-set-picker-list">
+          @for (os of results(); track trackById($index, os)) {
+            <li
+              role="button"
+              tabindex="0"
+              [class.order-set-picker__item--selected]="selected()?.id === os.id"
+              (click)="select(os)"
+              (keydown.enter)="select(os)"
+              (keydown.space)="select(os); $event.preventDefault()"
+              data-testid="order-set-picker-item"
+            >
+              <div class="order-set-picker__item-name">
+                {{ os.name }} <small>v{{ os.version }}</small>
+              </div>
+              <div class="order-set-picker__item-meta">
+                {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} · {{ os.admissionType }}
+              </div>
+            </li>
+          }
         </ul>
-        <button
-          type="button"
-          class="btn-primary"
-          data-testid="order-set-picker-apply"
-          [disabled]="state() === 'applying'"
-          (click)="apply(sel)"
-        >
-          {{ 'ORDER_SETS.APPLY' | translate }}
-        </button>
-      </section>
+      }
 
-      <section
-        *ngIf="appliedSummary() as summary"
-        class="order-set-picker__applied"
-        data-testid="order-set-picker-applied"
-      >
-        <p>
-          {{
-            'ORDER_SETS.APPLIED_RESULT'
-              | translate
-                : {
-                    count:
-                      summary.prescriptionIds.length +
-                      summary.labOrderIds.length +
-                      summary.imagingOrderIds.length,
-                    skipped: summary.skippedItemCount,
-                  }
-          }}
+      @if (state() === 'ready' && results().length === 0) {
+        <p class="order-set-picker__empty" data-testid="order-set-picker-empty">
+          {{ 'ORDER_SETS.NO_RESULTS' | translate }}
         </p>
-        <app-cds-card-list [cards]="summary.cdsAdvisories" />
-      </section>
+      }
+
+      @if (state() === 'searching') {
+        <p class="order-set-picker__loading" data-testid="order-set-picker-loading">
+          {{ 'ORDER_SETS.SEARCHING' | translate }}
+        </p>
+      }
+
+      @if (state() === 'error') {
+        <p class="order-set-picker__error" data-testid="order-set-picker-error">
+          {{ 'ORDER_SETS.ERROR' | translate }}
+        </p>
+      }
+
+      @if (selected(); as sel) {
+        <section class="order-set-picker__preview" data-testid="order-set-picker-preview">
+          <h3>{{ sel.name }}</h3>
+          @if (sel.description) {
+            <p>{{ sel.description }}</p>
+          }
+          <ul>
+            @for (item of sel.orderItems; track item; let i = $index) {
+              <li>
+                <strong>{{ orderItemType(item) }}</strong
+                >: {{ orderItemLabel(item) }}
+              </li>
+            }
+          </ul>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="order-set-picker-apply"
+            [disabled]="state() === 'applying'"
+            (click)="apply(sel)"
+          >
+            {{ 'ORDER_SETS.APPLY' | translate }}
+          </button>
+        </section>
+      }
+
+      @if (appliedSummary(); as summary) {
+        <section class="order-set-picker__applied" data-testid="order-set-picker-applied">
+          <p>
+            {{
+              'ORDER_SETS.APPLIED_RESULT'
+                | translate
+                  : {
+                      count:
+                        summary.prescriptionIds.length +
+                        summary.labOrderIds.length +
+                        summary.imagingOrderIds.length,
+                      skipped: summary.skippedItemCount,
+                    }
+            }}
+          </p>
+          <app-cds-card-list [cards]="summary.cdsAdvisories" />
+        </section>
+      }
     </section>
   `,
   styles: [

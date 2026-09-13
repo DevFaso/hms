@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -26,6 +26,7 @@ const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
   standalone: true,
   imports: [CommonModule, DatePipe, FormsModule, TranslateModule],
   templateUrl: './my-documents.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-documents.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyDocumentsComponent implements OnInit {

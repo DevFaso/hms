@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -77,6 +84,7 @@ type TabKey =
     EnumLabelPipe,
   ],
   templateUrl: './patient-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-detail.scss',
 })
 export class PatientDetailComponent implements OnInit {

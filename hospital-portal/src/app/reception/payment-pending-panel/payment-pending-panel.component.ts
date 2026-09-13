@@ -1,4 +1,12 @@
-import { Component, Input, Output, EventEmitter, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,6 +28,7 @@ interface OpenInvoice {
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './payment-pending-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './payment-pending-panel.component.scss',
 })
 export class PaymentPendingPanelComponent {

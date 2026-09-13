@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
 import { Dhis2Service } from './dhis2.service';
@@ -62,7 +62,7 @@ describe('Dhis2Service', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [Dhis2Service, provideHttpClient(), provideHttpClientTesting()],
+      providers: [Dhis2Service, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(Dhis2Service);
     httpMock = TestBed.inject(HttpTestingController);

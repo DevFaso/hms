@@ -1,5 +1,5 @@
-import { Component, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+
 import { TranslateModule } from '@ngx-translate/core';
 
 import { DowntimeService } from '../services/downtime.service';
@@ -12,7 +12,7 @@ import { DowntimeService } from '../services/downtime.service';
 @Component({
   selector: 'app-downtime-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   template: `
     @if (visible()) {
       <div class="downtime-banner" role="alert" data-testid="downtime-banner">
@@ -24,6 +24,7 @@ import { DowntimeService } from '../services/downtime.service';
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .downtime-banner {
       display: flex;

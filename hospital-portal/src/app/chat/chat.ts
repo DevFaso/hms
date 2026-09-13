@@ -1,5 +1,13 @@
-import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   ChatService,
@@ -101,8 +109,9 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './chat.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',
 })
 export class ChatComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -23,6 +23,7 @@ import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hos
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './lab-results.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-results.scss',
 })
 export class LabResultsComponent implements OnInit {

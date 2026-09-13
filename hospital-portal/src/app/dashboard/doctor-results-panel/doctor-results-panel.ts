@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
@@ -13,7 +13,7 @@ const LOCALE_MAP: Record<string, string> = {
 @Component({
   selector: 'app-doctor-results-panel',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule],
   templateUrl: './doctor-results-panel.html',
   styleUrl: './doctor-results-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,5 +1,12 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { RouterModule } from '@angular/router';
 import { DashboardService, LabOpsSummary } from '../../services/dashboard.service';
 import { ToastService } from '../../core/toast.service';
@@ -23,8 +30,9 @@ interface StatusRow {
 @Component({
   selector: 'app-lab-ops-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [RouterModule],
   templateUrl: './lab-ops-dashboard.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-ops-dashboard.scss',
 })
 export class LabOpsDashboardComponent implements OnInit {

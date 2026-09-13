@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -17,6 +17,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './my-records.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyRecordsComponent implements OnInit {

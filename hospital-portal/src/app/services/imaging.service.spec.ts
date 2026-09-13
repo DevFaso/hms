@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
 import { ImagingService, ImagingReportResponse } from './imaging.service';
@@ -17,7 +17,7 @@ describe('ImagingService — results', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), ImagingService],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), ImagingService],
     });
     service = TestBed.inject(ImagingService);
     httpMock = TestBed.inject(HttpTestingController);

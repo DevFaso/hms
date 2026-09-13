@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -11,6 +11,7 @@ import { AuthService } from '../auth/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './announcement-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './announcement-list.scss',
 })
 export class AnnouncementListComponent implements OnInit {

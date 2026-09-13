@@ -1,4 +1,12 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -30,6 +38,7 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './medical-history-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medical-history-tab.component.scss',
 })
 export class MedicalHistoryTabComponent implements OnInit {

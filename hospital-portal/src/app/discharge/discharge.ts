@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -28,6 +28,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './discharge.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './discharge.scss',
 })
 export class DischargeComponent implements OnInit {

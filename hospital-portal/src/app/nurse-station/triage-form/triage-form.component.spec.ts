@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TriageFormComponent } from './triage-form.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import {
   EncounterService,
   EncounterResponse,
@@ -44,7 +44,7 @@ describe('TriageFormComponent', () => {
     await TestBed.configureTestingModule({
       imports: [TriageFormComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: EncounterService, useValue: mockEncounterService },
         { provide: ToastService, useValue: mockToastService },

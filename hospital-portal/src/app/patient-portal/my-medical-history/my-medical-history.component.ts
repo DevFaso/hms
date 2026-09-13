@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin } from 'rxjs';
@@ -15,6 +15,7 @@ import {
   standalone: true,
   imports: [CommonModule, DatePipe, TranslateModule],
   templateUrl: './my-medical-history.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-medical-history.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyMedicalHistoryComponent implements OnInit {

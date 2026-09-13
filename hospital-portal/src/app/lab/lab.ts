@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -26,6 +33,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab.scss',
 })
 export class LabComponent implements OnInit {

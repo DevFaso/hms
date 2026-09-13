@@ -8,6 +8,7 @@ import {
   OnInit,
   PLATFORM_ID,
   ViewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -25,6 +26,7 @@ import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
   standalone: true,
   imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent],
   templateUrl: './login.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./login.scss'],
 })
 export class Login implements OnInit, AfterViewInit {

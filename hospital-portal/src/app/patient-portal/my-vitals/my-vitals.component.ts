@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, VitalSignSummary } from '../../services/patient-portal.service';
@@ -16,6 +23,7 @@ interface VitalGroup {
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-vitals.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-vitals.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyVitalsComponent implements OnInit {

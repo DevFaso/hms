@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -45,6 +45,7 @@ interface OrderSetPickerCtx {
     EnumLabelPipe,
   ],
   templateUrl: './admissions.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admissions.scss',
 })
 export class AdmissionsComponent implements OnInit {

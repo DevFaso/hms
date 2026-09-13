@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -38,6 +45,7 @@ interface HistoryState {
   standalone: true,
   imports: [CommonModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './integration-health.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-health.scss',
 })
 export class IntegrationHealthComponent implements OnInit {

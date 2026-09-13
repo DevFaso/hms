@@ -8,7 +8,7 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
@@ -37,7 +37,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-bpa-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [FormsModule, TranslateModule, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './bpa-panel.component.html',
   styleUrls: ['./bpa-panel.component.scss'],

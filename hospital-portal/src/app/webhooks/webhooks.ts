@@ -1,4 +1,13 @@
-import { Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -49,6 +58,7 @@ interface RevealedSecret {
     HospitalScopeHintComponent,
   ],
   templateUrl: './webhooks.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './webhooks.scss',
 })
 export class WebhooksComponent implements OnInit, OnDestroy {

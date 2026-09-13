@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WaitlistPanelComponent } from './waitlist-panel.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, WaitlistEntryResponse } from '../reception.service';
 import { SlotInventoryService } from '../../services/slot-inventory.service';
 import { PatientService } from '../../services/patient.service';
@@ -78,7 +78,7 @@ describe('WaitlistPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [WaitlistPanelComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: SlotInventoryService, useValue: mockSlotInventoryService },

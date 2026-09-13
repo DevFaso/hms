@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -58,7 +58,7 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
       imports: [PrescriptionsComponent, TranslateModule.forRoot()],
       providers: [
         // The scope chip pulls in HospitalService, which needs HttpClient.
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PrescriptionService, useValue: prescriptionService },
         { provide: StaffService, useValue: staffService },
@@ -192,7 +192,7 @@ describe('PrescriptionsComponent — signing', () => {
     await TestBed.configureTestingModule({
       imports: [PrescriptionsComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PrescriptionService, useValue: prescriptionService },
         { provide: StaffService, useValue: staffService },
@@ -348,7 +348,7 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     await TestBed.configureTestingModule({
       imports: [PrescriptionsComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PrescriptionService, useValue: prescriptionService },
         { provide: StaffService, useValue: staffService },

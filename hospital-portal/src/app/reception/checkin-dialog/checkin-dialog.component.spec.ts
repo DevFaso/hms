@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CheckinDialogComponent } from './checkin-dialog.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, ReceptionQueueItem, CheckInResponse } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
@@ -50,7 +50,7 @@ describe('CheckinDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CheckinDialogComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: ToastService, useValue: mockToastService },

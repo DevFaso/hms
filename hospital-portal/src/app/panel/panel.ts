@@ -1,4 +1,13 @@
-import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -46,6 +55,7 @@ import { ToastService } from '../core/toast.service';
     HospitalScopeHintComponent,
   ],
   templateUrl: './panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './panel.scss',
 })
 export class PanelComponent implements OnInit {

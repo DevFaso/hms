@@ -1,5 +1,12 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { AuthService } from '../auth/auth.service';
@@ -21,8 +28,9 @@ type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
+  imports: [RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
   templateUrl: './staff-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-detail.scss',
 })
 export class StaffDetailComponent implements OnInit {

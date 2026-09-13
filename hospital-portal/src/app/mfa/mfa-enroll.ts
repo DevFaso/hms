@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -15,6 +15,7 @@ import { MfaService } from '../auth/mfa.service';
   standalone: true,
   imports: [FormsModule],
   templateUrl: './mfa-enroll.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'],
 })
 export class MfaEnrollComponent {

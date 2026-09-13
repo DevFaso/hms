@@ -88,50 +88,52 @@ import { ToastService } from '../../../core/toast.service';
         </button>
       </form>
 
-      <p *ngIf="loading()" data-testid="dhis2-export-loading">
-        {{ 'DHIS2.PANEL.LOADING' | translate }}
-      </p>
+      @if (loading()) {
+        <p data-testid="dhis2-export-loading">
+          {{ 'DHIS2.PANEL.LOADING' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="dhis2-export__error" data-testid="dhis2-export-error">
-        {{ 'DHIS2.PANEL.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="dhis2-export__error" data-testid="dhis2-export-error">
+          {{ 'DHIS2.PANEL.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        class="data-table"
-        *ngIf="!loading() && !error() && runs().length > 0"
-        data-testid="dhis2-export-runs"
-      >
-        <thead>
-          <tr>
-            <th>{{ 'DHIS2.PANEL.COL_STARTED' | translate }}</th>
-            <th>{{ 'DHIS2.PANEL.COL_DATASET' | translate }}</th>
-            <th>{{ 'DHIS2.PANEL.COL_PERIOD' | translate }}</th>
-            <th>{{ 'DHIS2.PANEL.COL_STATUS' | translate }}</th>
-            <th>{{ 'DHIS2.PANEL.COL_VALUES' | translate }}</th>
-            <th>{{ 'DHIS2.PANEL.COL_SKIPPED' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let r of runs(); trackBy: trackById" [attr.data-run-id]="r.id">
-            <td>{{ r.startedAt | date: 'short' }}</td>
-            <td>{{ r.datasetUid }}</td>
-            <td>{{ r.periodIso }}</td>
-            <td>
-              <span class="status-pill" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
-            </td>
-            <td>{{ r.valueCount }}</td>
-            <td>{{ r.skippedCount }}</td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!loading() && !error() && runs().length > 0) {
+        <table class="data-table" data-testid="dhis2-export-runs">
+          <thead>
+            <tr>
+              <th>{{ 'DHIS2.PANEL.COL_STARTED' | translate }}</th>
+              <th>{{ 'DHIS2.PANEL.COL_DATASET' | translate }}</th>
+              <th>{{ 'DHIS2.PANEL.COL_PERIOD' | translate }}</th>
+              <th>{{ 'DHIS2.PANEL.COL_STATUS' | translate }}</th>
+              <th>{{ 'DHIS2.PANEL.COL_VALUES' | translate }}</th>
+              <th>{{ 'DHIS2.PANEL.COL_SKIPPED' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of runs(); track trackById($index, r)) {
+              <tr [attr.data-run-id]="r.id">
+                <td>{{ r.startedAt | date: 'short' }}</td>
+                <td>{{ r.datasetUid }}</td>
+                <td>{{ r.periodIso }}</td>
+                <td>
+                  <span class="status-pill" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
+                </td>
+                <td>{{ r.valueCount }}</td>
+                <td>{{ r.skippedCount }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!loading() && !error() && runs().length === 0"
-        class="dhis2-export__empty"
-        data-testid="dhis2-export-empty"
-      >
-        {{ 'DHIS2.PANEL.EMPTY' | translate }}
-      </p>
+      @if (!loading() && !error() && runs().length === 0) {
+        <p class="dhis2-export__empty" data-testid="dhis2-export-empty">
+          {{ 'DHIS2.PANEL.EMPTY' | translate }}
+        </p>
+      }
     </section>
   `,
   styles: [

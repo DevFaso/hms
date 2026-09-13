@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RecallsPanelComponent } from './recalls-panel.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, RecallResponse } from '../reception.service';
 import { PatientService } from '../../services/patient.service';
 import { ReferralService } from '../../services/referral.service';
@@ -71,7 +71,7 @@ describe('RecallsPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [RecallsPanelComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: PatientService, useValue: mockPatientService },

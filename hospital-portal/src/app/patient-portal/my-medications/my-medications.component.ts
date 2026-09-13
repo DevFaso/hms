@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -16,6 +16,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-medications.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-medications.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyMedicationsComponent implements OnInit {

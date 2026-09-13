@@ -13,7 +13,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -46,7 +46,7 @@ import { HospitalTypeaheadComponent } from '../hospital-typeahead/hospital-typea
 @Component({
   selector: 'app-hospital-scope-chip',
   standalone: true,
-  imports: [CommonModule, TranslateModule, HospitalTypeaheadComponent],
+  imports: [TranslateModule, HospitalTypeaheadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hospital-scope-chip.component.html',
   styleUrl: './hospital-scope-chip.component.scss',

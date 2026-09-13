@@ -24,6 +24,11 @@ module.exports = tseslint.config(
     ],
     processor: angular.processInlineTemplates,
     rules: {
+      // Angular 22 made OnPush the default and its migration pinned every
+      // existing component to ChangeDetectionStrategy.Eager to keep behaviour;
+      // angular-eslint 22 then flags each pin. Moving 141 components to OnPush
+      // is its own change (tasklist, Standing platform debt), not a lint fix.
+      '@angular-eslint/prefer-on-push-component-change-detection': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

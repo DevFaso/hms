@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 
@@ -23,6 +23,7 @@ import { FocusOnErrorDirective } from './focus-on-error.directive';
 @Component({
   standalone: true,
   imports: [FormsModule, FocusOnErrorDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <form appFocusOnError (ngSubmit)="onSubmit()">
       <input

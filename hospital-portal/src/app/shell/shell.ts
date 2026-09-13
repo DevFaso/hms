@@ -9,6 +9,7 @@ import {
   ElementRef,
   ViewChild,
   AfterViewInit,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -67,6 +68,7 @@ interface NavItem {
     BrandMarkComponent,
   ],
   templateUrl: './shell.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './shell.scss',
 })
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {

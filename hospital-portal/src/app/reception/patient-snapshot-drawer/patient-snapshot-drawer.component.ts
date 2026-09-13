@@ -7,6 +7,7 @@ import {
   SimpleChanges,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +20,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './patient-snapshot-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-snapshot-drawer.component.scss',
 })
 export class PatientSnapshotDrawerComponent implements OnChanges {

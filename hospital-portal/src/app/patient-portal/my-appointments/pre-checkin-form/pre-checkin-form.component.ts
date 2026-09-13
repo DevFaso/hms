@@ -7,6 +7,7 @@ import {
   Output,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -25,6 +26,7 @@ import {
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './pre-checkin-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pre-checkin-form.component.scss',
 })
 export class PreCheckinFormComponent implements OnInit, OnChanges {

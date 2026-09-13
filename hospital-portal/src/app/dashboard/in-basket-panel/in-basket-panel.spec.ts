@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, throwError } from 'rxjs';
 import { InBasketPanelComponent } from './in-basket-panel';
@@ -59,7 +59,7 @@ describe('InBasketPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [InBasketPanelComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: InBasketService, useValue: inBasketSpy },
       ],

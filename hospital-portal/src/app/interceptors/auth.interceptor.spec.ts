@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 
@@ -28,7 +28,7 @@ describe('apiPrefixInterceptor', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([apiPrefixInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([apiPrefixInterceptor])),
         provideHttpClientTesting(),
         { provide: AuthService, useValue: auth },
         { provide: Router, useValue: router },

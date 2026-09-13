@@ -1,5 +1,12 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { TranslateModule } from '@ngx-translate/core';
 
 import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
@@ -43,8 +50,9 @@ interface KpiCard {
 @Component({
   selector: 'app-kpi-cards',
   standalone: true,
-  imports: [CommonModule, TranslateModule, KpiSparklineComponent],
+  imports: [TranslateModule, KpiSparklineComponent],
   templateUrl: './kpi-cards.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kpi-cards.component.scss',
 })
 export class KpiCardsComponent implements OnInit {

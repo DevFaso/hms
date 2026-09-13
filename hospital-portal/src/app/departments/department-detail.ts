@@ -1,5 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
@@ -53,8 +53,9 @@ interface DepartmentStats {
 @Component({
   selector: 'app-department-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule],
   templateUrl: './department-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-detail.scss',
 })
 export class DepartmentDetailComponent implements OnInit {

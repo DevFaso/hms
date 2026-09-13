@@ -1,4 +1,11 @@
-import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  inject,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InsuranceIssue } from '../reception.service';
@@ -8,6 +15,7 @@ import { InsuranceIssue } from '../reception.service';
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './insurance-issues-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './insurance-issues-panel.component.scss',
 })
 export class InsuranceIssuesPanelComponent {

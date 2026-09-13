@@ -6,6 +6,7 @@ import {
   OnChanges,
   SimpleChanges,
   inject,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -25,6 +26,7 @@ type ColKey = keyof FlowBoard;
   standalone: true,
   imports: [CommonModule, DragDropModule, TranslateModule],
   templateUrl: './flow-board.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './flow-board.component.scss',
 })
 export class FlowBoardComponent implements OnChanges {

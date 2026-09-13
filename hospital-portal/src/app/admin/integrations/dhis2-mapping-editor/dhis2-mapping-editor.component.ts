@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
@@ -22,7 +22,7 @@ import { ToastService } from '../../../core/toast.service';
 @Component({
   selector: 'app-dhis2-mapping-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-mappings" data-testid="dhis2-mapping-editor">
@@ -44,59 +44,61 @@ import { ToastService } from '../../../core/toast.service';
         </label>
       </div>
 
-      <p *ngIf="loading()" data-testid="dhis2-mapping-loading">
-        {{ 'DHIS2.MAPPINGS.LOADING' | translate }}
-      </p>
+      @if (loading()) {
+        <p data-testid="dhis2-mapping-loading">
+          {{ 'DHIS2.MAPPINGS.LOADING' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="dhis2-mappings__error" data-testid="dhis2-mapping-error">
-        {{ 'DHIS2.MAPPINGS.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="dhis2-mappings__error" data-testid="dhis2-mapping-error">
+          {{ 'DHIS2.MAPPINGS.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        class="data-table"
-        *ngIf="!loading() && !error() && rows().length > 0"
-        data-testid="dhis2-mapping-table"
-      >
-        <thead>
-          <tr>
-            <th>{{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }}</th>
-            <th>{{ 'DHIS2.MAPPINGS.COL_CODE' | translate }}</th>
-            <th>{{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }}</th>
-            <th>{{ 'DHIS2.MAPPINGS.COL_COC' | translate }}</th>
-            <th>{{ 'DHIS2.MAPPINGS.COL_PERIOD' | translate }}</th>
-            <th>{{ 'DHIS2.MAPPINGS.COL_ACTIVE' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let m of rows(); trackBy: trackById" [attr.data-mapping-id]="m.id">
-            <td>{{ m.hmsConceptSystem }}</td>
-            <td>{{ m.hmsConceptCode }}</td>
-            <td>{{ m.dhis2DataElementUid }}</td>
-            <td>{{ m.dhis2CategoryOptionComboUid || '—' }}</td>
-            <td>{{ m.periodType }}</td>
-            <td>{{ m.active ? '✓' : '·' }}</td>
-            <td>
-              <button
-                type="button"
-                class="action-link delete-link"
-                (click)="onDelete(m.id)"
-                data-testid="dhis2-mapping-delete"
-              >
-                {{ 'COMMON.DELETE' | translate }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!loading() && !error() && rows().length > 0) {
+        <table class="data-table" data-testid="dhis2-mapping-table">
+          <thead>
+            <tr>
+              <th>{{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }}</th>
+              <th>{{ 'DHIS2.MAPPINGS.COL_CODE' | translate }}</th>
+              <th>{{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }}</th>
+              <th>{{ 'DHIS2.MAPPINGS.COL_COC' | translate }}</th>
+              <th>{{ 'DHIS2.MAPPINGS.COL_PERIOD' | translate }}</th>
+              <th>{{ 'DHIS2.MAPPINGS.COL_ACTIVE' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of rows(); track trackById($index, m)) {
+              <tr [attr.data-mapping-id]="m.id">
+                <td>{{ m.hmsConceptSystem }}</td>
+                <td>{{ m.hmsConceptCode }}</td>
+                <td>{{ m.dhis2DataElementUid }}</td>
+                <td>{{ m.dhis2CategoryOptionComboUid || '—' }}</td>
+                <td>{{ m.periodType }}</td>
+                <td>{{ m.active ? '✓' : '·' }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="action-link delete-link"
+                    (click)="onDelete(m.id)"
+                    data-testid="dhis2-mapping-delete"
+                  >
+                    {{ 'COMMON.DELETE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!loading() && !error() && rows().length === 0"
-        class="dhis2-mappings__empty"
-        data-testid="dhis2-mapping-empty"
-      >
-        {{ 'DHIS2.MAPPINGS.EMPTY' | translate }}
-      </p>
+      @if (!loading() && !error() && rows().length === 0) {
+        <p class="dhis2-mappings__empty" data-testid="dhis2-mapping-empty">
+          {{ 'DHIS2.MAPPINGS.EMPTY' | translate }}
+        </p>
+      }
 
       <form class="dhis2-mappings__add" (ngSubmit)="onAdd()" data-testid="dhis2-mapping-add-form">
         <h3>{{ 'DHIS2.MAPPINGS.ADD' | translate }}</h3>

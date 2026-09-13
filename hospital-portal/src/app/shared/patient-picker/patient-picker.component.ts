@@ -7,8 +7,9 @@ import {
   Output,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -23,8 +24,9 @@ import { PatientService, PatientResponse } from '../../services/patient.service'
 @Component({
   selector: 'app-patient-picker',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   templateUrl: './patient-picker.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',
 })
 export class PatientPickerComponent implements OnInit, OnDestroy {

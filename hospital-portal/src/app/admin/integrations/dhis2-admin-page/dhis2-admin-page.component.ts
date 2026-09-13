@@ -167,17 +167,15 @@ type Tab = 'config' | 'mappings' | 'exports';
             {{ 'COMMON.SAVE' | translate }}
           </button>
 
-          <p
-            *ngIf="loadedConfig() as cfg"
-            class="dhis2-admin__last-export"
-            data-testid="dhis2-config-last-export"
-          >
-            {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
-            {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
-            ·
-            {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
-            {{ cfg.authSecretConfigured ? '✓' : '✗' }}
-          </p>
+          @if (loadedConfig(); as cfg) {
+            <p class="dhis2-admin__last-export" data-testid="dhis2-config-last-export">
+              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
+              {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
+              ·
+              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
+              {{ cfg.authSecretConfigured ? '✓' : '✗' }}
+            </p>
+          }
         </form>
       </section>
 
@@ -187,7 +185,9 @@ type Tab = 'config' | 'mappings' | 'exports';
         aria-labelledby="dhis2-tab-mappings"
         [hidden]="activeTab() !== 'mappings'"
       >
-        <app-dhis2-mapping-editor *ngIf="activeTab() === 'mappings'" />
+        @if (activeTab() === 'mappings') {
+          <app-dhis2-mapping-editor />
+        }
       </section>
 
       <section
@@ -196,7 +196,9 @@ type Tab = 'config' | 'mappings' | 'exports';
         aria-labelledby="dhis2-tab-exports"
         [hidden]="activeTab() !== 'exports'"
       >
-        <app-dhis2-export-panel *ngIf="activeTab() === 'exports'" />
+        @if (activeTab() === 'exports') {
+          <app-dhis2-export-panel />
+        }
       </section>
     </section>
   `,

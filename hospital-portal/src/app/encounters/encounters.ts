@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -40,6 +40,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
     EnumLabelPipe,
   ],
   templateUrl: './encounters.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './encounters.scss',
 })
 export class EncountersComponent implements OnInit {

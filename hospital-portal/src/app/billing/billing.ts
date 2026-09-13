@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -21,6 +21,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './billing.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
 })
 export class BillingComponent implements OnInit {

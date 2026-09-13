@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -79,6 +86,7 @@ const ACTION_CONFIG: Record<LifecycleAction, ActionConfig> = {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './organization-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-detail.scss',
 })
 export class OrganizationDetailComponent implements OnInit {

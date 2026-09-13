@@ -1,4 +1,12 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -18,6 +26,7 @@ type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRES
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
   templateUrl: './triage-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',
 })
 export class TriageFormComponent {

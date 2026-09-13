@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { OAuthService } from 'angular-oauth2-oidc';
 
@@ -34,7 +34,7 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: OAuthService, useValue: oauthMock },
       ],

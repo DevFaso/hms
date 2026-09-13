@@ -1,5 +1,4 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -21,8 +20,9 @@ interface EditState {
 @Component({
   selector: 'app-data-residency-policy',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './data-residency-policy.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './data-residency-policy.scss',
 })
 export class DataResidencyPolicyComponent implements OnInit {
