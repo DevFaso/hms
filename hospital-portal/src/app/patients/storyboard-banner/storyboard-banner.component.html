@@ -32,7 +32,7 @@
             <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
               >warning</span
             >
-            <h3 class="storyboard__section-title">{{ 'STORYBOARD.ALLERGIES' | translate }}</h3>
+            <h2 class="storyboard__section-title">{{ 'STORYBOARD.ALLERGIES' | translate }}</h2>
             @if (s.hasHighSeverityAllergy) {
               <span class="storyboard__pill storyboard__pill--danger">
                 {{ 'STORYBOARD.HIGH_SEVERITY' | translate }}
@@ -70,7 +70,7 @@
             <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
               >stethoscope</span
             >
-            <h3 class="storyboard__section-title">{{ 'STORYBOARD.PROBLEMS' | translate }}</h3>
+            <h2 class="storyboard__section-title">{{ 'STORYBOARD.PROBLEMS' | translate }}</h2>
             @if (s.hasChronicProblem) {
               <span class="storyboard__pill storyboard__pill--info">
                 {{ 'STORYBOARD.CHRONIC_PRESENT' | translate }}
@@ -111,9 +111,9 @@
             <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
               >event_available</span
             >
-            <h3 class="storyboard__section-title">
+            <h2 class="storyboard__section-title">
               {{ 'STORYBOARD.ACTIVE_ENCOUNTER' | translate }}
-            </h3>
+            </h2>
           </div>
           @if (hasEncounter() && s.activeEncounter; as enc) {
             <dl class="storyboard__kv">
@@ -164,7 +164,7 @@
             <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
               >heart_broken</span
             >
-            <h3 class="storyboard__section-title">{{ 'STORYBOARD.CODE_STATUS' | translate }}</h3>
+            <h2 class="storyboard__section-title">{{ 'STORYBOARD.CODE_STATUS' | translate }}</h2>
           </div>
           @if (hasCodeStatus() && s.codeStatus; as cs) {
             @if (cs.status) {

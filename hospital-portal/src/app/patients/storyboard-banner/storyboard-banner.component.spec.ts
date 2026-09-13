@@ -126,7 +126,12 @@ describe('StoryboardBannerComponent', () => {
 
     expect(firstStream.observed).toBeFalse();
     expect(bannerEl()?.dataset['state']).toBe('ready');
-    expect(storyboardSpy.getStoryboard.calls.mostRecent().args[0]).toBe('p-fast');
+    // The fixture varies only fullName, which the banner no longer renders, so
+    // read what it holds: the fast answer, not the slow one that arrived last.
+    const held = (
+      fixture.componentInstance as unknown as { summary: () => PatientStoryboard | null }
+    ).summary();
+    expect(held?.patient.fullName).toBe('p-fast');
   });
 });
 
