@@ -2723,4 +2723,47 @@ class NurseTaskServiceImplTest {
             rx.getId(), UUID.randomUUID(), hospitalId, givenRequest()))
             .doesNotThrowAnyException();
     }
+
+    @Test
+    void getOrderTasksSkipsAnOrderWhosePatientNoLongerExists() {
+        // dev, 2026-09-13: a hard-deleted patient left a procedure order behind; the lazy
+        // proxy threw EntityNotFoundException on getFullName() and the whole board was a 500.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID livePatientId = UUID.randomUUID();
+        UUID gonePatientId = UUID.randomUUID();
+
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(livePatientId, "Ann Assigned", "Ann", "Assigned"),
+                patient(gonePatientId, "Gone Patient", "Gone", "Patient")));
+
+        Patient live = mock(Patient.class);
+        when(live.getId()).thenReturn(livePatientId);
+        when(live.getFullName()).thenReturn("Ann Assigned");
+        Patient gone = mock(Patient.class);
+        when(gone.getId()).thenReturn(gonePatientId);
+        when(gone.getFullName()).thenThrow(new jakarta.persistence.EntityNotFoundException(
+            "Unable to find com.example.hms.model.Patient with id " + gonePatientId));
+
+        LabOrder liveDraw = mock(LabOrder.class);
+        when(liveDraw.getId()).thenReturn(UUID.randomUUID());
+        when(liveDraw.getPatient()).thenReturn(live);
+        when(liveDraw.getPriority()).thenReturn("ROUTINE");
+        when(liveDraw.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 9, 13, 8, 0));
+        when(labOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(liveDraw));
+
+        ProcedureOrder orphaned = mock(ProcedureOrder.class);
+        when(orphaned.getId()).thenReturn(UUID.randomUUID());
+        when(orphaned.getPatient()).thenReturn(gone);
+        when(procedureOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(orphaned));
+
+        List<NurseOrderTaskResponseDTO> tasks = service.getOrderTasks(nurseId, hospitalId, null, 20);
+
+        assertThat(tasks)
+            .singleElement()
+            .extracting(NurseOrderTaskResponseDTO::getPatientName)
+            .isEqualTo("Ann Assigned");
+    }
 }
