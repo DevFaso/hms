@@ -1,6 +1,7 @@
 package com.example.hms.service.recordaccess;
 
 import com.example.hms.enums.RecordAccessDenialReason;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
@@ -49,6 +50,7 @@ class RecordAccessPolicyImplTest {
     @Mock private TreatmentRelationshipResolver resolver;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private BreakGlassGate breakGlassGate;
+    @Mock private com.example.hms.repository.PatientRepository patientRepository;
 
     @InjectMocks private RecordAccessPolicyImpl policy;
 
@@ -242,5 +244,59 @@ class RecordAccessPolicyImplTest {
         assertThat(d.permitted()).isFalse();
         assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
         verify(breakGlassGate, never()).liveSession(any(), any(), any());
+    }
+
+    // ------------------------------------------------------------------ E8 #54: restricted charts
+
+    private com.example.hms.model.Patient restrictedPatient() {
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setId(patient);
+        p.setChartRestricted(true);
+        when(patientRepository.findByIdUnscoped(patient)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    @DisplayName("a restricted chart refuses a registered clinician without a live session — CHART_RESTRICTED")
+    void restrictedChartRefusesRegistrationAlone() {
+        restrictedPatient();
+        PatientHospitalRegistration reg = new PatientHospitalRegistration();
+        reg.setId(UUID.randomUUID());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.of(reg));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.CHART_RESTRICTED);
+    }
+
+    @Test
+    @DisplayName("a restricted chart opens under a live session, and the relationship becomes BREAK_GLASS")
+    void restrictedChartOpensUnderASession() {
+        restrictedPatient();
+        com.example.hms.model.BreakGlassSession session = new com.example.hms.model.BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        session.setStartedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        session.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().actorDirectlyAttached()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the flag is read only after a relationship exists: a stranger still gets NOT_STAFF_AT_HOSPITAL")
+    void restrictionDisclosesNothingToAStranger() {
+        restrictedPatient();
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL);
+        verify(patientRepository, never()).findByIdUnscoped(patient);
     }
 }

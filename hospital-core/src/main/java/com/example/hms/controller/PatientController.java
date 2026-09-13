@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.PatientDiagnosisRequestDTO;
 import com.example.hms.payload.dto.PatientDiagnosisUpdateRequestDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientProfileUpdateRequestDTO;
+import com.example.hms.payload.dto.ChartRestrictionRequestDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.RegistrationMatchDTO;
@@ -253,6 +254,25 @@ public class PatientController {
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, dto.getHospitalId(), false);
         dto.setHospitalId(resolvedHospitalId);
         return ResponseEntity.ok(patientService.updatePatient(id, dto, locale));
+    }
+
+    /**
+     * E8 #54 — restrict or lift the restriction on a chart. An administrative
+     * act (HOSPITAL_ADMIN / SUPER_ADMIN, D5-consistent); the write-audit
+     * interceptor records it by convention.
+     */
+    @Operation(summary = "Restrict or lift the restriction on a patient's chart",
+        description = "While restricted, every read of the chart needs a live break-the-glass session with a stated reason.")
+    @PostMapping("/{id}/chart-restriction")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<PatientResponseDTO> setChartRestriction(
+        @PathVariable UUID id,
+        @Valid @RequestBody ChartRestrictionRequestDTO dto,
+        Authentication auth
+    ) {
+        UUID actor = authUtils.resolveUserId(auth).orElse(null);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, null, false);
+        return ResponseEntity.ok(patientService.setChartRestriction(id, dto, actor, hospitalId));
     }
 
     @WriteAudited(skip = true, reason = "service emits PATIENT_UPDATE / PATIENT_DELETE")

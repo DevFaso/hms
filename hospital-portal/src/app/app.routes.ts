@@ -1389,6 +1389,17 @@ export const routes: Routes = [
       // governance, credential health, baselines). SUPER_ADMIN only: most
       // backing endpoints are SUPER_ADMIN-only, and the flat security-policy
       // reads that would admit HOSPITAL_ADMIN are unscoped cross-tenant.
+      // E8 #54: the break-the-glass review — mirrors BreakGlassController's
+      // GET /audit and PATCH /{id}/review (HOSPITAL_ADMIN of the hospital, SUPER_ADMIN).
+      {
+        path: 'break-glass-review',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./break-glass-review/break-glass-review').then(
+            (m) => m.BreakGlassReviewComponent,
+          ),
+      },
       {
         path: 'admin-governance',
         canActivate: [RoleGuard],

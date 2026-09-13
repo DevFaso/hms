@@ -1,6 +1,9 @@
 package com.example.hms.service.support;
 
+import com.example.hms.enums.RecordAccessDenialReason;
+import com.example.hms.exception.ChartRestrictedException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.service.recordaccess.RecordAccessDecision;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
@@ -95,15 +98,22 @@ public class PatientChartAccess {
             }
             return patient;
         }
-        if (registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
+        // E8 #54: a restricted chart never opens on registration alone — the
+        // policy decides, and a CHART_RESTRICTED refusal is loud (403), not a 404.
+        if (!patient.isChartRestricted()
+            && registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
             return patient;
         }
         // E9 #58 — not linked by the desk (yet), but the patient may be on this
         // hospital's schedule, admitted here, or on an open order: the policy's
         // carriers open the chart for the staff treating them. Refused stays a
         // 404, indistinguishable from "no such patient".
-        if (recordAccessPolicy.decide(ctx.getPrincipalUserId(), patient.getId(), hospitalId).permitted()) {
+        RecordAccessDecision decision = recordAccessPolicy.decide(ctx.getPrincipalUserId(), patient.getId(), hospitalId);
+        if (decision.permitted()) {
             return patient;
+        }
+        if (decision.reason() == RecordAccessDenialReason.CHART_RESTRICTED) {
+            throw new ChartRestrictedException(patientId);
         }
         throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }

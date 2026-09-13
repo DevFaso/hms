@@ -58,6 +58,12 @@ public interface BreakGlassSessionRepository extends JpaRepository<BreakGlassSes
     @EntityGraph(attributePaths = {"user", "patient", "hospital", "revokedBy"})
     Page<BreakGlassSession> findByHospitalIdOrderByStartedAtDesc(UUID hospitalId, Pageable pageable);
 
+    /** E8 #54 — the review queue. */
+    Page<BreakGlassSession> findByHospitalIdAndReviewedAtIsNullOrderByStartedAtDesc(UUID hospitalId, Pageable pageable);
+
+    /** E8 #54 — what has been signed off. */
+    Page<BreakGlassSession> findByHospitalIdAndReviewedAtIsNotNullOrderByStartedAtDesc(UUID hospitalId, Pageable pageable);
+
     Optional<BreakGlassSession> findByIdAndHospitalId(UUID id, UUID hospitalId);
 
     /**

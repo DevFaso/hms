@@ -234,6 +234,26 @@ public class Patient extends BaseEntity implements TenantScoped {
         return deceasedAt != null;
     }
 
+    /**
+     * E8 #54 — a restricted chart (VIP, staff member, own or family record):
+     * every read at the hospital needs a live break-the-glass session, even
+     * from staff with a registration-based relationship. Set by a hospital
+     * administrator with a reason; plain columns, no association, so the
+     * policy can read it without a join or a lazy proxy.
+     */
+    @Builder.Default
+    @Column(name = "chart_restricted", nullable = false)
+    private boolean chartRestricted = false;
+
+    @Column(name = "chart_restriction_reason", length = 512)
+    private String chartRestrictionReason;
+
+    @Column(name = "chart_restricted_at")
+    private LocalDateTime chartRestrictedAt;
+
+    @Column(name = "chart_restricted_by_user_id")
+    private UUID chartRestrictedByUserId;
+
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true,
         foreignKey = @ForeignKey(name = "fk_patient_user"))

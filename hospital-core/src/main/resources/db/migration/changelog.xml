@@ -2393,4 +2393,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V160 — E8 #54: restricted charts and break-the-glass review.
+         A chart-restriction flag on the patient row (every read then
+         needs a live break-the-glass session) and a reviewed / sign-off
+         state on each session for the compliance screen. Additive DDL.
+         ================================================================= -->
+    <changeSet id="V160-restricted-charts-and-break-glass-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V160__restricted_charts_and_break_glass_review.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

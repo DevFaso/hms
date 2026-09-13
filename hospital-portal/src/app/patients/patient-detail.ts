@@ -104,7 +104,8 @@ export class PatientDetailComponent implements OnInit {
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
 
-  private patientId = '';
+  /** The route's patient id; read by the template for the restricted-chart prompt (E8 #54). */
+  patientId = '';
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -138,6 +139,8 @@ export class PatientDetailComponent implements OnInit {
 
   onBreakGlassSessionChanged(): void {
     this.accessEpoch.update((n) => n + 1);
+    // E8 #54: a session declared from the restricted prompt opens the chart.
+    if (this.restricted()) this.loadPatient(this.patientId);
   }
 
   /**
@@ -154,20 +157,70 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.effectiveHospitalIdForRequest() ?? null;
   }
 
+  /** E8 #54 — the chart is restricted and the caller holds no live session: the page shows the declaration prompt. */
+  readonly restricted = signal(false);
+
   loadPatient(id: string): void {
     this.loading.set(true);
+    this.restricted.set(false);
     const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
         this.patient.set(p);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error('Patient not found');
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
+        if (err.status === 403 && err.error?.code === 'CHART_RESTRICTED') {
+          // Loud by design: a restricted chart is not a missing one.
+          this.restricted.set(true);
+          return;
+        }
+        this.toast.error('Patient not found');
         this.router.navigate(['/patients']);
       },
     });
+  }
+
+  /** Restricting a chart is the hospital administrator's act (E8 #54). */
+  canManageRestriction(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+  }
+
+  readonly restrictionReason = signal('');
+  readonly restrictionSubmitting = signal(false);
+
+  setChartRestriction(restricted: boolean): void {
+    const p = this.patient();
+    if (!p || this.restrictionSubmitting()) return;
+    const reason = this.restrictionReason().trim();
+    if (restricted && reason.length < 5) {
+      this.toast.error(this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED'));
+      return;
+    }
+    this.restrictionSubmitting.set(true);
+    this.patientService
+      .setChartRestriction(p.id, restricted, restricted ? reason : undefined)
+      .subscribe({
+        next: (updated) => {
+          this.patient.set(updated);
+          this.restrictionReason.set('');
+          this.restrictionSubmitting.set(false);
+          this.toast.success(
+            this.translate.instant(
+              restricted
+                ? 'PATIENTS.CHART_RESTRICTION_APPLIED'
+                : 'PATIENTS.CHART_RESTRICTION_LIFTED',
+            ),
+          );
+        },
+        error: (err: HttpErrorResponse) => {
+          this.restrictionSubmitting.set(false);
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PATIENTS.CHART_RESTRICTION_FAILED'),
+          );
+        },
+      });
   }
 
   /** Mirrors PatientVitalSignController's READ list.

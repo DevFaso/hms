@@ -102,6 +102,10 @@ public class PatientResponseDTO {
     private LocalDate registrationDate   = LocalDate.of(1970, 1, 1);
 
     private boolean active;
+    /** E8 #54 — every read of this chart needs a live break-the-glass session. */
+    private boolean chartRestricted;
+    private String chartRestrictionReason;
+    private LocalDateTime chartRestrictedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

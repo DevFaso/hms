@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
+import com.example.hms.payload.dto.BreakGlassReviewRequestDTO;
 import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
 import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
 import com.example.hms.service.BreakGlassService;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -110,7 +112,22 @@ public class BreakGlassController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Page<BreakGlassSessionResponseDTO>> listForHospital(
             @RequestParam UUID hospitalId,
+            @RequestParam(required = false) Boolean reviewed,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(breakGlassService.listForHospital(hospitalId, pageable));
+        return ResponseEntity.ok(breakGlassService.listForHospital(hospitalId, reviewed, pageable));
+    }
+
+    @PatchMapping("/{sessionId}/review")
+    @Operation(summary = "Sign a break-the-glass session off (E8 #54)",
+               description = "Records the compliance reviewer's outcome and note on the session. "
+                           + "HOSPITAL_ADMIN of the session's hospital or SUPER_ADMIN; re-reviewing overwrites.")
+    @ApiResponse(responseCode = "200", description = "Session reviewed")
+    @ApiResponse(responseCode = "403", description = "Caller is not an admin of the session's hospital")
+    @ApiResponse(responseCode = "404", description = "Session not found")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    public ResponseEntity<BreakGlassSessionResponseDTO> review(
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody BreakGlassReviewRequestDTO request) {
+        return ResponseEntity.ok(breakGlassService.review(sessionId, request));
     }
 }

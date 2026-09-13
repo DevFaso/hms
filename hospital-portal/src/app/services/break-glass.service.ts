@@ -18,6 +18,20 @@ export interface BreakGlassSession {
   revokeReason: string | null;
   auditCount: number;
   live: boolean;
+  /** E8 #54 — compliance sign-off; null until reviewed. */
+  reviewedAt?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedByUserName?: string | null;
+  reviewOutcome?: BreakGlassReviewOutcome | null;
+  reviewNote?: string | null;
+  reviewed?: boolean;
+}
+
+export type BreakGlassReviewOutcome = 'JUSTIFIED' | 'NOT_JUSTIFIED' | 'FOLLOW_UP';
+
+export interface BreakGlassReviewRequest {
+  outcome: BreakGlassReviewOutcome;
+  note?: string;
 }
 
 export interface BreakGlassDeclareRequest {
@@ -72,15 +86,20 @@ export class BreakGlassService {
       );
   }
 
+  /** @param reviewed undefined = the whole register, false = the review queue, true = signed off (E8 #54). */
   listForHospital(
     hospitalId: string,
     page = 0,
     size = 20,
+    reviewed?: boolean,
   ): Observable<PageResult<BreakGlassSession>> {
-    const params = new HttpParams()
-      .set('hospitalId', hospitalId)
-      .set('page', page)
-      .set('size', size);
+    let params = new HttpParams().set('hospitalId', hospitalId).set('page', page).set('size', size);
+    if (reviewed !== undefined) params = params.set('reviewed', reviewed);
     return this.http.get<PageResult<BreakGlassSession>>(`${this.baseUrl}/audit`, { params });
+  }
+
+  /** E8 #54 — the compliance reviewer signs a session off. */
+  review(sessionId: string, request: BreakGlassReviewRequest): Observable<BreakGlassSession> {
+    return this.http.patch<BreakGlassSession>(`${this.baseUrl}/${sessionId}/review`, request);
   }
 }

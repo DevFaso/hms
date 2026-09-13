@@ -860,6 +860,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/webhooks',
       });
     }
+    // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'policy',
+        label: 'Break-glass review',
+        translationKey: 'NAV.BREAK_GLASS_REVIEW',
+        route: '/break-glass-review',
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      });
+    }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
     if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
       items.push({

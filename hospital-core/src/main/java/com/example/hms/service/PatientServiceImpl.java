@@ -51,6 +51,7 @@ import com.example.hms.payload.dto.PatientDiagnosisRequestDTO;
 import com.example.hms.payload.dto.PatientDiagnosisUpdateRequestDTO;
 import com.example.hms.payload.dto.PatientInsuranceRequestDTO;
 import com.example.hms.payload.dto.PatientProfileUpdateRequestDTO;
+import com.example.hms.payload.dto.ChartRestrictionRequestDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
@@ -102,6 +103,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -353,6 +355,30 @@ public class PatientServiceImpl implements PatientService {
         }
 
         return buildPatientDto(patient, hospital.getId());
+    }
+
+    @Override
+    @Transactional
+    public PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId) {
+        Patient patient = patientRepository.findByIdUnscoped(id)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
+        if (request.isRestricted()) {
+            String reason = trimToNull(request.getReason());
+            if (reason == null) {
+                throw new BusinessException("A reason is required to restrict a chart.");
+            }
+            patient.setChartRestricted(true);
+            patient.setChartRestrictionReason(reason);
+            patient.setChartRestrictedAt(LocalDateTime.now(ZoneId.systemDefault()));
+            patient.setChartRestrictedByUserId(actorUserId);
+        } else {
+            patient.setChartRestricted(false);
+            patient.setChartRestrictionReason(null);
+            patient.setChartRestrictedAt(null);
+            patient.setChartRestrictedByUserId(null);
+        }
+        log.warn("[CHART_RESTRICTION] patient={} restricted={} by user={}", id, request.isRestricted(), actorUserId);
+        return buildPatientDto(patientRepository.save(patient), hospitalId);
     }
 
     @Override
