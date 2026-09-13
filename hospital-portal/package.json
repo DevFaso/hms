@@ -87,7 +87,7 @@
     "@types/jasmine": "6.0.0",
     "@types/node": "20.19.11",
     "@types/sockjs-client": "^1.5.4",
-    "angular-eslint": "20.3.0",
+    "angular-eslint": "22.5.0",
     "eslint": "^9.35.0",
     "eslint-config-prettier": "9.1.2",
     "jasmine-core": "5.9.0",
