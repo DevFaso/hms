@@ -5,6 +5,8 @@ plugins {
 dependencies {
     // --- Spring Boot starters ---
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Boot 4: RestTemplateBuilder / RestClient live in their own module.
+    implementation 'org.springframework.boot:spring-boot-restclient'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -17,10 +19,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // Liquibase
-    implementation 'org.liquibase:liquibase-core'
+    // Boot 4 runs Liquibase only through its starter (liquibase-core alone is inert).
+    implementation 'org.springframework.boot:spring-boot-starter-liquibase'
     // Distributed scheduler locks: one instance runs a sweep, the others skip it.
-    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.3.0'
-    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.3.0'
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:7.10.1'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:7.10.1'
 
     // Kafka
     implementation 'org.springframework.kafka:spring-kafka'
@@ -37,14 +40,14 @@ dependencies {
     implementation 'com.bucket4j:bucket4j-core:8.10.1'
 
     // OpenAPI / Swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
     // swagger-annotations-jakarta is provided transitively by springdoc — do NOT add swagger-annotations separately
 
     // Jackson Hibernate module
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-hibernate6'
+    implementation 'tools.jackson.datatype:jackson-datatype-hibernate7'
 
     // Hypersistence Utils (Hibernate JSON types)
-    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.7.1'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.5'
 
     // PDF generation
     implementation 'com.itextpdf:kernel:8.0.2'
@@ -78,14 +81,14 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
 
     // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test-classic'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
     // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
     // splitStatements config) surface pre-merge instead of on dev deploy.
-    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'

@@ -7,8 +7,8 @@ import com.example.hms.model.platform.WebhookDelivery;
 import com.example.hms.model.platform.WebhookEndpoint;
 import com.example.hms.repository.platform.WebhookDeliveryRepository;
 import com.example.hms.repository.platform.WebhookEndpointRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,7 +88,7 @@ class WebhookPublisherTest {
         assertThat(payload.get("hospitalId").asText()).isEqualTo(hospitalId.toString());
         assertThat(payload.get("occurredAt").asText()).isNotBlank();
         // THE no-PHI rule, structurally: ids and timestamps, nothing else.
-        assertThat(payload.fieldNames()).toIterable().containsExactlyInAnyOrder(
+        assertThat(payload.propertyNames()).containsExactlyInAnyOrder(
             "event", "resourceType", "resourceId", "hospitalId", "occurredAt");
     }
 

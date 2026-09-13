@@ -2501,6 +2501,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   extended diagnostics in both tsconfigs; the warnings they hid are dead `??`
   and `?.` on non-nullable types. Also: local development now needs Node
   24.15+ (Angular 22's engines range); CI and the frontend image are on 24.
+- **Spring Boot 4.1 left three follow-ups (2026-09-13).** (a) Testcontainers
+  stays pinned at 1.21.4 (`ext['testcontainers.version']` + the BOM) because
+  Boot 4's managed 2.0.5 renames modules; moving is its own change, and the
+  pin must not drop below 1.21 (docker-java 3.4.0 is refused by Docker Engine
+  29). (b) Tests use `spring-boot-starter-test-classic`, the pre-4.0 bundle;
+  Boot 4's per-technology test starters (`webmvc-test`, `data-jpa-test`,
+  `security-test`, …) are the supported shape. (c) HAPI FHIR 7.4.5 and iText
+  8.0.2 were not bumped with the platform; HAPI 8.x is out. Also worth
+  knowing: Boot 4 runs Liquibase only via `spring-boot-starter-liquibase` and
+  `RestTemplateBuilder` only via `spring-boot-restclient`, both added; the
+  `java:S8700` decision above (Instant vs LocalDateTime) is unchanged by the
+  move to Hibernate 7.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.

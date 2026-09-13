@@ -75,8 +75,8 @@ import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import com.example.hms.service.emar.FiveRightsVerificationResult;
 import com.example.hms.service.emar.FiveRightsVerificationService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -494,7 +494,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private String serializeOverrides(Set<FiveRightsCheck> failed) {
         try {
             return objectMapper.writeValueAsString(failed.stream().map(Enum::name).toList());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to serialize five-rights overrides; falling back to toString. {}", e.getMessage());
             return failed.stream().map(Enum::name).toList().toString();
         }

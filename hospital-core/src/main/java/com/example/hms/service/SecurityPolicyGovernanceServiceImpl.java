@@ -10,8 +10,8 @@ import com.example.hms.payload.dto.superadmin.SecurityPolicyBaselineRequestDTO;
 import com.example.hms.payload.dto.superadmin.SecurityPolicyBaselineResponseDTO;
 import com.example.hms.repository.SecurityPolicyApprovalRepository;
 import com.example.hms.repository.SecurityPolicyBaselineRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -86,7 +86,7 @@ public class SecurityPolicyGovernanceServiceImpl implements SecurityPolicyGovern
         String json;
         try {
             json = objectMapper.writeValueAsString(exportPayload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to serialize security baseline {}", baseline.getId(), e);
             throw new IllegalStateException("Unable to export baseline", e);
         }

@@ -25,8 +25,7 @@ import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
 import com.example.hms.payload.dto.pro.ProResponseDTO;
 import com.example.hms.service.pro.ProInstrumentService;
 import com.example.hms.service.pro.ProResponseService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.json.JsonMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,7 +35,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -53,12 +52,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("ProInstrumentController + ProResponseController")
 class ProControllersTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
 
-    private static MappingJackson2HttpMessageConverter jacksonConverter(ObjectMapper mapper) {
-        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
-        converter.setObjectMapper(mapper);
-        return converter;
+    private static JacksonJsonHttpMessageConverter jacksonConverter(JsonMapper mapper) {
+        // Spring Framework 7: the Jackson 3 converter takes the mapper in its constructor.
+        return new JacksonJsonHttpMessageConverter(mapper);
     }
 
     private static Authentication clinician() {

@@ -11,8 +11,7 @@ import com.example.hms.payload.dto.insurance.EligibilityCheckRequestDTO;
 import com.example.hms.payload.dto.insurance.EligibilityResponseDTO;
 import com.example.hms.service.EligibilityService;
 import com.example.hms.service.SmartPhraseService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,7 +21,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -64,7 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("EligibilityController + SmartPhraseController")
 class EligibilityAndSmartPhraseControllerTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     // ───────────────────────────────────────────────────────────────────────
     // EligibilityController
@@ -392,9 +391,8 @@ class EligibilityAndSmartPhraseControllerTest {
         }
     }
 
-    private static MappingJackson2HttpMessageConverter jacksonConverter(ObjectMapper mapper) {
-        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
-        converter.setObjectMapper(mapper);
-        return converter;
+    private static JacksonJsonHttpMessageConverter jacksonConverter(JsonMapper mapper) {
+        // Spring Framework 7: the Jackson 3 converter takes the mapper in its constructor.
+        return new JacksonJsonHttpMessageConverter(mapper);
     }
 }

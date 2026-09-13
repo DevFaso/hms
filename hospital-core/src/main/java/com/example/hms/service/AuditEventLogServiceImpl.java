@@ -16,8 +16,8 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.security.context.ImpersonationContext;
 import com.example.hms.security.context.ImpersonationContextHolder;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -329,7 +329,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         }
         try {
             return objectMapper.writeValueAsString(details);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Could not serialize audit event details: {}", e.getMessage());
             return "{\"error\":\"Could not serialize details object\"}";
         }

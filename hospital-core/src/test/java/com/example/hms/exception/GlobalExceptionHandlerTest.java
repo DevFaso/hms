@@ -222,7 +222,8 @@ class GlobalExceptionHandlerTest {
             org.springframework.http.converter.HttpMessageNotReadableException ex =
                 new org.springframework.http.converter.HttpMessageNotReadableException(
                     "Outer wrapper",
-                    new com.fasterxml.jackson.databind.JsonMappingException(null, jacksonMessage),
+                    tools.jackson.databind.exc.MismatchedInputException.from(
+                        (tools.jackson.core.JsonParser) null, Object.class, jacksonMessage),
                     new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
 
             ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
@@ -267,8 +268,9 @@ class GlobalExceptionHandlerTest {
         void fallsBackToFixedDefaultWhenAllMessagesBlank() {
             // Cause exists but has a null message — historically the source
             // of the "Malformed request body: null" footgun.
-            com.fasterxml.jackson.databind.JsonMappingException blankCause =
-                new com.fasterxml.jackson.databind.JsonMappingException(null, (String) null);
+            tools.jackson.databind.exc.MismatchedInputException blankCause =
+                tools.jackson.databind.exc.MismatchedInputException.from(
+                    (tools.jackson.core.JsonParser) null, Object.class, (String) null);
             org.springframework.http.converter.HttpMessageNotReadableException ex =
                 new org.springframework.http.converter.HttpMessageNotReadableException(
                     "",

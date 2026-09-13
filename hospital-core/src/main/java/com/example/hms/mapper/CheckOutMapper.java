@@ -4,9 +4,9 @@ import com.example.hms.model.Appointment;
 import com.example.hms.model.Encounter;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.payload.dto.clinical.CheckOutRequestDTO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -78,7 +78,7 @@ public class CheckOutMapper {
         if (diagnoses == null || diagnoses.isEmpty()) return null;
         try {
             return OBJECT_MAPPER.writeValueAsString(diagnoses);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return diagnoses.toString();
         }
     }
@@ -88,7 +88,7 @@ public class CheckOutMapper {
         if (json == null || json.isBlank()) return Collections.emptyList();
         try {
             return OBJECT_MAPPER.readValue(json, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return List.of(json);
         }
     }
