@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -23,7 +23,7 @@ type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
 })

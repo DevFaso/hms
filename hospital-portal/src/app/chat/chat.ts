@@ -1,5 +1,5 @@
 import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   ChatService,
@@ -101,7 +101,7 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
 })

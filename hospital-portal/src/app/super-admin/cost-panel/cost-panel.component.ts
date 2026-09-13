@@ -52,53 +52,52 @@ interface WindowState {
         </button>
       </form>
 
-      <p *ngIf="featureDisabled()" class="cost-panel__empty" data-testid="cost-disabled">
-        {{ 'COST_PANEL.FEATURE_DISABLED' | translate }}
-      </p>
+      @if (featureDisabled()) {
+        <p class="cost-panel__empty" data-testid="cost-disabled">
+          {{ 'COST_PANEL.FEATURE_DISABLED' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="cost-panel__error" data-testid="cost-error">
-        {{ 'COST_PANEL.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="cost-panel__error" data-testid="cost-error">
+          {{ 'COST_PANEL.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        *ngIf="!featureDisabled() && !error() && rows().length > 0"
-        class="data-table"
-        data-testid="cost-rows"
-      >
-        <thead>
-          <tr>
-            <th scope="col">{{ 'COST_PANEL.COL_HOSPITAL' | translate }}</th>
-            <th scope="col" class="num">{{ 'COST_PANEL.COL_AUDIT_EVENTS' | translate }}</th>
-            <th scope="col" class="num">{{ 'COST_PANEL.COL_SPLUNK' | translate }}</th>
-            <th scope="col" class="num">{{ 'COST_PANEL.COL_GRAFANA' | translate }}</th>
-            <th scope="col" class="num">{{ 'COST_PANEL.COL_STORAGE_GIB' | translate }}</th>
-            <th scope="col" class="num">{{ 'COST_PANEL.COL_AMOUNT' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            *ngFor="let row of rows(); trackBy: trackByHospitalId"
-            [attr.data-hospital-id]="row.hospitalId"
-          >
-            <td>{{ row.hospitalName }}</td>
-            <td class="num">{{ row.auditEventCount | number: '1.0-0' }}</td>
-            <td class="num">{{ row.splunkEventCount | number: '1.0-0' }}</td>
-            <td class="num">{{ row.grafanaSeriesCardinality | number: '1.0-0' }}</td>
-            <td class="num">
-              {{ row.postgresStorageBytes / 1073741824 | number: '1.2-2' }}
-            </td>
-            <td class="num">{{ row.chargebackAmount | number: '1.2-2' }} {{ row.currency }}</td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!featureDisabled() && !error() && rows().length > 0) {
+        <table class="data-table" data-testid="cost-rows">
+          <thead>
+            <tr>
+              <th scope="col">{{ 'COST_PANEL.COL_HOSPITAL' | translate }}</th>
+              <th scope="col" class="num">{{ 'COST_PANEL.COL_AUDIT_EVENTS' | translate }}</th>
+              <th scope="col" class="num">{{ 'COST_PANEL.COL_SPLUNK' | translate }}</th>
+              <th scope="col" class="num">{{ 'COST_PANEL.COL_GRAFANA' | translate }}</th>
+              <th scope="col" class="num">{{ 'COST_PANEL.COL_STORAGE_GIB' | translate }}</th>
+              <th scope="col" class="num">{{ 'COST_PANEL.COL_AMOUNT' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track trackByHospitalId($index, row)) {
+              <tr [attr.data-hospital-id]="row.hospitalId">
+                <td>{{ row.hospitalName }}</td>
+                <td class="num">{{ row.auditEventCount | number: '1.0-0' }}</td>
+                <td class="num">{{ row.splunkEventCount | number: '1.0-0' }}</td>
+                <td class="num">{{ row.grafanaSeriesCardinality | number: '1.0-0' }}</td>
+                <td class="num">
+                  {{ row.postgresStorageBytes / 1073741824 | number: '1.2-2' }}
+                </td>
+                <td class="num">{{ row.chargebackAmount | number: '1.2-2' }} {{ row.currency }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!featureDisabled() && !error() && !loading() && rows().length === 0"
-        class="cost-panel__empty"
-        data-testid="cost-empty"
-      >
-        {{ 'COST_PANEL.NO_DATA' | translate }}
-      </p>
+      @if (!featureDisabled() && !error() && !loading() && rows().length === 0) {
+        <p class="cost-panel__empty" data-testid="cost-empty">
+          {{ 'COST_PANEL.NO_DATA' | translate }}
+        </p>
+      }
     </section>
   `,
   styles: [

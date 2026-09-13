@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -19,7 +19,7 @@ interface EditState {
 @Component({
   selector: 'app-super-admin-data-residency',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './data-residency.html',
   styleUrl: './data-residency.scss',
 })

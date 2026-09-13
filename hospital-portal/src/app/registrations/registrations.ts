@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -28,7 +28,7 @@ type ActiveFilter = 'all' | 'active' | 'inactive';
   selector: 'app-registrations',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './registrations.html',
   styleUrl: './registrations.scss',
 })

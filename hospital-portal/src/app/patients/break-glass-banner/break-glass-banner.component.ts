@@ -10,7 +10,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
@@ -36,7 +36,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-break-glass-banner',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './break-glass-banner.component.html',
   styleUrl: './break-glass-banner.component.scss',

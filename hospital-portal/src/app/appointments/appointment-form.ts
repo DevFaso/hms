@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { of, Subject } from 'rxjs';
@@ -20,7 +20,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './appointment-form.html',
   styleUrl: './appointment-form.scss',
 })

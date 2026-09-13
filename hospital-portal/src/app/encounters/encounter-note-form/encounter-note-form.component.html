@@ -7,15 +7,16 @@
       </p>
     </div>
     <div class="enc-note-form__template" role="radiogroup" aria-label="Note template">
-      <button
-        type="button"
-        *ngFor="let tpl of templates"
-        class="enc-note-form__template-btn"
-        [class.is-active]="form().template === tpl"
-        (click)="setTemplate(tpl)"
-      >
-        {{ tpl }}
-      </button>
+      @for (tpl of templates; track tpl) {
+        <button
+          type="button"
+          class="enc-note-form__template-btn"
+          [class.is-active]="form().template === tpl"
+          (click)="setTemplate(tpl)"
+        >
+          {{ tpl }}
+        </button>
+      }
     </div>
   </header>
 
@@ -162,7 +163,7 @@
       <ng-container *ngTemplateOutlet="popupTpl; context: { fieldKey: 'plan' }"></ng-container>
     </label>
 
-    <ng-container *ngIf="isSoapie()">
+    @if (isSoapie()) {
       <label class="enc-note-form__field">
         <span>I — Implementation</span>
         <textarea
@@ -177,7 +178,6 @@
           *ngTemplateOutlet="popupTpl; context: { fieldKey: 'implementation' }"
         ></ng-container>
       </label>
-
       <label class="enc-note-form__field">
         <span>E — Evaluation</span>
         <textarea
@@ -192,7 +192,7 @@
           *ngTemplateOutlet="popupTpl; context: { fieldKey: 'evaluation' }"
         ></ng-container>
       </label>
-    </ng-container>
+    }
   </fieldset>
 
   <fieldset class="enc-note-form__group">
@@ -224,15 +224,17 @@
       />
       <span>This is a late entry</span>
     </label>
-    <label class="enc-note-form__field" *ngIf="form().lateEntry">
-      <span>Event occurred at</span>
-      <input
-        type="datetime-local"
-        name="eventOccurredAt"
-        [value]="form().eventOccurredAt ?? ''"
-        (change)="setEventOccurredAt($any($event.target).value)"
-      />
-    </label>
+    @if (form().lateEntry) {
+      <label class="enc-note-form__field">
+        <span>Event occurred at</span>
+        <input
+          type="datetime-local"
+          name="eventOccurredAt"
+          [value]="form().eventOccurredAt ?? ''"
+          (change)="setEventOccurredAt($any($event.target).value)"
+        />
+      </label>
+    }
     <div class="enc-note-form__attestations">
       <label class="enc-note-form__check">
         <input
@@ -295,22 +297,21 @@
 </form>
 
 <ng-template #popupTpl let-fieldKey="fieldKey">
-  <div
-    class="enc-note-form__popup"
-    *ngIf="popup() && popup()!.fieldKey === fieldKey"
-    role="listbox"
-  >
-    <button
-      *ngFor="let suggestion of popup()!.suggestions; let i = index"
-      type="button"
-      class="enc-note-form__popup-item"
-      [class.is-highlighted]="i === popup()!.highlightedIndex"
-      (mousedown)="$event.preventDefault()"
-      (click)="pickSuggestion(i, fieldKey)"
-    >
-      <strong>{{ suggestion.trigger }}</strong>
-      <span>{{ suggestion.title }}</span>
-      <small>{{ suggestion.scope }}</small>
-    </button>
-  </div>
+  @if (popup() && popup()!.fieldKey === fieldKey) {
+    <div class="enc-note-form__popup" role="listbox">
+      @for (suggestion of popup()!.suggestions; track suggestion; let i = $index) {
+        <button
+          type="button"
+          class="enc-note-form__popup-item"
+          [class.is-highlighted]="i === popup()!.highlightedIndex"
+          (mousedown)="$event.preventDefault()"
+          (click)="pickSuggestion(i, fieldKey)"
+        >
+          <strong>{{ suggestion.trigger }}</strong>
+          <span>{{ suggestion.title }}</span>
+          <small>{{ suggestion.scope }}</small>
+        </button>
+      }
+    </div>
+  }
 </ng-template>

@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -14,7 +14,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-lab-instruments',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, TranslateModule],
+  imports: [RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-instruments.html',
   styleUrl: './lab-instruments.scss',
 })

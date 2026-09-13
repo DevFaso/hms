@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
@@ -12,7 +12,7 @@ import {
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './medication-catalog.html',
   styleUrl: './medication-catalog.scss',
 })

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { TranslateModule } from '@ngx-translate/core';
 import { DiagnosisSlice } from '../morbidity.service';
 
@@ -25,7 +25,7 @@ import { DiagnosisSlice } from '../morbidity.service';
 @Component({
   selector: 'app-diagnosis-bars',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './diagnosis-bars.component.html',
   styleUrl: './diagnosis-bars.component.scss',

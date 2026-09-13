@@ -1,5 +1,5 @@
 import { Component, Output, EventEmitter, inject, signal, OnInit, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
@@ -14,7 +14,7 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.component.html',
   styleUrl: './walkin-dialog.component.scss',
 })

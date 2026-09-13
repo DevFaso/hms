@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -31,7 +31,7 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   template: `
     <div class="settings-page">
       <div class="settings-header">

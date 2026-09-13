@@ -9,7 +9,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   EligibilityCheckType,
@@ -35,7 +35,7 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, EnumLabelPipe],
+  imports: [FormsModule, EnumLabelPipe],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

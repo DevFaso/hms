@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -20,7 +20,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-drug-interactions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
   styleUrl: './drug-interactions.scss',
 })

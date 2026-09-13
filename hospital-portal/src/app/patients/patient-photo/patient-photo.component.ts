@@ -8,7 +8,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../../core/toast.service';
@@ -26,7 +26,7 @@ import { RegistrationExtrasService } from '../../services/registration-extras.se
 @Component({
   selector: 'app-patient-photo',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   templateUrl: './patient-photo.component.html',
   styleUrl: './patient-photo.component.scss',
 })

@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
@@ -10,7 +10,7 @@ import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './pharmacy-registry.html',
   styleUrl: './pharmacy-registry.scss',
 })

@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { AuthService } from '../auth/auth.service';
@@ -21,7 +21,7 @@ type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
+  imports: [RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
   templateUrl: './staff-detail.html',
   styleUrl: './staff-detail.scss',
 })

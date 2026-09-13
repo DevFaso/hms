@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -12,7 +12,7 @@ import { TranslateModule } from '@ngx-translate/core';
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './staff-list.html',
   styleUrl: './staff-list.scss',
 })

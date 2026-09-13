@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { TranslateModule } from '@ngx-translate/core';
 import { MatrixTabComponent } from './matrix-tab';
 import { PoliciesTabComponent } from './policies-tab';
@@ -19,7 +19,6 @@ type TabKey = 'matrix' | 'policies' | 'users' | 'credentials' | 'security';
   selector: 'app-admin-governance',
   standalone: true,
   imports: [
-    CommonModule,
     TranslateModule,
     MatrixTabComponent,
     PoliciesTabComponent,

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientSnapshot } from '../../services/dashboard.service';
@@ -7,7 +7,7 @@ import { PatientSnapshot } from '../../services/dashboard.service';
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

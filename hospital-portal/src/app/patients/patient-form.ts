@@ -1,5 +1,5 @@
 import { Component, inject, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import {
@@ -26,7 +26,7 @@ import { EMPTY, of } from 'rxjs';
 @Component({
   selector: 'app-patient-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './patient-form.html',
   styleUrl: './patient-form.scss',
 })

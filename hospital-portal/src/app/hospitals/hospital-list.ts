@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
@@ -12,7 +12,7 @@ import { TranslateModule } from '@ngx-translate/core';
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './hospital-list.html',
   styleUrl: './hospital-list.scss',
 })

@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterModule } from '@angular/router';
 import { DashboardService, LabOpsSummary } from '../../services/dashboard.service';
 import { ToastService } from '../../core/toast.service';
@@ -23,7 +23,7 @@ interface StatusRow {
 @Component({
   selector: 'app-lab-ops-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [RouterModule],
   templateUrl: './lab-ops-dashboard.html',
   styleUrl: './lab-ops-dashboard.scss',
 })
