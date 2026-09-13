@@ -2488,6 +2488,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   with wide graphs and runs a guaranteed-miss `patientRepository.findById` on
   sub-resource ids for every audited write; four `BaseIT` controller classes
   each hand-roll the same FK-ordered `deleteAll()` list.
+- **Angular 22 left three things pinned rather than fixed (2026-09-13).**
+  (a) Angular 22 makes OnPush the default; the migration pinned all 141
+  existing components to `ChangeDetectionStrategy.Eager` and angular-eslint 22
+  flags every pin, so `prefer-on-push-component-change-detection` is off in
+  `eslint.config.js`. Moving components to OnPush is a per-component audit of
+  what mutates state outside signals, not a lint fix. (b) 15 template
+  expressions are wrapped in `$safeNavigationMigration(...)`, the compiler's
+  marker for `?.` now yielding `undefined` where it yielded `null`; each is a
+  translate-param or display site to check and unwrap. (c) The migration
+  suppressed the `nullishCoalescingNotNullable` and `optionalChainNotNullable`
+  extended diagnostics in both tsconfigs; the warnings they hid are dead `??`
+  and `?.` on non-nullable types. Also: local development now needs Node
+  24.15+ (Angular 22's engines range); CI and the frontend image are on 24.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.
