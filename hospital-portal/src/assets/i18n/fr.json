@@ -2129,6 +2129,20 @@
     "TITLE": "Drapeaux de Fonctionnalité",
     "TOGGLE": "Basculer"
   },
+  "VERIFY": {
+    "VERIFYING_TITLE": "Activation de votre compte",
+    "VERIFYING_MSG": "Un instant, nous confirmons votre adresse e-mail.",
+    "SUCCESS_TITLE": "Votre compte est actif",
+    "SUCCESS_MSG": "Votre adresse e-mail est confirmée. Vous pouvez vous connecter.",
+    "SIGN_IN_NOW": "Se connecter",
+    "FAILED_TITLE": "Ce lien d'activation ne fonctionne plus",
+    "FAILED_MSG": "Le lien est invalide ou a expiré. Saisissez votre adresse e-mail pour en recevoir un nouveau.",
+    "MISSING_TITLE": "Lien d'activation incomplet",
+    "MISSING_MSG": "Il manque l'adresse e-mail ou le jeton dans ce lien. Saisissez votre adresse e-mail pour en recevoir un nouveau.",
+    "RESEND": "Envoyer un nouveau lien d'activation",
+    "RESENT": "Si cette adresse correspond à un compte non encore activé, un nouveau lien d'activation est en route. Il est valable 24 heures.",
+    "BACK_TO_LOGIN": "Retour à la connexion"
+  },
   "HOSPITAL_SCOPE": {
     "ALL_HOSPITALS": "Tous les hôpitaux",
     "CLEAR": "Effacer la portée hôpital",
@@ -2772,6 +2786,11 @@
     "TOKEN_MISSING": "Jeton manquant dans la réponse.",
     "LOGIN_FAILED": "Échec de la connexion. Veuillez réessayer.",
     "ENTER_EMAIL": "Veuillez saisir votre adresse e-mail.",
+    "RESEND_ACTIVATION": "Renvoyer l'e-mail d'activation",
+    "RA_TITLE": "Activer votre compte",
+    "RA_INSTRUCTION": "Saisissez l'adresse e-mail de votre compte et nous enverrons un nouveau lien d'activation, valable 24 heures.",
+    "SEND_ACTIVATION_LINK": "Envoyer le lien d'activation",
+    "ACTIVATION_LINK_SENT": "Si cette adresse correspond à un compte non encore activé, un nouveau lien d'activation est en route. Il est valable 24 heures.",
     "RESET_LINK_SENT": "Si cette adresse e-mail est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception."
   },
   "NAV": {

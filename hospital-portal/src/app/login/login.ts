@@ -75,6 +75,14 @@ export class Login implements OnInit, AfterViewInit {
   /** Forgot-username state */
   forgotUsernameMode = false;
 
+  // Resend activation e-mail (the third link under the form). The e-mail
+  // activation link now lands on /verify; this is the way to get a fresh one
+  // when the first never arrived or expired.
+  resendActivationMode = false;
+  resendActivationEmail = '';
+  resendActivationLoading = false;
+  resendActivationSuccess = '';
+
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -458,6 +466,7 @@ export class Login implements OnInit, AfterViewInit {
   openForgotPassword(): void {
     this.forgotPasswordMode = true;
     this.forgotUsernameMode = false;
+    this.resendActivationMode = false;
     this.error = '';
     this.forgotPasswordEmail = '';
     this.forgotPasswordSuccess = '';
@@ -496,11 +505,50 @@ export class Login implements OnInit, AfterViewInit {
   openForgotUsername(): void {
     this.forgotUsernameMode = true;
     this.forgotPasswordMode = false;
+    this.resendActivationMode = false;
     this.error = '';
   }
 
   closeForgotUsername(): void {
     this.forgotUsernameMode = false;
     this.error = '';
+  }
+
+  // ─── Resend activation e-mail ───────────────────────────────────────────────
+
+  openResendActivation(): void {
+    this.resendActivationMode = true;
+    this.forgotPasswordMode = false;
+    this.forgotUsernameMode = false;
+    this.error = '';
+    this.resendActivationEmail = '';
+    this.resendActivationSuccess = '';
+  }
+
+  closeResendActivation(): void {
+    this.resendActivationMode = false;
+    this.resendActivationSuccess = '';
+    this.error = '';
+  }
+
+  submitResendActivation(): void {
+    if (!this.isBrowser || this.resendActivationLoading) return;
+    this.error = '';
+    this.resendActivationSuccess = '';
+    const email = this.resendActivationEmail.trim();
+    if (!email) {
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+      return;
+    }
+    this.resendActivationLoading = true;
+    // One answer whatever the backend said: it does not reveal whether the
+    // address exists, and neither does this dialog.
+    const done = (): void => {
+      this.resendActivationLoading = false;
+      this.resendActivationSuccess = this.translate.instant('LOGIN.ACTIVATION_LINK_SENT');
+    };
+    this.http
+      .post<void>('/auth/resend-verification', null, { params: { email } })
+      .subscribe({ next: done, error: done });
   }
 }

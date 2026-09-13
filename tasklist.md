@@ -2401,18 +2401,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   report as "nothing reached them"), not in the shared helper, whose other
   callers legitimately have nothing to send. Found by the #570 review.
 
-- The email-activation **link** has no landing page. `sendActivationEmail`
-  builds `${app.frontend.base-url}/verify?email=&token=` (public
-  self-registration, and `POST /auth/resend-verification`), but `verify` is not
-  a route in `app.routes.ts` — the `**` fallback redirects it to `/login`, so
-  the link silently does nothing. There is also no "resend activation" control
-  anywhere in the portal, so `/auth/resend-verification` is reachable only by
-  hand. Self-registration itself is 410 Gone, which is why this went unnoticed:
-  the only live producer of that link is the resend endpoint. Either add the
-  `/verify` route (calling `GET /auth/verify-email`) plus a resend affordance
-  on the login screen, or retire the link and move those accounts onto the
-  confirmation-code path everyone else uses. Found by the #569 review while
-  making the disabled-login message name a route that actually exists.
+- ~~The email-activation **link** has no landing page.~~ Closed 2026-09-13:
+  `/verify` is a public route (`VerifyEmailComponent`) that calls
+  `GET /auth/verify-email` with the link's `email` and `token`, shows the
+  outcome, and on a refused or incomplete link offers a resend from the same
+  address; the login screen gained a third link, "Resend activation e-mail",
+  driving `POST /auth/resend-verification` behind a dialog that answers the
+  same way whether or not the address exists; the auth interceptor treats
+  both endpoints as public so a stale token cannot kill the request. No
+  backend change. Self-registration stays 410, so the resend endpoint is
+  still the only live producer of the link.
 
 - ~~Hospital scope is applied page by page.~~ Closed by the route-level gate
   (`HospitalScopeGateService`, 2026-09-13): a route carrying

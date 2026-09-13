@@ -147,6 +147,43 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     httpMock.verify();
   });
 
+  it('the resend-activation dialog opens alone and posts the address', () => {
+    component.openForgotPassword();
+    component.openResendActivation();
+    expect(component.resendActivationMode).toBeTrue();
+    expect(component.forgotPasswordMode).toBeFalse();
+
+    component.resendActivationEmail = ' a@b.c ';
+    component.submitResendActivation();
+    const req = httpMock.expectOne(
+      (r) =>
+        r.method === 'POST' &&
+        r.url === '/auth/resend-verification' &&
+        r.params.get('email') === 'a@b.c',
+    );
+    req.flush({ message: 'If the email is registered, a new verification link has been sent.' });
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
+    expect(component.resendActivationLoading).toBeFalse();
+  });
+
+  it('the resend-activation dialog gives the same answer on a backend error (no enumeration)', () => {
+    component.openResendActivation();
+    component.resendActivationEmail = 'a@b.c';
+    component.submitResendActivation();
+    httpMock
+      .expectOne((r) => r.url === '/auth/resend-verification')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
+    expect(component.error).toBe('');
+  });
+
+  it('the resend-activation dialog refuses an empty address without a request', () => {
+    component.openResendActivation();
+    component.submitResendActivation();
+    httpMock.expectNone((r) => r.url === '/auth/resend-verification');
+    expect(component.error).toBe('LOGIN.ENTER_EMAIL');
+  });
+
   it('seeds globalView=true and clears effective hospital scope after JWT-only login', () => {
     // Sanity: a brand-new RoleContextService starts in non-global view
     // so the assertion below is meaningful.
