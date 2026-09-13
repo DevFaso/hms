@@ -1607,9 +1607,8 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
-        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        // The request keeps the recorded attending, so neither the role check nor the
+        // assignment lookup runs (see updateEncounter_keepingTheRecordedAttending_...).
         when(encounterMapper.mergeEncounter(
                 any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                 any(Encounter.class),
@@ -1714,9 +1713,8 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
-        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        // The request keeps the recorded attending, so neither the role check nor the
+        // assignment lookup runs (see updateEncounter_keepingTheRecordedAttending_...).
         when(encounterMapper.mergeEncounter(
                 any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                 any(Encounter.class),
@@ -1922,5 +1920,167 @@ class EncounterServiceImplTest {
         verify(encounterRepository, never()).findByPatient_Id(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // =====================================================================
+    // An update that keeps the recorded attending does not re-credential them
+    // =====================================================================
+
+    /**
+     * dev, 2026-09-13: a nurse's edit on a doctor's encounter was refused with
+     * "not authorized to be attending" because that doctor's role assignment had
+     * since been hard-deleted. The attending of record is not being chosen again
+     * by an update that keeps them, so neither the role check nor the assignment
+     * lookup runs, and the encounter keeps the assignment it already carries.
+     */
+    @Test
+    void updateEncounter_keepingTheRecordedAttending_doesNotRecredentialThem() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+
+        User staffUser = User.builder().username("doctor_b").build();
+        staffUser.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+
+        UserRoleHospitalAssignment recorded = new UserRoleHospitalAssignment();
+        recorded.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.ARRIVED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(recorded);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.ARRIVED);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(recorded);
+        merged.setEncounterDate(existing.getEncounterDate());
+        merged.setNotes("ghftghh");
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+        request.setNotes("ghftghh");
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class),
+                any(Patient.class),
+                any(Staff.class),
+                any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
+            .thenReturn(new EncounterResponseDTO());
+
+        service.updateEncounter(encounterId, request, locale, false, hospitalId);
+
+        verify(roleValidator, never()).isDoctor(any(), any());
+        verify(roleValidator, never()).isNurse(any(), any());
+        verify(roleValidator, never()).isHospitalAdmin(any(), any());
+        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(encounterMapper).mergeEncounter(
+            any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+            eq(existing), eq(patient), eq(staff), eq(hospital),
+            org.mockito.ArgumentMatchers.<Appointment>isNull(),
+            eq(recorded));
+    }
+
+    /** Choosing a different attending on an update is a choice, and is credentialed as one. */
+    @Test
+    void updateEncounter_choosingANewAttending_stillCredentialsThem() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID recordedStaffId = UUID.randomUUID();
+        UUID newStaffId = UUID.randomUUID();
+        UUID newUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+
+        Staff recordedStaff = Staff.builder().hospital(hospital).build();
+        recordedStaff.setId(recordedStaffId);
+        User newUser = User.builder().username("nurse_c").build();
+        newUser.setId(newUserId);
+        Staff newStaff = Staff.builder().user(newUser).hospital(hospital).build();
+        newStaff.setId(newStaffId);
+
+        UserRoleHospitalAssignment recorded = new UserRoleHospitalAssignment();
+        recorded.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.ARRIVED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(recordedStaff);
+        existing.setAssignment(recorded);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(newStaffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(newStaffId)).thenReturn(Optional.of(newStaff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(roleValidator.isDoctor(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isNurse(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isHospitalAdmin(newUserId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, false, hospitalId))
+            .isInstanceOf(BusinessException.class);
+
+        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(encounterRepository, never()).save(any(Encounter.class));
     }
 }
