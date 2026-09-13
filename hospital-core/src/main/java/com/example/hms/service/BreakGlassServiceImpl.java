@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -172,7 +173,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             throw new UnauthorizedAccessException(
                 "Only a HOSPITAL_ADMIN of the session's hospital or a SUPER_ADMIN may review it.");
         }
-        session.setReviewedAt(LocalDateTime.now());
+        session.setReviewedAt(LocalDateTime.now(ZoneId.systemDefault()));
         session.setReviewedByUserId(caller.getId());
         session.setReviewOutcome(request.getOutcome());
         session.setReviewNote(request.getNote());
@@ -210,12 +211,17 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Override
     @Transactional(readOnly = true)
     public Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Pageable pageable) {
-        return listForHospital(hospitalId, null, pageable);
+        return registerFor(hospitalId, null, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Boolean reviewed, Pageable pageable) {
+        return registerFor(hospitalId, reviewed, pageable);
+    }
+
+    /** Both listings share one hospital-scope check; private, so neither public method calls the other through this. */
+    private Page<BreakGlassSessionResponseDTO> registerFor(UUID hospitalId, Boolean reviewed, Pageable pageable) {
         // The controller-level @PreAuthorize only checks that the caller has the
         // ROLE_HOSPITAL_ADMIN authority — it does NOT verify the call is for the
         // caller's own hospital. Without this service-side check a hospital admin
@@ -228,10 +234,17 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                 "Caller is not an administrator at hospital " + hospitalId
                     + "; cannot view its break-glass audit trail.");
         }
-        return (reviewed == null ? sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, pageable)
-                : reviewed ? sessionRepository.findByHospitalIdAndReviewedAtIsNotNullOrderByStartedAtDesc(hospitalId, pageable)
-                : sessionRepository.findByHospitalIdAndReviewedAtIsNullOrderByStartedAtDesc(hospitalId, pageable))
-            .map(this::toDto);
+        return pageFor(hospitalId, reviewed, pageable).map(this::toDto);
+    }
+
+    private Page<BreakGlassSession> pageFor(UUID hospitalId, Boolean reviewed, Pageable pageable) {
+        if (reviewed == null) {
+            return sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, pageable);
+        }
+        if (reviewed) {
+            return sessionRepository.findByHospitalIdAndReviewedAtIsNotNullOrderByStartedAtDesc(hospitalId, pageable);
+        }
+        return sessionRepository.findByHospitalIdAndReviewedAtIsNullOrderByStartedAtDesc(hospitalId, pageable);
     }
 
     @Override

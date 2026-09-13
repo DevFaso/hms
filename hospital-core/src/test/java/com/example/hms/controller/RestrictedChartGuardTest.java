@@ -18,8 +18,8 @@ class RestrictedChartGuardTest {
     void chartRestrictionIsAdministrative() {
         Map<String, String> guards = GuardIndex.guardsOf(PatientController.class);
         String guard = guards.get("POST /{id}/chart-restriction");
-        assertThat(guard).as("POST /patients/{id}/chart-restriction is guarded").isNotNull();
-        assertThat(guard).contains("'ROLE_HOSPITAL_ADMIN'", "'ROLE_SUPER_ADMIN'")
+        assertThat(guard).as("POST /patients/{id}/chart-restriction is guarded").isNotNull()
+            .contains("'ROLE_HOSPITAL_ADMIN'", "'ROLE_SUPER_ADMIN'")
             .doesNotContain("DOCTOR", "NURSE", "MIDWIFE", "RECEPTIONIST", "PHARMACIST");
     }
 
@@ -28,9 +28,9 @@ class RestrictedChartGuardTest {
     void reviewIsAdministrative() {
         Map<String, String> guards = GuardIndex.guardsOf(BreakGlassController.class);
         String review = guards.get("PATCH /{sessionId}/review");
-        assertThat(review).as("PATCH /break-glass/{sessionId}/review is guarded").isNotNull();
-        assertThat(review).contains("'ROLE_HOSPITAL_ADMIN'", "'ROLE_SUPER_ADMIN'")
-            .doesNotContain("DOCTOR", "NURSE", "MIDWIFE");
-        assertThat(review).isEqualTo(guards.get("GET /audit"));
+        assertThat(review).as("PATCH /break-glass/{sessionId}/review is guarded").isNotNull()
+            .contains("'ROLE_HOSPITAL_ADMIN'", "'ROLE_SUPER_ADMIN'")
+            .doesNotContain("DOCTOR", "NURSE", "MIDWIFE")
+            .isEqualTo(guards.get("GET /audit"));
     }
 }

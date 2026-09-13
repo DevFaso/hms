@@ -103,6 +103,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -360,7 +361,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId) {
         Patient patient = patientRepository.findByIdUnscoped(id)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", id));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
         if (request.isRestricted()) {
             String reason = trimToNull(request.getReason());
             if (reason == null) {
@@ -368,7 +369,7 @@ public class PatientServiceImpl implements PatientService {
             }
             patient.setChartRestricted(true);
             patient.setChartRestrictionReason(reason);
-            patient.setChartRestrictedAt(LocalDateTime.now());
+            patient.setChartRestrictedAt(LocalDateTime.now(ZoneId.systemDefault()));
             patient.setChartRestrictedByUserId(actorUserId);
         } else {
             patient.setChartRestricted(false);

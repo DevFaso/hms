@@ -32,7 +32,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,8 +125,9 @@ class BreakGlassServiceImplReviewTest {
     void nonAdminIsRefused() {
         callerIsHospitalAdminHere(false);
 
-        assertThatThrownBy(() -> service.review(sessionId,
-            BreakGlassReviewRequestDTO.builder().outcome(BreakGlassReviewOutcome.NOT_JUSTIFIED).build()))
+        BreakGlassReviewRequestDTO request =
+            BreakGlassReviewRequestDTO.builder().outcome(BreakGlassReviewOutcome.NOT_JUSTIFIED).build();
+        assertThatThrownBy(() -> service.review(sessionId, request))
             .isInstanceOf(UnauthorizedAccessException.class);
         assertThat(session.getReviewedAt()).isNull();
         verify(sessionRepository, never()).save(any());
@@ -139,8 +139,9 @@ class BreakGlassServiceImplReviewTest {
         UUID other = UUID.randomUUID();
         when(sessionRepository.findById(other)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.review(other,
-            BreakGlassReviewRequestDTO.builder().outcome(BreakGlassReviewOutcome.FOLLOW_UP).build()))
+        BreakGlassReviewRequestDTO request =
+            BreakGlassReviewRequestDTO.builder().outcome(BreakGlassReviewOutcome.FOLLOW_UP).build();
+        assertThatThrownBy(() -> service.review(other, request))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

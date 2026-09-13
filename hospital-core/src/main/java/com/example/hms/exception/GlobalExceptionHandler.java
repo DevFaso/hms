@@ -21,6 +21,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -345,13 +346,18 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message, WebRequest request) {
+        return new ResponseEntity<>(errorBody(status, message, request), status);
+    }
+
+    /** The standard error body; a handler that adds a field (E8 #54's {@code code}) builds on it. */
+    private Map<String, Object> errorBody(HttpStatus status, String message, WebRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now(ZoneId.systemDefault()));
         body.put(FIELD_STATUS, status.value());
         body.put(FIELD_ERROR, status.getReasonPhrase());
         body.put(FIELD_MESSAGE, message);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
-        return new ResponseEntity<>(body, status);
+        return body;
     }
 
     /**
@@ -361,15 +367,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ChartRestrictedException.class)
     public ResponseEntity<Object> handleChartRestricted(ChartRestrictedException ex, WebRequest request) {
-        log.warn("Restricted chart {} refused at path {}", ex.getPatientId(), request.getDescription(false));
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
-        body.put(FIELD_STATUS, HttpStatus.FORBIDDEN.value());
-        body.put(FIELD_ERROR, HttpStatus.FORBIDDEN.getReasonPhrase());
+        String path = request.getDescription(false);
+        log.warn("Restricted chart {} refused at path {}", ex.getPatientId(), path);
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", ChartRestrictedException.CODE);
         body.put("patientId", ex.getPatientId());
-        body.put(FIELD_MESSAGE, ex.getMessage());
-        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
