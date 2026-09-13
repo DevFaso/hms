@@ -15,7 +15,7 @@ import com.example.hms.payload.dto.superadmin.SecurityRuleSetRequestDTO;
 import com.example.hms.payload.dto.superadmin.SecurityRuleSimulationRequestDTO;
 import com.example.hms.payload.dto.superadmin.SecurityRuleTemplateImportRequestDTO;
 import com.example.hms.repository.SecurityRuleSetRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -129,5 +129,30 @@ class SecurityRuleGovernanceServiceImplTest {
         dto.setPriority(priority);
         dto.setControllers(List.of("RoleController"));
         return dto;
+    }
+
+
+    @Test
+    void createRuleSetFallsBackToEmptyMetadataWhenSerializationFails() {
+        when(ruleSetRepository.save(any(SecurityRuleSet.class))).thenAnswer(invocation -> {
+            SecurityRuleSet entity = invocation.getArgument(0);
+            entity.setId(UUID.randomUUID());
+            entity.setCreatedAt(LocalDateTime.now());
+            entity.setUpdatedAt(LocalDateTime.now());
+            return entity;
+        });
+        when(objectMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+
+        SecurityRuleSetRequestDTO request = new SecurityRuleSetRequestDTO();
+        request.setName("Clinical enforcement pack");
+        request.setEnforcementScope("GLOBAL");
+        request.setPublishedBy("alice@example.com");
+        request.setRules(List.of(buildDefinition("RBAC-SEGREGATION", 1)));
+
+        // The metadata column degrades to "{}" rather than failing the rule set.
+        var response = service.createRuleSet(request);
+
+        assertThat(response.getId()).isNotNull();
+        assertThat(response.getRuleCount()).isEqualTo(1);
     }
 }

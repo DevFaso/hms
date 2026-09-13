@@ -5,13 +5,12 @@ import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
 import com.example.hms.service.AppointmentService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
@@ -98,7 +97,6 @@ class AppointmentControllerTest {
     void setUp() {
         reset(appointmentService, messageSource, appointmentReminderService);
         objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
 
         appointmentId = UUID.randomUUID();
         patientId = UUID.randomUUID();

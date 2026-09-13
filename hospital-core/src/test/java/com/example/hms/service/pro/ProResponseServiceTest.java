@@ -37,7 +37,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.pro.ProResponseRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;

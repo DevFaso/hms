@@ -11,9 +11,9 @@ import com.example.hms.payload.dto.reference.ReferenceCatalogResponseDTO;
 import com.example.hms.payload.dto.reference.SchedulePublishRequestDTO;
 import com.example.hms.repository.reference.ReferenceCatalogEntryRepository;
 import com.example.hms.repository.reference.ReferenceCatalogRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
@@ -211,7 +211,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
         try {
             Map<String, Object> result = objectMapper.readValue(raw, MAP_TYPE);
             return result != null ? result : Map.of();
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.warn("[catalog:import] metadata parse error row={} reason={}", csvRow.getRecordNumber(), ex.getMessage());
             return Map.of();
         }

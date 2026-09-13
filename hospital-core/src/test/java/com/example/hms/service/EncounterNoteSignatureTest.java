@@ -81,7 +81,7 @@ class EncounterNoteSignatureTest {
     @Mock private DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private NotificationService notificationService;
     @Mock private EmailService emailService;
-    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock private tools.jackson.databind.ObjectMapper objectMapper;
     @Mock private com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     @Mock private com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     @Mock private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;

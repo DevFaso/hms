@@ -1,9 +1,9 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.model.integration.Dhis2AuthMode;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -155,7 +155,7 @@ public class DhisHttpClient {
             int imported = summary.path("importCount").path("imported").asInt(0);
             int ignored = summary.path("importCount").path("ignored").asInt(0);
             return new DhisHttpResponse(status, imported, ignored, body);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.info("DHIS2 import-summary not parseable as JSON (status {}); body length={}",
                 status, body.length());
             return new DhisHttpResponse(status, 0, 0, body);

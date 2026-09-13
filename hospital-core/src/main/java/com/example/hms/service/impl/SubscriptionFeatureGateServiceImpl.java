@@ -4,8 +4,8 @@ import com.example.hms.model.platform.OrganizationSubscription;
 import com.example.hms.model.platform.SubscriptionPlan;
 import com.example.hms.repository.OrganizationSubscriptionRepository;
 import com.example.hms.service.SubscriptionFeatureGateService;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -123,7 +123,7 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
                 .map(this::normalize)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
-        } catch (RuntimeException | java.io.IOException ex) {
+        } catch (RuntimeException ex) { // Jackson 3 throws unchecked JacksonException
             // Malformed jsonb cell — degrade to ungated rather than block
             // every flag for the org. Logged so the operator can retag the
             // plan; the legacy TEXT column is still consulted on next call.

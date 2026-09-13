@@ -193,7 +193,9 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         payload.put("issuedAt", Instant.now().toString());
 
         try {
-            messagingTemplate.convertAndSend(BROADCAST_TOPIC, payload);
+            // Spring Framework 7: a Map payload also matches the (payload, headers)
+            // overload, so name the intent.
+            messagingTemplate.convertAndSend(BROADCAST_TOPIC, (Object) payload);
         } catch (RuntimeException ex) {
             // Don't let a transient broker failure swallow the audit trail —
             // the action is still recorded as an attempt.
