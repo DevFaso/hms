@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,6 +31,7 @@ import com.example.hms.model.Announcement;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
@@ -2724,6 +2726,62 @@ class NurseTaskServiceImplTest {
             .doesNotThrowAnyException();
     }
 
+    @Test
+    void getOrderTasksSkipsAnOrderWhosePatientNoLongerExists() {
+        // dev, 2026-09-13: a hard-deleted patient left an imaging order behind; the lazy
+        // proxy threw EntityNotFoundException on getFullName() and the whole board was a 500.
+        // One orphan of each kind, one live lab and one live imaging order.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID livePatientId = UUID.randomUUID();
+        UUID gonePatientId = UUID.randomUUID();
+
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(livePatientId, "Ann Assigned", "Ann", "Assigned"),
+                patient(gonePatientId, "Gone Patient", "Gone", "Patient")));
+
+        Patient live = mock(Patient.class);
+        when(live.getId()).thenReturn(livePatientId);
+        when(live.getFullName()).thenReturn("Ann Assigned");
+        Patient gone = mock(Patient.class);
+        when(gone.getId()).thenReturn(gonePatientId);
+        when(gone.getFullName()).thenThrow(new jakarta.persistence.EntityNotFoundException(
+            "Unable to find com.example.hms.model.Patient with id " + gonePatientId));
+
+        LabOrder liveDraw = mock(LabOrder.class);
+        when(liveDraw.getId()).thenReturn(UUID.randomUUID());
+        when(liveDraw.getPatient()).thenReturn(live);
+        when(liveDraw.getPriority()).thenReturn("ROUTINE");
+        when(liveDraw.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 9, 13, 8, 0));
+        LabOrder orphanedDraw = mock(LabOrder.class);
+        when(orphanedDraw.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedDraw.getPatient()).thenReturn(gone);
+        when(labOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(liveDraw, orphanedDraw));
+
+        ImagingOrder liveScan = mock(ImagingOrder.class);
+        when(liveScan.getId()).thenReturn(UUID.randomUUID());
+        when(liveScan.getPatient()).thenReturn(live);
+        when(liveScan.getPriority()).thenReturn(null);
+        when(liveScan.getOrderedAt()).thenReturn(LocalDateTime.of(2026, 9, 13, 9, 0));
+        ImagingOrder orphanedImaging = mock(ImagingOrder.class);
+        when(orphanedImaging.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedImaging.getPatient()).thenReturn(gone);
+        when(imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(eq(hospitalId), any()))
+            .thenReturn(List.of(orphanedImaging, liveScan));
+
+        ProcedureOrder orphanedProcedure = mock(ProcedureOrder.class);
+        when(orphanedProcedure.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedProcedure.getPatient()).thenReturn(gone);
+        when(procedureOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(orphanedProcedure));
+
+        List<NurseOrderTaskResponseDTO> tasks = service.getOrderTasks(nurseId, hospitalId, null, 20);
+
+        assertThat(tasks)
+            .extracting(NurseOrderTaskResponseDTO::getOrderType, NurseOrderTaskResponseDTO::getPatientName)
+            .containsExactly(tuple("Lab", "Ann Assigned"), tuple("Imaging", "Ann Assigned"));
+    }
 
     @Test
     void recordMedicationAdministrationOverrideSurvivesSerializationFailure() {
