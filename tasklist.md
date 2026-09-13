@@ -2414,17 +2414,30 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   confirmation-code path everyone else uses. Found by the #569 review while
   making the disabled-login message name a route that actually exists.
 
-- Hospital scope is applied page by page: after #566, 18 of ~115 staff routes
-  carry the scope chip and gate on `RoleContextService.hasHospitalScope`, while
-  every other route whose backend calls `requireActiveHospitalId()` (imaging,
-  discharge, nurse station, procedure orders, registrations, bed management,
-  pharmacy inventory/dispensing/claims, lab QC, reports, billing, departments,
-  scheduling…) still fires in global view and shows a load-error toast. The
-  right depth is one route-level mechanism — `data: { requiresHospitalScope }`
-  on the route consumed by a shell-level gate (chip + hint + outlet) — plus
-  `AuthService.getHospitalId()` delegating to
-  `roleContext.effectiveHospitalIdForRequest()` so the 22 remaining callers
-  follow the chip. From the #566 self-review.
+- ~~Hospital scope is applied page by page.~~ Closed by the route-level gate
+  (`HospitalScopeGateService`, 2026-09-13): a route carrying
+  `data: { requiresHospitalScope: true }` renders only once a hospital is in
+  scope; a super-admin in global view sees the chip and the hint in place of
+  the page, staff are never gated, a `?hospitalId=` in the URL pins the scope
+  on navigation and a pick is kept across gated pages; the shell keys the
+  router outlet on the effective hospital so a scope change rebuilds the page.
+  `AuthService.getHospitalId()` now delegates to
+  `roleContext.effectiveHospitalIdForRequest()`, so the 26 callers (params,
+  path variables, bodies, STOMP topics) follow the chip and can no longer name
+  the primary hospital while the header is omitted. Flagged: the eleven pages
+  that used to error or go blank in global view (appointments calendar, lab
+  staff / instruments / inventory, discharge, maternity, patient tracker,
+  registrations, procedure orders, order sets, DHIS2) plus the five whose
+  backend silently fell back to the raw context hospital (lab ops, reports,
+  reception, nurse station, eMAR); `shell.spec.ts` pins the list. Still owed:
+  the eleven pages that gate themselves (`scopeReady` + own chip + hint) keep
+  their per-page block until they move to the flag, which means deleting the
+  block and the chip, not adding the flag beside them (two chips); the pages
+  that are global on open but scoped on one tab (imaging results, medication
+  history, stock routing by prescription, pharmacy checkout, bed-management
+  writes) now follow the chip through `getHospitalId()` but have no gate on
+  the tab; and the chart still has no scope chip (the "no deterministic
+  primary hospital" entry below).
 - Hospital search index: V90 indexes `LOWER(name)` with the default opclass, so
   on a non-C collation `LIKE 'x%'` is not a range scan and a one-letter prefix
   late in the alphabet walks most of the index; a `text_pattern_ops` (or partial
@@ -2433,8 +2446,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - Scope-gate boilerplate: six pages carry the same `scopeReady` alias +
   `scopeChanged$` + `takeUntil` + `applyUrlScopeSync` block (registries and
   webhooks use `load$` + `switchMap` instead); one injectable
-  (`ready`, `untilScopeChange()`, `sync(route)`) or the route-level gate above
-  would make it a one-liner per page. From the #566 self-review.
+  (`ready`, `untilScopeChange()`, `sync(route)`) would make it a one-liner per
+  page; the route-level gate above now exists, so the shorter route is to
+  move each of those pages onto the flag and delete the block. From the
+  #566 self-review.
 - `@DataJpaTest` slices repeat the same `@ActiveProfiles("test")` +
   `@Import({TenantContextAccessor, EncryptionKeyHolder})` preamble in six
   classes; a `@TenantScopedDataJpaTest` meta-annotation and a

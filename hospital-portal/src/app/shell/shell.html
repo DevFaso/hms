@@ -358,7 +358,28 @@
       <app-emergency-broadcast-banner />
       <!-- P3 #23a — persistent read-only banner; not dismissible by design. -->
       <app-downtime-banner />
-      <router-outlet />
+      @if (scopeGate.blocked()) {
+        <!-- Route-level hospital scope gate (HospitalScopeGateService): a route
+             flagged requiresHospitalScope is one facility's page. Until a
+             hospital is pinned the page is not created, so it never fires a
+             scoped request into global view; the chip is the way in. -->
+        <section class="scope-gate" data-testid="scope-gate">
+          <h1 class="scope-gate__title">{{ 'HOSPITAL_SCOPE.GATE_TITLE' | translate }}</h1>
+          <app-hospital-scope-chip [preserveScope]="true" />
+          <app-hospital-scope-hint />
+        </section>
+      } @else {
+        @if (scopeGate.showChip()) {
+          <div class="scope-bar" data-testid="scope-bar">
+            <app-hospital-scope-chip [preserveScope]="true" />
+          </div>
+        }
+        <!-- Keyed on the effective hospital while the route is gated: a scope
+             change rebuilds the page instead of trusting it to reload. -->
+        @for (key of [scopeGate.outletKey()]; track key) {
+          <router-outlet />
+        }
+      }
     </main>
   </div>
 </div>

@@ -147,7 +147,7 @@ export class DischargeComponent implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.staffId = this.auth.getUserProfile()?.staffId ?? null;
     this.resolveAssignment();
     this.loadApprovals();

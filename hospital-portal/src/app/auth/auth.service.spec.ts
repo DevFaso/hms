@@ -226,3 +226,37 @@ describe('AuthService — setToken storage swap (closes Copilot review #2 on PR 
     expect(service.isTokenRemembered()).toBeFalse();
   });
 });
+
+describe('AuthService — getHospitalId follows the effective scope', () => {
+  let service: AuthService;
+  let roleContext: RoleContextService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    roleContext = TestBed.inject(RoleContextService);
+  });
+
+  it('is the assignment for staff', () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    roleContext.activeHospitalId = 'h1';
+    expect(service.getHospitalId()).toBe('h1');
+  });
+
+  it('is null for a super-admin in global view, not their primary hospital', () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.activeHospitalId = 'primary';
+    roleContext.markSuperAdminGlobalDefaults();
+    expect(service.getHospitalId()).toBeNull();
+  });
+
+  it("is the chip's pick once a super-admin has scoped", () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.activeHospitalId = 'primary';
+    roleContext.markSuperAdminGlobalDefaults();
+    roleContext.scopeToHospital('h2');
+    expect(service.getHospitalId()).toBe('h2');
+  });
+});

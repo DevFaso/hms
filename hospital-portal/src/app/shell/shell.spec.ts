@@ -1012,3 +1012,42 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     expect(messagesLink?.querySelector('.badge')).toBeNull();
   });
 });
+
+describe('ShellComponent — route-level hospital scope gate', () => {
+  /** Every route path carrying `data.requiresHospitalScope`, parent path joined in. */
+  function flaggedRoutes(rs: Route[], prefix = ''): string[] {
+    return rs.flatMap((r) => {
+      const path = [prefix, r.path].filter(Boolean).join('/');
+      const own = r.data?.['requiresHospitalScope'] === true ? [path] : [];
+      return [...own, ...(r.children ? flaggedRoutes(r.children, path) : [])];
+    });
+  }
+
+  it('flags exactly the one-facility pages, so a super-admin in global view is asked to pick first', () => {
+    // The mapping behind this list is the "Hospital scope is applied page by
+    // page" entry of tasklist.md: pages that read the hospital from the
+    // session and send it as a param, path variable or body, or whose backend
+    // resolves the raw context hospital, i.e. the ones that used to fail or
+    // silently show the primary hospital in global view.
+    expect(flaggedRoutes(routes).sort()).toEqual(
+      [
+        'admin/integrations/dhis2',
+        'admin/order-sets',
+        'appointments/calendar',
+        'discharge',
+        'emar',
+        'lab-instruments',
+        'lab-inventory',
+        'lab-ops-dashboard',
+        'lab-staff',
+        'maternity',
+        'nurse-station',
+        'patient-tracker',
+        'procedure-orders',
+        'reception',
+        'registrations',
+        'reports',
+      ].sort(),
+    );
+  });
+});

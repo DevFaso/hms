@@ -145,7 +145,7 @@ export class OrderSetListComponent implements OnInit {
         switchMap((term) => {
           this.loading.set(true);
           this.error.set(false);
-          const hid = this.roleContext.activeHospitalId ?? '';
+          const hid = this.roleContext.effectiveHospitalIdForRequest() ?? '';
           return this.orderSetService.list(hid, term);
         }),
       )
