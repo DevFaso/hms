@@ -259,11 +259,19 @@ describe('Dashboard navigation & RBAC', () => {
   // ── Hero shortcuts vs the Quick Actions strip ───────────────
 
   it('hides the hero shortcuts on the nurse view, which renders the Quick Actions strip', () => {
-    expect(createComponent(['ROLE_NURSE'], []).hasQuickActionsStrip()).toBeTrue();
+    expect(
+      createComponent(['ROLE_NURSE'], ['Create Encounters']).hasQuickActionsStrip(),
+    ).toBeTrue();
+  });
+
+  it('keeps the hero shortcuts when the strip would be empty', () => {
+    expect(createComponent(['ROLE_NURSE'], []).hasQuickActionsStrip()).toBeFalse();
   });
 
   it('hides the hero shortcuts on the doctor view, which renders the Quick Actions strip', () => {
-    expect(createComponent(['ROLE_DOCTOR'], []).hasQuickActionsStrip()).toBeTrue();
+    expect(
+      createComponent(['ROLE_DOCTOR'], ['Create Encounters']).hasQuickActionsStrip(),
+    ).toBeTrue();
   });
 
   it('keeps the hero shortcuts on views without a Quick Actions strip', () => {

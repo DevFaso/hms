@@ -75,7 +75,7 @@
           </div>
         </div>
       }
-      @if (isNurse() || isMidwife()) {
+      @if ((isNurse() || isMidwife()) && (hospitalName() || departmentName())) {
         <div class="doctor-hero-info" data-testid="hero-context">
           @if (hospitalName(); as hospital) {
             <span class="doctor-chip hospital-chip" data-testid="hero-hospital">

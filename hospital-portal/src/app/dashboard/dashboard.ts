@@ -439,8 +439,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Appointment / Start Encounter / Register Patient. The hero shows those
    * shortcuts only where no strip does, so nothing is on the page twice.
    */
-  hasQuickActionsStrip = computed(() =>
-    (['hospitaladmin', 'doctor', 'nurse', 'receptionist'] as string[]).includes(this.activeView()),
+  hasQuickActionsStrip = computed(
+    () =>
+      (['hospitaladmin', 'doctor', 'nurse', 'receptionist'] as string[]).includes(
+        this.activeView(),
+      ) && this.quickActions().length > 0,
   );
 
   // ── Role display label ────────────────────────────────────────
