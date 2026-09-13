@@ -66,6 +66,13 @@ public interface UltrasoundOrderRepository extends JpaRepository<UltrasoundOrder
     @Query("SELECT COUNT(u) FROM UltrasoundOrder u WHERE u.patient.id = :patientId AND u.status <> 'CANCELLED'")
     long countByPatientId(@Param("patientId") UUID patientId);
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<UltrasoundOrder> findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59d — the status-filtered sibling of the finder above. */
+    List<UltrasoundOrder> findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedDateDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, UltrasoundOrderStatus status);
+
     /**
      * Find the most recent order for a patient.
      */

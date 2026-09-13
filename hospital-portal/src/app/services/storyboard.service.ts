@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { RestrictedRows } from './patient.service';
+
 /**
  * Wire shapes for {@code GET /api/patients/:patientId/storyboard}.
  * The Storyboard banner aggregates allergies, problems, the active
@@ -24,6 +26,9 @@ export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING
 
 export interface StoryboardAllergy {
   id: string;
+  /** Hospital that recorded the allergy (E9 #56 provenance). */
+  hospitalId?: string | null;
+  hospitalName?: string | null;
   allergenDisplay: string;
   allergenCode?: string | null;
   severity?: AllergySeverity | null;
@@ -33,6 +38,9 @@ export interface StoryboardAllergy {
 
 export interface StoryboardProblem {
   id: string;
+  /** Hospital that recorded the problem (E9 #59 provenance). */
+  hospitalId?: string | null;
+  hospitalName?: string | null;
   problemDisplay: string;
   problemCode?: string | null;
   icdVersion?: string | null;
@@ -76,6 +84,8 @@ export interface PatientStoryboard {
   codeStatus?: StoryboardCodeStatus | null;
   hasHighSeverityAllergy: boolean;
   hasChronicProblem: boolean;
+  /** E9 #64 — problems withheld under D3, per recording hospital. */
+  restrictedRows?: RestrictedRows[];
   hospitalId?: string | null;
   hospitalName?: string | null;
   generatedAt?: string | null;

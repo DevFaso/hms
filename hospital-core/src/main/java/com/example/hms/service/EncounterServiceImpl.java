@@ -78,6 +78,12 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.example.hms.mapper.PatientHospitalRegistrationMapper.joinName;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 
 @Slf4j
@@ -242,6 +248,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     private final EncounterRepository encounterRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
@@ -251,6 +258,10 @@ public class EncounterServiceImpl implements EncounterService {
     private final EncounterMapper encounterMapper;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
     private final EncounterHistoryRepository encounterHistoryRepository;
     private final EncounterNoteRepository encounterNoteRepository;
     private final EncounterNoteAddendumRepository encounterNoteAddendumRepository;
@@ -1384,11 +1395,7 @@ public class EncounterServiceImpl implements EncounterService {
         Patient patient = patientRepository.findByUsernameOrEmail(identifier)
             .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
 
-        List<Encounter> encounters = encounterRepository.findByPatient_Id(patient.getId());
-
-        return encounters.stream()
-            .map(encounterMapper::toEncounterResponseDTO)
-            .toList();
+        return readEncountersForPatient(patient.getId());
     }
 
     @Override
@@ -1397,7 +1404,36 @@ public class EncounterServiceImpl implements EncounterService {
         if (!patientRepository.existsById(patientId)) {
             throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
         }
-        return encounterRepository.findByPatient_Id(patientId).stream()
+        return readEncountersForPatient(patientId);
+    }
+
+    /**
+     * E9 #59e — encounters follow the patient across the readable hospitals
+     * when the caller acts in one, read at the database rather than every
+     * tenant's rows. A foreign encounter in a sensitive category (decision D3)
+     * is withheld here and opens through break-the-glass (E9 #62); every
+     * foreign row surfaced is accounted. A super-admin in global view — and a
+     * patient reading their own, who has no acting hospital — keeps the
+     * unscoped read.
+     */
+    private List<EncounterResponseDTO> readEncountersForPatient(UUID patientId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null) {
+            return encounterRepository.findByPatient_Id(patientId).stream()
+                .map(encounterMapper::toEncounterResponseDTO)
+                .toList();
+        }
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
+        List<Encounter> encounters = encounterRepository
+            .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
+            .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
+            .toList();
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(encounters.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), activeHospitalId),
+            "Cross-hospital encounter read on the treatment relationship");
+        return encounters.stream()
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -1638,6 +1674,10 @@ public class EncounterServiceImpl implements EncounterService {
                     .build();
             patientAllergyRepository.save(allergy);
             count++;
+        }
+        if (count > 0) {
+            // E9 #56 — patients.allergies is the derived summary of the structured rows.
+            allergySummarySync.refresh(encounter.getPatient());
         }
         return count;
     }

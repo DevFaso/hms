@@ -43,7 +43,7 @@ import java.util.UUID;
 public class IntakeOutputController {
 
     private static final String READ_WRITE_ROLES =
-        "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')";
 
     private final IntakeOutputService intakeOutputService;
     private final ControllerAuthUtils authUtils;

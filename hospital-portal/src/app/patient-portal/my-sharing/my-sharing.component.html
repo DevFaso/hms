@@ -1,239 +1,211 @@
 <div class="portal-page">
   <div class="portal-page-header">
     <h1>
-      <span class="material-symbols-outlined">share</span>
+      <span class="material-symbols-outlined">visibility</span>
       {{ 'PORTAL.SHARING.TITLE' | translate }}
     </h1>
   </div>
 
-  <!-- Tabs -->
-  <div class="rec-tabs">
-    <button
-      class="rec-tab"
-      [class.active]="activeTab() === 'consents'"
-      (click)="activeTab.set('consents')"
-    >
-      <span class="material-symbols-outlined">handshake</span>
-      {{ 'PORTAL.SHARING.CONSENTS_TAB' | translate }}
-    </button>
-    <button
-      class="rec-tab"
-      [class.active]="activeTab() === 'access-log'"
-      (click)="switchToAccessLog()"
-    >
-      <span class="material-symbols-outlined">visibility</span>
-      {{ 'PORTAL.SHARING.ACCESS_LOG_TAB' | translate }}
-    </button>
-  </div>
-
-  <!-- CONSENTS TAB -->
-  @if (activeTab() === 'consents') {
-    <div class="sharing-actions">
-      <button class="share-btn" (click)="openShareForm()">
-        <span class="material-symbols-outlined">add_circle</span>
-        {{ 'PORTAL.SHARING.SHARE_RECORDS' | translate }}
-      </button>
+  <!--
+    E9 #66 — the one thing a patient controls: whether other hospitals may
+    read their record on the treatment relationship. Their own hospital's
+    access never changes; an emergency access remains possible and lands in
+    the list below.
+  -->
+  <section
+    class="opt-out-card"
+    [class.opt-out-card--on]="optedOut()"
+    data-testid="opt-out-card"
+    [attr.aria-busy]="optOutLoading() || optOutSaving()"
+  >
+    <div class="opt-out-head">
+      <span class="material-symbols-outlined opt-out-icon" aria-hidden="true">
+        {{ optedOut() ? 'lock' : 'lock_open' }}
+      </span>
+      <div>
+        <h2>{{ 'PORTAL.SHARING.OPT_OUT.TITLE' | translate }}</h2>
+        <p>{{ 'PORTAL.SHARING.OPT_OUT.DESC' | translate }}</p>
+      </div>
     </div>
 
-    @if (showShareForm()) {
-      <div class="share-form-card">
-        <h3>{{ 'PORTAL.SHARING.SHARE_FORM_TITLE' | translate }}</h3>
-        <div class="share-form-fields">
-          <div class="share-field">
-            <label for="share-hospital-id">{{ 'PORTAL.SHARING.HOSPITAL_ID' | translate }}</label>
-            <input
-              id="share-hospital-id"
-              type="text"
-              [(ngModel)]="shareHospitalId"
-              [placeholder]="'PORTAL.SHARING.HOSPITAL_ID_PLACEHOLDER' | translate"
-            />
-          </div>
-          <div class="share-field">
-            <label for="share-purpose">{{ 'PORTAL.SHARING.SHARE_PURPOSE' | translate }}</label>
-            <select id="share-purpose" [(ngModel)]="sharePurpose">
-              <option value="">{{ 'PORTAL.SHARING.PURPOSE_TREATMENT' | translate }}</option>
-              <option value="Second Opinion">
-                {{ 'PORTAL.SHARING.PURPOSE_SECOND_OPINION' | translate }}
-              </option>
-              <option value="Referral">{{ 'PORTAL.SHARING.PURPOSE_REFERRAL' | translate }}</option>
-              <option value="Transfer">{{ 'PORTAL.SHARING.PURPOSE_TRANSFER' | translate }}</option>
-            </select>
-          </div>
-          <div class="share-field">
-            <label for="share-expiration">{{ 'PORTAL.SHARING.EXPIRATION' | translate }}</label>
-            <input id="share-expiration" type="date" [(ngModel)]="shareExpiration" />
-          </div>
-        </div>
-        <div class="share-form-actions">
-          <button class="share-cancel-btn" (click)="cancelShare()">
-            {{ 'PORTAL.SHARING.CANCEL' | translate }}
-          </button>
-          <button
-            class="share-submit-btn"
-            (click)="submitShare()"
-            [disabled]="sharing() || !shareHospitalId.trim()"
-          >
-            {{
-              sharing()
-                ? ('PORTAL.SHARING.SHARING' | translate)
-                : ('PORTAL.SHARING.CONFIRM_SHARE' | translate)
-            }}
-          </button>
-        </div>
-      </div>
-    }
-
-    @if (loadingConsents()) {
-      <div class="portal-loading">
-        <div class="portal-spinner"></div>
-        <span>{{ 'PORTAL.SHARING.LOADING_CONSENTS' | translate }}</span>
-      </div>
-    } @else if (!consents().length) {
-      <div class="portal-empty">
-        <span class="material-symbols-outlined">verified_user</span>
-        <h3>{{ 'PORTAL.SHARING.NO_CONSENTS_TITLE' | translate }}</h3>
-        <p>{{ 'PORTAL.SHARING.NO_CONSENTS_DESC' | translate }}</p>
-        <p class="rec-muted" style="margin-top: 8px">
-          {{ 'PORTAL.SHARING.NO_CONSENTS_HINT' | translate }}
-        </p>
-      </div>
+    @if (optOutLoading()) {
+      <p class="rec-muted">{{ 'PORTAL.SHARING.OPT_OUT.LOADING' | translate }}</p>
+    } @else if (optOutFailed()) {
+      <p class="opt-out-status opt-out-status--failed" data-testid="opt-out-failed">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        {{ 'PORTAL.SHARING.OPT_OUT.LOAD_FAILED' | translate }}
+      </p>
     } @else {
-      <div class="portal-list" style="margin-top: 16px">
-        @for (c of consents(); track c.id) {
-          <div class="portal-list-item sharing-consent-item">
-            <div class="pli-icon" style="background: #d1fae5">
-              <span class="material-symbols-outlined" style="color: #059669">verified_user</span>
-            </div>
-            <div class="pli-body">
-              <span class="pli-title">{{ c.fromHospitalName }} → {{ c.toHospitalName }}</span>
-              <span class="pli-sub"
-                >{{ 'PORTAL.SHARING.PURPOSE' | translate }}
-                {{ c.purpose || ('PORTAL.SHARING.TREATMENT' | translate) }}</span
-              >
-              <span class="pli-meta">
-                {{ 'PORTAL.SHARING.GRANTED' | translate }} {{ c.grantedAt | date: 'mediumDate' }}
-                @if (c.expiresAt) {
-                  · {{ 'PORTAL.SHARING.EXPIRES' | translate }}
-                  {{ c.expiresAt | date: 'mediumDate' }}
-                }
-              </span>
-            </div>
-            <div class="consent-actions">
-              <span class="portal-status-chip" [attr.data-status]="c.status">{{
-                c.status | enumLabel: 'status'
-              }}</span>
-              @if (c.status === 'ACTIVE') {
-                <button class="revoke-btn" (click)="revokeConsent(c)" [disabled]="revoking()">
-                  {{ 'PORTAL.SHARING.REVOKE' | translate }}
-                </button>
-              }
-            </div>
+      <p class="opt-out-status" data-testid="opt-out-status">
+        @if (optedOut()) {
+          {{ 'PORTAL.SHARING.OPT_OUT.STATUS_ON' | translate }}
+          {{ optOut()?.optedOutAt | date: 'mediumDate' }}
+        } @else {
+          {{ 'PORTAL.SHARING.OPT_OUT.STATUS_OFF' | translate }}
+        }
+      </p>
+
+      @if (showOptOutForm()) {
+        <div class="opt-out-form" data-testid="opt-out-form">
+          <label for="opt-out-reason">{{
+            'PORTAL.SHARING.OPT_OUT.REASON_LABEL' | translate
+          }}</label>
+          <textarea
+            id="opt-out-reason"
+            rows="3"
+            maxlength="1000"
+            [(ngModel)]="optOutReason"
+            [placeholder]="'PORTAL.SHARING.OPT_OUT.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+          <div class="opt-out-actions">
+            <button
+              type="button"
+              class="opt-out-btn opt-out-btn--ghost"
+              (click)="cancelOptOut()"
+              [disabled]="optOutSaving()"
+            >
+              {{ 'PORTAL.SHARING.OPT_OUT.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="opt-out-btn"
+              data-testid="opt-out-confirm"
+              (click)="confirmOptOut()"
+              [disabled]="optOutSaving()"
+            >
+              {{ 'PORTAL.SHARING.OPT_OUT.CONFIRM' | translate }}
+            </button>
+          </div>
+        </div>
+      } @else if (optedOut()) {
+        <button
+          type="button"
+          class="opt-out-btn opt-out-btn--ghost"
+          data-testid="opt-out-revoke"
+          (click)="revokeOptOut()"
+          [disabled]="optOutSaving()"
+        >
+          {{ 'PORTAL.SHARING.OPT_OUT.DISABLE' | translate }}
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="opt-out-btn"
+          data-testid="opt-out-enable"
+          (click)="openOptOutForm()"
+          [disabled]="optOutSaving()"
+        >
+          {{ 'PORTAL.SHARING.OPT_OUT.ENABLE' | translate }}
+        </button>
+      }
+      <p class="rec-muted opt-out-note">
+        {{ 'PORTAL.SHARING.OPT_OUT.OWN_HOSPITAL_NOTE' | translate }}
+      </p>
+    }
+  </section>
+
+  <h2 class="access-log-title">
+    <span class="material-symbols-outlined" aria-hidden="true">history</span>
+    {{ 'PORTAL.SHARING.ACCESS_LOG_TITLE' | translate }}
+  </h2>
+
+  <!--
+    Shown above every state, including the empty one. What this page can
+    report is narrower than "who viewed my records" implies: routine chart
+    reads emit no audit event, so listing only disclosures without saying so
+    reads as "nobody else looked".
+  -->
+  <p class="access-scope-note">
+    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+    {{ 'PORTAL.SHARING.ACCESS_LOG_SCOPE_NOTE' | translate }}
+  </p>
+  @if (loadingLog()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.SHARING.LOADING_LOG' | translate }}</span>
+    </div>
+  } @else if (logFailed()) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">error</span>
+      <h3>{{ 'PORTAL.SHARING.LOG_FAILED_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.SHARING.LOG_FAILED_DESC' | translate }}</p>
+      <button type="button" class="portal-btn" (click)="retryAccessLog()">
+        {{ 'PORTAL.SHARING.LOG_RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (!accessLog().length) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">shield</span>
+      <h3>{{ 'PORTAL.SHARING.NO_ACCESS_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.SHARING.NO_ACCESS_DESC' | translate }}</p>
+    </div>
+  } @else {
+    @if (emergencyCount() || externalCount()) {
+      <div class="access-summary">
+        @if (emergencyCount()) {
+          <div class="as-stat as-emergency">
+            <span class="as-count">{{ emergencyCount() }}</span>
+            <span class="as-label">{{
+              'PORTAL.SHARING.SUMMARY_EMERGENCY' | translate: { count: emergencyCount() }
+            }}</span>
+          </div>
+        }
+        @if (externalCount()) {
+          <div class="as-stat as-external">
+            <span class="as-count">{{ externalCount() }}</span>
+            <span class="as-label">{{
+              'PORTAL.SHARING.SUMMARY_EXTERNAL' | translate: { count: externalCount() }
+            }}</span>
           </div>
         }
       </div>
     }
-  }
-
-  <!-- ACCESS LOG TAB -->
-  @if (activeTab() === 'access-log') {
-    <!--
-      Shown above every state, including the empty one. What this page can
-      report is narrower than "who viewed my records" implies: routine chart
-      reads emit no audit event, so listing only disclosures without saying so
-      reads as "nobody else looked".
-    -->
-    <p class="access-scope-note">
-      <span class="material-symbols-outlined" aria-hidden="true">info</span>
-      {{ 'PORTAL.SHARING.ACCESS_LOG_SCOPE_NOTE' | translate }}
-    </p>
-    @if (loadingLog()) {
-      <div class="portal-loading">
-        <div class="portal-spinner"></div>
-        <span>{{ 'PORTAL.SHARING.LOADING_LOG' | translate }}</span>
-      </div>
-    } @else if (logFailed()) {
-      <div class="portal-empty">
-        <span class="material-symbols-outlined">error</span>
-        <h3>{{ 'PORTAL.SHARING.LOG_FAILED_TITLE' | translate }}</h3>
-        <p>{{ 'PORTAL.SHARING.LOG_FAILED_DESC' | translate }}</p>
-        <button type="button" class="portal-btn" (click)="retryAccessLog()">
-          {{ 'PORTAL.SHARING.LOG_RETRY' | translate }}
-        </button>
-      </div>
-    } @else if (!accessLog().length) {
-      <div class="portal-empty">
-        <span class="material-symbols-outlined">shield</span>
-        <h3>{{ 'PORTAL.SHARING.NO_ACCESS_TITLE' | translate }}</h3>
-        <p>{{ 'PORTAL.SHARING.NO_ACCESS_DESC' | translate }}</p>
-      </div>
-    } @else {
-      @if (emergencyCount() || externalCount()) {
-        <div class="access-summary">
-          @if (emergencyCount()) {
-            <div class="as-stat as-emergency">
-              <span class="as-count">{{ emergencyCount() }}</span>
-              <span class="as-label">{{
-                'PORTAL.SHARING.SUMMARY_EMERGENCY' | translate: { count: emergencyCount() }
-              }}</span>
-            </div>
-          }
-          @if (externalCount()) {
-            <div class="as-stat as-external">
-              <span class="as-count">{{ externalCount() }}</span>
-              <span class="as-label">{{
-                'PORTAL.SHARING.SUMMARY_EXTERNAL' | translate: { count: externalCount() }
-              }}</span>
-            </div>
-          }
+    <div class="portal-list access-log-list">
+      @for (entry of accessLog(); track entry.id) {
+        <div
+          class="portal-list-item"
+          [class.pli-external]="entry.externalDisclosure"
+          [class.pli-emergency]="entry.category === 'EMERGENCY_ACCESS'"
+        >
+          <div class="pli-icon">
+            <span class="material-symbols-outlined">
+              @switch (entry.category) {
+                @case ('EMERGENCY_ACCESS') {
+                  emergency
+                }
+                @case ('SHARED_WITH_PROVIDER') {
+                  share
+                }
+                @case ('INSURANCE') {
+                  account_balance
+                }
+                @case ('COPY_RELEASED') {
+                  download
+                }
+                @case ('IDENTITY_CHANGE') {
+                  merge
+                }
+                @default {
+                  visibility
+                }
+              }
+            </span>
+          </div>
+          <div class="pli-body">
+            <span class="pli-title">{{ entry.actor }}</span>
+            <span class="pli-sub">
+              <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
+              @if (entry.actorRole) {
+                · {{ entry.actorRole }}
+              }
+              @if (entry.hospitalName) {
+                · {{ entry.hospitalName }}
+              }
+            </span>
+            <span class="pli-meta">{{ entry.timestamp | date: 'medium' }}</span>
+          </div>
         </div>
       }
-      <div class="portal-list" style="margin-top: 16px">
-        @for (entry of accessLog(); track entry.id) {
-          <div
-            class="portal-list-item"
-            [class.pli-external]="entry.externalDisclosure"
-            [class.pli-emergency]="entry.category === 'EMERGENCY_ACCESS'"
-          >
-            <div class="pli-icon">
-              <span class="material-symbols-outlined">
-                @switch (entry.category) {
-                  @case ('EMERGENCY_ACCESS') {
-                    emergency
-                  }
-                  @case ('SHARED_WITH_PROVIDER') {
-                    share
-                  }
-                  @case ('INSURANCE') {
-                    account_balance
-                  }
-                  @case ('COPY_RELEASED') {
-                    download
-                  }
-                  @case ('IDENTITY_CHANGE') {
-                    merge
-                  }
-                  @default {
-                    visibility
-                  }
-                }
-              </span>
-            </div>
-            <div class="pli-body">
-              <span class="pli-title">{{ entry.actor }}</span>
-              <span class="pli-sub">
-                <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
-                @if (entry.actorRole) {
-                  · {{ entry.actorRole }}
-                }
-                @if (entry.hospitalName) {
-                  · {{ entry.hospitalName }}
-                }
-              </span>
-              <span class="pli-meta">{{ entry.timestamp | date: 'medium' }}</span>
-            </div>
-          </div>
-        }
-      </div>
-    }
+    </div>
   }
 </div>

@@ -53,6 +53,10 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.enums.SensitivityCategory;
 
 @ExtendWith(MockitoExtension.class)
 class ConsultationServiceImplTest {
@@ -66,6 +70,10 @@ class ConsultationServiceImplTest {
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private NotificationService notificationService;
     @Mock private com.example.hms.security.audit.CrossTenantReadAudit crossTenantReadAudit;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+    @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
@@ -722,6 +730,61 @@ class ConsultationServiceImplTest {
         assertThat(result).hasSize(1);
     }
 
+    @Test
+    @DisplayName("getConsultationsForPatient follows the patient and withholds a foreign sensitive consultation")
+    void getConsultationsForPatientFollowsThePatient() {
+        // E9 #59b — a cardiology consult at Hôpital B is on the list at Hôpital A;
+        // a foreign consult in a sensitive category (D3) is withheld here and
+        // opens through break-the-glass; the foreign row surfaced is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        other.setName("Hôpital B");
+        Consultation local = buildConsultation(ConsultationStatus.REQUESTED);
+        Consultation foreign = buildConsultation(ConsultationStatus.COMPLETED);
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        Consultation foreignSensitive = buildConsultation(ConsultationStatus.COMPLETED);
+        foreignSensitive.setId(UUID.randomUUID());
+        foreignSensitive.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(local, foreign, foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(Consultation.class)))
+                .thenAnswer(inv -> inv.getArgument(0) == foreignSensitive ? SensitivityCategory.HIV : null);
+
+        List<ConsultationResponseDTO> result = service.getConsultationsForPatient(patientId);
+
+        assertThat(result).extracting(ConsultationResponseDTO::getId).containsExactly(local.getId(), foreign.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    @DisplayName("a live break-the-glass session surfaces the foreign sensitive consultation (E9 #62)")
+    void breakGlassUnlocksTheForeignSensitiveConsultation() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Consultation foreignSensitive = buildConsultation(ConsultationStatus.COMPLETED);
+        foreignSensitive.setId(UUID.randomUUID());
+        foreignSensitive.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(breakGlassGate.isUnlocked(any(), eq(patientId), eq(hospitalId))).thenReturn(true);
+        when(consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(foreignSensitive));
+        when(sensitivityClassifier.effectiveCategory(any(Consultation.class))).thenReturn(SensitivityCategory.HIV);
+
+        assertThat(service.getConsultationsForPatient(patientId)).extracting(ConsultationResponseDTO::getId)
+                .containsExactly(foreignSensitive.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
     // ── getConsultationsRequestedBy ─────────────────────────────────────────
 
     @Test
@@ -1198,8 +1261,8 @@ class ConsultationServiceImplTest {
             // The leak this closes: getStats took the optional @RequestParam at
             // face value, so omitting it aggregated every tenant — totals,
             // per-status counts, SLA averages and the specialty breakdown — on
-            // the widest guard of the consultation reads (NURSE, MIDWIFE and
-            // DENTIST included). The sibling tests above leave
+            // the widest guard of the consultation reads (NURSE and MIDWIFE
+            // included). The sibling tests above leave
             // requireActiveHospitalId unstubbed, so the mock returns null, the
             // filter is skipped and they would pass with the scoping deleted.
             Consultation mine = buildConsultation(ConsultationStatus.REQUESTED);

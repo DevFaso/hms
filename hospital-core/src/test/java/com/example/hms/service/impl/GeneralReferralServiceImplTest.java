@@ -41,6 +41,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import java.util.Set;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class GeneralReferralServiceImplTest {
@@ -63,6 +65,9 @@ class GeneralReferralServiceImplTest {
     private com.example.hms.service.ReferralEventRecorder eventRecorder;
     @Mock
     private com.example.hms.repository.ReferralEventRepository eventRepository;
+
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private GeneralReferralServiceImpl generalReferralService;
@@ -529,13 +534,15 @@ class GeneralReferralServiceImplTest {
         UUID patientId = UUID.randomUUID();
         UUID activeHospId = UUID.randomUUID();
 
+        // E9 #59b — the scope is the policy's readable set.
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
-        when(referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, activeHospId))
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(activeHospId))).thenReturn(Set.of(activeHospId));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(activeHospId)))
             .thenReturn(List.of());
 
         List<GeneralReferralResponseDTO> result = generalReferralService.getReferralsByPatient(patientId);
         assertThat(result).isEmpty();
-        verify(referralRepository).findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, activeHospId);
+        verify(referralRepository).findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(activeHospId));
     }
 
     @Test

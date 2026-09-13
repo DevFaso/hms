@@ -1,21 +1,27 @@
 /**
  * Role lists mirroring the backend @PreAuthorize gates on the patient-chart
  * endpoints (allergies / diagnoses / chart-updates / doctor-timeline).
+ * E9 #67 (D5): HOSPITAL_ADMIN is administrative-only on the chart — it keeps
+ * demographics, coverage and registration, none of the lists below.
  * Single source of truth for PatientChartComponent and the Chart tab gate in
  * PatientDetailComponent — update here when the backend gates change.
  */
 export const CHART_ROLES = {
+  // E9 #69: every clinical role reads allergies (contrast, induction, therapy).
   viewAllergies: [
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_PHARMACIST',
+    'ROLE_RADIOLOGIST',
+    'ROLE_ANESTHESIOLOGIST',
+    'ROLE_PHYSIOTHERAPIST',
   ],
   editAllergies: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
-  viewProblems: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN'],
+  // E9 #69: the pharmacist reads the problem list to verify a prescription.
+  viewProblems: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   editProblems: ['ROLE_DOCTOR'],
-  viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN'],
+  viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   createUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   viewTimeline: ['ROLE_DOCTOR'],
 } as const;
@@ -42,7 +48,7 @@ export const VITALS_VIEW_ROLES: string[] = [
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
   'ROLE_DOCTOR',
-  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_PHARMACIST',
   'ROLE_RADIOLOGIST',
   'ROLE_ANESTHESIOLOGIST',
   'ROLE_PHYSIOTHERAPIST',
@@ -50,11 +56,29 @@ export const VITALS_VIEW_ROLES: string[] = [
 ];
 
 /** Roles EncounterController's list read admits (was 'Create Encounters'). */
+/**
+ * Roles AppointmentController's per-patient read admits
+ * (APPOINTMENT_READ_ROLES). E9 #69: the Appointments tab was unconditional,
+ * so every role that reaches the chart but not this endpoint (the
+ * pharmacist now, the lab roles all along) clicked into a 403 card.
+ */
+export const APPOINTMENT_VIEW_ROLES: string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_STAFF',
+  'ROLE_RECEPTIONIST',
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_RADIOLOGIST',
+  'ROLE_ANESTHESIOLOGIST',
+  'ROLE_PHYSIOTHERAPIST',
+];
+
 export const ENCOUNTER_VIEW_ROLES: string[] = [
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_RADIOLOGIST',
   'ROLE_ANESTHESIOLOGIST',
   'ROLE_PHYSIOTHERAPIST',
@@ -75,7 +99,6 @@ export const CHART_REVIEW_VIEW_ROLES: string[] = [
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_HOSPITAL_ADMIN',
   'ROLE_RECEPTIONIST',
   'ROLE_PHARMACIST',
   'ROLE_LAB_SCIENTIST',

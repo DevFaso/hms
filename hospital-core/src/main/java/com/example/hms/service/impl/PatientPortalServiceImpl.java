@@ -24,7 +24,6 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
-import com.example.hms.payload.dto.PatientConsentRequestDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
@@ -51,7 +50,6 @@ import com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO
 import com.example.hms.payload.dto.portal.PatientEducationItemDTO;
 import com.example.hms.payload.dto.portal.PatientEducationProgressUpdateDTO;
 import com.example.hms.payload.dto.portal.PatientEducationQuestionSubmitDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
@@ -688,40 +686,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
-    // ── Grant data-sharing consent ───────────────────────────────────────
-
-    @Override
-    @Transactional
-    public PatientConsentResponseDTO grantMyConsent(Authentication auth, PortalConsentRequestDTO dto) {
-        UUID patientId = resolvePatientId(auth);
-        requireHospitalRegistration(patientId, dto.getFromHospitalId());
-
-        PatientConsentRequestDTO consentRequest = PatientConsentRequestDTO.builder()
-                .patientId(patientId)
-                .fromHospitalId(dto.getFromHospitalId())
-                .toHospitalId(dto.getToHospitalId())
-                .consentExpiration(dto.getConsentExpiration())
-                .purpose(dto.getPurpose())
-                .build();
-
-        log.info("Patient {} granting consent from hospital {} to hospital {}",
-                patientId, dto.getFromHospitalId(), dto.getToHospitalId());
-        return consentService.grantConsent(consentRequest);
-    }
-
-    // ── Revoke data-sharing consent ──────────────────────────────────────
-
-    @Override
-    @Transactional
-    public void revokeMyConsent(Authentication auth, UUID fromHospitalId, UUID toHospitalId) {
-        UUID patientId = resolvePatientId(auth);
-        requireHospitalRegistration(patientId, fromHospitalId);
-
-        log.info("Patient {} revoking consent from hospital {} to hospital {}",
-                patientId, fromHospitalId, toHospitalId);
-        consentService.revokeConsent(patientId, fromHospitalId, toHospitalId);
-    }
-
     // ── Record home vital sign ───────────────────────────────────────────
 
     @Override
@@ -1025,10 +989,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /**
-     * Verify that the patient has an active registration at the given hospital.
-     * Used by both grantMyConsent() and revokeMyConsent() to prevent a patient
-     * from fabricating or revoking consent on behalf of a hospital they have
-     * never attended (IDOR / privilege escalation).
+     * Verify that the patient has an active registration at the given hospital,
+     * so a patient cannot act on behalf of a hospital they have never attended
+     * (IDOR / privilege escalation). Its consent callers went with E9 #65; the
+     * self-service write paths that remain still need it.
      *
      * @throws BusinessException (HTTP 400) when no active registration is found.
      */

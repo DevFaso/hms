@@ -93,7 +93,7 @@
 - [x] 17. Insurance management + multi-hospital registration UI (reception + patient detail) â€” âœ… DONE (`/registrations` admin page w/ multi-hospital panel + Coverage tab on patient detail for insurance link/edit/delete and registration history; fixed the latent findActiveRegistration bare-array bug)
 - [x] 18. Patient education: resource management + assignment/progress views â€” âœ… DONE (`/patient-education` page: resource library CRUD w/ category/type/search filters, evidence & warning-sign flags, view/completion/rating stats; per-patient assignment (POST progress NOT_STARTED) + progress/comprehension tracking w/ provider notes; Q&A + visit-documentation blocks deferred)
 - [x] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines) â€” âœ… DONE (`/admin-assignments`: paged worklist + filters, single/multi-scope create, edit, regenerate-code w/ verification-reset warning, resend, deactivate/delete, CSV bulk import; `/admin-governance` console (SUPER_ADMIN): permission-matrix snapshots w/ prefill+publish+audit trail, security policies/rules CRUD, user CSV import + force-password-reset + rotation health, credential health (read-only, MFA/recovery upserts deferred), baselines + export, rule-set templates/import/simulation)
-- [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
+- [x] 20. ✅ DONE (reconciled 2026-09-12: 5a27d3c3 / PR #408 — `DigitalSignatureController` verify + revoke, `InvoiceEmailController`, `BillingInvoiceController` /search). Digital signatures: sign/verify/revoke flows; billing: invoice email + search
 
 ### Phase 4 â€” Quality floor (P3, parallelizable)
 
@@ -453,41 +453,41 @@ Quality gates (PR #139): 13/13 GitHub CI checks, SonarCloud gate clean (0 PR iss
 
 Top-down priority. Each item ships as one PR per the foundation-pass pattern in [`.claude/skills/pr-review-response/SKILL.md`](.claude/skills/pr-review-response/SKILL.md) + [`.claude/skills/liquibase-migration/SKILL.md`](.claude/skills/liquibase-migration/SKILL.md) (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
 
-- [ ] **P1.1 â€” Terminology binding** (gap #5)
-  - [ ] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI)
-  - [ ] ICD-10/11 on `PatientProblem` (already has `icdVersion` â€” wire validation + admin curation)
-  - [ ] WHO ATC + RxNorm on `MedicationCatalogItem`
-  - [ ] Update FHIR mappers to advertise the bound systems (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
+- [x] **P1.1 â€” Terminology binding** (gap #5) ✅ DONE (reconciled 2026-09-12, second look: all four ship — LOINC on `LabTestDefinition`; ICD-10/11 validated on every problem write by `PatientServiceImpl.normalizeDiagnosisCode` / `DiagnosisCodeValidator` (a curated ICD catalog would need a WHO-licensed source and is not fabricated here); `atcCode` + `rxnormCode` on `MedicationCatalogItem` since V43; the FHIR mappers advertise the systems).
+  - [x] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI) — `loincCode` + `idx_lab_testdef_loinc`
+  - [x] ICD-10/11 on `PatientProblem` (already has `icdVersion` â€” wire validation + admin curation)
+  - [x] WHO ATC + RxNorm on `MedicationCatalogItem`
+  - [x] Update FHIR mappers to advertise the bound systems — `LabCodes`, `ConditionFhirMapper`, `MedicationRequestFhirMapper` do; (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
 
-- [ ] **P1.2 â€” MLLP / FHIR persistence**
-  - [ ] Resolve OBR-3 â†’ `LabOrder.id` from analyzer messages (with allowlisted facility mapping)
-  - [ ] Persist ORU^R01 results as `LabResult` rows via the existing `LabResultService`
-  - [ ] Project ADT^A01/A04/A08 into `Patient` + `Encounter` via the EMPI service
-  - [ ] Per-facility allowlist (sending facility â†’ hospital)
+- [x] **P1.2 â€” MLLP / FHIR persistence** ✅ DONE (reconciled 2026-09-12: `MllpInboundLabServiceImpl` resolves OBR-3 and persists ORU^R01 as `LabResult` rows, multi-OBX in #484; ADT projection via `Hl7MessageDispatcher` + `AdtVisitSyncProperties`, A40 merge = Tier 2 #41; per-facility allowlist in `MllpProperties`).
+  - [x] Resolve OBR-3 â†’ `LabOrder.id` from analyzer messages (with allowlisted facility mapping)
+  - [x] Persist ORU^R01 results as `LabResult` rows via the existing `LabResultService`
+  - [x] Project ADT^A01/A04/A08 into `Patient` + `Encounter` via the EMPI service
+  - [x] Per-facility allowlist (sending facility â†’ hospital)
 
-- [ ] **P1.3 â€” CDS rule engine** (gap #3 expanded)
-  - [ ] Drug-drug interaction check on `order-sign` (depends on P1.1 RxNorm)
-  - [ ] Duplicate-order detection on `order-sign`
-  - [ ] Pediatric dose check (uses `Patient.dateOfBirth` + bound dose)
-  - [ ] BPA scaffolding for protocol cards (malaria, sepsis, OB hemorrhage)
+- [x] **P1.3 â€” CDS rule engine** (gap #3 expanded) ✅ DONE (reconciled 2026-09-12: `cdshooks/rules` = `DrugDrugInteractionRule`, `DuplicateMedicationOrderRule`, `PediatricDoseRule`; `cdshooks/bpa` = malaria, sepsis qSOFA, OB haemorrhage, NEWS protocol rules).
+  - [x] Drug-drug interaction check on `order-sign` (depends on P1.1 RxNorm)
+  - [x] Duplicate-order detection on `order-sign`
+  - [x] Pediatric dose check (uses `Patient.dateOfBirth` + bound dose)
+  - [x] BPA scaffolding for protocol cards (malaria, sepsis, OB hemorrhage)
 
-- [ ] **P1.4 â€” CPOE order-set builder** (gap #6) â€” versioned templates, search-driven picker
+- [x] **P1.4 â€” CPOE order-set builder** (gap #6) â€” versioned templates, search-driven picker ✅ DONE (reconciled 2026-09-12: PR #161 `feature/p1-cpoe-order-sets`, `OrderSetItemDispatcher`, order-catalog UX 11a5f71b).
 
-- [ ] **P1.5 â€” Storyboard patient banner** (gap #15) â€” persistent allergy / problem / encounter / code-status header on every chart route
+- [x] **P1.5 â€” Storyboard patient banner** (gap #15) â€” persistent allergy / problem / encounter / code-status header on every chart route ✅ DONE (reconciled 2026-09-12: `PatientStoryboardController` + the storyboard banner on the chart).
 
-- [ ] **P1.6 â€” Chart Review tabbed viewer** (gap #16) â€” Encounters / Notes / Results / Meds / Imaging / Procedures with timeline
+- [x] **P1.6 â€” Chart Review tabbed viewer** (gap #16) â€” Encounters / Notes / Results / Meds / Imaging / Procedures with timeline ✅ DONE (reconciled 2026-09-12: `ChartReviewController` + the chart-review tab).
 
-- [ ] **P1.7 â€” Cadence visual scheduling grid** (gap #17) â€” FullCalendar multi-resource block view
+- [x] **P1.7 â€” Cadence visual scheduling grid** (gap #17) â€” FullCalendar multi-resource block view ✅ DONE (reconciled 2026-09-12: `scheduling` module on `@fullcalendar/angular`).
 
-- [ ] **P1.8 â€” Inpatient eMAR** (gap #10) â€” barcode-scan administration loop on top of pharmacy + MAR entities
+- [x] **P1.8 â€” Inpatient eMAR** (gap #10) â€” barcode-scan administration loop on top of pharmacy + MAR entities ✅ DONE (reconciled 2026-09-12: `MedicationAdministrationRecord` + `nurse-station/emar` barcode loop; V139 pharmacist-verification gate in front of it).
 
-- [ ] **P1.9 â€” Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22)
+- [x] **P1.9 â€” Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22) ✅ DONE (reconciled 2026-09-12: break-the-glass = E9 #62 (`BreakGlassGate`, reason-bearing sessions); granular consent scopes WITHDRAWN by decision D7 — the consent-grant machinery was deleted in #617/#618).
 
-- [ ] **P1.10 â€” Telehealth low-bandwidth** (gap #12) â€” audio + photo + chat reusing the chat module
+- [x] **P1.10 â€” Telehealth low-bandwidth** (gap #12) â€” audio + photo + chat reusing the chat module ✅ DONE (reconciled 2026-09-12: merged 2026-05-01, 97a8799e — audio + photo on the chat module).
 
-- [ ] **P1.11 â€” DHIS2 ADX export** (gap #14) â€” immunization, ANC, malaria reporting tied to FHIR `Immunization`
+- [x] **P1.11 â€” DHIS2 ADX export** (gap #14) â€” immunization, ANC, malaria reporting tied to FHIR `Immunization` ✅ DONE (reconciled 2026-09-12: `Dhis2ExportController` + `Dhis2AdminController`, integration schema).
 
-- [ ] **P1.12 â€” Referral lifecycle** (gap #13) â€” accept / decline / complete states on `GeneralReferral`
+- [x] **P1.12 â€” Referral lifecycle** (gap #13) â€” accept / decline / complete states on `GeneralReferral` ✅ DONE (reconciled 2026-09-12: shipped in PRs #139–#141, as the entry itself records).
 
 P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-gaps.md`.
 
@@ -1369,15 +1369,15 @@ Epic calls it Healthy Planet; here it is defaulter tracing and programme
 cohorts. The DHIS2 ADX export is already wired, so these feed a reporting path
 that exists rather than inventing one.
 
-- [ ] 35. **Disease registries / cohorts** — HIV, TB, malaria, hypertension,
+- [x] 35. **Disease registries / cohorts** ✅ DONE (reconciled 2026-09-12: PR #541 `feat/disease-registries` — `ProgramRegistryController`, `CareProgram`, portal `registries`). — HIV, TB, malaria, hypertension,
   diabetes, ANC. Enrolment + status + programme visit cadence.
-- [ ] 36. **Care-gap worklist + defaulter tracing.** A care gap is structurally
+- [x] 36. **Care-gap worklist + defaulter tracing.** ✅ DONE (reconciled 2026-09-12: PR #543 `feat/care-gap-defaulter-tracing` — `CareGapTraceService`, `PatientRecallController`). A care gap is structurally
   the same row as a recall with a rule behind it instead of a clinician, and
   `PatientOutreachNotifier` (#476) is already the transport with preference
   and SMS-guard handling solved.
-- [ ] 37. **Panel management** — provider / CHW panels, empanelment.
-  Verified zero code for all three (`CareGap`, `QualityMeasure`,
-  `PanelManagement`, `Cohort`, `Readmission` all empty).
+- [x] 37. **Panel management** ✅ DONE (reconciled 2026-09-12: PR #549 `feat/panel-management` — `PatientPanelController`, `PanelWorklistController`, portal `panel`). — provider / CHW panels, empanelment.
+  _("Verified zero code for all three" was true when written and stale since
+  #541/#543/#549 — the item-39 lesson: read the shipped surface before sizing.)_
 
 ## E5 — Records, identity, HIM
 
@@ -1529,14 +1529,14 @@ that exists rather than inventing one.
 
 ## E6 — Interop breadth that fits this deployment
 
-- [ ] 42. **FHIR DiagnosticReport + ServiceRequest providers.** Seven providers
+- [x] 42. **FHIR DiagnosticReport + ServiceRequest providers.** ✅ DONE (reconciled 2026-09-12: PR #542 — `DiagnosticReportFhirResourceProvider`, `ServiceRequestFhirResourceProvider`). Seven providers
   exist (Patient, Encounter, Condition, Observation, Immunization,
   MedicationRequest). Orders and reports — labs, the new microbiology cultures,
   the #26 imaging reports — have no FHIR face at all.
-- [ ] 43. **FHIR Appointment + Slot providers.** Newly populatable: V121/V128
+- [x] 43. **FHIR Appointment + Slot providers.** ✅ DONE (reconciled 2026-09-12: PR #544 — `AppointmentFhirResourceProvider`, `SlotFhirResourceProvider`). Newly populatable: V121/V128
   gave slots a real inventory and a booking writer, which is why the audit
   correctly called this absent at the time and why it is now cheap.
-- [ ] 44. **FHIR DocumentReference + patient record download.** The portal is
+- [x] 44. **FHIR DocumentReference + patient record download.** ✅ DONE (reconciled 2026-09-12: PR #548 — `DocumentReferenceFhirResourceProvider`, `PatientRecordExportController`; staff read of patient uploads 39e96a91). The portal is
   print-only. #477's bulk exporter already streams NDJSON through
   patient-scoped queries, so a single-patient download is a narrow lift.
 - [x] 45. **Outbound webhooks / API-key management** for third-party clients.
@@ -1600,6 +1600,9 @@ that exists rather than inventing one.
 > French-derived jurisdiction, and how Epic's two mechanisms actually differ —
 > is in `docs/compliance/cross-hospital-record-access-decision-record.md`.
 > Items #48, #51, #52 and #53 are unaffected; #50 is re-scoped in place.
+> ⚠ **Superseded again on 2026-09-11 by E9 (#55–#69):** the default is the
+> Epic same-instance model — automatic merge on registration at the acting
+> hospital, no consent gate, sensitive categories behind a stated reason.
 
 **The decision (user, 2026-09-07):** stop treating a patient's consent as the
 gate on one hospital reading another's chart, and adopt the model Epic runs in
@@ -1730,7 +1733,7 @@ all exist and are reachable.
   ⚠ **Also blocked by #51 (the withhold half) and #52 (posture + opt-out),
   both numbered after it.** Working top-down through this section ships the
   widened filter before the sensitive-category withhold exists — do not.
-- [ ] 50. **Announced availability + provenance on the chart.** ⚠ **Re-scoped
+- [x] 50. **Announced availability + provenance on the chart.** ⛔ WITHDRAWN 2026-09-12 — E9 (decided 2026-09-11) supersedes announced availability with the same-instance model; the provenance half shipped as E9 #61 (PR #611). ⚠ **Re-scoped
   2026-09-08 — see `docs/compliance/cross-hospital-record-access-decision-record.md`.**
   The default is no longer a silent merge: the chart states that records exist
   elsewhere (hospital, count, most-recent date — no PHI) and loads them on an
@@ -1809,7 +1812,7 @@ all exist and are reachable.
   absent, and swallows failures to a warn. Hardening those four is part of this
   item, not an assumption behind it — see [[out-of-session-lazy-proxies]] for
   how these rows were silently dropped once already.
-- [ ] 54. **Break-the-glass for restricted charts.** Distinct from everything
+- [x] 54. **Break-the-glass for restricted charts.** ✅ DONE 2026-09-12 (V160) — `patients.chart_restricted` (+ reason, at, by) set by `POST /patients/{id}/chart-restriction` (HOSPITAL_ADMIN / SUPER_ADMIN); `RecordAccessPolicyImpl` refuses a restricted chart with `CHART_RESTRICTED` unless a live session exists (then the relationship is BREAK_GLASS), read only after a relationship is found; `PatientChartAccess` turns that refusal into a 403 with code `CHART_RESTRICTED` (loud, not the 404) and the portal answers it with the declaration prompt; sessions carry `reviewed_at / reviewed_by / review_outcome / review_note`, `PATCH /break-glass/{id}/review` signs them off and `GET /break-glass/audit?reviewed=false` is the queue behind the new `/break-glass-review` page (Administration). Pinned by `RecordAccessPolicyImplTest`, `PatientChartAccessRestrictedTest`, `BreakGlassServiceImplReviewTest`, `RestrictedChartGuardTest`. Residual: a super-admin in global view opens restricted charts without a session (platform operator; the restriction is hospital-scoped). Distinct from everything
   above and easy to conflate — this is intra-organisational. VIPs, staff
   members, a clinician's own record or a family member's: access requires a
   stated reason, is time-boxed, and is flagged loudly. `BreakGlassSession`
@@ -1826,6 +1829,376 @@ all exist and are reachable.
   fields, documented as being for compliance review screens. That is twice in
   one item; read the endpoint list before writing the next one. Matters more once #49 widens the default reach, because
   the population of people who can technically reach a given chart grows.
+
+## E9 — Le dossier suit le patient (one patient, one chart, many hospitals)
+
+**Decided by the user on 2026-09-11**, after the access-model audit
+(artifact: <https://claude.ai/code/artifact/edd6f774-af3b-4db9-8934-60973b0602e7>).
+This section supersedes the E8 posture where the two disagree: E8's
+"announced availability plus explicit pull" (#50) is withdrawn in favour of
+the Epic **same-instance** model — one shared chart, access by role and
+treatment relationship, a sensitive-category carve-out unlocked by a stated
+reason, and audit. **There is no consent gate.** Burkina Faso has no HIPAA;
+the applicable frame is the 2021 data-protection law and the CIL, with the
+care-purpose basis under medical secrecy (the French *secret partagé* within
+the *équipe de soins*), which counsel confirms in parallel, not as a blocker.
+
+**What the audit found (2026-09-11, develop 17530891 = prod ee22135b):** no
+clinical row crosses a hospital boundary today, for any role, consent or not —
+the wall is the row's `hospital_id` (85 `findByPatient_IdAndHospital_Id`
+finders in 38 services, 34 registration guards, `Patient.hospitalId` = first
+hospital as tenant key for 7 entities). The E8 `RecordAccessPolicy` reaches one
+read (the doctor timeline) behind a flag that is OFF on prod. The consent-grant
+machinery (`PatientConsent` + `ConsentResolutionService` + `/records/*` +
+Consent Management + portal Record Sharing, 2,988 lines) is a parallel path the
+chart never calls, and `BreakGlassSession` unlocks only that path. 1,117
+endpoints / 167 controllers; 111 guards carry permission tokens no user can
+hold; 5 phantom role codes in guards; 9 seeded roles guard nothing.
+
+**Decisions taken (D1–D8, user "ok" on the recommendations):**
+
+- **D1** Registration at the acting hospital IS the automatic treatment
+  relationship (Tier A). Reception creates it on arrival; every write already
+  requires it.
+- **D2** A clinician may open an unregistered patient's chart with a stated
+  reason (Tier B) — `BreakGlassSession` is the grant: time-boxed, revocable,
+  every read stamped.
+- **D3** HIV, behavioural health, substance use and reproductive health
+  (`SensitivityCategory`, V158) do NOT travel automatically; they open through
+  the same reason box. Untagged rows travel (Epic behaviour). Classification
+  is by department default; the English keyword heuristic is deleted.
+- **D4** The patient opt-out (V157) is KEPT as the single patient control —
+  objection, not consent. The portal access log / disclosure report stays.
+  The patient-side "grant sharing to hospital X" flow is removed.
+- **D5** HOSPITAL_ADMIN becomes administrative-only on the chart (break-glass
+  available). Today it reads AND writes diagnoses and allergies.
+- **D6** SUPER_ADMIN keeps inherited clinical roles for now, but ONE
+  inheritance list (JWT path has 7, login path 14) and every read audited as
+  cross-tenant (already the case).
+- **D7** The consent-grant machinery is DELETED, not parked. Consent-to-treat
+  (V126) and ROI requests (V151) stay — they gate treatment and external
+  disclosure, not clinician access. Existing `REFERRAL` consent rows stay
+  readable; no data is deleted.
+- **D8** Counsel / CIL confirmation runs in parallel.
+
+**Invariants:** writes stay at the acting hospital and still require
+registration there; SCHEMA-isolated tenants never cross; every cross-hospital
+read writes a `RECORD_SHARE` disclosure row; provenance (hospital, clinician,
+date) is visible on every foreign row without a click. Every item is one PR
+off develop, drafted until `/code-review` + `/security-review`, never stacked.
+**Next free migration: V159.**
+
+### Phase 0 — prerequisites (same work under any decision)
+
+- [x] 55. **Live hospital scope.** ✅ DONE 2026-09-12 (backend, PR #597 79e9f20a; the portal half is 55b, still open). Permitted / primary hospital ids are baked
+  into the JWT at login (`CLAIM_PERMITTED_HOSPITAL_IDS`,
+  `CLAIM_PRIMARY_HOSPITAL_ID` = first row of an unordered query) and never
+  refreshed; `ControllerAuthUtils.resolveHospitalScope` reads the live
+  assignment table instead. The two disagree after any assignment change
+  until logout — root cause of the nurse's FHIR "not registered" and "failed
+  to load history" on dev (2026-09-10). Resolve the permitted set and the
+  active hospital from `user_role_hospital_assignment` per request (one query,
+  request-cached), keep `X-Hospital-Id` validated against that live set, make
+  `resolveHospitalScope` and `HospitalContextHolder` ONE resolver, and delete
+  the dead `extractHospitalIdFromJwt`. No migration. Needs `/security-review`.
+  _(backend half in PR #597; the portal half is 55b)_
+- [x] 55b. **Portal rehydrates scope from the session, not the token.** ✅ DONE 2026-09-12 — `SessionScopeService.hydrate()` (GET `/auth/session/bootstrap`) on app bootstrap, login, MFA completion, the OIDC redirect and impersonation start/stop; the stored profile is the only fallback; `getPermittedHospitalIds()` and the JWT branch of `getHospitalId()` deleted; non-admins keep every permitted hospital.
+  `app.component.ts` decodes the stored JWT on every bootstrap for
+  `permittedHospitalIds` / `primaryHospitalId` and, for non-admin roles,
+  collapses the list to ONE hospital ("non-admin staff always get exactly one
+  permitted hospital"), so the picker shows a stale or truncated set the
+  server now ignores. Hydrate from `GET /auth/session/bootstrap` (live
+  assignments, already exists) on bootstrap, MFA challenge, login and
+  impersonation; drop the JWT-decoding fallbacks in `auth.service.ts`
+  (`getHospitalId`, `getPermittedHospitalIds`) once nothing reads them.
+- [x] 56. **One allergy store.** ✅ DONE 2026-09-12 (PR #598 9dd86bfc). Three stores never sync: free-text
+  `patients.allergies` (Medical tab, `PatientMapper`), structured
+  `patient_allergies` scoped by hospital (storyboard `loadAllergies`), and
+  `PatientMedicalHistory.allergies`. "No known allergies" beside "peanuts,
+  garlic" on one screen (dev, 2026-09-10). Make `patient_allergies`
+  patient-wide (drop the hospital scope on READ; provenance kept as a column),
+  backfill the free-text column into rows (V159, additive; the column stays
+  but is no longer written), point Medical tab / storyboard / FHIR
+  AllergyIntolerance / mapper at the one store. Patient-safety fix, and the
+  first thing that travels cross-hospital by construction.
+  _(PR #598 — NO migration after all: the column is encrypted at rest, so the
+  backfill is a Java startup runner (`LegacyAllergyTextBackfill`, one
+  transaction per patient, idempotent) rather than SQL; structured rows are the
+  truth, the column is a derived summary kept by `PatientAllergySummarySync`;
+  storyboard / GET allergies / doctor record / timeline read patient-wide with
+  provenance; GET allergies writes RECORD_SHARE for foreign rows. Storyboard
+  and chart-review still surface foreign allergies without a ledger row — see
+  #60.)_
+- [x] 57. **Stop keying `Patient` on its first hospital.** ✅ DONE 2026-09-12 (PR #599 23ae632f). `Patient implements
+  TenantScoped` on `hospitalId` (= first registration) makes a multi-hospital
+  patient vanish from the second hospital's scoped finders; #591 papered over
+  the chart tabs only. Registration-based scope for `Patient` and the six
+  other `TenantScoped` entities (`ImagingOrder`, `ImagingReport`,
+  `UltrasoundOrder`, `UltrasoundReport`, `EmpiMasterIdentity`,
+  `EmpiMergeEvent`). No migration.
+
+### Phase 1 — flip the policy
+
+- [x] 58. **`RecordAccessPolicy` on the decided rule.** ✅ DONE 2026-09-12 (PR #600 0295d7fc, flag removed). Relationship = active
+  registration at the acting hospital, else an E8 resolver carrier, else a
+  live `BreakGlassSession` for this patient+hospital. Remove
+  `app.record-access.cross-hospital-reads-enabled` (the widening ships behind
+  nothing; dev first, prod in a deliberate sync). Opt-out honoured. SCHEMA
+  excluded. `EXPLICIT_CONSENT` stays in the enum and column, hidden from the
+  portal. `PatientChartAccess.require` delegates to the policy for reads: 404
+  only when there is neither registration nor session. Supersedes E8 #49's
+  gating and #52's posture toggle.
+- [x] 59. **Widen the read finders, one domain per PR.** ✅ DONE 2026-09-12 — all five domains shipped (a #603, b #604, c #605, d, e); the residuals are listed inline below. The 26 unwidened
+  patient+hospital finders (`CrossHospitalReadFilterCoverageTest` budget → 0)
+  become `…HospitalIdIn(readable)` on READ paths only: (a) chart — problems,
+  allergies, vitals, notes, chart updates; (b) orders and results — lab,
+  imaging, procedures, consultations, referrals; (c) medications — prescriptions,
+  eMAR history, medication history; (d) maternity and registries; (e) discharge
+  and admissions. Write guards untouched. Each PR: the finder, the service,
+  the `RECORD_SHARE` row, a tenancy test that fails when the widening is
+  reverted.
+  **(a) chart shipped 2026-09-12 (PR #603)**: problems, surgical history,
+  directives, nursing notes, chart updates; `CrossHospitalRows.maySurface` is
+  D3 in code and `CrossHospitalReachRecorder` the one ledger writer. **(b)
+  orders and results shipped 2026-09-12**: lab orders, lab results (patient
+  path), imaging orders, procedure orders, consultations (D3 applied),
+  referrals (originating hospital). **(c) medications shipped 2026-09-12**:
+  prescription list + page, patient medications, medication timeline
+  (prescriptions + pharmacy fills; the date-ranged fill query had NO hospital
+  predicate at all — fixed), doctor-record medications (a foreign
+  keyword-sensitive prescription is withheld and does not flag the section).
+  Deliberately still local: the MTM polypharmacy count (a write-path
+  derivation, no row surfaced — widening it means a RECORD_SHARE on review
+  creation, decide with #60) and the CDS/BPA rule engines (#60). eMAR has no
+  patient-list read to widen. **(d) maternity and immunizations shipped
+  2026-09-12**: labour episodes, newborn assessments, postpartum observations
+  (no local plan), birth plans, high-risk care plans, maternal history, OB/GYN
+  referrals, ultrasound orders, the doctor record's and timeline's imaging,
+  immunizations (list + by vaccine). Seven of those read EVERY tenant before
+  (no hospital predicate at all) — brought onto the policy. Still
+  patient-wide, recorded here: the immunization schedule reads (overdue,
+  upcoming, reminders, incomplete series — JPQL with no hospital predicate)
+  and the postpartum care-plan resolver (the plan is the acting hospital's
+  object). Maternity rows carry no sensitivity tag; D3's "reproductive
+  health" is #63's department classification (family planning), not
+  pregnancy care as such — pregnancy care travels by design. **(e) discharge
+  and admissions shipped 2026-09-12**: discharge summaries; admissions and
+  encounters by patient (both read EVERY tenant before and both carry a
+  sensitivity category, so D3 applies through the classifier). Deliberately
+  still local: the current-admission lookup (the acting hospital's bed/tracker
+  question, not a record that travels). Still unscoped, for #60: the
+  storyboard's, snapshot's and mortality service's encounter reads. ⚠ The ratchet is
+  a CEILING and walks the
+  repository subfolders — 28 single-hospital finders remain, not the 26 this
+  bullet first counted; a widened finder whose single sibling still has a
+  caller (CDS hooks, FHIR `$everything`, bulk export, record sharing) stays
+  until #60/#65 retire the caller. ⚠ Lab and imaging rows carry NO sensitivity
+  tag (V158 tagged encounters, admissions, consultations, problems, notes
+  only), so an HIV viral load travels cross-hospital today — that is #63's
+  department classification, or a tag on `LabTestDefinition`, to decide.
+- [x] 60. **Whole-chart surfaces on the readable set.** ✅ DONE 2026-09-12 — (a) in-app surfaces and (b) FHIR `$everything` both on the readable set with a ledger row each; residuals inline below. ⚠ Since #56 the
+  storyboard and chart review already surface foreign ALLERGY rows with no
+  `RECORD_SHARE` (those calls carry no requester); wiring the ledger through
+  these surfaces is part of this item, not optional. FHIR `$everything` /
+  `fhir-record` export (`PatientEverythingService.resolveHospitalScopeOrForbid`
+  fails closed on the stale context today), storyboard, chart review, timeline
+  (already), snapshot. Every one writes the disclosure row.
+  **(a) in-app surfaces shipped 2026-09-12**: storyboard (now writes the
+  RECORD_SHARE row #56/#59a left out — one per source hospital across
+  allergies, problems, directives), chart review (every section on the
+  readable set, D3 on encounters, one ledger row per review), snapshot (every
+  section on the readable set when an acting hospital is given; allergies
+  stay patient-wide per #56; one ledger row per snapshot). Deliberately still
+  local: the storyboard's active-encounter lookup (the acting hospital's
+  tracker question) and the legacy `patient_diagnoses` read (V14-era,
+  read-only). **(b) FHIR `$everything` / `fhir-record` export shipped
+  2026-09-12**: every section (Encounter, Observation — vitals and results,
+  Condition, MedicationRequest, DocumentReference — discharge summaries) reads
+  the readable set through the SectionContext; a foreign encounter or
+  condition in a sensitive category is withheld (D3); one RECORD_SHARE per
+  source hospital per page, beside the PATIENT_EXPORT audit.
+  `resolveHospitalScopeOrForbid` still fails closed with no context — an
+  export needs an acting hospital, by design. `$export` (bulk) is a hospital's
+  own data and stays local by design; uploaded documents are patient-anchored
+  (no hospital column) and stay patient-wide.
+- [x] 61. **Provenance on the row (portal).** ✅ DONE 2026-09-12 (PR #611 6ecce0b9; the flip was lost in a web-side merge and is restored here). `TimelineEntry.metadata` is not
+  declared in `patient.service.ts`, so #582's provenance reaches the wire and
+  is discarded — the blocking defect from the E8 record. Type it, render
+  hospital · clinician · date on every foreign row in timeline, results,
+  medications, problems; fill the two missing staff names (prescription from
+  `Prescription.staff`, lab from `LabOrder.orderingStaff`, NOT
+  `releasedByDisplay`). Absorbs the surviving half of E8 #50.
+
+### Phase 2 — sensitive categories and break-the-glass
+
+- [x] 62. **Break-the-glass wired into the policy.** ✅ DONE 2026-09-12 — (a) and (b) below. Tier B (unregistered
+  patient) and the sensitive-row unlock consume `BreakGlassSession`; the
+  consent resolver stops being its only consumer. Reads under a session are
+  stamped with the session id in the disclosure row. Absorbs E8 #54.
+  **(a) shipped 2026-09-12**: `BreakGlassGate` (one live-session question,
+  request-cached, a session declared at another hospital does not count);
+  `RecordAccessPolicy` grants a Tier B relationship of kind `BREAK_GLASS`
+  when no registration and no carrier exist — opt-out and the staff gate
+  still hold; `CrossHospitalReachRecorder` stamps `breakGlassSessionId` on
+  every disclosure row written under a session; the D3 sites already on
+  develop (diagnoses, timeline, doctor record, nursing notes, consultations,
+  admissions, encounters) take an `unlocked` flag. **(b) shipped 2026-09-12**:
+  the same flag at the whole-chart sites — storyboard problems, chart-review
+  encounters, snapshot encounters and active diagnoses, FHIR `$everything`
+  Encounter and Condition sections (carried on the SectionContext). The
+  portal's declare flow already exists (`break-glass-banner`); the restricted
+  rows UI that tells a clinician something is withheld and offers the
+  declaration is #64. E8 #54 absorbed.
+- [x] 63. **Department classification screen + heuristic deletion.** ✅ DONE
+  2026-09-12. The department page carries a "Sensitive category" card for
+  HOSPITAL_ADMIN / SUPER_ADMIN (the four D3 categories or none) on the
+  existing `GET`/`PUT /departments/{id}/default-sensitivity`; the hospital
+  admin's onboarding checklist names the step. `SENSITIVE_KEYWORDS`,
+  `SENSITIVE_DEPARTMENTS` and `HIGH_ALERT_MEDICATION_KEYWORDS` are gone from
+  `PatientServiceImpl`: a row is sensitive when the classifier says so
+  (problems, notes, encounters, and prescriptions/results through their
+  encounter); allergies keep the life-threatening flag and ultrasound rows
+  their structured high-risk/anomaly flags — clinical alerts, not privacy;
+  surgical history and directives carry no tag and are never withheld.
+  Previously recorded as: `PUT /departments/{id}/default-sensitivity` exists;
+  the HOSPITAL_ADMIN screen does not. Add it, put it on the hospital
+  onboarding checklist, and delete the keyword sets (English substring
+  matching against French text; never fired).
+- [x] 64. **Restricted rows on the chart (portal).** ✅ DONE 2026-09-12.
+  A read that withholds a row under D3 now says so: `WithheldRows` tallies
+  the refused rows per recording hospital and department and the storyboard
+  and doctor timeline responses carry `restrictedRows` (where and how many,
+  never the row). The portal renders each line as *Dossier restreint
+  (hôpital, département, n)* with one *Ouvrir avec motif* action that opens
+  the existing break-glass banner's declaration modal and its reason
+  textarea; a declared or ended session re-reads the storyboard and the
+  chart. In-hospital behaviour unchanged: the tally is empty, nothing renders.
+  Not counted, by design: the chart's bare-array reads (`/diagnoses`, the
+  doctor record sections) have no envelope for the summary, and the
+  imaging rows withheld on structured high-risk flags carry no category.
+  Previously recorded as: foreign rows whose effective category is set
+  render as *Dossier restreint (hôpital, département, n)* with *Ouvrir avec
+  motif*, reusing the break-glass banner and its reason textarea.
+
+### Phase 3 — retire the consent grants (D7)
+
+- [x] 65. **Backend removal.** ✅ DONE 2026-09-12. Gone: `PatientConsentController`
+  grant / revoke / active / from-hospital / to-hospital, `ConsentResolutionService`
+  and its three tiers, `PatientRecordSharingController` with
+  `/records/share|resolve|aggregate|export` and the 1,648-line
+  `PatientRecordSharingServiceImpl`, `ShareScope`, the share and consent request
+  DTOs, `POST/DELETE /me/patient/consents`. Kept one release, read-only:
+  `GET /patient-consents`, `GET /patient-consents/patient/{id}`,
+  `GET /me/patient/consents`, the super-admin dashboard feed, the entity,
+  repository, table and `ConsentType` (REFERRAL rows exist). ROI and treatment
+  consent untouched. Residuals: the portal's Consent Management pages, the
+  patient-detail Sharing tab and the patient portal's grant/revoke still call
+  the removed endpoints until #66 (do not sync main between the two); the
+  Android/iOS patient apps call `/me/patient/consents` grant/revoke and need
+  the same pruning; `BreakGlassService.consumeIfLive` lost its only production
+  caller (the resolver) and is dead behind its tests.
+  Previously recorded as: `PatientConsentController` grant/revoke,
+  `ConsentResolutionService` tiers, `/records/share|resolve|aggregate|export`,
+  `PatientRecordSharingServiceImpl` (1,648 lines), `POST/DELETE
+  /me/patient/consents`; read endpoints for existing consent rows may stay one
+  release; ⚠ `ConsentType.REFERRAL` rows exist; keep the enum value readable.
+- [x] 66. **Portal removal.** ✅ DONE 2026-09-12. Gone: the Consent Management
+  pages and their routes/nav, `record-sharing.service.ts`, the patient-detail
+  Sharing tab (resolve / grant / export) and its styles, the e2e spec, the
+  `CONSENT.*` and `SHARED_RECORDS.*` trees and the `PATIENTS.SHARING*` keys in
+  EN/FR/ES. Patient "Record Sharing" is now "Who accessed my record": the
+  opt-out card on the V157 API (`/patients/{id}/record-sharing/opt-out`,
+  patient-scoped) above the disclosure list; the consent list and grant form
+  are gone (`/me/patient/consents` GET stays server-side one release, #65).
+  Release of Information keeps its own pages (`/roi`). Residual: the
+  Android/iOS patient apps still carry the consent screens (#65 note).
+  Previously recorded as: Consent Management becomes Release of Information
+  only; patient "Record Sharing" becomes "Who accessed my record" plus the
+  opt-out toggle (V157, API shipped, no UI yet); the two i18n trees pruned.
+
+### Phase 4 — role hygiene (independent of the model)
+
+- [x] 67. **D5 + D6.** ✅ DONE 2026-09-12 (three PRs, below). HOSPITAL_ADMIN off the clinical chart (one constant per
+  surface: `CLINICAL_CHART_ROLES`); one SUPER_ADMIN inheritance list shared by
+  `JwtTokenProvider` and `SecurityConfig.authoritiesMapper`; a guard test that
+  fails when the two lists diverge. Needs `/security-review`.
+  **(a) D6 shipped 2026-09-12**: `RoleExpansion` (security) is the one place a
+  principal's roles widen — `SUPER_ADMIN_INHERITS` (the JWT path's seven; the
+  login path's fourteen never reached a token, only the login role picker,
+  which now shows the same eight) and doctor equivalence — called by both
+  `JwtTokenProvider.getAuthenticationFromJwt` and
+  `SecurityConfig.authoritiesMapper`; `RoleExpansionTest` fails the build if
+  either file grows a list of its own again.
+  **(b1) D5 shipped 2026-09-12** — the patient chart page and what it opens
+  onto: the `/patients/{id}` clinical sub-resources (allergies, diagnoses,
+  chart updates, storyboard, chart review, vitals, lab results, medications,
+  micro-cultures, FHIR record, growth, intake/output), encounters and their
+  treatments and notes, nursing notes, admissions (not the order-set catalog),
+  applying an order set, discharge summaries and approvals, transfers,
+  isolation, consultations, referrals (not the expire-overdue sweep or the OB
+  reports summary), the in-basket, CDS acknowledgements — 89 guards across 24
+  controllers, with the matcher layer narrowed the same way (chart patterns
+  matched ahead of the `/patients/**` blanket, vitals POST/GET) and the portal
+  mirrors (`chart-access.ts`, patient-detail growth/fluid/download/micro, the
+  six route guards and nav entries, discharge page). Pinned by
+  `HospitalAdminOffChartTest` (annotations, with the keeps asserted too) and
+  `SecurityConfigChartMatcherTest`. Keeps: demographics, registration,
+  coverage, photo, wristband, documents, catalogs, ops sweeps, break-glass.
+  **(b2) D5 shipped 2026-09-12** — orders, results, imaging, medications,
+  maternity care, procedures, transfusion, report signatures, per-patient
+  panels and programmes, PRO responses, chart attachments: 108 guards across
+  30 controllers, the eight clinical lab matchers, the three service-level
+  gates (`RoleValidator.canCreatePrescription`, `BirthPlanServiceImpl`,
+  `HighRiskPregnancyCarePlanServiceImpl`), and the portal mirrors (directive,
+  maternity, imaging, lab, lab-results, prescriptions, mortality role lists;
+  ten route guards and nav entries). Pinned by `HospitalAdminOffOrdersTest` +
+  `SecurityConfigLabMatcherTest`. Keeps, asserted: the two escalation sweeps,
+  the delete-only corrections, the mortality register, signature governance,
+  admin panel views, prenatal and recall scheduling, catalogs, tagging,
+  labels, lookups, lab configuration. D6 is PR #619. With b2, item 67 is
+  complete except the dead HOSPITAL_ADMIN branch in
+  `ControllerAuthUtils.resolveHospitalScope` (identical to the fallthrough).
+- [x] 68. **Dead tokens and phantom roles.** ✅ DONE 2026-09-12 (two PRs, below). Strip the 111 permission tokens
+  from `@PreAuthorize` (wiring `PermissionCatalog` into authorities would widen
+  235 guards at once — not this item); seed or remove `ROLE_STAFF` (18
+  endpoints), `ROLE_IT_STAFF` (12 + webhooks route), `ROLE_NURSE_PRACTITIONER`,
+  `ROLE_DENTIST`, `ROLE_ADMINISTRATIVE_STAFF`, `ROLE_CASHIER`; retire the nine
+  seeded-but-unused roles; sidebar visibility decided on the same role lists
+  as the API.
+  **(b) portal shipped 2026-09-12** — sidebar visibility is decided on the route
+  guards' role lists: `shell.spec.ts` gained a behavioural parity suite (for
+  every role the routes name, the sidebar rendered with every permission
+  granted contains no route whose `RoleGuard` refuses that role; conditional
+  gates included). It found, and the same PR fixed: `/nurse-station` and
+  `/hospitals` were permission-gated only (a hospital admin holds 'Access
+  Nurse Station' and landed on 403); the pharmacy group gate showed the
+  catalog, registry, dispensing and stock-routing entries to INVENTORY_CLERK
+  and STORE_MANAGER, whose guards refuse them; the `/medication-catalog` route
+  now admits STORE_MANAGER (on every `MedicationCatalogController` read all
+  along); the `/pharmacy-registry` route drops HOSPITAL_ADMIN (the API dropped
+  it in #67); ROLE_IT_STAFF and ROLE_CASHIER, never seeded, are off the
+  webhooks and checkout route + nav. Residual for the route-vs-API layer:
+  `/prescriptions` route admits PHARMACY_VERIFIER, which the API admits only
+  on POST verify. **(a) backend shipped 2026-09-12 (V159)** — the 106
+  permission tokens are out of 102 guards in ten controllers (authorities are
+  roles only, so none was load-bearing); the same defect in another coat,
+  bare role names inside `hasAnyAuthority` on `PatientPrimaryCareController`
+  (six) and `StaffAvailabilityController` (one), is gone with the effective
+  lists unchanged; every reference to IT_STAFF, NURSE_PRACTITIONER, DENTIST,
+  ADMINISTRATIVE_STAFF (→ STAFF), CASHIER, SPECIALIST and SUPPORT_STAFF is
+  removed; V159 seeds ROLE_STAFF and retires the seven V2 roles nothing
+  admits (USER, MODERATOR, TECHNICIAN, CLEANER, SECURITY, SUPPORT, MANAGER)
+  where nobody holds them; `RoleRegistryTest` reads every guard against the
+  migration SQL. Open decisions, not changes: `PatientPrimaryCareController`
+  named RECEPTIONIST (assign) and DOCTOR/NURSE (current, history) but never
+  admitted them — admit via `hasAnyRole` if wanted; `StaffRepository`'s
+  provider query lost a dead `ROLE_SPECIALIST` literal and may have meant
+  PHYSICIAN/SURGEON.
+- [x] 69. **Patient-safety gaps in the matrix.** ✅ DONE 2026-09-12 — allergies GET admits RADIOLOGIST/ANESTHESIOLOGIST/PHYSIOTHERAPIST (`ALLERGY_READ_ROLES`); PHARMACIST reads diagnoses, vitals (annotation + matcher), lab results (get/list/patient path + matcher) and the chart itself (`PATIENT_READ_ROLES`, portal /patients); MIDWIFE gains every NURSE-admitted medication and consultation guard (prescription create/update/dispatch-sms + `canCreatePrescription`, patient medications, medication history ×3, dispenses by patient, MTM reads, catalog and registry reads, overdue consultations); pinned by `ClinicalMatrixGapsTest` + `SecurityConfigPharmacistReadMatcherTest`. Allergies readable by every
+  clinical role (today DOCTOR/NURSE/MIDWIFE/HOSPITAL_ADMIN/PHARMACIST only —
+  anaesthesiologists and radiologists cannot read them); PHARMACIST reads
+  diagnoses, vitals and lab results (verification gate V139 without renal
+  function today); MIDWIFE parity with NURSE on medications and consultations.
 
 ## Standing platform debt — owed, not parity
 
@@ -2189,6 +2562,14 @@ universal) and both #33 and #34 shipped. **E4–E7 are the remaining Tier 2
 work, all pick-by-demand: E4 (#35–#37), E5 (#38 demographics depth, #39b ROI
 request workflow — #39 and #40 shipped), E6 (#42–#45), E7 (#46, #47); #41
 shipped.**
+
+**E9 (#55–#69) is the live access-model work as of 2026-09-11** and supersedes
+E8 where they disagree (#49 gating, #50 announced-pull, #52 posture toggle,
+#54). Order: Phase 0 (#55 → #56 → #57) is the same work under any decision
+and starts now; Phase 1 (#58 → #59 a–e → #60 → #61) is the widening and goes
+to prod only in a deliberate sync; Phase 2 (#62–#64) before Phase 3
+(#65–#66) so no read loses its unlock path; Phase 4 (#67–#69) is independent
+and can interleave.
 
 **E8 (#48–#54) sits outside that ordering.** It is not parity breadth — it is
 the cross-hospital access model, adopted by decision on 2026-09-07, and it

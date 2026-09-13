@@ -405,10 +405,12 @@ describe('LabResultsComponent — read-back role gate', () => {
     return TestBed.createComponent(LabResultsComponent).componentInstance;
   }
 
-  it('offers read-back to the admin roles the backend authorizes', () => {
+  it('offers neither read-back nor acknowledge to a hospital admin (E9 #67)', () => {
+    // Read-back is the ordering clinician's act and acknowledge is the
+    // lab's; a hospital admin is administrative on the chart and gets no
+    // control that would 403 on submit.
     const component = createWithRoles(['ROLE_HOSPITAL_ADMIN']);
-    expect(component.canReadBack).toBeTrue();
-    // Admins are not in the acknowledge set - the two gates are different.
+    expect(component.canReadBack).toBeFalse();
     expect(component.canAcknowledge).toBeFalse();
   });
 

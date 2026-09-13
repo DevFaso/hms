@@ -38,7 +38,6 @@ export class BirthPlanTabComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   /** Review = DOCTOR/MIDWIFE/SUPER_ADMIN. */
@@ -51,7 +50,6 @@ export class BirthPlanTabComponent implements OnInit {
   readonly canDelete = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canSeePendingReview = this.canDelete;

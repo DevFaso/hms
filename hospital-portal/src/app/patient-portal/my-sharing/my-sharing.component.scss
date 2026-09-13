@@ -1,86 +1,75 @@
-.sharing-consent-item .consent-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.revoke-btn {
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.revoke-btn:hover:not(:disabled) {
-  background: #fee2e2;
-}
-.revoke-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .rec-muted {
   font-size: 13px;
   color: #64748b;
 }
 
-.sharing-actions {
-  margin-bottom: 16px;
-}
+// ── Opt-out card (E9 #66) ─────────────────────────────────────
+//
+// One decision, stated plainly, with the current state visible before any
+// button. Amber when the door is closed: not an error, a setting the
+// patient chose, and one they should notice is on.
 
-.share-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  .material-symbols-outlined {
-    font-size: 20px;
-  }
-
-  &:hover {
-    background: var(--primary-dark);
-  }
-}
-
-.share-form-card {
+.opt-out-card {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 16px;
-  animation: fadeSlide 0.15s ease;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 
-  h3 {
-    margin: 0 0 16px;
+  &--on {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+}
+
+.opt-out-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+
+  h2 {
+    margin: 0 0 4px;
     font-size: 16px;
     font-weight: 600;
     color: #1e293b;
   }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #475569;
+  }
 }
 
-.share-form-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+.opt-out-icon {
+  font-size: 28px;
+  color: #b45309;
+  flex-shrink: 0;
 }
 
-.share-field {
+.opt-out-status {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &--failed {
+    color: #b91c1c;
+    font-weight: 500;
+  }
+}
+
+.opt-out-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 
   label {
     font-size: 12px;
@@ -90,15 +79,15 @@
     letter-spacing: 0.5px;
   }
 
-  input,
-  select {
+  textarea {
     padding: 10px 12px;
+    font: inherit;
     font-size: 14px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     background: #f8fafc;
     color: #1e293b;
-    transition: border-color 0.2s;
+    resize: vertical;
 
     &:focus {
       outline: none;
@@ -107,36 +96,20 @@
   }
 }
 
-.share-form-actions {
+.opt-out-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 20px;
 }
 
-.share-cancel-btn {
-  padding: 8px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: #e2e8f0;
-  }
-}
-
-.share-submit-btn {
-  padding: 8px 20px;
+.opt-out-btn {
+  align-self: flex-start;
+  padding: 9px 18px;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
   background: var(--primary);
-  border: none;
+  border: 1px solid var(--primary);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
@@ -149,17 +122,46 @@
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-dark);
+    outline-offset: 2px;
+  }
+
+  &--ghost {
+    color: #334155;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+
+    &:hover:not(:disabled) {
+      background: #e2e8f0;
+    }
+  }
 }
 
-@keyframes fadeSlide {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
+.opt-out-note {
+  margin: 0;
+}
+
+// ── Access log ────────────────────────────────────────────────
+
+.access-log-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+    color: #64748b;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+}
+
+.access-log-list {
+  margin-top: 16px;
 }
 
 // ── Access-log rows (Tier 2 item 39) ─────────────────────────

@@ -45,20 +45,14 @@ export class DischargeComponent implements OnInit {
   private staffId: string | null = null;
   private assignmentId: string | null = null;
 
-  readonly canDecide = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canDecide = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
   readonly canRequest = this.roleContext.hasAnyActiveRole([
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canEditSummaries = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
   /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */
@@ -66,7 +60,6 @@ export class DischargeComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 

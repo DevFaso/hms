@@ -36,7 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping(value = "/webhook-endpoints", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_IT_STAFF')")
+@PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
 @Tag(name = "Webhook Endpoints", description = "Outbound event notifications (Tier 2 item 45)")
 @SecurityRequirement(name = "bearerAuth")
 public class WebhookEndpointController {

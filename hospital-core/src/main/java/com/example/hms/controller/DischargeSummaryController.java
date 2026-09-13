@@ -40,7 +40,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Create a discharge summary")
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> createDischargeSummary(
         @Valid @RequestBody DischargeSummaryRequestDTO request,
         Locale locale
@@ -51,7 +51,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Update a discharge summary (only if not finalized)")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> updateDischargeSummary(
         @PathVariable UUID id,
         @Valid @RequestBody DischargeSummaryRequestDTO request,
@@ -63,7 +63,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Finalize a discharge summary (lock it with provider signature)")
     @PostMapping("/{id}/finalize")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> finalizeDischargeSummary(
         @PathVariable UUID id,
         @RequestParam String providerSignature,
@@ -76,7 +76,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summary by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<DischargeSummaryResponseDTO> getDischargeSummaryById(
         @PathVariable UUID id,
         Locale locale
@@ -87,7 +87,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summary by encounter ID")
     @GetMapping("/encounter/{encounterId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<DischargeSummaryResponseDTO> getDischargeSummaryByEncounter(
         @PathVariable UUID encounterId,
         Locale locale
@@ -98,7 +98,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get all discharge summaries for a patient")
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<List<DischargeSummaryResponseDTO>> getDischargeSummariesByPatient(
         @PathVariable UUID patientId,
         Locale locale
@@ -109,7 +109,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summaries for hospital within date range")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<DischargeSummaryResponseDTO>> getDischargeSummariesByHospitalAndDateRange(
         @PathVariable UUID hospitalId,
         @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
@@ -122,7 +122,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get unfinalized discharge summaries for hospital")
     @GetMapping("/hospital/{hospitalId}/unfinalized")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<List<DischargeSummaryResponseDTO>> getUnfinalizedDischargeSummaries(
         @PathVariable UUID hospitalId,
         Locale locale
@@ -133,7 +133,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summaries with pending test results")
     @GetMapping("/hospital/{hospitalId}/pending-results")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<DischargeSummaryResponseDTO>> getDischargeSummariesWithPendingResults(
         @PathVariable UUID hospitalId,
         Locale locale
@@ -144,7 +144,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summaries by provider")
     @GetMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<List<DischargeSummaryResponseDTO>> getDischargeSummariesByProvider(
         @PathVariable UUID providerId,
         Locale locale
@@ -155,7 +155,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Delete a discharge summary (only if not finalized)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<Void> deleteDischargeSummary(
         @PathVariable UUID id,
         @RequestParam UUID deletedByProviderId

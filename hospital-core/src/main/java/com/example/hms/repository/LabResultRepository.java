@@ -187,6 +187,23 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         Pageable pageable
     );
 
+    /** E9 #59b — results across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    List<LabResult> findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+        UUID patientId,
+        Collection<UUID> hospitalIds,
+        Pageable pageable
+    );
+
     /**
      * Page-returning variant used by FHIR {@code Patient/$everything}
      * so {@code Page.hasNext()} can drive the {@code Bundle.link[next]}
@@ -206,6 +223,23 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     Page<LabResult> findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
         UUID patientId,
         UUID hospitalId,
+        Pageable pageable
+    );
+
+    /** E9 #60b — the paged readable-set sibling, for FHIR {@code $everything}. */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    Page<LabResult> findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+        UUID patientId,
+        Collection<UUID> hospitalIds,
         Pageable pageable
     );
 

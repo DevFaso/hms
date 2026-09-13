@@ -21,6 +21,10 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
         Pageable pageable
     );
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<NewbornAssessment> findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+
     Optional<NewbornAssessment> findFirstByPatient_IdOrderByAssessmentTimeDesc(UUID patientId);
 
     /** Earliest assessment with a delivery back-link — the growth chart's birth-weight seed. */

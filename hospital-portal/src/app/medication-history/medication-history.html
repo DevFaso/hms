@@ -156,13 +156,17 @@
               <th scope="col">{{ 'MED_TIMELINE.PERIOD' | translate }}</th>
               <th scope="col">{{ 'MED_TIMELINE.REGIMEN' | translate }}</th>
               <th scope="col">{{ 'MED_TIMELINE.SOURCE' | translate }}</th>
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'MED_TIMELINE.FLAGS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
             @for (e of t.timeline; track e.entryId) {
-              <tr [class.row-flagged]="e.hasOverlap || e.hasInteraction">
+              <tr
+                [class.row-flagged]="e.hasOverlap || e.hasInteraction"
+                [class.foreign-row]="isForeignRow(e)"
+              >
                 <td>
                   <span class="{{ entryTypeClass(e) }}">
                     {{
@@ -203,6 +207,7 @@
                   }
                 </td>
                 <td>{{ e.source || '—' }}</td>
+                <td class="hospital-cell">{{ e.hospitalName || '—' }}</td>
                 <td>{{ e.status || '—' }}</td>
                 <td class="flags-cell">
                   @if (e.hasOverlap) {

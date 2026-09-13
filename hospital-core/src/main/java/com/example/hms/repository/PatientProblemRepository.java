@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import java.util.Collection;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.PatientProblem;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,7 +17,11 @@ public interface PatientProblemRepository extends JpaRepository<PatientProblem, 
 
     List<PatientProblem> findByPatient_Id(UUID patientId);
 
+    /** Acting hospital only — still read by CDS hooks, FHIR $everything and bulk export (E9 #60). */
     List<PatientProblem> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+    /** E9 #59 — the readable set from {@code RecordAccessPolicy.readableHospitalIds}. */
+    List<PatientProblem> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds);
 
     /**
      * A patient's whole problem list, newest first — the patient portal's

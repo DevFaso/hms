@@ -7,6 +7,14 @@ package com.example.hms.enums;
  */
 public enum TreatmentRelationshipKind {
 
+    /**
+     * The patient is registered at this hospital — reception linked them
+     * (E9 #58, decision D1). The automatic relationship: a deliberate act by a
+     * person at a desk, already required for every write, made for every
+     * patient who walks in. Strongest, and it does not lapse.
+     */
+    REGISTRATION,
+
     /** The patient is admitted here now, or was discharged within the tail. */
     ACTIVE_ADMISSION,
 
@@ -20,5 +28,13 @@ public enum TreatmentRelationshipKind {
     PANEL_ASSIGNMENT,
 
     /** A lab or imaging order placed here that has not reached a terminal status. */
-    OPEN_ORDER
+    OPEN_ORDER,
+
+    /**
+     * No registration and no carrier, but the actor declared a break-the-glass
+     * session for this patient at this hospital (E9 #62, decision D2 — Tier B).
+     * Time-boxed, audited on declaration, and every disclosure row it enables
+     * carries the session id. Weakest, and it lapses with the session.
+     */
+    BREAK_GLASS
 }

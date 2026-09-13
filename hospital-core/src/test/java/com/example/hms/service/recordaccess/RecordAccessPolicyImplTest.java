@@ -1,6 +1,7 @@
 package com.example.hms.service.recordaccess;
 
 import com.example.hms.enums.RecordAccessDenialReason;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.model.BreakGlassSession;
 
 /**
  * The gates, in the order they close. Each test opens every earlier gate and
@@ -46,6 +48,9 @@ class RecordAccessPolicyImplTest {
     @Mock private PatientRecordSharingOptOutRepository optOutRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private TreatmentRelationshipResolver resolver;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private BreakGlassGate breakGlassGate;
+    @Mock private com.example.hms.repository.PatientRepository patientRepository;
 
     @InjectMocks private RecordAccessPolicyImpl policy;
 
@@ -153,7 +158,27 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("no carrier → NO_TREATMENT_RELATIONSHIP")
+    @DisplayName("E9 #58 — registration at the acting hospital is the relationship, no carrier needed")
+    void registrationAloneIsTheRelationship() {
+        when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setId(UUID.randomUUID());
+        registration.setRegistrationDate(java.time.LocalDate.of(2026, 9, 1));
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId))
+            .thenReturn(Optional.of(registration));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.REGISTRATION);
+        assertThat(d.relationship().carrierId()).isEqualTo(registration.getId());
+        assertThat(d.relationship().expiresAt()).isNull();
+        verify(resolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("no registration and no carrier → NO_TREATMENT_RELATIONSHIP")
     void noRelationship() {
         when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
 
@@ -186,5 +211,92 @@ class RecordAccessPolicyImplTest {
 
         assertThat(policy.decide(actor, patient, hospitalId).permitted()).isTrue();
         assertThat(policy.decide(actor, other, hospitalId).permitted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("E9 #62 (Tier B): no registration and no carrier, but a live break-the-glass session here — permitted, kind BREAK_GLASS")
+    void breakGlassStandsInForTheRelationship() {
+        when(resolver.resolve(patient, hospitalId, actor)).thenReturn(Optional.empty());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.empty());
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        session.setStartedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        session.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().carrierId()).isEqualTo(session.getId());
+        assertThat(d.relationship().expiresAt()).isEqualTo(session.getExpiresAt());
+        assertThat(d.relationship().actorDirectlyAttached()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a break-the-glass session does not bypass the opt-out or the staff gate")
+    void breakGlassDoesNotBypassEarlierGates() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(new BreakGlassSession()));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
+        verify(breakGlassGate, never()).liveSession(any(), any(), any());
+    }
+
+    // ------------------------------------------------------------------ E8 #54: restricted charts
+
+    private com.example.hms.model.Patient restrictedPatient() {
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setId(patient);
+        p.setChartRestricted(true);
+        when(patientRepository.findByIdUnscoped(patient)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    @DisplayName("a restricted chart refuses a registered clinician without a live session — CHART_RESTRICTED")
+    void restrictedChartRefusesRegistrationAlone() {
+        restrictedPatient();
+        PatientHospitalRegistration reg = new PatientHospitalRegistration();
+        reg.setId(UUID.randomUUID());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.of(reg));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.CHART_RESTRICTED);
+    }
+
+    @Test
+    @DisplayName("a restricted chart opens under a live session, and the relationship becomes BREAK_GLASS")
+    void restrictedChartOpensUnderASession() {
+        restrictedPatient();
+        com.example.hms.model.BreakGlassSession session = new com.example.hms.model.BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        session.setStartedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        session.setExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().actorDirectlyAttached()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the flag is read only after a relationship exists: a stranger still gets NOT_STAFF_AT_HOSPITAL")
+    void restrictionDisclosesNothingToAStranger() {
+        restrictedPatient();
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL);
+        verify(patientRepository, never()).findByIdUnscoped(patient);
     }
 }

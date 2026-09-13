@@ -100,7 +100,7 @@ public class AdmissionOrderSetController {
 
     /** Apply an order set to an admission, fanning into Prescription / Lab / Imaging. */
     @PostMapping("/{orderSetId}/apply/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     public ResponseEntity<AppliedOrderSetSummaryDTO> apply(
         @PathVariable UUID orderSetId,
         @PathVariable UUID admissionId,

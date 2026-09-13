@@ -5,7 +5,8 @@ import { Observable, map, catchError, of } from 'rxjs';
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
-  patientId: string;
+  /** The patient id, as the backend sends it. */
+  id: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -477,35 +478,17 @@ interface DischargeSummaryApiResponse {
   additionalNotes: string;
 }
 
-export interface PatientConsent {
-  id: string;
-  fromHospitalId: string;
-  fromHospitalName: string;
-  toHospitalId: string;
-  toHospitalName: string;
-  purpose: string;
-  grantedAt: string;
-  expiresAt: string;
-  status: string;
-}
-
-/** Raw shape from backend PatientConsentResponseDTO */
-interface ConsentApiResponse {
-  id: string;
-  consentGiven: boolean;
-  consentTimestamp: string;
-  consentExpiration: string;
-  purpose: string;
+/**
+ * E9 #66 — the patient's own cross-hospital sharing opt-out (V157). Their
+ * own hospital's access is untouched; an emergency access stays possible
+ * and is accounted for in the disclosure list.
+ */
+export interface RecordSharingOptOut {
   patientId: string;
-  fromHospital: { id: string; name: string };
-  toHospital: { id: string; name: string };
-}
-
-export interface PortalConsentRequest {
-  fromHospitalId: string;
-  toHospitalId: string;
-  purpose: string;
-  consentExpiration: string;
+  inForce: boolean;
+  optedOutAt: string | null;
+  reason: string | null;
+  revokedAt: string | null;
 }
 
 /**
@@ -1081,45 +1064,22 @@ export class PatientPortalService {
       );
   }
 
-  // ── Consent Management ─────────────────────────────────────────────
+  // ── Record-sharing opt-out (E9 #66) ─────────────────────────────────
 
-  getMyConsents(): Observable<PatientConsent[]> {
-    return this.http
-      .get<ApiWrapper<PageWrapper<ConsentApiResponse>>>(`${this.base}/consents`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        map((r) => (r.data?.content ?? []).map((c) => this.mapConsent(c))),
-        catchError(() => of([])),
-      );
+  /** The opt-out is patient-scoped on the API; a patient may only read their own (403 otherwise). */
+  getMyOptOut(patientId: string): Observable<RecordSharingOptOut> {
+    return this.http.get<RecordSharingOptOut>(`/patients/${patientId}/record-sharing/opt-out`);
   }
 
-  grantConsent(dto: PortalConsentRequest): Observable<PatientConsent> {
-    return this.http
-      .post<ApiWrapper<ConsentApiResponse>>(`${this.base}/consents`, dto)
-      .pipe(map((r) => this.mapConsent(r.data)));
+  optOutOfSharing(patientId: string, reason: string | null): Observable<RecordSharingOptOut> {
+    return this.http.post<RecordSharingOptOut>(
+      `/patients/${patientId}/record-sharing/opt-out`,
+      reason ? { reason } : {},
+    );
   }
 
-  private mapConsent(c: ConsentApiResponse): PatientConsent {
-    return {
-      id: c.id,
-      fromHospitalId: c.fromHospital?.id ?? '',
-      fromHospitalName: c.fromHospital?.name ?? '',
-      toHospitalId: c.toHospital?.id ?? '',
-      toHospitalName: c.toHospital?.name ?? '',
-      purpose: c.purpose ?? '',
-      grantedAt: c.consentTimestamp ?? '',
-      expiresAt: c.consentExpiration ?? '',
-      status: c.consentGiven ? 'ACTIVE' : 'REVOKED',
-    };
-  }
-
-  revokeConsent(fromHospitalId: string, toHospitalId: string): Observable<void> {
-    return this.http
-      .delete<ApiWrapper<void>>(`${this.base}/consents`, {
-        params: { fromHospitalId, toHospitalId },
-      })
-      .pipe(map(() => void 0));
+  revokeOptOut(patientId: string): Observable<RecordSharingOptOut> {
+    return this.http.delete<RecordSharingOptOut>(`/patients/${patientId}/record-sharing/opt-out`);
   }
 
   // ── Access Log ─────────────────────────────────────────────────────

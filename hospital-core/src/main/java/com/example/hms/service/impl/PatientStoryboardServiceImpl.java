@@ -1,5 +1,9 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.service.recordaccess.WithheldRows;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.enums.AdvanceDirectiveStatus;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.EncounterStatus;
@@ -36,6 +40,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import java.util.Map;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Aggregates allergies, active problems, the most recent non-terminal encounter,
@@ -64,6 +71,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private final EncounterRepository encounterRepository;
     private final AdvanceDirectiveRepository advanceDirectiveRepository;
     private final HospitalRepository hospitalRepository;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final SensitivityClassifier sensitivityClassifier;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,10 +84,37 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // résumé patient" on a chart that had otherwise rendered).
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
-        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
-        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId);
+        // E9 #59 — the hospitals this caller may read for this patient; the
+        // acting hospital alone when the policy says so, more when the patient
+        // is registered here. Null scope (super-admin global view) reads all.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = hospitalId == null ? null
+            : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // problems the D3 rule withholds; the ledger row names the session.
+        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        List<AllergySummaryDTO> allergies = loadAllergies(patientId);
+        // E9 #64 — what D3 withholds is counted, so the banner can say so.
+        WithheldRows withheld = new WithheldRows();
+        List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked, withheld);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
-        CodeStatusDTO codeStatus = loadCodeStatus(patient, hospitalId);
+        CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
+        // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
+        // directives (#59a); every one of them is accounted, once per source
+        // hospital for the whole banner. #56 and #59a left this ledger row out
+        // because the call carries no requester; the context has one.
+        if (readable != null) {
+            Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(
+                allergies.stream().map(AllergySummaryDTO::getHospitalId).toList(), hospitalId);
+            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+                problems.stream().map(ProblemSummaryDTO::getHospitalId).toList(), hospitalId));
+            if (codeStatus != null && codeStatus.getDirectives() != null) {
+                CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+                    codeStatus.getDirectives().stream().map(DirectiveSummaryDTO::getHospitalId).toList(), hospitalId));
+            }
+            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
+                "Cross-hospital storyboard read on the treatment relationship");
+        }
 
         boolean highSeverityAllergy = allergies.stream()
             .anyMatch(a -> a.getSeverity() != null
@@ -91,6 +129,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .codeStatus(codeStatus)
             .hasHighSeverityAllergy(highSeverityAllergy)
             .hasChronicProblem(chronicProblem)
+            .restrictedRows(withheld.summaries())
             .hospitalId(hospitalId)
             .hospitalName(resolveHospitalName(hospitalId))
             .generatedAt(LocalDateTime.now())
@@ -122,10 +161,14 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .build();
     }
 
-    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
-        List<PatientAllergy> source = hospitalId != null
-            ? allergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
-            : allergyRepository.findByPatient_Id(patientId);
+    /**
+     * E9 #56 — allergies follow the patient: every active row, whichever
+     * hospital recorded it, with that hospital named on the chip. A
+     * penicillin allergy recorded at Hôpital A is exactly the row the ED at
+     * Hôpital B must see.
+     */
+    private List<AllergySummaryDTO> loadAllergies(UUID patientId) {
+        List<PatientAllergy> source = allergyRepository.findByPatient_Id(patientId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator
@@ -137,11 +180,20 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .toList();
     }
 
-    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId) {
-        List<PatientProblem> source = hospitalId != null
-            ? problemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
+    /**
+     * E9 #59 — problems follow the patient across the readable hospitals,
+     * with the recording hospital on the chip. A foreign problem carrying a
+     * sensitivity category is withheld (D3) and counted (#64); it opens via
+     * break-the-glass.
+     */
+    private List<ProblemSummaryDTO> loadProblems(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                 boolean unlocked, WithheldRows withheld) {
+        List<PatientProblem> source = readable != null
+            ? problemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable)
             : problemRepository.findByPatient_Id(patientId);
         return source.stream()
+            .filter(p -> withheld.admit(p.getHospital(), null, hospitalId,
+                sensitivityClassifier.effectiveCategory(p), unlocked))
             .filter(p -> p.getStatus() == null
                 || p.getStatus() == ProblemStatus.ACTIVE
                 || p.getStatus() == ProblemStatus.RECURRENCE)
@@ -175,9 +227,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .orElse(null);
     }
 
-    private CodeStatusDTO loadCodeStatus(Patient patient, UUID hospitalId) {
-        List<AdvanceDirective> directives = hospitalId != null
-            ? advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)
+    /** E9 #59 — a code status is a property of the patient; directives travel with them. */
+    private CodeStatusDTO loadCodeStatus(Patient patient, Set<UUID> readable) {
+        List<AdvanceDirective> directives = readable != null
+            ? advanceDirectiveRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable)
             : advanceDirectiveRepository.findByPatient_Id(patient.getId());
         List<DirectiveSummaryDTO> activeDirectives = directives.stream()
             .filter(d -> d.getStatus() == null || d.getStatus() == AdvanceDirectiveStatus.ACTIVE)
@@ -200,6 +253,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private AllergySummaryDTO toAllergyDto(PatientAllergy a) {
         return AllergySummaryDTO.builder()
             .id(a.getId())
+            .hospitalId(a.getHospital() != null ? a.getHospital().getId() : null)
+            .hospitalName(a.getHospital() != null ? a.getHospital().getName() : null)
             .allergenDisplay(a.getAllergenDisplay())
             .allergenCode(a.getAllergenCode())
             .severity(a.getSeverity() != null ? a.getSeverity().name() : null)
@@ -211,6 +266,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private ProblemSummaryDTO toProblemDto(PatientProblem p) {
         return ProblemSummaryDTO.builder()
             .id(p.getId())
+            .hospitalId(p.getHospital() != null ? p.getHospital().getId() : null)
+            .hospitalName(p.getHospital() != null ? p.getHospital().getName() : null)
             .problemDisplay(p.getProblemDisplay())
             .problemCode(p.getProblemCode())
             .icdVersion(p.getIcdVersion())
@@ -238,6 +295,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private DirectiveSummaryDTO toDirectiveDto(AdvanceDirective d) {
         return DirectiveSummaryDTO.builder()
             .id(d.getId())
+            .hospitalId(d.getHospital() != null ? d.getHospital().getId() : null)
+            .hospitalName(d.getHospital() != null ? d.getHospital().getName() : null)
             .directiveType(d.getDirectiveType() != null ? d.getDirectiveType().name() : null)
             .status(d.getStatus() != null ? d.getStatus().name() : null)
             .effectiveDate(d.getEffectiveDate())

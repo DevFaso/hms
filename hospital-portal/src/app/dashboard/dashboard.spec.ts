@@ -526,13 +526,14 @@ describe('Dashboard navigation & RBAC', () => {
   });
 
   it('pharmacist tiles drop guard-rejected routes and use real pharmacy pages', () => {
-    // Real route table: /patients and /encounters exclude ROLE_PHARMACIST,
-    // the three pharmacy pages admit it.
+    // Real route table: /encounters excludes ROLE_PHARMACIST; /patients admits
+    // it since E9 #69 (the chart is read to verify a prescription); the three
+    // pharmacy pages admit it.
     const c = createComponent(['ROLE_PHARMACIST'], []);
     c.isPharmacist.set(true);
 
     const routes = c.pharmacistWorkflowTiles().map((t) => t.route);
-    expect(routes).not.toContain('/patients');
+    expect(routes).toContain('/patients');
     expect(routes).not.toContain('/encounters');
     expect(routes).toContain('/pharmacy/dispensing');
     expect(routes).toContain('/pharmacy/inventory');
@@ -575,7 +576,7 @@ describe('Dashboard navigation & RBAC', () => {
     // 'pharmacy/dispensing' is a single route entry, not a parent/child pair.
     const pharmacist = createComponent(['ROLE_PHARMACIST'], []);
     expect(gate(pharmacist, '/pharmacy/dispensing')).toBeTrue();
-    expect(gate(pharmacist, '/patients')).toBeFalse();
+    expect(gate(pharmacist, '/encounters')).toBeFalse();
   });
 
   it('canAccessRoute reports an unresolvable route as inaccessible', () => {
@@ -819,12 +820,15 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.labWorkflowTiles().length).toBe(7);
   });
 
-  it('pharmacistWorkflowTiles returns 5 tiles', () => {
+  it('pharmacistWorkflowTiles returns 6 tiles', () => {
     // 2026-08-23 role audit: the Reports tile is gone (it routed to
-    // /prescriptions and no pharmacy-reports page exists). Of the 7 that
-    // remain, Patients and Encounters drop — neither route admits a pharmacist.
+    // /prescriptions and no pharmacy-reports page exists). E9 #69: Patients
+    // survives — the pharmacist opens the chart to verify a prescription.
+    // Encounters still drops: /encounters stays with the treating team.
     const c = createComponent(['ROLE_PHARMACIST']);
-    expect(c.pharmacistWorkflowTiles().length).toBe(5);
+    expect(c.pharmacistWorkflowTiles().length).toBe(6);
+    expect(c.pharmacistWorkflowTiles().map((t) => t.route)).toContain('/patients');
+    expect(c.pharmacistWorkflowTiles().map((t) => t.route)).not.toContain('/encounters');
   });
 
   it('radiologistWorkflowTiles returns 7 tiles', () => {

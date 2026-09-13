@@ -197,6 +197,13 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "organization_id")
     private UUID organizationId;
 
+    /**
+     * The FIRST hospital this patient was registered at. Informational since
+     * E9 #57: the tenant filter scopes a patient by their registrations
+     * ({@code TenantScopeSpecification#patientScope}), so a patient linked to a
+     * second hospital is visible there without this column changing. Do not
+     * key any access rule on it.
+     */
     @Column(name = "hospital_id")
     private UUID hospitalId;
 
@@ -226,6 +233,26 @@ public class Patient extends BaseEntity implements TenantScoped {
     public boolean isDeceased() {
         return deceasedAt != null;
     }
+
+    /**
+     * E8 #54 — a restricted chart (VIP, staff member, own or family record):
+     * every read at the hospital needs a live break-the-glass session, even
+     * from staff with a registration-based relationship. Set by a hospital
+     * administrator with a reason; plain columns, no association, so the
+     * policy can read it without a join or a lazy proxy.
+     */
+    @Builder.Default
+    @Column(name = "chart_restricted", nullable = false)
+    private boolean chartRestricted = false;
+
+    @Column(name = "chart_restriction_reason", length = 512)
+    private String chartRestrictionReason;
+
+    @Column(name = "chart_restricted_at")
+    private LocalDateTime chartRestrictedAt;
+
+    @Column(name = "chart_restricted_by_user_id")
+    private UUID chartRestrictedByUserId;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true,

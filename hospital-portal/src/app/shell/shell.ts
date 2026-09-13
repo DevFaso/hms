@@ -222,8 +222,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-medical-history',
         },
         {
-          icon: 'share',
-          label: 'Record Sharing',
+          icon: 'visibility',
+          label: 'Who accessed my record',
           translationKey: 'NAV.RECORD_SHARING',
           route: '/my-sharing',
         },
@@ -270,7 +270,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Patient Records',
         // Mirrors the /patients RoleGuard list — without it, ten roles whose
         // static permission map grants 'View Patient Records' (accountant,
-        // billing specialist, pharmacist, …) saw a nav entry that landed on
+        // billing specialist, …) saw a nav entry that landed on
         // the 403 page because the guard rejects them.
         roles: [
           'ROLE_DOCTOR',
@@ -289,6 +289,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_RADIOLOGIST',
           'ROLE_ANESTHESIOLOGIST',
           'ROLE_PHYSIOTHERAPIST',
+          'ROLE_PHARMACIST',
         ],
       },
       {
@@ -393,14 +394,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/encounters',
         permission: 'Create Encounters',
         // Mirrors the /encounters RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'hotel',
@@ -409,14 +403,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admissions',
         permission: 'Admit Patients',
         // Mirrors the /admissions RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'grid_view',
@@ -483,7 +470,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Procedure Orders',
         translationKey: 'NAV.PROCEDURE_ORDERS',
         route: '/procedure-orders',
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'how_to_reg',
@@ -504,13 +491,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Discharge',
         translationKey: 'NAV.DISCHARGE',
         route: '/discharge',
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'school',
@@ -526,13 +507,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Disease Registries',
         translationKey: 'NAV.REGISTRIES',
         route: '/registries',
-        roles: [
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_DOCTOR',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
       },
       {
         // Tier 2 item 37. Same mirroring rule as /registries.
@@ -591,7 +566,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -609,6 +583,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.NURSE_STATION',
         route: '/nurse-station',
         permission: 'Access Nurse Station',
+        // Mirrors the /nurse-station RoleGuard (E9 #68). HOSPITAL_ADMIN holds
+        // 'Access Nurse Station' in the static map but the guard refuses it.
+        roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'qr_code_scanner',
@@ -648,7 +625,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_LAB_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -664,7 +640,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -676,13 +651,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/consultations',
         permission: 'Request Consultations',
         // Mirrors the /consultations RoleGuard.
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'assignment',
@@ -697,7 +666,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHYSIOTHERAPIST',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -709,14 +677,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/referrals',
         permission: 'Create Referrals',
         // Mirrors the /referrals RoleGuard (midwife added there in this change).
-        roles: [
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'receipt_long',
@@ -752,7 +713,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -772,7 +732,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -799,6 +758,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Hospitals',
         translationKey: 'NAV.HOSPITALS',
         route: '/hospitals',
+        // Mirrors the /hospitals RoleGuard (E9 #68).
+        roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_SUPER_ADMIN',
+        ],
       });
     }
     // PR #225 review: gate the admin-items group via the active-role-aware
@@ -883,13 +850,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // API keys + outbound webhooks (Tier 2 item 45) — mirrors the
-    // /api-keys and /webhook-endpoints controller gates exactly.
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_IT_STAFF'])) {
+    // /api-keys and /webhook-endpoints controller gates exactly
+    // (ROLE_IT_STAFF dropped in E9 #68: never seeded).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'webhook',
         label: 'API & Webhooks',
         translationKey: 'NAV.WEBHOOKS',
         route: '/webhooks',
+      });
+    }
+    // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'policy',
+        label: 'Break-glass review',
+        translationKey: 'NAV.BREAK_GLASS_REVIEW',
+        route: '/break-glass-review',
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       });
     }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
@@ -940,12 +918,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Medication Catalog',
           translationKey: 'NAV.MEDICATION_CATALOG',
           route: '/medication-catalog',
+          // Mirrors the /medication-catalog RoleGuard (E9 #68): the catalog
+          // API admits the store manager on every read but not the clerk.
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'local_pharmacy',
           label: 'Pharmacy Registry',
           translationKey: 'NAV.PHARMACY_REGISTRY',
           route: '/pharmacy-registry',
+          // Mirrors the /pharmacy-registry RoleGuard (E9 #68); the /pharmacies
+          // API admits clinicians and pharmacists only since E9 #67.
+          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         {
           icon: 'inventory_2',
@@ -970,12 +960,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
           route: '/pharmacy/dispensing',
+          // Mirrors the /pharmacy/dispensing RoleGuard (E9 #68): the group gate
+          // above admits the clerk and the store manager for the stock pages.
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'alt_route',
           label: 'Stock Routing',
           translationKey: 'NAV.STOCK_ROUTING',
           route: '/pharmacy/stock-routing',
+          // Mirrors the /pharmacy/stock-routing RoleGuard (E9 #68).
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
       );
     }
@@ -1020,7 +1025,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (
       this.hasAnyRole([
         'ROLE_PHARMACIST',
-        'ROLE_CASHIER',
         'ROLE_BILLING_SPECIALIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
@@ -1033,7 +1037,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/pharmacy/checkout',
       });
     }
-    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'clinical_notes',
         label: 'MTM Review',
@@ -1064,25 +1068,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
 
-    // ADMIN removed per role audit C1 — every consent backend call rejects it.
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
-      items.push({
-        icon: 'handshake',
-        label: 'Consent Management',
-        translationKey: 'NAV.CONSENT_MANAGEMENT',
-        route: '/consent-management',
-      });
-    }
-    if (this.hasAnyRole(['ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
-      if (!items.some((i) => i.route === '/consent-management')) {
-        items.push({
-          icon: 'handshake',
-          label: 'Consent Management',
-          translationKey: 'NAV.CONSENT_MANAGEMENT',
-          route: '/consent-management',
-        });
-      }
-    }
     if (
       this.hasAnyRole([
         'ROLE_LAB_SCIENTIST',
@@ -1194,7 +1179,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_LAB_TECHNICIAN',
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
-        'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1217,7 +1201,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_DOCTOR',
         'ROLE_NURSE',
         'ROLE_MIDWIFE',
-        'ROLE_HOSPITAL_ADMIN',
         'ROLE_PHARMACIST',
         'ROLE_SUPER_ADMIN',
       ])

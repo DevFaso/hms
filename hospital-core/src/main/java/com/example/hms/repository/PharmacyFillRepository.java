@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.Collection;
 
 @Repository
 public interface PharmacyFillRepository extends JpaRepository<PharmacyFill, UUID> {
@@ -19,21 +20,19 @@ public interface PharmacyFillRepository extends JpaRepository<PharmacyFill, UUID
     List<PharmacyFill> findByPatient_IdOrderByFillDateDesc(UUID patientId);
 
     /**
-     * Find pharmacy fills for a patient in a specific hospital.
+     * E9 #59c — fills across the readable hospitals
+     * ({@code RecordAccessPolicy.readableHospitalIds}). Replaces the
+     * single-hospital finder, which had no caller left.
      */
-    List<PharmacyFill> findByPatient_IdAndHospital_IdOrderByFillDateDesc(UUID patientId, UUID hospitalId);
+    List<PharmacyFill> findByPatient_IdAndHospital_IdInOrderByFillDateDesc(UUID patientId, Collection<UUID> hospitalIds);
 
     /**
-     * Find pharmacy fills for a patient within a date range.
+     * E9 #59c — the date-ranged sibling. Replaces a JPQL query that had NO
+     * hospital predicate at all: with a date range the medication timeline
+     * read every tenant's fills, SCHEMA-isolated ones included.
      */
-    @Query("SELECT pf FROM PharmacyFill pf WHERE pf.patient.id = :patientId " +
-           "AND pf.fillDate BETWEEN :startDate AND :endDate " +
-           "ORDER BY pf.fillDate DESC")
-    List<PharmacyFill> findByPatientAndDateRange(
-        @Param("patientId") UUID patientId,
-        @Param("startDate") LocalDate startDate,
-        @Param("endDate") LocalDate endDate
-    );
+    List<PharmacyFill> findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc(
+        UUID patientId, Collection<UUID> hospitalIds, LocalDate startDate, LocalDate endDate);
 
     /**
      * Find pharmacy fills linked to a specific prescription.

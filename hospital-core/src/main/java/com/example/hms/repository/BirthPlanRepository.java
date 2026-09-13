@@ -42,6 +42,12 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
         """)
     Optional<BirthPlan> findActiveBirthPlanByPatientId(@Param("patientId") UUID patientId);
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<BirthPlan> findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /** E9 #59d — the most recent plan across the readable hospitals; the sibling of {@link #findActiveBirthPlanByPatientId}. */
+    Optional<BirthPlan> findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
     /**
      * Find birth plans by hospital.
      */

@@ -84,6 +84,30 @@
             </div>
           </div>
         </div>
+        @if (canClassify) {
+          <div class="info-card sensitivity-card">
+            <h3>
+              <span class="material-symbols-outlined">shield_lock</span>
+              {{ 'DEPARTMENTS.DEFAULT_SENSITIVITY' | translate }}
+            </h3>
+            <p class="sensitivity-hint">{{ 'DEPARTMENTS.DEFAULT_SENSITIVITY_HINT' | translate }}</p>
+            <label class="sensitivity-label" for="default-sensitivity">{{
+              'DEPARTMENTS.DEFAULT_SENSITIVITY_LABEL' | translate
+            }}</label>
+            <select
+              id="default-sensitivity"
+              class="sensitivity-select"
+              [value]="defaultSensitivity() ?? ''"
+              [disabled]="sensitivitySaving()"
+              (change)="setDefaultSensitivity($any($event.target).value)"
+            >
+              <option value="">{{ 'DEPARTMENTS.SENSITIVITY_NONE' | translate }}</option>
+              @for (c of sensitivityCategories; track c) {
+                <option [value]="c">{{ 'DEPARTMENTS.SENSITIVITY_' + c | translate }}</option>
+              }
+            </select>
+          </div>
+        }
         @if (stats(); as s) {
           <div class="info-card">
             <h3>

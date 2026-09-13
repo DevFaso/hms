@@ -41,13 +41,7 @@ export class LabComponent implements OnInit {
 
   /** Only providers can place lab orders (matches POST /lab-orders @PreAuthorize). */
   readonly canCreateOrder = computed(() =>
-    this.auth.hasAnyRole([
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
-      'ROLE_SUPER_ADMIN',
-    ]),
+    this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN']),
   );
 
   orders = signal<LabOrderResponse[]>([]);
@@ -93,14 +87,13 @@ export class LabComponent implements OnInit {
   receivingSpecimenId = signal<string | null>(null);
   printingSpecimenId = signal<string | null>(null);
 
-  /** Matches the specimen create/receive @PreAuthorize (lab staff + admins). */
+  /** Matches the specimen create/receive @PreAuthorize (lab staff; E9 #67: no admins). */
   readonly canManageSpecimens = this.roleContext.hasAnyActiveRole([
     'ROLE_LAB_TECHNICIAN',
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_MANAGER',
     'ROLE_LAB_DIRECTOR',
     'ROLE_QUALITY_MANAGER',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 

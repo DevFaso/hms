@@ -1,6 +1,5 @@
 package com.example.hms.service.recordaccess;
 
-import com.example.hms.config.RecordAccessProperties;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
@@ -48,8 +47,9 @@ class ReadableHospitalIdsTest {
     @Mock private StaffRepository staffRepository;
     @Mock private TreatmentRelationshipResolver resolver;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private BreakGlassGate breakGlassGate;
+    @Mock private com.example.hms.repository.PatientRepository patientRepository;
 
-    private final RecordAccessProperties properties = new RecordAccessProperties();
     private RecordAccessPolicyImpl policy;
 
     private final UUID actor = UUID.randomUUID();
@@ -61,7 +61,7 @@ class ReadableHospitalIdsTest {
     @BeforeEach
     void setUp() {
         policy = new RecordAccessPolicyImpl(hospitalRepository, optOutRepository, staffRepository,
-            resolver, registrationRepository, properties);
+            resolver, registrationRepository, breakGlassGate, patientRepository);
 
         Hospital acting = hospital(actingId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
         other = hospital(otherId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED);
@@ -75,7 +75,7 @@ class ReadableHospitalIdsTest {
             TreatmentRelationshipKind.OPEN_ENCOUNTER, UUID.randomUUID(), actingId, patientId, null, null, true)));
         when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(registration(other)));
 
-        properties.setCrossHospitalReadsEnabled(true);
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, actingId)).thenReturn(Optional.empty());
     }
 
     @AfterEach
@@ -101,16 +101,18 @@ class ReadableHospitalIdsTest {
     }
 
     @Test
-    @DisplayName("flag OFF returns the acting hospital alone — exactly pre-E8 behaviour")
-    void flagOffIsPreE8() {
-        properties.setCrossHospitalReadsEnabled(false);
+    @DisplayName("E9 #58 — registered at the acting hospital: the patient's other hospitals are readable with no other carrier")
+    void registrationWidens() {
+        when(resolver.resolve(patientId, actingId, actor)).thenReturn(Optional.empty());
+        com.example.hms.model.PatientHospitalRegistration here = registration(hospital(actingId, TenantIsolationMode.ROW_LEVEL, RecordAccessPosture.TREATMENT_PRESUMED));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, actingId)).thenReturn(Optional.of(here));
 
         assertThat(policy.readableHospitalIds(actor, patientId, actingId))
-            .containsExactly(actingId);
+            .containsExactlyInAnyOrder(actingId, otherId);
     }
 
     @Test
-    @DisplayName("flag ON with a treatment relationship adds the patient's other hospitals")
+    @DisplayName("a treatment relationship adds the patient's other hospitals")
     void widensWhenPermitted() {
         assertThat(policy.readableHospitalIds(actor, patientId, actingId))
             .containsExactlyInAnyOrder(actingId, otherId);

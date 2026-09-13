@@ -47,7 +47,7 @@ public class PharmacyDirectoryController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @GetMapping("/community")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     public ResponseEntity<List<PharmacyOptionDTO>> listCommunityPharmacies(
         @RequestParam(required = false) UUID hospitalId,
         @RequestHeader(value = "X-Hospital-Id", required = false) UUID headerHospitalId,
@@ -77,7 +77,7 @@ public class PharmacyDirectoryController {
     public record PharmacyOptionDTO(UUID id, String name, String phoneNumber, String pharmacyType) { }
 
     @GetMapping("/patients/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
     public ResponseEntity<List<PharmacyLocationResponseDTO>> listPatientPharmacies(
         @PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId,

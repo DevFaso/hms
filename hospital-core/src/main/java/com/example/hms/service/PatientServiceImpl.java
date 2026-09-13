@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.WithheldRows;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.enums.AuditEventType;
@@ -20,6 +23,7 @@ import com.example.hms.mapper.PatientSurgicalHistoryMapper;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.AdvanceDirective;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
@@ -47,6 +51,7 @@ import com.example.hms.payload.dto.PatientDiagnosisRequestDTO;
 import com.example.hms.payload.dto.PatientDiagnosisUpdateRequestDTO;
 import com.example.hms.payload.dto.PatientInsuranceRequestDTO;
 import com.example.hms.payload.dto.PatientProfileUpdateRequestDTO;
+import com.example.hms.payload.dto.ChartRestrictionRequestDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
@@ -67,6 +72,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.service.allergy.LegacyAllergyTextImporter;
+import com.example.hms.service.allergy.PatientAllergySummarySync;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemHistoryRepository;
 import com.example.hms.repository.PatientProblemRepository;
@@ -96,6 +103,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -113,6 +121,7 @@ import java.security.SecureRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 @Service
 @RequiredArgsConstructor
@@ -169,45 +178,6 @@ public class PatientServiceImpl implements PatientService {
     private static final String SECTION_NOTES = "NOTES";
     private static final String SECTION_MEDICAL_HISTORY = "MEDICAL_HISTORY";
     private static final int DEFAULT_RECENT_ENCOUNTER_LIMIT = 10;
-    private static final Set<String> SENSITIVE_KEYWORDS = Set.of(
-        "mental health",
-        "psychiatry",
-        "substance",
-        "rehab",
-        "dependency",
-        "opioid",
-        "hiv",
-        "aids",
-        "sexual health",
-        "reproductive",
-        "fertility",
-        "abortion",
-        "oncology",
-        "chemotherapy",
-        "radiation",
-        "gender affirming",
-        "domestic violence",
-        "assault",
-        "trauma"
-    );
-    private static final Set<String> SENSITIVE_DEPARTMENTS = Set.of(
-        "behavioral health",
-        "mental health",
-        "psychiatry",
-        "addiction medicine",
-        "oncology",
-        "infectious disease"
-    );
-    private static final Set<String> HIGH_ALERT_MEDICATION_KEYWORDS = Set.of(
-        "opioid",
-        "fentanyl",
-        "oxycodone",
-        "hydromorphone",
-        "buprenorphine",
-        "methadone",
-        "ketamine",
-        "clozapine"
-    );
     private static final String META_STATUS = "status";
     /** E8 #50 — "who treated the patient", required on every row the chart
      *  renders so provenance reads as hospital + clinician + date + what. */
@@ -234,6 +204,8 @@ public class PatientServiceImpl implements PatientService {
     private final PatientVitalSignService patientVitalSignService;
     private final EncounterRepository encounterRepository;
     private final PatientAllergyRepository patientAllergyRepository;
+    private final LegacyAllergyTextImporter legacyAllergyTextImporter;
+    private final PatientAllergySummarySync allergySummarySync;
     private final LabResultRepository labResultRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final AuditEventLogService auditEventLogService;
@@ -255,6 +227,8 @@ public class PatientServiceImpl implements PatientService {
     private final UltrasoundReportRepository ultrasoundReportRepository;
     private final UltrasoundMapper ultrasoundMapper;
     private final NursingNoteRepository nursingNoteRepository;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final BreakGlassGate breakGlassGate;
     private final NursingNoteMapper nursingNoteMapper;
     private final StaffRepository staffRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -353,7 +327,8 @@ public class PatientServiceImpl implements PatientService {
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + dto.getHospitalId()));
 
-        Patient patient = patientRepository.findByUserId(user.getId())
+        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
+        Patient patient = existing
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
         // Mirror User's activation state: patients pending email verification start inactive
@@ -364,6 +339,13 @@ public class PatientServiceImpl implements PatientService {
 
         ensurePatientRegistration(patient, hospital);
 
+        // E9 #56 — the registration form's free-text allergies become structured
+        // rows at the registering hospital; the column is a derived summary now.
+        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+            legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
+                LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+        }
+
         if (dto.getInsurance() != null) {
             PatientInsuranceRequestDTO insuranceDTO = dto.getInsurance();
             if (insuranceDTO.getPatientId() == null) {
@@ -373,6 +355,30 @@ public class PatientServiceImpl implements PatientService {
         }
 
         return buildPatientDto(patient, hospital.getId());
+    }
+
+    @Override
+    @Transactional
+    public PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId) {
+        Patient patient = patientRepository.findByIdUnscoped(id)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
+        if (request.isRestricted()) {
+            String reason = trimToNull(request.getReason());
+            if (reason == null) {
+                throw new BusinessException("A reason is required to restrict a chart.");
+            }
+            patient.setChartRestricted(true);
+            patient.setChartRestrictionReason(reason);
+            patient.setChartRestrictedAt(LocalDateTime.now(ZoneId.systemDefault()));
+            patient.setChartRestrictedByUserId(actorUserId);
+        } else {
+            patient.setChartRestricted(false);
+            patient.setChartRestrictionReason(null);
+            patient.setChartRestrictedAt(null);
+            patient.setChartRestrictedByUserId(null);
+        }
+        log.warn("[CHART_RESTRICTION] patient={} restricted={} by user={}", id, request.isRestricted(), actorUserId);
+        return buildPatientDto(patientRepository.save(patient), hospitalId);
     }
 
     @Override
@@ -594,7 +600,8 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
 
-        Patient patient = patientRepository.findByUserId(user.getId())
+        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
+        Patient patient = existing
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
@@ -615,6 +622,12 @@ public class PatientServiceImpl implements PatientService {
         }
 
         ensurePatientRegistration(patient, hospital);
+
+        // E9 #56 — see createPatient: free-text allergies become structured rows.
+        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+            legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
+                LegacyAllergyTextImporter.SOURCE_REGISTRATION);
+        }
 
         if (dto.getInsurance() != null) {
             PatientInsuranceRequestDTO insuranceDTO = dto.getInsurance();
@@ -825,18 +838,25 @@ public class PatientServiceImpl implements PatientService {
         // disclosure. Flag off => a one-element set => today's behaviour.
         Set<UUID> readableHospitalIds =
             recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // rows the D3 rule withholds; the ledger rows name the session.
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        // E9 #64 — what D3 withholds is counted per hospital and department,
+        // so the chart can say "Dossier restreint" and offer the declaration.
+        WithheldRows withheld = new WithheldRows();
 
         List<PatientTimelineEntryDTO> aggregatedEntries = new ArrayList<>();
-        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
-        // Not widened: allergies, imaging and surgical history attach to
-        // patient + hospital with no encounter link, so #51's category cannot
-        // be resolved for them. A row whose category nobody can determine must
-        // not travel. Tracked as standing platform debt.
+        aggregatedEntries.addAll(collectEncounterEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        aggregatedEntries.addAll(collectPrescriptionEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        aggregatedEntries.addAll(collectLabResultEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked, withheld));
+        // Not widened: allergies attach to patient + hospital with no encounter
+        // link, so #51's category cannot be resolved for them. A row whose
+        // category nobody can determine must not travel. Tracked as standing
+        // platform debt. Imaging and surgical history read the readable set
+        // (E9 #59d, #59a); a foreign row the heuristic marks sensitive is withheld.
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectImagingEntries(patientId, hospitalId, categoryFilters));
-        aggregatedEntries.addAll(collectProcedureEntries(patientId, hospitalId, categoryFilters));
+        aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
+        aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries);
 
@@ -866,6 +886,7 @@ public class PatientServiceImpl implements PatientService {
             .sensitiveCategories(sensitiveCategories)
             .containsSensitiveData(!sensitiveCategories.isEmpty())
             .totalEntries(entries.size())
+            .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
             .build();
 
@@ -930,14 +951,23 @@ public class PatientServiceImpl implements PatientService {
 
         List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patientId,
-            resolvedHospitalId,
             includeSensitive,
             maxItems,
             sensitiveSections
         );
+        // E9 #59 — the doctor record follows the patient: one readable set for
+        // the whole record, every collector reads across it, and the reach of
+        // the whole record is accounted once at the end.
+        Set<UUID> readableHospitalIds =
+            recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, resolvedHospitalId);
+        // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
+        // rows every collector below withholds (D3); the ledger names the session.
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, resolvedHospitalId);
         List<PrescriptionResponseDTO> medications = collectDoctorRecordMedications(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -952,6 +982,8 @@ public class PatientServiceImpl implements PatientService {
         ImagingBundle imagingBundle = collectDoctorRecordImaging(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -959,6 +991,8 @@ public class PatientServiceImpl implements PatientService {
         List<NursingNoteResponseDTO> notes = collectDoctorRecordNursingNotes(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
+            unlocked,
             includeSensitive,
             notesLimit,
             sensitiveSections
@@ -966,6 +1000,8 @@ public class PatientServiceImpl implements PatientService {
         MedicalHistoryBundle medicalHistory = collectDoctorRecordMedicalHistory(
             patientId,
             resolvedHospitalId,
+            readableHospitalIds,
+            unlocked,
             includeSensitive,
             maxItems
         );
@@ -1007,6 +1043,22 @@ public class PatientServiceImpl implements PatientService {
             .build();
 
         logDoctorRecordAudit(patient, requesterUserId, assignment, reason, includeSensitive, response, sensitiveSections);
+        Map<String, Long> reach = new HashMap<>();
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            allergies.stream().map(PatientAllergyResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medications.stream().map(PrescriptionResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.problems().stream().map(PatientProblemResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.surgicalHistory().stream().map(PatientSurgicalHistoryResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            medicalHistory.advanceDirectives().stream().map(AdvanceDirectiveResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            notes.stream().map(NursingNoteResponseDTO::getHospitalId).toList(), resolvedHospitalId));
+        CrossHospitalReachRecorder.merge(reach, imagingBundle.reach());
+        recordCrossHospitalReach(patientId, resolvedHospitalId, requesterUserId, assignment, reach,
+            "Cross-hospital doctor record read on the treatment relationship");
         return response;
     }
 
@@ -1032,13 +1084,20 @@ public class PatientServiceImpl implements PatientService {
         }
 
         LinkedHashSet<String> sensitiveSections = new LinkedHashSet<>();
-        return collectDoctorRecordAllergies(
+        List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patient.getId(),
-            hospitalId,
             true,
             Integer.MAX_VALUE,
             sensitiveSections
         );
+        // E9 #53/#56 — every cross-hospital read is accounted: one RECORD_SHARE
+        // per source hospital whose rows were surfaced here.
+        Map<String, Long> reach = allergies.stream()
+            .filter(a -> a.getHospitalId() != null && !hospitalId.equals(a.getHospitalId()))
+            .collect(Collectors.groupingBy(a -> a.getHospitalId().toString(), Collectors.counting()));
+        recordCrossHospitalReach(patientId, hospitalId, requesterUserId, null, reach,
+            "Cross-hospital allergy read on the treatment relationship");
+        return allergies;
     }
 
     @Override
@@ -1076,6 +1135,7 @@ public class PatientServiceImpl implements PatientService {
             allergy.setVerificationStatus(AllergyVerificationStatus.UNCONFIRMED);
         }
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("CREATED", patientId, hospitalEntity.getId(), allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
     }
@@ -1107,6 +1167,7 @@ public class PatientServiceImpl implements PatientService {
             allergy.setRecordedDate(LocalDate.now());
         }
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("UPDATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
     }
@@ -1132,6 +1193,7 @@ public class PatientServiceImpl implements PatientService {
         resolveStaffContext(requesterUserId, effectiveHospitalId);
         allergy.setActive(false);
         patientAllergyRepository.save(allergy);
+        allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("DEACTIVATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, normalizedReason);
     }
 
@@ -1153,11 +1215,24 @@ public class PatientServiceImpl implements PatientService {
             .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
-        return patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        // E9 #59 — diagnoses follow the patient. Every hospital the policy lets
+        // this caller read contributes its rows; a foreign row with a
+        // sensitivity category is withheld (D3) and opens via break-the-glass.
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        List<PatientProblemResponseDTO> diagnoses = patientProblemRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
             .filter(problem -> includeHistorical || isActiveDiagnosis(problem))
+            .filter(problem -> maySurface(problem.getHospital(), hospitalId,
+                sensitivityClassifier.effectiveCategory(problem), unlocked))
             .sorted(problemComparator)
             .map(patientProblemMapper::toResponseDto)
             .toList();
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(diagnoses.stream().map(PatientProblemResponseDTO::getHospitalId).toList(), hospitalId),
+            "Cross-hospital diagnosis read on the treatment relationship");
+        return diagnoses;
     }
 
     @Override
@@ -1695,10 +1770,13 @@ public class PatientServiceImpl implements PatientService {
      * already governs.
      */
     private static boolean maySurface(Hospital rowHospital, UUID actingHospitalId,
-                                      com.example.hms.enums.SensitivityCategory category) {
-        boolean foreign = rowHospital != null && rowHospital.getId() != null
-            && !rowHospital.getId().equals(actingHospitalId);
-        return !foreign || category == null;
+                                      com.example.hms.enums.SensitivityCategory category, boolean unlocked) {
+        return CrossHospitalRows.maySurface(rowHospital, actingHospitalId, category, unlocked);
+    }
+
+    /** The department a prescription or lab order belongs to: its encounter's, when it has one. */
+    private static Department departmentOf(Encounter encounter) {
+        return encounter != null ? encounter.getDepartment() : null;
     }
 
     /**
@@ -1743,38 +1821,28 @@ public class PatientServiceImpl implements PatientService {
                 perSource.merge(source.toString(), 1L, Long::sum);
             }
         }
-        for (Map.Entry<String, Long> reach : perSource.entrySet()) {
-            try {
-                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.RECORD_SHARE)
-                    .status(AuditStatus.SUCCESS)
-                    .userId(requesterUserId)
-                    .assignmentId(assignment == null ? null : assignment.getId())
-                    .patientId(patientId)
-                    .entityType(AUDIT_ENTITY_PATIENT)
-                    .resourceId(patientId.toString())
-                    .eventDescription("Cross-hospital chart read on the treatment relationship")
-                    .details(Map.of(
-                        "actingHospitalId", String.valueOf(actingHospitalId),
-                        META_SOURCE_HOSPITAL_ID, reach.getKey(),
-                        "rowsSurfaced", reach.getValue()))
-                    .build());
-            } catch (RuntimeException ex) {
-                log.warn("[record-access] cross-hospital disclosure audit failed for patient {} source {}: {}",
-                    patientId, reach.getKey(), ex.getMessage());
-            }
-        }
+        recordCrossHospitalReach(patientId, actingHospitalId, requesterUserId, assignment, perSource,
+            "Cross-hospital chart read on the treatment relationship");
+    }
+
+    /** One RECORD_SHARE per source hospital in {@code perSource} (source hospital id -> rows surfaced). */
+    private void recordCrossHospitalReach(UUID patientId, UUID actingHospitalId, UUID requesterUserId,
+                                          UserRoleHospitalAssignment assignment, Map<String, Long> perSource,
+                                          String description) {
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId,
+            assignment == null ? null : assignment.getId(), perSource, description);
     }
 
     private List<PatientTimelineEntryDTO> collectEncounterEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                  UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                  UUID actingHospitalId, Set<String> categoryFilters,
+                                                                  boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ENCOUNTER)) {
             return List.of();
         }
         return encounterRepository.findByPatient_Id(patientId).stream()
             .filter(encounter -> isReadableHospital(readableHospitalIds, encounter.getHospital()))
-            .filter(encounter -> maySurface(encounter.getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(encounter)))
+            .filter(encounter -> withheld.admit(encounter.getHospital(), encounter.getDepartment(), actingHospitalId,
+                sensitivityClassifier.effectiveCategory(encounter), unlocked))
             .map(encounter -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, encounter.getStatus() != null ? encounter.getStatus().name() : null);
@@ -1794,15 +1862,16 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectPrescriptionEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                     UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                     UUID actingHospitalId, Set<String> categoryFilters,
+                                                                     boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PRESCRIPTION)) {
             return List.of();
         }
         return prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
             // A prescription carries no tag of its own; its category comes
             // from the encounter that wrote it (E8 #51).
-            .filter(prescription -> maySurface(prescription.getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(prescription.getEncounter())))
+            .filter(prescription -> withheld.admit(prescription.getHospital(), departmentOf(prescription.getEncounter()),
+                actingHospitalId, sensitivityClassifier.effectiveCategory(prescription.getEncounter()), unlocked))
             .map(prescription -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, META_STATUS, prescription.getStatus() != null ? prescription.getStatus().name() : null);
@@ -1825,7 +1894,8 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private List<PatientTimelineEntryDTO> collectLabResultEntries(UUID patientId, Set<UUID> readableHospitalIds,
-                                                                   UUID actingHospitalId, Set<String> categoryFilters) {
+                                                                   UUID actingHospitalId, Set<String> categoryFilters,
+                                                                   boolean unlocked, WithheldRows withheld) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_LAB_RESULT)) {
             return List.of();
         }
@@ -1833,8 +1903,9 @@ public class PatientServiceImpl implements PatientService {
             .filter(result -> result.getLabOrder() != null
                 && isReadableHospital(readableHospitalIds, result.getLabOrder().getHospital()))
             // Same as prescriptions: the category rides on the lab order's encounter.
-            .filter(result -> maySurface(result.getLabOrder().getHospital(), actingHospitalId,
-                sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter())))
+            .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
+                departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
+                sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()), unlocked))
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "unit", result.getResultUnit());
@@ -1876,7 +1947,7 @@ public class PatientServiceImpl implements PatientService {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)) {
             return List.of();
         }
-        return patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        return patientAllergyRepository.findByPatient_Id(patientId).stream()
             .map(allergy -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "severity", allergy.getSeverity());
@@ -1890,23 +1961,30 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(occurredAt)
                     .summary(formatAllergySummary(allergy))
                     .sensitive(isSensitiveAllergy(allergy))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, allergy.getHospital(), hospitalId))
                     .build();
             })
             .toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectImagingEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectImagingEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                UUID hospitalId, Set<String> categoryFilters,
+                                                                boolean unlocked) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_IMAGING)) {
             return List.of();
         }
-        List<UltrasoundOrder> orders = Optional.ofNullable(ultrasoundOrderRepository.findAllByPatientId(patientId))
+        // E9 #59d — read the readable set at the database (this used to load
+        // every tenant's rows and keep the acting hospital's in memory). A
+        // foreign row the heuristic marks sensitive is withheld (decision D3).
+        List<UltrasoundOrder> orders = Optional
+            .ofNullable(ultrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, readableHospitalIds))
             .orElse(List.of());
-        List<UltrasoundReport> reports = Optional.ofNullable(ultrasoundReportRepository.findAllByPatientId(patientId))
+        List<UltrasoundReport> reports = Optional
+            .ofNullable(ultrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(patientId, readableHospitalIds))
             .orElse(List.of());
 
         Stream<PatientTimelineEntryDTO> orderEntries = orders.stream()
-            .filter(order -> order.getHospital() != null && hospitalId.equals(order.getHospital().getId()))
+            .filter(order -> unlocked || isLocalRow(order.getHospital(), hospitalId) || !isSensitiveUltrasoundOrder(order))
             .map(order -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "orderedBy", order.getOrderedBy());
@@ -1920,12 +1998,12 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(order.getOrderedDate())
                     .summary(formatImagingOrderSummary(order))
                     .sensitive(isSensitiveUltrasoundOrder(order))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, order.getHospital(), hospitalId))
                     .build();
             });
 
         Stream<PatientTimelineEntryDTO> reportEntries = reports.stream()
-            .filter(report -> report.getHospital() != null && hospitalId.equals(report.getHospital().getId()))
+            .filter(report -> unlocked || isLocalRow(report.getHospital(), hospitalId) || !isSensitiveUltrasoundReport(report))
             .map(report -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "scanPerformedBy", report.getScanPerformedBy());
@@ -1938,19 +2016,20 @@ public class PatientServiceImpl implements PatientService {
                     .occurredAt(toDateTime(report.getScanDate()))
                     .summary(formatImagingReportSummary(report))
                     .sensitive(isSensitiveUltrasoundReport(report))
-                    .metadata(metadata)
+                    .metadata(stampProvenance(metadata, report.getHospital(), hospitalId))
                     .build();
             });
 
         return Stream.concat(orderEntries, reportEntries).toList();
     }
 
-    private List<PatientTimelineEntryDTO> collectProcedureEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
+    private List<PatientTimelineEntryDTO> collectProcedureEntries(UUID patientId, Set<UUID> readableHospitalIds,
+                                                                  UUID actingHospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PROCEDURE)) {
             return List.of();
         }
         List<PatientSurgicalHistory> procedures = Optional
-            .ofNullable(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .ofNullable(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds))
             .orElse(List.of());
         return procedures.stream()
             .map(history -> {
@@ -1963,8 +2042,8 @@ public class PatientServiceImpl implements PatientService {
                     .category(CATEGORY_PROCEDURE)
                     .occurredAt(toDateTime(history.getProcedureDate()))
                     .summary(formatProcedureSummary(history))
-                    .sensitive(isSensitiveSurgicalHistory(history))
-                    .metadata(metadata)
+                    .sensitive(false)
+                    .metadata(stampProvenance(metadata, history.getHospital(), actingHospitalId))
                     .build();
             })
             .toList();
@@ -1985,7 +2064,9 @@ public class PatientServiceImpl implements PatientService {
             patientId,
             Set.of(hospitalId),
             hospitalId,
-            Collections.emptySet()
+            Collections.emptySet(),
+            false,
+            new WithheldRows()
         );
         return encounterEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
@@ -1997,14 +2078,19 @@ public class PatientServiceImpl implements PatientService {
             .toList();
     }
 
+    /**
+     * E9 #56 — allergies are a property of the patient, not of the hospital
+     * that happened to record them: every active row travels, and the
+     * response carries {@code hospitalId} / {@code hospitalName} so the
+     * reader sees where each one was recorded.
+     */
     private List<PatientAllergyResponseDTO> collectDoctorRecordAllergies(
         UUID patientId,
-        UUID hospitalId,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patientId);
         Comparator<PatientAllergy> comparator = Comparator
             .comparing((PatientAllergy allergy) -> severityOrder(allergy.getSeverity()))
             .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -2025,18 +2111,27 @@ public class PatientServiceImpl implements PatientService {
     private List<PrescriptionResponseDTO> collectDoctorRecordMedications(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        // E9 #59c — medications follow the patient. A FOREIGN prescription the
+        // keyword heuristic marks sensitive is withheld whatever the caller
+        // asked for: decision D3, and it opens through break-the-glass in E9
+        // #62. It does not flag the section either, which would reveal that it
+        // exists. A local one keeps the includeSensitive behaviour.
+        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
                 Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean sectionSensitive = prescriptions.stream().anyMatch(this::isSensitiveMedication);
+        boolean sectionSensitive = prescriptions.stream()
+            .anyMatch(p -> isLocalRow(p.getHospital(), hospitalId) && isSensitiveMedication(p));
         List<PrescriptionResponseDTO> responses = prescriptions.stream()
             .sorted(comparator)
-            .filter(prescription -> includeSensitive || !isSensitiveMedication(prescription))
+            .filter(prescription -> !isSensitiveMedication(prescription) || unlocked
+                || (includeSensitive && isLocalRow(prescription.getHospital(), hospitalId)))
             .map(prescriptionMapper::toResponseDTO)
             .limit(limit)
             .toList();
@@ -2074,28 +2169,38 @@ public class PatientServiceImpl implements PatientService {
     private ImagingBundle collectDoctorRecordImaging(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<UltrasoundOrder> orders = ultrasoundOrderRepository.findAllByPatientId(patientId).stream()
-            .filter(order -> order.getHospital() != null && hospitalId.equals(order.getHospital().getId()))
+        // E9 #59d — imaging follows the patient on the record's readable set,
+        // read at the database. A FOREIGN row the heuristic marks sensitive is
+        // withheld whatever the caller asked for and does not flag the section
+        // (decision D3); a local one keeps the includeSensitive behaviour.
+        List<UltrasoundOrder> orders = ultrasoundOrderRepository
+            .findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc(patientId, readableHospitalIds).stream()
             .sorted(Comparator.comparing(UltrasoundOrder::getOrderedDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
-        boolean ordersSensitive = orders.stream().anyMatch(this::isSensitiveUltrasoundOrder);
+        boolean ordersSensitive = orders.stream()
+            .anyMatch(order -> isLocalRow(order.getHospital(), hospitalId) && isSensitiveUltrasoundOrder(order));
         List<UltrasoundOrderResponseDTO> orderDtos = orders.stream()
-            .filter(order -> includeSensitive || !isSensitiveUltrasoundOrder(order))
+            .filter(order -> !isSensitiveUltrasoundOrder(order) || unlocked
+                || (includeSensitive && isLocalRow(order.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toOrderResponseDTO)
             .limit(limit)
             .toList();
 
-        List<UltrasoundReport> reports = ultrasoundReportRepository.findAllByPatientId(patientId).stream()
-            .filter(report -> report.getHospital() != null && hospitalId.equals(report.getHospital().getId()))
+        List<UltrasoundReport> reports = ultrasoundReportRepository
+            .findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc(patientId, readableHospitalIds).stream()
             .sorted(Comparator.comparing(UltrasoundReport::getScanDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
-        boolean reportsSensitive = reports.stream().anyMatch(this::isSensitiveUltrasoundReport);
+        boolean reportsSensitive = reports.stream()
+            .anyMatch(report -> isLocalRow(report.getHospital(), hospitalId) && isSensitiveUltrasoundReport(report));
         List<UltrasoundReportResponseDTO> reportDtos = reports.stream()
-            .filter(report -> includeSensitive || !isSensitiveUltrasoundReport(report))
+            .filter(report -> !isSensitiveUltrasoundReport(report) || unlocked
+                || (includeSensitive && isLocalRow(report.getHospital(), hospitalId)))
             .map(ultrasoundMapper::toReportResponseDTO)
             .limit(limit)
             .toList();
@@ -2104,18 +2209,28 @@ public class PatientServiceImpl implements PatientService {
         if (sectionSensitive) {
             sensitiveSections.add(SECTION_IMAGING);
         }
-        return new ImagingBundle(orderDtos, reportDtos, sectionSensitive);
+        // The reach is counted on the rows that surfaced, from the entities —
+        // the report DTO carries no hospital id.
+        Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(
+            orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), hospitalId);
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
+            reports.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), hospitalId));
+        return new ImagingBundle(orderDtos, reportDtos, sectionSensitive, reach);
     }
 
     private List<NursingNoteResponseDTO> collectDoctorRecordNursingNotes(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
         List<NursingNote> notes = nursingNoteRepository
-            .findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(patientId, hospitalId);
+            .findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readableHospitalIds).stream()
+            .filter(note -> maySurface(note.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(note), unlocked))
+            .toList();
         boolean sectionSensitive = notes.stream().anyMatch(this::isSensitiveNursingNote);
         List<NursingNoteResponseDTO> responses = notes.stream()
             .filter(note -> includeSensitive || !isSensitiveNursingNote(note))
@@ -2131,10 +2246,16 @@ public class PatientServiceImpl implements PatientService {
     private MedicalHistoryBundle collectDoctorRecordMedicalHistory(
         UUID patientId,
         UUID hospitalId,
+        Set<UUID> readableHospitalIds,
+        boolean unlocked,
         boolean includeSensitive,
         int limit
     ) {
-        List<PatientProblem> problems = patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<PatientProblem> problems = patientProblemRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
+            .filter(problem -> maySurface(problem.getHospital(), hospitalId,
+                sensitivityClassifier.effectiveCategory(problem), unlocked))
+            .toList();
         Comparator<PatientProblem> problemComparator = Comparator
             .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
@@ -2147,31 +2268,29 @@ public class PatientServiceImpl implements PatientService {
             .toList();
 
         List<PatientSurgicalHistory> surgicalHistory = patientSurgicalHistoryRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId);
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<PatientSurgicalHistory> surgicalComparator = Comparator
             .comparing(PatientSurgicalHistory::getProcedureDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientSurgicalHistory::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean surgicalSensitive = surgicalHistory.stream().anyMatch(this::isSensitiveSurgicalHistory);
         List<PatientSurgicalHistoryResponseDTO> surgicalDtos = surgicalHistory.stream()
             .sorted(surgicalComparator)
-            .filter(history -> includeSensitive || !isSensitiveSurgicalHistory(history))
             .map(patientSurgicalHistoryMapper::toResponseDto)
             .limit(limit)
             .toList();
 
-        List<AdvanceDirective> directives = advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<AdvanceDirective> directives = advanceDirectiveRepository
+            .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
         Comparator<AdvanceDirective> directiveComparator = Comparator
             .comparing(AdvanceDirective::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(AdvanceDirective::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
-        boolean directiveSensitive = directives.stream().anyMatch(this::isSensitiveAdvanceDirective);
         List<AdvanceDirectiveResponseDTO> directiveDtos = directives.stream()
             .sorted(directiveComparator)
-            .filter(directive -> includeSensitive || !isSensitiveAdvanceDirective(directive))
             .map(advanceDirectiveMapper::toResponseDto)
             .limit(limit)
             .toList();
 
-        boolean sectionSensitive = problemSensitive || surgicalSensitive || directiveSensitive;
+        // Surgical history and directives carry no tag (E9 #63): only the problems can flag the section.
+        boolean sectionSensitive = problemSensitive;
         return new MedicalHistoryBundle(problemDtos, surgicalDtos, directiveDtos, sectionSensitive);
     }
 
@@ -2182,66 +2301,32 @@ public class PatientServiceImpl implements PatientService {
         return resolveTimelineLimit(requestedLimit);
     }
 
+    /*
+     * E9 #63 — what "sensitive" means on this chart. A row is sensitive when the
+     * classifier says so: its own tag, or its encounter's tag, or that
+     * encounter's department default (E8 #51). The English keyword lists that
+     * used to sit here matched substrings against French clinical text; they
+     * never fired, and "trauma" would have made an orthopaedic note sensitive.
+     * Two structured flags stay because they are clinical alerts the
+     * includeSensitive toggle has always gated, not privacy categories: a
+     * life-threatening allergy, and a high-risk or anomalous ultrasound.
+     */
     private boolean isSensitiveProblem(PatientProblem problem) {
-        if (problem == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(problem.getProblemDisplay())
-            || containsSensitiveKeyword(problem.getNotes());
-    }
-
-    private boolean isSensitiveSurgicalHistory(PatientSurgicalHistory history) {
-        if (history == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(history.getProcedureDisplay())
-            || containsSensitiveKeyword(history.getNotes());
-    }
-
-    private boolean isSensitiveAdvanceDirective(AdvanceDirective directive) {
-        if (directive == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(directive.getDescription());
+        return problem != null && sensitivityClassifier.effectiveCategory(problem) != null;
     }
 
     private boolean isSensitiveNursingNote(NursingNote note) {
-        if (note == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(note.getNarrative())
-            || containsSensitiveKeyword(note.getDataSubjective())
-            || containsSensitiveKeyword(note.getDataObjective())
-            || containsSensitiveKeyword(note.getDataAssessment())
-            || containsSensitiveKeyword(note.getDataPlan())
-            || containsSensitiveKeyword(note.getDataImplementation())
-            || containsSensitiveKeyword(note.getDataEvaluation())
-            || containsSensitiveKeyword(note.getActionSummary())
-            || containsSensitiveKeyword(note.getResponseSummary())
-            || containsSensitiveKeyword(note.getEducationSummary());
+        return note != null && sensitivityClassifier.effectiveCategory(note) != null;
     }
 
     private boolean isSensitiveUltrasoundOrder(UltrasoundOrder order) {
-        if (order == null) {
-            return false;
-        }
-        return Boolean.TRUE.equals(order.getIsHighRiskPregnancy())
-            || containsSensitiveKeyword(order.getClinicalIndication())
-            || containsSensitiveKeyword(order.getHighRiskNotes())
-            || containsSensitiveKeyword(order.getSpecialInstructions());
+        return order != null && Boolean.TRUE.equals(order.getIsHighRiskPregnancy());
     }
 
     private boolean isSensitiveUltrasoundReport(UltrasoundReport report) {
-        if (report == null) {
-            return false;
-        }
-        return Boolean.TRUE.equals(report.getAnomaliesDetected())
-            || Boolean.TRUE.equals(report.getSpecialistReferralNeeded())
-            || containsSensitiveKeyword(report.getFindingsSummary())
-            || containsSensitiveKeyword(report.getInterpretation())
-            || containsSensitiveKeyword(report.getAnomalyDescription())
-            || containsSensitiveKeyword(report.getFollowUpRecommendations())
-            || containsSensitiveKeyword(report.getGeneticScreeningType());
+        return report != null
+            && (Boolean.TRUE.equals(report.getAnomaliesDetected())
+                || Boolean.TRUE.equals(report.getSpecialistReferralNeeded()));
     }
 
     private void logDoctorRecordAudit(
@@ -2324,7 +2409,8 @@ public class PatientServiceImpl implements PatientService {
     private record ImagingBundle(
         List<UltrasoundOrderResponseDTO> orders,
         List<UltrasoundReportResponseDTO> reports,
-        boolean sensitive
+        boolean sensitive,
+        Map<String, Long> reach
     ) {}
 
     private boolean shouldIncludeCategory(Set<String> filters, String category) {
@@ -2411,62 +2497,28 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private boolean isSensitiveEncounter(Encounter encounter) {
-        if (encounter == null) {
-            return false;
-        }
-        if (encounter.getDepartment() != null && encounter.getDepartment().getName() != null) {
-            String deptName = encounter.getDepartment().getName().toLowerCase(Locale.ROOT);
-            if (SENSITIVE_DEPARTMENTS.contains(deptName)) {
-                return true;
-            }
-        }
-        return containsSensitiveKeyword(encounter.getNotes());
+        return encounter != null && sensitivityClassifier.effectiveCategory(encounter) != null;
     }
 
+    /** A row with no hospital, or the acting hospital's own, is local (mirrors {@code CrossHospitalRows}). */
+    private static boolean isLocalRow(Hospital rowHospital, UUID actingHospitalId) {
+        return rowHospital == null || rowHospital.getId() == null || rowHospital.getId().equals(actingHospitalId);
+    }
+
+    /** A prescription carries no tag of its own; its category rides on the encounter that wrote it. */
     private boolean isSensitiveMedication(Prescription prescription) {
-        if (prescription == null) {
-            return false;
-        }
-        return containsSensitiveKeyword(prescription.getMedicationName())
-            || containsSensitiveKeyword(prescription.getMedicationDisplayName())
-            || containsSensitiveKeyword(prescription.getNotes())
-            || containsHighAlertKeyword(prescription.getMedicationName());
+        return prescription != null && prescription.getEncounter() != null
+            && sensitivityClassifier.effectiveCategory(prescription.getEncounter()) != null;
     }
 
+    /** Same as prescriptions: the category rides on the lab order's encounter. */
     private boolean isSensitiveLabResult(LabResult result) {
-        if (result == null) {
-            return false;
-        }
-        String clinicalContext = Optional.ofNullable(result.getLabOrder())
-            .map(LabOrder::getClinicalIndication)
-            .orElse(null);
-        return containsSensitiveKeyword(clinicalContext) || containsSensitiveKeyword(result.getNotes());
+        return result != null && result.getLabOrder() != null && result.getLabOrder().getEncounter() != null
+            && sensitivityClassifier.effectiveCategory(result.getLabOrder().getEncounter()) != null;
     }
 
     private boolean isSensitiveAllergy(PatientAllergy allergy) {
-        if (allergy == null) {
-            return false;
-        }
-        if (allergy.getSeverity() == AllergySeverity.LIFE_THREATENING) {
-            return true;
-        }
-        return containsSensitiveKeyword(allergy.getReaction()) || containsSensitiveKeyword(allergy.getReactionNotes());
-    }
-
-    private boolean containsHighAlertKeyword(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String normalized = text.toLowerCase(Locale.ROOT);
-        return HIGH_ALERT_MEDICATION_KEYWORDS.stream().anyMatch(normalized::contains);
-    }
-
-    private boolean containsSensitiveKeyword(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String normalized = text.toLowerCase(Locale.ROOT);
-        return SENSITIVE_KEYWORDS.stream().anyMatch(normalized::contains);
+        return allergy != null && allergy.getSeverity() == AllergySeverity.LIFE_THREATENING;
     }
 
     private String resolveStaffName(Encounter encounter) {

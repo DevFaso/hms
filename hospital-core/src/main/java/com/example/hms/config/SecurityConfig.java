@@ -2,6 +2,7 @@ package com.example.hms.config;
 
 import com.example.hms.security.JwtAuthenticationEntryPoint;
 import com.example.hms.security.JwtAuthenticationFilter;
+import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
@@ -23,8 +24,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,10 +39,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
@@ -57,7 +53,6 @@ import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_PHARMACIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
-import static com.example.hms.config.SecurityConstants.ROLE_ADMINISTRATIVE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_ANESTHESIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
@@ -87,6 +82,24 @@ public class SecurityConfig {
 
     private static final String API_PATIENT_VITALS = "/patients/*/vitals";
     private static final String API_PATIENT_VITALS_PATTERN = API_PATIENT_VITALS + "/**";
+    /**
+     * E9 #67 (D5) — the clinical sub-resources of a patient. Matched ahead of
+     * the /patients/** blanket so HOSPITAL_ADMIN keeps the demographics the
+     * blanket admits and none of these; the controller annotations stay the
+     * precise gate per surface.
+     */
+    static final String[] API_PATIENT_CHART_PATTERNS = {
+        "/patients/*/allergies", "/patients/*/allergies/**",
+        "/patients/*/diagnoses", "/patients/*/diagnoses/**",
+        "/patients/*/chart-updates", "/patients/*/chart-updates/**",
+        "/patients/*/storyboard", "/patients/*/chart-review",
+        "/patients/*/lab-results", "/patients/*/lab-results/**",
+        "/patients/*/medications", "/patients/*/medications/**",
+        "/patients/*/micro-cultures", "/patients/*/micro-cultures/**",
+        "/patients/*/fhir-record",
+        "/patients/*/growth-chart", "/patients/*/growth-chart/**",
+        "/patients/*/intake-output", "/patients/*/intake-output/**"
+    };
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -207,34 +220,16 @@ public class SecurityConfig {
     }
 
     /**
-     * Expand ROLE_SUPER_ADMIN with operational roles so existing checks remain simple.
-     * NOTE: Authorization/tenant isolation must still be enforced at service layer.
+     * E9 #67 (D6): the password-login path widens a super-admin and a
+     * doctor-like role through {@link RoleExpansion}, the same rule the JWT
+     * path applies per request. This used to carry a fourteen-role list of
+     * its own against the JWT path's seven; the login role picker showed the
+     * difference. Authorization and tenant isolation are still enforced at
+     * the service layer.
      */
     @Bean
     public GrantedAuthoritiesMapper authoritiesMapper() {
-        final Set<String> inherited = Set.of(
-            ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-            ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-            ROLE_STAFF, ROLE_PATIENT, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT
-        );
-        return (Collection<? extends GrantedAuthority> authorities) -> {
-            boolean isSuper = authorities.stream().anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
-            // Doctor equivalence (2026-08-23 role audit, C2): physicians and
-            // surgeons ARE doctors. Mirrors JwtTokenProvider's per-request
-            // expansion so both auth paths agree.
-            boolean isDoctorLike = authorities.stream().anyMatch(a ->
-                "ROLE_PHYSICIAN".equals(a.getAuthority()) || "ROLE_SURGEON".equals(a.getAuthority()));
-            if (!isSuper && !isDoctorLike) return authorities;
-            var extended = new HashSet<GrantedAuthority>(authorities);
-            if (isSuper) {
-                inherited.forEach(r -> extended.add(new SimpleGrantedAuthority(r)));
-            }
-            if (isDoctorLike) {
-                extended.add(new SimpleGrantedAuthority(ROLE_DOCTOR));
-            }
-            return extended;
-        };
+        return RoleExpansion.authoritiesMapper();
     }
 
     @Bean
@@ -410,6 +405,16 @@ public class SecurityConfig {
                 .requestMatchers("/patients/phone-verification", "/patients/phone-verification/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // -------------------- Patient chart (E9 #67, D5) --------------------
+                // First match wins: the chart sub-resources sit ahead of the
+                // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
+                // for demographics. Same list as the blanket minus those two.
+                .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
                 // backs pharmacist-reachable pages such as /medication-history.
@@ -433,14 +438,15 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
-                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
 
                 // Consulting clinicians READ vitals (pre-operative assessment,
                 // exercise tolerance before therapy) but never write them —
                 // the POST matcher above stays narrow. Role audit D7.
+                // E9 #69: the pharmacist reads vitals to verify a prescription.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
-                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_RADIOLOGIST,
-                        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_RADIOLOGIST,
+                        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PUT, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -506,15 +512,15 @@ public class SecurityConfig {
 
                 // -------------------- Staff --------------------
                 // Narrow scheduling matcher FIRST (first-match-wins): the
-                // StaffSchedulingController annotations admit STAFF, PHARMACIST,
-                // RADIOLOGIST and ADMINISTRATIVE_STAFF on their own-shift/leave
+                // StaffSchedulingController annotations admit STAFF, PHARMACIST
+                // and RADIOLOGIST on their own-shift/leave
                 // endpoints, but the broad /staff/** matchers 403'd them before
                 // any annotation ran (2026-08-23 role audit, B1). The union
                 // below mirrors the controller; each endpoint's @PreAuthorize
                 // stays the precise gate.
                 .requestMatchers("/staff/scheduling/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_ADMINISTRATIVE_STAFF,
+                        ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PHARMACIST, ROLE_RADIOLOGIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
                 .requestMatchers(HttpMethod.GET, API_STAFF, API_STAFF_PATTERN)
@@ -634,7 +640,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_STAFF,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 // Workflow sub-resources FIRST (first-match-wins): the state
                 // machine requires lab staff for every step past PENDING
@@ -651,19 +657,20 @@ public class SecurityConfig {
                         API_LAB_ORDERS + "/*/specimens")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
-                // Only providers (doctors, nurses, admins) can place orders.
+                // Only providers (doctors, nurses, midwives) can place orders (E9 #67: no admins).
                 // Exact path only — a /** pattern here is what swallowed the
                 // workflow sub-resources above; future sub-resources ride
                 // anyRequest().authenticated() + their own @PreAuthorize.
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
-                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // E9 #69: PHARMACIST reads results (renal function before verifying, V139).
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
 
                 // Technicians can enter preliminary results; scientists/managers verify/release
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)
@@ -678,21 +685,21 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS + "/*/acknowledge")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR,
                         ROLE_QUALITY_MANAGER, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 // ---- Specimen endpoints (POST /lab-orders/{id}/specimens has its own matcher above) ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                        ROLE_SUPER_ADMIN)
 
                 // ---- QC Events ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_QC_EVENTS, API_LAB_QC_EVENTS_PATTERN)

@@ -32,6 +32,7 @@ public class PatientChartUpdateMapper {
 
         UUID patientId = update.getPatient() != null ? update.getPatient().getId() : null;
         UUID hospitalId = update.getHospital() != null ? update.getHospital().getId() : null;
+        String hospitalName = update.getHospital() != null ? update.getHospital().getName() : null;
         UUID staffId = update.getRecordedBy() != null ? update.getRecordedBy().getId() : null;
         String recordedByName = update.getRecordedBy() != null ? update.getRecordedBy().getFullName() : null;
         String recordedByRole = update.getAssignment() != null && update.getAssignment().getRole() != null
@@ -42,6 +43,7 @@ public class PatientChartUpdateMapper {
             .id(update.getId())
             .patientId(patientId)
             .hospitalId(hospitalId)
+            .hospitalName(hospitalName)
             .versionNumber(update.getVersionNumber())
             .updateReason(update.getUpdateReason())
             .summary(update.getSummary())

@@ -43,6 +43,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class MaternalHistoryServiceImplTest {
@@ -64,6 +71,11 @@ class MaternalHistoryServiceImplTest {
 
     @Mock
     private MaternalHistoryMapper maternalHistoryMapper;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private MaternalHistoryServiceImpl maternalHistoryService;
@@ -528,5 +540,61 @@ class MaternalHistoryServiceImplTest {
         assertThatThrownBy(() -> maternalHistoryService.calculateRiskScore(historyId, username))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Maternal history not found");
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getCurrentMaternalHistoryFollowsThePatientWhenActingInAHospital() {
+        // E9 #59d — the current history recorded at Hôpital B is the one read at
+        // Hôpital A when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        MaternalHistory foreign = MaternalHistory.builder().patient(patient).hospital(other).versionNumber(3).build();
+        foreign.setId(UUID.randomUUID());
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(recordAccessPolicy.readableHospitalIds(userId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+                patientId, Set.of(hospitalId, otherHospitalId))).thenReturn(Optional.of(foreign));
+        when(maternalHistoryMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
+
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username)).isEqualTo(responseDTO);
+        verify(maternalHistoryRepository, never()).findCurrentByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getAllVersionsFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — every version across the readable set; the foreign one is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        MaternalHistory foreign = MaternalHistory.builder().patient(patient).hospital(other).versionNumber(2).build();
+        foreign.setId(UUID.randomUUID());
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(recordAccessPolicy.readableHospitalIds(userId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(maternalHistoryRepository.findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+                patientId, Set.of(hospitalId, otherHospitalId))).thenReturn(List.of(foreign, maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(any(MaternalHistory.class))).thenReturn(responseDTO);
+
+        assertThat(maternalHistoryService.getAllVersionsByPatientId(patientId, username)).hasSize(2);
+        verify(maternalHistoryRepository, never()).findAllVersionsByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

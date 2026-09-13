@@ -383,7 +383,6 @@ export class PrescriptionsComponent implements OnInit {
   private static readonly VERIFIER_ROLES = [
     'ROLE_PHARMACIST',
     'ROLE_PHARMACY_VERIFIER',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ];
 

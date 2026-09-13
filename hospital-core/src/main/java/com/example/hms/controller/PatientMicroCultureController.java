@@ -36,7 +36,7 @@ import java.util.UUID;
 public class PatientMicroCultureController {
 
     private static final String READ_ROLES =
-        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN',"
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN',"
             + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR',"
             + "'ROLE_QUALITY_MANAGER','ROLE_PHARMACIST')";
 

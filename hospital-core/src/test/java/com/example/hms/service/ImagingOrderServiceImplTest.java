@@ -40,6 +40,8 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class ImagingOrderServiceImplTest {
@@ -59,6 +61,10 @@ class ImagingOrderServiceImplTest {
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private UUID patientId;
     private UUID hospitalId;
@@ -520,20 +526,38 @@ class ImagingOrderServiceImplTest {
     }
 
     @Test
-    void getOrdersByPatient_scopedToHospital() {
+    void getOrdersByPatient_followsThePatientAndAccountsTheReach() {
+        // E9 #59b — read across the readable set at the database (no more
+        // load-everything-then-filter); the foreign row is accounted.
         UUID otherHospId = UUID.randomUUID();
         Hospital otherHosp = new Hospital(); otherHosp.setId(otherHospId);
 
         ImagingOrder ownOrder = new ImagingOrder(); ownOrder.setId(UUID.randomUUID()); ownOrder.setHospital(hospital);
         ImagingOrder otherOrder = new ImagingOrder(); otherOrder.setId(UUID.randomUUID()); otherOrder.setHospital(otherHosp);
-        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(ownOrder.getId()).build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenReturn(List.of(ownOrder, otherOrder));
-        when(imagingOrderMapper.toResponseDTO(ownOrder)).thenReturn(dto);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId, otherHospId));
+        when(imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, Set.of(hospitalId, otherHospId)))
+            .thenReturn(List.of(ownOrder, otherOrder));
+        when(imagingOrderMapper.toResponseDTO(any(ImagingOrder.class)))
+            .thenAnswer(inv -> ImagingOrderResponseDTO.builder().id(((ImagingOrder) inv.getArgument(0)).getId()).build());
 
         List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByPatient(patientId, null);
-        assertThat(result).hasSize(1);
+        assertThat(result).extracting(ImagingOrderResponseDTO::getId).containsExactly(ownOrder.getId(), otherOrder.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getOrdersByPatient_scopedWithStatusReadsTheReadableSet() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(
+                patientId, Set.of(hospitalId), ImagingOrderStatus.ORDERED)).thenReturn(List.of());
+
+        assertThat(imagingOrderService.getOrdersByPatient(patientId, ImagingOrderStatus.ORDERED)).isEmpty();
+        verify(imagingOrderRepository).findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(
+            patientId, Set.of(hospitalId), ImagingOrderStatus.ORDERED);
     }
 
     @Test

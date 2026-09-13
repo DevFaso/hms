@@ -91,7 +91,7 @@ class PatientVitalSignControllerTest {
     @Test
     void listVitals_parsesDateFilters() {
         UUID patientId = UUID.randomUUID();
-        Authentication auth = buildAuth("ROLE_HOSPITAL_ADMIN");
+        Authentication auth = buildAuth("ROLE_DOCTOR");
 
         LocalDateTime from = LocalDateTime.now().minusDays(1).withNano(0);
         LocalDateTime to = LocalDateTime.now().withNano(0);
@@ -113,7 +113,7 @@ class PatientVitalSignControllerTest {
     @Test
     void listVitals_throwsForInvalidDate() {
         UUID patientId = UUID.randomUUID();
-        Authentication auth = buildAuth("ROLE_HOSPITAL_ADMIN");
+        Authentication auth = buildAuth("ROLE_DOCTOR");
 
         when(authUtils.resolveHospitalScope(auth, null, null, false)).thenReturn(null);
         when(authUtils.parseDateTime("not-a-date")).thenThrow(new BusinessException("Invalid date format: not-a-date"));

@@ -63,6 +63,26 @@ public class HospitalContext {
      */
     private final boolean headerOverridden;
 
+    /**
+     * The hospital this request is pinned to, or {@code null} when it is not
+     * pinned. A super-admin is global unless an explicit {@code X-Hospital-Id}
+     * scope was applied ({@link #headerOverridden}); everyone else is pinned to
+     * their {@link #activeHospitalId}, which {@code JwtTokenProvider} derives
+     * from the LIVE assignment table on every request.
+     *
+     * <p>This is the one rule every scope resolver reads (E9 #55) —
+     * {@code ControllerAuthUtils}, {@code RoleValidator}, {@code MeController},
+     * the registration controller and the user service used to each carry
+     * their own copy, several of them reading a claim that the
+     * username/password login never produced.
+     */
+    public UUID pinnedHospitalId() {
+        if (superAdmin && !headerOverridden) {
+            return null;
+        }
+        return activeHospitalId;
+    }
+
     public static HospitalContext empty() {
         return HospitalContext.builder()
             .principalUserId(null)

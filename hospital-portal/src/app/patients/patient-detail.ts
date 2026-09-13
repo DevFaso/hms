@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -7,19 +7,13 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { VitalSignService, VitalSignResponse } from '../services/vital-sign.service';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
-import {
-  RecordSharingService,
-  RecordShareResult,
-  ShareScope,
-  ConsentGrantRequest,
-} from '../services/record-sharing.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
+  APPOINTMENT_VIEW_ROLES,
   CHART_REVIEW_VIEW_ROLES,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
@@ -56,8 +50,7 @@ type TabKey =
   | 'encounters'
   | 'appointments'
   | 'directives'
-  | 'documents'
-  | 'sharing';
+  | 'documents';
 
 @Component({
   selector: 'app-patient-detail',
@@ -93,8 +86,6 @@ export class PatientDetailComponent implements OnInit {
   private readonly vitalService = inject(VitalSignService);
   private readonly encounterService = inject(EncounterService);
   private readonly appointmentService = inject(AppointmentService);
-  private readonly sharingService = inject(RecordSharingService);
-  private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   protected readonly permissions = inject(PermissionService);
@@ -113,22 +104,8 @@ export class PatientDetailComponent implements OnInit {
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
 
-  /* Sharing tab */
-  hospitals = signal<HospitalResponse[]>([]);
-  hospitalsLoading = signal(false);
-  selectedHospitalId = signal('');
-  sharingResult = signal<RecordShareResult | null>(null);
-  sharingLoading = signal(false);
-  sharingError = signal('');
-  /** Grant consent modal */
-  showGrantModal = signal(false);
-  grantFromHospitalId = signal('');
-  grantToHospitalId = signal('');
-  grantPurpose = signal('');
-  grantExpiry = signal('');
-  grantLoading = signal(false);
-
-  private patientId = '';
+  /** The route's patient id; read by the template for the restricted-chart prompt (E8 #54). */
+  patientId = '';
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -145,6 +122,27 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.activeHospitalId ?? null;
   }
 
+  /** E9 #64 — the break-glass banner, so a restricted line can open its declaration. */
+  private readonly breakGlass = viewChild(BreakGlassBannerComponent);
+
+  /**
+   * E9 #64 — bumped when a break-the-glass session is declared or ends. The
+   * storyboard and the chart take it as an input and re-read on it: what
+   * they withhold depends on the session.
+   */
+  readonly accessEpoch = signal(0);
+
+  /** "Ouvrir avec motif" on any restricted line: one declaration, one reason. */
+  openRestrictedRows(): void {
+    this.breakGlass()?.openDeclare();
+  }
+
+  onBreakGlassSessionChanged(): void {
+    this.accessEpoch.update((n) => n + 1);
+    // E8 #54: a session declared from the restricted prompt opens the chart.
+    if (this.restricted()) this.loadPatient(this.patientId);
+  }
+
   /**
    * The hospital this page's requests are scoped to: the hospital the user
    * actually picked, not `activeHospitalId`, which is the JWT primary and stays
@@ -159,20 +157,70 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.effectiveHospitalIdForRequest() ?? null;
   }
 
+  /** E8 #54 — the chart is restricted and the caller holds no live session: the page shows the declaration prompt. */
+  readonly restricted = signal(false);
+
   loadPatient(id: string): void {
     this.loading.set(true);
+    this.restricted.set(false);
     const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
         this.patient.set(p);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error('Patient not found');
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
+        if (err.status === 403 && err.error?.code === 'CHART_RESTRICTED') {
+          // Loud by design: a restricted chart is not a missing one.
+          this.restricted.set(true);
+          return;
+        }
+        this.toast.error('Patient not found');
         this.router.navigate(['/patients']);
       },
     });
+  }
+
+  /** Restricting a chart is the hospital administrator's act (E8 #54). */
+  canManageRestriction(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+  }
+
+  readonly restrictionReason = signal('');
+  readonly restrictionSubmitting = signal(false);
+
+  setChartRestriction(restricted: boolean): void {
+    const p = this.patient();
+    if (!p || this.restrictionSubmitting()) return;
+    const reason = this.restrictionReason().trim();
+    if (restricted && reason.length < 5) {
+      this.toast.error(this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED'));
+      return;
+    }
+    this.restrictionSubmitting.set(true);
+    this.patientService
+      .setChartRestriction(p.id, restricted, restricted ? reason : undefined)
+      .subscribe({
+        next: (updated) => {
+          this.patient.set(updated);
+          this.restrictionReason.set('');
+          this.restrictionSubmitting.set(false);
+          this.toast.success(
+            this.translate.instant(
+              restricted
+                ? 'PATIENTS.CHART_RESTRICTION_APPLIED'
+                : 'PATIENTS.CHART_RESTRICTION_LIFTED',
+            ),
+          );
+        },
+        error: (err: HttpErrorResponse) => {
+          this.restrictionSubmitting.set(false);
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PATIENTS.CHART_RESTRICTION_FAILED'),
+          );
+        },
+      });
   }
 
   /** Mirrors PatientVitalSignController's READ list.
@@ -189,6 +237,10 @@ export class PatientDetailComponent implements OnInit {
    *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
     return this.roleContext.hasAnyActiveRole(ENCOUNTER_VIEW_ROLES);
+  }
+  /** Mirrors AppointmentController's per-patient READ gate (E9 #69). */
+  canViewAppointments(): boolean {
+    return this.roleContext.hasAnyActiveRole(APPOINTMENT_VIEW_ROLES);
   }
 
   /** Chart Review is its own backend (ChartReviewController) with its own,
@@ -207,7 +259,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
       'ROLE_DOCTOR',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -218,7 +269,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
       'ROLE_DOCTOR',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -248,7 +298,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
   }
@@ -356,7 +405,6 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
       'ROLE_LAB_SCIENTIST',
       'ROLE_LAB_TECHNICIAN',
@@ -436,30 +484,12 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.hasAnyActiveRole(DIRECTIVE_ROLES);
   }
 
-  /** Whether the current user can view the Record Sharing tab */
-  canViewSharing(): boolean {
-    return this.permissions.hasAnyPermission('View Record Sharing', 'Manage Patient Consents', '*');
-  }
-
-  /** Whether the current user can grant or revoke patient consents */
-  canManageConsents(): boolean {
-    return this.permissions.hasPermission('Manage Patient Consents');
-  }
-
   setTab(tab: TabKey): void {
-    // Prevent navigating to the sharing tab when the user lacks permission.
-    // Falls back to the overview tab so component state is never left on an
-    // unauthorised panel, even when setTab() is called programmatically.
-    if (tab === 'sharing' && !this.canViewSharing()) {
-      this.activeTab.set('overview');
-      return;
-    }
     this.activeTab.set(tab);
     if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
-    if (tab === 'sharing' && this.hospitals().length === 0) this.loadHospitals();
   }
 
   private loadVitals(): void {
@@ -504,133 +534,7 @@ export class PatientDetailComponent implements OnInit {
     });
   }
 
-  private loadHospitals(): void {
-    this.hospitalsLoading.set(true);
-    // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
-    if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe({
-        next: (h) => {
-          this.hospitals.set(h);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => {
-          this.toast.error('Failed to load hospitals');
-          this.hospitalsLoading.set(false);
-        },
-      });
-    } else {
-      this.hospitalService.getMyHospitalAsResponse().subscribe({
-        next: (h) => {
-          this.hospitals.set([h]);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => {
-          this.toast.error('Failed to load hospital');
-          this.hospitalsLoading.set(false);
-        },
-      });
-    }
-  }
-
-  // ── Sharing actions ──────────────────────────────────────────────────────
-
-  requestRecords(): void {
-    const hospitalId = this.selectedHospitalId();
-    if (!hospitalId) {
-      this.toast.error('Please select a hospital first.');
-      return;
-    }
-    this.sharingLoading.set(true);
-    this.sharingError.set('');
-    this.sharingResult.set(null);
-    this.sharingService.resolveAndShare(this.patientId, hospitalId).subscribe({
-      next: (result) => {
-        this.sharingResult.set(result);
-        this.sharingLoading.set(false);
-      },
-      error: (err) => {
-        const msg = err?.error?.message ?? 'Failed to resolve patient records.';
-        this.sharingError.set(msg);
-        this.sharingLoading.set(false);
-      },
-    });
-  }
-
-  openGrantModal(): void {
-    this.grantPurpose.set('');
-    this.grantExpiry.set('');
-    this.showGrantModal.set(true);
-  }
-
-  closeGrantModal(): void {
-    this.showGrantModal.set(false);
-  }
-
-  submitGrant(): void {
-    const from = this.grantFromHospitalId();
-    const to = this.grantToHospitalId();
-    if (!from || !to) {
-      this.toast.error('Please select both source and target hospitals.');
-      return;
-    }
-    this.grantLoading.set(true);
-    const req: ConsentGrantRequest = {
-      patientId: this.patientId,
-      fromHospitalId: from,
-      toHospitalId: to,
-      purpose: this.grantPurpose() || undefined,
-      consentExpiration: this.grantExpiry() || undefined,
-    };
-    this.sharingService.grantConsent(req).subscribe({
-      next: () => {
-        this.toast.success('Consent granted successfully.');
-        this.grantLoading.set(false);
-        this.closeGrantModal();
-      },
-      error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to grant consent.');
-        this.grantLoading.set(false);
-      },
-    });
-  }
-
-  exportRecord(format: 'pdf' | 'csv'): void {
-    const result = this.sharingResult();
-    if (!result) return;
-    this.sharingService
-      .exportRecord(
-        this.patientId,
-        result.resolvedFromHospitalId,
-        result.requestingHospitalId,
-        format,
-      )
-      .subscribe({
-        next: (blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `patient_record_${this.patientId}.${format}`;
-          a.click();
-          URL.revokeObjectURL(url);
-        },
-        error: () => this.toast.error(`Failed to export record as ${format.toUpperCase()}.`),
-      });
-  }
-
   // ── Helpers ──────────────────────────────────────────────────────────────
-
-  scopeBadgeClass(scope: ShareScope): string {
-    switch (scope) {
-      case 'SAME_HOSPITAL':
-        return 'badge-scope same-hospital';
-      case 'INTRA_ORG':
-        return 'badge-scope intra-org';
-      case 'CROSS_ORG':
-        return 'badge-scope cross-org';
-      default:
-        return 'badge-scope';
-    }
-  }
 
   getInitials(p: PatientResponse): string {
     return `${p.firstName?.charAt(0) ?? ''}${p.lastName?.charAt(0) ?? ''}`.toUpperCase();

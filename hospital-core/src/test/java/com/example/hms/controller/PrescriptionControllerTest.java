@@ -41,6 +41,6 @@ class PrescriptionControllerTest {
     void list_preAuthorize_retainsTenantRoles() throws Exception {
         List<String> roles = extractRolesFromMethod("list",
                 UUID.class, UUID.class, UUID.class, Pageable.class, Locale.class);
-        assertThat(roles).contains("DOCTOR", "NURSE", "MIDWIFE", "PHARMACIST", "HOSPITAL_ADMIN");
+        assertThat(roles).contains("DOCTOR", "NURSE", "MIDWIFE", "PHARMACIST").doesNotContain("HOSPITAL_ADMIN");
     }
 }

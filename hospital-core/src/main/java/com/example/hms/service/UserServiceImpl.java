@@ -38,8 +38,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import com.example.hms.security.JwtTokenHolder;
-import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -98,7 +97,6 @@ public class UserServiceImpl implements UserService {
     private final AuditEventLogService auditEventLogService;
     private final PasswordHistoryService passwordHistoryService;
     private final StaffRepository staffRepository;
-    private final JwtTokenProvider jwtTokenProvider;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
@@ -737,8 +735,8 @@ public class UserServiceImpl implements UserService {
     }
 
     private UUID resolveHospitalForPatient(AdminSignupRequest request) {
-        // Try JWT first (receptionist registering at their facility)
-        UUID hospitalId = extractHospitalIdFromJwt();
+        // The request context first (receptionist registering at their facility)
+        UUID hospitalId = activeHospitalFromContext();
         if (hospitalId == null) {
             hospitalId = request.getHospitalId();
         }
@@ -919,42 +917,15 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new IllegalStateException("Assignment was not persisted as expected"));
     }
 
-    private UUID extractHospitalIdFromJwt() {
-        try {
-            String jwt = JwtTokenHolder.getToken();
-            if (jwt == null || jwt.isBlank())
-                return null;
-
-            io.jsonwebtoken.Claims claims;
-            java.security.Key vk = jwtTokenProvider.getVerificationKey();
-            claims = switch (vk) {
-                case javax.crypto.SecretKey sk -> io.jsonwebtoken.Jwts.parser()
-                        .verifyWith(sk)
-                        .build()
-                        .parseSignedClaims(jwt)
-                        .getPayload();
-                case java.security.PublicKey pk -> io.jsonwebtoken.Jwts.parser()
-                        .verifyWith(pk)
-                        .build()
-                        .parseSignedClaims(jwt)
-                        .getPayload();
-                default -> null;
-            };
-            if (claims == null) {
-                return null;
-            }
-
-            Object hId = claims.get("primaryHospitalId");
-            if (hId == null) {
-                hId = claims.get("hospitalId");
-            }
-            if (hId instanceof String s && !s.isBlank()) {
-                return UUID.fromString(s);
-            }
-        } catch (RuntimeException e) {
-            log.warn("[JWT] Failed to extract hospitalId from JWT claims", e);
-        }
-        return null;
+    /**
+     * The hospital the request is pinned to (live permitted set +
+     * {@code X-Hospital-Id}); {@code null} for a super-admin in global view.
+     * Replaces a helper that re-parsed the raw bearer token for its
+     * {@code primaryHospitalId} claim — a value frozen at login, wrong after
+     * any assignment change (E9 #55).
+     */
+    private static UUID activeHospitalFromContext() {
+        return HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
     }
 
 

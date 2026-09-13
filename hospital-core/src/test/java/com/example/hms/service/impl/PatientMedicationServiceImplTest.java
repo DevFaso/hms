@@ -29,6 +29,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class PatientMedicationServiceImplTest {
@@ -37,6 +43,8 @@ class PatientMedicationServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RefillRequestRepository refillRequestRepository;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private PatientMedicationServiceImpl service;
@@ -51,6 +59,9 @@ class PatientMedicationServiceImplTest {
         hospitalId = UUID.randomUUID();
         patient = new Patient(); patient.setId(patientId);
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
+        // E9 #59c — the read spans the readable set; by default just the acting hospital.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId));
     }
 
     @Test
@@ -85,7 +96,7 @@ class PatientMedicationServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p1, p2));
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
@@ -98,7 +109,7 @@ class PatientMedicationServiceImplTest {
     void getMedications_defaultLimit_appliesWhenZero() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of());
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 0);
@@ -116,7 +127,7 @@ class PatientMedicationServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
@@ -134,7 +145,7 @@ class PatientMedicationServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
@@ -152,7 +163,7 @@ class PatientMedicationServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
@@ -171,7 +182,7 @@ class PatientMedicationServiceImplTest {
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
 
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
@@ -199,7 +210,7 @@ class PatientMedicationServiceImplTest {
     private void stubMedicationsFor(Prescription p) {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
                 .thenReturn(List.of(p));
     }
 
@@ -284,5 +295,30 @@ class PatientMedicationServiceImplTest {
 
         assertThat(dto.getRefillRequestStatus()).isNull();
         assertThat(dto.isRefillRequestOpen()).isFalse();
+    }
+
+    @Test
+    void getMedications_followsThePatientWithProvenanceAndAccountsTheReach() {
+        // E9 #59c — the metformin prescribed at Hôpital B is on the list at
+        // Hôpital A with its hospital on the row; the disclosure is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("Hôpital B").build(); other.setId(otherHospitalId);
+        Prescription local = new Prescription(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
+        local.setCreatedAt(LocalDateTime.now()); local.setMedicationName("Amlodipine");
+        Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
+        foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(local, foreign));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getHospitalId).containsExactly(hospitalId, otherHospitalId);
+        assertThat(result.get(1).getHospitalName()).isEqualTo("Hôpital B");
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

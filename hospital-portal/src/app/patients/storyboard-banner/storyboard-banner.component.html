@@ -115,6 +115,9 @@
             @for (a of s.allergies; track a.id) {
               <li class="storyboard__chip" [ngClass]="severityClass(a.severity)">
                 <span class="storyboard__chip-label">{{ a.allergenDisplay }}</span>
+                @if (a.hospitalName && a.hospitalId !== s.hospitalId) {
+                  <span class="storyboard__chip-detail">· {{ a.hospitalName }}</span>
+                }
                 @if (a.reaction) {
                   <span class="storyboard__chip-detail" aria-hidden="false"
                     >— {{ a.reaction }}</span
@@ -151,6 +154,9 @@
             @for (p of s.problems; track p.id) {
               <li class="storyboard__chip" [class.storyboard__chip--info]="p.chronic">
                 <span class="storyboard__chip-label">{{ p.problemDisplay }}</span>
+                @if (p.hospitalName && p.hospitalId !== s.hospitalId) {
+                  <span class="storyboard__chip-detail">· {{ p.hospitalName }}</span>
+                }
                 @if (p.problemCode) {
                   <span class="storyboard__chip-detail">{{ p.problemCode }}</span>
                 }
@@ -165,6 +171,11 @@
         } @else {
           <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_PROBLEMS' | translate }}</p>
         }
+        <!-- E9 #64 — what D3 withheld, never a silent gap. -->
+        <app-restricted-rows
+          [rows]="s.restrictedRows ?? []"
+          (openWithReason)="openRestricted.emit()"
+        />
       </div>
 
       <!-- Active Encounter -->

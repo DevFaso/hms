@@ -263,7 +263,7 @@ class GeneralReferralControllerTest {
     }
 
     @Test
-    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
     void getReferralsByHospital_supportsStatusFilter() throws Exception {
         UUID hospitalId = UUID.randomUUID();
         GeneralReferralResponseDTO response = buildResponse(UUID.randomUUID());

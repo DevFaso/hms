@@ -61,7 +61,7 @@ public class BirthPlanController {
      * @return Created birth plan with HTTP 201 status
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
     @Operation(summary = "Create a new birth plan", 
                description = "Allows patients to create their own birth plans or providers to create on behalf of patients.")
     public ResponseEntity<BirthPlanResponseDTO> createBirthPlan(
@@ -83,7 +83,7 @@ public class BirthPlanController {
      * @return Updated birth plan with HTTP 200 status
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
     @Operation(summary = "Update a birth plan", 
                description = "Updates an existing birth plan. If the plan was previously reviewed, the review status will be reset.")
     public ResponseEntity<BirthPlanResponseDTO> updateBirthPlan(
@@ -104,7 +104,7 @@ public class BirthPlanController {
      * @return Birth plan details with HTTP 200 status
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
     @Operation(summary = "Get birth plan by ID", 
                description = "Retrieves a specific birth plan. Access is controlled based on user role and ownership.")
     public ResponseEntity<BirthPlanResponseDTO> getBirthPlanById(
@@ -124,7 +124,7 @@ public class BirthPlanController {
      * @return List of birth plans for the patient with HTTP 200 status
      */
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
     @Operation(summary = "Get birth plans by patient ID", 
                description = "Retrieves all birth plans for a specific patient. Patients can only view their own plans.")
     public ResponseEntity<List<BirthPlanResponseDTO>> getBirthPlansByPatientId(
@@ -144,7 +144,7 @@ public class BirthPlanController {
      * @return Most recent birth plan or HTTP 204 if none exists
      */
     @GetMapping("/patient/{patientId}/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
     @Operation(summary = "Get active birth plan for patient", 
                description = "Retrieves the most recent birth plan for a specific patient. Returns 204 No Content if no plan exists.")
     public ResponseEntity<BirthPlanResponseDTO> getActiveBirthPlan(
@@ -177,7 +177,7 @@ public class BirthPlanController {
      * @return Paginated search results with HTTP 200 status
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE')")
     @Operation(summary = "Search birth plans", 
                description = "Provider-only operation to search birth plans with various filters and pagination.")
     public ResponseEntity<Page<BirthPlanResponseDTO>> searchBirthPlans(
@@ -257,7 +257,7 @@ public class BirthPlanController {
      * @return HTTP 204 No Content on successful deletion
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'PATIENT')")
     @Operation(summary = "Delete a birth plan", 
                description = "Deletes a birth plan. Access is controlled based on user role and ownership.")
     public ResponseEntity<Void> deleteBirthPlan(
@@ -279,7 +279,7 @@ public class BirthPlanController {
      * @return Paginated list of pending birth plans with HTTP 200 status
      */
     @GetMapping("/pending-review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE')")
     @Operation(summary = "Get birth plans pending review", 
                description = "Provider-only operation to retrieve birth plans that require provider review for a specific hospital.")
     public ResponseEntity<Page<BirthPlanResponseDTO>> getPendingReviews(

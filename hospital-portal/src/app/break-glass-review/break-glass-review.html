@@ -1,0 +1,171 @@
+<div class="page-container">
+  <header class="page-header">
+    <div>
+      <h1>{{ 'BREAK_GLASS_REVIEW.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'BREAK_GLASS_REVIEW.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button
+        type="button"
+        class="filter-btn"
+        data-testid="filter-queue"
+        [class.active]="queueOnly()"
+        (click)="setQueueOnly(true)"
+      >
+        {{ 'BREAK_GLASS_REVIEW.FILTER_QUEUE' | translate }}
+      </button>
+      <button
+        type="button"
+        class="filter-btn"
+        data-testid="filter-all"
+        [class.active]="!queueOnly()"
+        (click)="setQueueOnly(false)"
+      >
+        {{ 'BREAK_GLASS_REVIEW.FILTER_ALL' | translate }}
+      </button>
+      <button type="button" class="btn-secondary" (click)="reload()" [disabled]="!scopeReady()">
+        {{ 'COMMON.REFRESH' | translate }}
+      </button>
+    </div>
+  </header>
+
+  <app-hospital-scope-hint />
+
+  @if (error()) {
+    <div class="error-state" role="alert">{{ error() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (scopeReady() && sessions().length === 0) {
+    <div class="empty-state" data-testid="empty">
+      {{
+        (queueOnly() ? 'BREAK_GLASS_REVIEW.EMPTY_QUEUE' : 'BREAK_GLASS_REVIEW.EMPTY_ALL')
+          | translate
+      }}
+    </div>
+  } @else if (scopeReady()) {
+    <div class="table-wrap">
+      <table class="review-table">
+        <thead>
+          <tr>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_STARTED' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_USER' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_PATIENT' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_REASON' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_STATE' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_READS' | translate }}</th>
+            <th>{{ 'BREAK_GLASS_REVIEW.COL_REVIEW' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (s of sessions(); track s.id) {
+            <tr [attr.data-testid]="'session-' + s.id" [class.unreviewed]="!s.reviewed">
+              <td>
+                {{ s.startedAt | date: 'short' }}
+                <div class="muted">
+                  {{ 'BREAK_GLASS_REVIEW.EXPIRES' | translate }} {{ s.expiresAt | date: 'short' }}
+                </div>
+              </td>
+              <td>{{ s.userName }}</td>
+              <td>
+                <a [routerLink]="['/patients', s.patientId]">{{ s.patientId | slice: 0 : 8 }}…</a>
+              </td>
+              <td class="reason">{{ s.reason }}</td>
+              <td>
+                @if (s.live) {
+                  <span class="chip live">{{ 'BREAK_GLASS_REVIEW.LIVE' | translate }}</span>
+                } @else if (s.revokedAt) {
+                  <span class="chip revoked">{{ 'BREAK_GLASS_REVIEW.REVOKED' | translate }}</span>
+                } @else {
+                  <span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
+                }
+              </td>
+              <td class="num">{{ s.auditCount }}</td>
+              <td>
+                @if (reviewing() === s.id) {
+                  <div class="review-form">
+                    <label>
+                      {{ 'BREAK_GLASS_REVIEW.OUTCOME' | translate }}
+                      <select [ngModel]="outcome()" (ngModelChange)="outcome.set($event)">
+                        @for (o of outcomes; track o) {
+                          <option [value]="o">
+                            {{ 'BREAK_GLASS_REVIEW.OUTCOME_' + o | translate }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+                    <label>
+                      {{ 'BREAK_GLASS_REVIEW.NOTE' | translate }}
+                      <textarea
+                        rows="2"
+                        maxlength="1024"
+                        [ngModel]="note()"
+                        (ngModelChange)="note.set($event)"
+                      ></textarea>
+                    </label>
+                    <div class="review-actions">
+                      <button
+                        type="button"
+                        class="btn-primary"
+                        data-testid="submit-review"
+                        (click)="submitReview()"
+                        [disabled]="submitting()"
+                      >
+                        {{ 'BREAK_GLASS_REVIEW.SIGN_OFF' | translate }}
+                      </button>
+                      <button type="button" class="btn-secondary" (click)="cancelReview()">
+                        {{ 'COMMON.CANCEL' | translate }}
+                      </button>
+                    </div>
+                  </div>
+                } @else if (s.reviewed) {
+                  <span class="chip reviewed">{{
+                    'BREAK_GLASS_REVIEW.OUTCOME_' + s.reviewOutcome | translate
+                  }}</span>
+                  <div class="muted">
+                    {{ s.reviewedByUserName }} · {{ s.reviewedAt | date: 'short' }}
+                  </div>
+                  @if (s.reviewNote) {
+                    <div class="muted note">{{ s.reviewNote }}</div>
+                  }
+                  <button type="button" class="link-btn" (click)="openReview(s)">
+                    {{ 'BREAK_GLASS_REVIEW.RE_REVIEW' | translate }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    [attr.data-testid]="'review-' + s.id"
+                    (click)="openReview(s)"
+                  >
+                    {{ 'BREAK_GLASS_REVIEW.REVIEW' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <nav class="pagination" aria-label="pagination">
+        <button type="button" (click)="goToPage(page() - 1)" [disabled]="page() === 0">
+          {{ 'COMMON.PREVIOUS' | translate }}
+        </button>
+        <span>{{ page() + 1 }} / {{ totalPages() }}</span>
+        <button
+          type="button"
+          (click)="goToPage(page() + 1)"
+          [disabled]="page() + 1 >= totalPages()"
+        >
+          {{ 'COMMON.NEXT' | translate }}
+        </button>
+      </nav>
+    }
+  }
+</div>

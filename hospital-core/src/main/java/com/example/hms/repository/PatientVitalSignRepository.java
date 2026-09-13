@@ -24,6 +24,10 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
 
     List<PatientVitalSign> findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId, Pageable pageable);
 
+    /** E9 #60 — vitals across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<PatientVitalSign> findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+
     /**
      * Page-returning variant used by the FHIR {@code $everything}
      * operation so {@code Page.hasNext()} can drive the
@@ -33,6 +37,10 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
      */
     Page<PatientVitalSign> findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /** E9 #60b — the paged readable-set sibling, for FHIR {@code $everything}. */
+    Page<PatientVitalSign> findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
 
         @Query("""
                 SELECT v FROM PatientVitalSign v

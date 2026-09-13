@@ -19,6 +19,10 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
     List<LaborEpisode> findByPatient_IdAndHospital_IdOrderByAdmittedAtDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<LaborEpisode> findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+
     /** Tenant guard — single-row lookups go through id + hospital. */
     Optional<LaborEpisode> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 }

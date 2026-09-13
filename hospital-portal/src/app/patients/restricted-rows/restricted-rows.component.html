@@ -1,0 +1,39 @@
+@if (rows().length > 0) {
+  <div
+    class="restricted"
+    data-testid="restricted-rows"
+    role="group"
+    [attr.aria-label]="'RECORD_ACCESS.RESTRICTED_ARIA' | translate"
+  >
+    <ul class="restricted__list">
+      @for (r of rows(); track trackRow(r)) {
+        <li class="restricted__row" data-testid="restricted-row">
+          <span class="material-symbols-outlined restricted__icon" aria-hidden="true">lock</span>
+          @if (r.departmentName) {
+            <span>{{
+              'RECORD_ACCESS.RESTRICTED_ROW_DEPT'
+                | translate
+                  : { hospital: r.hospitalName, department: r.departmentName, count: r.count }
+            }}</span>
+          } @else {
+            <span>{{
+              'RECORD_ACCESS.RESTRICTED_ROW'
+                | translate: { hospital: r.hospitalName, count: r.count }
+            }}</span>
+          }
+        </li>
+      }
+    </ul>
+    <div class="restricted__actions">
+      <button
+        type="button"
+        class="restricted__btn"
+        data-testid="restricted-open"
+        (click)="openWithReason.emit()"
+      >
+        {{ 'RECORD_ACCESS.OPEN_WITH_REASON' | translate }}
+      </button>
+      <span class="restricted__hint">{{ 'RECORD_ACCESS.RESTRICTED_HINT' | translate }}</span>
+    </div>
+  </div>
+}

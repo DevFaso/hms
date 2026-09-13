@@ -27,6 +27,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 
 /**
  * Service implementation for Birth Plan operations.
@@ -42,9 +47,10 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final BirthPlanMapper birthPlanMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
-    private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     private static final String ROLE_NURSE = "ROLE_NURSE";
@@ -143,7 +149,22 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
         }
 
-        List<BirthPlan> birthPlans = birthPlanRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
+        // E9 #59d — birth plans follow the patient across the readable
+        // hospitals when the caller acts in one; a super-admin in global view
+        // (and a patient reading their own) keeps the unscoped read.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return birthPlanRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+                .map(birthPlanMapper::toResponseDTO)
+                .toList();
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<BirthPlan> birthPlans = birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(birthPlans.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital birth plan read on the treatment relationship");
         return birthPlans.stream()
             .map(birthPlanMapper::toResponseDTO)
             .toList();
@@ -165,8 +186,23 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
         }
 
-        return birthPlanRepository.findActiveBirthPlanByPatientId(patientId)
+        // E9 #59d — the most recent plan across the readable hospitals.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID actingHospitalId = ctx.pinnedHospitalId();
+        if (actingHospitalId == null) {
+            return birthPlanRepository.findActiveBirthPlanByPatientId(patientId)
+                .map(birthPlanMapper::toResponseDTO)
+                .orElse(null);
+        }
+        UUID requesterUserId = ctx.getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        List<BirthPlan> active = birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream().toList();
+        reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(active.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
+            "Cross-hospital birth plan read on the treatment relationship");
+        return active.stream()
             .map(birthPlanMapper::toResponseDTO)
+            .findFirst()
             .orElse(null);
     }
 
@@ -185,12 +221,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
         // Check access - only providers can search across patients
         checkProviderAccess(user);
-
-        // If hospital admin, limit to their hospital
-        if (hasRole(user, ROLE_HOSPITAL_ADMIN) && hospitalId == null) {
-            // Get user's assigned hospital from context
-            hospitalId = getUserHospitalId(user);
-        }
 
         Page<BirthPlan> birthPlans = birthPlanRepository.searchBirthPlans(
             hospitalId,
@@ -247,11 +277,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         // Only providers can view pending reviews
         checkProviderReviewAccess(user);
 
-        // If hospital admin, limit to their hospital
-        if (hasRole(user, ROLE_HOSPITAL_ADMIN) && hospitalId == null) {
-            hospitalId = getUserHospitalId(user);
-        }
-
         if (hospitalId == null) {
             throw new BusinessException("Hospital ID is required to view pending reviews");
         }
@@ -293,7 +318,9 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     }
 
     private void checkBirthPlanAccess(User user, BirthPlan birthPlan) {
-        if (hasRole(user, ROLE_SUPER_ADMIN) || hasRole(user, ROLE_HOSPITAL_ADMIN)) {
+        // E9 #67 (D5): a hospital admin is refused at the controller; only the
+        // platform operator bypasses the per-role checks below.
+        if (hasRole(user, ROLE_SUPER_ADMIN)) {
             return;
         }
 
@@ -311,7 +338,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private void checkProviderAccess(User user) {
         if (!hasRole(user, ROLE_SUPER_ADMIN) &&
-            !hasRole(user, ROLE_HOSPITAL_ADMIN) &&
             !hasRole(user, ROLE_DOCTOR) &&
             !hasRole(user, ROLE_MIDWIFE) &&
             !hasRole(user, ROLE_NURSE)) {
@@ -321,7 +347,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     private void checkProviderReviewAccess(User user) {
         if (!hasRole(user, ROLE_SUPER_ADMIN) &&
-            !hasRole(user, ROLE_HOSPITAL_ADMIN) &&
             !hasRole(user, ROLE_DOCTOR) &&
             !hasRole(user, ROLE_MIDWIFE)) {
             throw new AccessDeniedException("Only doctors and midwives can review birth plans");

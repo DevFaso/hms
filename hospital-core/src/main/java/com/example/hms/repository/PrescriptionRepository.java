@@ -46,6 +46,10 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
 
+    /** E9 #59c — the paged prescription list across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    Page<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId, Pageable pageable);
 

@@ -43,14 +43,14 @@ public class AdmissionController {
     private final AdmissionService admissionService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(admissionService.admitPatient(request));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals")
     public ResponseEntity<List<AdmissionResponseDTO>> listAllAdmissions(
         @RequestParam(required = false) String status,
@@ -61,14 +61,14 @@ public class AdmissionController {
     }
 
     @GetMapping("/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get admission details", description = "Retrieve admission by ID")
     public ResponseEntity<AdmissionResponseDTO> getAdmission(@PathVariable UUID admissionId) {
         return ResponseEntity.ok(admissionService.getAdmission(admissionId));
     }
 
     @PutMapping("/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Update admission", description = "Update admission details (room, acuity, notes, etc.)")
     public ResponseEntity<AdmissionResponseDTO> updateAdmission(
         @PathVariable UUID admissionId,
@@ -88,7 +88,7 @@ public class AdmissionController {
     }
 
     @PostMapping("/{admissionId}/assign-bed")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Assign a bed", description = "Assign a structured bed to an admission; releases any previously held bed")
     public ResponseEntity<AdmissionResponseDTO> assignBed(
         @PathVariable UUID admissionId,
@@ -98,14 +98,14 @@ public class AdmissionController {
     }
 
     @DeleteMapping("/{admissionId}/bed")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Unassign the bed", description = "Detach the admission's bed and make it available again")
     public ResponseEntity<AdmissionResponseDTO> unassignBed(@PathVariable UUID admissionId) {
         return ResponseEntity.ok(admissionService.unassignBed(admissionId));
     }
 
     @PostMapping("/{admissionId}/discharge")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Discharge patient", description = "Discharge a patient from hospital")
     public ResponseEntity<AdmissionResponseDTO> dischargePatient(
         @PathVariable UUID admissionId,
@@ -115,7 +115,7 @@ public class AdmissionController {
     }
 
     @DeleteMapping("/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Cancel admission", description = "Cancel a pending or active admission")
     public ResponseEntity<Void> cancelAdmission(@PathVariable UUID admissionId) {
         admissionService.cancelAdmission(admissionId);
@@ -123,14 +123,14 @@ public class AdmissionController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get admissions by patient", description = "Retrieve all admissions for a patient")
     public ResponseEntity<List<AdmissionResponseDTO>> getAdmissionsByPatient(@PathVariable UUID patientId) {
         return ResponseEntity.ok(admissionService.getAdmissionsByPatient(patientId));
     }
 
     @GetMapping("/patient/{patientId}/current")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get current admission for patient", description = "Retrieve active admission for a patient if any")
     public ResponseEntity<AdmissionResponseDTO> getCurrentAdmissionForPatient(@PathVariable UUID patientId) {
         AdmissionResponseDTO admission = admissionService.getCurrentAdmissionForPatient(patientId);
@@ -141,7 +141,7 @@ public class AdmissionController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get admissions by hospital", description = "Retrieve admissions for a hospital with optional filters")
     public ResponseEntity<List<AdmissionResponseDTO>> getAdmissionsByHospital(
         @PathVariable UUID hospitalId,

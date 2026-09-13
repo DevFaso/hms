@@ -88,7 +88,6 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/registries': 'CARE',
   '/panels': 'CARE',
   '/roi': 'PATIENTS_FLOW',
-  '/consent-management': 'CARE',
 
   // ── MEDICATIONS & PHARMACY ───────────────────────────────────────────
   '/prescriptions': 'PHARMACY',
@@ -141,6 +140,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/admin-assignments': 'ADMINISTRATION',
   '/webhooks': 'ADMINISTRATION',
   '/admin-governance': 'ADMINISTRATION',
+  '/break-glass-review': 'ADMINISTRATION',
   '/feature-flags': 'ADMINISTRATION',
   // The same entry resolves to one path or the other depending on whether the
   // active role is super admin, so both spellings need a home.

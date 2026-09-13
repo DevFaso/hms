@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,8 @@ class PatientChartAccessTest {
     private final PatientRepository patientRepository = mock(PatientRepository.class);
     private final PatientHospitalRegistrationRepository registrationRepository =
         mock(PatientHospitalRegistrationRepository.class);
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy =
+        mock(com.example.hms.service.recordaccess.RecordAccessPolicy.class);
 
     private PatientChartAccess access;
 
@@ -36,7 +39,7 @@ class PatientChartAccessTest {
 
     @BeforeEach
     void setUp() {
-        access = new PatientChartAccess(patientRepository, registrationRepository);
+        access = new PatientChartAccess(patientRepository, registrationRepository, recordAccessPolicy);
         patient = Patient.builder().firstName("Aminata").lastName("Sawadogo").build();
         patient.setId(PATIENT_ID);
     }
@@ -56,14 +59,40 @@ class PatientChartAccessTest {
     }
 
     @Test
-    @DisplayName("404s when the patient has no registration at the caller's hospital")
+    @DisplayName("404s when the patient has no registration and no treatment relationship at the caller's hospital")
     void deniesUnregisteredPatient() {
         when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(PATIENT_ID, CALLER_HOSPITAL))
             .thenReturn(false);
+        when(recordAccessPolicy.decide(any(), eq(PATIENT_ID), eq(CALLER_HOSPITAL)))
+            .thenReturn(com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                PATIENT_ID, CALLER_HOSPITAL, null,
+                com.example.hms.enums.RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, null));
 
         assertThatThrownBy(() -> access.require(PATIENT_ID, CALLER_HOSPITAL))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("E9 #58 — not yet linked by the desk, but scheduled or admitted here: the policy opens the chart")
+    void allowsUnregisteredPatientWithATreatmentRelationship() {
+        UUID actor = UUID.randomUUID();
+        when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(PATIENT_ID, CALLER_HOSPITAL))
+            .thenReturn(false);
+        when(recordAccessPolicy.decide(actor, PATIENT_ID, CALLER_HOSPITAL))
+            .thenReturn(com.example.hms.service.recordaccess.RecordAccessDecision.permitted(
+                PATIENT_ID, CALLER_HOSPITAL, actor,
+                new com.example.hms.service.recordaccess.TreatmentRelationship(
+                    com.example.hms.enums.TreatmentRelationshipKind.SCHEDULED_APPOINTMENT,
+                    UUID.randomUUID(), CALLER_HOSPITAL, PATIENT_ID, null, null, true),
+                null));
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(actor).build());
+        try {
+            assertThat(access.require(PATIENT_ID, CALLER_HOSPITAL)).isSameAs(patient);
+        } finally {
+            HospitalContextHolder.clear();
+        }
     }
 
     @Test
@@ -76,6 +105,10 @@ class PatientChartAccessTest {
         when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(PATIENT_ID, CALLER_HOSPITAL))
             .thenReturn(false);
+        when(recordAccessPolicy.decide(any(), eq(PATIENT_ID), eq(CALLER_HOSPITAL)))
+            .thenReturn(com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                PATIENT_ID, CALLER_HOSPITAL, null,
+                com.example.hms.enums.RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, null));
         ResourceNotFoundException unregistered = catchNotFound(PATIENT_ID, CALLER_HOSPITAL);
 
         // Same key AND same args: a caller must not be able to tell "no such

@@ -57,7 +57,7 @@ public class MedicationHistoryController {
      * @return Comprehensive medication timeline with analysis
      */
     @GetMapping("/patient/{patientId}/timeline")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST')")
     @Operation(
         summary = "Get medication timeline",
         description = "Retrieves comprehensive medication timeline including prescriptions, pharmacy fills, " +
@@ -113,7 +113,7 @@ public class MedicationHistoryController {
      * @return Pharmacy fill details
      */
     @GetMapping("/pharmacy-fills/{fillId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST')")
     @Operation(
         summary = "Get pharmacy fill by ID",
         description = "Retrieves details of a specific pharmacy fill record"
@@ -138,7 +138,7 @@ public class MedicationHistoryController {
      * @return List of pharmacy fills
      */
     @GetMapping("/patient/{patientId}/pharmacy-fills")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST')")
     @Operation(
         summary = "Get pharmacy fills for patient",
         description = "Retrieves all pharmacy fill records for a specific patient"

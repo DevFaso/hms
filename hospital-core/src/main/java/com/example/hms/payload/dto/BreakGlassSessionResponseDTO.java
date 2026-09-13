@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.enums.BreakGlassReviewOutcome;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,4 +58,17 @@ public class BreakGlassSessionResponseDTO {
 
     @Schema(description = "True when the session is currently live (not revoked, not expired).")
     private boolean live;
+
+    @Schema(description = "E8 #54 — when a compliance reviewer signed the session off; null until reviewed.")
+    private LocalDateTime reviewedAt;
+    @Schema(description = "The reviewer.")
+    private UUID reviewedByUserId;
+    @Schema(description = "The reviewer's username.")
+    private String reviewedByUserName;
+    @Schema(description = "JUSTIFIED, NOT_JUSTIFIED or FOLLOW_UP.")
+    private BreakGlassReviewOutcome reviewOutcome;
+    @Schema(description = "The reviewer's note.")
+    private String reviewNote;
+    @Schema(description = "True once reviewed.")
+    private boolean reviewed;
 }

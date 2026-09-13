@@ -48,6 +48,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class BirthPlanServiceImplTest {
@@ -66,6 +73,11 @@ class BirthPlanServiceImplTest {
 
     @Mock
     private BirthPlanMapper birthPlanMapper;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private BirthPlanServiceImpl birthPlanService;
@@ -322,6 +334,51 @@ class BirthPlanServiceImplTest {
     }
 
     @Test
+    void getBirthPlanById_asSuperAdmin_bypassesThePerRoleChecks() {
+        // E9 #67 (D5): the platform operator is the only role that skips the
+        // per-role checks; no patient lookup is made on the way through.
+        User superAdmin = new User();
+        superAdmin.setId(UUID.randomUUID());
+        superAdmin.setUsername("ops@test.com");
+        superAdmin.setUserRoles(createUserRoles("ROLE_SUPER_ADMIN"));
+
+        when(userRepository.findByUsername(superAdmin.getUsername()))
+            .thenReturn(Optional.of(superAdmin));
+        when(birthPlanRepository.findById(birthPlan.getId()))
+            .thenReturn(Optional.of(birthPlan));
+        when(birthPlanMapper.toResponseDTO(birthPlan))
+            .thenReturn(responseDTO);
+
+        BirthPlanResponseDTO result = birthPlanService.getBirthPlanById(birthPlan.getId(), superAdmin.getUsername());
+
+        assertEquals(responseDTO.getId(), result.getId());
+        verify(patientRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    void getBirthPlanById_asHospitalAdmin_throwsAccessDenied() {
+        // E9 #67 (D5): a hospital admin no longer bypasses the access check.
+        // The controller refuses the role first; this pins the service gate
+        // so an annotation drift alone cannot reopen the chart.
+        User hospitalAdmin = new User();
+        hospitalAdmin.setId(UUID.randomUUID());
+        hospitalAdmin.setUsername("admin@test.com");
+        hospitalAdmin.setUserRoles(createUserRoles("ROLE_HOSPITAL_ADMIN"));
+
+        when(userRepository.findByUsername(hospitalAdmin.getUsername()))
+            .thenReturn(Optional.of(hospitalAdmin));
+        when(birthPlanRepository.findById(birthPlan.getId()))
+            .thenReturn(Optional.of(birthPlan));
+
+        UUID birthPlanId = birthPlan.getId();
+        String username = hospitalAdmin.getUsername();
+        assertThrows(AccessDeniedException.class, () ->
+            birthPlanService.getBirthPlanById(birthPlanId, username)
+        );
+        verify(birthPlanMapper, never()).toResponseDTO(any());
+    }
+
+    @Test
     void getBirthPlansByPatientId_asDoctor_success() {
         // Given
         List<BirthPlan> plans = Arrays.asList(birthPlan);
@@ -538,5 +595,74 @@ class BirthPlanServiceImplTest {
         assertThrows(AccessDeniedException.class, () ->
             birthPlanService.getPendingReviews(hospitalId, pageable, username)
         );
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getBirthPlansByPatientIdFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — a doctor acting at Hôpital A sees the plan written at
+        // Hôpital B when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        BirthPlan foreign = new BirthPlan();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(doctorUser.getId())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
+            .thenReturn(Set.of(hospital.getId(), otherHospitalId));
+        when(birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+            .thenReturn(List.of(birthPlan, foreign));
+        when(birthPlanMapper.toResponseDTO(any(BirthPlan.class))).thenReturn(responseDTO);
+
+        List<BirthPlanResponseDTO> result = birthPlanService.getBirthPlansByPatientId(patient.getId(), doctorUser.getUsername());
+
+        assertThat(result).hasSize(2);
+        verify(birthPlanRepository, never()).findByPatientIdOrderByCreatedAtDesc(any());
+        verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getActiveBirthPlanFollowsThePatientWhenActingInAHospital() {
+        // E9 #59d — the most recent plan across the readable set, here the one
+        // written at Hôpital B; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        BirthPlan foreign = new BirthPlan();
+        foreign.setId(UUID.randomUUID());
+        foreign.setPatient(patient);
+        foreign.setHospital(other);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(doctorUser.getId())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .superAdmin(false)
+            .build());
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
+            .thenReturn(Set.of(hospital.getId(), otherHospitalId));
+        when(birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+            .thenReturn(Optional.of(foreign));
+        when(birthPlanMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
+
+        assertThat(birthPlanService.getActiveBirthPlan(patient.getId(), doctorUser.getUsername())).isEqualTo(responseDTO);
+        verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
+        verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

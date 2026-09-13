@@ -51,6 +51,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class LaborServiceImplTest {
@@ -65,6 +69,8 @@ class LaborServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private LaborServiceImpl service;
 
@@ -83,7 +89,7 @@ class LaborServiceImplTest {
             episodeRepository, entryRepository, deliveryRecordRepository,
             patientRepository, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
-            notificationService, new LaborMapper());
+            notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -416,5 +422,29 @@ class LaborServiceImplTest {
         verify(entryRepository).save(captor.capture());
         assertThat(captor.getValue().getAlerts())
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-tachycardia"));
+    }
+
+    @Test
+    void getEpisodesFollowThePatientAndAccountTheReach() {
+        // E9 #59d — the delivery at Hôpital B is on the list at Hôpital A when
+        // the policy reads B for this patient; the disclosure is accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        LaborEpisode foreign = LaborEpisode.builder()
+            .patient(patient).hospital(other).status(LaborStatus.DELIVERED)
+            .admittedAt(LocalDateTime.now().minusDays(400)).build();
+        foreign.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(episodeRepository.findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(
+                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(List.of(episode, foreign));
+
+        List<LaborEpisodeResponseDTO> result = service.getEpisodes(patientId, hospitalId, 10);
+
+        assertThat(result).extracting(LaborEpisodeResponseDTO::getHospitalId).containsExactly(hospitalId, otherHospitalId);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

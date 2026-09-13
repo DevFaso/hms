@@ -58,7 +58,6 @@ import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
-import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 @Slf4j
@@ -569,17 +568,30 @@ public class JwtTokenProvider {
         boolean hospitalAdminFlag = getBooleanClaim(claims.get(CLAIM_IS_HOSPITAL_ADMIN))
             || authorities.stream().anyMatch(ROLE_HOSPITAL_ADMIN::equalsIgnoreCase);
 
-        if (principalUserId != null && organizationIds.isEmpty() && hospitalIds.isEmpty()) {
-            Map<String, Object> recomputed = buildTenantClaims(principalUserId, authorities);
-            organizationIds = extractUuidSet(recomputed.get(CLAIM_PERMITTED_ORGANIZATION_IDS));
-            hospitalIds = extractUuidSet(recomputed.get(CLAIM_PERMITTED_HOSPITAL_IDS));
-            departmentIds = extractUuidSet(recomputed.get(CLAIM_PERMITTED_DEPARTMENT_IDS));
-            if (activeOrganization == null) {
-                activeOrganization = extractUuid(recomputed.get(CLAIM_PRIMARY_ORGANIZATION_ID));
-            }
-            if (activeHospital == null) {
-                activeHospital = extractUuid(recomputed.get(CLAIM_PRIMARY_HOSPITAL_ID));
-            }
+        if (principalUserId != null) {
+            // E9 #55 — the permitted set is read from the assignment table on
+            // EVERY request, never from the claims baked at login. The claims
+            // are a snapshot: an assignment added, revoked or re-scoped after
+            // sign-in left the token asserting a scope the table no longer
+            // held, and the two resolvers that read scope (this one and the
+            // assignment fallback in ControllerAuthUtils) disagreed until the
+            // user logged out. The token's primary hospital is kept only while
+            // it is still permitted, so the active scope is stable across
+            // requests; otherwise the live primary (the most recently created
+            // active assignment) takes over. An empty live set is an empty
+            // scope — fail closed, not "whatever the token said".
+            Map<String, Object> live = buildTenantClaims(principalUserId, authorities);
+            Set<UUID> liveHospitals = extractUuidSet(live.get(CLAIM_PERMITTED_HOSPITAL_IDS));
+            Set<UUID> liveOrganizations = extractUuidSet(live.get(CLAIM_PERMITTED_ORGANIZATION_IDS));
+            departmentIds = extractUuidSet(live.get(CLAIM_PERMITTED_DEPARTMENT_IDS));
+            activeHospital = activeHospital != null && liveHospitals.contains(activeHospital)
+                ? activeHospital
+                : extractUuid(live.get(CLAIM_PRIMARY_HOSPITAL_ID));
+            activeOrganization = activeOrganization != null && liveOrganizations.contains(activeOrganization)
+                ? activeOrganization
+                : extractUuid(live.get(CLAIM_PRIMARY_ORGANIZATION_ID));
+            hospitalIds = liveHospitals;
+            organizationIds = liveOrganizations;
         }
 
         if (activeOrganization == null && !organizationIds.isEmpty()) {
@@ -676,32 +688,10 @@ public class JwtTokenProvider {
             .map(this::ensureRolePrefix)
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        if (normalizedRoles.contains(ROLE_SUPER_ADMIN)) {
-            List<String> inherited = List.of(
-                ROLE_HOSPITAL_ADMIN,
-                ROLE_RECEPTIONIST,
-                ROLE_DOCTOR,
-                ROLE_NURSE,
-                "ROLE_LAB_SCIENTIST",
-                "ROLE_STAFF",
-                ROLE_PATIENT
-            );
-            inherited.stream()
-                .map(String::trim)
-                .filter(r -> !r.isEmpty())
-                .forEach(normalizedRoles::add);
-        }
-
-        // Doctor equivalence (2026-08-23 role audit, C2): physicians and
-        // surgeons ARE doctors — every matcher and @PreAuthorize naming
-        // ROLE_DOCTOR admits them through this expansion instead of each
-        // list carrying three role names. Mirrored in
-        // SecurityConfig.authoritiesMapper for the session-auth path.
-        if (normalizedRoles.contains("ROLE_PHYSICIAN") || normalizedRoles.contains("ROLE_SURGEON")) {
-            normalizedRoles.add(ROLE_DOCTOR);
-        }
-
-        List<SimpleGrantedAuthority> authorities = normalizedRoles.stream()
+        // E9 #67 (D6): super-admin inheritance and doctor equivalence live in
+        // RoleExpansion, shared with SecurityConfig.authoritiesMapper so the
+        // two auth paths cannot drift again.
+        List<SimpleGrantedAuthority> authorities = RoleExpansion.expand(normalizedRoles).stream()
             .map(SimpleGrantedAuthority::new)
             .toList();
 

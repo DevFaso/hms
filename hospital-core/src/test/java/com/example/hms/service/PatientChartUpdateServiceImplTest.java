@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import java.util.Set;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientChartUpdateMapper;
@@ -49,6 +50,8 @@ class PatientChartUpdateServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private PatientChartUpdateMapper patientChartUpdateMapper;
     @Mock private ObjectMapper objectMapper;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private PatientChartUpdateServiceImpl service;
 
@@ -87,7 +90,8 @@ class PatientChartUpdateServiceImplTest {
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         PatientChartUpdate update = PatientChartUpdate.builder().patient(patient).hospital(hospital).build();
         Page<PatientChartUpdate> page = new PageImpl<>(List.of(update));
-        when(patientChartUpdateRepository.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class))).thenReturn(page);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(patientChartUpdateRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class))).thenReturn(page);
         when(patientChartUpdateMapper.toResponseDto(any())).thenReturn(PatientChartUpdateResponseDTO.builder().build());
 
         Page<PatientChartUpdateResponseDTO> result = service.listPatientChartUpdates(patientId, hospitalId, PageRequest.of(0, 10));

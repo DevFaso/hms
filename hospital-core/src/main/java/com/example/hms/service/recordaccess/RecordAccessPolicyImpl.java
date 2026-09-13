@@ -3,12 +3,14 @@ package com.example.hms.service.recordaccess;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
+import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
-import com.example.hms.config.RecordAccessProperties;
+import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,20 +32,23 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final StaffRepository staffRepository;
     private final TreatmentRelationshipResolver resolver;
     private final PatientHospitalRegistrationRepository registrationRepository;
-    private final RecordAccessProperties properties;
+    private final BreakGlassGate breakGlassGate;
+    private final PatientRepository patientRepository;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
                                   StaffRepository staffRepository,
                                   TreatmentRelationshipResolver resolver,
                                   PatientHospitalRegistrationRepository registrationRepository,
-                                  RecordAccessProperties properties) {
+                                  BreakGlassGate breakGlassGate,
+                                  PatientRepository patientRepository) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
         this.resolver = resolver;
         this.registrationRepository = registrationRepository;
-        this.properties = properties;
+        this.breakGlassGate = breakGlassGate;
+        this.patientRepository = patientRepository;
     }
 
     @Override
@@ -80,13 +85,13 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         Set<UUID> readable = new LinkedHashSet<>();
         if (actingHospitalId != null) {
-            // The acting hospital is always readable — that is today's
-            // behaviour and it does not depend on the flag, the posture or a
-            // treatment relationship. Turning the flag off must leave the
-            // caller exactly where they were before E8.
+            // The acting hospital is always readable — that does not depend
+            // on the posture or a treatment relationship. E9 #58 removed the
+            // feature flag that used to stop here: the widening is the model
+            // now (decision D1), not an experiment.
             readable.add(actingHospitalId);
         }
-        if (!properties.isCrossHospitalReadsEnabled() || patientId == null || actingHospitalId == null) {
+        if (patientId == null || actingHospitalId == null) {
             return readable;
         }
         if (!cachedDecision(actorUserId, patientId, actingHospitalId).permitted()) {
@@ -156,9 +161,59 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL, posture);
         }
-        return resolver.resolve(patientId, hospitalId, actorUserId)
+        // E9 #58 (D1) — registration at the acting hospital IS the treatment
+        // relationship. Reception creates it on arrival, every write already
+        // requires it, and it is a deliberate act by a person at a desk. The
+        // resolver's carriers (admission, encounter, appointment window, panel,
+        // open order) remain the second signal for a patient who is scheduled
+        // or admitted here but not yet linked by the desk.
+        Optional<PatientHospitalRegistration> registered =
+            registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId);
+        if (registered.isPresent()) {
+            PatientHospitalRegistration r = registered.get();
+            TreatmentRelationship byRegistration = new TreatmentRelationship(
+                TreatmentRelationshipKind.REGISTRATION, r.getId(), hospitalId, patientId,
+                r.getRegistrationDate() != null ? r.getRegistrationDate().atStartOfDay() : null,
+                null, false);
+            return unlessRestricted(actorUserId, patientId, hospitalId, byRegistration, posture);
+        }
+        Optional<TreatmentRelationship> carried = resolver.resolve(patientId, hospitalId, actorUserId);
+        if (carried.isPresent()) {
+            return unlessRestricted(actorUserId, patientId, hospitalId, carried.get(), posture);
+        }
+        // E9 #62 (decision D2, Tier B) — no registration and no carrier: a live
+        // break-the-glass session the actor declared for this patient at this
+        // hospital stands in for the relationship. Opt-out and the staff gate
+        // above still hold; the session is time-boxed, audited on declaration,
+        // and every disclosure row it enables carries its id.
+        return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+            .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
             .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, posture));
+    }
+
+    /**
+     * E8 #54 — a restricted chart needs a live break-the-glass session even
+     * from staff who hold a treatment relationship. The flag is read only once
+     * a relationship exists, so the refusal discloses nothing to a stranger;
+     * under a session the relationship becomes BREAK_GLASS and the read is
+     * audited as such.
+     */
+    private RecordAccessDecision unlessRestricted(UUID actorUserId, UUID patientId, UUID hospitalId,
+                                                  TreatmentRelationship relationship, RecordAccessPosture posture) {
+        boolean restricted = patientRepository.findByIdUnscoped(patientId)
+            .map(Patient::isChartRestricted)
+            .orElse(false);
+        if (!restricted) {
+            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, relationship, posture);
+        }
+        return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+            .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
+            .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
+            .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                RecordAccessDenialReason.CHART_RESTRICTED, posture));
     }
 }

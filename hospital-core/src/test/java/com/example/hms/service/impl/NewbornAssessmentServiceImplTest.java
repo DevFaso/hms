@@ -43,6 +43,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class NewbornAssessmentServiceImplTest {
@@ -63,6 +68,10 @@ class NewbornAssessmentServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private NewbornAssessmentServiceImpl service;
     private UUID patientId;
@@ -82,7 +91,9 @@ class NewbornAssessmentServiceImplTest {
             staffRepository,
             userRepository,
             notificationService,
-            new NewbornAssessmentMapper()
+            new NewbornAssessmentMapper(),
+            recordAccessPolicy,
+            reachRecorder
         );
 
         patientId = UUID.randomUUID();
@@ -263,5 +274,19 @@ class NewbornAssessmentServiceImplTest {
         assertThrows(ResourceNotFoundException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
         verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void getRecentAssessmentsReadTheReadableSet() {
+        // E9 #59d — the read spans the policy's readable set at the database.
+        UUID otherHospitalId = UUID.randomUUID();
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(assessmentRepository.findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc(
+                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(List.of());
+
+        assertThat(service.getRecentAssessments(patientId, hospitalId, 5)).isEmpty();
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(), eq(Map.of()), anyString());
     }
 }

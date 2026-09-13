@@ -21,7 +21,6 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,7 +64,6 @@ class UserServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private StaffRepository staffRepository;
-    @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private PasswordHistoryService passwordHistoryService;

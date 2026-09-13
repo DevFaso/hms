@@ -11,17 +11,13 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { catchError, of } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import {
-  AuthService,
-  type LoginUserProfile,
-  type SessionBootstrapResponse,
-} from '../auth/auth.service';
+import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { safeReturnUrl } from '../auth/return-url';
 import { RoleContextService } from '../core/role-context.service';
+import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 
 @Component({
@@ -85,6 +81,7 @@ export class Login implements OnInit, AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly sessionScope = inject(SessionScopeService);
   private readonly translate = inject(TranslateService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
@@ -336,77 +333,25 @@ export class Login implements OnInit, AfterViewInit {
           // path so the bug doesn't appear in the brand-new session.
           this.roleContext.markSuperAdminGlobalDefaults();
 
-          // ── Session bootstrap (Task 6): fetch authoritative context from DB ──
-          // Replaces client-side JWT decoding for hospital_id resolution.
-          // Falls back to login-response data gracefully if bootstrap fails.
-          this.auth
-            .sessionBootstrap()
-            .pipe(catchError(() => of(null)))
-            .subscribe((bootstrap: SessionBootstrapResponse | null) => {
+          // ── Session scope (E9 #55b): the live session decides, never the token ──
+          // The login body is DB-fresh, so it stands in when the server cannot
+          // be asked; the JWT claims are not consulted on either path.
+          this.sessionScope
+            .hydrate({
+              forcePasswordChange: res.forcePasswordChange ?? false,
+              forceUsernameChange: res.forceUsernameChange ?? false,
+              phoneNumber: res.phoneNumber,
+              licenseNumber: res.licenseNumber,
+            })
+            .subscribe((bootstrap) => {
               const forcePasswordChange = res.forcePasswordChange ?? false;
               const forceUsernameChange = res.forceUsernameChange ?? false;
 
-              if (bootstrap) {
-                // Authoritative data from DB — use this in preference to JWT/login body
-                const bsRoles = bootstrap.roles ?? jwtRoles;
-                this.roleContext.setRoles(bsRoles);
-                if (bsRoles.length === 1) {
-                  this.roleContext.activeRole = bsRoles[0];
-                }
-
-                const permittedIds = (bootstrap.permittedHospitalIds ?? []).filter((v) => !!v);
-                this.roleContext.setPermittedHospitalIds(permittedIds);
-
-                if (permittedIds.length === 1) {
-                  this.roleContext.activeHospitalId = permittedIds[0];
-                } else if (bootstrap.primaryHospitalId) {
-                  this.roleContext.activeHospitalId = bootstrap.primaryHospitalId;
-                }
-                // Re-seed global view from the bootstrap roles in case
-                // bsRoles differs from jwtRoles (e.g. a SUPER_ADMIN role
-                // that wasn't in the JWT but IS in the DB-authoritative
-                // bootstrap response). Idempotent — no-op if already
-                // marked or if the user isn't a super-admin.
-                this.roleContext.markSuperAdminGlobalDefaults();
-
-                const profile: LoginUserProfile = {
-                  id: bootstrap.userId,
-                  username: bootstrap.username,
-                  email: bootstrap.email ?? '',
-                  firstName: bootstrap.firstName,
-                  lastName: bootstrap.lastName,
-                  profileImageUrl: bootstrap.profileImageUrl,
-                  roles: bsRoles,
-                  profileType: bootstrap.staffId
-                    ? 'STAFF'
-                    : bootstrap.patientId
-                      ? 'PATIENT'
-                      : undefined,
-                  staffId: bootstrap.staffId,
-                  roleName: bootstrap.staffRoleCode,
-                  active: true,
-                  forcePasswordChange,
-                  forceUsernameChange,
-                  primaryHospitalId: bootstrap.primaryHospitalId,
-                  primaryHospitalName: bootstrap.primaryHospitalName,
-                  hospitalIds: permittedIds,
-                };
-                this.auth.setUserProfile(profile);
-              } else {
-                // Bootstrap unavailable — fall back to login-response data
-                const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
-                const permittedIds =
-                  bodyHospitalIds.length > 0
-                    ? bodyHospitalIds
-                    : this.auth.getPermittedHospitalIds();
-                this.roleContext.setPermittedHospitalIds(permittedIds);
-
-                if (permittedIds.length === 1) {
-                  this.roleContext.activeHospitalId = permittedIds[0];
-                } else if (res.primaryHospitalId) {
-                  this.roleContext.activeHospitalId = res.primaryHospitalId;
-                }
-
+              if (!bootstrap) {
+                this.sessionScope.applyScope(
+                  (res.hospitalIds ?? []).filter((v) => !!v),
+                  res.primaryHospitalId ?? null,
+                );
                 if (res.id && res.username) {
                   const profile: LoginUserProfile = {
                     id: res.id,

@@ -22,6 +22,8 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     // Hospital-scoped queries for tenant isolation
     List<LabOrder> findByHospital_Id(UUID hospitalId);
     List<LabOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+    /** E9 #59b — lab orders across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<LabOrder> findByPatient_IdAndHospital_IdIn(UUID patientId, java.util.Collection<UUID> hospitalIds);
 
     /** FHIR ServiceRequest/DiagnosticReport search (Tier 2 item 42): newest first, capped by the caller. */
     org.springframework.data.domain.Page<LabOrder>

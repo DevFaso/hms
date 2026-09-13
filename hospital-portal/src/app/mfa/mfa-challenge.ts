@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
 import { RoleContextService } from '../core/role-context.service';
+import { SessionScopeService } from '../core/session-scope.service';
 
 /**
  * T-33: MFA Challenge page.
@@ -23,6 +24,7 @@ export class MfaChallengeComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
+  private readonly sessionScope = inject(SessionScopeService);
 
   loading = signal(false);
   error = signal('');
@@ -75,50 +77,52 @@ export class MfaChallengeComponent {
           this.auth.setRefreshToken(res.refreshToken, true);
         }
 
-        const jwtRoles = this.auth.getRoles();
-        this.roleContext.setRoles(jwtRoles);
-        if (jwtRoles.length === 1) {
-          this.roleContext.activeRole = jwtRoles[0];
-        }
-
-        const bodyHospitalIds = (res.hospitalIds ?? []).filter((v: string) => !!v);
-        const permittedIds =
-          bodyHospitalIds.length > 0 ? bodyHospitalIds : this.auth.getPermittedHospitalIds();
-        this.roleContext.setPermittedHospitalIds(permittedIds);
-        if (permittedIds.length === 1) {
-          this.roleContext.activeHospitalId = permittedIds[0];
-        } else if (res.primaryHospitalId) {
-          this.roleContext.activeHospitalId = res.primaryHospitalId;
-        }
-
-        if (res.id && res.username) {
-          const profile: LoginUserProfile = {
-            id: res.id,
-            username: res.username,
-            email: res.email ?? '',
-            firstName: res.firstName,
-            lastName: res.lastName,
-            phoneNumber: res.phoneNumber,
-            profileImageUrl: res.profilePictureUrl,
-            roles: res.roles ?? [],
-            profileType: res.profileType,
-            licenseNumber: res.licenseNumber,
-            staffId: res.staffId,
-            roleName: res.roleName,
-            active: res.active ?? true,
+        // E9 #55b: the live session decides the hospital scope; the MFA body
+        // stands in when the server cannot be asked; the token never does.
+        this.roleContext.setRoles(this.auth.getRoles());
+        this.sessionScope
+          .hydrate({
             forcePasswordChange: res.forcePasswordChange,
             forceUsernameChange: res.forceUsernameChange,
-            primaryHospitalId: res.primaryHospitalId,
-            primaryHospitalName: res.primaryHospitalName,
-            hospitalIds: res.hospitalIds,
-          };
-          this.auth.setUserProfile(profile);
-        }
+            phoneNumber: res.phoneNumber,
+            licenseNumber: res.licenseNumber,
+          })
+          .subscribe((bootstrap) => {
+            if (!bootstrap) {
+              this.sessionScope.applyScope(
+                (res.hospitalIds ?? []).filter((v: string) => !!v),
+                res.primaryHospitalId ?? null,
+              );
+              if (res.id && res.username) {
+                const profile: LoginUserProfile = {
+                  id: res.id,
+                  username: res.username,
+                  email: res.email ?? '',
+                  firstName: res.firstName,
+                  lastName: res.lastName,
+                  phoneNumber: res.phoneNumber,
+                  profileImageUrl: res.profilePictureUrl,
+                  roles: res.roles ?? [],
+                  profileType: res.profileType,
+                  licenseNumber: res.licenseNumber,
+                  staffId: res.staffId,
+                  roleName: res.roleName,
+                  active: res.active ?? true,
+                  forcePasswordChange: res.forcePasswordChange,
+                  forceUsernameChange: res.forceUsernameChange,
+                  primaryHospitalId: res.primaryHospitalId,
+                  primaryHospitalName: res.primaryHospitalName,
+                  hospitalIds: res.hospitalIds,
+                };
+                this.auth.setUserProfile(profile);
+              }
+            }
 
-        const needsSetup = res.forcePasswordChange || res.forceUsernameChange;
-        const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
-        this.router.navigateByUrl(dest);
-        this.loading.set(false);
+            const needsSetup = res.forcePasswordChange || res.forceUsernameChange;
+            const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
+            this.router.navigateByUrl(dest);
+            this.loading.set(false);
+          });
       },
       error: (err) => {
         this.loading.set(false);

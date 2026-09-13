@@ -45,22 +45,71 @@ class CrossHospitalReadFilterCoverageTest {
      * Finders actually routed through {@link RecordAccessPolicy#readableHospitalIds}
      * — they take a collection of hospital ids rather than one.
      *
-     * <p>Only one so far. The encounter and lab-result paths widen too, but they
-     * filter in memory over an already patient-scoped query, so they have no
-     * hospital-taking finder to list here. Allergies, imaging and surgical
-     * history are NOT widened: they attach to patient + hospital with no
-     * encounter link, so #51's category cannot be resolved for them, and a row
-     * whose category nobody can determine must not cross a hospital boundary.
+     * <p>The encounter and lab-result paths widen too, but they filter in memory
+     * over an already patient-scoped query, so they have no hospital-taking
+     * finder to list here. Allergies went patient-wide in E9 #56 (decision D3:
+     * untagged travels); the chart domain — problems, surgical history,
+     * directives, nursing notes, chart updates — in E9 #59a. Problems and
+     * nursing notes carry a sensitivity tag and are filtered through
+     * {@code CrossHospitalRows.maySurface}; the rest are untagged and travel.
      */
     private static final Set<String> WIDENED = Set.of(
-        "PrescriptionRepository.findByPatient_IdAndHospital_IdIn");
+        "PrescriptionRepository.findByPatient_IdAndHospital_IdIn",
+        // E9 #59a — the chart domain follows the patient.
+        "PatientProblemRepository.findByPatient_IdAndHospital_IdIn",
+        "PatientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn",
+        "AdvanceDirectiveRepository.findByPatient_IdAndHospital_IdIn",
+        "NursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "NursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "PatientChartUpdateRepository.findByPatient_IdAndHospital_IdIn",
+        // E9 #59b — orders and results follow the patient.
+        "LabOrderRepository.findByPatient_IdAndHospital_IdIn",
+        "LabResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn",
+        "ImagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
+        "ImagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc",
+        "ProcedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
+        "ConsultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc",
+        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        // E9 #59c — medications follow the patient (PrescriptionRepository's In
+        // finder, listed above, gained a paged overload).
+        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc",
+        "PharmacyFillRepository.findByPatient_IdAndHospital_IdInAndFillDateBetweenOrderByFillDateDesc",
+        // E9 #59d — maternity and immunizations follow the patient.
+        "LaborEpisodeRepository.findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc",
+        "NewbornAssessmentRepository.findByPatient_IdAndHospital_IdInOrderByAssessmentTimeDesc",
+        "PostpartumObservationRepository.findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc",
+        "BirthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "BirthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "HighRiskPregnancyCarePlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
+        "HighRiskPregnancyCarePlanRepository.findFirstByPatient_IdAndHospital_IdInAndActiveTrueOrderByCreatedAtDesc",
+        "MaternalHistoryRepository.findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",
+        "MaternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",
+        "ObgynReferralRepository.findByPatient_IdAndHospital_IdIn",
+        "UltrasoundOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedDateDesc",
+        "UltrasoundOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedDateDesc",
+        "UltrasoundReportRepository.findByUltrasoundOrder_Patient_IdAndHospital_IdInOrderByScanDateDesc",
+        "ImmunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc",
+        "ImmunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc",
+        // E9 #59e — discharge and admissions follow the patient.
+        "DischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc",
+        "AdmissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc",
+        "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc",
+        // E9 #60 — the whole-chart surfaces.
+        "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
+        "PatientVitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
+        "LabResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn",
+        "DischargeSummaryRepository.findWithAssociationsByPatient_IdAndHospital_IdInOrderByDischargeDateDesc");
 
     /**
-     * Single-hospital patient finders as of PR #49-pass-1. Every one of these
-     * still reads the acting hospital only. Growing this list is fine; doing it
-     * without noticing is not.
+     * Single-hospital patient finders still declared. Every one of these reads
+     * the acting hospital only. Growing this list is fine; doing it without
+     * noticing is not — and since the assertion is a ceiling, this number is
+     * kept at the EXACT current count so that a removed finder is noticed too.
+     * 29 at #49-pass-1; 28 after E9 #59a — the chart domain widened beside the
+     * single finders that CDS, FHIR and bulk export still
+     * call, and only the chart-update page finder had no caller left.
      */
-    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 29;
+    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 28;
 
     @Test
     @DisplayName("the single-hospital patient-read surface has not grown unnoticed")

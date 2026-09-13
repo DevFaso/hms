@@ -27,6 +27,14 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
     List<GeneralReferral> findByPatientIdAndHospitalIdOrderByCreatedAtDesc(UUID patientId, UUID hospitalId);
 
     /**
+     * E9 #59b — referrals across the readable hospitals
+     * ({@code RecordAccessPolicy.readableHospitalIds}). Keyed on the
+     * ORIGINATING hospital; the receiving hospital's own view is the
+     * {@code findByReceivingHospitalId…} family below.
+     */
+    List<GeneralReferral> findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+
+    /**
      * Find referrals by referring provider
      */
     List<GeneralReferral> findByReferringProviderIdOrderByCreatedAtDesc(UUID referringProviderId);

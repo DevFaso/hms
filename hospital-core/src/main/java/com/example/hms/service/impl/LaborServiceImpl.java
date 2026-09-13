@@ -49,6 +49,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContextHolder;
 
 /**
  * Labor & Delivery (P1 #6, roadmap row 41). Follows the OB house pattern of
@@ -94,6 +98,8 @@ public class LaborServiceImpl implements LaborService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final LaborMapper laborMapper;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -147,8 +153,17 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("Hospital context required to list labor episodes.");
         }
         int effectiveLimit = Math.clamp(limit <= 0 ? 10 : limit, 1, 50);
-        return episodeRepository
-            .findByPatient_IdAndHospital_IdOrderByAdmittedAtDesc(patientId, hospitalId, PageRequest.of(0, effectiveLimit))
+        // E9 #59d — labour episodes follow the patient across the readable
+        // hospitals (a transfer in labour is the case this exists for); every
+        // foreign episode surfaced is accounted.
+        UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        List<LaborEpisode> episodes = episodeRepository
+            .findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(patientId, readable, PageRequest.of(0, effectiveLimit));
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(episodes.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), hospitalId),
+            "Cross-hospital labour episode read on the treatment relationship");
+        return episodes
             .stream()
             .map(episode -> laborMapper.toEpisodeResponse(
                 episode,

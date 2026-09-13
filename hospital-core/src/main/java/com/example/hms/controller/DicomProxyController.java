@@ -30,7 +30,7 @@ public class DicomProxyController {
     }
 
     @GetMapping("/{studyUid}/instances")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','RADIOLOGIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST')")
     public ResponseEntity<List<String>> listInstances(@PathVariable String studyUid) {
         if (!service.isEnabled()) {
             return ResponseEntity.notFound().build();

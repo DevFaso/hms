@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.storyboard;
 
+import com.example.hms.payload.dto.RestrictedRowsDTO;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -34,6 +35,12 @@ public class PatientStoryboardDTO {
     private List<ProblemSummaryDTO> problems;
     private ActiveEncounterDTO activeEncounter;
     private CodeStatusDTO codeStatus;
+    /**
+     * E9 #64 — problems this read withheld under decision D3, per recording
+     * hospital; the banner renders them as restricted and offers
+     * break-the-glass. Empty in-hospital.
+     */
+    private List<RestrictedRowsDTO> restrictedRows;
 
     /** Convenience flags so the UI can render badges without re-deriving them. */
     private boolean hasHighSeverityAllergy;
@@ -73,6 +80,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Active allergy entry rendered as a chip.")
     public static class AllergySummaryDTO {
         private UUID id;
+        /** Hospital that recorded the allergy (E9 #56 provenance); null only for legacy rows without one. */
+        private UUID hospitalId;
+        private String hospitalName;
         private String allergenDisplay;
         private String allergenCode;
         private String severity;
@@ -89,6 +99,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Active problem-list entry rendered as a chip.")
     public static class ProblemSummaryDTO {
         private UUID id;
+        /** Hospital that recorded the row (E9 #59 provenance). */
+        private UUID hospitalId;
+        private String hospitalName;
         private String problemDisplay;
         private String problemCode;
         private String icdVersion;
@@ -140,6 +153,9 @@ public class PatientStoryboardDTO {
     @Schema(description = "Advance directive surfaced alongside the code status.")
     public static class DirectiveSummaryDTO {
         private UUID id;
+        /** Hospital that recorded the row (E9 #59 provenance). */
+        private UUID hospitalId;
+        private String hospitalName;
         private String directiveType;
         private String status;
         private LocalDate effectiveDate;

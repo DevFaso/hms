@@ -33,6 +33,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class ImmunizationServiceImplTest {
@@ -43,6 +50,8 @@ class ImmunizationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private ImmunizationMapper immunizationMapper;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private ImmunizationServiceImpl service;
@@ -223,5 +232,69 @@ class ImmunizationServiceImplTest {
     void deleteImmunization_notFound() {
         when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteImmunization(immunizationId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test
+    void getImmunizationsByPatientIdFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — the BCG given at Hôpital B is on the record at Hôpital A
+        // when the policy reads B for this patient; accounted.
+        UUID requesterId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().build();
+        other.setId(otherHospitalId);
+        PatientImmunization foreign = new PatientImmunization();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        ImmunizationResponseDTO dto = new ImmunizationResponseDTO();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(requesterId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(requesterId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(immunizationRepository.findByPatient_IdAndHospital_IdInOrderByAdministrationDateDesc(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(foreign));
+        when(immunizationMapper.toResponseDTO(foreign)).thenReturn(dto);
+
+        assertThat(service.getImmunizationsByPatientId(patientId)).containsExactly(dto);
+        verify(immunizationRepository, never()).findByPatient_IdOrderByAdministrationDateDesc(any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getImmunizationsByVaccineCodeFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — the vaccine-code sibling reads the same readable set; accounted.
+        UUID requesterId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().build();
+        other.setId(otherHospitalId);
+        PatientImmunization foreign = new PatientImmunization();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        ImmunizationResponseDTO dto = new ImmunizationResponseDTO();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(requesterId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(requesterId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(immunizationRepository.findByPatient_IdAndHospital_IdInAndVaccineCodeOrderByAdministrationDateDesc(
+                patientId, Set.of(hospitalId, otherHospitalId), "BCG")).thenReturn(List.of(foreign));
+        when(immunizationMapper.toResponseDTO(foreign)).thenReturn(dto);
+
+        assertThat(service.getImmunizationsByVaccineCode(patientId, "BCG")).containsExactly(dto);
+        verify(immunizationRepository, never()).findByPatient_IdAndVaccineCodeOrderByAdministrationDateDesc(any(), any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

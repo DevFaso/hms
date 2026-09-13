@@ -6,6 +6,7 @@ import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
 import com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO;
 import com.example.hms.service.PatientHospitalRegistrationService;
+import com.example.hms.security.context.HospitalContextHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,7 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.net.URI;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -64,10 +64,10 @@ public class PatientHospitalRegistrationController {
         @Valid @RequestBody PatientHospitalRegistrationRequestDTO dto,
         Locale locale
     ) {
-        // If caller didn’t send hospitalId, inject from JWT (reception flow)
-        UUID jwtHospitalId = extractHospitalIdFromJwt();
-        if (dto.getHospitalId() == null && jwtHospitalId != null) {
-            dto.setHospitalId(jwtHospitalId);
+        // If the caller did not send hospitalId, pin it to the request context (reception flow)
+        UUID contextHospitalId = activeHospitalFromContext();
+        if (dto.getHospitalId() == null && contextHospitalId != null) {
+            dto.setHospitalId(contextHospitalId);
         }
 
        
@@ -104,7 +104,7 @@ public class PatientHospitalRegistrationController {
         if (patientId != null) {
             return ResponseEntity.ok(registrationService.getRegistrationsByPatient(patientId, page, size, active));
         }
-        UUID scopeHospitalId = hospitalId != null ? hospitalId : extractHospitalIdFromJwt();
+        UUID scopeHospitalId = hospitalId != null ? hospitalId : activeHospitalFromContext();
         if (scopeHospitalId != null) {
             return ResponseEntity.ok(registrationService.getRegistrationsByHospital(scopeHospitalId, page, size, active));
         }
@@ -159,25 +159,14 @@ public class PatientHospitalRegistrationController {
     }
 
     // ===== Helpers =====
-    private UUID extractHospitalIdFromJwt() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) return null;
-
-        Object candidate = null;
-
-        Object details = auth.getDetails();
-        if (details instanceof Map<?, ?> m) {
-            candidate = m.get("hospitalId");
-        }
-        if (candidate == null && auth.getPrincipal() instanceof Map<?, ?> m) {
-            candidate = m.get("hospitalId");
-        }
-
-        if (candidate instanceof UUID u) return u;
-        if (candidate instanceof String s && !s.isBlank()) {
-            try { return UUID.fromString(s); } catch (RuntimeException ignored) { /* non-UUID string — fall through */ }
-        }
-        return null;
+    /**
+     * The hospital the request is pinned to (live permitted set +
+     * {@code X-Hospital-Id}); {@code null} for a super-admin in global view.
+     * The previous helper read a {@code hospitalId} entry off
+     * {@code auth.getDetails()}, which nothing ever populated (E9 #55).
+     */
+    private static UUID activeHospitalFromContext() {
+        return HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
     }
 
 }

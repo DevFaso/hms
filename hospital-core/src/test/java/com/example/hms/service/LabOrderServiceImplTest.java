@@ -52,6 +52,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 class LabOrderServiceImplTest {
@@ -76,6 +80,8 @@ class LabOrderServiceImplTest {
     private HospitalRepository hospitalRepository;
     @Mock
     private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
@@ -370,5 +376,36 @@ class LabOrderServiceImplTest {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm unavailable", e);
         }
+    }
+
+    @Test
+    void getLabOrdersByPatientIdFollowsThePatientAndAccountsTheReach() {
+        // E9 #59b — a lab order placed at Hôpital B is on the list at Hôpital A
+        // when the policy lets this caller read B for this patient, and the
+        // disclosure is accounted per source hospital.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        other.setName("Hôpital B");
+        LabOrder local = new LabOrder();
+        local.setId(UUID.randomUUID());
+        local.setHospital(hospital);
+        LabOrder foreign = new LabOrder();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(orderingUserId);
+        when(recordAccessPolicy.readableHospitalIds(orderingUserId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(local, foreign));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenAnswer(inv -> LabOrderResponseDTO.builder().id(((LabOrder) inv.getArgument(0)).getId().toString()).build());
+
+        List<LabOrderResponseDTO> result = labOrderService.getLabOrdersByPatientId(patientId, Locale.ENGLISH);
+
+        assertThat(result).extracting(LabOrderResponseDTO::getId).containsExactly(local.getId().toString(), foreign.getId().toString());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(orderingUserId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

@@ -48,6 +48,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import java.util.Map;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
@@ -94,6 +98,10 @@ class PrescriptionServiceImplTest {
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
                 null, null, null, java.time.Clock.systemUTC());
 
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
@@ -414,13 +422,14 @@ class PrescriptionServiceImplTest {
         Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)).thenReturn(page);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable);
+        verify(prescriptionRepository).findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId), pageable);
         verify(prescriptionRepository, never()).findAll(any(Pageable.class));
     }
 
@@ -545,7 +554,8 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
@@ -2225,7 +2235,8 @@ class PrescriptionServiceImplTest {
         Pageable pageable = PageRequest.of(0, 10);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospId, pageable))
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospId), pageable))
             .thenReturn(Page.empty());
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
@@ -2276,7 +2287,8 @@ class PrescriptionServiceImplTest {
         UUID hospId = UUID.randomUUID();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospId))
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospId))).thenReturn(Set.of(hospId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospId)))
             .thenReturn(List.of());
 
         List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
@@ -2667,5 +2679,36 @@ class PrescriptionServiceImplTest {
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getPrescriptionsByPatientIdFollowsThePatientAndAccountsTheReach() {
+        // E9 #59c — the amoxicillin prescribed at Hôpital B is on the list at
+        // Hôpital A when the policy reads B for this patient, and the
+        // disclosure is accounted per source hospital.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Hospital local = new Hospital();
+        local.setId(hospitalId);
+        Prescription localRx = new Prescription();
+        localRx.setId(UUID.randomUUID());
+        localRx.setHospital(local);
+        Prescription foreignRx = new Prescription();
+        foreignRx.setId(UUID.randomUUID());
+        foreignRx.setHospital(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
+            .thenReturn(List.of(localRx, foreignRx));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+
+        List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
+
+        assertThat(result).extracting(PrescriptionResponseDTO::getId).containsExactly(localRx.getId(), foreignRx.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

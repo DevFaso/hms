@@ -49,6 +49,10 @@ export interface PatientResponse {
   departmentName?: string;
   organizationId?: string;
   active: boolean;
+  /** E8 #54 — every read of this chart needs a live break-the-glass session. */
+  chartRestricted?: boolean;
+  chartRestrictionReason?: string | null;
+  chartRestrictedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
   /** Non-null iff the patient has a photo (P3 #21). The binary comes from
@@ -208,6 +212,9 @@ export interface ChartUpdate {
   recordedAt: string;
   recordedByName?: string;
   recordedByRole?: string;
+  /** E9 #61 — the hospital that recorded the update; equals the active hospital for a local one. */
+  hospitalId?: string;
+  hospitalName?: string;
   sections?: (ChartUpdateSection & { id: string })[];
 }
 
@@ -245,6 +252,19 @@ export interface TimelineEntryMetadata {
   [key: string]: unknown;
 }
 
+/**
+ * E9 #64 — what a read withheld under decision D3: rows recorded at another
+ * hospital in a sensitive category, with no live break-the-glass session.
+ * Only where and how many; the rows themselves stay behind the declaration.
+ */
+export interface RestrictedRows {
+  hospitalId?: string | null;
+  hospitalName?: string | null;
+  /** Absent for rows that carry no department (problems). */
+  departmentName?: string | null;
+  count: number;
+}
+
 export interface TimelineEntry {
   entryId: string;
   category: string;
@@ -261,6 +281,8 @@ export interface PatientTimeline {
   entries: TimelineEntry[];
   totalEntries: number;
   generatedAt: string;
+  /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
+  restrictedRows?: RestrictedRows[];
 }
 
 /** SMS OTP challenge issued by POST /patients/phone-verification. */
@@ -489,6 +511,18 @@ export class PatientService {
     return this.http.post<PatientTimeline>(`/patients/${patientId}/doctor-timeline`, {
       accessReason,
       maxEvents,
+    });
+  }
+
+  /** E8 #54 — restrict or lift the restriction on a chart (HOSPITAL_ADMIN / SUPER_ADMIN). */
+  setChartRestriction(
+    id: string,
+    restricted: boolean,
+    reason?: string,
+  ): Observable<PatientResponse> {
+    return this.http.post<PatientResponse>(`/patients/${id}/chart-restriction`, {
+      restricted,
+      reason,
     });
   }
 }

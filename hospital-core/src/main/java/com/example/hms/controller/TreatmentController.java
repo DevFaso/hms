@@ -36,9 +36,9 @@ public class TreatmentController {
     private final TreatmentService treatmentService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('DOCTOR')")
     @Operation(summary = "Create a new treatment",
-            description = "Creates a new medical treatment. Requires HOSPITAL_ADMIN or DOCTOR role.")
+            description = "Creates a new medical treatment. Requires the DOCTOR role.")
     public ResponseEntity<TreatmentResponseDTO> createTreatment(
             @Valid @RequestBody TreatmentRequestDTO treatmentRequestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale,
@@ -49,7 +49,7 @@ public class TreatmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
     @Operation(summary = "Get all treatments",
             description = "Retrieves all treatments with optional language filtering")
     public ResponseEntity<List<TreatmentResponseDTO>> getAllTreatments(
@@ -60,7 +60,7 @@ public class TreatmentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'PATIENT')")
     @Operation(summary = "Get treatment by ID",
             description = "Retrieves a specific treatment by ID")
     public ResponseEntity<TreatmentResponseDTO> getTreatmentById(
@@ -72,9 +72,9 @@ public class TreatmentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('HOSPITAL_ADMIN') or (hasRole('DOCTOR') and @treatmentSecurityService.isTreatmentCreator(authentication, #id))")
+    @PreAuthorize("hasRole('DOCTOR') and @treatmentSecurityService.isTreatmentCreator(authentication, #id)")
     @Operation(summary = "Update a treatment",
-            description = "Updates an existing treatment. Requires HOSPITAL_ADMIN role or being the creator DOCTOR.")
+            description = "Updates an existing treatment. Requires being the creator DOCTOR.")
     public ResponseEntity<TreatmentResponseDTO> updateTreatment(
             @PathVariable UUID id,
             @Valid @RequestBody TreatmentRequestDTO treatmentRequestDTO,

@@ -94,6 +94,41 @@ describe('BreakGlassBannerComponent', () => {
     expect(fixture.nativeElement.querySelector('.bg-active')).toBeNull();
   });
 
+  it('E9 #64 — openDeclare opens the same declaration modal for a clinician with a scope', () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    setInputs('p1');
+
+    expect(fixture.componentInstance.openDeclare()).toBeTrue();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.bg-modal')).not.toBeNull();
+  });
+
+  it('E9 #64 — openDeclare says why when the role cannot declare, and opens nothing', () => {
+    init(['ROLE_PATIENT']);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    setInputs('p1');
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+
+    expect(fixture.componentInstance.openDeclare()).toBeFalse();
+    fixture.detectChanges();
+
+    expect(toast.error).toHaveBeenCalledWith('BREAK_GLASS.NOT_ALLOWED');
+    expect(fixture.nativeElement.querySelector('.bg-modal')).toBeNull();
+  });
+
+  it('E9 #64 — openDeclare asks for a hospital scope before opening', () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    setInputs('p1', null);
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+
+    expect(fixture.componentInstance.openDeclare()).toBeFalse();
+
+    expect(toast.error).toHaveBeenCalledWith('BREAK_GLASS.NEED_HOSPITAL');
+  });
+
   it('does not call the API when patientId is missing', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));

@@ -30,5 +30,12 @@ public enum RecordAccessDenialReason {
     NOT_STAFF_AT_HOSPITAL,
 
     /** No carrier establishes a live relationship between patient and hospital. */
-    NO_TREATMENT_RELATIONSHIP
+    NO_TREATMENT_RELATIONSHIP,
+    /**
+     * The hospital administrator restricted this chart (E8 #54: VIP, staff
+     * member, own or family record) and the actor holds no live
+     * break-the-glass session for it. Evaluated after a relationship is
+     * found, so it never discloses whether one exists to a stranger.
+     */
+    CHART_RESTRICTED
 }

@@ -28,7 +28,6 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.enums.PatientDocumentType;
@@ -365,32 +364,6 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         AppointmentResponseDTO result = portalService.rescheduleMyAppointment(auth, dto, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
-    }
-
-    // ── Grant data-sharing consent ───────────────────────────────────────
-
-    @Operation(summary = "Grant data-sharing consent",
-            description = "Allow one hospital to share your records with another hospital")
-    @PostMapping("/consents")
-    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
-    public ResponseEntity<ApiResponseWrapper<PatientConsentResponseDTO>> grantConsent(
-            Authentication auth, @Valid @RequestBody PortalConsentRequestDTO dto) {
-        PatientConsentResponseDTO result = portalService.grantMyConsent(auth, dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
-    }
-
-    // ── Revoke data-sharing consent ──────────────────────────────────────
-
-    @Operation(summary = "Revoke data-sharing consent",
-            description = "Revoke a previously granted consent between two hospitals")
-    @DeleteMapping("/consents")
-    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
-    public ResponseEntity<ApiResponseWrapper<Void>> revokeConsent(
-            Authentication auth,
-            @RequestParam UUID fromHospitalId,
-            @RequestParam UUID toHospitalId) {
-        portalService.revokeMyConsent(auth, fromHospitalId, toHospitalId);
-        return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 
     // ── Record home vital sign ───────────────────────────────────────────

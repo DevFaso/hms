@@ -32,4 +32,7 @@ public class PatientLabResultResponseDTO {
     private String performedBy;
     private String category;
     private String notes;
+    /** E9 provenance — the hospital that resulted the row; equals the acting hospital for a local row. */
+    private UUID hospitalId;
+    private String hospitalName;
 }

@@ -19,7 +19,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import com.example.hms.enums.BreakGlassReviewOutcome;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Short-lived emergency-access grant ("break-the-glass") that lets a
@@ -97,6 +101,25 @@ public class BreakGlassSession extends BaseEntity {
     @Column(name = "audit_count", nullable = false)
     @Builder.Default
     private int auditCount = 0;
+
+    /** E8 #54 — compliance sign-off. NULL reviewedAt = not yet reviewed. */
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "reviewed_by_user_id")
+    private UUID reviewedByUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_outcome", length = 32)
+    private BreakGlassReviewOutcome reviewOutcome;
+
+    @Size(max = 1024)
+    @Column(name = "review_note", length = 1024)
+    private String reviewNote;
+
+    public boolean isReviewed() {
+        return reviewedAt != null;
+    }
 
     /** True when the session is still active: not revoked and not expired. */
     public boolean isLive() {

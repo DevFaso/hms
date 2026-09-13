@@ -40,7 +40,7 @@ public class PharmacyPaymentController {
     private final PharmacyPaymentService pharmacyPaymentService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Record pharmacy payment",
             description = "Create a payment (cash, mobile-money, or insurance) against a dispense")
     @ApiResponse(responseCode = "201", description = "Payment recorded")
@@ -53,7 +53,7 @@ public class PharmacyPaymentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get pharmacy payment", description = "Retrieve a pharmacy payment by ID")
     @ApiResponse(responseCode = "200", description = "Payment found")
     @ApiResponse(responseCode = "404", description = "Payment not found")
@@ -62,7 +62,7 @@ public class PharmacyPaymentController {
     }
 
     @GetMapping("/dispense/{dispenseId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List payments by dispense",
             description = "Paginated list of payments for a dispense record")
     @ApiResponse(responseCode = "200", description = "Payments retrieved")
@@ -76,7 +76,7 @@ public class PharmacyPaymentController {
     // PATIENT role intentionally excluded: PATIENT callers use the patient-portal `/me` flow
     // which resolves the patient ID from the JWT, preventing IDOR via arbitrary {patientId}.
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List payments by patient",
             description = "Paginated list of payments for a patient \u2014 staff-facing invoice view")
     @ApiResponse(responseCode = "200", description = "Payments retrieved")

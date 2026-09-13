@@ -62,8 +62,9 @@ public class RoleValidator {
      *
      * <p>Why this matters: {@code JwtTokenProvider.getAuthenticationFromJwt}
      * inflates a real super-admin's {@code ROLE_SUPER_ADMIN} authority to
-     * also carry {@code ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, …}
-     * so per-hospital staff checks "just work". An impersonation context
+     * also carry {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}
+     * (the one list both auth paths share since E9 #67) so per-hospital
+     * staff checks "just work". An impersonation context
      * (or any future code path that copies authorities verbatim) could
      * therefore present {@code ROLE_SUPER_ADMIN} in {@code authorities}
      * without the principal actually being a super-admin. The discrete
@@ -90,7 +91,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE_PRACTITIONER","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -231,7 +232,6 @@ public class RoleValidator {
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
-    public boolean isNursePractitioner(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE_PRACTITIONER"); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
@@ -257,17 +257,20 @@ public class RoleValidator {
     /* =========================================
        Convenience
        ========================================= */
+    /**
+     * Prescribing is a clinical act: a hospital admin no longer passes (E9 #67,
+     * D5), and midwives, who prescribe throughout the OB module, have parity
+     * with nurses (E9 #69).
+     */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isNurse(userId, hospitalId)
-            || isNursePractitioner(userId, hospitalId)
-            || isHospitalAdmin(userId, hospitalId);
+            || isMidwife(userId, hospitalId);
     }
 
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isPhysician(userId, hospitalId)
-            || isNursePractitioner(userId, hospitalId)
             || isNurse(userId, hospitalId);
     }
 

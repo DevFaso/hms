@@ -378,3 +378,27 @@
     grid-template-columns: 1fr;
   }
 }
+
+// E9 #63 — the department's default sensitive category.
+.sensitivity-card {
+  .sensitivity-hint {
+    margin: 0 0 12px;
+    color: #5c5c74;
+    font-size: 0.9rem;
+  }
+
+  .sensitivity-label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .sensitivity-select {
+    width: 100%;
+    max-width: 360px;
+    padding: 8px 10px;
+    border: 1px solid #c9c9d6;
+    border-radius: 6px;
+    background: #fff;
+  }
+}

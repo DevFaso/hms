@@ -66,4 +66,8 @@ public class PatientMedicationResponseDTO {
     @Schema(description = "True while a request is awaiting a decision (REQUESTED or PAUSED), "
             + "so the portal can suppress a duplicate request the backend would reject.")
     private boolean refillRequestOpen;
+
+    /** E9 provenance — the hospital that prescribed; equals the acting hospital for a local row. */
+    private UUID hospitalId;
+    private String hospitalName;
 }

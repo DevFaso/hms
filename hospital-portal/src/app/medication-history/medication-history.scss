@@ -385,3 +385,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+// E9 #61 — an entry from another hospital is marked structurally as well as named.
+tr.foreign-row td:first-child {
+  border-left: 3px solid var(--primary);
+}
+
+.hospital-cell {
+  color: #5c5c74;
+  font-size: 0.85rem;
+}

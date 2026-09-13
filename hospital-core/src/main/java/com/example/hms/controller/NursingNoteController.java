@@ -40,7 +40,7 @@ public class NursingNoteController {
     private final NursingNoteService nursingNoteService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Document a structured nursing note for a patient")
     public ResponseEntity<NursingNoteResponseDTO> createNote(
         @Valid @RequestBody NursingNoteCreateRequestDTO request,
@@ -51,7 +51,7 @@ public class NursingNoteController {
     }
 
     @PostMapping("/{noteId}/addenda")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Append an auditable addendum to an existing nursing note")
     public ResponseEntity<NursingNoteResponseDTO> appendAddendum(
         @PathVariable UUID noteId,
@@ -64,7 +64,7 @@ public class NursingNoteController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Load recent nursing notes for a patient")
     public ResponseEntity<List<NursingNoteResponseDTO>> getRecentNotes(
         @RequestParam(name = "patientId") UUID patientId,
@@ -78,7 +78,7 @@ public class NursingNoteController {
     }
 
     @GetMapping("/{noteId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Fetch a specific nursing note")
     public ResponseEntity<NursingNoteResponseDTO> getNote(
         @PathVariable UUID noteId,

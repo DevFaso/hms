@@ -4,17 +4,25 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
-  PatientConsent,
   AccessLogEntry,
   DisclosureAccounting,
+  RecordSharingOptOut,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
-import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
+/**
+ * "Who accessed my record" (E9 #66, decision D7).
+ *
+ * <p>The consent-grant form that used to live here is gone: a patient's record
+ * follows them on the treatment relationship, so there is nothing to grant.
+ * What a patient controls is the opt-out (V157): close the door to other
+ * hospitals, keep their own hospital's access, and see every access and
+ * disclosure below, emergency ones first.
+ */
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, FormsModule, TranslateModule],
   templateUrl: './my-sharing.component.html',
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],
 })
@@ -23,75 +31,69 @@ export class MySharingComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
-  activeTab = signal<'consents' | 'access-log'>('consents');
-  loadingConsents = signal(true);
-  loadingLog = signal(false);
+  /* ── Opt-out ── */
+  optOut = signal<RecordSharingOptOut | null>(null);
+  optOutLoading = signal(true);
+  /** Load failure is shown as such, never as "sharing is on". */
+  optOutFailed = signal(false);
+  optOutSaving = signal(false);
+  showOptOutForm = signal(false);
+  optOutReason = '';
+  private patientId = '';
+
+  /* ── Access log ── */
+  loadingLog = signal(true);
   /**
    * Distinguished from "no rows" on purpose: an empty access log reads as
    * "nobody has looked at your records", which is not a safe thing to tell
    * a patient when what actually happened is that the request failed.
    */
   logFailed = signal(false);
-  consents = signal<PatientConsent[]>([]);
   accessLog = signal<AccessLogEntry[]>([]);
   /**
    * Per-category counts across the whole history, not just the loaded page.
-   * Leads the tab so the two rows that matter are visible without scrolling
+   * Leads the page so the two rows that matter are visible without scrolling
    * through months of routine chart opens.
    */
   disclosureSummary = signal<DisclosureAccounting | null>(null);
-  revoking = signal(false);
-  accessLogLoaded = false;
-
-  // Share form state
-  showShareForm = signal(false);
-  sharing = signal(false);
-  shareHospitalId = '';
-  sharePurpose = '';
-  shareExpiration = '';
-  private patientHospitalId = '';
 
   ngOnInit(): void {
-    this.portal.getMyConsents().subscribe({
-      next: (c) => {
-        this.consents.set(c);
-        this.loadingConsents.set(false);
-      },
-      error: () => this.loadingConsents.set(false),
-    });
+    this.loadAccessLog();
     this.portal.getMyProfile().subscribe({
       next: (profile) => {
-        this.patientHospitalId = profile.hospitalId ?? '';
+        this.patientId = profile.id ?? '';
+        this.loadOptOut();
+      },
+      error: () => {
+        this.optOutFailed.set(true);
+        this.optOutLoading.set(false);
       },
     });
   }
 
-  switchToAccessLog(): void {
-    this.activeTab.set('access-log');
-    if (!this.accessLogLoaded) {
-      this.loadingLog.set(true);
-      this.logFailed.set(false);
-      this.portal.getMyDisclosures().subscribe({
-        next: (accounting) => {
-          this.disclosureSummary.set(accounting);
-          this.accessLog.set(accounting.entries);
-          this.loadingLog.set(false);
-          this.accessLogLoaded = true;
-        },
-        error: () => {
-          this.logFailed.set(true);
-          this.loadingLog.set(false);
-          // Not marked loaded: a failure should retry on the next visit
-          // rather than cache itself as an answer.
-        },
-      });
-    }
+  optedOut(): boolean {
+    return this.optOut()?.inForce === true;
+  }
+
+  loadAccessLog(): void {
+    this.loadingLog.set(true);
+    this.logFailed.set(false);
+    this.portal.getMyDisclosures().subscribe({
+      next: (accounting) => {
+        this.disclosureSummary.set(accounting);
+        this.accessLog.set(accounting.entries);
+        this.loadingLog.set(false);
+      },
+      error: () => {
+        this.logFailed.set(true);
+        this.loadingLog.set(false);
+      },
+    });
   }
 
   /** Retry after a failed load. */
   retryAccessLog(): void {
-    this.accessLogLoaded = false;
-    this.switchToAccessLog();
+    this.loadAccessLog();
   }
 
   /**
@@ -115,55 +117,65 @@ export class MySharingComponent implements OnInit {
     return this.disclosureSummary()?.externalDisclosures ?? 0;
   }
 
-  revokeConsent(c: PatientConsent): void {
-    this.revoking.set(true);
-    this.portal.revokeConsent(c.fromHospitalId, c.toHospitalId).subscribe({
-      next: () => {
-        this.consents.update((list) =>
-          list.map((item) => (item.id === c.id ? { ...item, status: 'REVOKED' } : item)),
-        );
-        this.toast.success(this.translate.instant('PORTAL.SHARING.CONSENT_REVOKED'));
-        this.revoking.set(false);
+  openOptOutForm(): void {
+    this.optOutReason = '';
+    this.showOptOutForm.set(true);
+  }
+
+  cancelOptOut(): void {
+    this.showOptOutForm.set(false);
+  }
+
+  confirmOptOut(): void {
+    if (!this.patientId || this.optOutSaving()) return;
+    this.optOutSaving.set(true);
+    this.portal.optOutOfSharing(this.patientId, this.optOutReason.trim() || null).subscribe({
+      next: (state) => {
+        this.optOut.set(state);
+        this.showOptOutForm.set(false);
+        this.optOutSaving.set(false);
+        this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_ON'));
       },
       error: () => {
-        this.toast.error(this.translate.instant('PORTAL.SHARING.CONSENT_REVOKE_FAILED'));
-        this.revoking.set(false);
+        this.optOutSaving.set(false);
+        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
       },
     });
   }
 
-  openShareForm(): void {
-    this.shareHospitalId = '';
-    this.sharePurpose = '';
-    this.shareExpiration = '';
-    this.showShareForm.set(true);
+  revokeOptOut(): void {
+    if (!this.patientId || this.optOutSaving()) return;
+    this.optOutSaving.set(true);
+    this.portal.revokeOptOut(this.patientId).subscribe({
+      next: (state) => {
+        this.optOut.set(state);
+        this.optOutSaving.set(false);
+        this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_OFF'));
+      },
+      error: () => {
+        this.optOutSaving.set(false);
+        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
+      },
+    });
   }
 
-  cancelShare(): void {
-    this.showShareForm.set(false);
-  }
-
-  submitShare(): void {
-    if (!this.shareHospitalId.trim()) return;
-    this.sharing.set(true);
-    this.portal
-      .grantConsent({
-        fromHospitalId: this.patientHospitalId,
-        toHospitalId: this.shareHospitalId.trim(),
-        purpose: this.sharePurpose.trim() || 'Treatment',
-        consentExpiration: this.shareExpiration || '',
-      })
-      .subscribe({
-        next: (consent) => {
-          this.consents.update((list) => [consent, ...list]);
-          this.toast.success(this.translate.instant('PORTAL.SHARING.CONSENT_GRANTED'));
-          this.sharing.set(false);
-          this.showShareForm.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('PORTAL.SHARING.CONSENT_GRANT_FAILED'));
-          this.sharing.set(false);
-        },
-      });
+  private loadOptOut(): void {
+    if (!this.patientId) {
+      this.optOutFailed.set(true);
+      this.optOutLoading.set(false);
+      return;
+    }
+    this.optOutLoading.set(true);
+    this.optOutFailed.set(false);
+    this.portal.getMyOptOut(this.patientId).subscribe({
+      next: (state) => {
+        this.optOut.set(state);
+        this.optOutLoading.set(false);
+      },
+      error: () => {
+        this.optOutFailed.set(true);
+        this.optOutLoading.set(false);
+      },
+    });
   }
 }

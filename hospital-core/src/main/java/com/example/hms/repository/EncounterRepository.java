@@ -196,6 +196,27 @@ public interface EncounterRepository
     Page<Encounter> findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 
+    /** E9 #59e — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    List<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(UUID patientId, Collection<UUID> hospitalIds);
+
+    /** E9 #60 — the paged sibling, for the chart review. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    Page<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
+
     /**
      * Find COMPLETED encounters for a patient that do NOT have a corresponding
      * discharge summary. Used by the patient portal to backfill missing summaries.

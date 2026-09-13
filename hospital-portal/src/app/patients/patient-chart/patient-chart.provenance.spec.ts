@@ -144,4 +144,20 @@ describe('PatientChartComponent — timeline provenance', () => {
     expect(component.entryHospital(local)).toBe('CHU de Ouagadougou');
     expect(component.isForeignEntry(local)).toBeFalse();
   });
+
+  // E9 #61 — the same provenance on the allergies, problems and updates rows.
+  it('marks a row recorded at another hospital as foreign, by id', () => {
+    setup([]);
+    expect(component.isForeignRow({ hospitalId: 'h-2' })).toBeTrue();
+  });
+
+  it('treats a row from the active hospital as local', () => {
+    setup([]);
+    expect(component.isForeignRow({ hospitalId: 'h-1' })).toBeFalse();
+  });
+
+  it('treats a row with no hospital id as local rather than foreign', () => {
+    setup([]);
+    expect(component.isForeignRow({})).toBeFalse();
+  });
 });

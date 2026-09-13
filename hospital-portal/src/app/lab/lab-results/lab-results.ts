@@ -114,7 +114,6 @@ export class LabResultsComponent implements OnInit {
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_DIRECTOR',
     'ROLE_QUALITY_MANAGER',
-    'ROLE_HOSPITAL_ADMIN',
   ]);
   /** POST /{id}/acknowledge — intersection of @PreAuthorize and SecurityConfig matcher. */
   readonly canAcknowledge = this.roleContext.hasAnyActiveRole([
@@ -128,14 +127,13 @@ export class LabResultsComponent implements OnInit {
    * POST /{id}/critical-read-back — deliberately NOT the acknowledge list.
    * Read-back is the ordering clinician confirming what they were told; the
    * backend excludes the lab roles (lab attestation is not clinician receipt),
-   * so showing them the button meant a control that always 403'd — while the
-   * admin roles the backend does authorize never got it.
+   * so showing them the button meant a control that always 403'd. Hospital
+   * admins lost this with E9 #67: read-back is a clinician's act.
    */
   readonly canReadBack = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 

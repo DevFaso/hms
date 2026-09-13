@@ -25,7 +25,6 @@ import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.HealthSummaryDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
-import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
@@ -80,7 +79,7 @@ import static org.mockito.Mockito.when;
  * prescriptions, vitals, encounters, appointments, invoices, consents,
  * immunizations, consultations, treatment plans, referrals,
  * care team, access log, after-visit summaries, and IDOR rejection paths
- * for grantMyConsent / revokeMyConsent.
+ * (the consent write paths went with E9 #65).
  */
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings({"java:S100", "java:S1192"})
@@ -779,51 +778,6 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(out.getActor()).isEqualTo("dr.martin");
             assertThat(out.getEventType()).isEqualTo("PATIENT_ACCESS");
             assertThat(out.getDescription()).isEqualTo("Doctor viewed patient record");
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // IDOR rejection — grantMyConsent / revokeMyConsent
-    // ══════════════════════════════════════════════════════════════════════
-
-    @Nested
-    @DisplayName("IDOR rejection — consent endpoints")
-    class IdorRejection {
-
-        @Test
-        @DisplayName("grantMyConsent — should throw BusinessException when patient not registered at source hospital")
-        void grantMyConsent_notRegisteredAtHospital_throws() {
-            stubPatientResolution();
-            UUID from = UUID.randomUUID();
-            UUID to = UUID.randomUUID();
-
-            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, from))
-                    .thenReturn(Optional.empty());
-
-            PortalConsentRequestDTO dto = PortalConsentRequestDTO.builder()
-                    .fromHospitalId(from)
-                    .toHospitalId(to)
-                    .purpose("Treatment")
-                    .build();
-
-            assertThatThrownBy(() -> service.grantMyConsent(auth, dto))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not registered at the specified source hospital");
-        }
-
-        @Test
-        @DisplayName("revokeMyConsent — should throw BusinessException when patient not registered at source hospital")
-        void revokeMyConsent_notRegisteredAtHospital_throws() {
-            stubPatientResolution();
-            UUID from = UUID.randomUUID();
-            UUID to = UUID.randomUUID();
-
-            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, from))
-                    .thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> service.revokeMyConsent(auth, from, to))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not registered at the specified source hospital");
         }
     }
 }

@@ -68,7 +68,7 @@ public class EncounterController {
      * do not open visits.
      */
     private static final String ENCOUNTER_CREATE_ROLES =
-        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')";
+        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
 
     /**
      * Encounter list READ — the visit history panel on the patient chart. This
@@ -78,13 +78,13 @@ public class EncounterController {
      * audit D7.
      */
     private static final String ENCOUNTER_LIST_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
     /** As above, plus ROLE_PATIENT for their own encounter. */
     private static final String ENCOUNTER_DETAIL_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT',"
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PATIENT',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
@@ -100,10 +100,10 @@ public class EncounterController {
         summary = "Create a new encounter",
         description = "Creates a new patient encounter. " +
             "Receptionists use this as the walk-in check-in endpoint: the hospitalId is always " +
-            "taken from the JWT (cannot be overridden) and the initial status defaults to ARRIVED. " +
+            "the active hospital of the request context (cannot be overridden) and the initial status defaults to ARRIVED. " +
             "For receptionist walk-ins, omit appointmentId; supply patientId and chiefComplaint. " +
             "Doctors, nurses, and midwives may also create encounters; their hospitalId defaults " +
-            "to the JWT value but can be overridden in the request body."
+            "to the active hospital of the request context but can be overridden in the request body."
     )
     public ResponseEntity<EncounterResponseDTO> create(
         @Valid @RequestBody EncounterRequestDTO dto,
@@ -111,18 +111,18 @@ public class EncounterController {
         Authentication auth
     ) {
         // Enforce hospital scoping
-        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
+        UUID contextHospitalId = authUtils.currentHospitalId(auth);
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, ROLE_RECEPTIONIST);
         if (isReceptionist) {
-            if (jwtHospitalId == null) {
-                throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
+            if (contextHospitalId == null) {
+                throw new BusinessException("Receptionist must be affiliated with a hospital (no active hospital in the request context).");
             }
-            dto.setHospitalId(jwtHospitalId); // receptionist cannot override
+            dto.setHospitalId(contextHospitalId); // receptionist cannot override
         } else {
-            // non-receptionist: allow body value; fallback to JWT if body missing
+            // non-receptionist: allow body value; fallback to the request context if body missing
             if (dto.getHospitalId() == null) {
-                dto.setHospitalId(jwtHospitalId);
+                dto.setHospitalId(contextHospitalId);
             }
         }
 
@@ -180,16 +180,15 @@ public class EncounterController {
         }
 
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
+        UUID contextHospitalId = authUtils.currentHospitalId(auth);
         UUID resolvedHospitalId = hospitalId;
 
         if (!isSuperAdmin) {
-            // Non-superadmin MUST be scoped to a hospital — try param → JWT → assignment fallback
+            // Non-superadmin MUST be scoped to a hospital — param, else the
+            // request context (live permitted set + X-Hospital-Id, with the
+            // assignment fallback already inside currentHospitalId).
             if (resolvedHospitalId == null) {
-                resolvedHospitalId = jwtHospitalId;
-            }
-            if (resolvedHospitalId == null) {
-                resolvedHospitalId = authUtils.fallbackHospitalFromAssignments(auth).orElse(null);
+                resolvedHospitalId = contextHospitalId;
             }
             if (resolvedHospitalId == null) {
                 throw new BusinessException("Hospital context required to list encounters. Please select an active hospital.");
@@ -208,7 +207,7 @@ public class EncounterController {
     // Update
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Update an encounter (super-admin, doctor, nurse, midwife, hospital-admin)")
     public ResponseEntity<EncounterResponseDTO> update(
         @PathVariable UUID id,
@@ -217,10 +216,10 @@ public class EncounterController {
         Authentication auth,
         com.example.hms.security.ActingContext ctx
     ) {
-        // For consistency, honor JWT hospital for receptionist (though receptionist isn't allowed here)
-        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
+        // Default the body hospital to the request context when absent
+        UUID contextHospitalId = authUtils.currentHospitalId(auth);
         if (dto.getHospitalId() == null) {
-            dto.setHospitalId(jwtHospitalId);
+            dto.setHospitalId(contextHospitalId);
         }
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
@@ -243,7 +242,7 @@ public class EncounterController {
     // By Doctor
     // ----------------------------------------------------------
     @GetMapping(value = "/doctor/{identifier}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounters by doctor (UUID | username | email | license)")
     public ResponseEntity<List<EncounterResponseDTO>> byDoctor(
         @PathVariable String identifier,
@@ -394,7 +393,7 @@ public class EncounterController {
     // MVP 6 — Check-Out & After-Visit Summary
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
         description = "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
@@ -419,7 +418,7 @@ public class EncounterController {
     // MVP 6 — Retrieve After-Visit Summary for a completed encounter
     // ----------------------------------------------------------
     @GetMapping(value = "/{encounterId}/avs", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_PATIENT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_PATIENT')")
     @Operation(
         summary = "Get After-Visit Summary for a completed encounter (MVP 6)",
         description = "Returns the AVS for a previously checked-out encounter. "
@@ -433,7 +432,7 @@ public class EncounterController {
         return ResponseEntity.ok(avs);
     }
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Create or update encounter note (super-admin, doctor, nurse, midwife, hospital-admin)", 
                description = "Creates or updates the encounter note with SOAP/narrative documentation")
     public ResponseEntity<EncounterNoteResponseDTO> upsertEncounterNote(
@@ -510,7 +509,7 @@ public class EncounterController {
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounter note history",
                description = "Returns the audit trail of all changes to the encounter note, " +
                            "including original creation, updates, and addendums.")

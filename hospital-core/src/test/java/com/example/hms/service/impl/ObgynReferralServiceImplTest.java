@@ -44,6 +44,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import java.util.Map;
+import java.util.Set;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class ObgynReferralServiceImplTest {
@@ -55,6 +65,8 @@ class ObgynReferralServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private ObgynReferralMapper referralMapper;
     @Mock private ObjectMapper objectMapper;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private ObgynReferralServiceImpl service;
 
@@ -276,5 +288,38 @@ class ObgynReferralServiceImplTest {
         ReferralStatusSummaryDTO result = service.getStatusSummary();
         assertThat(result.getSubmitted()).isEqualTo(5L);
         assertThat(result.getOverdue()).isEqualTo(4L);
+    }
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
+
+    @Test void getReferralsForPatientFollowThePatientWhenActingInAHospital() {
+        // E9 #59d — the referral written at Hôpital B is on the page at Hôpital A
+        // when the policy reads B for this patient; accounted.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId);
+        ObgynReferral foreign = ObgynReferral.builder().patient(patient).hospital(other).midwife(user)
+            .status(ObgynReferralStatus.SUBMITTED).urgency(ObgynReferralUrgency.ROUTINE).build();
+        foreign.setId(UUID.randomUUID());
+        Pageable pageable = PageRequest.of(0, 10);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(hospitalId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .superAdmin(false)
+            .build());
+        when(recordAccessPolicy.readableHospitalIds(userId, patientId, hospitalId)).thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(referralRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId), pageable))
+            .thenReturn(new PageImpl<>(List.of(referral, foreign)));
+        when(referralMapper.toResponseDTO(any())).thenReturn(ObgynReferralResponseDTO.builder().id(referralId).build());
+
+        Page<ObgynReferralResponseDTO> result = service.getReferralsForPatient(patientId, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        verify(referralRepository, never()).findByPatient_Id(any(), any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 }

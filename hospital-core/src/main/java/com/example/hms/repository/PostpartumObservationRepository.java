@@ -23,6 +23,10 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
         Pageable pageable
     );
 
+    /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    List<PostpartumObservation> findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc(
+        UUID patientId, java.util.Collection<UUID> hospitalIds, Pageable pageable);
+
     Optional<PostpartumObservation> findFirstByCarePlan_IdOrderByObservationTimeDesc(UUID carePlanId);
 
     Optional<PostpartumObservation> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);

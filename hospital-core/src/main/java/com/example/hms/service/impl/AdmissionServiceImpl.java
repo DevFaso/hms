@@ -36,6 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import java.util.Set;
+import com.example.hms.service.recordaccess.CrossHospitalRows;
+import com.example.hms.service.recordaccess.SensitivityClassifier;
+import com.example.hms.service.recordaccess.BreakGlassGate;
 
 /**
  * Implementation of AdmissionService
@@ -70,6 +76,10 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final BedAssignmentService bedAssignmentService;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final CrossHospitalReachRecorder reachRecorder;
+    private final SensitivityClassifier sensitivityClassifier;
+    private final BreakGlassGate breakGlassGate;
 
     @Override
     @Transactional
@@ -278,12 +288,26 @@ public class AdmissionServiceImpl implements AdmissionService {
     public List<AdmissionResponseDTO> getAdmissionsByPatient(UUID patientId) {
         // ── Tenant isolation: filter to active hospital ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<Admission> admissions = admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId);
-        if (activeHospitalId != null) {
-            admissions = admissions.stream()
-                .filter(a -> a.getHospital() != null && activeHospitalId.equals(a.getHospital().getId()))
+        if (activeHospitalId == null) {
+            return admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
+                .map(admissionMapper::toResponseDTO)
                 .toList();
         }
+        // E9 #59e — admissions follow the patient across the readable hospitals,
+        // read at the database rather than by loading every tenant's rows and
+        // keeping the acting hospital's. A foreign admission in a sensitive
+        // category (decision D3) is withheld here and opens through
+        // break-the-glass (E9 #62); every foreign row surfaced is accounted.
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
+        List<Admission> admissions = admissionRepository
+            .findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(patientId, readable).stream()
+            .filter(a -> CrossHospitalRows.maySurface(a.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(a), unlocked))
+            .toList();
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(admissions.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList(), activeHospitalId),
+            "Cross-hospital admission read on the treatment relationship");
         return admissions.stream()
             .map(admissionMapper::toResponseDTO)
             .toList();

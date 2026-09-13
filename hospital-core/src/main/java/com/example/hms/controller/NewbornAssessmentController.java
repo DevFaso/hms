@@ -45,7 +45,7 @@ public class NewbornAssessmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Document a newborn assessment",
         description = "Records newborn adaptation details including Apgar scores, vitals, physical exam findings, follow-up actions, and parent education.",
@@ -71,7 +71,7 @@ public class NewbornAssessmentController {
     }
 
     @GetMapping("/recent")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "List recent newborn assessments",
         description = "Returns the most recent newborn assessments recorded for the patient.",
@@ -95,7 +95,7 @@ public class NewbornAssessmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Search newborn assessments",
         description = "Returns a paginated view of newborn assessments filtered by time range.",
