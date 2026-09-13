@@ -517,7 +517,7 @@ public class LabResultServiceImpl implements LabResultService {
         try {
             @SuppressWarnings("unchecked")
             java.util.Map<String, Object> cond =
-                new com.fasterxml.jackson.databind.ObjectMapper()
+                new tools.jackson.databind.ObjectMapper()
                     .readValue(conditionJson, java.util.Map.class);
             if (cond.containsKey("severityFlag")) {
                 String required = (String) cond.get("severityFlag");

@@ -13,9 +13,9 @@ import com.example.hms.payload.dto.referral.ReferralAttachmentDTO;
 import com.example.hms.payload.dto.referral.ReferralClinicianSummaryDTO;
 import com.example.hms.payload.dto.referral.ReferralHospitalSummaryDTO;
 import com.example.hms.payload.dto.referral.ReferralPatientSummaryDTO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +143,7 @@ public class ObgynReferralMapper {
 
         try {
             return objectMapper.writeValueAsString(attachments);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Unable to serialize referral message attachments", e);
         }
     }
@@ -155,7 +155,7 @@ public class ObgynReferralMapper {
 
         try {
             return objectMapper.readValue(attachmentsJson, MESSAGE_ATTACHMENTS_TYPE);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             LOGGER.warn("Failed to parse referral message attachments payload: {}", e.getMessage());
             return List.of();
         }

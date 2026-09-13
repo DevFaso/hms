@@ -3,7 +3,7 @@ package com.example.hms.service.tenant;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.service.RegionPolicyService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;

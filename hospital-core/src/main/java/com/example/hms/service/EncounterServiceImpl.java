@@ -273,7 +273,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
     private final EmailService emailService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
@@ -301,7 +301,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeMap(java.util.Map<String, Object> map) {
             try {
                 return objectMapper.writeValueAsString(map);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 return null;
             }
         }
@@ -309,7 +309,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeEncounter(Encounter encounter) {
             try {
                 return objectMapper.writeValueAsString(encounter);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 return null;
             }
         }
@@ -1212,7 +1212,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             return null;
         }
     }

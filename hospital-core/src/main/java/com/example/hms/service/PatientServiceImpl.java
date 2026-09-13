@@ -87,8 +87,8 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.DiagnosisCodeValidator;
 import com.example.hms.utility.RoleValidator;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1642,7 +1642,7 @@ public class PatientServiceImpl implements PatientService {
         try {
             PatientProblemResponseDTO dto = patientProblemMapper.toResponseDto(problem);
             return objectMapper.writeValueAsString(dto);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.warn("Unable to serialize patient problem {} snapshot", problem.getId(), ex);
             return null;
         }

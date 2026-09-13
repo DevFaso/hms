@@ -6,13 +6,13 @@ import com.example.hms.model.chart.PatientChartUpdate;
 import com.example.hms.payload.dto.PatientChartAttachmentResponseDTO;
 import com.example.hms.payload.dto.PatientChartSectionEntryResponseDTO;
 import com.example.hms.payload.dto.PatientChartUpdateResponseDTO;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
+import tools.jackson.core.JacksonException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ public class PatientChartUpdateMapper {
         }
         try {
             return objectMapper.readValue(detailsJson, new TypeReference<>() {});
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.warn("Unable to parse chart section details JSON payload", e);
             return Map.of();
         }

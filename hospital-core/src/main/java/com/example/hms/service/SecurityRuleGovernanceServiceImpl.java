@@ -12,8 +12,8 @@ import com.example.hms.payload.dto.superadmin.SecurityRuleTemplateDTO;
 import com.example.hms.payload.dto.superadmin.SecurityRuleTemplateImportRequestDTO;
 import com.example.hms.payload.dto.superadmin.SecurityRuleTemplateImportResponseDTO;
 import com.example.hms.repository.SecurityRuleSetRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -181,7 +181,7 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
     private String serializeMetadata(Map<String, Object> payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to serialize security rule metadata", e);
             return "{}";
         }
