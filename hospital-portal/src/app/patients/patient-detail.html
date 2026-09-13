@@ -25,23 +25,6 @@
   }
 
   @if (!loading() && patient(); as p) {
-    <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
-    <app-storyboard-banner
-      [patientId]="p.id"
-      [refreshToken]="accessEpoch()"
-      (openRestricted)="openRestrictedRows()"
-    />
-
-    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
-    <app-break-glass-banner
-      [patientId]="p.id"
-      [hospitalId]="currentHospitalId()"
-      (sessionChanged)="onBreakGlassSessionChanged()"
-    />
-
-    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
-    <app-bpa-panel [patientId]="p.id" />
-
     <!-- Header -->
     <div class="detail-header">
       <app-patient-photo
@@ -66,6 +49,16 @@
           @if (p.gender) {
             <span class="meta-tag"
               ><span class="material-symbols-outlined">person</span> {{ p.gender }}</span
+            >
+          }
+          @if (p.dateOfBirth) {
+            <span class="meta-tag" data-testid="header-dob"
+              ><span class="material-symbols-outlined">cake</span> {{ p.dateOfBirth }}</span
+            >
+          }
+          @if (p.bloodType) {
+            <span class="meta-tag" data-testid="header-blood-type"
+              ><span class="material-symbols-outlined">bloodtype</span> {{ p.bloodType }}</span
             >
           }
           <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
@@ -110,6 +103,23 @@
         </button>
       }
     </div>
+
+    <!-- Storyboard — allergies / problems / active encounter / code status. Identity is the header above. -->
+    <app-storyboard-banner
+      [patientId]="p.id"
+      [refreshToken]="accessEpoch()"
+      (openRestricted)="openRestrictedRows()"
+    />
+
+    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
+    <app-break-glass-banner
+      [patientId]="p.id"
+      [hospitalId]="currentHospitalId()"
+      (sessionChanged)="onBreakGlassSessionChanged()"
+    />
+
+    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
+    <app-bpa-panel [patientId]="p.id" />
 
     <!-- Tabs -->
     <div class="tabs">

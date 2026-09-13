@@ -1,14 +1,7 @@
-<!-- Zero-height probe that stays in normal flow. Once it scrolls out of the
-`.content` scroll box the banner is pinned, which is the only reliable
-way to know: CSS has no ":stuck" selector. -->
-@if (patientId()) {
-  <div #stickySentinel class="storyboard__sentinel" aria-hidden="true"></div>
-}
 @if (patientId()) {
   <section
     class="storyboard"
     data-testid="storyboard-banner"
-    [class.storyboard--condensed]="condensed()"
     [attr.data-state]="state()"
     [attr.aria-label]="'STORYBOARD.ARIA_LABEL' | translate"
   >
@@ -28,76 +21,7 @@ way to know: CSS has no ":stuck" selector. -->
         {{ 'STORYBOARD.EMPTY' | translate }}
       </p>
     } @else if (summary(); as s) {
-      <header class="storyboard__header">
-        <div class="storyboard__identity">
-          <h2 class="storyboard__name">
-            {{
-              s.patient.fullName || (s.patient.firstName || '') + ' ' + (s.patient.lastName || '')
-            }}
-          </h2>
-          <div class="storyboard__meta">
-            @if (s.patient.mrn) {
-              <span class="storyboard__meta-item">
-                <span class="storyboard__meta-label">{{ 'STORYBOARD.MRN' | translate }}</span>
-                <span class="storyboard__meta-value">{{ s.patient.mrn }}</span>
-              </span>
-            }
-            @if (s.patient.ageYears !== null && s.patient.ageYears !== undefined) {
-              <span class="storyboard__meta-item">
-                <span class="storyboard__meta-label">{{ 'STORYBOARD.AGE' | translate }}</span>
-                <span class="storyboard__meta-value">
-                  {{ 'STORYBOARD.AGE_YEARS_VALUE' | translate: { years: s.patient.ageYears } }}
-                </span>
-              </span>
-            }
-            @if (s.patient.gender) {
-              <span class="storyboard__meta-item">
-                <span class="storyboard__meta-label">{{ 'STORYBOARD.SEX' | translate }}</span>
-                <span class="storyboard__meta-value">{{ s.patient.gender }}</span>
-              </span>
-            }
-            @if (s.patient.bloodType) {
-              <span class="storyboard__meta-item">
-                <span class="storyboard__meta-label">{{
-                  'STORYBOARD.BLOOD_TYPE' | translate
-                }}</span>
-                <span class="storyboard__meta-value">{{ s.patient.bloodType }}</span>
-              </span>
-            }
-            @if (s.patient.dateOfBirth) {
-              <span class="storyboard__meta-item">
-                <span class="storyboard__meta-label">{{ 'STORYBOARD.DOB' | translate }}</span>
-                <span class="storyboard__meta-value">{{ s.patient.dateOfBirth }}</span>
-              </span>
-            }
-          </div>
-        </div>
-      </header>
-      @if (condensed()) {
-        <!-- Pinned: only the facts that change what a clinician does next. -->
-        <div class="storyboard__condensed-flags" data-testid="storyboard-condensed-flags">
-          @if (hasAllergies()) {
-            <span
-              class="storyboard__pill"
-              [ngClass]="
-                s.hasHighSeverityAllergy ? 'storyboard__pill--danger' : 'storyboard__pill--warn'
-              "
-            >
-              {{ 'STORYBOARD.ALLERGIES' | translate }} ({{ s.allergies.length }})
-            </span>
-          } @else {
-            <span class="storyboard__pill storyboard__pill--neutral">
-              {{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}
-            </span>
-          }
-          @if (hasCodeStatus() && s.codeStatus?.status; as codeStatus) {
-            <span class="storyboard__pill" [ngClass]="codeStatusPillClass(codeStatus)">
-              {{ codeStatus | enumLabel: 'status' }}
-            </span>
-          }
-        </div>
-      }
-      <div class="storyboard__sections" [hidden]="condensed()">
+      <div class="storyboard__sections">
         <!-- Allergies -->
         <div
           class="storyboard__section"
