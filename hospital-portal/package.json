@@ -84,7 +84,7 @@
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.63.0",
     "@types/express": "^5.0.6",
-    "@types/jasmine": "5.1.9",
+    "@types/jasmine": "6.0.0",
     "@types/node": "^24.13.4",
     "@types/sockjs-client": "^1.5.4",
     "angular-eslint": "^22.5.0",

@@ -27,9 +27,13 @@ updates:
     open-pull-requests-limit: 5
     groups:
       # The framework proper: lockstep peer deps, exact pins. Never split.
+      # zone.js rides with it: each Angular major peer-requires a zone.js
+      # minor (20 -> 0.15, 21+ -> 0.16), so a zone.js bump in the minor group
+      # failed npm ci against the pinned core on PR #638 (2026-09-13).
       angular:
         patterns:
           - "@angular/*"
+          - "zone.js"
         exclude-patterns:
           - "@angular/cdk"
           - "@angular/material"
@@ -43,6 +47,8 @@ updates:
       portal-minor-and-patch:
         patterns:
           - "*"
+        exclude-patterns:
+          - "zone.js"
         update-types:
           - minor
           - patch
