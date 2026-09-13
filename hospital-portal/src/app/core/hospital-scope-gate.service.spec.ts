@@ -48,7 +48,6 @@ describe('HospitalScopeGateService', () => {
     expect(gate.required()).toBeFalse();
     expect(gate.blocked()).toBeFalse();
     expect(gate.showChip()).toBeFalse();
-    expect(gate.outletKey()).toBe('static');
   });
 
   it('blocks a super-admin in global view on a gated route', async () => {
@@ -66,7 +65,6 @@ describe('HospitalScopeGateService', () => {
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeFalse();
     expect(gate.showChip()).toBeFalse();
-    expect(gate.outletKey()).toBe('h1');
   });
 
   it('reads the flag from a child route under an unflagged parent', async () => {
@@ -81,7 +79,6 @@ describe('HospitalScopeGateService', () => {
     await router.navigateByUrl('/gated?hospitalId=h2');
     expect(roleContext.effectiveHospitalIdForRequest()).toBe('h2');
     expect(gate.blocked()).toBeFalse();
-    expect(gate.outletKey()).toBe('h2');
   });
 
   it('keeps the current pick when the URL carries no hospital, so one pick serves every gated page', async () => {
@@ -92,15 +89,43 @@ describe('HospitalScopeGateService', () => {
     expect(gate.blocked()).toBeFalse();
   });
 
-  it('unblocks and re-keys the outlet on a pick, and blocks again when the scope is cleared', async () => {
+  it('unblocks on a pick and blocks again when the scope is cleared', async () => {
     asSuperAdminInGlobalView();
     await router.navigateByUrl('/gated');
     expect(gate.blocked()).toBeTrue();
     roleContext.scopeToHospital('h4');
     expect(gate.blocked()).toBeFalse();
-    expect(gate.outletKey()).toBe('h4');
     roleContext.enableGlobalView();
     expect(gate.blocked()).toBeTrue();
+  });
+
+  it('re-keys the outlet on a scope change while gated, never on navigation alone', async () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.activeHospitalId = 'primary';
+    roleContext.markSuperAdminGlobalDefaults();
+    roleContext.scopeToHospital('h1');
+    TestBed.tick();
+    const initial = gate.outletKey();
+
+    await router.navigateByUrl('/gated');
+    await router.navigateByUrl('/open');
+    await router.navigateByUrl('/parent/child');
+    TestBed.tick();
+    expect(gate.outletKey())
+      .withContext('navigation between gated and ungated routes')
+      .toBe(initial);
+
+    roleContext.scopeToHospital('h2');
+    TestBed.tick();
+    expect(gate.outletKey()).withContext('a pick on a gated route').not.toBe(initial);
+    const afterPick = gate.outletKey();
+
+    await router.navigateByUrl('/open');
+    roleContext.scopeToHospital('h3');
+    TestBed.tick();
+    expect(gate.outletKey())
+      .withContext('a pick on an ungated route, which reloads itself')
+      .toBe(afterPick);
   });
 
   it('routeRequiresHospitalScope accepts only a literal true', () => {
