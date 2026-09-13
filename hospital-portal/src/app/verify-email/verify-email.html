@@ -1,0 +1,86 @@
+<div class="rp-page">
+  <div class="rp-container">
+    <div class="rp-brand">
+      <span class="material-symbols-outlined rp-logo-icon">local_hospital</span>
+      <span class="rp-logo-text">HMS</span>
+    </div>
+
+    <div class="rp-card" data-testid="verify-card">
+      @switch (state()) {
+        @case ('verifying') {
+          <div class="rp-state-icon rp-lock-icon">
+            <span class="material-symbols-outlined">mark_email_read</span>
+          </div>
+          <h1 class="rp-title">{{ 'VERIFY.VERIFYING_TITLE' | translate }}</h1>
+          <p class="rp-subtitle" role="status">{{ 'VERIFY.VERIFYING_MSG' | translate }}</p>
+        }
+        @case ('verified') {
+          <div class="rp-state-icon rp-success-icon">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <h1 class="rp-title">{{ 'VERIFY.SUCCESS_TITLE' | translate }}</h1>
+          <p class="rp-subtitle" role="status">{{ 'VERIFY.SUCCESS_MSG' | translate }}</p>
+          <button type="button" class="rp-btn-primary" (click)="goToLogin()">
+            {{ 'VERIFY.SIGN_IN_NOW' | translate }}
+          </button>
+        }
+        @default {
+          <div class="rp-state-icon rp-error-icon">
+            <span class="material-symbols-outlined">link_off</span>
+          </div>
+          @if (state() === 'missing') {
+            <h1 class="rp-title">{{ 'VERIFY.MISSING_TITLE' | translate }}</h1>
+            <p class="rp-subtitle">{{ 'VERIFY.MISSING_MSG' | translate }}</p>
+          } @else {
+            <h1 class="rp-title">{{ 'VERIFY.FAILED_TITLE' | translate }}</h1>
+            <p class="rp-subtitle">{{ 'VERIFY.FAILED_MSG' | translate }}</p>
+          }
+
+          @if (resendSent()) {
+            <p class="rp-subtitle" role="status" data-testid="verify-resent">{{ resendSent() }}</p>
+            <button type="button" class="rp-btn-primary" (click)="goToLogin()">
+              {{ 'VERIFY.BACK_TO_LOGIN' | translate }}
+            </button>
+          } @else {
+            @if (resendError()) {
+              <div class="rp-error-banner" role="alert">
+                <span class="material-symbols-outlined">error</span>
+                <span>{{ resendError() }}</span>
+              </div>
+            }
+            <form (ngSubmit)="resend()" class="rp-form" data-testid="verify-resend-form">
+              <div class="rp-field">
+                <label for="verify-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }}</label>
+                <div class="rp-input-wrapper">
+                  <span class="material-symbols-outlined rp-input-icon">mail</span>
+                  <input
+                    id="verify-email"
+                    type="email"
+                    name="email"
+                    [(ngModel)]="resendEmail"
+                    autocomplete="email"
+                    [disabled]="resendLoading"
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" class="rp-btn-primary" [disabled]="resendLoading">
+                @if (resendLoading) {
+                  <span class="rp-spinner"></span>
+                  <span>{{ 'LOGIN.SENDING' | translate }}</span>
+                } @else {
+                  <span>{{ 'VERIFY.RESEND' | translate }}</span>
+                }
+              </button>
+              <button type="button" class="rp-back-link" (click)="goToLogin()">
+                {{ 'VERIFY.BACK_TO_LOGIN' | translate }}
+              </button>
+            </form>
+          }
+        }
+      }
+    </div>
+
+    <p class="rp-footer">&copy; {{ currentYear }} HMS - Hospital Management System</p>
+  </div>
+</div>

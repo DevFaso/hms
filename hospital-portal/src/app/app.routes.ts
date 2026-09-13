@@ -30,6 +30,11 @@ export const routes: Routes = [
       import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),
   },
   {
+    // Landing page of the e-mail activation link (see VerifyEmailComponent).
+    path: 'verify',
+    loadComponent: () => import('./verify-email/verify-email').then((m) => m.VerifyEmailComponent),
+  },
+  {
     path: 'privacy-policy',
     loadComponent: () =>
       import('./privacy-policy/privacy-policy').then((m) => m.PrivacyPolicyComponent),

@@ -100,6 +100,19 @@ describe('apiPrefixInterceptor', () => {
     req.flush({});
   });
 
+  it('never attaches credentials to the activation endpoints, which a stale token would break', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(true);
+    http.get('/auth/verify-email', { params: { email: 'a@b.c', token: 't' } }).subscribe();
+    http.post('/auth/resend-verification', null, { params: { email: 'a@b.c' } }).subscribe();
+    const verify = httpMock.expectOne((r) => r.url === '/api/auth/verify-email');
+    const resend = httpMock.expectOne((r) => r.url === '/api/auth/resend-verification');
+    expect(verify.request.headers.has('Authorization')).toBeFalse();
+    expect(resend.request.headers.has('Authorization')).toBeFalse();
+    verify.flush({});
+    resend.flush({});
+  });
+
   it('sends no Authorization header when there is no token', () => {
     auth.getToken.and.returnValue(null);
     http.get('patients').subscribe();

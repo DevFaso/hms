@@ -2129,6 +2129,20 @@
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle"
   },
+  "VERIFY": {
+    "VERIFYING_TITLE": "Activando su cuenta",
+    "VERIFYING_MSG": "Un momento, estamos confirmando su dirección de correo.",
+    "SUCCESS_TITLE": "Su cuenta está activa",
+    "SUCCESS_MSG": "Su dirección de correo está confirmada. Ya puede iniciar sesión.",
+    "SIGN_IN_NOW": "Iniciar sesión",
+    "FAILED_TITLE": "Este enlace de activación ya no funciona",
+    "FAILED_MSG": "El enlace no es válido o ha caducado. Introduzca su dirección de correo para recibir uno nuevo.",
+    "MISSING_TITLE": "Enlace de activación incompleto",
+    "MISSING_MSG": "A este enlace le falta la dirección de correo o el token. Introduzca su dirección de correo para recibir uno nuevo.",
+    "RESEND": "Enviar un nuevo enlace de activación",
+    "RESENT": "Si esta dirección pertenece a una cuenta aún no activa, un nuevo enlace de activación está en camino. Es válido durante 24 horas.",
+    "BACK_TO_LOGIN": "Volver al inicio de sesión"
+  },
   "HOSPITAL_SCOPE": {
     "ALL_HOSPITALS": "Todos los hospitales",
     "CLEAR": "Quitar el filtro de hospital",
@@ -2771,6 +2785,11 @@
     "TOKEN_MISSING": "Falta el token en la respuesta.",
     "LOGIN_FAILED": "Error al iniciar sesión. Inténtelo de nuevo.",
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
+    "RESEND_ACTIVATION": "Reenviar el correo de activación",
+    "RA_TITLE": "Activar su cuenta",
+    "RA_INSTRUCTION": "Introduzca la dirección de correo de su cuenta y le enviaremos un nuevo enlace de activación, válido durante 24 horas.",
+    "SEND_ACTIVATION_LINK": "Enviar el enlace de activación",
+    "ACTIVATION_LINK_SENT": "Si esta dirección pertenece a una cuenta aún no activa, un nuevo enlace de activación está en camino. Es válido durante 24 horas.",
     "RESET_LINK_SENT": "Si ese correo está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada."
   },
   "NAV": {

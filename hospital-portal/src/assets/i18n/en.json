@@ -2129,6 +2129,20 @@
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle"
   },
+  "VERIFY": {
+    "VERIFYING_TITLE": "Activating your account",
+    "VERIFYING_MSG": "One moment while we confirm your e-mail address.",
+    "SUCCESS_TITLE": "Your account is active",
+    "SUCCESS_MSG": "Your e-mail address is confirmed. You can sign in now.",
+    "SIGN_IN_NOW": "Sign in",
+    "FAILED_TITLE": "This activation link no longer works",
+    "FAILED_MSG": "The link is invalid or has expired. Enter your e-mail address to receive a new one.",
+    "MISSING_TITLE": "Incomplete activation link",
+    "MISSING_MSG": "This link is missing its e-mail address or token. Enter your e-mail address to receive a new one.",
+    "RESEND": "Send a new activation link",
+    "RESENT": "If this address belongs to an account that is not yet active, a new activation link is on its way. It is valid for 24 hours.",
+    "BACK_TO_LOGIN": "Back to sign in"
+  },
   "HOSPITAL_SCOPE": {
     "ALL_HOSPITALS": "All hospitals",
     "CLEAR": "Clear hospital scope",
@@ -2771,6 +2785,11 @@
     "TOKEN_MISSING": "Token missing in response.",
     "LOGIN_FAILED": "Login failed. Please try again.",
     "ENTER_EMAIL": "Please enter your email address.",
+    "RESEND_ACTIVATION": "Resend activation e-mail",
+    "RA_TITLE": "Activate your account",
+    "RA_INSTRUCTION": "Enter the e-mail address of your account and we will send a new activation link. It is valid for 24 hours.",
+    "SEND_ACTIVATION_LINK": "Send activation link",
+    "ACTIVATION_LINK_SENT": "If this address belongs to an account that is not yet active, a new activation link is on its way. It is valid for 24 hours.",
     "RESET_LINK_SENT": "If that email is registered, a password reset link has been sent. Please check your inbox."
   },
   "NAV": {
