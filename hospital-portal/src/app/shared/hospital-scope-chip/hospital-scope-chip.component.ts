@@ -78,6 +78,17 @@ export class HospitalScopeChipComponent implements OnInit {
    */
   @Input() disableUrlSync = false;
 
+  /**
+   * When `true` the chip neither reads `?hospitalId=` on init nor resets the
+   * scope to global view: it shows whatever the session already pinned. The
+   * shell's route-level gate (HospitalScopeGateService) uses it so a
+   * super-admin picks a hospital once and keeps it across every gated page;
+   * the gate applies a URL scope itself on navigation. Page-level chips keep
+   * the default, where the URL is the state
+   * (docs/super-admin-cross-tenant-design.md).
+   */
+  @Input() preserveScope = false;
+
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
   protected readonly selectedHospitalId = this.roleContext.selectedHospitalId;
@@ -112,7 +123,9 @@ export class HospitalScopeChipComponent implements OnInit {
     // Calling it again here lets the chip work even on pages that
     // forgot the pre-load step (degraded UX — first load races, then
     // self-corrects on the chip's emission).
-    const scopedId = this.scopeUrl.applyUrlScopeSync(this.route);
+    const scopedId = this.preserveScope
+      ? this.roleContext.selectedHospitalId()
+      : this.scopeUrl.applyUrlScopeSync(this.route);
     if (scopedId) {
       this.hospitalService
         .getById(scopedId)

@@ -132,6 +132,24 @@ describe('HospitalScopeChipComponent', () => {
     expect(emissions).toEqual([null]);
   });
 
+  it('preserveScope keeps the pinned hospital on init instead of re-reading the URL', () => {
+    asSuperAdmin();
+    roleContext.scopeToHospital('hosp-9');
+    component.preserveScope = true;
+    fixture.detectChanges();
+
+    expect(roleContext.globalView()).toBeFalse();
+    expect(roleContext.selectedHospitalId()).toBe('hosp-9');
+  });
+
+  it('without preserveScope a URL with no hospital resets a pinned super-admin to global view', () => {
+    asSuperAdmin();
+    roleContext.scopeToHospital('hosp-9');
+    fixture.detectChanges();
+
+    expect(roleContext.globalView()).toBeTrue();
+  });
+
   it('onSelectAll switches to global view and closes the overlay', () => {
     asSuperAdmin();
     fixture.detectChanges();

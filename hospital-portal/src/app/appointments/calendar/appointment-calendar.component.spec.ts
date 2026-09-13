@@ -1,3 +1,4 @@
+import { computed } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -37,7 +38,7 @@ describe('AppointmentCalendarComponent', () => {
     staffSvc = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffSvc.list.and.returnValue(of([]));
     const role = jasmine.createSpyObj<RoleContextService>('RoleContextService', [], {
-      activeHospitalId: activeHospital,
+      effectiveHospitalIdForRequest: computed(() => activeHospital),
     });
 
     await TestBed.configureTestingModule({

@@ -2139,6 +2139,7 @@
     "SEARCH_ERROR": "Couldn’t load hospitals. Please try again.",
     "TYPE_TO_NARROW": "Showing the first {{count}} hospitals — type to narrow.",
     "PICK_TO_CONTINUE": "Select a hospital to continue — this page belongs to one facility.",
+    "GATE_TITLE": "Choose a hospital",
     "NONE_ACTIVE": "No active hospitals yet.",
     "EMPTY_GLOBAL": {
       "ENCOUNTERS": "No encounters across any of your hospitals.",

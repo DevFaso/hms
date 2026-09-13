@@ -926,3 +926,23 @@ $sidebar-active: #0e7c6b;
     border: none;
   }
 }
+
+// Route-level hospital scope gate (see HospitalScopeGateService): what a
+// super-admin in global view sees in place of a one-facility page.
+.scope-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  max-width: 40rem;
+
+  &__title {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 600;
+  }
+}
+
+.scope-bar {
+  margin-bottom: 1rem;
+}

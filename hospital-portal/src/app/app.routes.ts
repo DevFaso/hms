@@ -327,6 +327,7 @@ export const routes: Routes = [
             // Cadence visual scheduling grid (P1 #7) — lazy so FullCalendar
             // only ships when this route is visited.
             path: 'calendar',
+            data: { requiresHospitalScope: true },
             loadComponent: () =>
               import('./appointments/calendar/appointment-calendar.component').then(
                 (m) => m.AppointmentCalendarComponent,
@@ -643,6 +644,7 @@ export const routes: Routes = [
         path: 'lab-ops-dashboard',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
@@ -660,6 +662,7 @@ export const routes: Routes = [
         path: 'lab-staff',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
@@ -690,6 +693,7 @@ export const routes: Routes = [
         path: 'lab-instruments',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
@@ -724,6 +728,7 @@ export const routes: Routes = [
         path: 'lab-inventory',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
@@ -920,6 +925,7 @@ export const routes: Routes = [
         path: 'reports',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
@@ -943,6 +949,7 @@ export const routes: Routes = [
         path: 'discharge',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./discharge/discharge').then((m) => m.DischargeComponent),
@@ -955,6 +962,7 @@ export const routes: Routes = [
         path: 'maternity',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
@@ -998,6 +1006,7 @@ export const routes: Routes = [
         path: 'nurse-station',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           // Role audit decision C5: the bedside nurse station is for
           // clinical staff — admins oversee via the patient tracker. The
           // /nurse/** backend always rejected HOSPITAL_ADMIN and ADMIN.
@@ -1012,6 +1021,7 @@ export const routes: Routes = [
         path: 'emar',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
@@ -1023,6 +1033,7 @@ export const routes: Routes = [
         path: 'patient-tracker',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
@@ -1153,6 +1164,7 @@ export const routes: Routes = [
         path: 'reception',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
@@ -1564,6 +1576,7 @@ export const routes: Routes = [
         path: 'registrations',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_RECEPTIONIST',
             'ROLE_HOSPITAL_ADMIN',
@@ -1582,6 +1595,7 @@ export const routes: Routes = [
         path: 'procedure-orders',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
@@ -1603,7 +1617,10 @@ export const routes: Routes = [
       {
         path: 'admin/order-sets',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
         loadComponent: () =>
           import('./admin/order-sets/order-set-list.component').then(
             (m) => m.OrderSetListComponent,
@@ -1636,7 +1653,10 @@ export const routes: Routes = [
       {
         path: 'admin/integrations/dhis2',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
         loadComponent: () =>
           import('./admin/integrations/dhis2-admin-page/dhis2-admin-page.component').then(
             (m) => m.Dhis2AdminPageComponent,

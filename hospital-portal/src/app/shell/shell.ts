@@ -34,6 +34,9 @@ import { NavOrderService } from './nav-order.service';
 import { NAV_GROUP_IDS, navGroupForRoute, navGroupTranslationKey } from './nav-groups';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 
 interface NavItem {
@@ -57,6 +60,8 @@ interface NavItem {
     ImpersonationBannerComponent,
     EmergencyBroadcastBannerComponent,
     DowntimeBannerComponent,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
     TranslateModule,
     SkipLinkComponent,
     BrandMarkComponent,
@@ -76,6 +81,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
+  /** Route-level hospital scope gate: see HospitalScopeGateService. */
+  protected readonly scopeGate = inject(HospitalScopeGateService);
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);

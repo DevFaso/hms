@@ -165,7 +165,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    const hid = this.roleContext.activeHospitalId;
+    const hid = this.roleContext.effectiveHospitalIdForRequest();
     this.hospitalId.set(hid ?? null);
     if (!hid) {
       this.state.set('error');
