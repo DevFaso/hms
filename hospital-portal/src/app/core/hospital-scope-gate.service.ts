@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
@@ -29,9 +29,12 @@ export function routeRequiresHospitalScope(root: ActivatedRouteSnapshot): boolea
  * On every navigation the gate re-reads the flag from the deepest activated
  * route and honours a `?hospitalId=` in the URL (shared links); without one
  * the current pick is kept, so a super-admin moving between gated pages picks
- * once. `outletKey` follows the effective hospital on a gated route and the
- * shell keys the router outlet on it, so a scope change rebuilds the page
- * instead of trusting every page to reload itself.
+ * once. `outletKey` advances only when the effective hospital changes while
+ * a gated route is active, and the shell keys the router outlet on it, so a
+ * scope change rebuilds the page instead of trusting every page to reload
+ * itself. Navigation alone never changes the key: a key that also flipped
+ * between gated and ungated routes rebuilt the outlet on every such
+ * navigation (NG0956 in dev mode, and a second ngOnInit for the page).
  */
 @Injectable({ providedIn: 'root' })
 export class HospitalScopeGateService {
@@ -49,12 +52,21 @@ export class HospitalScopeGateService {
   /** The chip belongs above a gated page only for the one account that can switch: a super-admin. */
   readonly showChip = computed(() => this._required() && this.roleContext.isSuperAdmin());
 
-  /** Identity of the outlet: the effective hospital on a gated route, constant elsewhere. */
-  readonly outletKey = computed(() =>
-    this._required() ? (this.roleContext.effectiveHospitalIdForRequest() ?? 'unscoped') : 'static',
-  );
+  private readonly _scopeEpoch = signal(0);
+  private lastEffectiveHospitalId: string | null | undefined;
+
+  /** Identity of the outlet: advances on a scope change while a gated route is active, never on navigation. */
+  readonly outletKey = computed(() => `scope-${this._scopeEpoch()}`);
 
   constructor() {
+    effect(() => {
+      const id = this.roleContext.effectiveHospitalIdForRequest();
+      const previous = this.lastEffectiveHospitalId;
+      this.lastEffectiveHospitalId = id;
+      if (previous !== undefined && previous !== id && untracked(this._required)) {
+        this._scopeEpoch.update((n) => n + 1);
+      }
+    });
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),

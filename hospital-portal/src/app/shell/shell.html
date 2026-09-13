@@ -374,8 +374,9 @@
             <app-hospital-scope-chip [preserveScope]="true" />
           </div>
         }
-        <!-- Keyed on the effective hospital while the route is gated: a scope
-             change rebuilds the page instead of trusting it to reload. -->
+        <!-- The key advances on a scope change while the route is gated, so the
+             page is rebuilt instead of trusting it to reload; it never changes on
+             navigation alone (HospitalScopeGateService.outletKey). -->
         @for (key of [scopeGate.outletKey()]; track key) {
           <router-outlet />
         }
