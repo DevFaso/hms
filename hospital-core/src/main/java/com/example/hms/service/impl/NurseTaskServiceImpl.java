@@ -546,8 +546,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<NurseOrderTaskResponseDTO> tasks = new ArrayList<>();
         for (LabOrder order : labOrderRepository.findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_LAB_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            String labPatientName = nameOfOrSkip(patient, "lab order", order.getId());
+            String labPatientName = listedNameOf(patient, scope, "lab order", order.getId());
             if (labPatientName == null) continue;
             tasks.add(orderTask(order.getId(), patient.getId(), labPatientName, "Lab",
                 normalizePriority(order.getPriority()), order.getOrderDatetime()));
@@ -555,8 +554,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (ImagingOrder order : imagingOrderRepository
                 .findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, NURSE_ACTION_IMAGING_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            String imagingPatientName = nameOfOrSkip(patient, "imaging order", order.getId());
+            String imagingPatientName = listedNameOf(patient, scope, "imaging order", order.getId());
             if (imagingPatientName == null) continue;
             tasks.add(orderTask(order.getId(), patient.getId(), imagingPatientName, "Imaging",
                 order.getPriority() != null ? order.getPriority().name() : PRIORITY_ROUTINE,
@@ -565,8 +563,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (ProcedureOrder order : procedureOrderRepository
                 .findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_PROCEDURE_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            String procedurePatientName = nameOfOrSkip(patient, "procedure order", order.getId());
+            String procedurePatientName = listedNameOf(patient, scope, "procedure order", order.getId());
             if (procedurePatientName == null) continue;
             tasks.add(orderTask(order.getId(), patient.getId(), procedurePatientName, "Procedure",
                 order.getUrgency() != null ? order.getUrgency().name() : PRIORITY_ROUTINE,
@@ -579,13 +576,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /**
-     * The patient's display name, or null when the row behind the lazy proxy is gone: a
-     * hard-deleted patient leaves its orders behind (the V156 keys are NOT VALID, and
-     * procedure orders carry no key at all). One such order used to fail the whole nurse
-     * board and dashboard summary with a 500 (dev, 2026-09-13); it is skipped with a
-     * warning instead. The id itself is read from the proxy without a query.
+     * The patient's display name when the order belongs on this nurse's board, else null:
+     * null when the patient is outside the nurse's assigned scope, and null when the row
+     * behind the lazy proxy is gone. A hard-deleted patient leaves its orders behind (the
+     * V156 keys are NOT VALID, and procedure orders carry no key at all); one such order
+     * used to fail the whole nurse board and dashboard summary with a 500 (dev,
+     * 2026-09-13). It is skipped with a warning instead. The id itself is read from the
+     * proxy without a query; only the name touches the row.
      */
-    private String nameOfOrSkip(Patient patient, String orderType, UUID orderId) {
+    private String listedNameOf(Patient patient, Set<UUID> scope, String orderType, UUID orderId) {
+        if (!inScope(patient, scope)) {
+            return null;
+        }
         try {
             return patient.getFullName();
         } catch (EntityNotFoundException e) {
