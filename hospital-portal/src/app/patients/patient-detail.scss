@@ -583,3 +583,39 @@
     }
   }
 }
+
+/* E8 #54 — restricted charts */
+.meta-tag.restricted {
+  background: var(--danger-soft, #fde8e6);
+  color: var(--danger, #b42318);
+}
+
+.restricted-state {
+  margin: 1rem 0;
+  padding: 1.5rem;
+  border: 1px solid var(--danger, #b42318);
+  border-radius: 8px;
+  background: var(--danger-soft, #fde8e6);
+
+  h2 {
+    margin: 0.25rem 0;
+  }
+}
+
+.restriction-card {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border, #cfd8d7);
+  border-radius: 8px;
+
+  label {
+    display: block;
+    margin: 0.5rem 0;
+  }
+
+  input {
+    width: 100%;
+    max-width: 32rem;
+    padding: 0.4rem;
+  }
+}

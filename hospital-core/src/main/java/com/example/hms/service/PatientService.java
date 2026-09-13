@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.PatientDiagnosisRequestDTO;
 import com.example.hms.payload.dto.PatientDiagnosisUpdateRequestDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientProfileUpdateRequestDTO;
+import com.example.hms.payload.dto.ChartRestrictionRequestDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
@@ -39,6 +40,9 @@ public interface PatientService {
     PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO, Locale locale);
 
     PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO, Locale locale);
+
+    /** E8 #54 — restrict or lift the restriction on a chart; the administrator's act, audited by convention. */
+    PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId);
 
     PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, UUID hospitalId, Locale locale);
 

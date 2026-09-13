@@ -197,6 +197,9 @@ public class PatientMapper {
             .careTeamNotes(patient.getCareTeamNotes())
             .chronicConditions(parseChronicConditions(patient.getChronicConditions()))
             .active(patient.isActive())
+            .chartRestricted(patient.isChartRestricted())
+            .chartRestrictionReason(patient.getChartRestrictionReason())
+            .chartRestrictedAt(patient.getChartRestrictedAt())
             .mrn(resolvedMrn)
             .displayName(nullIfBlank(firstNonBlank(
                 scopedRegistration != null ? scopedRegistration.getPatientFullName() : null,

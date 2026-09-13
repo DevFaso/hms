@@ -816,6 +816,36 @@
     "CONFIRM": "Declare access",
     "NOT_ALLOWED": "Your role cannot declare emergency access."
   },
+  "BREAK_GLASS_REVIEW": {
+    "TITLE": "Break-glass review",
+    "SUBTITLE": "Every emergency-access session at this hospital, to be signed off by an administrator.",
+    "FILTER_QUEUE": "To review",
+    "FILTER_ALL": "All sessions",
+    "EMPTY_QUEUE": "Nothing to review — every session has been signed off.",
+    "EMPTY_ALL": "No break-the-glass session at this hospital.",
+    "LOAD_FAILED": "Could not load the register.",
+    "COL_STARTED": "Started",
+    "COL_USER": "Declared by",
+    "COL_PATIENT": "Patient",
+    "COL_REASON": "Stated reason",
+    "COL_STATE": "State",
+    "COL_READS": "Audited reads",
+    "COL_REVIEW": "Review",
+    "EXPIRES": "Expires",
+    "LIVE": "Live",
+    "REVOKED": "Revoked",
+    "EXPIRED": "Expired",
+    "REVIEW": "Review",
+    "RE_REVIEW": "Change the review",
+    "OUTCOME": "Outcome",
+    "OUTCOME_JUSTIFIED": "Justified",
+    "OUTCOME_NOT_JUSTIFIED": "Not justified",
+    "OUTCOME_FOLLOW_UP": "Follow-up needed",
+    "NOTE": "Note",
+    "SIGN_OFF": "Sign off",
+    "REVIEWED": "Session signed off.",
+    "REVIEW_FAILED": "Could not sign the session off."
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
     "LOADING": "Loading patient summary…",
@@ -2865,7 +2895,8 @@
     "SEARCH_LABEL": "Search modules",
     "SEARCH_PLACEHOLDER": "Search modules...",
     "SEARCH_CLEAR": "Clear search",
-    "SEARCH_NO_RESULTS": "No module matches \"{{query}}\"."
+    "SEARCH_NO_RESULTS": "No module matches \"{{query}}\".",
+    "BREAK_GLASS_REVIEW": "Break-glass review"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -3582,7 +3613,20 @@
     "NEWS_BAND_MEDIUM": "Medium risk",
     "NEWS_BAND_HIGH": "High risk",
     "NEWS_INCOMPLETE": "Incomplete",
-    "NEWS_INCOMPLETE_HINT": "Not every NEWS2 parameter was recorded — the true score can only be equal or higher."
+    "NEWS_INCOMPLETE_HINT": "Not every NEWS2 parameter was recorded — the true score can only be equal or higher.",
+    "CHART_RESTRICTED_CHIP": "Restricted chart",
+    "CHART_RESTRICTED_TITLE": "This chart is restricted",
+    "CHART_RESTRICTED_BODY": "The hospital administrator restricted this record. To open it, declare a break-the-glass session with your clinical justification — every read will be logged and reviewed.",
+    "CHART_RESTRICTION_TITLE": "Chart restriction",
+    "CHART_RESTRICTION_HELP": "Restrict this chart for a VIP, a staff member, or a relative of staff. While restricted, every read needs a break-the-glass session with a stated reason.",
+    "CHART_RESTRICTION_REASON": "Reason",
+    "CHART_RESTRICTION_APPLY": "Restrict this chart",
+    "CHART_RESTRICTION_LIFT": "Lift the restriction",
+    "CHART_RESTRICTION_ACTIVE": "This chart is restricted.",
+    "CHART_RESTRICTION_REASON_REQUIRED": "State why the chart is restricted (at least 5 characters).",
+    "CHART_RESTRICTION_APPLIED": "Chart restricted.",
+    "CHART_RESTRICTION_LIFTED": "Restriction lifted.",
+    "CHART_RESTRICTION_FAILED": "Could not update the chart restriction."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",

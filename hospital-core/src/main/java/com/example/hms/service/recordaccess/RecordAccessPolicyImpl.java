@@ -5,10 +5,12 @@ import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,19 +33,22 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     private final TreatmentRelationshipResolver resolver;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final BreakGlassGate breakGlassGate;
+    private final PatientRepository patientRepository;
 
     public RecordAccessPolicyImpl(HospitalRepository hospitalRepository,
                                   PatientRecordSharingOptOutRepository optOutRepository,
                                   StaffRepository staffRepository,
                                   TreatmentRelationshipResolver resolver,
                                   PatientHospitalRegistrationRepository registrationRepository,
-                                  BreakGlassGate breakGlassGate) {
+                                  BreakGlassGate breakGlassGate,
+                                  PatientRepository patientRepository) {
         this.hospitalRepository = hospitalRepository;
         this.optOutRepository = optOutRepository;
         this.staffRepository = staffRepository;
         this.resolver = resolver;
         this.registrationRepository = registrationRepository;
         this.breakGlassGate = breakGlassGate;
+        this.patientRepository = patientRepository;
     }
 
     @Override
@@ -170,11 +175,11 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                 TreatmentRelationshipKind.REGISTRATION, r.getId(), hospitalId, patientId,
                 r.getRegistrationDate() != null ? r.getRegistrationDate().atStartOfDay() : null,
                 null, false);
-            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, byRegistration, posture);
+            return unlessRestricted(actorUserId, patientId, hospitalId, byRegistration, posture);
         }
         Optional<TreatmentRelationship> carried = resolver.resolve(patientId, hospitalId, actorUserId);
         if (carried.isPresent()) {
-            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, carried.get(), posture);
+            return unlessRestricted(actorUserId, patientId, hospitalId, carried.get(), posture);
         }
         // E9 #62 (decision D2, Tier B) — no registration and no carrier: a live
         // break-the-glass session the actor declared for this patient at this
@@ -187,5 +192,28 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
             .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, posture));
+    }
+
+    /**
+     * E8 #54 — a restricted chart needs a live break-the-glass session even
+     * from staff who hold a treatment relationship. The flag is read only once
+     * a relationship exists, so the refusal discloses nothing to a stranger;
+     * under a session the relationship becomes BREAK_GLASS and the read is
+     * audited as such.
+     */
+    private RecordAccessDecision unlessRestricted(UUID actorUserId, UUID patientId, UUID hospitalId,
+                                                  TreatmentRelationship relationship, RecordAccessPosture posture) {
+        boolean restricted = patientRepository.findByIdUnscoped(patientId)
+            .map(Patient::isChartRestricted)
+            .orElse(false);
+        if (!restricted) {
+            return RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, relationship, posture);
+        }
+        return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+            .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
+            .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
+            .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                RecordAccessDenialReason.CHART_RESTRICTED, posture));
     }
 }

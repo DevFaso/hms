@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
+import com.example.hms.payload.dto.BreakGlassReviewRequestDTO;
 import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
 import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
 import org.springframework.data.domain.Page;
@@ -46,6 +47,12 @@ public interface BreakGlassService {
 
     /** Hospital-scoped audit page (compliance review screen). */
     Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Pageable pageable);
+
+    /** E8 #54 — the register filtered by review state: {@code null} = all, {@code false} = the queue, {@code true} = signed off. */
+    Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Boolean reviewed, Pageable pageable);
+
+    /** E8 #54 — a HOSPITAL_ADMIN of the session's hospital or a SUPER_ADMIN signs the session off. Re-reviewing overwrites. */
+    BreakGlassSessionResponseDTO review(UUID sessionId, BreakGlassReviewRequestDTO request);
 
     /**
      * Returns the current user's live session for the given patient if one

@@ -11,6 +11,19 @@
     </div>
   }
 
+  @if (!loading() && restricted()) {
+    <section class="restricted-state" data-testid="restricted-chart" role="alert">
+      <span class="material-symbols-outlined">lock</span>
+      <h2>{{ 'PATIENTS.CHART_RESTRICTED_TITLE' | translate }}</h2>
+      <p>{{ 'PATIENTS.CHART_RESTRICTED_BODY' | translate }}</p>
+      <app-break-glass-banner
+        [patientId]="patientId"
+        [hospitalId]="scopedHospitalId()"
+        (sessionChanged)="onBreakGlassSessionChanged()"
+      />
+    </section>
+  }
+
   @if (!loading() && patient(); as p) {
     <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
     <app-storyboard-banner
@@ -58,6 +71,16 @@
           <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
             p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
           }}</span>
+          @if (p.chartRestricted) {
+            <span
+              class="meta-tag restricted"
+              data-testid="restricted-chip"
+              [title]="canManageRestriction() ? (p.chartRestrictionReason ?? '') : ''"
+            >
+              <span class="material-symbols-outlined">lock</span>
+              {{ 'PATIENTS.CHART_RESTRICTED_CHIP' | translate }}
+            </span>
+          }
         </div>
       </div>
       @if (canDownloadRecord()) {
@@ -246,6 +269,51 @@
     <!-- ═══ Coverage Tab (insurance + hospital registrations) ═══ -->
     @if (activeTab() === 'coverage' && canViewCoverage()) {
       <app-coverage-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Chart restriction (E8 #54): the hospital administrator's act ═══ -->
+    @if (canManageRestriction()) {
+      <section class="restriction-card" data-testid="restriction-card">
+        <h3>{{ 'PATIENTS.CHART_RESTRICTION_TITLE' | translate }}</h3>
+        @if (p.chartRestricted) {
+          <p>
+            {{ 'PATIENTS.CHART_RESTRICTION_ACTIVE' | translate }}
+            @if (p.chartRestrictionReason) {
+              <em>— {{ p.chartRestrictionReason }}</em>
+            }
+          </p>
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="lift-restriction"
+            (click)="setChartRestriction(false)"
+            [disabled]="restrictionSubmitting()"
+          >
+            {{ 'PATIENTS.CHART_RESTRICTION_LIFT' | translate }}
+          </button>
+        } @else {
+          <p>{{ 'PATIENTS.CHART_RESTRICTION_HELP' | translate }}</p>
+          <label>
+            {{ 'PATIENTS.CHART_RESTRICTION_REASON' | translate }}
+            <input
+              type="text"
+              maxlength="512"
+              data-testid="restriction-reason"
+              [ngModel]="restrictionReason()"
+              (ngModelChange)="restrictionReason.set($event)"
+            />
+          </label>
+          <button
+            type="button"
+            class="btn-danger"
+            data-testid="apply-restriction"
+            (click)="setChartRestriction(true)"
+            [disabled]="restrictionSubmitting()"
+          >
+            {{ 'PATIENTS.CHART_RESTRICTION_APPLY' | translate }}
+          </button>
+        }
+      </section>
     }
 
     <!-- ═══ Documents Tab (what the patient uploaded through the portal) ═══ -->

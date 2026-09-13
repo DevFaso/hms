@@ -49,6 +49,10 @@ export interface PatientResponse {
   departmentName?: string;
   organizationId?: string;
   active: boolean;
+  /** E8 #54 — every read of this chart needs a live break-the-glass session. */
+  chartRestricted?: boolean;
+  chartRestrictionReason?: string | null;
+  chartRestrictedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
   /** Non-null iff the patient has a photo (P3 #21). The binary comes from
@@ -507,6 +511,18 @@ export class PatientService {
     return this.http.post<PatientTimeline>(`/patients/${patientId}/doctor-timeline`, {
       accessReason,
       maxEvents,
+    });
+  }
+
+  /** E8 #54 — restrict or lift the restriction on a chart (HOSPITAL_ADMIN / SUPER_ADMIN). */
+  setChartRestriction(
+    id: string,
+    restricted: boolean,
+    reason?: string,
+  ): Observable<PatientResponse> {
+    return this.http.post<PatientResponse>(`/patients/${id}/chart-restriction`, {
+      restricted,
+      reason,
     });
   }
 }

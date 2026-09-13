@@ -816,6 +816,36 @@
     "CONFIRM": "Activar acceso",
     "NOT_ALLOWED": "Su rol no permite declarar un acceso de emergencia."
   },
+  "BREAK_GLASS_REVIEW": {
+    "TITLE": "Revisión de accesos de emergencia",
+    "SUBTITLE": "Cada sesión de acceso de emergencia de este hospital, pendiente de la firma de un administrador.",
+    "FILTER_QUEUE": "Por revisar",
+    "FILTER_ALL": "Todas las sesiones",
+    "EMPTY_QUEUE": "Nada que revisar — todas las sesiones están firmadas.",
+    "EMPTY_ALL": "Ninguna sesión de acceso de emergencia en este hospital.",
+    "LOAD_FAILED": "No se pudo cargar el registro.",
+    "COL_STARTED": "Inicio",
+    "COL_USER": "Declarado por",
+    "COL_PATIENT": "Paciente",
+    "COL_REASON": "Motivo declarado",
+    "COL_STATE": "Estado",
+    "COL_READS": "Lecturas registradas",
+    "COL_REVIEW": "Revisión",
+    "EXPIRES": "Expira",
+    "LIVE": "Activa",
+    "REVOKED": "Revocada",
+    "EXPIRED": "Expirada",
+    "REVIEW": "Revisar",
+    "RE_REVIEW": "Cambiar la revisión",
+    "OUTCOME": "Conclusión",
+    "OUTCOME_JUSTIFIED": "Justificado",
+    "OUTCOME_NOT_JUSTIFIED": "No justificado",
+    "OUTCOME_FOLLOW_UP": "Requiere seguimiento",
+    "NOTE": "Nota",
+    "SIGN_OFF": "Firmar",
+    "REVIEWED": "Sesión firmada.",
+    "REVIEW_FAILED": "No se pudo firmar la sesión."
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
     "LOADING": "Cargando resumen del paciente…",
@@ -2865,7 +2895,8 @@
     "SEARCH_LABEL": "Buscar módulos",
     "SEARCH_PLACEHOLDER": "Buscar módulos...",
     "SEARCH_CLEAR": "Borrar la búsqueda",
-    "SEARCH_NO_RESULTS": "Ningún módulo coincide con «{{query}}»."
+    "SEARCH_NO_RESULTS": "Ningún módulo coincide con «{{query}}».",
+    "BREAK_GLASS_REVIEW": "Revisión de accesos de emergencia"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",
@@ -3582,7 +3613,20 @@
     "NEWS_BAND_MEDIUM": "Riesgo medio",
     "NEWS_BAND_HIGH": "Riesgo alto",
     "NEWS_INCOMPLETE": "Incompleto",
-    "NEWS_INCOMPLETE_HINT": "No se registraron todos los parámetros NEWS2 — la puntuación real solo puede ser igual o mayor."
+    "NEWS_INCOMPLETE_HINT": "No se registraron todos los parámetros NEWS2 — la puntuación real solo puede ser igual o mayor.",
+    "CHART_RESTRICTED_CHIP": "Expediente restringido",
+    "CHART_RESTRICTED_TITLE": "Este expediente está restringido",
+    "CHART_RESTRICTED_BODY": "El administrador del hospital restringió este expediente. Para abrirlo, declare un acceso de emergencia con su justificación clínica — cada lectura quedará registrada y será revisada.",
+    "CHART_RESTRICTION_TITLE": "Restricción del expediente",
+    "CHART_RESTRICTION_HELP": "Restrinja este expediente para una personalidad, un miembro del personal o un familiar del personal. Mientras esté restringido, cada lectura exige un acceso de emergencia justificado.",
+    "CHART_RESTRICTION_REASON": "Motivo",
+    "CHART_RESTRICTION_APPLY": "Restringir este expediente",
+    "CHART_RESTRICTION_LIFT": "Levantar la restricción",
+    "CHART_RESTRICTION_ACTIVE": "Este expediente está restringido.",
+    "CHART_RESTRICTION_REASON_REQUIRED": "Indique el motivo de la restricción (al menos 5 caracteres).",
+    "CHART_RESTRICTION_APPLIED": "Expediente restringido.",
+    "CHART_RESTRICTION_LIFTED": "Restricción levantada.",
+    "CHART_RESTRICTION_FAILED": "No se pudo actualizar la restricción del expediente."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",

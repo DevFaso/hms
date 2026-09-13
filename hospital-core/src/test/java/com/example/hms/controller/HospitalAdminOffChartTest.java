@@ -37,6 +37,8 @@ class HospitalAdminOffChartTest {
         // What a hospital admin is for: the demographic record and its registration.
         assertKept(PatientController.class, "GET /{id}");
         assertKept(PatientController.class, "PUT /{id}");
+        // E8 #54: restricting a chart is the administrator's act.
+        assertKept(PatientController.class, "POST /{id}/chart-restriction");
     }
 
     @Test

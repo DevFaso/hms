@@ -11,6 +11,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
+import com.example.hms.payload.dto.BreakGlassReviewRequestDTO;
 import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
 import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
 import com.example.hms.repository.BreakGlassSessionRepository;
@@ -158,6 +159,33 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         return toDto(session);
     }
 
+    @Override
+    @Transactional
+    public BreakGlassSessionResponseDTO review(UUID sessionId, BreakGlassReviewRequestDTO request) {
+        User caller = currentUserOrThrow();
+        BreakGlassSession session = sessionRepository.findById(sessionId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Break-glass session not found: " + sessionId));
+        boolean isAdmin = hasAnyRoleAtHospital(caller, session.getHospital().getId(), ADMIN_REVOKE_ROLES)
+            || isSuperAdmin(caller);
+        if (!isAdmin) {
+            throw new UnauthorizedAccessException(
+                "Only a HOSPITAL_ADMIN of the session's hospital or a SUPER_ADMIN may review it.");
+        }
+        session.setReviewedAt(LocalDateTime.now());
+        session.setReviewedByUserId(caller.getId());
+        session.setReviewOutcome(request.getOutcome());
+        session.setReviewNote(request.getNote());
+        sessionRepository.save(session);
+        emitAudit(AuditEventType.BREAK_GLASS_ACCESS, caller, session.getHospital(), session.getPatient(),
+            "Break-the-glass session reviewed: " + request.getOutcome()
+                + (request.getNote() != null ? " — " + request.getNote() : ""),
+            session.getId(), AuditStatus.SUCCESS);
+        log.warn("[BREAK_GLASS] Reviewed session={} by user={} outcome={}",
+            session.getId(), caller.getId(), request.getOutcome());
+        return toDto(session);
+    }
+
     // ---------------------------------------------------------------------
     // Read paths
     // ---------------------------------------------------------------------
@@ -182,6 +210,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Override
     @Transactional(readOnly = true)
     public Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Pageable pageable) {
+        return listForHospital(hospitalId, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Boolean reviewed, Pageable pageable) {
         // The controller-level @PreAuthorize only checks that the caller has the
         // ROLE_HOSPITAL_ADMIN authority — it does NOT verify the call is for the
         // caller's own hospital. Without this service-side check a hospital admin
@@ -194,7 +228,9 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                 "Caller is not an administrator at hospital " + hospitalId
                     + "; cannot view its break-glass audit trail.");
         }
-        return sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, pageable)
+        return (reviewed == null ? sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, pageable)
+                : reviewed ? sessionRepository.findByHospitalIdAndReviewedAtIsNotNullOrderByStartedAtDesc(hospitalId, pageable)
+                : sessionRepository.findByHospitalIdAndReviewedAtIsNullOrderByStartedAtDesc(hospitalId, pageable))
             .map(this::toDto);
     }
 
@@ -342,6 +378,13 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .revokeReason(s.getRevokeReason())
             .auditCount(s.getAuditCount())
             .live(s.isLive())
+            .reviewedAt(s.getReviewedAt())
+            .reviewedByUserId(s.getReviewedByUserId())
+            .reviewedByUserName(s.getReviewedByUserId() == null ? null
+                : userRepository.findById(s.getReviewedByUserId()).map(User::getUsername).orElse(null))
+            .reviewOutcome(s.getReviewOutcome())
+            .reviewNote(s.getReviewNote())
+            .reviewed(s.isReviewed())
             .build();
     }
 }

@@ -206,6 +206,43 @@ describe('PatientDetailComponent', () => {
     expect(component.canViewEncounters()).toBeFalse();
   });
 
+  it('turns a 403 CHART_RESTRICTED into the declaration prompt instead of the not-found redirect (E8 #54)', () => {
+    patientServiceSpy.getById.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { code: 'CHART_RESTRICTED' } })),
+    );
+    fixture.detectChanges();
+
+    expect(component.restricted()).toBeTrue();
+    expect(toastSpy.error).not.toHaveBeenCalledWith('Patient not found');
+    expect(fixture.nativeElement.querySelector('[data-testid="restricted-chart"]')).toBeTruthy();
+  });
+
+  it('offers the restriction card to the hospital administrator only (E8 #54)', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_HOSPITAL_ADMIN'),
+    );
+    expect(component.canManageRestriction()).toBeTrue();
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    expect(component.canManageRestriction()).toBeFalse();
+  });
+
+  it('restricts a chart with a reason and shows the chip (E8 #54)', () => {
+    patientServiceSpy.setChartRestriction = jasmine
+      .createSpy('setChartRestriction')
+      .and.returnValue(
+        of({ ...mockPatient, chartRestricted: true, chartRestrictionReason: 'Staff member' }),
+      );
+    fixture.detectChanges();
+    component.restrictionReason.set('Staff member');
+    component.setChartRestriction(true);
+
+    expect(patientServiceSpy.setChartRestriction).toHaveBeenCalledWith('p1', true, 'Staff member');
+    expect(component.patient()?.chartRestricted).toBeTrue();
+    expect(toastSpy.success).toHaveBeenCalled();
+  });
+
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {
     // The D5/D6 resolution: they read results and imaging from the patient's
     // record, not from /lab and /imaging, which are order-entry workbenches.

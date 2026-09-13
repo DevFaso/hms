@@ -354,6 +354,25 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, status);
     }
 
+    /**
+     * E8 #54 — a restricted chart. 403, with a code the portal turns into the
+     * break-the-glass declaration prompt; deliberately not the 404 that hides
+     * every other refusal, because a restricted chart is meant to be loud.
+     */
+    @ExceptionHandler(ChartRestrictedException.class)
+    public ResponseEntity<Object> handleChartRestricted(ChartRestrictedException ex, WebRequest request) {
+        log.warn("Restricted chart {} refused at path {}", ex.getPatientId(), request.getDescription(false));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.FORBIDDEN.value());
+        body.put(FIELD_ERROR, HttpStatus.FORBIDDEN.getReasonPhrase());
+        body.put("code", ChartRestrictedException.CODE);
+        body.put("patientId", ex.getPatientId());
+        body.put(FIELD_MESSAGE, ex.getMessage());
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());

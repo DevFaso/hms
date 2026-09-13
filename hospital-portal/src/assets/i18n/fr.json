@@ -816,6 +816,36 @@
     "CONFIRM": "Activer l'accès",
     "NOT_ALLOWED": "Votre rôle ne permet pas de déclarer un accès d’urgence."
   },
+  "BREAK_GLASS_REVIEW": {
+    "TITLE": "Revue des accès d'urgence",
+    "SUBTITLE": "Chaque session d'accès d'urgence de cet hôpital, à valider par un administrateur.",
+    "FILTER_QUEUE": "À revoir",
+    "FILTER_ALL": "Toutes les sessions",
+    "EMPTY_QUEUE": "Rien à revoir — chaque session a été validée.",
+    "EMPTY_ALL": "Aucune session d'accès d'urgence dans cet hôpital.",
+    "LOAD_FAILED": "Impossible de charger le registre.",
+    "COL_STARTED": "Début",
+    "COL_USER": "Déclaré par",
+    "COL_PATIENT": "Patient",
+    "COL_REASON": "Motif déclaré",
+    "COL_STATE": "État",
+    "COL_READS": "Lectures journalisées",
+    "COL_REVIEW": "Revue",
+    "EXPIRES": "Expire",
+    "LIVE": "Active",
+    "REVOKED": "Révoquée",
+    "EXPIRED": "Expirée",
+    "REVIEW": "Revoir",
+    "RE_REVIEW": "Modifier la revue",
+    "OUTCOME": "Conclusion",
+    "OUTCOME_JUSTIFIED": "Justifié",
+    "OUTCOME_NOT_JUSTIFIED": "Non justifié",
+    "OUTCOME_FOLLOW_UP": "Suivi nécessaire",
+    "NOTE": "Note",
+    "SIGN_OFF": "Valider",
+    "REVIEWED": "Session validée.",
+    "REVIEW_FAILED": "Impossible de valider la session."
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
     "LOADING": "Chargement du résumé patient…",
@@ -2865,7 +2895,8 @@
     "SEARCH_LABEL": "Rechercher un module",
     "SEARCH_PLACEHOLDER": "Rechercher un module...",
     "SEARCH_CLEAR": "Effacer la recherche",
-    "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} »."
+    "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} ».",
+    "BREAK_GLASS_REVIEW": "Revue des accès d'urgence"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -3582,7 +3613,20 @@
     "NEWS_BAND_MEDIUM": "Risque moyen",
     "NEWS_BAND_HIGH": "Risque élevé",
     "NEWS_INCOMPLETE": "Incomplet",
-    "NEWS_INCOMPLETE_HINT": "Tous les paramètres NEWS2 n'ont pas été enregistrés — le score réel ne peut être qu'égal ou supérieur."
+    "NEWS_INCOMPLETE_HINT": "Tous les paramètres NEWS2 n'ont pas été enregistrés — le score réel ne peut être qu'égal ou supérieur.",
+    "CHART_RESTRICTED_CHIP": "Dossier restreint",
+    "CHART_RESTRICTED_TITLE": "Ce dossier est restreint",
+    "CHART_RESTRICTED_BODY": "L'administrateur de l'hôpital a restreint ce dossier. Pour l'ouvrir, déclenchez un accès d'urgence avec votre justification clinique — chaque lecture sera journalisée et revue.",
+    "CHART_RESTRICTION_TITLE": "Restriction du dossier",
+    "CHART_RESTRICTION_HELP": "Restreindre ce dossier pour une personnalité, un membre du personnel ou un proche du personnel. Tant qu'il est restreint, chaque lecture exige un accès d'urgence motivé.",
+    "CHART_RESTRICTION_REASON": "Motif",
+    "CHART_RESTRICTION_APPLY": "Restreindre ce dossier",
+    "CHART_RESTRICTION_LIFT": "Lever la restriction",
+    "CHART_RESTRICTION_ACTIVE": "Ce dossier est restreint.",
+    "CHART_RESTRICTION_REASON_REQUIRED": "Indiquez le motif de la restriction (au moins 5 caractères).",
+    "CHART_RESTRICTION_APPLIED": "Dossier restreint.",
+    "CHART_RESTRICTION_LIFTED": "Restriction levée.",
+    "CHART_RESTRICTION_FAILED": "Impossible de modifier la restriction du dossier."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
