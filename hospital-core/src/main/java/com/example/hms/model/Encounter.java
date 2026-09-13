@@ -32,6 +32,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
+import org.hibernate.Hibernate;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -239,9 +240,16 @@ public class Encounter extends BaseEntity {
             throw new IllegalStateException("Encounter.staff must belong to encounter.hospital");
         }
 
-        // Assignment must be hospital-scoped and match encounter hospital
-        if (assignment == null || assignment.getHospital() == null
-            || !Objects.equals(assignment.getHospital().getId(), hospital.getId())) {
+        // Assignment must be hospital-scoped and match encounter hospital. An uninitialized
+        // proxy is the persisted reference an update carries over unchanged: it was checked
+        // when it was set, and it is not loaded here because the row behind it may be gone
+        // (assignments are hard-deleted and clinical.encounters.assignment_id has no FK).
+        if (assignment == null) {
+            throw new IllegalStateException("Encounter.assignment.hospital must match encounter.hospital");
+        }
+        if (Hibernate.isInitialized(assignment)
+            && (assignment.getHospital() == null
+                || !Objects.equals(assignment.getHospital().getId(), hospital.getId()))) {
             throw new IllegalStateException("Encounter.assignment.hospital must match encounter.hospital");
         }
 

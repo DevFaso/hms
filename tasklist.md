@@ -2527,6 +2527,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - Two-factor transport for controlled substances; `app.empi.probabilistic.enabled`
   still defaults false.
 
+- **Encounters outlive their attending's assignment, and nothing says so.**
+  `clinical.encounters.assignment_id` (and `hospital.staff.assignment_id`)
+  have no foreign key on Postgres — no migration ever created the
+  `fk_encounter_assignment` / `fk_staff_assignment` the entities declare, and
+  H2 tests build them from the entities so nothing notices — while user
+  removal and `DELETE /assignments/..` hard-delete the assignment row. Dev
+  2026-09-13: four Hospital B encounters pointed at a deleted assignment and
+  could not be edited by anyone (fixed on the update path: an unchanged
+  attending is no longer re-credentialed and `Encounter.validate()` no longer
+  loads an uninitialized assignment proxy). The decision still owed: soft-delete
+  assignments (as #564 argued for audit rows), or add the two keys as
+  `NOT VALID` after a backfill that decides what a dangling row should point
+  at. Either way the schema and the model should stop disagreeing.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
