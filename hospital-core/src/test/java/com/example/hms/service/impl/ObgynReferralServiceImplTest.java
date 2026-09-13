@@ -54,6 +54,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ObgynReferralServiceImplTest {
@@ -321,5 +322,24 @@ class ObgynReferralServiceImplTest {
         verify(referralRepository, never()).findByPatient_Id(any(), any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+
+    @Test void createReferral_snapshotSerializationFails_throwsIllegalState() {
+        ObgynReferralCreateRequestDTO req = new ObgynReferralCreateRequestDTO();
+        req.setPatientId(patientId); req.setHospitalId(hospitalId);
+        req.setUrgency(ObgynReferralUrgency.ROUTINE);
+        req.setReferralReason("Routine checkup");
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(user));
+        lenient().when(referralRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // Jackson 3 throws its unchecked JacksonException; the snapshot must not be persisted half-built.
+        when(objectMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+
+        assertThatThrownBy(() -> service.createReferral(req, "midwife1"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Unable to serialize referral snapshot");
     }
 }

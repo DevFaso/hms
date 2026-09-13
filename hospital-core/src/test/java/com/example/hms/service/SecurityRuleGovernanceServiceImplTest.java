@@ -130,4 +130,29 @@ class SecurityRuleGovernanceServiceImplTest {
         dto.setControllers(List.of("RoleController"));
         return dto;
     }
+
+
+    @Test
+    void createRuleSetFallsBackToEmptyMetadataWhenSerializationFails() {
+        when(ruleSetRepository.save(any(SecurityRuleSet.class))).thenAnswer(invocation -> {
+            SecurityRuleSet entity = invocation.getArgument(0);
+            entity.setId(UUID.randomUUID());
+            entity.setCreatedAt(LocalDateTime.now());
+            entity.setUpdatedAt(LocalDateTime.now());
+            return entity;
+        });
+        when(objectMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+
+        SecurityRuleSetRequestDTO request = new SecurityRuleSetRequestDTO();
+        request.setName("Clinical enforcement pack");
+        request.setEnforcementScope("GLOBAL");
+        request.setPublishedBy("alice@example.com");
+        request.setRules(List.of(buildDefinition("RBAC-SEGREGATION", 1)));
+
+        // The metadata column degrades to "{}" rather than failing the rule set.
+        var response = service.createRuleSet(request);
+
+        assertThat(response.getId()).isNotNull();
+        assertThat(response.getRuleCount()).isEqualTo(1);
+    }
 }

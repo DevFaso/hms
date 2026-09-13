@@ -2723,4 +2723,54 @@ class NurseTaskServiceImplTest {
             rx.getId(), UUID.randomUUID(), hospitalId, givenRequest()))
             .doesNotThrowAnyException();
     }
+
+
+    @Test
+    void recordMedicationAdministrationOverrideSurvivesSerializationFailure() {
+        // A mapper that fails: the five-rights override falls back to toString, the dose is still recorded.
+        ObjectMapper failingMapper = mock(ObjectMapper.class);
+        when(failingMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+        NurseTaskServiceImpl failing = new NurseTaskServiceImpl(
+            nurseDashboardService, prescriptionRepository, marRepository,
+            vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
+            admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
+            nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
+            nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
+            fiveRightsService, failingMapper);
+
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Patient mockPatient = mock(Patient.class);
+        when(mockPatient.getId()).thenReturn(patientId);
+        when(mockPatient.getFullName()).thenReturn("John Doe");
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+
+        Prescription rx = mock(Prescription.class);
+        when(rx.getId()).thenReturn(rxId);
+        when(rx.getPatient()).thenReturn(mockPatient);
+        when(rx.getHospital()).thenReturn(mockHospital);
+        when(rx.getMedicationName()).thenReturn("Ceftriaxone");
+        when(rx.getDosage()).thenReturn("2");
+        when(rx.getDoseUnit()).thenReturn("g");
+        when(rx.getRoute()).thenReturn("IV");
+        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.of(mock(Staff.class)));
+
+        ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        request.setOverrideReason("Pre-eMAR rollout dose; verified manually by charge nurse.");
+
+        NurseMedicationTaskResponseDTO result = failing.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
+
+        assertThat(result.getStatus()).isEqualTo("GIVEN");
+        assertThat(captor.getValue().getFiveRightsOverrides()).startsWith("[");
+    }
 }

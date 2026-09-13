@@ -369,4 +369,26 @@ class ReferenceCatalogServiceImplTest {
         ReferenceCatalogResponseDTO result = service.createCatalog(req);
         assertThat(result.getCode()).isEqualTo("MY_SPECIAL_CODE");
     }
+
+
+    @Test
+    void importCatalog_unparseableMetadataIsIgnored() {
+        // The metadata cell is not JSON: the row still imports, with empty metadata.
+        String csv = "code,label,description,active,metadata\nABC,Abc Label,Some desc,true,{not json\n";
+        MockMultipartFile file = new MockMultipartFile("file", "catalog.csv",
+                "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        when(catalogRepository.findById(catalogId)).thenReturn(Optional.of(catalog));
+        when(entryRepository.findByCatalogIdAndCodeIgnoreCase(eq(catalogId), anyString()))
+                .thenReturn(Optional.empty());
+        when(entryRepository.save(any(ReferenceCatalogEntry.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(entryRepository.countByCatalogId(catalogId)).thenReturn(1L);
+        when(catalogRepository.save(any(ReferenceCatalog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CatalogImportResponseDTO result = service.importCatalog(catalogId, file);
+
+        assertThat(result.getProcessed()).isEqualTo(1);
+        assertThat(result.getCreated()).isEqualTo(1);
+        assertThat(result.getSkipped()).isZero();
+    }
 }

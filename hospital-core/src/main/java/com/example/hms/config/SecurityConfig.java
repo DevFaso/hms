@@ -233,7 +233,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) {
         return cfg.getAuthenticationManager();
     }
 
@@ -289,7 +289,7 @@ public class SecurityConfig {
     @SuppressWarnings({"java:S3330", "java:S4502"})
     // S3330: XSRF-TOKEN cookie intentionally lacks HttpOnly so Angular can read it when CSRF is enabled.
     // S4502: CSRF is enabled by default, but selectively ignored for preflight and specific public bootstrap endpoint.
-    public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+    public SecurityFilterChain apiSecurity(HttpSecurity http) {
 
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepo.setCookiePath("/");
@@ -813,7 +813,7 @@ public class SecurityConfig {
      * custom {@code JwtAuthenticationFilter} continues to handle internal
      * HMAC/RSA tokens unchanged.
      */
-    private void configureOidcResourceServer(HttpSecurity http) throws Exception {
+    private void configureOidcResourceServer(HttpSecurity http) {
         JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
         BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
         if (oidcDecoder == null || oidcResolver == null) {

@@ -39,6 +39,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.payload.dto.DoctorChartSectionDTO;
+import com.example.hms.enums.DoctorChartSectionType;
+import java.util.Map;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class PatientChartUpdateServiceImplTest {
@@ -214,5 +218,31 @@ class PatientChartUpdateServiceImplTest {
         Pageable pageable = PageRequest.of(0, 10);
         assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, null, pageable))
             .isInstanceOf(BusinessException.class);
+    }
+
+
+    @Test
+    void createPatientChartUpdate_detailsSerializationFails_isBusinessException() {
+        DoctorChartSectionDTO section = DoctorChartSectionDTO.builder()
+            .sectionType(DoctorChartSectionType.values()[0])
+            .details(Map.of("key", "value"))
+            .build();
+        DoctorPatientChartUpdateRequestDTO request = new DoctorPatientChartUpdateRequestDTO();
+        request.setUpdateReason("Follow-up");
+        request.setHospitalId(hospitalId);
+        request.setSections(List.of(section));
+
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
+        lenient().when(patientChartUpdateRepository.findTopByPatient_IdAndHospital_IdOrderByVersionNumberDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        when(objectMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+
+        assertThatThrownBy(() -> service.createPatientChartUpdate(patientId, hospitalId, staffUserId, assignment, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("structured chart details");
     }
 }
