@@ -324,13 +324,13 @@ $shadow-md:
 
 .ring-track {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.2);
+  stroke: var(--primary-tint);
   stroke-width: 7;
 }
 
 .ring-fill {
   fill: none;
-  stroke: #6ee7b7;
+  stroke: var(--primary);
   stroke-width: 7;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -349,7 +349,7 @@ $shadow-md:
 .ring-pct {
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: var(--primary-deep);
   small {
     font-size: 11px;
     font-weight: 600;
@@ -359,14 +359,14 @@ $shadow-md:
 
 .ring-sub {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.65);
+  color: $text-muted;
   margin-top: 2px;
 }
 
 .ring-caption {
   font-size: 11px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.65);
+  color: $text-muted;
   text-align: center;
   line-height: 1.3;
 }
@@ -2042,15 +2042,18 @@ $shadow-md:
 
 // ── Role-specific hero gradient overrides ───────────────────────────────────
 //
-// All roles share a single light-blue → white gradient for visual coherence
+// All roles share a single light-teal → white gradient for visual coherence
 // across the product. The per-role classes are retained (referenced in
 // tests + dashboard.ts heroGradientClass()) so each role can still ship a
 // subtle accent if we ever want to differentiate again, but for now they
 // alias the shared palette. Do NOT reintroduce purple/teal/red gradients
 // without product approval — see UI consistency note 2026-05-02.
 %hero-gradient-shared {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 55%, #e0f2fe 100%);
-  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.28);
+  // Light tint → white, so the dark greeting, name and date stay legible.
+  // The palette migration (#562) mapped the old light blue onto --primary,
+  // which turned this into a dark teal wash under dark text.
+  background: linear-gradient(135deg, var(--primary-tint) 0%, var(--primary-soft) 55%, #fff 100%);
+  box-shadow: 0 8px 32px rgba(14, 124, 107, 0.16);
 }
 
 .hero-gradient-hospital-admin,
@@ -3291,14 +3294,20 @@ $shadow-md:
   color: #0369a1;
 }
 
+.hospital-chip {
+  background: #fff;
+  border: 1px solid var(--primary-tint);
+  color: var(--primary-deep);
+}
+
 .header-search-inline {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 12px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: #fff;
+  border: 1px solid var(--primary-tint);
   color: inherit;
   transition: background 0.15s;
 

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DashboardComponent } from './dashboard';
@@ -85,6 +85,7 @@ describe('Dashboard navigation & RBAC', () => {
       'hasAnyRole',
       'getToken',
       'getUserProfile',
+      'getHospitalId',
     ]);
     authStub.getRoles.and.returnValue(roles);
     authStub.hasAnyRole.and.callFake((r: string[]) =>
@@ -253,6 +254,65 @@ describe('Dashboard navigation & RBAC', () => {
   it('activeView should be "nurse" for ROLE_NURSE', () => {
     const nurse = createComponent(['ROLE_NURSE'], []);
     expect(nurse.activeView()).toBe('nurse');
+  });
+
+  // ── Hero shortcuts vs the Quick Actions strip ───────────────
+
+  it('hides the hero shortcuts on the nurse view, which renders the Quick Actions strip', () => {
+    expect(
+      createComponent(['ROLE_NURSE'], ['Create Encounters']).hasQuickActionsStrip(),
+    ).toBeTrue();
+  });
+
+  it('keeps the hero shortcuts when the strip would be empty', () => {
+    expect(createComponent(['ROLE_NURSE'], []).hasQuickActionsStrip()).toBeFalse();
+  });
+
+  it('hides the hero shortcuts on the doctor view, which renders the Quick Actions strip', () => {
+    expect(
+      createComponent(['ROLE_DOCTOR'], ['Create Encounters']).hasQuickActionsStrip(),
+    ).toBeTrue();
+  });
+
+  it('keeps the hero shortcuts on views without a Quick Actions strip', () => {
+    const c = createComponent(['ROLE_PHARMACIST'], []);
+    expect(c.activeView()).toBe('pharmacist');
+    expect(c.hasQuickActionsStrip()).toBeFalse();
+  });
+
+  // ── Nurse stat strip: tasks ─────────────────────────────────
+
+  it('tasksToComplete mirrors the clinical inbox count and is zero before it loads', () => {
+    const c = createComponent(['ROLE_NURSE'], []);
+    expect(c.tasksToComplete()).toBe(0);
+    c.inboxCounts.set({ unreadMessages: 3, tasksToComplete: 4 } as Parameters<
+      typeof c.inboxCounts.set
+    >[0]);
+    expect(c.tasksToComplete()).toBe(4);
+  });
+
+  // ── Hero hospital chip ──────────────────────────────────────
+
+  it('fetches the active hospital name for the clinician hero', () => {
+    const c = createComponent(['ROLE_NURSE'], []);
+    (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).getHospitalId.and.returnValue(
+      'h1',
+    );
+    (c as unknown as { loadDashboardData: () => void }).loadDashboardData();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/hospitals/h1')
+      .flush({ id: 'h1', name: 'Hospital B' });
+    expect(c.hospitalName()).toBe('Hospital B');
+  });
+
+  it('does not ask for a hospital name without an active hospital', () => {
+    const c = createComponent(['ROLE_NURSE'], []);
+    (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).getHospitalId.and.returnValue(
+      null,
+    );
+    (c as unknown as { loadDashboardData: () => void }).loadDashboardData();
+    TestBed.inject(HttpTestingController).expectNone('/hospitals/h1');
+    expect(c.hospitalName()).toBeNull();
   });
 
   // ── Lab Director active view and computed properties ────────
@@ -620,6 +680,7 @@ describe('Dashboard onStartEncounter', () => {
       'hasAnyRole',
       'getToken',
       'getUserProfile',
+      'getHospitalId',
     ]);
     authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
     authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
@@ -709,6 +770,7 @@ describe('Dashboard i18n refactor coverage', () => {
       'hasAnyRole',
       'getToken',
       'getUserProfile',
+      'getHospitalId',
     ]);
     authStub.getRoles.and.returnValue(roles);
     authStub.hasAnyRole.and.callFake((r: string[]) => roles.some((role) => r.includes(role)));

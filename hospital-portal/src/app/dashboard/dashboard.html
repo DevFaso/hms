@@ -45,6 +45,12 @@
       </div>
       @if (isDoctor()) {
         <div class="doctor-hero-info">
+          @if (hospitalName(); as hospital) {
+            <span class="doctor-chip hospital-chip" data-testid="hero-hospital">
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ hospital }}
+            </span>
+          }
           @if (specialization()) {
             <span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
@@ -67,6 +73,22 @@
               [attr.aria-label]="'DASHBOARD.SEARCH_PATIENTS' | translate"
             />
           </div>
+        </div>
+      }
+      @if ((isNurse() || isMidwife()) && (hospitalName() || departmentName())) {
+        <div class="doctor-hero-info" data-testid="hero-context">
+          @if (hospitalName(); as hospital) {
+            <span class="doctor-chip hospital-chip" data-testid="hero-hospital">
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ hospital }}
+            </span>
+          }
+          @if (departmentName(); as dept) {
+            <span class="doctor-chip dept-chip">
+              <span class="material-symbols-outlined">domain</span>
+              {{ dept }}
+            </span>
+          }
         </div>
       }
     </div>
@@ -98,26 +120,30 @@
     }
 
     <div class="hero-actions">
-      @if (permissions.hasPermission('Create Appointments')) {
-        <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
-          <span class="material-symbols-outlined">calendar_add_on</span>
-          {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
-        </a>
-      }
-      @if (permissions.hasPermission('Create Encounters')) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
-          <span class="material-symbols-outlined">stethoscope</span>
-          {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
-        </a>
-      }
-      @if (
-        permissions.hasPermission('Register Patients') &&
-        !permissions.hasPermission('Create Encounters')
-      ) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
-          <span class="material-symbols-outlined">person_add</span>
-          {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
-        </a>
+      <!-- Shortcuts only where no Quick Actions strip already carries them
+           (hasQuickActionsStrip), so Start Encounter is never on the page twice. -->
+      @if (!hasQuickActionsStrip()) {
+        @if (permissions.hasPermission('Create Appointments')) {
+          <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
+            <span class="material-symbols-outlined">calendar_add_on</span>
+            {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
+          </a>
+        }
+        @if (permissions.hasPermission('Create Encounters')) {
+          <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
+            <span class="material-symbols-outlined">stethoscope</span>
+            {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
+          </a>
+        }
+        @if (
+          permissions.hasPermission('Register Patients') &&
+          !permissions.hasPermission('Create Encounters')
+        ) {
+          <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
+            <span class="material-symbols-outlined">person_add</span>
+            {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
+          </a>
+        }
       }
       <button
         class="hero-btn hero-btn-ghost"
@@ -1551,6 +1577,21 @@
           ><span class="stat-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
         </div>
       </a>
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="tasksToComplete() === 0"
+        [class.stat-card-active]="tasksToComplete() > 0"
+        routerLink="/nurse-station"
+        data-testid="nurse-tasks-stat"
+      >
+        <div class="stat-icon-wrap">
+          <span class="material-symbols-outlined stat-icon">checklist</span>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value">{{ tasksToComplete() }}</span
+          ><span class="stat-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
+        </div>
+      </a>
     </section>
 
     <!-- Quick Actions promoted above the workspace so the most-used flows
@@ -1746,41 +1787,6 @@
                   }
                 </div>
               }
-            </div>
-          </section>
-        }
-
-        @if (inboxCounts(); as ic) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
-                <h2 class="card-title">{{ 'DASHBOARD.INBOX' | translate }}</h2>
-                @if (totalInboxCount() > 0) {
-                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
-                }
-              </div>
-              <a routerLink="/chat" class="card-link">{{ 'DASHBOARD.OPEN' | translate }}</a>
-            </div>
-            <div class="inbox-items">
-              <a routerLink="/chat" class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-chat">
-                  <span class="material-symbols-outlined">chat</span>
-                </div>
-                <span class="inbox-row-label">{{ 'DASHBOARD.MESSAGES' | translate }}</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
-                  ic.unreadMessages
-                }}</span>
-              </a>
-              <div class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-task">
-                  <span class="material-symbols-outlined">checklist</span>
-                </div>
-                <span class="inbox-row-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
-                  ic.tasksToComplete
-                }}</span>
-              </div>
             </div>
           </section>
         }

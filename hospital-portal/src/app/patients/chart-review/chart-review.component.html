@@ -5,12 +5,6 @@
     [attr.data-state]="state()"
     [attr.aria-label]="'CHART_REVIEW.ARIA_LABEL' | translate"
   >
-    <header class="chart-review__header">
-      <h2 class="chart-review__title">
-        <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
-        {{ 'CHART_REVIEW.TITLE' | translate }}
-      </h2>
-    </header>
     @if (state() === 'loading') {
       <p class="chart-review__status" data-testid="chart-review-loading">
         <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
@@ -63,6 +57,16 @@
             <ol class="chart-review__timeline">
               @for (event of c.timeline; track event.id) {
                 <li class="chart-review__timeline-item">
+                  <time class="chart-review__timeline-date" [attr.datetime]="event.occurredAt">
+                    @if (event.occurredAt) {
+                      {{ event.occurredAt | date: 'mediumDate' }}
+                      <span class="chart-review__timeline-time">{{
+                        event.occurredAt | date: 'shortTime'
+                      }}</span>
+                    } @else {
+                      —
+                    }
+                  </time>
                   <div
                     class="chart-review__timeline-marker"
                     [attr.data-section]="event.section"
@@ -73,11 +77,6 @@
                       <span class="chart-review__pill chart-review__pill--neutral">
                         {{ sectionLabelKey(event.section) | translate }}
                       </span>
-                      @if (event.occurredAt) {
-                        <time class="chart-review__timeline-date">
-                          {{ event.occurredAt | date: 'medium' }}
-                        </time>
-                      }
                       @if (event.status) {
                         <span class="chart-review__pill" [ngClass]="statusClass(event.status)">
                           {{ event.status | enumLabel: 'status' }}
