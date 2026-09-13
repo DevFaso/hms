@@ -69,21 +69,21 @@
     "@grafana/faro-web-tracing": "^2.3.1",
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
-    "@stomp/stompjs": "7.1.1",
+    "@stomp/stompjs": "7.3.0",
     "angular-oauth2-oidc": "^19.0.0",
     "express": "5.2.1",
     "rxjs": "7.8.2",
     "sockjs-client": "1.6.1",
     "tslib": "2.8.1",
-    "zone.js": "0.15.1"
+    "zone.js": "0.16.3"
   },
   "devDependencies": {
     "@angular/build": "^20.3.23",
     "@angular/cli": "^20.3.22",
     "@angular/compiler-cli": "20.3.31",
     "@axe-core/playwright": "^4.11.3",
-    "@playwright/test": "1.56.1",
-    "@types/express": "5.0.3",
+    "@playwright/test": "1.63.0",
+    "@types/express": "5.0.6",
     "@types/jasmine": "6.0.0",
     "@types/node": "20.19.11",
     "@types/sockjs-client": "^1.5.4",
@@ -96,10 +96,10 @@
     "karma-chrome-launcher": "3.2.0",
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
-    "karma-jasmine-html-reporter": "2.1.0",
+    "karma-jasmine-html-reporter": "2.3.0",
     "prettier": "^3.6.2",
-    "puppeteer": "25.8.0",
+    "puppeteer": "25.10.0",
     "typescript": "5.9.2",
-    "typescript-eslint": "8.40.0"
+    "typescript-eslint": "8.70.0"
   }
 }
