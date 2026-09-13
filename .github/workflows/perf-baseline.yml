@@ -33,7 +33,7 @@ jobs:
     environment: ${{ inputs.target_environment }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install k6
         run: |
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload k6 summary artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-baseline-summary-${{ inputs.target_environment }}-${{ github.run_number }}
           path: perf-baseline-summary.json
