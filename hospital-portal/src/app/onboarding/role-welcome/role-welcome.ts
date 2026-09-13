@@ -7,6 +7,7 @@ import {
   PLATFORM_ID,
   QueryList,
   ViewChildren,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -24,6 +25,7 @@ type PageState = 'loading' | 'loaded' | 'already-verified' | 'success' | 'not-fo
   standalone: true,
   imports: [FormsModule, RouterModule, TranslateModule],
   templateUrl: './role-welcome.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./role-welcome.scss'],
 })
 export class RoleWelcomeComponent implements OnInit {

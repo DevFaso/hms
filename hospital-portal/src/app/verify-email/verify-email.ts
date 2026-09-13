@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -28,6 +28,7 @@ export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
   // The same public card as the password-reset landing page, on purpose: the
   // two links arrive in the same kind of e-mail and should land on the same
   // kind of page.
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['../reset-password/reset-password.scss'],
 })
 export class VerifyEmailComponent implements OnInit {

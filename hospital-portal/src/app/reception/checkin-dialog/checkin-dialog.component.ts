@@ -1,4 +1,12 @@
-import { Component, Output, EventEmitter, Input, inject, signal } from '@angular/core';
+import {
+  Component,
+  Output,
+  EventEmitter,
+  Input,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -15,6 +23,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './checkin-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
 })
 export class CheckinDialogComponent {

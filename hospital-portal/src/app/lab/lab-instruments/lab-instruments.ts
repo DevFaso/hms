@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +23,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-instruments.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-instruments.scss',
 })
 export class LabInstrumentsComponent implements OnInit {

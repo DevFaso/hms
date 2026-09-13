@@ -1,5 +1,12 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -31,6 +38,7 @@ interface ReplayState {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './integration-messages.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-messages.scss',
 })
 export class IntegrationMessagesComponent implements OnInit {

@@ -1,4 +1,11 @@
-import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
@@ -76,6 +83,7 @@ const SPECIALIZATIONS = [
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './user-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',
 })
 export class UserListComponent implements OnInit, OnDestroy {

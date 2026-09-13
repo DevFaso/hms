@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -26,6 +26,7 @@ import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.com
     PreCheckinFormComponent,
   ],
   templateUrl: './my-appointments.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-appointments.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyAppointmentsComponent implements OnInit {

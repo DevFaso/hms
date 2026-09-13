@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -108,7 +108,7 @@ describe('Dashboard navigation & RBAC', () => {
     TestBed.configureTestingModule({
       imports: [DashboardComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter(routes),
         { provide: AuthService, useValue: authStub },
@@ -641,7 +641,7 @@ describe('Dashboard onStartEncounter', () => {
     TestBed.configureTestingModule({
       imports: [DashboardComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AuthService, useValue: authStub },
@@ -730,7 +730,7 @@ describe('Dashboard i18n refactor coverage', () => {
     TestBed.configureTestingModule({
       imports: [DashboardComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         // Real route table — the tile computeds filter through canAccessRoute,
         // which since 2026-08-23 hides routes it cannot resolve.
@@ -1110,7 +1110,7 @@ describe('Dashboard live tracker refresh', () => {
     TestBed.configureTestingModule({
       imports: [DashboardComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AuthService, useValue: authStub },

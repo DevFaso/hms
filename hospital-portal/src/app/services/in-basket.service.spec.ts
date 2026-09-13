@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { InBasketService, InBasketPage, InBasketSummary, InBasketItem } from './in-basket.service';
 
@@ -9,7 +9,7 @@ describe('InBasketService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [InBasketService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [InBasketService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(InBasketService);
     httpMock = TestBed.inject(HttpTestingController);

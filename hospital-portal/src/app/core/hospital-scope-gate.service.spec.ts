@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, provideRouter } from '@angular/router';
 
@@ -8,7 +8,7 @@ import {
 } from './hospital-scope-gate.service';
 import { RoleContextService } from './role-context.service';
 
-@Component({ standalone: true, template: '' })
+@Component({ standalone: true, changeDetection: ChangeDetectionStrategy.Eager, template: '' })
 class BlankComponent {}
 
 describe('HospitalScopeGateService', () => {

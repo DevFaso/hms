@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StaffService, StaffResponse } from '../services/staff.service';
@@ -23,6 +30,7 @@ type TabType = 'overview' | 'employment' | 'department' | 'schedule';
   standalone: true,
   imports: [RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
   templateUrl: './staff-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-detail.scss',
 })
 export class StaffDetailComponent implements OnInit {

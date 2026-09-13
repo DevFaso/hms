@@ -1,4 +1,13 @@
-import { Component, inject, signal, OnInit, computed, Output, EventEmitter } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  OnInit,
+  computed,
+  Output,
+  EventEmitter,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -25,6 +34,7 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './waitlist-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './waitlist-panel.component.scss',
 })
 export class WaitlistPanelComponent implements OnInit {

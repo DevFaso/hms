@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,6 +27,7 @@ import {
   standalone: true,
   imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './digital-signatures.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './digital-signatures.scss',
 })
 export class DigitalSignaturesComponent implements OnInit {

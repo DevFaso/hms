@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -26,6 +33,7 @@ interface FlagOverride {
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './feature-flags.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',
 })
 export class FeatureFlagsComponent implements OnInit {

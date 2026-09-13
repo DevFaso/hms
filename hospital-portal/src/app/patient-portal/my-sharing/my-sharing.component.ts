@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -24,6 +24,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, DatePipe, FormsModule, TranslateModule],
   templateUrl: './my-sharing.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],
 })
 export class MySharingComponent implements OnInit {

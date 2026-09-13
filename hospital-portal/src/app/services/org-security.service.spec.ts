@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { OrgSecurityService } from './org-security.service';
 
@@ -9,7 +9,7 @@ describe('OrgSecurityService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), OrgSecurityService],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), OrgSecurityService],
     });
     service = TestBed.inject(OrgSecurityService);
     httpMock = TestBed.inject(HttpTestingController);

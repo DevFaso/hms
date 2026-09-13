@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -40,6 +47,7 @@ import {
     HospitalScopeHintComponent,
   ],
   templateUrl: './microbiology.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './microbiology.scss',
 })
 export class MicrobiologyComponent implements OnInit {

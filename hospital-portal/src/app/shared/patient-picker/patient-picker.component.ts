@@ -7,6 +7,7 @@ import {
   Output,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 
 import { TranslateModule } from '@ngx-translate/core';
@@ -25,6 +26,7 @@ import { PatientService, PatientResponse } from '../../services/patient.service'
   standalone: true,
   imports: [TranslateModule],
   templateUrl: './patient-picker.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',
 })
 export class PatientPickerComponent implements OnInit, OnDestroy {

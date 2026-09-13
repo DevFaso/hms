@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -23,6 +30,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './bed-management.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-management.scss',
 })
 export class BedManagementComponent implements OnInit {

@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { LabOpsDashboardComponent } from './lab-ops-dashboard';
@@ -37,7 +37,7 @@ describe('LabOpsDashboardComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [LabOpsDashboardComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
 
     fixture = TestBed.createComponent(LabOpsDashboardComponent);

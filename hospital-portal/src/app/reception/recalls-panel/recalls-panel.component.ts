@@ -1,4 +1,12 @@
-import { Component, inject, signal, OnInit, Output, EventEmitter } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  OnInit,
+  Output,
+  EventEmitter,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -27,6 +35,7 @@ type RecallFilter = 'ALL' | RecallStatus;
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './recalls-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './recalls-panel.component.scss',
 })
 export class RecallsPanelComponent implements OnInit {

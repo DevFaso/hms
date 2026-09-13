@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of } from 'rxjs';
@@ -55,7 +55,7 @@ describe('PatientSnapshotDrawerComponent', () => {
     await TestBed.configureTestingModule({
       imports: [PatientSnapshotDrawerComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: ToastService, useValue: mockToastService },

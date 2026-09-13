@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Route } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -89,7 +89,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     TestBed.configureTestingModule({
       imports: [ShellComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AuthService, useValue: authStub },
@@ -718,7 +718,7 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
     TestBed.configureTestingModule({
       imports: [ShellComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AuthService, useValue: authStub },
@@ -930,7 +930,7 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     TestBed.configureTestingModule({
       imports: [ShellComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AuthService, useValue: authStub },

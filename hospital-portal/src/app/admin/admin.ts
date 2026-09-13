@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -25,6 +25,7 @@ interface AdminSection {
   standalone: true,
   imports: [RouterLink, TranslateModule],
   templateUrl: './admin.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin.scss',
 })
 export class AdminComponent implements OnInit {

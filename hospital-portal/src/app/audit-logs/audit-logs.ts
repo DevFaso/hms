@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -15,6 +22,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './audit-logs.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',
 })
 export class AuditLogsComponent implements OnInit {

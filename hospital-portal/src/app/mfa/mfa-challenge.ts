@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -17,6 +17,7 @@ import { SessionScopeService } from '../core/session-scope.service';
   standalone: true,
   imports: [FormsModule],
   templateUrl: './mfa-challenge.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'], // reuse same styles
 })
 export class MfaChallengeComponent {

@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -53,6 +53,7 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-detail.scss',
 })
 export class AppointmentDetailComponent implements OnInit {

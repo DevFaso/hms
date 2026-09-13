@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -31,6 +31,7 @@ const SUPPORTED_LANGS = [
   standalone: true,
   imports: [RouterLink, TranslateModule],
   templateUrl: './settings.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './settings.scss',
 })
 export class SettingsComponent {

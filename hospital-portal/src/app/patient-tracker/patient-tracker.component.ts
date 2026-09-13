@@ -1,4 +1,12 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription, interval, of } from 'rxjs';
@@ -44,6 +52,7 @@ export interface TrackerColumn {
     RovingFocusDirective,
   ],
   templateUrl: './patient-tracker.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-tracker.component.scss',
 })
 export class PatientTrackerComponent implements OnInit, OnDestroy {

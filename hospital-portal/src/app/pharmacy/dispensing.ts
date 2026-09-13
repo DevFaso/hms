@@ -1,4 +1,12 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -24,6 +32,7 @@ import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './dispensing.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dispensing.scss',
 })
 export class DispensingComponent implements OnInit, OnDestroy {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { AuditSavedSearchService } from './audit-saved-search.service';
@@ -17,7 +17,7 @@ describe('AuditSavedSearchService (MVP-8c REST)', () => {
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     localStorage.removeItem(MIGRATION_FLAG_KEY);
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(AuditSavedSearchService);
     httpMock = TestBed.inject(HttpTestingController);

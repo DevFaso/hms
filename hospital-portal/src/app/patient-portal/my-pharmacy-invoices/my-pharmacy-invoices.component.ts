@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import {
   PharmacyClaimResponse,
@@ -17,6 +17,7 @@ import {
   standalone: true,
   imports: [CommonModule, DatePipe, DecimalPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyPharmacyInvoicesComponent implements OnInit {

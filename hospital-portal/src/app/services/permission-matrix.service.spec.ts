@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { PermissionMatrixService } from './permission-matrix.service';
 
@@ -9,7 +9,11 @@ describe('PermissionMatrixService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), PermissionMatrixService],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        PermissionMatrixService,
+      ],
     });
     service = TestBed.inject(PermissionMatrixService);
     httpMock = TestBed.inject(HttpTestingController);

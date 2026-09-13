@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +29,7 @@ import { RoleContextService } from '../core/role-context.service';
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './drug-interactions.scss',
 })
 export class DrugInteractionsComponent implements OnInit {

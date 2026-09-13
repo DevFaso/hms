@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -60,6 +68,7 @@ interface ActivityRow {
   standalone: true,
   imports: [CommonModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './super-admin.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',
 })
 export class SuperAdminComponent implements OnInit {

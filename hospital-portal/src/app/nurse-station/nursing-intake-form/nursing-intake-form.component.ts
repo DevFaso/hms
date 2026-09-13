@@ -1,4 +1,12 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -17,6 +25,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './nursing-intake-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nursing-intake-form.component.scss',
 })
 export class NursingIntakeFormComponent {

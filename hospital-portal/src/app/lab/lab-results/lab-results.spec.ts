@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -49,7 +49,7 @@ describe('LabResultsComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [LabResultsComponent, TranslateModule.forRoot()],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
 
     fixture = TestBed.createComponent(LabResultsComponent);
@@ -388,7 +388,7 @@ describe('LabResultsComponent — read-back role gate', () => {
     TestBed.configureTestingModule({
       imports: [LabResultsComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         {

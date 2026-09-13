@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -33,7 +33,7 @@ describe('HospitalScopeChipComponent', () => {
       imports: [HospitalScopeChipComponent, TranslateModule.forRoot()],
       // The chip injects ActivatedRoute + Router via HospitalScopeUrlService
       // for `?hospitalId=` URL round-trip, so provide a stub router.
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(HospitalScopeChipComponent);
     component = fixture.componentInstance;

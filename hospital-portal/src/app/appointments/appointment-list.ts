@@ -1,4 +1,11 @@
-import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -18,6 +25,7 @@ type SortDir = 'asc' | 'desc';
   standalone: true,
   imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
   templateUrl: './appointment-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',
 })
 export class AppointmentListComponent implements OnInit, OnDestroy {

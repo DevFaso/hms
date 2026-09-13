@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -22,6 +22,7 @@ interface DeptOption {
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './appointment-form.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',
 })
 export class AppointmentFormComponent implements OnInit {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { ObgynReferralService } from './obgyn-referral.service';
 
@@ -9,7 +9,7 @@ describe('ObgynReferralService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), ObgynReferralService],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), ObgynReferralService],
     });
     service = TestBed.inject(ObgynReferralService);
     httpMock = TestBed.inject(HttpTestingController);

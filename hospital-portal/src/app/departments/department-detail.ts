@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -55,6 +55,7 @@ interface DepartmentStats {
   standalone: true,
   imports: [RouterLink, TranslateModule],
   templateUrl: './department-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-detail.scss',
 })
 export class DepartmentDetailComponent implements OnInit {

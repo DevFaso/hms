@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -115,7 +115,7 @@ describe('SuperAdminComponent', () => {
     TestBed.configureTestingModule({
       imports: [SuperAdminComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },
@@ -390,7 +390,7 @@ describe('SuperAdminComponent', () => {
     TestBed.configureTestingModule({
       imports: [SuperAdminComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },

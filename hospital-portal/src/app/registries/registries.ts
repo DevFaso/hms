@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -66,6 +67,7 @@ interface RegistryLoad {
     HospitalScopeHintComponent,
   ],
   templateUrl: './registries.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './registries.scss',
 })
 export class RegistriesComponent implements OnInit, OnDestroy {

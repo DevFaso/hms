@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -28,6 +28,7 @@ import { EMPTY, of } from 'rxjs';
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './patient-form.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-form.scss',
 })
 export class PatientFormComponent implements OnInit {

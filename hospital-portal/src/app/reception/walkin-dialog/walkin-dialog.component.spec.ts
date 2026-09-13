@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WalkInDialogComponent } from './walkin-dialog.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { PatientService } from '../../services/patient.service';
 import { StaffService } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -25,7 +25,7 @@ describe('WalkInDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [WalkInDialogComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PatientService, useValue: mockPatientService },
         { provide: StaffService, useValue: mockStaffService },

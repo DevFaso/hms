@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import {
@@ -15,6 +15,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './role-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './role-list.scss',
 })
 export class RoleListComponent implements OnInit {

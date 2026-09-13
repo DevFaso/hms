@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -58,6 +59,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
     HospitalScopeHintComponent,
   ],
   templateUrl: './roi.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './roi.scss',
 })
 export class RoiComponent implements OnInit, OnDestroy {

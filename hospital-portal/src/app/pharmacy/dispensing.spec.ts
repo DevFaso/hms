@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { DispensingComponent } from './dispensing';
@@ -162,7 +162,7 @@ describe('DispensingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DispensingComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: AuthService, useValue: authSvc },
@@ -425,7 +425,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     await TestBed.configureTestingModule({
       imports: [DispensingComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         {

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NursingIntakeFormComponent } from './nursing-intake-form.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import {
   EncounterService,
   EncounterResponse,
@@ -41,7 +41,7 @@ describe('NursingIntakeFormComponent', () => {
     await TestBed.configureTestingModule({
       imports: [NursingIntakeFormComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: EncounterService, useValue: mockEncounterService },
         { provide: ToastService, useValue: mockToastService },

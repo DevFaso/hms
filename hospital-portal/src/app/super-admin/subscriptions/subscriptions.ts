@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -24,6 +31,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './subscriptions.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './subscriptions.scss',
 })
 export class SubscriptionsComponent implements OnInit {

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReceptionCockpitComponent } from './reception-cockpit.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of } from 'rxjs';
@@ -41,7 +41,7 @@ describe('ReceptionCockpitComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ReceptionCockpitComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: ToastService, useValue: mockToastService },

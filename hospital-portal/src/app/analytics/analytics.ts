@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -23,6 +30,7 @@ interface StatCard {
   standalone: true,
   imports: [CommonModule, TranslateModule, KpiCardsComponent],
   templateUrl: './analytics.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analytics.scss',
 })
 export class AnalyticsComponent implements OnInit {

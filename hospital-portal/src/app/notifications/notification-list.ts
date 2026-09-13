@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +10,7 @@ import { Notification, NotificationService } from '../services/notification.serv
   standalone: true,
   imports: [CommonModule, RouterLink, TranslateModule],
   templateUrl: './notification-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-list.scss',
 })
 export class NotificationListComponent implements OnInit {

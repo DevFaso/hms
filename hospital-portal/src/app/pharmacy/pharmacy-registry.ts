@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -12,6 +12,7 @@ import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './pharmacy-registry.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-registry.scss',
 })
 export class PharmacyRegistryComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -9,6 +9,7 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
   standalone: true,
   imports: [CommonModule, TranslateModule, DatePipe],
   templateUrl: './emergency-broadcast-banner.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './emergency-broadcast-banner.scss',
 })
 export class EmergencyBroadcastBannerComponent {

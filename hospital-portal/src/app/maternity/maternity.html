@@ -485,13 +485,15 @@
               {{ 'MATERNITY.LMP' | translate }}:
               {{
                 h.menstrualHistory?.lastMenstrualPeriod
-                  ? (h.menstrualHistory?.lastMenstrualPeriod | date: 'mediumDate')
+                  ? ($safeNavigationMigration(h.menstrualHistory?.lastMenstrualPeriod)
+                    | date: 'mediumDate')
                   : '—'
               }}
               · {{ 'MATERNITY.EDD' | translate }}:
               {{
                 h.menstrualHistory?.estimatedDueDate
-                  ? (h.menstrualHistory?.estimatedDueDate | date: 'mediumDate')
+                  ? ($safeNavigationMigration(h.menstrualHistory?.estimatedDueDate)
+                    | date: 'mediumDate')
                   : '—'
               }}
             </p>

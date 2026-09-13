@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -18,6 +18,7 @@ import { TranslateModule } from '@ngx-translate/core';
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './organization-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
 })
 export class OrganizationListComponent implements OnInit {

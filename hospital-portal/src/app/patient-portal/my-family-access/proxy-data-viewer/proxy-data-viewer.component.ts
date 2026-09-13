@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -48,6 +48,7 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
   standalone: true,
   imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './proxy-data-viewer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./proxy-data-viewer.component.scss', '../../patient-portal-pages.scss'],
 })
 export class ProxyDataViewerComponent implements OnInit {

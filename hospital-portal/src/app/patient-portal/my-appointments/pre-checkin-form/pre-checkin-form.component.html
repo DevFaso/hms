@@ -276,7 +276,8 @@
         <div class="review-section">
           <h4>{{ 'PRE_CHECKIN.APPOINTMENT_SECTION' | translate }}</h4>
           <p>
-            {{ appointment?.department }} — {{ appointment?.date | date: 'fullDate' }} at
+            {{ appointment?.department }} —
+            {{ $safeNavigationMigration(appointment?.date) | date: 'fullDate' }} at
             {{ appointment?.startTime }}
           </p>
         </div>

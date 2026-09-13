@@ -1,5 +1,12 @@
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   PharmacyClaimResponse,
@@ -24,6 +31,7 @@ interface StatusOption {
   standalone: true,
   imports: [CommonModule, FormsModule, DatePipe, DecimalPipe],
   templateUrl: './pharmacy-claims.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
 })
 export class PharmacyClaimsComponent implements OnInit {

@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -34,6 +41,7 @@ type ActiveTab = 'support' | 'aggregated';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './audit-search.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-search.scss',
 })
 export class SuperAdminAuditSearchComponent implements OnInit {

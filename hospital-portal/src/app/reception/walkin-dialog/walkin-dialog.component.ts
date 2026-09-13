@@ -1,4 +1,13 @@
-import { Component, Output, EventEmitter, inject, signal, OnInit, computed } from '@angular/core';
+import {
+  Component,
+  Output,
+  EventEmitter,
+  inject,
+  signal,
+  OnInit,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -16,6 +25,7 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './walkin-dialog.component.scss',
 })
 export class WalkInDialogComponent implements OnInit {

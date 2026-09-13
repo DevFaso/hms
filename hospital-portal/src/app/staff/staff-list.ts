@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
@@ -14,6 +21,7 @@ import { TranslateModule } from '@ngx-translate/core';
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './staff-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
 })
 export class StaffListComponent implements OnInit {

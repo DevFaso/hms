@@ -1,4 +1,11 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -42,6 +49,7 @@ export const RESET_ALL_PHRASE = 'RESET ALL MFA';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './emergency.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './emergency.scss',
 })
 export class EmergencyComponent {

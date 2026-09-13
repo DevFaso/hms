@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -12,6 +12,7 @@ import { ProfileService } from '../services/profile.service';
   standalone: true,
   imports: [FormsModule, TranslateModule],
   templateUrl: './account-setup.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./account-setup.scss'],
 })
 export class AccountSetupComponent implements OnInit {

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { RegistrationService } from './registration.service';
 import { PatientInsuranceService } from './patient-insurance.service';
@@ -10,7 +10,7 @@ describe('RegistrationService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), RegistrationService],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), RegistrationService],
     });
     service = TestBed.inject(RegistrationService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -66,7 +66,11 @@ describe('PatientInsuranceService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), PatientInsuranceService],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        PatientInsuranceService,
+      ],
     });
     service = TestBed.inject(PatientInsuranceService);
     httpMock = TestBed.inject(HttpTestingController);

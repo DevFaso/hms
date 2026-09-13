@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -59,6 +66,7 @@ interface ReportForm {
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './imaging.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './imaging.scss',
 })
 export class ImagingComponent implements OnInit {

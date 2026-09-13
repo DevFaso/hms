@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -44,6 +44,7 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
     HospitalScopeHintComponent,
   ],
   templateUrl: './slot-admin.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './slot-admin.scss',
 })
 export class SlotAdminComponent implements OnInit {

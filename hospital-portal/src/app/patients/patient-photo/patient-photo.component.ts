@@ -7,6 +7,7 @@ import {
   ViewChild,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
@@ -28,6 +29,7 @@ import { RegistrationExtrasService } from '../../services/registration-extras.se
   standalone: true,
   imports: [TranslateModule],
   templateUrl: './patient-photo.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-photo.component.scss',
 })
 export class PatientPhotoComponent implements OnChanges, OnDestroy {

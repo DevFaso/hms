@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -24,6 +31,7 @@ import { ToastService } from '../core/toast.service';
   standalone: true,
   imports: [FormsModule, TranslateModule, DiagnosisBarsComponent],
   templateUrl: './morbidity.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './morbidity.scss',
 })
 export class MorbidityComponent implements OnInit {

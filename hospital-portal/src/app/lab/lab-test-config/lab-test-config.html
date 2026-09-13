@@ -468,7 +468,8 @@
         <div class="modal-body">
           <p>
             {{
-              'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG' | translate: { name: deletingDef()?.testName }
+              'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG'
+                | translate: { name: $safeNavigationMigration(deletingDef()?.testName) }
             }}
           </p>
         </div>

@@ -18,6 +18,7 @@ import {
   HttpResponse,
   provideHttpClient,
   withInterceptors,
+  withXhr,
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -65,7 +66,7 @@ describe('offlineDispenseInterceptor', () => {
     queue = new StubQueue();
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([offlineDispenseInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([offlineDispenseInterceptor])),
         provideHttpClientTesting(),
         { provide: OfflineDispenseQueueService, useValue: queue },
       ],

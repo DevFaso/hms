@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +26,7 @@ const ASSIGNABLE_LAB_ROLES = [
   standalone: true,
   imports: [CommonModule, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-staff-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-staff-list.scss',
 })
 export class LabStaffListComponent implements OnInit {

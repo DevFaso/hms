@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -14,6 +14,7 @@ import { environment } from '../environments/environment';
   standalone: true,
   imports: [RouterOutlet, TranslateModule],
   template: `<router-outlet />`,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

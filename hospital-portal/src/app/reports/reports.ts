@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +22,7 @@ import { ToastService } from '../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './reports.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports.scss',
 })
 export class ReportsComponent implements OnInit {

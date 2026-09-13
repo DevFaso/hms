@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin } from 'rxjs';
@@ -47,6 +54,7 @@ interface QcChartGroup {
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',
 })
 export class LabQcDashboardComponent implements OnInit {

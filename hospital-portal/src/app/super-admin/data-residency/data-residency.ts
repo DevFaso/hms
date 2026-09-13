@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -21,6 +28,7 @@ interface EditState {
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './data-residency.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './data-residency.scss',
 })
 export class DataResidencyComponent implements OnInit {

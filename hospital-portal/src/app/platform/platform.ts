@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -100,6 +107,7 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './platform.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
 })
 export class PlatformComponent implements OnInit {
