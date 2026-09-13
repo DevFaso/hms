@@ -19,15 +19,14 @@ import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -117,7 +116,6 @@ class PatientPortalControllerPhase2Test {
     void setUp() {
         reset(portalService);
         objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
 
         auth = new UsernamePasswordAuthenticationToken(
                 "patient.jane", "password",

@@ -34,7 +34,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -212,8 +212,8 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        var provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
+        // Spring Security 7: the UserDetailsService is a constructor argument.
+        var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         provider.setAuthoritiesMapper(authoritiesMapper());
         return provider;
@@ -305,39 +305,39 @@ public class SecurityConfig {
                 // Keep CSRF enabled for browser-cookie flows; ignore only what is necessary.
                 .ignoringRequestMatchers(
                     // CORS preflight (no cookies should mutate state anyway)
-                    new AntPathRequestMatcher("/**", "OPTIONS"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.OPTIONS, "/**"),
                     // Public auth endpoints return JWTs — no cookie session to protect.
                     // The patient-mobile-app (React/fetch) does not use the XSRF-TOKEN
                     // dance, so these must be CSRF-exempt.
-                    new AntPathRequestMatcher("/auth/login", "POST"),
-                    new AntPathRequestMatcher("/auth/register", "POST"),
-                    new AntPathRequestMatcher("/auth/bootstrap-signup", "POST"),
-                    new AntPathRequestMatcher("/auth/token/refresh", "POST"),
-                    new AntPathRequestMatcher("/auth/password/**"),
-                    new AntPathRequestMatcher("/auth/resend-verification", "POST"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/login"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
-                    new AntPathRequestMatcher("/ws-chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/ws-chat/**"),
                     // REST chat endpoints
-                    new AntPathRequestMatcher("/chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/chat/**"),
                     // Patient portal self-service (native mobile apps use Bearer JWT,
                     // not browser cookies, so CSRF protection is unnecessary)
-                    new AntPathRequestMatcher(API_ME_PATIENT_PATTERN),
-                    new AntPathRequestMatcher("/me/notifications/**"),
-                    new AntPathRequestMatcher("/notifications/**"),
-                    new AntPathRequestMatcher("/me/chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher(API_ME_PATIENT_PATTERN),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/notifications/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/notifications/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/chat/**"),
                     // File uploads from mobile apps (multipart — no XSRF token)
-                    new AntPathRequestMatcher("/files/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/files/**"),
                     // Appointment booking from mobile apps (Bearer JWT, no cookies)
-                    new AntPathRequestMatcher("/appointments/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/appointments/**"),
                     // Partner pharmacy SMS webhook (T-55) — shared-secret header auth, no cookies
-                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/webhooks/partner-sms"),
                     // FHIR R4 endpoints — server-to-server clients (OpenMRS/DHIS2/HIE)
                     // authenticate via Bearer JWT, not browser cookies.
-                    new AntPathRequestMatcher("/fhir/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/fhir/**"),
                     // CDS Hooks invocations — server-to-server callers post JSON
                     // with Bearer JWT.
-                    new AntPathRequestMatcher("/cds-services/**")
+                    PathPatternRequestMatcher.withDefaults().matcher("/cds-services/**")
                 )
             )
             .exceptionHandling(ex -> ex

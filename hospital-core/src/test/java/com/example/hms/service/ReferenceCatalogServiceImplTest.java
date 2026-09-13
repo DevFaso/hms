@@ -11,7 +11,7 @@ import com.example.hms.payload.dto.reference.ReferenceCatalogResponseDTO;
 import com.example.hms.payload.dto.reference.SchedulePublishRequestDTO;
 import com.example.hms.repository.reference.ReferenceCatalogEntryRepository;
 import com.example.hms.repository.reference.ReferenceCatalogRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

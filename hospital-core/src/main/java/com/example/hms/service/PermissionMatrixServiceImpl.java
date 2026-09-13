@@ -13,9 +13,9 @@ import com.example.hms.payload.dto.PermissionMatrixSnapshotRequestDTO;
 import com.example.hms.payload.dto.PermissionMatrixSnapshotResponseDTO;
 import com.example.hms.repository.PermissionMatrixAuditEventRepository;
 import com.example.hms.repository.PermissionMatrixSnapshotRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
@@ -191,7 +191,7 @@ public class PermissionMatrixServiceImpl implements PermissionMatrixService {
         }
         try {
             return objectMapper.readValue(json, ROW_LIST_TYPE);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to deserialize permission matrix", e);
             throw new BusinessException("permission.matrix.serialization.error");
         }
@@ -200,7 +200,7 @@ public class PermissionMatrixServiceImpl implements PermissionMatrixService {
     private String writeRows(List<PermissionMatrixRowDTO> rows) {
         try {
             return objectMapper.writeValueAsString(rows);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to serialize permission matrix", e);
             throw new BusinessException("permission.matrix.serialization.error");
         }

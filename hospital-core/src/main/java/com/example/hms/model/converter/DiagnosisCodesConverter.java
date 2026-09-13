@@ -1,12 +1,12 @@
 package com.example.hms.model.converter;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
+import tools.jackson.core.JacksonException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +23,7 @@ public class DiagnosisCodesConverter implements AttributeConverter<List<String>,
         }
         try {
             return OBJECT_MAPPER.writeValueAsString(attribute);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to serialize diagnosis codes", e);
             throw new IllegalStateException("Unable to write diagnosis codes", e);
         }
@@ -37,7 +37,7 @@ public class DiagnosisCodesConverter implements AttributeConverter<List<String>,
         try {
             return OBJECT_MAPPER.readValue(dbData,
                 OBJECT_MAPPER.getTypeFactory().constructCollectionType(List.class, String.class));
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.error("Failed to deserialize diagnosis codes", e);
             return new ArrayList<>();
         }

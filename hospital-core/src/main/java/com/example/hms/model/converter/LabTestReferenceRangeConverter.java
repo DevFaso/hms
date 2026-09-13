@@ -1,13 +1,13 @@
 package com.example.hms.model.converter;
 
 import com.example.hms.model.LabTestReferenceRange;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
+import tools.jackson.core.JacksonException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +27,7 @@ public class LabTestReferenceRangeConverter implements AttributeConverter<List<L
         }
         try {
             return OBJECT_MAPPER.writeValueAsString(attribute);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("Failed to serialize lab test reference ranges", e);
             throw new IllegalStateException("Unable to write reference ranges", e);
         }
@@ -41,7 +41,7 @@ public class LabTestReferenceRangeConverter implements AttributeConverter<List<L
         try {
             return OBJECT_MAPPER.readValue(dbData,
                 OBJECT_MAPPER.getTypeFactory().constructCollectionType(List.class, LabTestReferenceRange.class));
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             log.error("Failed to deserialize lab test reference ranges", e);
             return new ArrayList<>();
         }

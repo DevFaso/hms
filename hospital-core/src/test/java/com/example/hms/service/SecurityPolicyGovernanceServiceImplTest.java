@@ -13,8 +13,8 @@ import com.example.hms.model.security.SecurityPolicyBaseline;
 import com.example.hms.payload.dto.superadmin.SecurityPolicyBaselineRequestDTO;
 import com.example.hms.repository.SecurityPolicyApprovalRepository;
 import com.example.hms.repository.SecurityPolicyBaselineRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -100,7 +100,7 @@ class SecurityPolicyGovernanceServiceImplTest {
     }
 
     @Test
-    void exportLatestBaselineSerializesPayload() throws JsonProcessingException {
+    void exportLatestBaselineSerializesPayload() throws JacksonException {
         SecurityPolicyBaseline baseline = SecurityPolicyBaseline.builder()
             .baselineVersion("baseline-2025")
             .title("Global security baseline")
