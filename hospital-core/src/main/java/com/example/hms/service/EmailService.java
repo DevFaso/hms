@@ -49,21 +49,6 @@ public interface EmailService {
         Locale locale
     );
 
-    default void sendAppointmentRescheduledEmail(
-        String to,
-        String patientName,
-        String hospitalName,
-        String staffName,
-        String newAppointmentDate,
-        String newAppointmentTime,
-        String hospitalEmail,
-        String hospitalPhone,
-        String rescheduleLink,
-        String cancelLink
-    ) {
-        sendAppointmentRescheduledEmail(to, patientName, hospitalName, staffName, newAppointmentDate,
-            newAppointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink, DEFAULT_RECIPIENT_LOCALE);
-    }
 
     void sendAppointmentCancelledEmail(
         String to,
@@ -77,19 +62,6 @@ public interface EmailService {
         Locale locale
     );
 
-    default void sendAppointmentCancelledEmail(
-        String to,
-        String patientName,
-        String hospitalName,
-        String staffName,
-        String appointmentDate,
-        String appointmentTime,
-        String hospitalEmail,
-        String hospitalPhone
-    ) {
-        sendAppointmentCancelledEmail(to, patientName, hospitalName, staffName, appointmentDate,
-            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
-    }
 
     void sendAppointmentCompletedEmail(
         String to,
@@ -103,19 +75,6 @@ public interface EmailService {
         Locale locale
     );
 
-    default void sendAppointmentCompletedEmail(
-        String to,
-        String patientName,
-        String hospitalName,
-        String staffName,
-        String appointmentDate,
-        String appointmentTime,
-        String hospitalEmail,
-        String hospitalPhone
-    ) {
-        sendAppointmentCompletedEmail(to, patientName, hospitalName, staffName, appointmentDate,
-            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
-    }
 
     void sendAppointmentNoShowEmail(
         String to,
@@ -129,19 +88,6 @@ public interface EmailService {
         Locale locale
     );
 
-    default void sendAppointmentNoShowEmail(
-        String to,
-        String patientName,
-        String hospitalName,
-        String staffName,
-        String appointmentDate,
-        String appointmentTime,
-        String hospitalEmail,
-        String hospitalPhone
-    ) {
-        sendAppointmentNoShowEmail(to, patientName, hospitalName, staffName, appointmentDate,
-            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
-    }
 
     void sendAppointmentConfirmationEmail(
         String to,
@@ -157,21 +103,6 @@ public interface EmailService {
         Locale locale
     );
 
-    default void sendAppointmentConfirmationEmail(
-        String to,
-        String patientName,
-        String hospitalName,
-        String staffName,
-        String appointmentDate,
-        String appointmentTime,
-        String hospitalEmail,
-        String hospitalPhone,
-        String rescheduleLink,
-        String cancelLink
-    ) {
-        sendAppointmentConfirmationEmail(to, patientName, hospitalName, staffName, appointmentDate,
-            appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink, DEFAULT_RECIPIENT_LOCALE);
-    }
 
     // ---------------------------------------------------------------------
     // Account and staff mails — the recipient is a User, which records no

@@ -200,18 +200,6 @@ class EmailServiceImplTest {
                 .contains("email.appointment.contact[contact@chu.bf|+226 25 00 00 00]");
         }
 
-        @Test
-        @DisplayName("the overload without a locale renders in the product default, never the request's")
-        void legacyOverloadFallsBackToTheProductDefault() {
-            stubMailSender();
-            emailService.sendAppointmentCancelledEmail(
-                "awa@example.com", "Awa Traore", "CHU Yalgado", "Ouedraogo",
-                "2026-09-05", "09:00 - 09:30", "contact@chu.bf", "+226 25 00 00 00");
-
-            verify(messageSource).getMessage(
-                eq("email.appointment.cancelled.subject"), any(), eq(EmailService.DEFAULT_RECIPIENT_LOCALE));
-            assertThat(EmailService.DEFAULT_RECIPIENT_LOCALE).isEqualTo(Locale.FRENCH);
-        }
 
         @Test
         @DisplayName("a null locale means the product default, not an NPE")

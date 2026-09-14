@@ -64,6 +64,8 @@ public class EmailServiceImpl implements EmailService {
 
     // Bundle keys used by more than one mail.
     // Markup fragments repeated across the mails (Sonar S1192).
+    private static final String HTML_BR = "<br/>";
+    private static final String HTML_CENTER_BLOCK = "<div style=\"text-align:center;margin:32px 0;\">";
     private static final String HTML_A_OPEN = "<a href=\"";
     private static final String HTML_STRONG_OPEN = "<strong>";
     private static final String HTML_STRONG_CLOSE = "</strong>";
@@ -503,7 +505,7 @@ public class EmailServiceImpl implements EmailService {
 
         String bodyContent = BODY_OPEN
             + BODY_PARAGRAPH_OPEN + text(l, "email.recovery.contact.body.intro") + CLOSE_PARAGRAPH
-            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + HTML_CENTER_BLOCK
             + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
             + "border-radius:12px;padding:20px 40px;\">"
             + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
@@ -605,18 +607,18 @@ public class EmailServiceImpl implements EmailService {
                 .append(text(l, "email.activation.credentials.title")).append(CLOSE_PARAGRAPH)
                 .append("<p style=\"margin:0;font-size:14px;color:#075985;\">")
                 .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.username")).append(HTML_STRONG_CLOSE_SP)
-                .append(escapeHtml(username)).append("<br/>")
+                .append(escapeHtml(username)).append(HTML_BR)
                 .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.password")).append(HTML_STRONG_CLOSE_SP)
                 .append(text(l, "email.activation.credentials.password.hint"))
                 .append(HTML_P_DIV_CLOSE);
         }
 
-        body.append("<div style=\"text-align:center;margin:32px 0;\">")
+        body.append(HTML_CENTER_BLOCK)
             .append(HTML_A_OPEN).append(safeLink).append(HTML_STYLE_ATTR).append(PRIMARY_BUTTON_STYLE).append("\">")
             .append(text(l, KEY_ACTIVATION_BUTTON)).append("</a>")
             .append(CLOSE_DIV)
             .append("<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">")
-            .append(text(l, KEY_LINK_FALLBACK)).append("<br/>")
+            .append(text(l, KEY_LINK_FALLBACK)).append(HTML_BR)
             .append(HTML_A_OPEN).append(safeLink).append("\" style=\"color:#2563eb;word-break:break-all;\">")
             .append(safeLink).append("</a>")
             .append(CLOSE_PARAGRAPH)
@@ -640,12 +642,12 @@ public class EmailServiceImpl implements EmailService {
         String bodyContent = BODY_OPEN
             + GREETING_PARAGRAPH_OPEN + text(l, "email.common.greeting.hello") + CLOSE_PARAGRAPH
             + BODY_PARAGRAPH_OPEN + text(l, "email.password.reset.body.intro") + CLOSE_PARAGRAPH
-            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + HTML_CENTER_BLOCK
             + HTML_A_OPEN + safeLink + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
             + text(l, "email.password.reset.button") + "</a>"
             + CLOSE_DIV
             + "<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">"
-            + text(l, KEY_LINK_FALLBACK) + "<br/>"
+            + text(l, KEY_LINK_FALLBACK) + HTML_BR
             + HTML_A_OPEN + safeLink + "\" style=\"color:#2563eb;word-break:break-all;\">" + safeLink + "</a>"
             + CLOSE_PARAGRAPH
             + HR
@@ -682,7 +684,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private String signInButton(Locale l) {
-        return "<div style=\"text-align:center;margin:32px 0;\">"
+        return HTML_CENTER_BLOCK
             + HTML_A_OPEN + escapeHtml(loginUrl()) + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
             + text(l, KEY_SIGNIN_BUTTON) + "</a>"
             + CLOSE_DIV;
@@ -866,7 +868,7 @@ public class EmailServiceImpl implements EmailService {
             + HTML_A_OPEN + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
             + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
             + "font-weight:600;display:inline-block;\">" + text(l, KEY_ACTIVATION_BUTTON) + "</a></p>"
-            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + text(l, "email.admin.welcome.cta.copy") + "<br/>"
+            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + text(l, "email.admin.welcome.cta.copy") + HTML_BR
             + HTML_A_OPEN + activationUrl + "\" " + LINK_STYLE + ">" + activationUrl
             + "</a><br/><br/>" + text(l, "email.admin.welcome.cta.signin.activated", loginAnchor) + CLOSE_PARAGRAPH;
     }
