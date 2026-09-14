@@ -20,6 +20,7 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 interface QcPoint {
   x: number;
@@ -402,7 +403,7 @@ export class LabApprovalQueueComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone: 'ok' | 'warn' | 'fail' = dev > 2 ? 'fail' : dev > 1 ? 'warn' : 'ok';
-        const dateStr = new Date(e.recordedAt).toLocaleDateString('en-US', {
+        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
@@ -426,7 +427,10 @@ export class LabApprovalQueueComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+          month: 'short',
+          day: 'numeric',
+        });
       xAxisLabels.push({ x: xToSvg(0), label: fmtDate(levelEvents[0]) });
       if (n > 2) {
         const mid = Math.floor(n / 2);

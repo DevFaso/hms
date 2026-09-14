@@ -2202,6 +2202,33 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Two portal screens are hard-coded French, not translated.**
+  `patient-portal/my-pharmacy-invoices` and `pharmacy/pharmacy-checkout` (and
+  `pharmacy-claims`' `labelFr` option arrays) carry no keys at all. They read
+  correctly for the French target and are wrong for every other language;
+  converting them is one `PORTAL.*`/`PHARMACY.*` pass each. Left out of the
+  French-completeness PRs on purpose, because "already French" was the
+  product's ask and a half-conversion would have been worse than none.
+- **Spanish has 1377 untranslated values.** `check-i18n-untranslated.mjs`
+  ratchets ES at that ceiling rather than allowlisting them, because pinning
+  them would claim they were reviewed. A Spanish pass is the same shape as
+  the French one (2026-09-13) and nobody has asked for it.
+- **Terminology the product owner has not settled**, all pre-existing and all
+  now visible because the rest is French: MRN renders four ways (`MRN`,
+  `DMI`, `NRM`, `N° dossier`) where a Burkinabè clerk expects **IPP**;
+  *Department* is both "Service" and "Département" while *Ward* is also
+  "Service"; *Email* is "Courriel" on some screens and "E-mail" on others;
+  *Acuity* → "Niveau de soins" and *Shift* → "Poste" (11 keys) want a nurse's
+  confirmation. Each is a find-and-replace once decided; none should be
+  decided by the person doing the replace.
+- **Notifications are stored in one language.** `createNotification(message,
+  recipient)` persists rendered text, so a message is in whichever language
+  it was rendered in at write time, whatever the recipient later switches to.
+  The 2026-09-14 pass renders them in the recipient's locale, which is
+  correct today and wrong the day a user changes language. The fix is to
+  store a key plus parameters and render at read time; the automation-task
+  labels the platform page shows (`task.title`, `nextAction`, `metricLabel`)
+  arrive server-composed and have the same shape.
 - **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
   matcher that covers its path.** The record-sharing opt-out shipped admitting
   ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and

@@ -77,6 +77,7 @@ import {
   CredentialRenewalTarget,
 } from './credential-renewal/credential-renewal.component';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -2081,7 +2082,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Mirrors the billing page's XOF formatting so amounts read identically. */
   formatInvoiceAmount(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(currentLocale(), {
       style: 'currency',
       currency: 'XOF',
       maximumFractionDigits: 0,

@@ -164,9 +164,22 @@ describe('InBasketPanelComponent', () => {
     expect(component.typeIcon('UNKNOWN')).toBe('📌');
   });
 
-  it('should format dates correctly', () => {
+  it('formats dates in the product language by default — French, 24-hour', () => {
+    localStorage.removeItem('lang');
     expect(component.formatDate(null)).toBe('');
-    expect(component.formatDate('2025-07-15T10:00:00')).toContain('Jul');
+    const out = component.formatDate('2025-07-15T10:00:00');
+    expect(out).toContain('juil.');
+    expect(out).toContain('10:00');
+    expect(out).not.toContain('AM');
+  });
+
+  it('follows the stored language when the user chose English', () => {
+    localStorage.setItem('lang', 'en');
+    try {
+      expect(component.formatDate('2025-07-15T10:00:00')).toContain('Jul');
+    } finally {
+      localStorage.removeItem('lang');
+    }
   });
 
   it('should trackById return item id', () => {

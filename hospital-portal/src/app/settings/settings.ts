@@ -2,6 +2,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { applyLanguage, isSupportedLang } from '../shared/i18n/app-locale';
 
 interface SettingsCard {
   icon: string;
@@ -83,12 +84,12 @@ export class SettingsComponent {
   ]);
 
   switchLang(lang: string): void {
+    if (!isSupportedLang(lang)) return;
     this.translate.use(lang);
     this.currentLang.set(lang);
-    try {
-      localStorage.setItem('lang', lang);
-    } catch {
-      // localStorage can throw in privacy modes — preference is still applied for the session.
-    }
+    // Persists the choice (privacy modes that refuse storage still get the
+    // session) and reloads when it changed, so the LOCALE_ID-bound date and
+    // number pipes follow the labels.
+    if (applyLanguage(lang)) window.location.reload();
   }
 }

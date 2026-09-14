@@ -13,6 +13,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -443,7 +444,7 @@ export class BillingComponent implements OnInit {
   }
 
   formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(currentLocale(), {
       style: 'currency',
       currency: 'XOF',
       maximumFractionDigits: 0,

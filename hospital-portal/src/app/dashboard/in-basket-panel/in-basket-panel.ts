@@ -11,6 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-in-basket-panel',
@@ -121,12 +122,14 @@ export class InBasketPanelComponent implements OnInit {
   formatDate(iso: string | null): string {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleString('en-US', {
+    // No hour12 override: the locale decides. Burkina Faso reads a 24-hour
+    // clock; forcing 12-hour produced "15 juil., 10:00 AM" — French date,
+    // American time.
+    return d.toLocaleString(currentLocale(), {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true,
     });
   }
 

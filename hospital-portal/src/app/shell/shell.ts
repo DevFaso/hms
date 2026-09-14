@@ -39,6 +39,7 @@ import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
+import { applyLanguage, isSupportedLang } from '../shared/i18n/app-locale';
 
 interface NavItem {
   icon: string;
@@ -1769,8 +1770,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   switchLang(lang: string): void {
+    if (!isSupportedLang(lang)) return;
     this.translate.use(lang);
     this.currentLang.set(lang);
-    localStorage.setItem('lang', lang);
+    // LOCALE_ID is fixed at bootstrap, so the date and number pipes only
+    // follow the new language after a reload; without it the labels switch
+    // and the dates stay in the old one.
+    if (applyLanguage(lang)) window.location.reload();
   }
 }
