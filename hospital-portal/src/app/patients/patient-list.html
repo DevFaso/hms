@@ -68,7 +68,7 @@
         >
           <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (g of genderOptions; track g) {
-            <option [value]="g">{{ formatGender(g) }}</option>
+            <option [value]="g">{{ g | enumLabel: 'gender' }}</option>
           }
         </select>
       </div>
@@ -140,7 +140,7 @@
     <div class="active-chips">
       @if (genderFilter) {
         <span class="filter-chip">
-          {{ 'PATIENTS.GENDER' | translate }}: {{ formatGender(genderFilter) }}
+          {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
           <button class="chip-remove" (click)="removeFilter('gender')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -272,7 +272,7 @@
               </td>
               <td>{{ patient.email }}</td>
               <td>{{ patient.phoneNumberPrimary ?? '—' }}</td>
-              <td>{{ patient.gender ? formatGender(patient.gender) : '—' }}</td>
+              <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
               <td>
                 @if (patient.bloodType) {
                   <span class="blood-badge">{{ patient.bloodType }}</span>

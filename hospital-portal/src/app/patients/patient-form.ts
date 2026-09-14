@@ -180,7 +180,7 @@ export class PatientFormComponent implements OnInit {
   get lockedHospitalName(): string {
     return this.hospitals.length === 1
       ? this.hospitals[0].name
-      : this.translate.instant('PATIENTS.NO_HOSPITAL_ASSIGNED');
+      : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {

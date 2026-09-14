@@ -6,7 +6,9 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -77,13 +79,32 @@ export class TriageFormComponent {
    * the template tracks each option by identity; the form is re-created per
    * encounter, so a language switch is picked up on the next open.
    */
-  readonly esiOptions = [
-    { value: 1, label: this.translate.instant('TRIAGE.ESI_OPTION_1') },
-    { value: 2, label: this.translate.instant('TRIAGE.ESI_OPTION_2') },
-    { value: 3, label: this.translate.instant('TRIAGE.ESI_OPTION_3') },
-    { value: 4, label: this.translate.instant('TRIAGE.ESI_OPTION_4') },
-    { value: 5, label: this.translate.instant('TRIAGE.ESI_OPTION_5') },
-  ];
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Built once, then rebuilt only when ngx-translate reports a language (or a
+   * late-arriving translation file) — never inside change detection, so the
+   * array keeps its identity for the template's tracking and a first paint
+   * ahead of the language file does not freeze raw keys for the form's life.
+   */
+  private esiOptionsCache = this.buildEsiOptions();
+
+  get esiOptions(): { value: number; label: string }[] {
+    return this.esiOptionsCache;
+  }
+
+  private buildEsiOptions(): { value: number; label: string }[] {
+    return [1, 2, 3, 4, 5].map((value) => ({
+      value,
+      label: this.translate.instant(`TRIAGE.ESI_OPTION_${value}`) as string,
+    }));
+  }
+
+  constructor() {
+    this.translate.onLangChange
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
+  }
 
   get canSubmit(): boolean {
     return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();

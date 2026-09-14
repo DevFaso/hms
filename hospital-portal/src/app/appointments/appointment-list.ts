@@ -17,13 +17,14 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
+  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',
@@ -243,15 +244,6 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
       default:
         return base;
     }
-  }
-
-  formatStatus(status: string): string {
-    // Same lookup the EnumLabelPipe performs, so the badge reads in the
-    // active locale. The prettifier stays as the fallback for any status
-    // the enum group has not been extended with yet.
-    const key = `PORTAL.ENUM.APPOINTMENT_STATUS.${status}`;
-    const label = this.translate.instant(key);
-    return typeof label === 'string' && label && label !== key ? label : status.replace(/_/g, ' ');
   }
 
   hospitalName(id: string): string {

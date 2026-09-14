@@ -2,7 +2,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { applyLanguage, isSupportedLang } from '../shared/i18n/app-locale';
+import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 
 interface SettingsCard {
   icon: string;
@@ -40,7 +40,7 @@ export class SettingsComponent {
   private readonly router = inject(Router);
 
   readonly languages = SUPPORTED_LANGS;
-  currentLang = signal<string>(this.translate.currentLang || this.translate.defaultLang || 'fr');
+  currentLang = signal<string>(storedLang());
 
   cards = computed<SettingsCard[]>(() => [
     {
@@ -84,12 +84,6 @@ export class SettingsComponent {
   ]);
 
   switchLang(lang: string): void {
-    if (!isSupportedLang(lang)) return;
-    this.translate.use(lang);
-    this.currentLang.set(lang);
-    // Persists the choice (privacy modes that refuse storage still get the
-    // session) and reloads when it changed, so the LOCALE_ID-bound date and
-    // number pipes follow the labels.
-    if (applyLanguage(lang)) window.location.reload();
+    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
   }
 }

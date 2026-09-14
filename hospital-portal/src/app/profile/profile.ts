@@ -25,6 +25,7 @@ import {
 } from '../services/profile.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
@@ -123,7 +124,7 @@ export class ProfileComponent implements OnInit {
    * A Super Admin who also happens to have a patient record should see
    * "Super Admin" here, not "PATIENT".
    */
-  sessionProfileType = computed((): string => {
+  sessionProfileType(): string {
     const roles = this.auth.getRoles();
     const priority: [string, string][] = [
       ['ROLE_SUPER_ADMIN', 'DASHBOARD.ROLE.SUPER_ADMIN'],
@@ -141,7 +142,7 @@ export class ProfileComponent implements OnInit {
       if (roles.includes(role)) return this.translate.instant(labelKey);
     }
     return this.translate.instant('PROFILE.TYPE_USER');
-  });
+  }
 
   /** Show license number only for clinical staff roles in this session. */
   showLicenseNumber = computed(() => {
@@ -149,7 +150,7 @@ export class ProfileComponent implements OnInit {
     return this.auth.hasAnyRole(clinicalRoles) && !!this.user()?.licenseNumber;
   });
 
-  memberSince = computed(() => {
+  memberSince(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
     return new Date(u.createdAt).toLocaleDateString(this.dateLocale(), {
@@ -157,9 +158,9 @@ export class ProfileComponent implements OnInit {
       month: 'long',
       day: 'numeric',
     });
-  });
+  }
 
-  lastLogin = computed(() => {
+  lastLogin(): string {
     const u = this.user();
     if (!u?.lastLoginAt) return this.translate.instant('PROFILE.NEVER');
     return new Date(u.lastLoginAt).toLocaleString(this.dateLocale(), {
@@ -169,7 +170,7 @@ export class ProfileComponent implements OnInit {
       hour: '2-digit',
       minute: '2-digit',
     });
-  });
+  }
 
   securityScore = computed(() => {
     const c = this.credentials();
@@ -189,14 +190,14 @@ export class ProfileComponent implements OnInit {
     return '#dc2626';
   });
 
-  securityScoreLabel = computed(() => {
+  securityScoreLabel(): string {
     const s = this.securityScore();
     if (s >= 80) return this.translate.instant('PROFILE.SCORE_EXCELLENT');
     if (s >= 50) return this.translate.instant('PROFILE.SCORE_GOOD');
     return this.translate.instant('PROFILE.SCORE_NEEDS_ATTENTION');
-  });
+  }
 
-  accountAge = computed(() => {
+  accountAge(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
     const created = new Date(u.createdAt);
@@ -219,7 +220,7 @@ export class ProfileComponent implements OnInit {
     return this.translate.instant(years > 1 ? 'PROFILE.AGE_YEARS' : 'PROFILE.AGE_YEAR', {
       count: years,
     });
-  });
+  }
 
   /* ── Inline MFA Enrollment ── */
   mfaStep = signal<'idle' | 'qr' | 'verify' | 'backup'>('idle');
@@ -739,17 +740,6 @@ export class ProfileComponent implements OnInit {
    * {@link EnumLabelPipe}: `PORTAL.ENUM.AUDIT_EVENT_TYPE.*` first, then a
    * prettified fallback so an unmapped event never renders as a raw key.
    */
-  formatEventType(eventType: string): string {
-    if (!eventType) return '';
-    const key = `PORTAL.ENUM.AUDIT_EVENT_TYPE.${eventType}`;
-    const label = this.translate.instant(key);
-    if (typeof label === 'string' && label && label !== key) return label;
-    return eventType
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   formatTimestamp(ts: string): string {
     if (!ts) return '';
     const date = new Date(ts);
@@ -781,6 +771,6 @@ export class ProfileComponent implements OnInit {
    * the first paint (before a language is set) still formats.
    */
   private dateLocale(): string {
-    return this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    return currentLocale();
   }
 }

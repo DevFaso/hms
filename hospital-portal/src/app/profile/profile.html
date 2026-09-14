@@ -912,7 +912,9 @@
                       </div>
                       <div class="timeline-content">
                         <div class="timeline-header">
-                          <span class="timeline-type">{{ formatEventType(event.eventType) }}</span>
+                          <span class="timeline-type">{{
+                            event.eventType | enumLabel: 'auditEventType'
+                          }}</span>
                           <span class="timeline-time">{{
                             formatTimestamp(event.eventTimestamp)
                           }}</span>

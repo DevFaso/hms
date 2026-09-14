@@ -162,16 +162,6 @@ export class ConsultationsComponent implements OnInit {
    * field, so the labels follow a runtime language switch — the template
    * still indexes it as `typeLabel[value]`.
    */
-  get typeLabel(): Record<string, string> {
-    return {
-      OUTPATIENT_CONSULT: this.translate.instant('CONSULTATIONS.TYPE_OUTPATIENT'),
-      INPATIENT_CONSULT: this.translate.instant('CONSULTATIONS.TYPE_INPATIENT'),
-      FOLLOW_UP_CONSULT: this.translate.instant('CONSULTATIONS.TYPE_FOLLOW_UP'),
-      CURBSIDE_CONSULT: this.translate.instant('CONSULTATIONS.TYPE_CURBSIDE'),
-      EMERGENCY_CONSULT: this.translate.instant('CONSULTATIONS.TYPE_EMERGENCY'),
-    };
-  }
-
   ngOnInit(): void {
     // Cross-tenant: apply the URL scope BEFORE the first list fetch so
     // the auth interceptor reads the right X-Hospital-Id on initial

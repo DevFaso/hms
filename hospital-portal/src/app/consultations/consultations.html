@@ -304,7 +304,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'CONSULTATIONS.TYPE' | translate }}</span
               ><span class="field-value">{{
-                typeLabel[con.consultationType] || con.consultationType
+                con.consultationType | enumLabel: 'consultationType'
               }}</span>
             </div>
             <div class="detail-field">
@@ -569,7 +569,7 @@
               [title]="'CONSULTATIONS.TYPE_TITLE' | translate"
             >
               @for (t of consultationTypes; track t) {
-                <option [value]="t">{{ typeLabel[t] || t }}</option>
+                <option [value]="t">{{ t | enumLabel: 'consultationType' }}</option>
               }
             </select>
           </div>

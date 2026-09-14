@@ -68,7 +68,7 @@ export class PharmacyRegistryComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : this.translate.instant('PHARMACY.NO_HOSPITAL_ASSIGNED');
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   loadPharmacies(): void {

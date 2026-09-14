@@ -11,6 +11,7 @@ import {
 } from '../../services/in-basket.service';
 import { TranslateModule } from '@ngx-translate/core';
 
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 function mockItem(overrides: Partial<InBasketItem> = {}): InBasketItem {
   return {
     id: 'ib-1',
@@ -166,6 +167,7 @@ describe('InBasketPanelComponent', () => {
 
   it('formats dates in the product language by default — French, 24-hour', () => {
     localStorage.removeItem('lang');
+    resetStoredLangForTests();
     expect(component.formatDate(null)).toBe('');
     const out = component.formatDate('2025-07-15T10:00:00');
     expect(out).toContain('juil.');
@@ -175,10 +177,12 @@ describe('InBasketPanelComponent', () => {
 
   it('follows the stored language when the user chose English', () => {
     localStorage.setItem('lang', 'en');
+    resetStoredLangForTests();
     try {
       expect(component.formatDate('2025-07-15T10:00:00')).toContain('Jul');
     } finally {
       localStorage.removeItem('lang');
+      resetStoredLangForTests();
     }
   });
 

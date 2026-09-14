@@ -21,6 +21,7 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -555,6 +556,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   formatTime(timestamp: string): string {
     if (!timestamp) return '';
     const d = new Date(timestamp);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' });
   }
 }

@@ -309,7 +309,9 @@
               <td class="reason-cell" [title]="appt.reason">{{ appt.reason }}</td>
               <td>{{ appt.hospitalName }}</td>
               <td>
-                <span [class]="getStatusClass(appt.status)">{{ formatStatus(appt.status) }}</span>
+                <span [class]="getStatusClass(appt.status)">{{
+                  appt.status | enumLabel: 'appointmentStatus'
+                }}</span>
               </td>
               <td>
                 <a

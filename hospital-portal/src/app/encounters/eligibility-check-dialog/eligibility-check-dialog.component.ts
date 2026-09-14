@@ -139,7 +139,7 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
           resp.status === 'ELIGIBLE'
             ? this.translate.instant('ENCOUNTERS.ELIGIBILITY.COVERAGE_ACTIVE')
             : this.translate.instant('ENCOUNTERS.ELIGIBILITY.RESULT', {
-                status: this.translate.instant(`ENCOUNTERS.ELIGIBILITY.STATUS.${resp.status}`),
+                status: this.translate.instant(`PORTAL.ENUM.STATUS.${resp.status}`),
               }),
         );
       },

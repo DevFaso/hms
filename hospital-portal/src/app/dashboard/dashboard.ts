@@ -1037,7 +1037,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         key: 'open_balance',
         label: this.t('DASHBOARD.OPEN_BALANCE'),
-        value: '$' + (s.billing.openBalanceTotal ?? 0).toLocaleString(),
+        // XOF through the same formatter as every other amount on this page — the
+        // tile used to hard-code a dollar sign on a CFA franc balance.
+        value: this.formatInvoiceAmount(s.billing.openBalanceTotal ?? 0),
         icon: 'account_balance',
         color: '#d97706',
         bgColor: '#fef3c7',

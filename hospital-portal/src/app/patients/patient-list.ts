@@ -17,13 +17,14 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
+  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',
@@ -234,14 +235,6 @@ export class PatientListComponent implements OnInit, OnDestroy {
    * the raw enum under `PORTAL.ENUM.GENDER.*` first, then a prettified fallback
    * so an unmapped value never renders as a raw translation key.
    */
-  formatGender(g: string): string {
-    if (!g) return '';
-    const key = `PORTAL.ENUM.GENDER.${g.toUpperCase()}`;
-    const label = this.translate.instant(key);
-    if (typeof label === 'string' && label && label !== key) return label;
-    return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase().replaceAll('_', ' ');
-  }
-
   hospitalName(id: string): string {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }

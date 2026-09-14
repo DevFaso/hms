@@ -637,18 +637,17 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     if (domain) {
       const domainMap = EnumLabelPipe.LABELS[domain];
       if (domainMap?.[value]) return domainMap[value];
-    } else {
-      // Only when the caller named no domain. Scanning every group for a value
-      // ignores the domain the caller asked for, and the groups disagree:
-      // EXPIRED is "Deceased" under dischargeDisposition and "Expired" under
-      // status, so today the answer is decided by declaration order and
-      // re-ordering the map would silently relabel unrelated screens. Every
-      // call site now passes a domain, so a value its own group does not know
-      // falls to the prettifier below — English, but never another screen's
-      // meaning.
-      for (const map of Object.values(EnumLabelPipe.LABELS)) {
-        if (map[value]) return map[value];
-      }
+    }
+    // Then every other group. 24 call sites pass the generic 'status' domain
+    // for values that only encounterStatus / labOrderStatus / ... define, and
+    // their curated casing ("Ready for Discharge") lives in those siblings.
+    // Restricting this scan to domain-less calls dropped them to the Title-Case
+    // prettifier. The scan's known hazard — EXPIRED is "Deceased" under
+    // dischargeDisposition and "Expired" under status, decided by declaration
+    // order — is real but pre-existing; the fix for it is the right domain at
+    // those call sites, not a narrower fallback here.
+    for (const map of Object.values(EnumLabelPipe.LABELS)) {
+      if (map[value]) return map[value];
     }
 
     // 3) Prettify — UPPER_SNAKE_CASE → Title Case

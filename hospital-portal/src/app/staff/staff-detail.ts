@@ -198,20 +198,17 @@ export class StaffDetailComponent implements OnInit {
     const { start } = this.getWeekRange();
     const monday = new Date(start + 'T00:00:00');
     const today = this.toISODate(new Date());
-    const dayNames = [
-      'COMMON.WEEKDAY_SHORT_MON',
-      'COMMON.WEEKDAY_SHORT_TUE',
-      'COMMON.WEEKDAY_SHORT_WED',
-      'COMMON.WEEKDAY_SHORT_THU',
-      'COMMON.WEEKDAY_SHORT_FRI',
-      'COMMON.WEEKDAY_SHORT_SAT',
-      'COMMON.WEEKDAY_SHORT_SUN',
-    ].map((key) => this.translate.instant(key));
-    return dayNames.map((label, i) => {
+    // The locale already knows its weekday abbreviations; no keys to maintain.
+    const locale = currentLocale();
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const date = this.toISODate(d);
-      return { label, date, isToday: date === today };
+      return {
+        label: d.toLocaleDateString(locale, { weekday: 'short' }),
+        date,
+        isToday: date === today,
+      };
     });
   }
 
