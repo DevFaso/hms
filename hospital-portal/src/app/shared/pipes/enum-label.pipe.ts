@@ -95,31 +95,24 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     },
 
     /* ── Encounter / visit types ──────────────────────────── */
+    /* Tier 2 is a first-match scan over EVERY group below, not a per-domain
+     * map, so trimming a group here changes what other domains render for
+     * the same value. Trimming this one to the 8 EncounterType sends took
+     * WALK_IN, PRE_OP, POST_OP and PRE_ADMISSION out of the pool entirely, and
+     * changed what ROUTINE resolves to ("Routine Visit" -> "Routine", since it
+     * is still defined under consultationUrgency, taskPriority and
+     * referralUrgency). None is reachable — there are no domain-less enumLabel
+     * calls, and no domain whose group omits them — so nothing changed on
+     * screen. Check that again before the next trim. */
     encounterType: {
       CONSULTATION: 'Consultation',
       FOLLOW_UP: 'Follow-Up',
       EMERGENCY: 'Emergency',
-      ROUTINE: 'Routine Visit',
-      PROCEDURE: 'Procedure',
-      LAB_VISIT: 'Lab Visit',
-      IMAGING: 'Imaging',
-      VACCINATION: 'Vaccination',
-      ADMISSION: 'Admission',
-      DISCHARGE: 'Discharge',
-      WALK_IN: 'Walk-In',
-      TELEMEDICINE: 'Telemedicine',
-      REFERRAL: 'Referral',
-      PRE_ADMISSION: 'Pre-Admission',
-      PRE_OP: 'Pre-Op',
-      POST_OP: 'Post-Op',
-      PRENATAL: 'Prenatal',
-      POSTNATAL: 'Postnatal',
-      DENTAL: 'Dental',
-      MENTAL_HEALTH: 'Mental Health',
-      REHABILITATION: 'Rehabilitation',
-      SPECIALIST: 'Specialist',
-      ANNUAL_PHYSICAL: 'Annual Physical',
-      URGENT_CARE: 'Urgent Care',
+      SURGERY: 'Surgery',
+      LAB: 'Laboratory',
+      OUTPATIENT: 'Outpatient',
+      INPATIENT: 'Inpatient',
+      TELEHEALTH: 'Telehealth',
     },
 
     /* ── Statuses (generic catch-all — used by many callers) ── */
@@ -575,6 +568,7 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       MANAGING_DISCOMFORT: 'Managing Discomfort',
       HIGH_RISK_PREGNANCY: 'High-Risk Pregnancy',
       ULTRASOUND_SCANS: 'Ultrasound & Scans',
+      GENETIC_SCREENING: 'Genetic Screening',
     },
 
     /* ── Permissions ──────────────────────────────────────── */
