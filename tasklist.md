@@ -1691,7 +1691,7 @@ all exist and are reachable.
   own answer (schedule/admission-bounded, with a tail after discharge) is the
   place to start. This is the item to build first and alone: #49 through #53
   are all consumers of it.
-- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, behind `app.record-access.cross-hospital-reads-enabled` (OFF); 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
+- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, LIVE since #600 removed `app.record-access.cross-hospital-reads-enabled` (E9 #58, 2026-09-12) — there is no flag; `readableHospitalIds` widens unconditionally once `decide` permits; 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
   ⚠ Raw grep says 148, but ~42 of those are the repository declarations
   themselves and 3 are definitions: the real **call-site** surface is ~103, of
@@ -2202,33 +2202,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
-- **Two portal screens are hard-coded French, not translated.**
-  `patient-portal/my-pharmacy-invoices` and `pharmacy/pharmacy-checkout` (and
-  `pharmacy-claims`' `labelFr` option arrays) carry no keys at all. They read
-  correctly for the French target and are wrong for every other language;
-  converting them is one `PORTAL.*`/`PHARMACY.*` pass each. Left out of the
-  French-completeness PRs on purpose, because "already French" was the
-  product's ask and a half-conversion would have been worse than none.
-- **Spanish has 1377 untranslated values.** `check-i18n-untranslated.mjs`
-  ratchets ES at that ceiling rather than allowlisting them, because pinning
-  them would claim they were reviewed. A Spanish pass is the same shape as
-  the French one (2026-09-13) and nobody has asked for it.
-- **Terminology the product owner has not settled**, all pre-existing and all
-  now visible because the rest is French: MRN renders four ways (`MRN`,
-  `DMI`, `NRM`, `N° dossier`) where a Burkinabè clerk expects **IPP**;
-  *Department* is both "Service" and "Département" while *Ward* is also
-  "Service"; *Email* is "Courriel" on some screens and "E-mail" on others;
-  *Acuity* → "Niveau de soins" and *Shift* → "Poste" (11 keys) want a nurse's
-  confirmation. Each is a find-and-replace once decided; none should be
-  decided by the person doing the replace.
-- **Notifications are stored in one language.** `createNotification(message,
-  recipient)` persists rendered text, so a message is in whichever language
-  it was rendered in at write time, whatever the recipient later switches to.
-  The 2026-09-14 pass renders them in the recipient's locale, which is
-  correct today and wrong the day a user changes language. The fix is to
-  store a key plus parameters and render at read time; the automation-task
-  labels the platform page shows (`task.title`, `nextAction`, `metricLabel`)
-  arrive server-composed and have the same shape.
+- **A staff revoke of a sharing opt-out is not written to the audit row with the
+  actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
+  userId + patientId under a description that reads as the patient's own act
+  ("opt-out revoked") whichever admin did it. Since #656 the service is
+  tenant-scoped, so the actor is at least a hospital the patient is registered
+  at — but a patient disputing a re-opened record still has to join users and
+  assignments by hand to learn who. The `details` map is already there; add
+  the authorities and the active hospital, and make the description say
+  self-revoke vs staff-revoke. No schema change.
 - **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
   matcher that covers its path.** The record-sharing opt-out shipped admitting
   ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and

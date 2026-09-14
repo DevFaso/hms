@@ -30,9 +30,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
@@ -188,6 +190,46 @@ class RecordAccessControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.inForce").value(false))
             .andExpect(jsonPath("$.revokedAt").exists());
+    }
+
+    // ------------------------------------------------------ the annotation layer, alone
+
+    @Test
+    @DisplayName("the revoke annotation refuses a receptionist on its own — no matcher involved")
+    void revokeAnnotationExcludesReceptionist() {
+        // RecordSharingOptOutSecurityIT proves the union of matcher + annotation; a
+        // 403 there cannot say which layer refused. This pins the annotation itself.
+        Map<String, String> guards = GuardIndex.guardsOf(RecordAccessController.class);
+        assertThat(guards.get("DELETE /record-sharing/opt-out"))
+            .contains("'ROLE_PATIENT'", "'ROLE_HOSPITAL_ADMIN'", "'ROLE_SUPER_ADMIN'")
+            .doesNotContain("'ROLE_RECEPTIONIST'");
+        assertThat(guards.get("GET /record-sharing/opt-out")).contains("'ROLE_RECEPTIONIST'");
+        assertThat(guards.get("POST /record-sharing/opt-out")).contains("'ROLE_RECEPTIONIST'");
+    }
+
+    /** A role as it appears inside a hasAnyAuthority(...) expression. */
+    private static String quoted(String role) {
+        return "'" + role + "'";
+    }
+
+    @Test
+    @DisplayName("the staff lists the self-check reads are the staff half of the SpEL they sit beside")
+    void staffListsMatchTheAnnotations() {
+        // An annotation value must be a compile-time constant, so the SpEL cannot be
+        // built from the lists; this is what keeps the two from drifting apart.
+        for (String role : RecordAccessController.OPT_OUT_STAFF) {
+            assertThat(RecordAccessController.OPT_OUT_ROLES)
+                .as("OPT_OUT_ROLES names %s", role).contains(quoted(role));
+        }
+        for (String role : RecordAccessController.OPT_OUT_REVOKE_STAFF) {
+            assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES)
+                .as("OPT_OUT_REVOKE_ROLES names %s", role).contains(quoted(role));
+        }
+        assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES)
+            .as("a receptionist may set an opt-out but never revoke one")
+            .doesNotContain(quoted("ROLE_RECEPTIONIST"));
+        assertThat(RecordAccessController.OPT_OUT_REVOKE_STAFF)
+            .as("and the self-check agrees").doesNotContain("ROLE_RECEPTIONIST");
     }
 
     // ------------------------------------------------------------- posture
