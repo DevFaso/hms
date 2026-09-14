@@ -148,7 +148,7 @@
                   <span class="material-symbols-outlined type-icon">{{
                     getTypeIcon(enc.encounterType)
                   }}</span>
-                  {{ enc.encounterType || '—' }}
+                  {{ enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—' }}
                 </span>
               </td>
               <td>{{ enc.encounterDate ? (enc.encounterDate | date: 'mediumDate') : '—' }}</td>
@@ -218,7 +218,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span
-              ><span class="field-value">{{ enc.encounterType || '—' }}</span>
+              ><span class="field-value">{{
+                enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span

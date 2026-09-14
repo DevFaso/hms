@@ -68,7 +68,11 @@ export function javaEnumConstants(source, name) {
   // declaration ("see enum AuditEventType {...}") would otherwise win the
   // match and send every offset below into a blanked region.
   const blanked = blankCommentsAndStrings(source);
-  const decl = new RegExp(`enum\\s+${name}\\s*(?:implements[^{]*)?\\{`).exec(blanked);
+  // The name comes from a filename in a hand-edited JSON file, so escape it:
+  // an unescaped `.` matches any character and a `$` (legal in a Java type
+  // name) anchors the pattern.
+  const safe = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  const decl = new RegExp(`enum\\s+${safe}\\s*(?:implements[^{]*)?\\{`).exec(blanked);
   if (!decl) return null;
 
   const open = decl.index + decl[0].length - 1;

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "ng": "ng",
@@ -27,7 +27,7 @@
     "i18n:referenced": "node scripts/check-i18n-referenced-keys.mjs",
     "i18n:translated": "node scripts/check-i18n-untranslated.mjs",
     "i18n:enums": "node scripts/check-i18n-enum-coverage.mjs",
-    "test:scripts": "node --test \"scripts/*.test.mjs\"",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
   },
   "prettier": {

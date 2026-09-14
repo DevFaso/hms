@@ -31,9 +31,10 @@
  * come from, and `{}` must not be the cheapest way to silence the question.
  *
  * Missing keys FAIL — that is English on a French screen. Keys no declared
- * enum can emit are reported but do not fail: `status` is a deliberate shared
- * pool across 13 unrelated call sites, so its group holds far more than any
- * one of them sends.
+ * enum can emit are reported but do not fail: a group may deliberately hold
+ * more than one enum sends. (`status` is the shared pool, but it is
+ * reason-exempt and returns before that comparison, so it never produces the
+ * note.)
  *
  * WHAT THIS GATE CANNOT SEE, and neither can any other:
  *   - a *derived* status — `PatientMedicationServiceImpl.resolveStatus` invents
@@ -54,82 +55,41 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
-import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
+import { javaEnumConstants, groupOf, blankCommentsAndStrings } from './lib/java-enum.mjs';
+import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
 const REPO_DIR = resolve(PORTAL_DIR, '..');
 const SRC = resolve(PORTAL_DIR, 'src', 'app');
-const EN_PATH = resolve(PORTAL_DIR, 'src', 'assets', 'i18n', 'en.json');
+const I18N_DIR = resolve(PORTAL_DIR, 'src', 'assets', 'i18n');
+const BASELINE = 'en';
+/** A collision is only a defect in the locale it happens in, so check all three. */
+const LOCALES = [BASELINE, 'fr', 'es'];
+const EN_PATH = resolve(I18N_DIR, `${BASELINE}.json`);
 const DOMAINS_PATH = resolve(SCRIPT_DIR, 'i18n-enum-domains.json');
 
 const REPORT_ONLY = process.argv.includes('--report-only');
 
 /** `| enumLabel: 'prescriptionStatus'`, with whatever whitespace. */
 const PIPE_CALL = /enumLabel\s*:\s*'([A-Za-z_][A-Za-z0-9_]*)'/g;
-/** Only these may appear in a declaration; anything else is a typo. */
-const DECLARATION_KEYS = ['enum', 'enums', 'group', 'reason'];
-
-/** Fails on a hollow or misspelled entry rather than treating it as exempt. */
-function validateDeclaration(domain, entry, errors) {
-  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
-    errors.push(`BAD DECLARATION ${domain} — the value must be an object.`);
-    return false;
-  }
-  const unknown = Object.keys(entry).filter((key) => !DECLARATION_KEYS.includes(key));
-  if (unknown.length) {
-    errors.push(
-      `BAD DECLARATION ${domain} — unknown propert${unknown.length > 1 ? 'ies' : 'y'} ` +
-        `${unknown.join(', ')}; expected one of ${DECLARATION_KEYS.join(', ')}.`,
-    );
-    return false;
-  }
-  const sources = ['enum', 'enums', 'reason'].filter((key) => key in entry);
-  if (sources.length !== 1) {
-    errors.push(
-      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / reason ` +
-        `(found ${sources.length ? sources.join(' + ') : 'none'}).`,
-    );
-    return false;
-  }
-  // Counting the keys is not enough: `{"enums": []}` declared exactly one and
-  // checked nothing, which made it cheaper than the `{}` this function exists
-  // to reject, and `{"enum": null}` died on an unhandled TypeError instead of
-  // producing the message below.
-  const filled = (value) => typeof value === 'string' && value.trim() !== '';
-  if ('enum' in entry && !filled(entry.enum)) {
-    errors.push(`BAD DECLARATION ${domain} — enum must be a path to a .java file.`);
-    return false;
-  }
-  if (
-    'enums' in entry &&
-    (!Array.isArray(entry.enums) || entry.enums.length === 0 || !entry.enums.every(filled))
-  ) {
-    errors.push(`BAD DECLARATION ${domain} — enums must be a non-empty array of .java paths.`);
-    return false;
-  }
-  if ('group' in entry && !filled(entry.group)) {
-    errors.push(`BAD DECLARATION ${domain} — group must be a non-empty string.`);
-    return false;
-  }
-  if ('reason' in entry && !filled(entry.reason)) {
-    errors.push(`BAD DECLARATION ${domain} — an exemption needs a reason someone can read.`);
-    return false;
-  }
-  return true;
-}
 
 function main() {
   const en = JSON.parse(readFileSync(EN_PATH, 'utf8'));
   const enumGroups = en?.PORTAL?.ENUM ?? {};
   const declared = JSON.parse(readFileSync(DOMAINS_PATH, 'utf8'));
 
-  /** domain -> the templates that pipe it, so a failure names somewhere to go. */
+  /** domain -> the files that pipe it, so a failure names somewhere to go. */
   const used = new Map();
-  // .ts as well as .html: components with an inline `template:` were invisible
-  // to both the UNDECLARED check and the coverage check.
+  // .ts as well as .html, for a component with an inline `template:` — but
+  // comments are blanked first and .spec.ts is skipped, or the pipe's own
+  // TSDoc examples and a TODO in a spec would be recorded as call sites and
+  // any future doc example would be a build break. (The sibling gate
+  // check-i18n-referenced-keys.mjs has excluded .spec.ts all along.)
   for (const file of walk(SRC, ['.html', '.ts'])) {
-    const text = readFileSync(file, 'utf8');
+    if (file.endsWith('.spec.ts')) continue;
+    const raw = readFileSync(file, 'utf8');
+    const text = file.endsWith('.ts') ? blankCommentsAndStrings(raw) : raw;
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
       if (!used.has(domain)) used.set(domain, new Set());
       used.get(domain).add(relative(PORTAL_DIR, file).replaceAll('\\', '/'));
@@ -145,6 +105,8 @@ function main() {
   // unparseable or bad-declaration domain contributes nothing and must not
   // inflate the ratio a reader scans first.
   let checkedDomains = 0;
+  /** Every group a piped domain resolves to, whether or not it is enum-backed. */
+  const groupsInUse = new Set();
 
   for (const domain of [...used.keys()].sort()) {
     const where = [...used.get(domain)].sort();
@@ -160,6 +122,7 @@ function main() {
     const entry = declared[domain];
     if (!validateDeclaration(domain, entry, errors)) continue;
 
+    groupsInUse.add(entry.group ?? groupOf(domain));
     if (entry.reason) {
       exempt += 1;
       notes.push(`${domain}: not checked — ${entry.reason}`);
@@ -176,13 +139,21 @@ function main() {
         broken = true;
         continue;
       }
-      const name = path
-        .split('/')
-        .pop()
-        .replace(/\.java$/, '');
+      const name = enumNameOf(path);
+      // null and [] are different failures, and the lib's contract says so:
+      // null means no enum of that name is in the file — almost always a
+      // filename/type-name mismatch in the declaration, not a parser problem.
       const found = javaEnumConstants(readFileSync(javaPath, 'utf8'), name);
-      if (!found || found.length === 0) {
-        errors.push(`UNPARSEABLE ENUM ${domain} -> ${path} (no constants found for ${name}).`);
+      if (found === null) {
+        errors.push(
+          `NO SUCH ENUM ${domain} -> ${path} contains no \`enum ${name}\`; ` +
+            `check the declaration names the file whose type it means.`,
+        );
+        broken = true;
+        continue;
+      }
+      if (found.length === 0) {
+        errors.push(`UNPARSEABLE ENUM ${domain} -> ${path} (enum ${name} parsed to no constants).`);
         broken = true;
         continue;
       }
@@ -193,33 +164,49 @@ function main() {
     checkedDomains += 1;
     const group = entry.group ?? groupOf(domain);
     const keys = enumGroups[group] ?? {};
-    const enumName =
-      paths.length > 1
-        ? 'one of the declared enums'
-        : paths[0]
-            .split('/')
-            .pop()
-            .replace(/\.java$/, '');
+    const enumName = paths.length > 1 ? 'one of the declared enums' : enumNameOf(paths[0]);
     const missing = [...constants].filter((value) => !(value in keys));
     const extra = Object.keys(keys).filter((key) => !constants.has(key));
     checked += constants.size;
     covered += constants.size - missing.length;
     for (const value of missing) {
       errors.push(
-        `UNKEYED ${group}.${value} — ${
-          paths.length > 1
-            ? 'one of the declared enums'
-            : paths[0]
-                .split('/')
-                .pop()
-                .replace(/\.java$/, '')
-        } ` + `can send it and ${where[0]} pipes it, so it renders Title-Cased English.`,
+        `UNKEYED ${group}.${value} — ${enumName} can send it and ${where[0]} ` +
+          `pipes it, so it renders Title-Cased English.`,
       );
     }
     if (extra.length) {
       notes.push(
         `${group}: ${extra.length} key(s) no declared enum can emit — ${extra.join(', ')}`,
       );
+    }
+  }
+
+  // Two distinct states that render as the same word are invisible to every
+  // other gate: parity, referenced-key and untranslated are all green on a
+  // pool where ACKNOWLEDGED and CONFIRMED both read "Confirmé". This runs over
+  // every group a piped domain resolves to — including the reason-exempt ones,
+  // which is where the shared pool lives and where the collisions actually
+  // are. Reported, not failed: some pairs are genuine synonyms.
+  for (const locale of LOCALES) {
+    const groups =
+      locale === BASELINE
+        ? enumGroups
+        : (JSON.parse(readFileSync(resolve(I18N_DIR, `${locale}.json`), 'utf8'))?.PORTAL?.ENUM ??
+          {});
+    for (const group of [...groupsInUse].sort()) {
+      const byText = new Map();
+      for (const [key, text] of Object.entries(groups[group] ?? {})) {
+        if (!byText.has(text)) byText.set(text, []);
+        byText.get(text).push(key);
+      }
+      for (const [text, ks] of byText) {
+        if (ks.length > 1) {
+          notes.push(
+            `${group} [${locale}]: ${ks.join(' and ')} both render ${JSON.stringify(text)}`,
+          );
+        }
+      }
     }
   }
 
