@@ -2589,11 +2589,15 @@ they stay visible instead of living in a javadoc.
   (`license_alert_stage` starts NULL and any grade beats nothing). One-off
   backlog, not recurring. Disable with
   `hms.credentialing.expiry.enabled=false` to defer it.
-- `api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare: Universal SSL
-  covers `*.e-keneya.com` but not second-level `*.dev.e-keneya.com`.
-- Keycloak `hms-portal` partial-import on the dev + prod realms before any SSO flip.
-- Remove the old `*.bitnesttechs.com` custom domains from all Railway services.
-- Revoke the chat-exposed SonarCloud token.
+- ~~`api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare~~ ✅ done
+  2026-09-13. Universal SSL covers `*.e-keneya.com` but not second-level
+  `*.dev.e-keneya.com`, which is why it could not stay proxied.
+- ~~Keycloak `hms-portal` partial-import on the dev + prod realms~~ ✅ done
+  2026-09-13, ahead of any SSO flip. The flip itself is still not scheduled.
+- ~~Remove the old `*.bitnesttechs.com` custom domains from all Railway
+  services.~~ ✅ done 2026-09-13.
+- ~~Revoke the chat-exposed SonarCloud token.~~ ✅ done 2026-09-13. The CI
+  secret is the only copy that should exist now.
 - Play Store privacy-policy URL.
 
 ## Deliberate non-goals — recorded so they stop resurfacing
