@@ -207,26 +207,27 @@ class RecordAccessControllerTest {
         assertThat(guards.get("POST /record-sharing/opt-out")).contains("'ROLE_RECEPTIONIST'");
     }
 
-    @Test
-    @DisplayName("the staff lists the self-check reads are the staff half of the SpEL they sit beside")
     /** A role as it appears inside a hasAnyAuthority(...) expression. */
     private static String quoted(String role) {
         return "'" + role + "'";
     }
 
+    @Test
+    @DisplayName("the staff lists the self-check reads are the staff half of the SpEL they sit beside")
     void staffListsMatchTheAnnotations() {
         // An annotation value must be a compile-time constant, so the SpEL cannot be
         // built from the lists; this is what keeps the two from drifting apart.
         for (String role : RecordAccessController.OPT_OUT_STAFF) {
-            assertThat(RecordAccessController.OPT_OUT_ROLES.contains(quoted(role)))
-                .as("OPT_OUT_ROLES names %s", role).isTrue();
+            assertThat(RecordAccessController.OPT_OUT_ROLES)
+                .as("OPT_OUT_ROLES names %s", role).contains(quoted(role));
         }
         for (String role : RecordAccessController.OPT_OUT_REVOKE_STAFF) {
-            assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES.contains(quoted(role)))
-                .as("OPT_OUT_REVOKE_ROLES names %s", role).isTrue();
+            assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES)
+                .as("OPT_OUT_REVOKE_ROLES names %s", role).contains(quoted(role));
         }
-        assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES.contains(quoted("ROLE_RECEPTIONIST")))
-            .as("a receptionist may set an opt-out but never revoke one").isFalse();
+        assertThat(RecordAccessController.OPT_OUT_REVOKE_ROLES)
+            .as("a receptionist may set an opt-out but never revoke one")
+            .doesNotContain(quoted("ROLE_RECEPTIONIST"));
         assertThat(RecordAccessController.OPT_OUT_REVOKE_STAFF)
             .as("and the self-check agrees").doesNotContain("ROLE_RECEPTIONIST");
     }
