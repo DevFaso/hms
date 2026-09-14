@@ -15,10 +15,10 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
+import { javaEnumConstants, groupOf } from './java-enum.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_DIR = resolve(SCRIPT_DIR, '..', '..');
+const REPO_DIR = resolve(SCRIPT_DIR, '..', '..', '..');
 
 const enumSource = (...lines) => ['public enum E {', ...lines, '}'].join('\n');
 
@@ -148,7 +148,7 @@ test('groupOf matches EnumLabelPipe.toUpperSnake, including on acronyms', () => 
   // every capital would send the gate to PATIENT_M_R_N while the pipe reads
   // PATIENT_MRN — green gate, English screen.
   const pipe = readFileSync(
-    resolve(SCRIPT_DIR, '..', 'src/app/shared/pipes/enum-label.pipe.ts'),
+    resolve(SCRIPT_DIR, '..', '..', 'src/app/shared/pipes/enum-label.pipe.ts'),
     'utf8',
   );
   const toUpperSnake =

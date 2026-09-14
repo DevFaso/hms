@@ -26,6 +26,9 @@
  *   "reason": why no enum backs it (a String column, a portal-side vocabulary,
  *             or a status a service *derives* rather than reads)
  *
+ * The group is always toUpperSnake(domain), exactly as EnumLabelPipe computes
+ * it. There is no override, on purpose — see lib/enum-domains.mjs.
+ *
  * An undeclared domain fails, and so does a hollow or misspelled entry: the
  * point is that adding an `enumLabel:` call makes someone say where its values
  * come from, and `{}` must not be the cheapest way to silence the question.
@@ -55,7 +58,7 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
-import { javaEnumConstants, groupOf, blankCommentsAndStrings } from './lib/java-enum.mjs';
+import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +71,7 @@ const BASELINE = 'en';
 const LOCALES = [BASELINE, 'fr', 'es'];
 const EN_PATH = resolve(I18N_DIR, `${BASELINE}.json`);
 const DOMAINS_PATH = resolve(SCRIPT_DIR, 'i18n-enum-domains.json');
+const COLLISIONS_PATH = resolve(SCRIPT_DIR, 'i18n-enum-collisions.json');
 
 const REPORT_ONLY = process.argv.includes('--report-only');
 
@@ -79,17 +83,16 @@ function main() {
   const enumGroups = en?.PORTAL?.ENUM ?? {};
   const declared = JSON.parse(readFileSync(DOMAINS_PATH, 'utf8'));
 
-  /** domain -> the files that pipe it, so a failure names somewhere to go. */
+  /** domain -> the templates that pipe it, so a failure names somewhere to go. */
   const used = new Map();
-  // .ts as well as .html, for a component with an inline `template:` — but
-  // comments are blanked first and .spec.ts is skipped, or the pipe's own
-  // TSDoc examples and a TODO in a spec would be recorded as call sites and
-  // any future doc example would be a build break. (The sibling gate
-  // check-i18n-referenced-keys.mjs has excluded .spec.ts all along.)
-  for (const file of walk(SRC, ['.html', '.ts'])) {
-    if (file.endsWith('.spec.ts')) continue;
-    const raw = readFileSync(file, 'utf8');
-    const text = file.endsWith('.ts') ? blankCommentsAndStrings(raw) : raw;
+  // .html only. Scanning .ts for an inline `template:` was tried twice and
+  // withdrawn: raw, it recorded the pipe's own TSDoc examples as call sites;
+  // blanked, it erased the single-quoted domain argument the regex needs and
+  // matched nothing at all. No component in src/app carries an `enumLabel:` in
+  // an inline template today, so the blind spot is real but empty — it is
+  // recorded in tasklist.md rather than guarded by a check that does not work.
+  for (const file of walk(SRC)) {
+    const text = readFileSync(file, 'utf8');
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
       if (!used.has(domain)) used.set(domain, new Set());
       used.get(domain).add(relative(PORTAL_DIR, file).replaceAll('\\', '/'));
@@ -122,7 +125,7 @@ function main() {
     const entry = declared[domain];
     if (!validateDeclaration(domain, entry, errors)) continue;
 
-    groupsInUse.add(entry.group ?? groupOf(domain));
+    groupsInUse.add(groupOf(domain));
     if (entry.reason) {
       exempt += 1;
       notes.push(`${domain}: not checked — ${entry.reason}`);
@@ -162,7 +165,7 @@ function main() {
     if (broken) continue;
 
     checkedDomains += 1;
-    const group = entry.group ?? groupOf(domain);
+    const group = groupOf(domain);
     const keys = enumGroups[group] ?? {};
     const enumName = paths.length > 1 ? 'one of the declared enums' : enumNameOf(paths[0]);
     const missing = [...constants].filter((value) => !(value in keys));
@@ -188,6 +191,30 @@ function main() {
   // every group a piped domain resolves to — including the reason-exempt ones,
   // which is where the shared pool lives and where the collisions actually
   // are. Reported, not failed: some pairs are genuine synonyms.
+  // A declaration nobody pipes is never validated, so its path is never
+  // checked: delete the last `| enumLabel: 'wardType'` from a template, or move
+  // WardType.java in a backend refactor, and the entry rots until the next
+  // person adds that pipe and inherits a MISSING ENUM FILE they did not cause.
+  for (const domain of Object.keys(declared).sort()) {
+    if (domain.startsWith('$') || used.has(domain)) continue;
+    const entry = declared[domain];
+    if (!validateDeclaration(domain, entry, errors)) continue;
+    for (const path of entry.enums ?? (entry.enum ? [entry.enum] : [])) {
+      if (!existsSync(resolve(REPO_DIR, path))) {
+        errors.push(`ORPHAN DECLARATION ${domain} -> ${path} does not exist and nothing pipes it.`);
+      }
+    }
+    notes.push(`${domain}: declared but no template pipes it — drop it, or the pipe went missing`);
+  }
+
+  // Two distinct states rendering as one word is invisible to parity,
+  // referenced-key and untranslated alike — which is how ON_HOLD shipped with
+  // the value PENDING already had. Reporting alone was not enough: on a tree
+  // that already had 18, the new one would have been note 19 in a green build.
+  // So the known ones are pinned and anything else fails, exactly as
+  // check-i18n-untranslated.mjs pins its shared words.
+  const pinned = new Set(JSON.parse(readFileSync(COLLISIONS_PATH, 'utf8')).allowed);
+  const seen = new Set();
   for (const locale of LOCALES) {
     const groups =
       locale === BASELINE
@@ -201,12 +228,23 @@ function main() {
         byText.get(text).push(key);
       }
       for (const [text, ks] of byText) {
-        if (ks.length > 1) {
-          notes.push(
-            `${group} [${locale}]: ${ks.join(' and ')} both render ${JSON.stringify(text)}`,
+        if (ks.length < 2) continue;
+        const id = `${group}[${locale}]:${ks.slice().sort().join('+')}`;
+        seen.add(id);
+        const where = `${group} [${locale}]: ${ks.join(' and ')} both render ${JSON.stringify(text)}`;
+        if (pinned.has(id)) notes.push(`${where} (pinned)`);
+        else
+          errors.push(
+            `COLLISION ${where} — two states a user cannot tell apart. Give one ` +
+              `its own wording, or pin it in scripts/i18n-enum-collisions.json ` +
+              `as ${JSON.stringify(id)} if they are genuine synonyms.`,
           );
-        }
       }
+    }
+  }
+  for (const id of pinned) {
+    if (!seen.has(id)) {
+      errors.push(`STALE COLLISION PIN ${id} no longer collides; drop it from the allowlist.`);
     }
   }
 

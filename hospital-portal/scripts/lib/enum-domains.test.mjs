@@ -24,7 +24,6 @@ test('accepts the three declared forms', () => {
   assert.equal(check({ enum: JAVA }).ok, true);
   assert.equal(check({ enums: [JAVA, JAVA] }).ok, true);
   assert.equal(check({ reason: 'a String column, not an enum' }).ok, true);
-  assert.equal(check({ enum: JAVA, group: 'FOO_BAR' }).ok, true);
 });
 
 test('an empty enums array does not silence a domain', () => {
@@ -43,7 +42,10 @@ test('a hollow or over-full declaration is rejected', () => {
 });
 
 test('a misspelled key is a typo, not an exemption', () => {
-  for (const entry of [{ enumm: JAVA }, { reasons: 'x' }]) {
+  // `group` is included on purpose: it used to be accepted, and accepting it
+  // again would re-open a validated way to point the gate at a group the pipe
+  // never reads.
+  for (const entry of [{ enumm: JAVA }, { reasons: 'x' }, { enum: JAVA, group: 'X' }]) {
     const { ok, errors } = check(entry);
     assert.equal(ok, false);
     assert.match(errors[0], /unknown propert/);

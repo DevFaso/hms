@@ -98,10 +98,12 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     /* Tier 2 is a first-match scan over EVERY group below, not a per-domain
      * map, so trimming a group here changes what other domains render for
      * the same value. Trimming this one to the 8 EncounterType sends took
-     * the curated spelling of ROUTINE, WALK_IN, PRE_OP, POST_OP and
-     * PRE_ADMISSION out of that pool; none is reachable (there are no
-     * domain-less enumLabel calls and no domain whose group omits them),
-     * so nothing changed on screen — but check that before the next trim. */
+     * WALK_IN, PRE_OP, POST_OP and PRE_ADMISSION out of the pool entirely, and
+     * changed what ROUTINE resolves to ("Routine Visit" -> "Routine", since it
+     * is still defined under consultationUrgency, taskPriority and
+     * referralUrgency). None is reachable — there are no domain-less enumLabel
+     * calls, and no domain whose group omits them — so nothing changed on
+     * screen. Check that again before the next trim. */
     encounterType: {
       CONSULTATION: 'Consultation',
       FOLLOW_UP: 'Follow-Up',

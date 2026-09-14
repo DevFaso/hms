@@ -9,8 +9,17 @@
  * domain to stop being checked.
  */
 
-/** Only these may appear in a declaration; anything else is a typo. */
-export const DECLARATION_KEYS = ['enum', 'enums', 'group', 'reason'];
+/**
+ * Only these may appear in a declaration; anything else is a typo.
+ *
+ * There is deliberately no `group` override. EnumLabelPipe computes the group
+ * as toUpperSnake(domain) with no way to redirect it, so an override here
+ * could only ever point the gate at a group the pipe does not read — and
+ * pointing it at a group that happens to hold the constants (the shared STATUS
+ * pool, say) would turn the gate green while every value renders Title-Cased
+ * English. A validated escape hatch is worse than none.
+ */
+export const DECLARATION_KEYS = ['enum', 'enums', 'reason'];
 
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 const javaPath = (value) => filled(value) && value.endsWith('.java');
@@ -56,10 +65,6 @@ export function validateDeclaration(domain, entry, errors) {
     (!Array.isArray(entry.enums) || entry.enums.length === 0 || !entry.enums.every(javaPath))
   ) {
     errors.push(`BAD DECLARATION ${domain} — enums must be a non-empty array of .java paths.`);
-    return false;
-  }
-  if ('group' in entry && !filled(entry.group)) {
-    errors.push(`BAD DECLARATION ${domain} — group must be a non-empty string.`);
     return false;
   }
   if ('reason' in entry && !filled(entry.reason)) {

@@ -684,7 +684,9 @@
                 <tr>
                   <td class="date-cell">{{ enc.encounterDate | date: 'mediumDate' }}</td>
                   <td>
-                    <span class="encounter-type">{{ enc.encounterType }}</span>
+                    <span class="encounter-type">{{
+                      enc.encounterType | enumLabel: 'encounterType'
+                    }}</span>
                   </td>
                   <td>{{ enc.staffFullName || enc.staffName || '—' }}</td>
                   <td>{{ enc.departmentName || '—' }}</td>

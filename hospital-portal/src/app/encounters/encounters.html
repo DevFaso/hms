@@ -645,7 +645,7 @@
             <label for="enc-type">{{ 'ENCOUNTERS.TYPE' | translate }} *</label>
             <select id="enc-type" [(ngModel)]="form.encounterType" required>
               @for (t of encounterTypes; track t) {
-                <option [value]="t">{{ t }}</option>
+                <option [value]="t">{{ t | enumLabel: 'encounterType' }}</option>
               }
             </select>
           </div>
