@@ -50,6 +50,15 @@ jobs:
       - name: i18n referenced-key check
         run: npm run i18n:referenced
 
+      # Both gates above only ask whether a key EXISTS. A key copied from EN
+      # and never translated is present and non-empty, so both stayed green
+      # while 1041 French values were still the English string — on a
+      # French-first product, that is the whole defect. This one fails when a
+      # FR value is byte-identical to EN and is not pinned in
+      # scripts/i18n-untranslated-allowlist.json with the exact shared text.
+      - name: i18n translation check
+        run: npm run i18n:translated
+
       - name: Build
         run: npm run build
 

@@ -57,9 +57,16 @@ class NotFoundMessageKeyTest {
 
     private static final Path MAIN_JAVA = Paths.get("src/main/java");
 
-    /** Keys already carrying U+FFFD when this guard was added. Lower it, never raise it. */
+    /**
+     * Keys already carrying U+FFFD when this guard was added. Lower it, never raise it.
+     *
+     * <p>FR reached 0 on 2026-09-13: all 19 were retranslated from the English
+     * source during the French-completeness pass, rather than character-repaired,
+     * because a replacement glyph carries no information to repair from. ES keeps
+     * its budget — nobody has done that pass for Spanish yet.
+     */
     private static final Map<String, Integer> MOJIBAKE_BUDGET =
-        Map.of("", 0, "_en", 0, "_fr", 19, "_es", 27);
+        Map.of("", 0, "_en", 0, "_fr", 0, "_es", 27);
 
     /**
      * A maximal run of apostrophes. MessageFormat reads a doubled pair as one
