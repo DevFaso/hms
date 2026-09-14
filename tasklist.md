@@ -2202,6 +2202,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
+  matcher that covers its path.** The record-sharing opt-out shipped admitting
+  ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and
+  tested, while the `/patients/**` matchers refused a patient on GET and
+  DELETE and let POST fall through — so the feature was half-reachable for
+  months and every test agreed it worked. Neither layer is wrong on its own;
+  nobody compares them. `@WebMvcTest` slices never run the chain, and the
+  full-context patient ITs all set `addFilters = false`. A guard could read the
+  annotation's role set per handler, resolve the first matching
+  `requestMatchers` entry for that path and verb, and fail when the matcher is
+  the narrower of the two. `SecurityConfigChartMatcherTest` and its two
+  siblings are the shape of what exists today: source scans that assert
+  ordering, not reachability.
 - **Lab results are fetched cross-tenant and filtered in memory.**
   `collectLabResultEntries` calls `findByLabOrder_Patient_Id(patientId)` with no
   hospital predicate, then discards unreadable rows in the stream — so every row
@@ -2576,11 +2589,15 @@ they stay visible instead of living in a javadoc.
   (`license_alert_stage` starts NULL and any grade beats nothing). One-off
   backlog, not recurring. Disable with
   `hms.credentialing.expiry.enabled=false` to defer it.
-- `api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare: Universal SSL
-  covers `*.e-keneya.com` but not second-level `*.dev.e-keneya.com`.
-- Keycloak `hms-portal` partial-import on the dev + prod realms before any SSO flip.
-- Remove the old `*.bitnesttechs.com` custom domains from all Railway services.
-- Revoke the chat-exposed SonarCloud token.
+- ~~`api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare~~ ✅ done
+  2026-09-13. Universal SSL covers `*.e-keneya.com` but not second-level
+  `*.dev.e-keneya.com`, which is why it could not stay proxied.
+- ~~Keycloak `hms-portal` partial-import on the dev + prod realms~~ ✅ done
+  2026-09-13, ahead of any SSO flip. The flip itself is still not scheduled.
+- ~~Remove the old `*.bitnesttechs.com` custom domains from all Railway
+  services.~~ ✅ done 2026-09-13.
+- ~~Revoke the chat-exposed SonarCloud token.~~ ✅ done 2026-09-13. The CI
+  secret is the only copy that should exist now.
 - Play Store privacy-policy URL.
 
 ## Deliberate non-goals — recorded so they stop resurfacing
