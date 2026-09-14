@@ -313,13 +313,13 @@ export class PatientDetailComponent implements OnInit {
   downloadRecord(): void {
     if (this.recordDownloadLoading()) return;
     this.recordDownloadLoading.set(true);
-    this.patientService.downloadFhirRecord(this.patientId).subscribe({
+    this.patientService.downloadRecordPdf(this.patientId).subscribe({
       next: (blob) => {
         this.recordDownloadLoading.set(false);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `patient-record-${this.patientId}.json`;
+        a.download = `patient-record-${this.patientId}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       },
