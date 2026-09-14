@@ -89,7 +89,7 @@
                     <td>{{ a.department || '—' }}</td>
                     <td>
                       <span class="portal-status-chip" [attr.data-status]="a.status">{{
-                        a.status | enumLabel: 'status'
+                        a.status | enumLabel: 'appointmentStatus'
                       }}</span>
                     </td>
                   </tr>
@@ -203,7 +203,7 @@
                     <td>{{ inv.balance | number: '1.0-2' }}</td>
                     <td>
                       <span class="portal-status-chip" [attr.data-status]="inv.status">{{
-                        inv.status | enumLabel: 'status'
+                        inv.status | enumLabel: 'invoiceStatus'
                       }}</span>
                     </td>
                   </tr>

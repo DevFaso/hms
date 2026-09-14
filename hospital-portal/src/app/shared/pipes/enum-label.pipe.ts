@@ -447,11 +447,16 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     },
     dischargeDisposition: {
       HOME: 'Home',
-      SNF: 'Skilled Nursing Facility',
-      REHAB: 'Rehab Facility',
-      ANOTHER_HOSPITAL: 'Another Hospital',
-      HOSPICE: 'Hospice',
-      AMA: 'Against Medical Advice',
+      HOME_WITH_HOME_HEALTH: 'Home with Home Health',
+      SKILLED_NURSING_FACILITY: 'Skilled Nursing Facility',
+      LONG_TERM_CARE_FACILITY: 'Long-term Care Facility',
+      REHABILITATION_FACILITY: 'Rehabilitation Facility',
+      HOSPICE_HOME: 'Hospice - Home',
+      HOSPICE_FACILITY: 'Hospice - Facility',
+      PSYCHIATRIC_FACILITY: 'Psychiatric Facility',
+      AGAINST_MEDICAL_ADVICE: 'Against Medical Advice',
+      LEFT_WITHOUT_BEING_SEEN: 'Left Without Being Seen',
+      TRANSFERRED_TO_ANOTHER_HOSPITAL: 'Transfer to Another Hospital',
       EXPIRED: 'Deceased',
       OTHER: 'Other',
     },
@@ -472,8 +477,9 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       USER: 'User',
       SYSTEM: 'System',
     },
-    /* AuditEventType has 100+ values; we translate the user-facing subset.
-     * Anything missing falls through to the prettifier (UPPER_SNAKE → Title). */
+    /* All 130 AuditEventType values are keyed under PORTAL.ENUM.AUDIT_EVENT_TYPE
+     * and checked by scripts/check-i18n-enum-coverage.mjs, so this block is a
+     * safety net for a missing bundle, not the translation of record. */
     auditEventType: {
       LOGIN: 'Login',
       LOGOUT: 'Logout',
