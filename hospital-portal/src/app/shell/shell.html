@@ -22,7 +22,11 @@
           <span class="logo-text">e-<span class="logo-accent">Keneya</span></span>
         }
       </div>
-      <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+      <button
+        class="toggle-btn"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="'SHELL.TOGGLE_SIDEBAR' | translate"
+      >
         <span class="material-symbols-outlined">
           {{ sidebarCollapsed() ? 'chevron_right' : 'chevron_left' }}
         </span>
@@ -65,7 +69,7 @@
       </div>
     }
 
-    <nav class="sidebar-nav" aria-label="Primary navigation">
+    <nav class="sidebar-nav" [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate">
       @for (group of navGroups(); track group.id) {
         <!--
           role="group" + aria-labelledby so the heading names the set for a
@@ -102,7 +106,7 @@
             >
               <span
                 class="drag-handle material-symbols-outlined"
-                title="Drag to reorder"
+                [title]="'SHELL.DRAG_REORDER' | translate"
                 aria-hidden="true"
                 >drag_indicator</span
               >
@@ -130,7 +134,11 @@
         <div class="user-mini">
           <div class="avatar-sm">
             @if (userAvatarUrl()) {
-              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+              <img
+                [src]="userAvatarUrl()"
+                [alt]="'SHELL.AVATAR_ALT' | translate"
+                class="avatar-img"
+              />
             } @else {
               {{ userInitials() }}
             }
@@ -149,7 +157,11 @@
     <!-- Header -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
-        <button class="mobile-toggle" (click)="toggleSidebar()" aria-label="Menu">
+        <button
+          class="mobile-toggle"
+          (click)="toggleSidebar()"
+          [attr.aria-label]="'SHELL.MENU' | translate"
+        >
           <span class="material-symbols-outlined">menu</span>
         </button>
         <h2 class="page-title">{{ 'SHELL.PAGE_TITLE' | translate }}</h2>
@@ -228,7 +240,11 @@
         <button class="profile-btn" (click)="toggleProfileMenu()">
           <div class="avatar">
             @if (userAvatarUrl()) {
-              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+              <img
+                [src]="userAvatarUrl()"
+                [alt]="'SHELL.AVATAR_ALT' | translate"
+                class="avatar-img"
+              />
             } @else {
               {{ userInitials() }}
             }
@@ -311,7 +327,11 @@
         <div class="profile-menu-header">
           <div class="avatar-lg">
             @if (userAvatarUrl()) {
-              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+              <img
+                [src]="userAvatarUrl()"
+                [alt]="'SHELL.AVATAR_ALT' | translate"
+                class="avatar-img"
+              />
             } @else {
               {{ userInitials() }}
             }
@@ -349,7 +369,7 @@
       class="content"
       tabindex="-1"
       role="main"
-      aria-label="Main content"
+      [attr.aria-label]="'SHELL.MAIN_CONTENT_ARIA' | translate"
     >
       <app-impersonation-banner />
       <!-- MVP-7b — surfaces the latest /topic/emergency-broadcast frame

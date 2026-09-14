@@ -234,7 +234,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('team')">
           <span class="material-symbols-outlined section-icon">groups</span>
-          <span class="section-title">Care Team</span>
+          <span class="section-title">{{ 'NAV.CARE_TEAM' | translate }}</span>
           <span class="section-count">{{ pt.careTeam.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             teamOpen() ? 'expand_less' : 'expand_more'
@@ -243,7 +243,7 @@
         @if (teamOpen()) {
           <div class="section-body">
             @if (pt.careTeam.length === 0) {
-              <span class="no-data">No team assigned</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_TEAM_ASSIGNED' | translate }}</span>
             } @else {
               @for (m of pt.careTeam; track m.name + m.role) {
                 <div class="team-row">

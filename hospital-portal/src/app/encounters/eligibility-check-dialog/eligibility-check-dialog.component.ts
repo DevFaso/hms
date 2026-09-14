@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   EligibilityCheckType,
   EligibilityResponse,
@@ -35,7 +36,7 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [FormsModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

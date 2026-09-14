@@ -22,6 +22,7 @@
     "APPOINTMENTS.DATE": "Date",
     "APPOINTMENTS.MINUTES": "minutes",
     "APPOINTMENTS.NOTES": "Notes",
+    "APPOINTMENTS.PAGE_LABEL": "Page {{page}}",
     "APPOINTMENTS.PATIENT": "Patient",
     "ASSIGN_ADMIN.CODE": "Code",
     "ASSIGN_ADMIN.MESSAGE": "Message",
@@ -37,6 +38,7 @@
     "BIRTH_PLAN.SECTION_INTRO": "Introduction",
     "BREAK_GLASS_REVIEW.COL_PATIENT": "Patient",
     "BREAK_GLASS_REVIEW.NOTE": "Note",
+    "BREAK_GLASS_REVIEW.PAGINATION_LABEL": "Pagination",
     "CDS.INDICATOR.INFO": "Info",
     "CHART.ALLERGIES": "Allergies",
     "CHART.SECTIONS": "Sections",
@@ -90,6 +92,7 @@
     "DISCHARGE.FOLLOW_UP_TYPE": "Type",
     "DISCHARGE.MED_ACTION": "Action",
     "DISCHARGE.PATIENT": "Patient",
+    "DISCHARGE.TEST_TYPE_CULTURE": "Culture",
     "DRUG_INTERACTIONS.ACTIONS": "Actions",
     "DRUG_INTERACTIONS.ACTIVE": "Active",
     "DRUG_INTERACTIONS.DESCRIPTION": "Description",
@@ -108,6 +111,8 @@
     "EMPI.COL_SCORE": "Score",
     "ENCOUNTERS.DATE": "Date",
     "ENCOUNTERS.NOTES": "Notes",
+    "ENCOUNTERS.NOTE_FORM_SIGNATURE": "Signature",
+    "ENCOUNTERS.NOTE_FORM_SOAP_P": "P — Plan",
     "ENCOUNTERS.TRIAGE": "Triage",
     "ENCOUNTERS.TYPE": "Type",
     "FLAGS.DESCRIPTION_LABEL": "Description",
@@ -168,6 +173,7 @@
     "LANG.EN": "English",
     "LANG.ES": "Español",
     "LANG.FR": "Français",
+    "LOCK.AVATAR_ALT": "Avatar",
     "LOGIN.SUBTITLE": "e-Keneya",
     "MATERNITY.ALLERGIES": "Allergies",
     "MATERNITY.MED_HYPERTENSION": "Hypertension",
@@ -257,6 +263,7 @@
     "PATIENTS.MRN": "MRN",
     "PATIENTS.NOTES": "Notes",
     "PATIENTS.ORGANISATION": "Organisation",
+    "PATIENTS.PAGER_PAGE": "Page {{page}}",
     "PATIENTS.PATIENT": "Patient",
     "PATIENTS.PATIENT_COUNT": "patients",
     "PATIENTS.SPO2": "SpO₂",
@@ -364,6 +371,7 @@
     "SETTINGS_HUB.LANG_EN": "English",
     "SETTINGS_HUB.LANG_ES": "Español",
     "SETTINGS_HUB.LANG_FR": "Français",
+    "SHELL.AVATAR_ALT": "Avatar",
     "SHELL.MENU": "Menu",
     "SHELL.NOTIFICATIONS": "Notifications",
     "SHELL.PAGE_TITLE": "e-Keneya",
@@ -407,5 +415,11 @@
     "WEBHOOKS.PING": "Ping",
     "inBasket.messages": "Messages",
     "inBasket.urgent": "Urgent"
+  },
+  "es": {
+    "ENCOUNTERS.ELIGIBILITY.ERROR": "Error",
+    "ENCOUNTERS.NOTE_FORM_SOAP_P": "P — Plan",
+    "LOCK.AVATAR_ALT": "Avatar",
+    "SHELL.AVATAR_ALT": "Avatar"
   }
 }

@@ -872,7 +872,7 @@
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"
-              placeholder="e.g. Chest X-Ray"
+              [placeholder]="'IMAGING.STUDY_TYPE_PLACEHOLDER' | translate"
             />
           </div>
           <div class="field">
@@ -881,7 +881,7 @@
               id="img-bodyRegion"
               type="text"
               [(ngModel)]="form.bodyRegion"
-              placeholder="e.g. Chest"
+              [placeholder]="'IMAGING.BODY_REGION_PLACEHOLDER' | translate"
             />
           </div>
         </div>

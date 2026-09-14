@@ -3,7 +3,7 @@
     <button
       type="button"
       class="elig-dialog__backdrop"
-      aria-label="Close eligibility dialog"
+      [attr.aria-label]="'ENCOUNTERS.ELIGIBILITY.CLOSE_DIALOG_ARIA' | translate"
       (click)="close()"
       (keydown.escape)="close()"
     ></button>
@@ -15,8 +15,13 @@
       [open]="true"
     >
       <header class="elig-dialog__header">
-        <h3 id="elig-dialog-title">Eligibility &amp; prior-auth</h3>
-        <button type="button" class="elig-dialog__close" (click)="close()" aria-label="Close">
+        <h3 id="elig-dialog-title">{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}</h3>
+        <button
+          type="button"
+          class="elig-dialog__close"
+          (click)="close()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           ×
         </button>
       </header>
@@ -24,7 +29,7 @@
       <section class="elig-dialog__body">
         <div class="elig-dialog__row">
           <label class="elig-dialog__field">
-            <span>Scheme</span>
+            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SCHEME' | translate }}</span>
             <select [ngModel]="scheme()" (ngModelChange)="onSchemeChange($event)" name="scheme">
               @for (s of schemes; track s.value) {
                 <option [ngValue]="s.value">{{ s.label }}</option>
@@ -33,7 +38,7 @@
           </label>
 
           <label class="elig-dialog__field">
-            <span>Check type</span>
+            <span>{{ 'ENCOUNTERS.ELIGIBILITY.CHECK_TYPE' | translate }}</span>
             <select [ngModel]="checkType()" (ngModelChange)="onTypeChange($event)" name="checkType">
               @for (t of types; track t) {
                 <option [ngValue]="t">{{ t }}</option>
@@ -43,19 +48,19 @@
         </div>
 
         <label class="elig-dialog__field">
-          <span>Member id</span>
+          <span>{{ 'ENCOUNTERS.ELIGIBILITY.MEMBER_ID' | translate }}</span>
           <input
             type="text"
             [ngModel]="memberId()"
             (ngModelChange)="memberId.set($event)"
             name="memberId"
-            placeholder="NHIS card number, mutuelle id, …"
+            [placeholder]="'ENCOUNTERS.ELIGIBILITY.MEMBER_ID_PLACEHOLDER' | translate"
           />
         </label>
 
         @if (checkType() === 'PRIOR_AUTH') {
           <label class="elig-dialog__field">
-            <span>Service code</span>
+            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SERVICE_CODE' | translate }}</span>
             <input
               type="text"
               [ngModel]="serviceCode()"
@@ -85,7 +90,7 @@
             <dl>
               @if (r.responseCode) {
                 <div>
-                  <dt>Response</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.RESPONSE' | translate }}</dt>
                   <dd>
                     {{ r.responseCode }}
                     @if (r.payerResponseText) {
@@ -96,43 +101,43 @@
               }
               @if (r.copayAmount !== null && r.copayAmount !== undefined) {
                 <div>
-                  <dt>Copay</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.COPAY' | translate }}</dt>
                   <dd>{{ r.copayAmount }} {{ r.copayCurrency }}</dd>
                 </div>
               }
               @if (r.priorAuthRequired !== null && r.priorAuthRequired !== undefined) {
                 <div>
-                  <dt>Prior auth required</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.PRIOR_AUTH_REQUIRED' | translate }}</dt>
                   <dd>{{ r.priorAuthRequired ? 'Yes' : 'No' }}</dd>
                 </div>
               }
               @if (r.priorAuthNumber) {
                 <div>
-                  <dt>Auth number</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.AUTH_NUMBER' | translate }}</dt>
                   <dd>{{ r.priorAuthNumber }}</dd>
                 </div>
               }
               @if (r.validUntil) {
                 <div>
-                  <dt>Valid through</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.VALID_THROUGH' | translate }}</dt>
                   <dd>{{ r.validUntil }}</dd>
                 </div>
               }
               @if (r.errorMessage) {
                 <div>
-                  <dt>Error</dt>
+                  <dt>{{ 'ENCOUNTERS.ELIGIBILITY.ERROR' | translate }}</dt>
                   <dd>{{ r.errorMessage }}</dd>
                 </div>
               }
               <div>
-                <dt>Checked at</dt>
+                <dt>{{ 'ENCOUNTERS.ELIGIBILITY.CHECKED_AT' | translate }}</dt>
                 <dd>{{ r.completedAt ?? r.requestedAt }}</dd>
               </div>
             </dl>
           </article>
         } @else if (!running()) {
           <p class="elig-dialog__empty">
-            No prior check on file for this scheme — run one to populate the timeline.
+            {{ 'ENCOUNTERS.ELIGIBILITY.EMPTY' | translate }}
           </p>
         }
       </section>

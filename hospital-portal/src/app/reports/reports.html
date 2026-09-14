@@ -141,7 +141,7 @@
         class="btn-icon-close"
         type="button"
         (click)="showCreate.set(false)"
-        aria-label="Close"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
       >
         <span class="material-symbols-outlined">close</span>
       </button>

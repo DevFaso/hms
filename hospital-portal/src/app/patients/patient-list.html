@@ -30,7 +30,11 @@
         (input)="onSearchChange($any($event.target).value)"
       />
       @if (searchTerm) {
-        <button class="search-clear" title="Clear search" (click)="onSearchChange('')">
+        <button
+          class="search-clear"
+          [title]="'COMMON.CLEAR_SEARCH' | translate"
+          (click)="onSearchChange('')"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       }
@@ -40,7 +44,7 @@
       class="filter-toggle-btn"
       [class.has-filters]="activeFilterCount > 0"
       (click)="showFilters.set(!showFilters())"
-      title="Toggle filters"
+      [title]="'PATIENTS.TOGGLE_FILTERS' | translate"
     >
       <span class="material-symbols-outlined">tune</span>
       {{ 'COMMON.FILTERS' | translate }}
@@ -58,11 +62,11 @@
         <select
           id="genderFilter"
           class="filter-select"
-          title="Filter by gender"
+          [title]="'PATIENTS.FILTER_GENDER' | translate"
           [(ngModel)]="genderFilter"
           (ngModelChange)="onFilterChange()"
         >
-          <option value="">All</option>
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (g of genderOptions; track g) {
             <option [value]="g">{{ formatGender(g) }}</option>
           }
@@ -74,11 +78,11 @@
         <select
           id="statusFilter"
           class="filter-select"
-          title="Filter by status"
+          [title]="'PATIENTS.FILTER_STATUS' | translate"
           [(ngModel)]="statusFilter"
           (ngModelChange)="onFilterChange()"
         >
-          <option value="">All</option>
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
           <option value="active">{{ 'COMMON.ACTIVE' | translate }}</option>
           <option value="inactive">{{ 'COMMON.INACTIVE' | translate }}</option>
         </select>
@@ -91,11 +95,11 @@
         <select
           id="bloodTypeFilter"
           class="filter-select"
-          title="Filter by blood type"
+          [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
           [(ngModel)]="bloodTypeFilter"
           (ngModelChange)="onFilterChange()"
         >
-          <option value="">All</option>
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (bt of bloodTypes; track bt) {
             <option [value]="bt">{{ bt }}</option>
           }
@@ -110,7 +114,7 @@
           <select
             id="hospitalFilter"
             class="filter-select"
-            title="Filter by hospital"
+            [title]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
             [(ngModel)]="hospitalFilter"
             (ngModelChange)="onFilterChange()"
           >
@@ -319,8 +323,8 @@
             class="page-btn"
             [disabled]="currentPage() === 0"
             (click)="goToPage(currentPage() - 1)"
-            title="Previous page"
-            aria-label="Previous page"
+            [title]="'PATIENTS.PAGER_PREV' | translate"
+            [attr.aria-label]="'PATIENTS.PAGER_PREV' | translate"
           >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
@@ -330,7 +334,7 @@
                 class="page-btn page-num"
                 [class.active]="$index === currentPage()"
                 (click)="goToPage($index)"
-                [attr.aria-label]="'Page ' + ($index + 1)"
+                [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: $index + 1 }"
                 [attr.aria-current]="$index === currentPage() ? 'page' : null"
               >
                 {{ $index + 1 }}
@@ -342,7 +346,7 @@
               class="page-btn page-num"
               [class.active]="currentPage() === 0"
               (click)="goToPage(0)"
-              aria-label="Page 1"
+              [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: 1 }"
               [attr.aria-current]="currentPage() === 0 ? 'page' : null"
             >
               1
@@ -363,7 +367,7 @@
                   class="page-btn page-num"
                   [class.active]="$index === currentPage()"
                   (click)="goToPage($index)"
-                  [attr.aria-label]="'Page ' + ($index + 1)"
+                  [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: $index + 1 }"
                   [attr.aria-current]="$index === currentPage() ? 'page' : null"
                 >
                   {{ $index + 1 }}
@@ -379,7 +383,7 @@
               class="page-btn page-num"
               [class.active]="currentPage() === totalPages - 1"
               (click)="goToPage(totalPages - 1)"
-              [attr.aria-label]="'Page ' + totalPages"
+              [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: totalPages }"
               [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
             >
               {{ totalPages }}
@@ -389,8 +393,8 @@
             class="page-btn"
             [disabled]="currentPage() >= totalPages - 1"
             (click)="goToPage(currentPage() + 1)"
-            title="Next page"
-            aria-label="Next page"
+            [title]="'PATIENTS.PAGER_NEXT' | translate"
+            [attr.aria-label]="'PATIENTS.PAGER_NEXT' | translate"
           >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>

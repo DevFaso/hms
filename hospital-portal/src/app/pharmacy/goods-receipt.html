@@ -38,7 +38,7 @@
               name="inventoryItemId"
               required
             >
-              <option value="">— Select Inventory Item —</option>
+              <option value="">{{ 'PHARMACY.SELECT_INVENTORY_ITEM' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
                   {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
@@ -54,7 +54,7 @@
               [(ngModel)]="form.lotNumber"
               name="lotNumber"
               required
-              placeholder="e.g., LOT-2025-001"
+              [placeholder]="'PHARMACY.LOT_NUMBER_PLACEHOLDER' | translate"
             />
           </div>
         </div>
@@ -89,7 +89,7 @@
               type="text"
               [(ngModel)]="form.supplier"
               name="supplier"
-              placeholder="e.g., CAMEG"
+              [placeholder]="'PHARMACY.SUPPLIER_PLACEHOLDER' | translate"
             />
           </div>
           <div class="field">

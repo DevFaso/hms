@@ -51,7 +51,7 @@
                 name="endTime"
                 (change)="onEndTimeChange()"
               />
-              <small class="field-hint">Auto-calculated if left empty (30 min default)</small>
+              <small class="field-hint">{{ 'APPOINTMENTS.END_TIME_HINT' | translate }}</small>
             </div>
           </div>
           @if (timeError()) {
