@@ -2248,22 +2248,22 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scripts were run through Prettier by hand; `i18n-enum-domains.json` was
   deliberately left in its compact one-entry-per-line table form, which
   Prettier would triple in length.
-- **71 enum-shaped fields are interpolated raw, skipping the EnumLabelPipe
-  entirely.** Across 38 templates a value is rendered as `{{ o.modality }}`
-  rather than `{{ o.modality | enumLabel: 'imagingModality' }}`, so the wire
-  token reaches the screen even where the French key already exists and is
-  correct — `imaging.html` alone does it six times, and `audit-logs.html`
-  renders `{{ l.eventType }}` twice beside a profile page that pipes the same
-  field. The enum gate added in #659 cannot see these: it checks that a piped
-  domain is fully keyed, not that a field which should be piped is. Each site
-  needs its own judgement — `leave.reason`, `appt.reason` and `med.frequency`
-  are free text a human typed and must stay raw — so it is a sweep of 71
-  decisions, not a regex. Scoped out of the keys-and-gate PR deliberately.
-  ⚠ The 71 is a floor, not a total: the scanner matches a field *named*
-  `.status` / `.type` / `.modality`, so it never saw `enc.encounterType`,
-  of which #660 found and piped six more (one patient-facing). Re-derive
-  the list with a pattern that also matches a field whose name ENDS in an
-  enum-ish word before trusting the count.
+- **187 enum-shaped fields are still interpolated raw, skipping the
+  EnumLabelPipe entirely.** A value rendered as `{{ order.status }}` rather
+  than `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token
+  on screen in every language, and every other gate stays green: the key
+  exists, it is translated, it is simply never asked for. The earlier count
+  here said 71 — that scanner matched a field NAMED `.status`/`.type`, so it
+  never saw `enc.encounterType`; the corrected pattern finds 187 across 71
+  templates after the first tranche. `npm run i18n:raw-enums` now ratchets
+  the number so it cannot grow, and `--list` prints the sites to pick the
+  next tranche from. Each needs its own judgement — `leave.reason`,
+  `appt.reason` and `med.frequency` are free text a clinician typed and must
+  stay raw — and the domain must be traced to the DTO field the API fills,
+  not guessed from the variable name. Remaining clusters: `category` (7),
+  `priority` (5), `type` (7), `relationship` (4), `severity` (2), `source`
+  (3), and the `status` sites on nurse-station, chart-review, platform,
+  medical-history, maternity and medication-history.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

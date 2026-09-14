@@ -4760,6 +4760,7 @@
         "UPDATE": "Actualizado"
       },
       "GENDER": {
+        "ALL": "Todos",
         "FEMALE": "Femenino",
         "MALE": "Masculino",
         "NON_BINARY": "No binario",

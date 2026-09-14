@@ -711,7 +711,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
-                  ord.status
+                  ord.status | enumLabel: 'imagingOrderStatus'
                 }}</span></span
               >
             </div>
@@ -752,7 +752,7 @@
                 <div class="report-card" [attr.data-testid]="'imaging-report-' + rep.id">
                   <div class="report-meta">
                     <span class="status-badge {{ getStatusClass(rep.reportStatus) }}">{{
-                      rep.reportStatus
+                      rep.reportStatus | enumLabel: 'imagingReportStatus'
                     }}</span>
                     <span class="report-author">{{
                       rep.interpretingProviderName || rep.performedByName

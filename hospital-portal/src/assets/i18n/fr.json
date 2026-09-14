@@ -4726,6 +4726,7 @@
         "UPDATE": "Mis à jour"
       },
       "GENDER": {
+        "ALL": "Tous",
         "FEMALE": "Féminin",
         "MALE": "Masculin",
         "NON_BINARY": "Non binaire",

@@ -27,6 +27,7 @@
     "i18n:referenced": "node scripts/check-i18n-referenced-keys.mjs",
     "i18n:translated": "node scripts/check-i18n-untranslated.mjs",
     "i18n:enums": "node scripts/check-i18n-enum-coverage.mjs",
+    "i18n:raw-enums": "node scripts/check-i18n-raw-enums.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
   },

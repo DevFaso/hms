@@ -360,7 +360,10 @@
                   <div class="detail-list-item">
                     <div class="range-main">{{ formatReferenceRange(rr) }}</div>
                     <div class="range-meta">
-                      <span>{{ 'LAB_RESULTS.GENDER' | translate }}: {{ rr.gender || 'ALL' }}</span>
+                      <span
+                        >{{ 'LAB_RESULTS.GENDER' | translate }}:
+                        {{ rr.gender || 'ALL' | enumLabel: 'gender' }}</span
+                      >
                       <span
                         >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}:
                         {{ formatReferenceRangeAge(rr) }}</span

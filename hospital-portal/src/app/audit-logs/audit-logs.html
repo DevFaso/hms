@@ -31,7 +31,9 @@
       >
         <option value="">{{ 'AUDIT.ALL_EVENT_TYPES' | translate }}</option>
         @for (et of eventTypes(); track et.eventType) {
-          <option [value]="et.eventType">{{ et.eventType }} ({{ et.count }})</option>
+          <option [value]="et.eventType">
+            {{ et.eventType | enumLabel: 'auditEventType' }} ({{ et.count }})
+          </option>
         }
       </select>
       <input
@@ -105,7 +107,9 @@
                 <div class="cell-secondary">{{ l.roleName || '' }}</div>
               </td>
               <td>
-                <span class="event-type-badge">{{ l.eventType }}</span>
+                <span class="event-type-badge">{{
+                  l.eventType | enumLabel: 'auditEventType'
+                }}</span>
               </td>
               <td class="desc-cell">{{ l.eventDescription || '--' }}</td>
               <td>{{ l.entityType || '--' }}</td>
