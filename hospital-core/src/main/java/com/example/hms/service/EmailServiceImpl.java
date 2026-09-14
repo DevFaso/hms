@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Year;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.List;
@@ -62,6 +63,15 @@ public class EmailServiceImpl implements EmailService {
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     // Bundle keys used by more than one mail.
+    // Markup fragments repeated across the mails (Sonar S1192).
+    private static final String HTML_A_OPEN = "<a href=\"";
+    private static final String HTML_STRONG_OPEN = "<strong>";
+    private static final String HTML_STRONG_CLOSE = "</strong>";
+    private static final String HTML_STRONG_CLOSE_SP = "</strong> ";
+    private static final String HTML_P_DIV_CLOSE = "</p></div>";
+    private static final String HTML_DIV_BACKGROUND = "<div style=\"background:";
+    private static final String HTML_STYLE_ATTR = "\" style=\"";
+    private static final String COLOR_BRAND_TINT = "#bfdbfe";
     private static final String KEY_BRAND = "email.common.brand";
     private static final String KEY_GREETING_HI = "email.common.greeting.hi";
     private static final String KEY_GREETING_DEAR = "email.common.greeting.dear";
@@ -238,18 +248,18 @@ public class EmailServiceImpl implements EmailService {
 
     private static String anchor(String rawUrl) {
         String url = escapeHtml(rawUrl);
-        return "<a href=\"" + url + "\">" + url + "</a>";
+        return HTML_A_OPEN + url + "\">" + url + "</a>";
     }
 
     private String appointmentDetails(Locale l, String dateLabelKey, String timeLabelKey, String date, String time) {
-        return "<p><strong>" + text(l, dateLabelKey) + "</strong> " + escapeHtml(date) + "<br>"
-            + "<strong>" + text(l, timeLabelKey) + "</strong> " + escapeHtml(time) + CLOSE_PARAGRAPH;
+        return "<p><strong>" + text(l, dateLabelKey) + HTML_STRONG_CLOSE_SP + escapeHtml(date) + "<br>"
+            + HTML_STRONG_OPEN + text(l, timeLabelKey) + HTML_STRONG_CLOSE_SP + escapeHtml(time) + CLOSE_PARAGRAPH;
     }
 
     private String appointmentLinks(Locale l, String introKey, String rescheduleLink, String cancelLink) {
         return paragraph(text(l, introKey))
             + "<p><a href=\"" + escapeHtml(rescheduleLink) + "\">" + text(l, "email.appointment.links.reschedule") + "</a><br>"
-            + "<a href=\"" + escapeHtml(cancelLink) + "\">" + text(l, "email.appointment.links.cancel") + "</a></p>";
+            + HTML_A_OPEN + escapeHtml(cancelLink) + "\">" + text(l, "email.appointment.links.cancel") + "</a></p>";
     }
 
     // -------------------------------------------------------------------------
@@ -336,7 +346,7 @@ public class EmailServiceImpl implements EmailService {
             String url = escapeHtml(profileCompletionUrl);
             String buttonLabel = text(l, isPatient ? "email.patient.welcome.button" : "email.role.assignment.button");
             linkSection = "<p style=\"margin:24px 0;\">"
-                + "<a href=\"" + url + "\" style=\"background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;"
+                + HTML_A_OPEN + url + "\" style=\"background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;"
                 + "text-decoration:none;display:inline-block;\">" + buttonLabel + "</a></p>"
                 + "<p style=\"font-size: 14px; color: #666;\">" + text(l, "email.role.assignment.link.help")
                 + "<br />" + text(l, "email.role.assignment.link.fallback")
@@ -347,9 +357,9 @@ public class EmailServiceImpl implements EmailService {
         if (hasText(tempUsername) && hasText(tempPassword)) {
             credentialsSection = "<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;\">"
                 + "<p style=\"margin:0 0 8px;font-weight:600;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.title") + CLOSE_PARAGRAPH
-                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.username") + "</strong> "
+                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.username") + HTML_STRONG_CLOSE_SP
                 + escapeHtml(tempUsername) + CLOSE_PARAGRAPH
-                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.password") + "</strong> "
+                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.password") + HTML_STRONG_CLOSE_SP
                 + "<code style=\"background:#e0f2fe;padding:2px 6px;border-radius:4px;\">" + escapeHtml(tempPassword) + "</code></p>"
                 + "<p style=\"margin:8px 0 0;font-size:13px;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.change") + CLOSE_PARAGRAPH
                 + CLOSE_DIV;
@@ -368,10 +378,10 @@ public class EmailServiceImpl implements EmailService {
                 + codeHtml + CLOSE_PARAGRAPH
                 + credentialsSection
                 + linkSection
-                + paragraph("<strong>" + text(l, "email.patient.welcome.body.inactive") + "</strong>")
+                + paragraph(HTML_STRONG_OPEN + text(l, "email.patient.welcome.body.inactive") + HTML_STRONG_CLOSE)
                 + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:16px 0;\">"
                 + "<p style=\"margin:0;font-size:13px;color:#991b1b;\"><strong>" + text(l, "email.patient.welcome.body.unexpected.title")
-                + "</strong> " + text(l, "email.patient.welcome.body.unexpected") + CLOSE_PARAGRAPH
+                + HTML_STRONG_CLOSE_SP + text(l, "email.patient.welcome.body.unexpected") + CLOSE_PARAGRAPH
                 + CLOSE_DIV
                 + "<p style=\"color:#666;font-size:13px;\">" + text(l, "email.patient.welcome.body.expiry") + CLOSE_PARAGRAPH;
         } else {
@@ -384,7 +394,7 @@ public class EmailServiceImpl implements EmailService {
                 + paragraph(text(l, "email.role.assignment.body.reference", escapeHtml(assignmentCode)))
                 + linkSection
                 + credentialsSection
-                + paragraph("<strong>" + text(l, "email.role.assignment.body.inactive") + "</strong>")
+                + paragraph(HTML_STRONG_OPEN + text(l, "email.role.assignment.body.inactive") + HTML_STRONG_CLOSE)
                 + paragraph(text(l, "email.role.assignment.body.unexpected"))
                 + "<p style=\"color:#666\">" + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH;
         }
@@ -425,7 +435,7 @@ public class EmailServiceImpl implements EmailService {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        LocalDateTime changedAt = LocalDateTime.now();
+        LocalDateTime changedAt = LocalDateTime.now(ZoneOffset.UTC);
 
         String header = brandHeader(l, GRADIENT_GREEN, "#a7f3d0",
             "&#9989; " + text(l, "email.password.changed.heading"));
@@ -460,9 +470,9 @@ public class EmailServiceImpl implements EmailService {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        LocalDateTime restoredAt = LocalDateTime.now();
+        LocalDateTime restoredAt = LocalDateTime.now(ZoneOffset.UTC);
 
-        String header = brandHeader(l, GRADIENT_BLUE, "#bfdbfe",
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
             "&#9989; " + text(l, "email.account.restored.heading"));
 
         String bodyContent = BODY_OPEN
@@ -488,7 +498,7 @@ public class EmailServiceImpl implements EmailService {
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         String escapedCode = escapeHtml(verificationCode);
 
-        String header = brandHeader(l, GRADIENT_BLUE, "#bfdbfe",
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
             "&#128274; " + text(l, "email.recovery.contact.heading"));
 
         String bodyContent = BODY_OPEN
@@ -519,7 +529,7 @@ public class EmailServiceImpl implements EmailService {
         var subject = text(l, "email.username.reminder.subject");
         var body = heading(text(l, "email.username.reminder.heading"))
             + paragraph(text(l, "email.username.reminder.body.intro"))
-            + paragraph("<strong>" + text(l, "email.username.reminder.body.username") + "</strong> " + escapeHtml(username))
+            + paragraph(HTML_STRONG_OPEN + text(l, "email.username.reminder.body.username") + HTML_STRONG_CLOSE_SP + escapeHtml(username))
             + paragraph(text(l, "email.username.reminder.body.signin", anchor(loginUrl())))
             + "<p style=\"color:#666\">" + text(l, "email.username.reminder.body.unexpected") + CLOSE_PARAGRAPH;
         sendHtml(List.of(toEmail), List.of(), List.of(), subject, body);
@@ -570,7 +580,7 @@ public class EmailServiceImpl implements EmailService {
         String safeHosp = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
         String safeLink = escapeHtml(link);
 
-        String header = "<div style=\"background:" + GRADIENT_NAVY + ";"
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
             + "padding:32px 40px;text-align:center;\">"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;\">"
             + text(l, "email.activation.heading") + "</h1>"
@@ -594,49 +604,49 @@ public class EmailServiceImpl implements EmailService {
                 .append("<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#0c4a6e;\">")
                 .append(text(l, "email.activation.credentials.title")).append(CLOSE_PARAGRAPH)
                 .append("<p style=\"margin:0;font-size:14px;color:#075985;\">")
-                .append("<strong>").append(text(l, "email.activation.credentials.username")).append("</strong> ")
+                .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.username")).append(HTML_STRONG_CLOSE_SP)
                 .append(escapeHtml(username)).append("<br/>")
-                .append("<strong>").append(text(l, "email.activation.credentials.password")).append("</strong> ")
+                .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.password")).append(HTML_STRONG_CLOSE_SP)
                 .append(text(l, "email.activation.credentials.password.hint"))
-                .append("</p></div>");
+                .append(HTML_P_DIV_CLOSE);
         }
 
         body.append("<div style=\"text-align:center;margin:32px 0;\">")
-            .append("<a href=\"").append(safeLink).append("\" style=\"").append(PRIMARY_BUTTON_STYLE).append("\">")
+            .append(HTML_A_OPEN).append(safeLink).append(HTML_STYLE_ATTR).append(PRIMARY_BUTTON_STYLE).append("\">")
             .append(text(l, KEY_ACTIVATION_BUTTON)).append("</a>")
             .append(CLOSE_DIV)
             .append("<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">")
             .append(text(l, KEY_LINK_FALLBACK)).append("<br/>")
-            .append("<a href=\"").append(safeLink).append("\" style=\"color:#2563eb;word-break:break-all;\">")
+            .append(HTML_A_OPEN).append(safeLink).append("\" style=\"color:#2563eb;word-break:break-all;\">")
             .append(safeLink).append("</a>")
             .append(CLOSE_PARAGRAPH)
             .append("<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;\"/>")
             .append("<p style=\"font-size:13px;color:#94a3b8;text-align:center;\">")
             .append(text(l, "email.activation.body.expiry")).append(' ')
             .append(text(l, "email.activation.body.unexpected"))
-            .append("</p></div>");
+            .append(HTML_P_DIV_CLOSE);
 
         return htmlEmailWrapper(header + body + htmlEmailFooter(l));
     }
 
     private String buildResetEmailBody(Locale l, String link) {
         String safeLink = escapeHtml(link);
-        String header = brandHeader(l, GRADIENT_NAVY, "#bfdbfe",
+        String header = brandHeader(l, GRADIENT_NAVY, COLOR_BRAND_TINT,
             "&#128274; " + text(l, "email.password.reset.heading"));
 
-        String signIn = "<a href=\"" + escapeHtml(loginUrl()) + "\" style=\"color:#b45309;font-weight:600;\">"
+        String signIn = HTML_A_OPEN + escapeHtml(loginUrl()) + "\" style=\"color:#b45309;font-weight:600;\">"
             + text(l, "email.password.reset.body.unexpected.link") + "</a>";
 
         String bodyContent = BODY_OPEN
             + GREETING_PARAGRAPH_OPEN + text(l, "email.common.greeting.hello") + CLOSE_PARAGRAPH
             + BODY_PARAGRAPH_OPEN + text(l, "email.password.reset.body.intro") + CLOSE_PARAGRAPH
             + "<div style=\"text-align:center;margin:32px 0;\">"
-            + "<a href=\"" + safeLink + "\" style=\"" + PRIMARY_BUTTON_STYLE + "\">"
+            + HTML_A_OPEN + safeLink + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
             + text(l, "email.password.reset.button") + "</a>"
             + CLOSE_DIV
             + "<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">"
             + text(l, KEY_LINK_FALLBACK) + "<br/>"
-            + "<a href=\"" + safeLink + "\" style=\"color:#2563eb;word-break:break-all;\">" + safeLink + "</a>"
+            + HTML_A_OPEN + safeLink + "\" style=\"color:#2563eb;word-break:break-all;\">" + safeLink + "</a>"
             + CLOSE_PARAGRAPH
             + HR
             + "<div style=\"background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;"
@@ -646,7 +656,7 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"margin:0;font-size:14px;color:#78350f;line-height:1.6;\">"
             + text(l, "email.password.reset.body.unexpected.risk") + ' '
             + text(l, "email.password.reset.body.unexpected.action", signIn)
-            + "</p></div>"
+            + HTML_P_DIV_CLOSE
             + "<ul style=\"padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;\">"
             + "<li>" + text(l, "email.password.reset.body.expiry") + "</li>"
             + "<li>" + text(l, "email.password.reset.body.once") + "</li>"
@@ -663,7 +673,7 @@ public class EmailServiceImpl implements EmailService {
 
     /** Coloured header band with the brand line under the title. */
     private String brandHeader(Locale l, String gradient, String subtitleColor, String titleHtml) {
-        return "<div style=\"background:" + gradient + ";padding:32px 40px;text-align:center;\">"
+        return HTML_DIV_BACKGROUND + gradient + ";padding:32px 40px;text-align:center;\">"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
             + titleHtml
             + "</h1>"
@@ -673,7 +683,7 @@ public class EmailServiceImpl implements EmailService {
 
     private String signInButton(Locale l) {
         return "<div style=\"text-align:center;margin:32px 0;\">"
-            + "<a href=\"" + escapeHtml(loginUrl()) + "\" style=\"" + PRIMARY_BUTTON_STYLE + "\">"
+            + HTML_A_OPEN + escapeHtml(loginUrl()) + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
             + text(l, KEY_SIGNIN_BUTTON) + "</a>"
             + CLOSE_DIV;
     }
@@ -718,9 +728,9 @@ public class EmailServiceImpl implements EmailService {
         return "<div style=\"background:#f1f5f9;padding:20px 40px;text-align:center;"
              + "border-top:1px solid #e2e8f0;\">"
              + "<p style=\"margin:0;font-size:12px;color:#94a3b8;\">"
-             + text(l, "email.common.footer.copyright", String.valueOf(Year.now().getValue()))
+             + text(l, "email.common.footer.copyright", String.valueOf(Year.now(ZoneOffset.UTC).getValue()))
              + " &nbsp;|&nbsp; " + text(l, "email.common.footer.automated")
-             + "</p></div>";
+             + HTML_P_DIV_CLOSE;
     }
 
     private static void validateAddresses(List<String> addresses) {
@@ -763,7 +773,7 @@ public class EmailServiceImpl implements EmailService {
         String loginUrl        = loginUrl();
 
         String greeting = hasText(displayName)
-            ? text(l, KEY_GREETING_HI, "<strong>" + escapeHtml(displayName) + "</strong>")
+            ? text(l, KEY_GREETING_HI, HTML_STRONG_OPEN + escapeHtml(displayName) + HTML_STRONG_CLOSE)
             : text(l, KEY_GREETING_ANONYMOUS);
 
         String hospitalLine = escapedHospital != null
@@ -774,7 +784,7 @@ public class EmailServiceImpl implements EmailService {
             ? text(l, "email.admin.welcome.body.created.hospital", escapedRole, escapedHospital)
             : text(l, "email.admin.welcome.body.created", escapedRole);
 
-        String header = "<div style=\"background:" + GRADIENT_NAVY + ";"
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
             + "padding:32px 40px;text-align:center;\">"
             + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
@@ -810,9 +820,9 @@ public class EmailServiceImpl implements EmailService {
             + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
             + "border-radius:0 8px 8px 0;margin-top:24px;\">"
             + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
-            + "<strong>&#9888; " + text(l, "email.admin.welcome.security.title") + "</strong> "
+            + "<strong>&#9888; " + text(l, "email.admin.welcome.security.title") + HTML_STRONG_CLOSE_SP
             + text(l, "email.admin.welcome.security.body")
-            + "</p></div>"
+            + HTML_P_DIV_CLOSE
             + CLOSE_DIV;
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
@@ -840,7 +850,7 @@ public class EmailServiceImpl implements EmailService {
      */
     private String ctaBlock(Locale l, String rawActivationUrl, String rawLoginUrl) {
         String loginUrl = escapeHtml(rawLoginUrl);
-        String loginAnchor = "<a href=\"" + loginUrl + "\" " + LINK_STYLE + ">" + loginUrl + "</a>";
+        String loginAnchor = HTML_A_OPEN + loginUrl + "\" " + LINK_STYLE + ">" + loginUrl + "</a>";
         boolean hasActivation = hasText(rawActivationUrl);
 
         if (!hasActivation) {
@@ -853,11 +863,11 @@ public class EmailServiceImpl implements EmailService {
 
         String activationUrl = escapeHtml(rawActivationUrl);
         return "<p style=\"text-align:center;margin:28px 0;\">"
-            + "<a href=\"" + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
+            + HTML_A_OPEN + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
             + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
             + "font-weight:600;display:inline-block;\">" + text(l, KEY_ACTIVATION_BUTTON) + "</a></p>"
             + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + text(l, "email.admin.welcome.cta.copy") + "<br/>"
-            + "<a href=\"" + activationUrl + "\" " + LINK_STYLE + ">" + activationUrl
+            + HTML_A_OPEN + activationUrl + "\" " + LINK_STYLE + ">" + activationUrl
             + "</a><br/><br/>" + text(l, "email.admin.welcome.cta.signin.activated", loginAnchor) + CLOSE_PARAGRAPH;
     }
 

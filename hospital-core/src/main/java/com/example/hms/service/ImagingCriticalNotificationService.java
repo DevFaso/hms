@@ -258,12 +258,9 @@ public class ImagingCriticalNotificationService {
     /**
      * The alert text. Names the study and the patient and says where to act; the
      * impression is truncated rather than sent whole, because this same string
-     * goes down an SMS channel.
-     */
-    /**
-     * Read by the ordering provider (and, on escalation, the desk's
-     * administrators) — never by the caller, and a sweep has no request
-     * locale anyway — so the body is rendered in the staff locale.
+     * goes down an SMS channel. Read by the ordering provider (and, on
+     * escalation, the desk's administrators) — never by the caller, and a sweep
+     * has no request locale anyway — so the body is in the staff locale.
      */
     private String buildMessage(ImagingReport report, boolean escalation) {
         Locale locale = NotificationLocales.STAFF;

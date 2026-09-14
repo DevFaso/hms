@@ -158,9 +158,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
                     request.getIpAddress(), request.getDeviceInfo());
                 signatureRepository.save(signature);
 
-                String message = isValid
-                    ? text("signature.verify.success", locale)
-                    : text("signature.verify.invalid", locale);
+                String message = text(
+                    isValid ? "signature.verify.success" : "signature.verify.invalid", locale);
                 String invalidReason = isValid ? null : determineInvalidReason(signature, locale);
 
                 return SignatureVerificationResponseDTO.builder()

@@ -93,6 +93,9 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
 
     /** The resourceType every appointment webhook payload names (item 45). */
+    /** MessageSource varargs: an empty array, never null (Sonar S4449). */
+    private static final Object[] NO_ARGS = new Object[0];
+
     private static final String WEBHOOK_RESOURCE_APPOINTMENT = "Appointment";
     private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
     /**
@@ -791,7 +794,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
-                throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+                throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, "Access denied", locale));
             }
         }
     // On GET, return full details (existing mapping)
@@ -1109,7 +1112,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void requireHospitalScope(User user, UUID hospitalId, Locale locale) {
         if (!hasHospitalAccess(user, hospitalId)) {
-            throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+            throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, "Access denied", locale));
         }
     }
 

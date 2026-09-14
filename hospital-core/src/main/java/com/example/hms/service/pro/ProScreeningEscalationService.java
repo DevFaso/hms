@@ -245,13 +245,11 @@ public class ProScreeningEscalationService {
     }
 
     /**
-     * No answers, no score, no item text in the message: a notification
-     * row and an SMS are both plaintext. The recipient opens the chart.
-     */
-    /**
-     * Read by the recorder, the panel owners or the fallback role — clinical
-     * staff, never the caller (and the sweep has no request locale) — so the
-     * body is rendered in the staff locale.
+     * No answers, no score, no item text in the message: a notification row and
+     * an SMS are both plaintext. The recipient opens the chart. Read by the
+     * recorder, the panel owners or the fallback role — clinical staff, never
+     * the caller (and the sweep has no request locale) — so the body is in the
+     * staff locale.
      */
     private String buildMessage(ProResponse response, boolean critical, boolean escalation) {
         Locale locale = NotificationLocales.STAFF;

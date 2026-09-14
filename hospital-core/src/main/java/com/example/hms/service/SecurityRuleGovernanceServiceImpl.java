@@ -231,13 +231,21 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
      * The rule definitions underneath are left as written: they are copied
      * into the stored rule set on import, so they are data, not messages.
      */
+    private static final String CODE_RBAC_GLOBAL = "RBAC_GLOBAL";
+    private static final String CODE_NETWORK_SAFEGUARDS = "NETWORK_SAFEGUARDS";
+    private static final String CODE_DEVICE_HYGIENE = "DEVICE_HYGIENE";
+    private static final String CODE_SESSION_HARDENING = "SESSION_HARDENING";
+    private static final String FIELD_TITLE = "title";
+    private static final String FIELD_CATEGORY = "category";
+    private static final String FIELD_SUMMARY = "summary";
+
     private List<SecurityRuleTemplateDTO> buildTemplates(Locale locale) {
         Map<String, SecurityRuleTemplateDTO> templates = new LinkedHashMap<>();
-        templates.put("RBAC_GLOBAL", SecurityRuleTemplateDTO.builder()
-            .code("RBAC_GLOBAL")
-            .title(templateText("RBAC_GLOBAL", "title", locale))
-            .category(templateText("RBAC_GLOBAL", "category", locale))
-            .summary(templateText("RBAC_GLOBAL", "summary", locale))
+        templates.put(CODE_RBAC_GLOBAL, SecurityRuleTemplateDTO.builder()
+            .code(CODE_RBAC_GLOBAL)
+            .title(templateText(CODE_RBAC_GLOBAL, FIELD_TITLE, locale))
+            .category(templateText(CODE_RBAC_GLOBAL, FIELD_CATEGORY, locale))
+            .summary(templateText(CODE_RBAC_GLOBAL, FIELD_SUMMARY, locale))
             .controllers(List.of(ROLE_CONTROLLER, PERMISSION_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -261,11 +269,11 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
             ))
             .build());
 
-        templates.put("NETWORK_SAFEGUARDS", SecurityRuleTemplateDTO.builder()
-            .code("NETWORK_SAFEGUARDS")
-            .title(templateText("NETWORK_SAFEGUARDS", "title", locale))
-            .category(templateText("NETWORK_SAFEGUARDS", "category", locale))
-            .summary(templateText("NETWORK_SAFEGUARDS", "summary", locale))
+        templates.put(CODE_NETWORK_SAFEGUARDS, SecurityRuleTemplateDTO.builder()
+            .code(CODE_NETWORK_SAFEGUARDS)
+            .title(templateText(CODE_NETWORK_SAFEGUARDS, FIELD_TITLE, locale))
+            .category(templateText(CODE_NETWORK_SAFEGUARDS, FIELD_CATEGORY, locale))
+            .summary(templateText(CODE_NETWORK_SAFEGUARDS, FIELD_SUMMARY, locale))
             .controllers(List.of(ORG_RULE_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -289,11 +297,11 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
             ))
             .build());
 
-        templates.put("DEVICE_HYGIENE", SecurityRuleTemplateDTO.builder()
-            .code("DEVICE_HYGIENE")
-            .title(templateText("DEVICE_HYGIENE", "title", locale))
-            .category(templateText("DEVICE_HYGIENE", "category", locale))
-            .summary(templateText("DEVICE_HYGIENE", "summary", locale))
+        templates.put(CODE_DEVICE_HYGIENE, SecurityRuleTemplateDTO.builder()
+            .code(CODE_DEVICE_HYGIENE)
+            .title(templateText(CODE_DEVICE_HYGIENE, FIELD_TITLE, locale))
+            .category(templateText(CODE_DEVICE_HYGIENE, FIELD_CATEGORY, locale))
+            .summary(templateText(CODE_DEVICE_HYGIENE, FIELD_SUMMARY, locale))
             .controllers(List.of(ORG_RULE_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -317,11 +325,11 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
             ))
             .build());
 
-        templates.put("SESSION_HARDENING", SecurityRuleTemplateDTO.builder()
-            .code("SESSION_HARDENING")
-            .title(templateText("SESSION_HARDENING", "title", locale))
-            .category(templateText("SESSION_HARDENING", "category", locale))
-            .summary(templateText("SESSION_HARDENING", "summary", locale))
+        templates.put(CODE_SESSION_HARDENING, SecurityRuleTemplateDTO.builder()
+            .code(CODE_SESSION_HARDENING)
+            .title(templateText(CODE_SESSION_HARDENING, FIELD_TITLE, locale))
+            .category(templateText(CODE_SESSION_HARDENING, FIELD_CATEGORY, locale))
+            .summary(templateText(CODE_SESSION_HARDENING, FIELD_SUMMARY, locale))
             .controllers(List.of(AUTH_CONTROLLER, PASSWORD_RESET_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(

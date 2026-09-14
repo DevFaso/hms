@@ -31,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.List;
@@ -134,10 +135,10 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
                 Thresholds.of(10, 30),
                 text("platform.automation.queueHealth.metricLabel", locale),
                 text("platform.automation.queueHealth.metricValue", locale, String.valueOf(unreadAlerts)),
-                unreadAlerts > 30
-                    ? text("platform.automation.queueHealth.nextAction.critical", locale)
-                    : text("platform.automation.queueHealth.nextAction.normal", locale),
-                LocalDateTime.now().minusMinutes(5)
+                text(unreadAlerts > 30
+                    ? "platform.automation.queueHealth.nextAction.critical"
+                    : "platform.automation.queueHealth.nextAction.normal", locale),
+                LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
             ), locale),
             buildAutomationTask(new AutomationTaskInput(
                 "retry-spikes",
@@ -148,15 +149,15 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
                 Thresholds.of(5, 15),
                 text("platform.automation.retrySpikes.metricLabel", locale),
                 text("platform.automation.retrySpikes.metricValue", locale, String.valueOf(disabledLinks)),
-                disabledLinks > 15
-                    ? text("platform.automation.retrySpikes.nextAction.critical", locale)
-                    : text("platform.automation.retrySpikes.nextAction.normal", locale),
-                LocalDateTime.now().minusMinutes(12)
+                text(disabledLinks > 15
+                    ? "platform.automation.retrySpikes.nextAction.critical"
+                    : "platform.automation.retrySpikes.nextAction.normal", locale),
+                LocalDateTime.now(ZoneOffset.UTC).minusMinutes(12)
             ), locale),
             buildReleaseAutomationTask(
                 upcomingReleases,
                 activeWindows.size(),
-                Optional.ofNullable(latestWindowTimestamp).orElse(LocalDateTime.now()),
+                Optional.ofNullable(latestWindowTimestamp).orElseGet(() -> LocalDateTime.now(ZoneOffset.UTC)),
                 locale
             )
         );
@@ -315,9 +316,9 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .statusLabel(toStatusLabel(status, locale))
             .metricLabel(text("platform.automation.releaseWindows.metricLabel", locale))
             .metricValue(text("platform.automation.releaseWindows.metricValue", locale, String.valueOf(upcomingReleases)))
-            .nextAction(upcomingReleases == 0
-                ? text("platform.automation.releaseWindows.nextAction.none", locale)
-                : text("platform.automation.releaseWindows.nextAction.normal", locale))
+            .nextAction(text(upcomingReleases == 0
+                ? "platform.automation.releaseWindows.nextAction.none"
+                : "platform.automation.releaseWindows.nextAction.normal", locale))
             .lastRun(DISPLAY_FORMAT.format(lastRun))
             .build();
     }
