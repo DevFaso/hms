@@ -100,7 +100,7 @@
               </td>
               <td>
                 <span class="{{ statusClass(o.status) }}">
-                  {{ 'PROCEDURES.STATUS_' + o.status | translate }}
+                  {{ o.status | enumLabel: 'procedureOrderStatus' }}
                 </span>
               </td>
               <td class="actions-cell">
@@ -136,7 +136,7 @@
         <h2>
           {{ o.procedureName }}
           <span class="{{ statusClass(o.status) }}">
-            {{ 'PROCEDURES.STATUS_' + o.status | translate }}
+            {{ o.status | enumLabel: 'procedureOrderStatus' }}
           </span>
         </h2>
         <button

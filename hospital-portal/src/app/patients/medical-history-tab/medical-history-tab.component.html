@@ -298,7 +298,7 @@
                   {{ im.administrationDate ? (im.administrationDate | date: 'mediumDate') : '—' }}
                 </td>
                 <td>{{ doseLabel(im) }}</td>
-                <td>{{ im.status || '—' }}</td>
+                <td>{{ (im.status | enumLabel: 'immunizationStatus') || '—' }}</td>
                 <td>
                   {{ im.nextDoseDueDate ? (im.nextDoseDueDate | date: 'mediumDate') : '—' }}
                   @if (isOverdue(im)) {
@@ -697,11 +697,11 @@
           <div class="field">
             <label for="im-status">{{ 'COMMON.STATUS' | translate }} *</label>
             <select id="im-status" [(ngModel)]="immunizationForm.status">
-              <option value="COMPLETED">{{ 'MED_HISTORY.STATUS_COMPLETED' | translate }}</option>
-              <option value="NOT_DONE">{{ 'MED_HISTORY.STATUS_NOT_DONE' | translate }}</option>
-              <option value="REFUSED">{{ 'MED_HISTORY.STATUS_REFUSED' | translate }}</option>
+              <option value="COMPLETED">{{ 'COMPLETED' | enumLabel: 'immunizationStatus' }}</option>
+              <option value="NOT_DONE">{{ 'NOT_DONE' | enumLabel: 'immunizationStatus' }}</option>
+              <option value="REFUSED">{{ 'REFUSED' | enumLabel: 'immunizationStatus' }}</option>
               <option value="ENTERED_IN_ERROR">
-                {{ 'MED_HISTORY.STATUS_ENTERED_IN_ERROR' | translate }}
+                {{ 'ENTERED_IN_ERROR' | enumLabel: 'immunizationStatus' }}
               </option>
             </select>
           </div>

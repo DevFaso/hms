@@ -2248,18 +2248,64 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scripts were run through Prettier by hand; `i18n-enum-domains.json` was
   deliberately left in its compact one-entry-per-line table form, which
   Prettier would triple in length.
-- **278 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **Six round-3 findings on the raw-enum gate and the new enum groups, deferred
+  from #663 by the user.** None is reachable by a user today; all are hardening
+  of the gate or of a fallback path, and each was confirmed against the tree.
+  1. `rawEnumRenders` reports the line of the attribute NAME for a hit inside
+     an attribute value, so a `[title]`/`[matTooltip]` expression Prettier
+     wrapped points the build error at the wrong line. The line-number test
+     covers only the element-text path.
+  2. `TEXT_IF_INTERPOLATED` makes `<option value="{{ o.status }}">` a finding
+     even when the option's own label is piped — the same class-vs-label
+     confusion the gate exists to remove, in the other direction. No site has
+     the interpolated form today.
+  3. Five of the ten entries in `TEXT_ATTRS`/`TEXT_IF_INTERPOLATED`
+     (`mattooltip`, `matbadge`, `aria-valuetext`, `label`, `value`) match
+     nothing in the repo — there is no Angular Material here. The list reads
+     as general HTML semantics but is really four live entries plus config a
+     future reader has to re-verify.
+  4. `PORTAL.ENUM.STATUS.RESULTED` was reworded in FRENCH ONLY
+     ("Résultats rendus") to break a collision with the newly-pooled
+     `RESULTS_AVAILABLE`, so one wire value now has two French renderings —
+     `LAB_ORDER_STATUS.RESULTED` still reads "Résultats disponibles".
+     `scripts/i18n-enum-collisions.json` is the tool for that and already pins
+     two such pairs; decide whether these two are genuine synonyms and pin
+     them, or give RESULTED a distinct wording in BOTH groups.
+  5. None of the five domains #663 added (`immunizationStatus`, `marTaskStatus`,
+     `platformServiceStatus`, `platformReleaseStatus`, `procedureOrderStatus`)
+     has a group in `EnumLabelPipe.LABELS`, so they lack the tier-2 net every
+     pre-existing domain carries: with a key unported the pipe falls to the
+     tier-3 prettifier and renders "Pre Op Clearance Pending" rather than the
+     curated "Pre-Op Clearance Pending".
+  6. One negative assertion in the chart-review timeline spec excludes a string
+     the pipe cannot produce, and its comment mis-states the fallback order —
+     tier 2's cross-group LABELS scan runs before the prettifier, so an unkeyed
+     `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
+     Discharge". The positive assertion still catches the regression; the
+     exclusion is dead weight.
+- **221 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
   it is translated, it is simply never asked for. The count here has been wrong
-  twice — 71 when the scanner matched only a field NAMED `.status`/`.type` (so
-  it never saw `enc.encounterType`), then 187 when it matched only
+  three times — 71 when the scanner matched only a field NAMED `.status`/`.type`
+  (so it never saw `enc.encounterType`), then 187 when it matched only
   `{{ x.status }}` and `{{ x.status || 'y' }}` (so a `??`, a ternary, a
-  `[title]` binding and a two-step optional chain were all invisible). The
-  scan in `scripts/lib/raw-enum-scan.mjs` now covers all of those and has its
-  own tests, because a scan that silently stops matching reports zero findings
-  and reads as a win.
+  `[title]` binding and a two-step optional chain were all invisible), then 278
+  when it counted interpolations inside an ATTRIBUTE — `class="badge {{
+  getStatusClass(o.status) }}"` is a CSS class name nobody reads, and 38 of
+  those pins sat on templates whose label beside them was already piped. The
+  scan in `scripts/lib/raw-enum-scan.mjs` now counts an interpolation only in
+  element text or a text-bearing attribute, and has its own tests, because a
+  scan that silently stops matching reports zero findings and reads as a win.
+  It still cannot see two shapes: an expression whose variable is not
+  enum-named (`{{ formatStatus(s) }}` over a status list, `{{ st }}` over a
+  status array — two live English renders in `billing.html` were found by hand,
+  and the identical shape in `platform.html`, its status filter and its
+  status-change buttons, was missed on that pass and caught only by review),
+  and a method
+  call whose return value it cannot know (`{{ statusLabel(culture.status) }}`
+  translates, `{{ taskActionIcon(task.status) }}` is a Material icon name).
   `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
   that is not pinned fails the build and is named, and a pin whose site is
   gone is reported stale. Work it down in tranches: trace each field to the
@@ -2267,6 +2313,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   is a String the service composes, `.type` is either encounterType or
   vitalType depending on the screen — and leave the free text a clinician
   typed (`appt.reason`, `med.frequency`, `lab.result`) pinned where it is.
+  The status tranche is done: 47 status/state sites went to 9, and those 9 were
+  each traced and are NOT debt — `getApptStatusLabel` (dashboard, x2) and
+  `statusLabel` (micro, x2) already resolve through translate.instant;
+  `taskActionLabel`/`taskActionIcon` (platform), `countFor` (integration-health)
+  and the super-admin ternary return an icon name or a number, not a label; and
+  `h.state`/`p.state` are postal address lines, not enums. The baseline has no
+  field to record that, and `--write-baseline` rewrites its `$comment`, so it is
+  written here instead — do not re-trace them. Next clusters: `.reason` (14),
+  `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
+  text that should stay pinned.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

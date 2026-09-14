@@ -114,7 +114,7 @@
       >
         <option value="">{{ 'BILLING.ALL_STATUSES' | translate }}</option>
         @for (s of invoiceStatuses; track s) {
-          <option [value]="s">{{ formatStatus(s) }}</option>
+          <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
         }
       </select>
       <label class="date-filter">
@@ -182,7 +182,7 @@
               <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                  formatStatus(inv.status)
+                  (inv.status | enumLabel: 'invoiceStatus') || '—'
                 }}</span>
               </td>
               <td class="actions-cell">
@@ -315,7 +315,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                formatStatus(inv.status)
+                (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -404,7 +404,7 @@
             <label for="bill-status">{{ 'COMMON.STATUS' | translate }} *</label>
             <select id="bill-status" [(ngModel)]="form.status" required>
               @for (s of invoiceStatuses; track s) {
-                <option [value]="s">{{ formatStatus(s) }}</option>
+                <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
               }
             </select>
           </div>

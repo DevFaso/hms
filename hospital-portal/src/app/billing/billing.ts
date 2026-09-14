@@ -14,13 +14,14 @@ import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { currentLocale } from '../shared/i18n/app-locale';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
@@ -437,10 +438,6 @@ export class BillingComponent implements OnInit {
       default:
         return 'status-badge';
     }
-  }
-
-  formatStatus(status: string): string {
-    return status ? status.replace(/_/g, ' ') : '—';
   }
 
   formatCurrency(amount: number): string {
