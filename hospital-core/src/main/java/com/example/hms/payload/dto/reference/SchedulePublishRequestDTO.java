@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
 public class SchedulePublishRequestDTO {
 
     @Schema(description = "Timestamp when the catalog should be published", example = "2025-10-06T15:30:00")
-    @NotNull(message = "publishAt is required")
-    @FutureOrPresent(message = "publishAt must be in the future or present")
+    @NotNull(message = "{schedulePublish.publishAt.required}")
+    @FutureOrPresent(message = "{schedulePublish.publishAt.future}")
     private LocalDateTime publishAt;
 
     @Schema(description = "Optional notes for the publish action")
-    @Size(max = 2000, message = "Notes must be 2000 characters or less")
+    @Size(max = 2000, message = "{schedulePublish.notes.size}")
     private String notes;
 }

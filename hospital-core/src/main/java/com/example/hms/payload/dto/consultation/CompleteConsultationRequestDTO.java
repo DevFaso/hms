@@ -13,14 +13,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CompleteConsultationRequestDTO {
 
-    @NotBlank(message = "Recommendations are required to complete a consultation")
-    @Size(max = 2000, message = "Recommendations must not exceed 2000 characters")
+    @NotBlank(message = "{consultation.recommendations.required}")
+    @Size(max = 2000, message = "{consultation.recommendations.size}")
     private String recommendations;
 
     private String consultantNote;
 
     private Boolean followUpRequired;
 
-    @Size(max = 1000, message = "Follow-up instructions must not exceed 1000 characters")
+    @Size(max = 1000, message = "{consultation.followUpInstructions.size}")
     private String followUpInstructions;
 }

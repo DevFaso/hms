@@ -24,7 +24,7 @@ import java.time.LocalDate;
 @Builder
 public class RoiRequestCreateDTO {
 
-    @NotNull(message = "requesterType is required")
+    @NotNull(message = "{roiRequest.requesterType.required}")
     private RoiRequesterType requesterType;
 
     /**
@@ -40,11 +40,11 @@ public class RoiRequestCreateDTO {
     @Size(max = 500)
     private String requesterContact;
 
-    @NotBlank(message = "A purpose is required — it is what the decision weighs.")
+    @NotBlank(message = "{roiRequest.purpose.required}")
     @Size(max = 500)
     private String purpose;
 
-    @NotBlank(message = "The requested scope is required (e.g. \"full record\", \"labs 2025\").")
+    @NotBlank(message = "{roiRequest.scopeDescription.required}")
     @Size(max = 500)
     private String scopeDescription;
 

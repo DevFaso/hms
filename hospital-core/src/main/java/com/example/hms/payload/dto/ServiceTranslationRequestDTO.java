@@ -15,7 +15,7 @@ public class ServiceTranslationRequestDTO {
     @Schema(description = "Treatment ID this translation belongs to.", example = "e79ffac1-3402-453e-8b91-84a0be8e2e6f", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID treatmentId;
 
-    @NotNull(message = "Assignment ID is required")
+    @NotNull(message = "{serviceTranslation.assignmentId.required}")
     private UUID assignmentId;
 
     @NotBlank

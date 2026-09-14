@@ -19,16 +19,16 @@ import java.util.UUID;
 @Schema(description = "Create or update an on-call rota entry")
 public class OnCallScheduleRequestDTO {
 
-    @NotNull(message = "Staff member is required.")
+    @NotNull(message = "{onCallSchedule.staffId.required}")
     private UUID staffId;
 
     @Schema(description = "Department covered; optional for a hospital-wide rota")
     private UUID departmentId;
 
-    @NotNull(message = "Start time is required.")
+    @NotNull(message = "{onCallSchedule.startTime.required}")
     private OffsetDateTime startTime;
 
-    @NotNull(message = "End time is required.")
+    @NotNull(message = "{onCallSchedule.endTime.required}")
     private OffsetDateTime endTime;
 
     @Size(max = 500)

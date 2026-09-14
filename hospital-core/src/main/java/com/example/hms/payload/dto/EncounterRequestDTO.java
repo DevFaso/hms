@@ -22,9 +22,9 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 // Provide ONE of each group: (patientId | patientIdentifier), (staffId | staffIdentifier | staffEmail), (hospitalId | hospitalIdentifier)
-@OneOf(fields = {"patientId", "patientIdentifier"}, message = "Provide either patientId or patientIdentifier.")
-@OneOf(fields = {"staffId", "staffIdentifier", "staffEmail"}, message = "Provide staffId, staffIdentifier, or staffEmail.")
-@OneOf(fields = {"hospitalId", "hospitalIdentifier"}, message = "Provide hospitalId or hospitalIdentifier (receptionists will be scoped by JWT).")
+@OneOf(fields = {"patientId", "patientIdentifier"}, message = "{encounter.patient.required}")
+@OneOf(fields = {"staffId", "staffIdentifier", "staffEmail"}, message = "{encounter.staff.required}")
+@OneOf(fields = {"hospitalId", "hospitalIdentifier"}, message = "{encounter.hospital.required}")
 
 public class EncounterRequestDTO {
 
@@ -53,11 +53,11 @@ public class EncounterRequestDTO {
     private EncounterType encounterType;
 
     /** Optional: defaults to now() in controller/service if null */
-    @PastOrPresent(message = "Encounter date cannot be in the future")
+    @PastOrPresent(message = "{encounter.encounterDate.past}")
     private LocalDateTime encounterDate;
 
     /** Optional notes */
-    @Size(max = 2000, message = "Notes must be at most 2000 characters")
+    @Size(max = 2000, message = "{encounter.notes.size}")
     private String notes;
 
     /** Department is usually required for check-in/queueing */

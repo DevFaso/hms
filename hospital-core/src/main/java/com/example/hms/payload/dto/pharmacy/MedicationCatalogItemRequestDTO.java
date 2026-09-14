@@ -20,14 +20,14 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class MedicationCatalogItemRequestDTO {
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotBlank(message = "Code is required")
+    @NotBlank(message = "{medicationCatalogItem.code.required}")
     @Size(max = 30)
     private String code;
 
-    @NotBlank(message = "Medication name (French) is required")
+    @NotBlank(message = "{medicationCatalogItem.nameFr.required}")
     @Size(max = 255)
     private String nameFr;
 

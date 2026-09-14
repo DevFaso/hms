@@ -20,13 +20,13 @@ import java.util.Set;
 @Builder
 public class WebhookEndpointRequestDTO {
 
-    @NotBlank(message = "The delivery URL is required.")
+    @NotBlank(message = "{webhookEndpoint.url.required}")
     @Size(max = 500)
     private String url;
 
     @Size(max = 255)
     private String description;
 
-    @NotEmpty(message = "Subscribe the endpoint to at least one event.")
+    @NotEmpty(message = "{webhookEndpoint.events.required}")
     private Set<WebhookEventType> events;
 }

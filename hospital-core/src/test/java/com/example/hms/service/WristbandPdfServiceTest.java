@@ -13,24 +13,38 @@ import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +62,7 @@ class WristbandPdfServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private StockLotRepository stockLotRepository;
+    @Mock private MessageSource messageSource;
 
     @InjectMocks private WristbandPdfService service;
 
@@ -75,14 +90,66 @@ class WristbandPdfServiceTest {
         patient.setHospitalRegistrations(Set.of(registration));
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        // The bundle echoes its key and arguments, as the other service tests mock it; what is
+        // pinned is that every word on a label goes through it, and in which locale.
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenAnswer(inv -> {
+            String key = inv.getArgument(0);
+            Object[] args = inv.getArgument(1);
+            return args == null || args.length == 0 ? key
+                : key + " " + Arrays.stream(args).map(String::valueOf).collect(Collectors.joining(" "));
+        });
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+    }
+
+    @AfterEach
+    void clearLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
+    private static String textOf(byte[] pdf) throws Exception {
+        try (PDDocument doc = PDDocument.load(pdf)) {
+            return new PDFTextStripper().getText(doc);
+        }
+    }
+
+    private List<Locale> localesAskedOfTheBundle() {
+        ArgumentCaptor<Locale> locales = ArgumentCaptor.forClass(Locale.class);
+        verify(messageSource, atLeastOnce()).getMessage(anyString(), any(), locales.capture());
+        return locales.getAllValues();
     }
 
     @Test
-    void wristbandIsAPdf() {
+    void wristbandIsAPdfLabelledThroughTheBundleInTheRequestLocale() throws Exception {
         byte[] pdf = service.generateWristbandPdf(patientId, hospitalId);
 
         assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
         assertThat(pdf.length).isGreaterThan(500);
+        assertThat(textOf(pdf))
+            .contains("Awa Kaboré", "pdf.wristband.dob 1 mai 1990", "pdf.wristband.mrn OUA-1234",
+                "pdf.wristband.id " + patientId)
+            .doesNotContain("DOB:", "1990-05-01");
+        assertThat(localesAskedOfTheBundle()).containsOnly(Locale.FRENCH);
+    }
+
+    @Test
+    void wristbandDatesFollowTheRequestLocale() throws Exception {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+
+        String text = textOf(service.generateWristbandPdf(patientId, hospitalId));
+
+        assertThat(text).contains("pdf.wristband.dob May 1, 1990");
+        assertThat(localesAskedOfTheBundle()).containsOnly(Locale.ENGLISH);
+    }
+
+    @Test
+    void labelsFallBackToFrenchOutsideARequest() {
+        // No locale context at all: the product's first language, not the JVM default.
+        LocaleContextHolder.resetLocaleContext();
+
+        service.generateWristbandPdf(patientId, hospitalId);
+
+        assertThat(localesAskedOfTheBundle()).containsOnly(Locale.FRENCH);
     }
 
     @Test
@@ -109,7 +176,7 @@ class WristbandPdfServiceTest {
     }
 
     @Test
-    void specimenLabelIsAPdfAndUsesTheStoredBarcodeValue() {
+    void specimenLabelIsAPdfAndUsesTheStoredBarcodeValue() throws Exception {
         LabOrder order = LabOrder.builder().hospital(hospital).patient(patient).build();
         order.setId(UUID.randomUUID());
         LabSpecimen specimen = LabSpecimen.builder()
@@ -117,6 +184,7 @@ class WristbandPdfServiceTest {
             .accessionNumber("ACC-20260822-00001")
             .barcodeValue("LAB-ACC-20260822-00001")
             .specimenType("Blood")
+            .collectedAt(LocalDateTime.of(2026, 8, 22, 10, 15))
             .build();
         specimen.setId(UUID.randomUUID());
         when(specimenRepository.findById(specimen.getId())).thenReturn(Optional.of(specimen));
@@ -124,6 +192,7 @@ class WristbandPdfServiceTest {
         byte[] pdf = service.generateSpecimenLabelPdf(specimen.getId(), hospitalId);
 
         assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        assertThat(textOf(pdf)).contains("ACC-20260822-00001", "Awa Kaboré", "Blood  22 août 2026 10:15");
     }
 
     @Test
@@ -168,13 +237,18 @@ class WristbandPdfServiceTest {
     }
 
     @Test
-    void stockLotLabelIsAPdf() {
+    void stockLotLabelIsAPdf() throws Exception {
         StockLot lot = stockLot(hospital, "LOT-4f2a91c07b3e");
         when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
 
         byte[] pdf = service.generateStockLotLabelPdf(lot.getId(), hospitalId);
 
         assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        assertThat(textOf(pdf))
+            .contains("Amoxicillin", "500mg  pdf.stocklot.lot AMX-2291", "pdf.stocklot.expiry 31 mars 2027",
+                "LOT-4f2a91c07b3e")
+            .doesNotContain("EXP:", "2027-03-31");
+        assertThat(localesAskedOfTheBundle()).containsOnly(Locale.FRENCH);
     }
 
     @Test

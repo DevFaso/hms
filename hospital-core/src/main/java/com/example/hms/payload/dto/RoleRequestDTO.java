@@ -23,12 +23,12 @@ public class RoleRequestDTO {
 
     private UUID id;
 
-    @NotBlank(message = "Role name cannot be blank")
+    @NotBlank(message = "{role.name.blank}")
     @Size(min = 2, max = 50)
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Name of the role, e.g. HOSPITAL_ADMIN")
     private String name;
 
-    @NotBlank(message = "Role authority cannot be blank")
+    @NotBlank(message = "{role.code.blank}")
     @Size(min = 2, max = 50)
     @Schema(description = "Authority code for the role, typically ROLE_*", example = "ROLE_OPERATIONS_ADMIN")
     private String code;

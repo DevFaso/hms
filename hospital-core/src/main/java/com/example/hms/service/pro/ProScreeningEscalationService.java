@@ -24,6 +24,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import java.util.Locale;
 
 /**
  * The "somebody must look at this" loop for a screening (Tier 2 item 47).
@@ -70,6 +73,7 @@ public class ProScreeningEscalationService {
     private final PanelAssignmentRepository panelAssignmentRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
+    private final MessageSource messageSource;
 
     @Value("${hms.pro.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
@@ -244,19 +248,27 @@ public class ProScreeningEscalationService {
      * No answers, no score, no item text in the message: a notification
      * row and an SMS are both plaintext. The recipient opens the chart.
      */
+    /**
+     * Read by the recorder, the panel owners or the fallback role — clinical
+     * staff, never the caller (and the sweep has no request locale) — so the
+     * body is rendered in the staff locale.
+     */
     private String buildMessage(ProResponse response, boolean critical, boolean escalation) {
-        String instrument = response.getInstrument() != null ? response.getInstrument().getCode() : "screening";
+        Locale locale = NotificationLocales.STAFF;
+        String instrument = response.getInstrument() != null
+            ? response.getInstrument().getCode()
+            : messageSource.getMessage("pro.screening.instrumentFallback", null, locale);
         String patientName = response.getPatient() != null && response.getPatient().getFullName() != null
-            ? response.getPatient().getFullName() : "patient";
-        String prefix;
+            ? response.getPatient().getFullName()
+            : messageSource.getMessage("patient.fallback.generic", null, locale);
+        String key;
         if (escalation) {
-            prefix = "ESCALATION - unacknowledged " + instrument + " safety response for ";
+            key = "pro.screening.escalation";
         } else if (critical) {
-            prefix = instrument + " safety item answered positively for ";
+            key = "pro.screening.critical.notification";
         } else {
-            prefix = instrument + " screen positive for ";
+            key = "pro.screening.positive.notification";
         }
-        String action = critical ? ". Review and acknowledge in HMS." : ". Follow-up is due.";
-        return prefix + patientName + action;
+        return messageSource.getMessage(key, new Object[]{instrument, patientName}, locale);
     }
 }

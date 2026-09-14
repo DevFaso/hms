@@ -22,7 +22,7 @@ import java.util.UUID;
 @Builder
 public class FollowUpAppointmentDTO {
 
-    @NotBlank(message = "Appointment type is required")
+    @NotBlank(message = "{followUpAppointment.appointmentType.required}")
     @Size(max = 100)
     private String appointmentType; // POST_OP_CHECK, WOUND_CHECK, LAB_RECHECK, SPECIALTY_CONSULT
 

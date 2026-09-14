@@ -23,28 +23,28 @@ import java.util.UUID;
 @Builder
 public class TreatmentRequestDTO {
 
-    @Null(message = "ID must not be provided for creation")
+    @Null(message = "{treatment.id.null}")
     private UUID id;
 
-    @NotNull(message = "Department ID is required")
+    @NotNull(message = "{treatment.departmentId.required}")
     private UUID departmentId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotBlank(message = "Name is required")
-    @Size(max = 255, message = "Name must be less than 255 characters")
+    @NotBlank(message = "{treatment.name.required}")
+    @Size(max = 255, message = "{treatment.name.size}")
     private String name;
 
-    @Size(max = 1000, message = "Description must be less than 1000 characters")
+    @Size(max = 1000, message = "{treatment.description.size}")
     private String description;
 
-    @NotNull(message = "Price is required")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
-    @Digits(integer = 10, fraction = 2, message = "Price must have up to 10 digits before and 2 after decimal")
+    @NotNull(message = "{treatment.price.required}")
+    @DecimalMin(value = "0.0", inclusive = false, message = "{treatment.price.min}")
+    @Digits(integer = 10, fraction = 2, message = "{treatment.price.digits}")
     private BigDecimal price;
 
-    @PositiveOrZero(message = "Duration must be positive or zero")
+    @PositiveOrZero(message = "{treatment.durationMinutes.positive}")
     private Integer durationMinutes;
 
     @Builder.Default

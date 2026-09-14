@@ -36,6 +36,9 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class AnnouncementServiceImplTest {
@@ -51,6 +54,8 @@ class AnnouncementServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private AnnouncementServiceImpl service;

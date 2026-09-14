@@ -27,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.example.hms.i18n.TestMessageSources;
 
 /**
  * The nightly licence sweep (Tier 2 item 40).
@@ -53,7 +54,8 @@ class LicenseExpirySweepServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(
             TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new LicenseExpirySweepService(staffRepository, notificationService, clock);
+        service = new LicenseExpirySweepService(staffRepository, notificationService, clock,
+            TestMessageSources.bundles());
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -136,7 +138,7 @@ class LicenseExpirySweepServiceTest {
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService, times(2))
             .createNotification(message.capture(), anyString(), anyString());
-        assertThat(message.getValue()).contains("expired on");
+        assertThat(message.getValue()).contains("a expiré le");
         assertThat(message.getValue()).doesNotContain("-3");
     }
 

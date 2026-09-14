@@ -25,35 +25,35 @@ public class LabOrderRequestDTO {
 
     private UUID id;
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{labOrder.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     private UUID encounterId;
 
-    @NotBlank(message = "Test name is required")
+    @NotBlank(message = "{labOrder.testName.required}")
     private String testName;
 
     private String testCode;
 
-    @NotBlank(message = "Status is required")
+    @NotBlank(message = "{labOrder.status.required}")
     private String status;
 
     private String priority;
 
-    @NotBlank(message = "Clinical indication is required")
-    @Size(max = 2048, message = "Clinical indication must be at most 2048 characters")
+    @NotBlank(message = "{labOrder.clinicalIndication.required}")
+    @Size(max = 2048, message = "{labOrder.clinicalIndication.size}")
     private String clinicalIndication;
 
-    @NotBlank(message = "Medical necessity narrative is required")
-    @Size(max = 2048, message = "Medical necessity note must be at most 2048 characters")
+    @NotBlank(message = "{labOrder.medicalNecessityNote.required}")
+    @Size(max = 2048, message = "{labOrder.medicalNecessityNote.size}")
     private String medicalNecessityNote;
 
     private String notes;
 
-    @NotBlank(message = "A primary ICD-10 diagnosis code is required")
+    @NotBlank(message = "{labOrder.primaryDiagnosisCode.required}")
     @Schema(description = "Primary ICD-10 diagnosis code supporting medical necessity")
     private String primaryDiagnosisCode;
 
@@ -62,7 +62,7 @@ public class LabOrderRequestDTO {
     private List<String> additionalDiagnosisCodes = new ArrayList<>();
 
     @Schema(description = "Channel used to document or transmit the lab order (ELECTRONIC, PORTAL, PHONE, FAX, EMAIL, WRITTEN, WALK_IN, OTHER)")
-    @NotBlank(message = "Order channel is required")
+    @NotBlank(message = "{labOrder.orderChannel.required}")
     private String orderChannel;
 
     @Schema(description = "Free-text descriptor when orderChannel is OTHER")
@@ -76,11 +76,11 @@ public class LabOrderRequestDTO {
     private String documentationReference;
 
     @Schema(description = "Ordering provider NPI override if it differs from the staff profile")
-    @Pattern(regexp = "\\d{10}", message = "NPI must be a 10-digit numeric identifier")
+    @Pattern(regexp = "\\d{10}", message = "{labOrder.orderingProviderNpi.pattern}")
     private String orderingProviderNpi;
 
     @Schema(description = "Electronic signature attestation payload from the ordering provider")
-    @NotBlank(message = "An electronic signature attestation is required")
+    @NotBlank(message = "{labOrder.providerSignature.required}")
     private String providerSignature;
 
     @Schema(description = "Timestamp of the provider's electronic signature. Defaults to now if absent.")
@@ -104,12 +104,12 @@ public class LabOrderRequestDTO {
 
     private List<String> testResults;
 
-    @NotNull(message = "Ordering staff ID is required")
+    @NotNull(message = "{labOrder.orderingStaffId.required}")
     private UUID orderingStaffId;
 
-    @NotNull(message = "Lab test definition ID is required")
+    @NotNull(message = "{labOrder.labTestDefinitionId.required}")
     private UUID labTestDefinitionId;
 
-    @NotNull(message = "Assignment ID is required")
+    @NotNull(message = "{labOrder.assignmentId.required}")
     private UUID assignmentId;
 }

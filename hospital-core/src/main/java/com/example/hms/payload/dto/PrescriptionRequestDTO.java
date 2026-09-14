@@ -19,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@OneOf(fields = {"patientId", "patientIdentifier"}, message = "Provide patientId or patientIdentifier.")
+@OneOf(fields = {"patientId", "patientIdentifier"}, message = "{prescription.patientId.required}")
 public class PrescriptionRequestDTO {
 
     private UUID id; // ignored on create

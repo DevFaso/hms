@@ -14,11 +14,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PatientPrimaryCareRequestDTO {
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
-    @NotNull(message = "Assignment ID is required")
+    @NotNull(message = "{patientPrimaryCare.assignmentId.required}")
     private UUID assignmentId;
-    @NotNull(message = "Start date is required")
+    @NotNull(message = "{patientPrimaryCare.startDate.required}")
     private LocalDate startDate;
     private LocalDate endDate;
     private String notes;

@@ -55,6 +55,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
+import java.util.Locale;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S100")
@@ -71,8 +78,22 @@ class ResultReviewServiceImplTest {
     @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
 
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
     @InjectMocks
     private ResultReviewServiceImpl service;
+
+    // Inbox labels follow the request locale; pin English so the literal
+    // assertions below are independent of the JVM default.
+    @BeforeEach
+    void pinLocale() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+    }
+
+    @AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
 
     // ========== Helpers ==========
 
@@ -180,7 +201,7 @@ class ResultReviewServiceImplTest {
         List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
 
         assertEquals("NORMAL", result.get(0).getAbnormalFlag());
-        assertEquals("Lab Test", result.get(0).getTestName()); // fallback when testDef is null
+        assertEquals("Lab test", result.get(0).getTestName()); // fallback when testDef is null
     }
 
     @Test

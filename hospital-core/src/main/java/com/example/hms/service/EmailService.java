@@ -8,6 +8,18 @@ import java.util.Locale;
 public interface EmailService {
 
     /**
+     * Language of a mail whose recipient has no recorded language.
+     *
+     * <p>A mail is read by its recipient, never by the registrar or the
+     * browser that triggered it, so the request locale is never the answer.
+     * Patients state a language on the medical-history tab and the
+     * appointment mails receive it through {@code PatientLocaleResolver};
+     * staff and account holders have no such field yet, so their mails render
+     * in the product's language. French-first product, Burkina Faso.
+     */
+    Locale DEFAULT_RECIPIENT_LOCALE = Locale.FRENCH;
+
+    /**
      * True when this deployment can actually hand mail to an SMTP server.
      * Mirrors {@link SmsService#deliversRealSms()}: callers use it to tell
      * "the send failed" apart from "there is no transport to send with",
@@ -16,6 +28,12 @@ public interface EmailService {
     default boolean deliversRealEmail() {
         return true;
     }
+
+    // ---------------------------------------------------------------------
+    // Appointment mails — the recipient is the patient, so the caller passes
+    // the patient's own language. The overloads without a locale exist for
+    // callers that cannot know it and render in DEFAULT_RECIPIENT_LOCALE.
+    // ---------------------------------------------------------------------
 
     void sendAppointmentRescheduledEmail(
         String to,
@@ -27,8 +45,25 @@ public interface EmailService {
         String hospitalEmail,
         String hospitalPhone,
         String rescheduleLink,
-        String cancelLink
+        String cancelLink,
+        Locale locale
     );
+
+    default void sendAppointmentRescheduledEmail(
+        String to,
+        String patientName,
+        String hospitalName,
+        String staffName,
+        String newAppointmentDate,
+        String newAppointmentTime,
+        String hospitalEmail,
+        String hospitalPhone,
+        String rescheduleLink,
+        String cancelLink
+    ) {
+        sendAppointmentRescheduledEmail(to, patientName, hospitalName, staffName, newAppointmentDate,
+            newAppointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink, DEFAULT_RECIPIENT_LOCALE);
+    }
 
     void sendAppointmentCancelledEmail(
         String to,
@@ -38,8 +73,23 @@ public interface EmailService {
         String appointmentDate,
         String appointmentTime,
         String hospitalEmail,
-        String hospitalPhone
+        String hospitalPhone,
+        Locale locale
     );
+
+    default void sendAppointmentCancelledEmail(
+        String to,
+        String patientName,
+        String hospitalName,
+        String staffName,
+        String appointmentDate,
+        String appointmentTime,
+        String hospitalEmail,
+        String hospitalPhone
+    ) {
+        sendAppointmentCancelledEmail(to, patientName, hospitalName, staffName, appointmentDate,
+            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
+    }
 
     void sendAppointmentCompletedEmail(
         String to,
@@ -49,8 +99,23 @@ public interface EmailService {
         String appointmentDate,
         String appointmentTime,
         String hospitalEmail,
-        String hospitalPhone
+        String hospitalPhone,
+        Locale locale
     );
+
+    default void sendAppointmentCompletedEmail(
+        String to,
+        String patientName,
+        String hospitalName,
+        String staffName,
+        String appointmentDate,
+        String appointmentTime,
+        String hospitalEmail,
+        String hospitalPhone
+    ) {
+        sendAppointmentCompletedEmail(to, patientName, hospitalName, staffName, appointmentDate,
+            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
+    }
 
     void sendAppointmentNoShowEmail(
         String to,
@@ -60,8 +125,23 @@ public interface EmailService {
         String appointmentDate,
         String appointmentTime,
         String hospitalEmail,
-        String hospitalPhone
+        String hospitalPhone,
+        Locale locale
     );
+
+    default void sendAppointmentNoShowEmail(
+        String to,
+        String patientName,
+        String hospitalName,
+        String staffName,
+        String appointmentDate,
+        String appointmentTime,
+        String hospitalEmail,
+        String hospitalPhone
+    ) {
+        sendAppointmentNoShowEmail(to, patientName, hospitalName, staffName, appointmentDate,
+            appointmentTime, hospitalEmail, hospitalPhone, DEFAULT_RECIPIENT_LOCALE);
+    }
 
     void sendAppointmentConfirmationEmail(
         String to,
@@ -73,8 +153,30 @@ public interface EmailService {
         String hospitalEmail,
         String hospitalPhone,
         String rescheduleLink,
-        String cancelLink
+        String cancelLink,
+        Locale locale
     );
+
+    default void sendAppointmentConfirmationEmail(
+        String to,
+        String patientName,
+        String hospitalName,
+        String staffName,
+        String appointmentDate,
+        String appointmentTime,
+        String hospitalEmail,
+        String hospitalPhone,
+        String rescheduleLink,
+        String cancelLink
+    ) {
+        sendAppointmentConfirmationEmail(to, patientName, hospitalName, staffName, appointmentDate,
+            appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink, DEFAULT_RECIPIENT_LOCALE);
+    }
+
+    // ---------------------------------------------------------------------
+    // Account and staff mails — the recipient is a User, which records no
+    // language yet; these render in DEFAULT_RECIPIENT_LOCALE.
+    // ---------------------------------------------------------------------
 
     void sendRoleAssignmentConfirmationEmail(
         String to,
@@ -108,6 +210,12 @@ public interface EmailService {
 
     void sendPasswordResetConfirmationEmail(String to, String displayName);
 
+    /**
+     * @param locale the language the requester filled the reminder form in.
+     *               Here the requester is the recipient (the form asks for
+     *               the caller's own username), so this is the one mail
+     *               where the request language is the recipient's.
+     */
     void sendUsernameReminderEmail(String toEmail, String username, Locale locale);
 
     void sendPasswordRotationReminderEmail(String to, String displayName, long daysRemaining, LocalDate dueOn);
@@ -162,4 +270,3 @@ public interface EmailService {
     void sendRecoveryContactVerificationEmail(String to, String verificationCode);
 
 }
-

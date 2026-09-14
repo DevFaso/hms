@@ -9,6 +9,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -16,15 +17,23 @@ import org.springframework.test.util.ReflectionTestUtils;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.Session;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -36,6 +45,9 @@ class EmailServiceImplTest {
     @Mock
     private JavaMailSender mailSender;
 
+    @Mock
+    private MessageSource messageSource;
+
     @InjectMocks
     private EmailServiceImpl emailService;
 
@@ -44,6 +56,19 @@ class EmailServiceImplTest {
     @BeforeEach
     void injectFrontendBaseUrl() {
         ReflectionTestUtils.setField(emailService, "frontendBaseUrl", FRONTEND_BASE_URL);
+        // Every sentence comes from the bundle. The mock renders a key as
+        // "key" or "key[arg|arg]" so a test can assert both that the right key
+        // was asked for and that the dynamic values reached it — the real
+        // wording is the translators', not this test's.
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenAnswer(inv -> renderKey(inv.getArgument(0), inv.getArgument(1)));
+    }
+
+    private static String renderKey(String key, Object[] args) {
+        if (args == null || args.length == 0) {
+            return key;
+        }
+        return key + "[" + Arrays.stream(args).map(String::valueOf).collect(Collectors.joining("|")) + "]";
     }
 
     /**
@@ -140,6 +165,99 @@ class EmailServiceImplTest {
     }
 
     // =========================================================================
+    // Appointment mails — rendered in the PATIENT's language
+    // =========================================================================
+
+    @Nested
+    @DisplayName("appointment mails")
+    class AppointmentMails {
+
+        private static final String RESCHEDULE = "https://dev.e-keneya.com/appointments/reschedule/A-1";
+        private static final String CANCEL = "https://dev.e-keneya.com/appointments/cancel/A-1";
+
+        @Test
+        @DisplayName("confirmation resolves every sentence in the locale the caller passed")
+        void confirmationUsesTheRecipientLocale() {
+            stubMailSender();
+            emailService.sendAppointmentConfirmationEmail(
+                "awa@example.com", "Awa Traore", "CHU Yalgado", "Ouedraogo",
+                "2026-09-05", "09:00 - 09:30", "contact@chu.bf", "+226 25 00 00 00",
+                RESCHEDULE, CANCEL, Locale.ENGLISH);
+
+            verify(messageSource).getMessage(eq("email.appointment.confirmed.subject"), any(), eq(Locale.ENGLISH));
+            verify(messageSource, never()).getMessage(anyString(), any(), eq(Locale.FRENCH));
+
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.appointment.confirmed.subject");
+            assertThat(html).contains("email.common.greeting.dear[Awa Traore]");
+            assertThat(html).contains("email.appointment.confirmed.body.intro[CHU Yalgado|Ouedraogo]");
+            assertThat(html).contains("email.appointment.label.date");
+            assertThat(html).contains("2026-09-05");
+            assertThat(html).contains("09:00 - 09:30");
+            assertThat(html).contains("href=\"" + RESCHEDULE + "\"");
+            assertThat(html).contains("href=\"" + CANCEL + "\"");
+            assertThat(html).contains("email.appointment.contact[contact@chu.bf|+226 25 00 00 00]");
+        }
+
+        @Test
+        @DisplayName("the overload without a locale renders in the product default, never the request's")
+        void legacyOverloadFallsBackToTheProductDefault() {
+            stubMailSender();
+            emailService.sendAppointmentCancelledEmail(
+                "awa@example.com", "Awa Traore", "CHU Yalgado", "Ouedraogo",
+                "2026-09-05", "09:00 - 09:30", "contact@chu.bf", "+226 25 00 00 00");
+
+            verify(messageSource).getMessage(
+                eq("email.appointment.cancelled.subject"), any(), eq(EmailService.DEFAULT_RECIPIENT_LOCALE));
+            assertThat(EmailService.DEFAULT_RECIPIENT_LOCALE).isEqualTo(Locale.FRENCH);
+        }
+
+        @Test
+        @DisplayName("a null locale means the product default, not an NPE")
+        void nullLocaleFallsBackToTheProductDefault() {
+            stubMailSender();
+            emailService.sendAppointmentNoShowEmail(
+                "awa@example.com", "Awa Traore", "CHU Yalgado", "Ouedraogo",
+                "2026-09-05", "09:00 - 09:30", "contact@chu.bf", "+226 25 00 00 00", null);
+
+            verify(messageSource).getMessage(
+                eq("email.appointment.noshow.subject"), any(), eq(EmailService.DEFAULT_RECIPIENT_LOCALE));
+            assertThat(renderedHtml()).contains("email.appointment.noshow.contact[");
+        }
+
+        @Test
+        @DisplayName("rescheduled mail names the NEW date and time and the reschedule-again prose")
+        void rescheduledUsesTheNewLabels() {
+            stubMailSender();
+            emailService.sendAppointmentRescheduledEmail(
+                "awa@example.com", "Awa Traore", "CHU Yalgado", "Ouedraogo",
+                "2026-09-06", "10:00 - 10:30", "contact@chu.bf", "+226 25 00 00 00",
+                RESCHEDULE, CANCEL, Locale.of("es"));
+
+            String html = renderedHtml();
+            assertThat(html).contains("email.appointment.label.newDate");
+            assertThat(html).contains("email.appointment.label.newTime");
+            assertThat(html).contains("email.appointment.rescheduled.links.intro");
+            verify(messageSource).getMessage(eq("email.appointment.rescheduled.subject"), any(), eq(Locale.of("es")));
+        }
+
+        @Test
+        @DisplayName("user-supplied values are HTML-escaped before they reach the body")
+        void escapesUserSuppliedValues() {
+            stubMailSender();
+            emailService.sendAppointmentCompletedEmail(
+                "awa@example.com", "<script>alert(1)</script>", "CHU <b>Yalgado</b>", "O'Neil",
+                "2026-09-05", "09:00 - 09:30", "contact@chu.bf", "+226 25 00 00 00", Locale.FRENCH);
+
+            String html = renderedHtml();
+            assertThat(html).doesNotContain("<script>");
+            assertThat(html).contains("&lt;script&gt;alert(1)&lt;/script&gt;");
+            assertThat(html).contains("CHU &lt;b&gt;Yalgado&lt;/b&gt;");
+            assertThat(html).contains("O&#x27;Neil");
+        }
+    }
+
+    // =========================================================================
     // sendPasswordResetEmail
     // =========================================================================
 
@@ -156,14 +274,24 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("delegates to mailSender with a non-default frontendBaseUrl in the body")
-        void sendsEmailWithCustomBaseUrl() {
+        @DisplayName("renders in the product default locale and carries the reset link, the sign-in link and the 2-hour notice")
+        void rendersFromTheBundle() {
             ReflectionTestUtils.setField(emailService, "frontendBaseUrl", "https://staging.hms.example.com");
             stubMailSender();
-            emailService.sendPasswordResetEmail(
-                "user@example.com",
-                "https://staging.hms.example.com/reset-password?token=xyz");
-            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            String resetLink = "https://staging.hms.example.com/reset-password?token=xyz";
+            emailService.sendPasswordResetEmail("user@example.com", resetLink);
+
+            verify(messageSource).getMessage(eq("email.password.reset.subject"), any(), eq(Locale.FRENCH));
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.password.reset.subject");
+            assertThat(html).contains("href=\"" + resetLink + "\"");
+            assertThat(html).contains("email.password.reset.button");
+            // The "did you ask for this?" sentence carries the sign-in anchor as its argument.
+            assertThat(html).contains("email.password.reset.body.unexpected.action[<a href=\"https://staging.hms.example.com/login\"");
+            assertThat(html).contains("email.password.reset.body.unexpected.link");
+            assertThat(html).contains("email.password.reset.body.expiry");
+            assertThat(html).contains("email.password.reset.body.once");
+            assertThat(html).contains("email.common.footer.copyright[" + java.time.Year.now().getValue() + "]");
         }
 
         @Test
@@ -192,27 +320,42 @@ class EmailServiceImplTest {
     class SendPasswordResetConfirmationEmail {
 
         @Test
-        @DisplayName("delegates to mailSender once for a named recipient")
+        @DisplayName("delegates to mailSender once for a named recipient, greeting them by name")
         void sendsForNamedRecipient() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "John Doe");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            String html = renderedHtml();
+            assertThat(html).contains("email.common.greeting.hi[John Doe]");
+            assertThat(html).contains("email.password.changed.body.intro[");
+            assertThat(html).contains("email.password.changed.body.unexpected[<strong><a href=\"" + FRONTEND_BASE_URL + "/login\"");
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is blank (falls back to 'there')")
+        @DisplayName("a staff mail renders in the product default: the recipient has no recorded language")
+        void staffMailRendersInTheProductDefault() {
+            stubMailSender();
+            emailService.sendPasswordResetConfirmationEmail("user@example.com", "John Doe");
+            verify(messageSource).getMessage(eq("email.password.changed.subject"), any(), eq(Locale.FRENCH));
+            verify(messageSource, never()).getMessage(anyString(), any(), eq(Locale.ENGLISH));
+        }
+
+        @Test
+        @DisplayName("falls back to the anonymous greeting when displayName is blank")
         void sendsWithBlankDisplayName() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is null (falls back to 'there')")
+        @DisplayName("falls back to the anonymous greeting when displayName is null")
         void sendsWithNullDisplayName() {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", null);
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
@@ -222,6 +365,9 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendPasswordResetConfirmationEmail("user@example.com", "Alice");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            String html = renderedHtml();
+            assertThat(html).contains("href=\"https://custom.hms.example.com/login\"");
+            assertThat(html).doesNotContain("yourapp.com");
         }
 
         @Test
@@ -277,6 +423,69 @@ class EmailServiceImplTest {
     }
 
     // =========================================================================
+    // sendRoleAssignmentConfirmationEmail
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendRoleAssignmentConfirmationEmail")
+    class SendRoleAssignmentConfirmationEmail {
+
+        @Test
+        @DisplayName("a PATIENT role gets the welcome mail: subject names the hospital, body carries the code and the 48-hour notice")
+        void patientRoleGetsTheWelcomeMail() {
+            stubMailSender();
+            emailService.sendRoleAssignmentConfirmationEmail(
+                "awa@example.com", "Awa Traore", "ROLE_PATIENT", "CHU Yalgado",
+                "123456", "AS-1", "https://dev.e-keneya.com/onboarding/role-welcome?assignment=AS-1",
+                "atraore", "Temp@1234");
+
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.patient.welcome.subject[CHU Yalgado]");
+            assertThat(html).contains("email.patient.welcome.heading[CHU Yalgado]");
+            assertThat(html).contains("email.common.greeting.hi[Awa Traore]");
+            assertThat(html).contains("123456");
+            assertThat(html).contains("email.patient.welcome.button");
+            assertThat(html).contains("email.patient.welcome.body.expiry");
+            assertThat(html).contains("email.role.assignment.credentials.username");
+            assertThat(html).contains("atraore");
+            assertThat(html).doesNotContain("email.role.assignment.subject");
+            verify(messageSource).getMessage(eq("email.patient.welcome.subject"), any(), eq(Locale.FRENCH));
+        }
+
+        @Test
+        @DisplayName("a staff role gets the assignment mail with the assignment reference")
+        void staffRoleGetsTheAssignmentMail() {
+            stubMailSender();
+            emailService.sendRoleAssignmentConfirmationEmail(
+                "nurse@example.com", "Awa Traore", "Nurse", "CHU Yalgado",
+                "654321", "AS-2", null, null, null);
+
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.role.assignment.subject");
+            assertThat(html).contains("email.role.assignment.body.assigned[Nurse|CHU Yalgado]");
+            assertThat(html).contains("email.role.assignment.body.reference[AS-2]");
+            assertThat(html).contains("654321");
+            // No URL, no button; no temp credentials, no credentials box.
+            assertThat(html).doesNotContain("email.role.assignment.button");
+            assertThat(html).doesNotContain("email.role.assignment.credentials.title");
+        }
+
+        @Test
+        @DisplayName("blank role and hospital fall back to bundle sentences, not English literals")
+        void fallbacksComeFromTheBundle() {
+            stubMailSender();
+            emailService.sendRoleAssignmentConfirmationEmail(
+                "nurse@example.com", null, "", null, "111111", "AS-3", null, null, null);
+
+            String html = renderedHtml();
+            assertThat(html).contains("email.role.assignment.body.assigned[email.role.assignment.fallback.role|email.role.assignment.fallback.hospital]");
+            assertThat(html).contains("email.common.greeting.anonymous");
+            assertThat(html).doesNotContain("the assigned role");
+            assertThat(html).doesNotContain("our hospital network");
+        }
+    }
+
+    // =========================================================================
     // sendAdminWelcomeEmail
     // =========================================================================
 
@@ -296,7 +505,7 @@ class EmailServiceImplTest {
         }
 
         @Test
-        @DisplayName("succeeds when hospitalName is null (global / super-admin role)")
+        @DisplayName("succeeds when hospitalName is null (global / super-admin role) and drops the hospital row")
         void sendsWithoutHospital() {
             stubMailSender();
             emailService.sendAdminWelcomeEmail(
@@ -304,6 +513,10 @@ class EmailServiceImplTest {
                 "Temp@1234", "Super Admin", null,
                 "https://portal.example/onboarding/role-welcome?assignment=A-2");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            String html = renderedHtml();
+            assertThat(html).contains("email.admin.welcome.body.created[Super Admin]");
+            assertThat(html).doesNotContain("email.admin.welcome.body.created.hospital");
+            assertThat(html).doesNotContain("email.admin.welcome.credentials.hospital");
         }
 
         @Test
@@ -314,6 +527,7 @@ class EmailServiceImplTest {
                 "admin@hospital.com", null, "janedoe",
                 "Temp@1234", "Doctor", "City Hospital", null);
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
@@ -327,12 +541,15 @@ class EmailServiceImplTest {
 
             String html = renderedHtml();
             assertThat(html).contains(activationUrl);
-            assertThat(html).contains("Activate My Account");
+            assertThat(html).contains("email.activation.button");
             // The account is inactive at this moment: nothing may promise
             // sign-in as the next step, and the subject must not claim ready.
-            assertThat(html).doesNotContain("You can sign in immediately");
-            assertThat(html).doesNotContain("Sign In to Your Account");
-            assertThat(html).doesNotContain("Your Account Is Ready");
+            assertThat(html).doesNotContain("email.common.signin.button");
+            assertThat(html).startsWith("email.admin.welcome.subject");
+            // The step names the assignment mail by the SAME subject key, so
+            // the two mails agree in whatever language they render in.
+            assertThat(html).contains("email.admin.welcome.body.step[email.role.assignment.subject]");
+            assertThat(html).contains("email.admin.welcome.cta.signin.activated[<a href=\"" + FRONTEND_BASE_URL + "/login\"");
         }
 
         @Test
@@ -344,19 +561,15 @@ class EmailServiceImplTest {
                 "Temp@1234", "Nurse", "City General Hospital", null);
 
             String html = renderedHtml();
-            assertThat(html).contains("confirmation code");
-            assertThat(html).doesNotContain("Sign In to Your Account");
-            assertThat(html).doesNotContain("You can sign in immediately");
+            assertThat(html).contains("email.admin.welcome.cta.code");
+            assertThat(html).doesNotContain("email.common.signin.button");
+            assertThat(html).doesNotContain("email.activation.button");
             // This branch is what a two-role registration gets. A prominent
             // button is only ever offered for the activation screen: pointing
             // one at /login would lead straight to the rejection this mail
             // exists to prevent. The login address stays as secondary text.
             assertThat(html).doesNotContain("display:inline-block");
-            assertThat(html).contains("/login");
-            // Names the code, never a link: a blank profile-completion
-            // template is one of the two ways the URL is null, and in that
-            // configuration the assignment mail carries no link either.
-            assertThat(html).contains("confirmation code in that message");
+            assertThat(html).contains("email.admin.welcome.cta.signin.after[<a href=\"" + FRONTEND_BASE_URL + "/login\"");
         }
 
         @Test
@@ -392,22 +605,28 @@ class EmailServiceImplTest {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", "John Doe");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.account.restored.subject");
+            assertThat(html).contains("email.common.greeting.hi[John Doe]");
+            assertThat(html).contains("email.account.restored.body.unexpected");
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is blank (falls back to 'there')")
+        @DisplayName("delegates to mailSender once when displayName is blank (anonymous greeting)")
         void sendsWithBlankDisplayName() {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", "");
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
-        @DisplayName("delegates to mailSender once when displayName is null (falls back to 'there')")
+        @DisplayName("delegates to mailSender once when displayName is null (anonymous greeting)")
         void sendsWithNullDisplayName() {
             stubMailSender();
             emailService.sendAccountRestoredEmail("user@example.com", null);
             verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+            assertThat(renderedHtml()).contains("email.common.greeting.anonymous");
         }
 
         @Test
@@ -426,5 +645,155 @@ class EmailServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
-}
 
+    // =========================================================================
+    // sendRecoveryContactVerificationEmail
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendRecoveryContactVerificationEmail")
+    class SendRecoveryContactVerificationEmail {
+
+        @Test
+        @DisplayName("carries the code and the 15-minute expiry sentence, in the product default locale")
+        void carriesTheCodeAndTheExpiry() {
+            stubMailSender();
+            emailService.sendRecoveryContactVerificationEmail("backup@example.com", "482913");
+
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.recovery.contact.subject");
+            assertThat(html).contains("482913");
+            assertThat(html).contains("email.recovery.contact.body.expiry");
+            assertThat(html).contains("email.common.unexpected.title");
+            verify(messageSource).getMessage(eq("email.recovery.contact.subject"), any(), eq(Locale.FRENCH));
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for null recipient")
+        void rejectsNullRecipient() {
+            assertThatThrownBy(() ->
+                emailService.sendRecoveryContactVerificationEmail(null, "482913"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    // =========================================================================
+    // sendUsernameReminderEmail — the one mail whose request locale IS the recipient's
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendUsernameReminderEmail")
+    class SendUsernameReminderEmail {
+
+        @Test
+        @DisplayName("renders in the locale the requester filled the form in")
+        void usesTheGivenLocale() {
+            stubMailSender();
+            emailService.sendUsernameReminderEmail("user@example.com", "jdoe", Locale.of("es"));
+
+            verify(messageSource).getMessage(eq("email.username.reminder.subject"), any(), eq(Locale.of("es")));
+            String html = renderedHtml();
+            assertThat(html).contains("jdoe");
+            assertThat(html).contains("email.username.reminder.body.signin[<a href=\"" + FRONTEND_BASE_URL + "/login\"");
+        }
+
+        @Test
+        @DisplayName("a null locale renders in the product default")
+        void nullLocaleFallsBack() {
+            stubMailSender();
+            emailService.sendUsernameReminderEmail("user@example.com", "jdoe", null);
+            verify(messageSource).getMessage(eq("email.username.reminder.subject"), any(), eq(Locale.FRENCH));
+        }
+    }
+
+    // =========================================================================
+    // Password rotation — plural handled by key choice, never by an English "s"
+    // =========================================================================
+
+    @Nested
+    @DisplayName("password rotation mails")
+    class PasswordRotationMails {
+
+        @Test
+        @DisplayName("one day left picks the singular sentence")
+        void reminderSingular() {
+            stubMailSender();
+            emailService.sendPasswordRotationReminderEmail("user@example.com", "Jane", 1, LocalDate.of(2026, 9, 6));
+            String html = renderedHtml();
+            assertThat(html).contains("email.password.rotation.reminder.body.remaining.one");
+            assertThat(html).doesNotContain("remaining.many");
+        }
+
+        @Test
+        @DisplayName("several days left picks the plural sentence with the count as text")
+        void reminderPlural() {
+            stubMailSender();
+            emailService.sendPasswordRotationReminderEmail("user@example.com", "Jane", 7, LocalDate.of(2026, 9, 12));
+            String html = renderedHtml();
+            assertThat(html).contains("email.password.rotation.reminder.body.remaining.many[7]");
+            assertThat(html).contains("email.password.rotation.reminder.body.action[<a href=\"" + FRONTEND_BASE_URL + "/login\"");
+            verify(messageSource).getMessage(eq("email.password.rotation.reminder.subject"), any(), eq(Locale.FRENCH));
+        }
+
+        @Test
+        @DisplayName("the enforcement mail states the deadline and how long it has been overdue")
+        void forceChange() {
+            stubMailSender();
+            emailService.sendPasswordRotationForceChangeEmail("user@example.com", "Jane", LocalDate.of(2026, 9, 1), 3);
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.password.rotation.force.subject");
+            assertThat(html).contains("email.password.rotation.force.body.overdue.many[");
+            assertThat(html).contains("|3]");
+            assertThat(html).contains("email.password.rotation.force.body.restricted");
+        }
+
+        @Test
+        @DisplayName("one day overdue picks the singular sentence")
+        void forceChangeSingular() {
+            stubMailSender();
+            emailService.sendPasswordRotationForceChangeEmail("user@example.com", "Jane", LocalDate.of(2026, 9, 1), 1);
+            assertThat(renderedHtml()).contains("email.password.rotation.force.body.overdue.one[");
+        }
+    }
+
+    // =========================================================================
+    // sendActivationEmail
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendActivationEmail")
+    class SendActivationEmail {
+
+        @Test
+        @DisplayName("the short form carries the link twice (button and fallback) and the 24-hour notice")
+        void shortForm() {
+            stubMailSender();
+            String link = "https://dev.e-keneya.com/verify?email=awa%40example.com&token=t-1";
+            emailService.sendActivationEmail("awa@example.com", link);
+
+            String html = renderedHtml();
+            assertThat(html).startsWith("email.activation.subject");
+            // Escaped in the attribute and in the visible fallback: valid HTML, same URL once decoded.
+            assertThat(html).contains("href=\"https://dev.e-keneya.com/verify?email=awa%40example.com&amp;token=t-1\"");
+            assertThat(html).contains("email.activation.button");
+            assertThat(html).contains("email.activation.body.expiry");
+            assertThat(html).doesNotContain("email.common.greeting.hi");
+            assertThat(html).doesNotContain("email.activation.credentials.title");
+        }
+
+        @Test
+        @DisplayName("the long form greets by name and shows the username with the set-a-password hint")
+        void longForm() {
+            stubMailSender();
+            emailService.sendActivationEmail("awa@example.com", "https://dev.e-keneya.com/verify?token=t-2",
+                "Awa Traore", "atraore", "CHU Yalgado");
+
+            String html = renderedHtml();
+            assertThat(html).contains("email.common.greeting.hi[Awa Traore]");
+            assertThat(html).contains("email.activation.credentials.title");
+            assertThat(html).contains("atraore");
+            assertThat(html).contains("email.activation.credentials.password.hint");
+            assertThat(html).contains("CHU Yalgado");
+        }
+    }
+}

@@ -15,6 +15,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
 
 /**
  * Turns the licence-expiry rows nobody reads into notifications somebody
@@ -51,6 +53,7 @@ public class LicenseExpirySweepService {
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
     private final Clock clock;
+    private final MessageSource messageSource;
 
     /**
      * Grade every active practitioner's licence and notify on advances.
@@ -121,12 +124,16 @@ public class LicenseExpirySweepService {
             ? staff.getUser().getUsername()
             : staff.getId().toString();
         LocalDate expiry = staff.getLicenseExpiryDate();
+        // Read by the practitioner and the hospital administrators — a nightly
+        // sweep has no request locale — so the body is in the staff locale.
+        java.util.Locale locale = NotificationLocales.STAFF;
 
         if (stage == LicenseAlertStage.EXPIRED) {
-            return "Practising licence for " + name + " expired on " + expiry + ".";
+            return messageSource.getMessage("licence.expired.notification",
+                new Object[]{name, String.valueOf(expiry)}, locale);
         }
         long days = java.time.temporal.ChronoUnit.DAYS.between(today, expiry);
-        return "Practising licence for " + name + " expires on " + expiry
-            + " (" + days + " day(s)).";
+        return messageSource.getMessage("licence.expiring.notification",
+            new Object[]{name, String.valueOf(expiry), String.valueOf(days)}, locale);
     }
 }

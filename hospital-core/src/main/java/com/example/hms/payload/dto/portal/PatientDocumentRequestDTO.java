@@ -17,7 +17,7 @@ import java.time.LocalDate;
 @Builder
 public class PatientDocumentRequestDTO {
 
-    @NotNull(message = "Document type is required")
+    @NotNull(message = "{patientDocument.documentType.required}")
     private PatientDocumentType documentType;
 
     /** Optional date when the document was originally created/collected. */

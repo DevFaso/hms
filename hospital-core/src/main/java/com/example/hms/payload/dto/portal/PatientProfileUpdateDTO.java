@@ -63,6 +63,6 @@ public class PatientProfileUpdateDTO {
     private String preferredPharmacy;
 
     /** Self-reported free text — optional (Tier 2 item 38). */
-    @Size(max = 100, message = "Ethnicity cannot exceed 100 characters.")
+    @Size(max = 100, message = "{patientProfileUpdate.ethnicity.size}")
     private String ethnicity;
 }

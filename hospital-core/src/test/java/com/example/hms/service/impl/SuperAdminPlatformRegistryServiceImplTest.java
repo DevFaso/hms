@@ -32,6 +32,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
+import java.util.Locale;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.junit.jupiter.api.AfterEach;
 
 @ExtendWith(MockitoExtension.class)
 class SuperAdminPlatformRegistryServiceImplTest {
@@ -49,6 +55,8 @@ class SuperAdminPlatformRegistryServiceImplTest {
     @Mock
     private com.example.hms.service.AuditEventLogService auditEventLogService;
 
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
     @InjectMocks
     private SuperAdminPlatformRegistryServiceImpl service;
 
@@ -56,8 +64,16 @@ class SuperAdminPlatformRegistryServiceImplTest {
     private OrganizationPlatformService pendingLimsService;
     private OrganizationPlatformService managedInventoryService;
 
+    @AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // Dashboard copy follows the request locale; pin English for the
+        // literal assertions below.
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
         Organization organization = Organization.builder()
             .name("Northbridge Health")
             .code("NBH")

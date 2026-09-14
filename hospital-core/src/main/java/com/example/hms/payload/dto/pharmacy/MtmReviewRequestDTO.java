@@ -21,10 +21,10 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class MtmReviewRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{mtmReview.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     @Size(max = 500)

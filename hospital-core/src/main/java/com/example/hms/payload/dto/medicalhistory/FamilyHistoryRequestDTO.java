@@ -20,24 +20,24 @@ import java.util.UUID;
 @Schema(description = "Request to create or update family history")
 public class FamilyHistoryRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{familyHistory.patientId.required}")
     @Schema(description = "Patient ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     @Schema(description = "Hospital ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
     @Schema(description = "Staff member recording this history")
     private UUID recordedByStaffId;
 
-    @NotNull(message = "Recorded date is required")
+    @NotNull(message = "{familyHistory.recordedDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @Schema(description = "Date recorded", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate recordedDate;
 
     // Relationship
-    @NotBlank(message = "Relationship is required")
+    @NotBlank(message = "{familyHistory.relationship.required}")
     @Size(max = 100)
     @Schema(description = "Relationship to patient", requiredMode = Schema.RequiredMode.REQUIRED)
     private String relationship;
@@ -72,7 +72,7 @@ public class FamilyHistoryRequestDTO {
     @Schema(description = "Condition code (ICD-10, SNOMED)")
     private String conditionCode;
 
-    @NotBlank(message = "Condition display is required")
+    @NotBlank(message = "{familyHistory.conditionDisplay.required}")
     @Size(max = 255)
     @Schema(description = "Condition name", requiredMode = Schema.RequiredMode.REQUIRED)
     private String conditionDisplay;

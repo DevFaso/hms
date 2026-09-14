@@ -25,7 +25,7 @@ public class BirthPlanRequestDTO {
 
     private UUID hospitalId;
 
-    @NotNull(message = "Introduction section is required")
+    @NotNull(message = "{birthPlan.introduction.required}")
     private IntroductionDTO introduction;
 
     private DeliveryPreferencesDTO deliveryPreferences;
@@ -38,7 +38,7 @@ public class BirthPlanRequestDTO {
 
     private String additionalWishes;
 
-    @NotNull(message = "Flexibility acknowledgment is required")
+    @NotNull(message = "{birthPlan.flexibilityAcknowledgment.required}")
     private Boolean flexibilityAcknowledgment;
 
     private Boolean discussedWithProvider;
@@ -48,11 +48,11 @@ public class BirthPlanRequestDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class IntroductionDTO {
-        @NotBlank(message = "Patient name is required")
+        @NotBlank(message = "{birthPlan.introduction.patientName.required}")
         @Size(max = 255)
         private String patientName;
 
-        @NotNull(message = "Expected due date is required")
+        @NotNull(message = "{birthPlan.introduction.expectedDueDate.required}")
         private LocalDate expectedDueDate;
 
         @Size(max = 255)

@@ -35,6 +35,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class CriticalValueNotificationServiceTest {
@@ -45,6 +48,8 @@ class CriticalValueNotificationServiceTest {
     @Mock private LabResultMapper labResultMapper;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
     @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks private CriticalValueNotificationService service;
 
@@ -95,7 +100,7 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         verify(notificationService).createNotification(
-            contains("Potassium = 7.1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+            contains("Potassium 7.1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
         assertThat(result.getCriticalNotifiedAt()).isNotNull();
         verify(labResultRepository).save(result);
     }
@@ -202,7 +207,7 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(escalated).isEqualTo(1);
         verify(notificationService).createNotification(
-            contains("ESCALATION"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
+            contains("ESCALADE"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalatedAt()).isNotNull();
         verify(labResultRepository).save(result);
     }

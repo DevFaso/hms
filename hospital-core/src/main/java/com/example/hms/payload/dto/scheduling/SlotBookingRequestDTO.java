@@ -14,7 +14,7 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class SlotBookingRequestDTO {
 
-    @NotNull(message = "A patient is required to book a slot.")
+    @NotNull(message = "{slotBooking.patientId.required}")
     private UUID patientId;
 
     /** Optional; defaults to the slot's visit-type name. */

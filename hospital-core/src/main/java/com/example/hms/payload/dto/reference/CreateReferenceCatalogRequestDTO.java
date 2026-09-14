@@ -9,16 +9,16 @@ import lombok.Data;
 public class CreateReferenceCatalogRequestDTO {
 
     @Schema(description = "Unique catalog code (e.g. department_types)")
-    @NotBlank(message = "Catalog code is required")
-    @Size(max = 120, message = "Catalog code must be 120 characters or less")
+    @NotBlank(message = "{referenceCatalog.code.required}")
+    @Size(max = 120, message = "{referenceCatalog.code.size}")
     private String code;
 
     @Schema(description = "Display name for the catalog")
-    @NotBlank(message = "Catalog name is required")
-    @Size(max = 255, message = "Catalog name must be 255 characters or less")
+    @NotBlank(message = "{referenceCatalog.name.required}")
+    @Size(max = 255, message = "{referenceCatalog.name.size}")
     private String name;
 
     @Schema(description = "Optional catalog description")
-    @Size(max = 2000, message = "Description must be 2000 characters or less")
+    @Size(max = 2000, message = "{referenceCatalog.description.size}")
     private String description;
 }

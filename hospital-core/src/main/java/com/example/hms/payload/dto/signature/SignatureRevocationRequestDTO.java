@@ -19,18 +19,18 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request for revoking a digital signature")
 public class SignatureRevocationRequestDTO {
 
-    @NotBlank(message = "Revocation reason is required")
-    @Size(max = 1000, message = "Revocation reason cannot exceed 1000 characters")
+    @NotBlank(message = "{signatureRevocation.revocationReason.required}")
+    @Size(max = 1000, message = "{signatureRevocation.revocationReason.size}")
     @Schema(description = "Reason for revoking the signature", 
         example = "Error in report, needs correction")
     private String revocationReason;
 
-    @Size(max = 45, message = "IP address cannot exceed 45 characters")
+    @Size(max = 45, message = "{signatureRevocation.ipAddress.size}")
     @Schema(description = "IP address from which revocation is performed", 
         example = "198.51.100.1")
     private String ipAddress;
 
-    @Size(max = 500, message = "Device info cannot exceed 500 characters")
+    @Size(max = 500, message = "{signatureRevocation.deviceInfo.size}")
     @Schema(description = "Device/user agent information")
     private String deviceInfo;
 }

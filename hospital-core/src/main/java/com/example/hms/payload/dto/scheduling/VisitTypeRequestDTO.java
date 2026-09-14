@@ -18,19 +18,19 @@ public class VisitTypeRequestDTO {
     /** Null = hospital-wide visit type available to every department. */
     private UUID departmentId;
 
-    @NotBlank(message = "A visit-type code is required.")
+    @NotBlank(message = "{visitType.code.required}")
     @Size(max = 40)
     private String code;
 
-    @NotBlank(message = "A visit-type name is required.")
+    @NotBlank(message = "{visitType.name.required}")
     @Size(max = 150)
     private String name;
 
     @Size(max = 500)
     private String description;
 
-    @NotNull(message = "Duration is required.")
-    @Min(value = 1, message = "Duration must be at least one minute.")
+    @NotNull(message = "{visitType.durationMinutes.required}")
+    @Min(value = 1, message = "{visitType.durationMinutes.min}")
     private Integer durationMinutes;
 
     /**

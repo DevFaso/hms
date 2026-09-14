@@ -16,12 +16,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AdmissionOrderExecutionRequestDTO {
 
-    @NotNull(message = "Order set IDs are required")
+    @NotNull(message = "{admissionOrderExecution.orderSetIds.required}")
     private List<UUID> orderSetIds;
 
     /**
      * Staff member applying the order sets
      */
-    @NotNull(message = "Applied by staff ID is required")
+    @NotNull(message = "{admissionOrderExecution.appliedByStaffId.required}")
     private UUID appliedByStaffId;
 }

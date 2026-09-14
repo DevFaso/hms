@@ -19,6 +19,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
 
 /**
  * Critical-value notification loop (P0 #5).
@@ -68,6 +70,7 @@ public class CriticalValueNotificationService {
     private final LabResultRepository labResultRepository;
     private final LabResultMapper labResultMapper;
     private final com.example.hms.repository.StaffRepository staffRepository;
+    private final MessageSource messageSource;
 
     /**
      * Commits the mismatch record even though the caller's transaction is about
@@ -88,13 +91,15 @@ public class CriticalValueNotificationService {
         LabResultRepository labResultRepository,
         LabResultMapper labResultMapper,
         com.example.hms.repository.StaffRepository staffRepository,
-        org.springframework.transaction.PlatformTransactionManager transactionManager
+        org.springframework.transaction.PlatformTransactionManager transactionManager,
+        MessageSource messageSource
     ) {
         this.notificationService = notificationService;
         this.smsService = smsService;
         this.labResultRepository = labResultRepository;
         this.labResultMapper = labResultMapper;
         this.staffRepository = staffRepository;
+        this.messageSource = messageSource;
         this.mismatchTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         this.mismatchTx.setPropagationBehavior(
             org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -341,18 +346,25 @@ public class CriticalValueNotificationService {
         }
     }
 
+    /**
+     * Read by the ordering provider (and, on escalation, the desk's
+     * administrators) — never by the caller, and a sweep has no request
+     * locale anyway — so the body is rendered in the staff locale.
+     */
     private String buildMessage(LabResult result, boolean escalation) {
+        java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
         String testName = order != null && order.getLabTestDefinition() != null
-            ? order.getLabTestDefinition().getName() : "Lab test";
+            ? order.getLabTestDefinition().getName()
+            : messageSource.getMessage("lab.test.fallback", null, locale);
         String patientName = order != null && order.getPatient() != null
-            ? order.getPatient().getFullName() : "patient";
+            ? order.getPatient().getFullName()
+            : messageSource.getMessage("patient.fallback.generic", null, locale);
         String value = result.getResultValue()
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
-        String prefix = escalation
-            ? "ESCALATION - unacknowledged critical lab result: "
-            : "Critical lab result: ";
-        return prefix + testName + " = " + value + " for " + patientName
-            + ". Review and acknowledge in HMS.";
+        return messageSource.getMessage(
+            escalation ? "lab.critical.escalation" : "lab.critical.notification",
+            new Object[]{testName, value, patientName},
+            locale);
     }
 }

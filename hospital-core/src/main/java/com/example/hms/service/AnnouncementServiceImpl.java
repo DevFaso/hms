@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
 
 @Slf4j
 @Service
@@ -27,6 +29,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private final HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final MessageSource messageSource;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,6 +71,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             .build();
         AnnouncementResponseDTO saved = toDTO(announcementRepository.save(announcement));
 
+        // One body for every recipient: announcements never reach patients
+        // (filtered below) and staff have no per-user language, so the
+        // staff locale applies rather than the announcer's request locale.
+        String notificationBody = messageSource.getMessage(
+            "announcement.new.notification", new Object[]{text}, NotificationLocales.STAFF);
         List<User> activeUsers = userRepository.findByIsDeletedFalse();
         for (User user : activeUsers) {
             // Announcements are internal — skip pure-patient users
@@ -78,10 +86,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 continue;
             }
             try {
-                notificationService.createNotification(
-                    "New announcement: " + text,
-                    user.getUsername()
-                );
+                notificationService.createNotification(notificationBody, user.getUsername());
             } catch (Exception e) {
                 log.warn("Failed to notify user {}: {}", user.getUsername(), e.getMessage());
             }

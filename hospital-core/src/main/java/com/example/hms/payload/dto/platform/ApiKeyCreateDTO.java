@@ -18,7 +18,7 @@ import java.time.LocalDate;
 @Builder
 public class ApiKeyCreateDTO {
 
-    @NotBlank(message = "A label is required — it names the client this key is for.")
+    @NotBlank(message = "{apiKey.label.required}")
     @Size(max = 120)
     private String label;
 

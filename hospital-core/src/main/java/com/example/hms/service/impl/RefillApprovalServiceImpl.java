@@ -28,6 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -35,8 +39,8 @@ import java.util.UUID;
 public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";
+    private static final String MSG_MEDICATION_FALLBACK = "refill.decision.medicationFallback";
     /** Shared opening clause of every refill-decision notification. */
-    private static final String DECISION_PREFIX = "Your refill request for ";
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -44,6 +48,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private final NotificationService notificationService;
     private final ControllerAuthUtils authUtils;
     private final RoleValidator roleValidator;
+    private final MessageSource messageSource;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -237,10 +243,13 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         if (username == null || username.isBlank()) {
             return;
         }
+        // Read by the patient: their stated language, never the prescriber's
+        // request locale.
+        Locale locale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
         String medicationName = refill.getPrescription() != null && refill.getPrescription().getMedicationName() != null
                 ? refill.getPrescription().getMedicationName()
-                : "your prescription";
-        String message = buildDecisionMessage(refill, medicationName, status);
+                : messageSource.getMessage(MSG_MEDICATION_FALLBACK, null, locale);
+        String message = buildDecisionMessage(refill, medicationName, status, locale);
         try {
             notificationService.createNotification(message, username, NOTIFICATION_TYPE);
         } catch (Exception ex) {
@@ -249,19 +258,19 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         }
     }
 
-    private String buildDecisionMessage(RefillRequest refill, String medicationName, RefillStatus status) {
+    private String buildDecisionMessage(RefillRequest refill, String medicationName, RefillStatus status,
+                                        Locale locale) {
         if (status == RefillStatus.PAUSED) {
             // The reason is mandatory for a hold, so it is always worth surfacing.
-            return DECISION_PREFIX + medicationName
-                    + " is on hold: " + refill.getProviderNotes();
+            return messageSource.getMessage("refill.decision.paused",
+                    new Object[]{medicationName, refill.getProviderNotes()}, locale);
         }
         if (status == RefillStatus.APPROVED) {
             // The fill is now in the pharmacy work queue, so tell the patient
             // what to actually do rather than just that a decision was made.
-            return DECISION_PREFIX + medicationName
-                    + " has been approved and is ready to collect from the pharmacy.";
+            return messageSource.getMessage("refill.decision.approved", new Object[]{medicationName}, locale);
         }
-        return DECISION_PREFIX + medicationName + " has been denied.";
+        return messageSource.getMessage("refill.decision.denied", new Object[]{medicationName}, locale);
     }
 
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {

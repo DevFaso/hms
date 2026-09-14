@@ -19,18 +19,18 @@ import java.util.UUID;
 @Schema(description = "Request to create or update social history")
 public class SocialHistoryRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{socialHistory.patientId.required}")
     @Schema(description = "Patient ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     @Schema(description = "Hospital ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
     @Schema(description = "Staff member recording this history")
     private UUID recordedByStaffId;
 
-    @NotNull(message = "Recorded date is required")
+    @NotNull(message = "{socialHistory.recordedDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @Schema(description = "Date recorded", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate recordedDate;

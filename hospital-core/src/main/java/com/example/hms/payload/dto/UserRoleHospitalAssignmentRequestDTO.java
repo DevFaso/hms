@@ -57,19 +57,19 @@ public class UserRoleHospitalAssignmentRequestDTO {
     private LocalDate startDate;
 
     /** Bean Validation: exactly one of roleId or roleName must be present */
-    @AssertTrue(message = "Provide exactly one of roleId or roleName.")
+    @AssertTrue(message = "{userRoleHospitalAssignment.role.required}")
     public boolean isExactlyOneRoleIdentifierPresent() {
         boolean hasId = roleId != null;
         boolean hasName = roleName != null && !roleName.isBlank();
         return hasId ^ hasName;
     }
 
-    @AssertTrue(message = "Provide userId or userIdentifier")
+    @AssertTrue(message = "{userRoleHospitalAssignment.user.required}")
     public boolean isUserIdentifierValid() {
         return userId != null || (userIdentifier != null && !userIdentifier.isBlank());
     }
 
-    @AssertTrue(message = "Provide hospitalId or (hospitalCode/hospitalName) for non-global roles")
+    @AssertTrue(message = "{userRoleHospitalAssignment.hospital.required}")
     public boolean isHospitalIdentifierValid() {
     // Relaxed: allow omission entirely; service layer will enforce requirement based on role.
     return true;

@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ScheduleConsultationRequestDTO {
 
-    @NotNull(message = "Scheduled date/time is required")
+    @NotNull(message = "{scheduleConsultation.scheduledAt.required}")
     private LocalDateTime scheduledAt;
 
     private String scheduleNote;

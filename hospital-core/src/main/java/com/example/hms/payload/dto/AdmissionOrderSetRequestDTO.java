@@ -19,26 +19,26 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AdmissionOrderSetRequestDTO {
 
-    @NotBlank(message = "Order set name is required")
+    @NotBlank(message = "{admissionOrderSet.name.required}")
     private String name;
 
     private String description;
 
-    @NotNull(message = "Admission type is required")
+    @NotNull(message = "{admissionOrderSet.admissionType.required}")
     private AdmissionType admissionType;
 
     private UUID departmentId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotNull(message = "Order items are required")
+    @NotNull(message = "{admissionOrderSet.orderItems.required}")
     private List<Map<String, Object>> orderItems;
 
     private String clinicalGuidelines;
 
     private Boolean active = true;
 
-    @NotNull(message = "Created by staff ID is required")
+    @NotNull(message = "{admissionOrderSet.createdByStaffId.required}")
     private UUID createdByStaffId;
 }

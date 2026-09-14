@@ -16,17 +16,17 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class PatientEducationProgressRequestDTO {
-    @NotNull(message = "Resource ID is required")
+    @NotNull(message = "{patientEducationProgress.resourceId.required}")
     private UUID resourceId;
     
     private EducationComprehensionStatus comprehensionStatus;
     
-    @Min(value = 0, message = "Progress percentage must be between 0 and 100")
-    @Max(value = 100, message = "Progress percentage must be between 0 and 100")
+    @Min(value = 0, message = "{patientEducationProgress.progressPercentage.range}")
+    @Max(value = 100, message = "{patientEducationProgress.progressPercentage.range}")
     private Integer progressPercentage;
     
-    @Min(value = 1, message = "Rating must be between 1 and 5")
-    @Max(value = 5, message = "Rating must be between 1 and 5")
+    @Min(value = 1, message = "{patientEducationProgress.rating.range}")
+    @Max(value = 5, message = "{patientEducationProgress.rating.range}")
     private Integer rating;
     
     private String feedback;

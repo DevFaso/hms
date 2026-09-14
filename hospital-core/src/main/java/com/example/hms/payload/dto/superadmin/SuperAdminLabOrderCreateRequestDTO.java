@@ -21,63 +21,63 @@ import java.util.List;
 @Builder
 public class SuperAdminLabOrderCreateRequestDTO {
 
-    @NotBlank(message = "Organization identifier is required")
+    @NotBlank(message = "{superAdmin.labOrder.organizationIdentifier.required}")
     private String organizationIdentifier;
 
-    @NotBlank(message = "Hospital identifier is required")
+    @NotBlank(message = "{superAdmin.labOrder.hospitalIdentifier.required}")
     private String hospitalIdentifier;
 
-    @NotBlank(message = "Patient identifier is required")
+    @NotBlank(message = "{superAdmin.labOrder.patientIdentifier.required}")
     private String patientIdentifier;
 
-    @NotBlank(message = "Ordering staff identifier is required")
+    @NotBlank(message = "{superAdmin.labOrder.orderingStaffIdentifier.required}")
     private String orderingStaffIdentifier;
 
     private String orderingStaffRole;
 
-    @NotBlank(message = "Lab test identifier is required")
+    @NotBlank(message = "{superAdmin.labOrder.labTestIdentifier.required}")
     private String labTestIdentifier;
 
-    @NotBlank(message = "Status is required")
+    @NotBlank(message = "{superAdmin.labOrder.status.required}")
     private String status;
 
     private String priority;
 
     private String notes;
 
-    @NotNull(message = "Order date and time is required")
+    @NotNull(message = "{superAdmin.labOrder.orderDatetime.required}")
     private LocalDateTime orderDatetime;
 
     private List<String> testResults;
 
-    @NotBlank(message = "Clinical indication is required")
+    @NotBlank(message = "{superAdmin.labOrder.clinicalIndication.required}")
     @Size(max = 2048)
     private String clinicalIndication;
 
-    @NotBlank(message = "Medical necessity rationale is required")
+    @NotBlank(message = "{superAdmin.labOrder.medicalNecessityNote.required}")
     @Size(max = 2048)
     private String medicalNecessityNote;
 
-    @NotBlank(message = "Primary ICD-10 diagnosis code is required")
+    @NotBlank(message = "{superAdmin.labOrder.primaryDiagnosisCode.required}")
     private String primaryDiagnosisCode;
 
     @Builder.Default
     private List<String> additionalDiagnosisCodes = new ArrayList<>();
 
-    @NotBlank(message = "Order channel is required")
+    @NotBlank(message = "{superAdmin.labOrder.orderChannel.required}")
     private String orderChannel;
 
     private String orderChannelOther;
 
-    @NotNull(message = "Documentation sharing flag is required")
+    @NotNull(message = "{superAdmin.labOrder.documentationSharedWithLab.required}")
     private Boolean documentationSharedWithLab;
 
     private String documentationReference;
 
-    @Pattern(regexp = "\\d{10}", message = "NPI must be a 10-digit numeric identifier")
+    @Pattern(regexp = "\\d{10}", message = "{superAdmin.labOrder.orderingProviderNpi.pattern}")
     private String orderingProviderNpi;
 
-    @NotBlank(message = "Provider signature is required")
+    @NotBlank(message = "{superAdmin.labOrder.providerSignature.required}")
     private String providerSignature;
 
     private LocalDateTime signedAt;

@@ -19,10 +19,10 @@ import lombok.Setter;
 @Builder
 public class LabStaffRoleUpdateRequest {
 
-    @NotBlank(message = "roleCode is required")
+    @NotBlank(message = "{labStaff.roleCode.required}")
     @Pattern(
         regexp = "ROLE_LAB_TECHNICIAN|ROLE_LAB_SCIENTIST|ROLE_LAB_MANAGER",
-        message = "roleCode must be one of: ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER"
+        message = "{labStaff.roleCode.pattern}"
     )
     private String roleCode;
 }

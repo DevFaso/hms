@@ -27,6 +27,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,15 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
 
     private final SecurityRuleSetRepository ruleSetRepository;
     private final ObjectMapper objectMapper;
+    private final MessageSource messageSource;
+
+    /**
+     * Locale a template is rendered in when its title and summary become the
+     * NAME and DESCRIPTION of a stored rule set. The catalogue shown to the
+     * caller follows the request locale; the row must not, or one admin's
+     * language would be baked into a record every other admin reads.
+     */
+    private static final Locale CANONICAL_LOCALE = Locale.ENGLISH;
 
     @Override
     @Transactional
@@ -69,13 +80,13 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
     @Override
     @Transactional(readOnly = true)
     public List<SecurityRuleTemplateDTO> listTemplates() {
-        return buildTemplates();
+        return buildTemplates(LocaleContextHolder.getLocale());
     }
 
     @Override
     @Transactional
     public SecurityRuleTemplateImportResponseDTO importTemplate(SecurityRuleTemplateImportRequestDTO request) {
-        SecurityRuleTemplateDTO template = findTemplate(request.getTemplateCode());
+        SecurityRuleTemplateDTO template = findTemplate(request.getTemplateCode(), CANONICAL_LOCALE);
         List<SecurityRuleDefinitionDTO> rules = cloneDefinitions(template.getDefaultRules());
 
         SecurityRuleSet ruleSet = SecurityRuleSet.builder()
@@ -99,7 +110,7 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
 
         return SecurityRuleTemplateImportResponseDTO.builder()
             .templateCode(template.getCode())
-            .templateTitle(template.getTitle())
+            .templateTitle(findTemplate(request.getTemplateCode(), LocaleContextHolder.getLocale()).getTitle())
             .importedRuleCount(rules.size())
             .ruleSet(toResponse(saved, rules))
             .importedRules(rules)
@@ -122,7 +133,7 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
             .sorted()
             .toList();
 
-        List<String> recommendations = buildRecommendations(rules, impactScore);
+        List<String> recommendations = buildRecommendations(rules, impactScore, LocaleContextHolder.getLocale());
 
         return SecurityRuleSimulationResultDTO.builder()
             .scenario(request.getScenario())
@@ -204,20 +215,29 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
             .build();
     }
 
-    private SecurityRuleTemplateDTO findTemplate(String code) {
-        return buildTemplates().stream()
+    private SecurityRuleTemplateDTO findTemplate(String code, Locale locale) {
+        return buildTemplates(locale).stream()
             .filter(template -> template.getCode().equalsIgnoreCase(code))
             .findFirst()
             .orElseThrow(() -> new ResourceNotFoundException("security.rules.template.not-found"));
     }
 
-    private List<SecurityRuleTemplateDTO> buildTemplates() {
+    private String templateText(String code, String field, Locale locale) {
+        return messageSource.getMessage("security.template." + code + "." + field, null, locale);
+    }
+
+    /**
+     * The catalogue's title/category/summary are rendered in {@code locale}.
+     * The rule definitions underneath are left as written: they are copied
+     * into the stored rule set on import, so they are data, not messages.
+     */
+    private List<SecurityRuleTemplateDTO> buildTemplates(Locale locale) {
         Map<String, SecurityRuleTemplateDTO> templates = new LinkedHashMap<>();
         templates.put("RBAC_GLOBAL", SecurityRuleTemplateDTO.builder()
             .code("RBAC_GLOBAL")
-            .title("Global RBAC persona controls")
-            .category("RBAC templates")
-            .summary("Scaffold global role templates aligned with clinical, operational and finance personas.")
+            .title(templateText("RBAC_GLOBAL", "title", locale))
+            .category(templateText("RBAC_GLOBAL", "category", locale))
+            .summary(templateText("RBAC_GLOBAL", "summary", locale))
             .controllers(List.of(ROLE_CONTROLLER, PERMISSION_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -243,9 +263,9 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
 
         templates.put("NETWORK_SAFEGUARDS", SecurityRuleTemplateDTO.builder()
             .code("NETWORK_SAFEGUARDS")
-            .title("Network safeguard policies")
-            .category("Network safeguards")
-            .summary("CIDR restrictions, VPN enforcement and geofenced session policies.")
+            .title(templateText("NETWORK_SAFEGUARDS", "title", locale))
+            .category(templateText("NETWORK_SAFEGUARDS", "category", locale))
+            .summary(templateText("NETWORK_SAFEGUARDS", "summary", locale))
             .controllers(List.of(ORG_RULE_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -271,9 +291,9 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
 
         templates.put("DEVICE_HYGIENE", SecurityRuleTemplateDTO.builder()
             .code("DEVICE_HYGIENE")
-            .title("Managed device compliance")
-            .category("Device hygiene")
-            .summary("Check managed device compliance, OS patches and quarantine non-compliant hosts.")
+            .title(templateText("DEVICE_HYGIENE", "title", locale))
+            .category(templateText("DEVICE_HYGIENE", "category", locale))
+            .summary(templateText("DEVICE_HYGIENE", "summary", locale))
             .controllers(List.of(ORG_RULE_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -299,9 +319,9 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
 
         templates.put("SESSION_HARDENING", SecurityRuleTemplateDTO.builder()
             .code("SESSION_HARDENING")
-            .title("Session hardening controls")
-            .category("Session hardening")
-            .summary("Step-up MFA, idle timeouts, breached password resets and forced credential rotation.")
+            .title(templateText("SESSION_HARDENING", "title", locale))
+            .category(templateText("SESSION_HARDENING", "category", locale))
+            .summary(templateText("SESSION_HARDENING", "summary", locale))
             .controllers(List.of(AUTH_CONTROLLER, PASSWORD_RESET_CONTROLLER))
             .defaultRules(List.of(
                 createDefinition(
@@ -381,20 +401,20 @@ public class SecurityRuleGovernanceServiceImpl implements SecurityRuleGovernance
         return Math.min(5.0, Math.round((priorityWeight + controllerBonus) * 100.0) / 100.0);
     }
 
-    private List<String> buildRecommendations(List<SecurityRuleDefinitionDTO> rules, double impactScore) {
+    private List<String> buildRecommendations(List<SecurityRuleDefinitionDTO> rules, double impactScore, Locale locale) {
         List<String> recommendations = new ArrayList<>();
         if (impactScore >= 3.5) {
-            recommendations.add("Schedule staged rollout with monitoring window");
+            recommendations.add(messageSource.getMessage("security.recommendation.stagedRollout", null, locale));
         } else {
-            recommendations.add("Eligible for immediate rollout with standard change controls");
+            recommendations.add(messageSource.getMessage("security.recommendation.immediateRollout", null, locale));
         }
         boolean requiresMfa = rules.stream().anyMatch(rule -> rule.getRuleType() == SecurityRuleType.TWO_FACTOR_AUTH);
         if (requiresMfa) {
-            recommendations.add("Notify IAM team to prepare MFA enrollment campaign");
+            recommendations.add(messageSource.getMessage("security.recommendation.mfaCampaign", null, locale));
         }
         boolean hasNetworkRules = rules.stream().anyMatch(rule -> rule.getRuleType() == SecurityRuleType.IP_WHITELIST);
         if (hasNetworkRules) {
-            recommendations.add("Coordinate with network team for CIDR validation");
+            recommendations.add(messageSource.getMessage("security.recommendation.cidrValidation", null, locale));
         }
         return recommendations;
     }

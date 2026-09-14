@@ -28,11 +28,11 @@ public class RoiSelfRequestCreateDTO {
     @Size(max = 500)
     private String requesterContact;
 
-    @NotBlank(message = "A purpose is required — it is what the decision weighs.")
+    @NotBlank(message = "{roiSelfRequest.purpose.required}")
     @Size(max = 500)
     private String purpose;
 
-    @NotBlank(message = "The requested scope is required (e.g. \"full record\", \"labs 2025\").")
+    @NotBlank(message = "{roiSelfRequest.scopeDescription.required}")
     @Size(max = 500)
     private String scopeDescription;
 

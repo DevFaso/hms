@@ -39,6 +39,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -57,6 +60,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final NotificationService notificationService;
+    private final MessageSource messageSource;
 
     // ── Inventory items ──────────────────────────────────────────────────
 
@@ -238,13 +242,19 @@ public class InventoryServiceImpl implements InventoryService {
             return;
         }
         List<InventoryItem> lowStock = inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId);
+        // The alert is pushed to the user who triggered the sweep, so the
+        // recipient IS the caller and the request locale is the right one.
+        Locale locale = LocaleContextHolder.getLocale();
+        String unknown = messageSource.getMessage("inventory.lowStock.unknown", null, locale);
         for (InventoryItem item : lowStock) {
             String medicationName = item.getMedicationCatalogItem() != null
-                    ? item.getMedicationCatalogItem().getNameFr() : "Unknown";
+                    ? item.getMedicationCatalogItem().getNameFr() : unknown;
             String pharmacyName = item.getPharmacy() != null
-                    ? item.getPharmacy().getName() : "Unknown";
-            String message = String.format("Low stock alert: %s at %s — %s on hand, reorder threshold %s",
-                    medicationName, pharmacyName, item.getQuantityOnHand(), item.getReorderThreshold());
+                    ? item.getPharmacy().getName() : unknown;
+            String message = messageSource.getMessage("inventory.lowStock.notification",
+                    new Object[]{medicationName, pharmacyName,
+                        String.valueOf(item.getQuantityOnHand()), String.valueOf(item.getReorderThreshold())},
+                    locale);
 
             try {
                 UUID currentUserId = roleValidator.getCurrentUserId();

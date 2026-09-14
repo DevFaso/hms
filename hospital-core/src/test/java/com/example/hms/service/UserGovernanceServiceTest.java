@@ -28,6 +28,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class UserGovernanceServiceTest {
@@ -40,6 +43,8 @@ class UserGovernanceServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private UserGovernanceService service;

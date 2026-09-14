@@ -55,6 +55,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryServiceImplTest {
@@ -71,6 +74,7 @@ class InventoryServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private NotificationService notificationService;
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private InventoryServiceImpl service;

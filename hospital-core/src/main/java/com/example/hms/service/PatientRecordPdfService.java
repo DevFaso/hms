@@ -21,15 +21,14 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +44,12 @@ import java.util.function.Function;
  * rules that decide what a clinician may see on screen decide what is on paper, and rows those
  * rules hold back are counted, never listed.
  *
+ * <p>Every label on the page comes from the message bundle in the locale of the request that
+ * asked for the document (the clinician who clicked), resolved once in {@link #render(UUID)}
+ * and handed down as a {@link PdfLabels}; the drawing helpers never consult the request
+ * themselves. Dates follow the same locale. Patient data, codes and units are printed as
+ * stored.
+ *
  * <p>PDFBox with the standard Helvetica faces, like the wristband and invoice PDFs: no font
  * file to ship. Text outside WinAnsi (the fonts' encoding) is written as '?' rather than
  * failing the whole document on one character.
@@ -58,9 +63,7 @@ public class PatientRecordPdfService {
     static final int CHART_LIMIT = 200;
     private static final String AUDIT_ENTITY_TYPE = "PATIENT";
     private static final String NOT_FOUND_KEY = "patient.notFound";
-    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final String NONE = "None recorded";
+    private static final String SEPARATOR = " - ";
 
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
@@ -68,8 +71,10 @@ public class PatientRecordPdfService {
     private final ChartReviewService chartReviewService;
     private final AuditEventLogService auditEventLogService;
     private final UserRepository userRepository;
+    private final MessageSource messageSource;
 
     public byte[] render(UUID patientId) {
+        PdfLabels labels = PdfLabels.ofRequest(messageSource);
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
         if (hospitalId == null) {
             throw new AccessDeniedException(
@@ -84,22 +89,22 @@ public class PatientRecordPdfService {
         PatientStoryboardDTO storyboard = storyboardService.getStoryboard(patientId, hospitalId);
         ChartReviewDTO chart = chartReviewService.getChartReview(patientId, hospitalId, CHART_LIMIT);
 
-        byte[] pdf = write(storyboard, chart);
+        byte[] pdf = write(storyboard, chart, labels);
         emitAudit(patient, hospitalId, chart);
         return pdf;
     }
 
     // ---------------------------------------------------------------- layout
 
-    private byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart) {
-        try (Pages pages = new Pages()) {
-            writeIdentity(pages, storyboard);
-            writeStoryboard(pages, storyboard);
-            writeChart(pages, chart);
+    private static byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart, PdfLabels t) {
+        try (Pages pages = new Pages(t)) {
+            writeIdentity(pages, storyboard, t);
+            writeStoryboard(pages, storyboard, t);
+            writeChart(pages, chart, t);
             int held = storyboard.getRestrictedRows() == null ? 0 : storyboard.getRestrictedRows().size();
             if (held > 0) {
                 pages.gap();
-                pages.text(held + " row group(s) held at another hospital are not included in this record.");
+                pages.text(t.get("pdf.record.heldRows", String.valueOf(held)));
             }
             return pages.finish();
         } catch (IOException e) {
@@ -107,82 +112,89 @@ public class PatientRecordPdfService {
         }
     }
 
-    private static void writeIdentity(Pages pages, PatientStoryboardDTO storyboard) throws IOException {
+    private static void writeIdentity(Pages pages, PatientStoryboardDTO storyboard, PdfLabels t) throws IOException {
         String printedBy = SecurityUtils.getCurrentUsername();
-        pages.title("Patient record");
-        pages.text(safe(storyboard.getHospitalName()) + "   -   generated " + fmt(LocalDateTime.now(ZoneOffset.UTC))
-            + " UTC" + (printedBy != null ? "   -   printed by " + printedBy : ""));
+        pages.title(t.get("pdf.record.title"));
+        pages.text(join("   -   ", safe(storyboard.getHospitalName()),
+            t.get("pdf.record.generatedAt", t.fmt(LocalDateTime.now(ZoneOffset.UTC))),
+            printedBy != null ? t.get("pdf.record.printedBy", printedBy) : null));
         pages.gap();
-        pages.heading("Identity");
+        pages.heading(t.get("pdf.record.section.identity"));
         PatientStoryboardDTO.PatientHeaderDTO p = storyboard.getPatient();
         if (p == null) return;
-        pages.field("Name", p.getFullName());
-        pages.field("MRN", p.getMrn());
-        pages.field("Date of birth", fmt(p.getDateOfBirth())
-            + (p.getAgeYears() != null ? " (" + p.getAgeYears() + " years)" : ""));
-        pages.field("Sex", p.getGender());
-        pages.field("Blood type", p.getBloodType());
+        pages.field(t.get("pdf.record.field.name"), p.getFullName());
+        pages.field(t.get("pdf.record.field.mrn"), p.getMrn());
+        pages.field(t.get("pdf.record.field.dob"), join(" ", t.fmt(p.getDateOfBirth()),
+            p.getAgeYears() != null ? t.get("pdf.record.field.ageYears", String.valueOf(p.getAgeYears())) : null));
+        pages.field(t.get("pdf.record.field.sex"), p.getGender());
+        pages.field(t.get("pdf.record.field.bloodType"), p.getBloodType());
     }
 
-    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard) throws IOException {
-        pages.heading("Allergies");
-        pages.rows(storyboard.getAllergies(), a -> join(" - ",
+    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard, PdfLabels t) throws IOException {
+        pages.heading(t.get("pdf.record.section.allergies"));
+        pages.rows(storyboard.getAllergies(), a -> join(SEPARATOR,
             a.getAllergenDisplay(), a.getSeverity(), a.getReaction(), a.getVerificationStatus()));
 
-        pages.heading("Problems");
-        pages.rows(storyboard.getProblems(), pr -> join(" - ",
+        pages.heading(t.get("pdf.record.section.problems"));
+        pages.rows(storyboard.getProblems(), pr -> join(SEPARATOR,
             pr.getProblemDisplay(), code(pr.getProblemCode()), pr.getStatus(),
-            pr.isChronic() ? "chronic" : null, pr.getOnsetDate() != null ? "since " + fmt(pr.getOnsetDate()) : null));
+            pr.isChronic() ? t.get("pdf.record.problem.chronic") : null,
+            pr.getOnsetDate() != null ? t.get("pdf.record.problem.since", t.fmt(pr.getOnsetDate())) : null));
 
-        pages.heading("Active encounter");
+        pages.heading(t.get("pdf.record.section.activeEncounter"));
         PatientStoryboardDTO.ActiveEncounterDTO enc = storyboard.getActiveEncounter();
         if (enc == null) {
-            pages.text("No active encounter.");
+            pages.text(t.get("pdf.record.encounter.none"));
         } else {
-            pages.text(join(" - ", enc.getEncounterType(), enc.getStatus(), fmt(enc.getEncounterDate()),
+            pages.text(join(SEPARATOR, enc.getEncounterType(), enc.getStatus(), t.fmt(enc.getEncounterDate()),
                 enc.getDepartmentName(), enc.getStaffFullName(), enc.getRoomAssignment()));
-            if (enc.getChiefComplaint() != null) pages.wrapped("Chief complaint: " + enc.getChiefComplaint());
+            if (enc.getChiefComplaint() != null) {
+                pages.wrapped(t.get("pdf.record.encounter.chiefComplaint", enc.getChiefComplaint()));
+            }
         }
 
-        pages.heading("Code status");
+        pages.heading(t.get("pdf.record.section.codeStatus"));
         PatientStoryboardDTO.CodeStatusDTO code = storyboard.getCodeStatus();
         if (code == null || code.getStatus() == null) {
-            pages.text("Code status not documented.");
+            pages.text(t.get("pdf.record.codeStatus.none"));
         } else {
             pages.text(code.getStatus());
-            pages.rows(code.getDirectives(), d -> join(" - ", d.getDirectiveType(), d.getStatus(),
-                d.getEffectiveDate() != null ? "from " + fmt(d.getEffectiveDate()) : null, d.getDescription()));
+            pages.rows(code.getDirectives(), d -> join(SEPARATOR, d.getDirectiveType(), d.getStatus(),
+                d.getEffectiveDate() != null ? t.get("pdf.record.directive.from", t.fmt(d.getEffectiveDate())) : null,
+                d.getDescription()));
         }
     }
 
-    private static void writeChart(Pages pages, ChartReviewDTO chart) throws IOException {
-        pages.heading("Encounters");
-        pages.rows(chart.getEncounters(), e -> join(" - ", fmt(e.getEncounterDate()), e.getEncounterType(),
+    private static void writeChart(Pages pages, ChartReviewDTO chart, PdfLabels t) throws IOException {
+        pages.heading(t.get("pdf.record.section.encounters"));
+        pages.rows(chart.getEncounters(), e -> join(SEPARATOR, t.fmt(e.getEncounterDate()), e.getEncounterType(),
             e.getStatus(), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
 
-        pages.heading("Notes");
-        pages.rows(chart.getNotes(), n -> join(" - ", fmt(n.getDocumentedAt()), n.getTemplate(),
-            n.getAuthorName(), n.isSigned() ? "signed" : "draft", n.getPreview()));
+        pages.heading(t.get("pdf.record.section.notes"));
+        pages.rows(chart.getNotes(), n -> join(SEPARATOR, t.fmt(n.getDocumentedAt()), n.getTemplate(),
+            n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
+            n.getPreview()));
 
-        pages.heading("Results");
-        pages.rows(chart.getResults(), r -> join(" - ", fmt(r.getResultDate()),
+        pages.heading(t.get("pdf.record.section.results"));
+        pages.rows(chart.getResults(), r -> join(SEPARATOR, t.fmt(r.getResultDate()),
             safe(r.getTestName()) + code(r.getTestCode()),
             join(" ", r.getResultValue(), r.getResultUnit()), r.getAbnormalFlag(), r.getOrderingStaffName()));
 
-        pages.heading("Medications");
-        pages.rows(chart.getMedications(), m -> join(" - ", fmt(m.getCreatedAt()), m.getMedicationName(),
+        pages.heading(t.get("pdf.record.section.medications"));
+        pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),
             m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), m.getStatus(),
-            m.getPrescriberName(), m.isControlledSubstance() ? "controlled" : null));
+            m.getPrescriberName(), m.isControlledSubstance() ? t.get("pdf.record.medication.controlled") : null));
 
-        pages.heading("Imaging");
-        pages.rows(chart.getImaging(), i -> join(" - ", fmt(i.getOrderedAt()),
+        pages.heading(t.get("pdf.record.section.imaging"));
+        pages.rows(chart.getImaging(), i -> join(SEPARATOR, t.fmt(i.getOrderedAt()),
             join(" ", i.getModality(), i.getStudyType(), i.getBodyRegion(), i.getLaterality()), i.getStatus(),
-            i.getReportImpression() != null ? "Impression: " + i.getReportImpression() : null));
+            i.getReportImpression() != null ? t.get("pdf.record.imaging.impression", i.getReportImpression()) : null));
 
-        pages.heading("Procedures");
-        pages.rows(chart.getProcedures(), pr -> join(" - ", fmt(pr.getOrderedAt()), pr.getProcedureName(),
+        pages.heading(t.get("pdf.record.section.procedures"));
+        pages.rows(chart.getProcedures(), pr -> join(SEPARATOR, t.fmt(pr.getOrderedAt()), pr.getProcedureName(),
             pr.getProcedureCategory(), pr.getUrgency(), pr.getStatus(), pr.getOrderingProviderName(),
-            pr.isConsentObtained() ? "consent obtained" : "consent not recorded"));
+            t.get(pr.isConsentObtained() ? "pdf.record.procedure.consentObtained"
+                : "pdf.record.procedure.consentNotRecorded")));
     }
 
     // ---------------------------------------------------------------- audit
@@ -223,14 +235,6 @@ public class PatientRecordPdfService {
         return v == null || v.isBlank() ? "" : " (" + v + ")";
     }
 
-    private static String fmt(LocalDateTime t) {
-        return t == null ? "" : DATE_TIME.format(t);
-    }
-
-    private static String fmt(LocalDate d) {
-        return d == null ? "" : DATE.format(d);
-    }
-
     /** Joins the non-blank parts; a row never shows "null" or a dangling separator. */
     static String join(String separator, String... parts) {
         List<String> kept = new ArrayList<>();
@@ -253,11 +257,13 @@ public class PatientRecordPdfService {
         private static final PDFont BOLD = PDType1Font.HELVETICA_BOLD;
 
         private final PDDocument doc = new PDDocument();
+        private final PdfLabels labels;
         private PDPageContentStream cs;
         private float y;
         private int pageNumber;
 
-        Pages() throws IOException {
+        Pages(PdfLabels labels) throws IOException {
+            this.labels = labels;
             newPage();
         }
 
@@ -277,7 +283,7 @@ public class PatientRecordPdfService {
         }
 
         void field(String label, String value) throws IOException {
-            if (value != null && !value.isBlank()) wrapped(label + ": " + value);
+            if (value != null && !value.isBlank()) wrapped(labels.get("pdf.record.field", label, value));
         }
 
         void text(String text) throws IOException {
@@ -286,7 +292,7 @@ public class PatientRecordPdfService {
 
         <T> void rows(List<T> rows, Function<T, String> render) throws IOException {
             if (rows == null || rows.isEmpty()) {
-                text(NONE);
+                text(labels.get("pdf.record.none"));
                 return;
             }
             for (T row : rows) {
@@ -357,7 +363,7 @@ public class PatientRecordPdfService {
             cs.beginText();
             cs.setFont(BODY, 8);
             cs.newLineAtOffset(MARGIN, MARGIN / 2);
-            cs.showText("Page " + pageNumber);
+            cs.showText(sanitize(BODY, labels.get("pdf.record.page", String.valueOf(pageNumber))));
             cs.endText();
             cs.close();
             cs = null;

@@ -15,18 +15,18 @@ import lombok.Setter;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ReportDefinitionRequestDTO {
 
-    @NotBlank(message = "A report name is required.")
+    @NotBlank(message = "{reportDefinition.name.required}")
     @Size(max = 150)
     private String name;
 
-    @NotNull(message = "A report type is required.")
+    @NotNull(message = "{reportDefinition.reportType.required}")
     private ReportType reportType;
 
-    @NotNull(message = "A period is required.")
+    @NotNull(message = "{reportDefinition.period.required}")
     private ReportPeriod period;
 
     /** Comma-separated recipient email addresses. */
-    @NotBlank(message = "At least one recipient is required.")
+    @NotBlank(message = "{reportDefinition.recipients.required}")
     @Size(max = 1000)
     private String recipients;
 }

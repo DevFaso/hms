@@ -17,10 +17,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BirthPlanProviderReviewRequestDTO {
 
-    @NotNull(message = "Review status is required")
+    @NotNull(message = "{birthPlanProviderReview.reviewed.required}")
     private Boolean reviewed;
 
-    @NotBlank(message = "Provider signature is required")
+    @NotBlank(message = "{birthPlanProviderReview.signature.required}")
     @Size(max = 255)
     private String signature;
 

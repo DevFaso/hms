@@ -21,19 +21,19 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PharmacyPaymentRequestDTO {
 
-    @NotNull(message = "Dispense ID is required")
+    @NotNull(message = "{pharmacyPayment.dispenseId.required}")
     private UUID dispenseId;
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{pharmacyPayment.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotNull(message = "Payment method is required")
+    @NotNull(message = "{pharmacyPayment.paymentMethod.required}")
     private PharmacyPaymentMethod paymentMethod;
 
-    @NotNull(message = "Amount is required")
+    @NotNull(message = "{pharmacyPayment.amount.required}")
     private BigDecimal amount;
 
     @Size(max = 10)
@@ -42,7 +42,7 @@ public class PharmacyPaymentRequestDTO {
     @Size(max = 120)
     private String referenceNumber;
 
-    @NotNull(message = "Received-by user ID is required")
+    @NotNull(message = "{pharmacyPayment.receivedBy.required}")
     private UUID receivedBy;
 
     @Size(max = 1000)
