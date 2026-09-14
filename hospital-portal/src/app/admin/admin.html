@@ -8,14 +8,16 @@
 
   <!-- Stats Row -->
   <div class="stats-row">
-    @for (stat of stats(); track stat.label) {
+    @for (stat of stats(); track stat.labelKey) {
       <div class="stat-card">
         <div class="stat-icon" [style.background]="stat.color + '14'" [style.color]="stat.color">
           <span class="material-symbols-outlined">{{ stat.icon }}</span>
         </div>
         <div class="stat-info">
-          <span class="stat-value">{{ stat.value }}</span>
-          <span class="stat-label">{{ stat.label }}</span>
+          <span class="stat-value">{{
+            stat.valueKey ? (stat.valueKey | translate) : stat.value
+          }}</span>
+          <span class="stat-label">{{ stat.labelKey | translate }}</span>
         </div>
       </div>
     }

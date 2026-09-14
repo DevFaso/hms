@@ -5,7 +5,16 @@
   "ADMIN": {
     "QUICK_ACCESS": "Quick Access",
     "SUBTITLE": "Admin panel",
-    "TITLE": "Administration"
+    "TITLE": "Administration",
+    "STAT": {
+      "TOTAL_USERS": "Total Users",
+      "ACTIVE_STAFF": "Active Staff",
+      "DEPARTMENTS": "Departments",
+      "SYSTEM_HEALTH": "System Health",
+      "ON_SHIFT_TODAY": "On Shift Today",
+      "TODAY_APPOINTMENTS": "Today's Appointments",
+      "ONLINE": "Online"
+    }
   },
   "ADT_INTAKE": {
     "TITLE": "ADT intake provider config",
@@ -1154,6 +1163,14 @@
       "MEDIAN_LABEL": "Median",
       "TREND_LABEL": "30-day trend",
       "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points"
+    },
+    "CARD": {
+      "TOTAL_PATIENTS": "Total Patients",
+      "INVOICES": "Invoices",
+      "LAB_ORDERS": "Lab Orders",
+      "PRESCRIPTIONS": "Prescriptions",
+      "USERS": "Users",
+      "ACTIVE_HOSPITALS": "Active Hospitals"
     }
   },
   "ANNOUNCEMENTS": {
@@ -8019,7 +8036,11 @@
     "FINDING_MONITORING_REQUIRED": "Monitoring required",
     "FINDING_ABNORMAL": "Abnormal",
     "FINDING_CONCERNING_FOR_ANOMALY": "Concerning for anomaly",
-    "FINDING_URGENT": "Urgent"
+    "FINDING_URGENT": "Urgent",
+    "BPD_MM": "BPD (mm)",
+    "HC_MM": "HC (mm)",
+    "AC_MM": "AC (mm)",
+    "FL_MM": "FL (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",
@@ -9523,7 +9544,9 @@
     "ENROLL_STARTING": "Setting up…",
     "ENROLL_TITLE": "Multi-Factor Authentication",
     "ENROLL_VERIFY": "Verify",
-    "ENROLL_VERIFYING": "Verifying…"
+    "ENROLL_VERIFYING": "Verifying…",
+    "CHALLENGE_INVALID_CODE": "Enter a valid code (6-digit TOTP or 8-character backup code).",
+    "ENROLL_INVALID_CODE": "Please enter a valid 6-digit code."
   },
   "LAB_OPS": {
     "AGING": "Aging (>24h)",

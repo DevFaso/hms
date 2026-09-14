@@ -24,14 +24,14 @@
 
     <!-- Stat Cards -->
     <div class="stat-grid">
-      @for (card of statCards(); track card.label) {
+      @for (card of statCards(); track card.labelKey) {
         <div class="stat-card" [style.border-left-color]="card.color">
           <div class="stat-icon" [style.background]="card.bg" [style.color]="card.color">
             <span class="material-icons">{{ card.icon }}</span>
           </div>
           <div class="stat-info">
             <span class="stat-value">{{ card.value | number }}</span>
-            <span class="stat-label">{{ card.label }}</span>
+            <span class="stat-label">{{ card.labelKey | translate }}</span>
           </div>
         </div>
       }
@@ -75,7 +75,9 @@
               <div class="status-row">
                 <div class="status-info">
                   <span class="status-dot" [style.background]="statusColor(item.label)"></span>
-                  <span class="status-label">{{ item.label }}</span>
+                  <span class="status-label">{{
+                    item.label | enumLabel: 'appointmentStatus'
+                  }}</span>
                 </div>
                 <div class="status-bar-container">
                   <div
@@ -103,7 +105,7 @@
               <div class="status-row">
                 <div class="status-info">
                   <span class="status-dot" [style.background]="statusColor(item.label)"></span>
-                  <span class="status-label">{{ item.label }}</span>
+                  <span class="status-label">{{ item.label | enumLabel: 'encounterStatus' }}</span>
                 </div>
                 <div class="status-bar-container">
                   <div
@@ -131,7 +133,7 @@
               <div class="status-row">
                 <div class="status-info">
                   <span class="status-dot" [style.background]="statusColor(item.label)"></span>
-                  <span class="status-label">{{ item.label }}</span>
+                  <span class="status-label">{{ item.label | enumLabel: 'invoiceStatus' }}</span>
                 </div>
                 <div class="status-bar-container">
                   <div

@@ -1,7 +1,7 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -20,6 +20,7 @@ import { MfaService } from '../auth/mfa.service';
   styleUrls: ['./mfa-enroll.scss'],
 })
 export class MfaEnrollComponent {
+  private readonly translate = inject(TranslateService);
   private readonly mfaService = inject(MfaService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -76,7 +77,7 @@ export class MfaEnrollComponent {
 
   submitVerification(): void {
     if (!this.totpCode || this.totpCode.length < 6) {
-      this.error.set('Please enter a valid 6-digit code.');
+      this.error.set(this.translate.instant('MFA.ENROLL_INVALID_CODE'));
       return;
     }
     this.loading.set(true);

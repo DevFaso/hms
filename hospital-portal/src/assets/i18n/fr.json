@@ -5,7 +5,16 @@
   "ADMIN": {
     "QUICK_ACCESS": "Accès Rapide",
     "SUBTITLE": "Panneau d'administration",
-    "TITLE": "Administration"
+    "TITLE": "Administration",
+    "STAT": {
+      "TOTAL_USERS": "Total des utilisateurs",
+      "ACTIVE_STAFF": "Personnel actif",
+      "DEPARTMENTS": "Services",
+      "SYSTEM_HEALTH": "État du système",
+      "ON_SHIFT_TODAY": "En poste aujourd’hui",
+      "TODAY_APPOINTMENTS": "Rendez-vous du jour",
+      "ONLINE": "En ligne"
+    }
   },
   "ADT_INTAKE": {
     "TITLE": "Configuration ADT du fournisseur d'admission",
@@ -1154,6 +1163,14 @@
       "MEDIAN_LABEL": "Médiane",
       "TREND_LABEL": "Tendance sur 30 jours",
       "SPARKLINE_ARIA": "Tendance {{label}}, {{count}} points de données"
+    },
+    "CARD": {
+      "TOTAL_PATIENTS": "Total des patients",
+      "INVOICES": "Factures",
+      "LAB_ORDERS": "Demandes de labo",
+      "PRESCRIPTIONS": "Ordonnances",
+      "USERS": "Utilisateurs",
+      "ACTIVE_HOSPITALS": "Hôpitaux actifs"
     }
   },
   "ANNOUNCEMENTS": {
@@ -8019,7 +8036,11 @@
     "FINDING_MONITORING_REQUIRED": "Surveillance requise",
     "FINDING_ABNORMAL": "Anormal",
     "FINDING_CONCERNING_FOR_ANOMALY": "Suspicion d’anomalie",
-    "FINDING_URGENT": "Urgent"
+    "FINDING_URGENT": "Urgent",
+    "BPD_MM": "BIP (mm)",
+    "HC_MM": "PC (mm)",
+    "AC_MM": "PA (mm)",
+    "FL_MM": "LF (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",
@@ -9523,7 +9544,9 @@
     "ENROLL_STARTING": "Configuration en cours…",
     "ENROLL_TITLE": "Authentification multifacteur",
     "ENROLL_VERIFY": "Vérifier",
-    "ENROLL_VERIFYING": "Vérification en cours…"
+    "ENROLL_VERIFYING": "Vérification en cours…",
+    "CHALLENGE_INVALID_CODE": "Saisissez un code valide (TOTP à 6 chiffres ou code de secours à 8 caractères).",
+    "ENROLL_INVALID_CODE": "Veuillez saisir un code valide à 6 chiffres."
   },
   "LAB_OPS": {
     "AGING": "Ancienneté (>24h)",

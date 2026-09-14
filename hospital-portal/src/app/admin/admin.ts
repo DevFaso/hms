@@ -6,8 +6,11 @@ import { AuthService } from '../auth/auth.service';
 import { DashboardService } from '../services/dashboard.service';
 
 interface SystemStat {
-  label: string;
+  /** i18n keys, not text — see ADMIN.STAT.*. */
+  labelKey: string;
   value: string | number;
+  /** Set when the value is a word rather than a number. */
+  valueKey?: string;
   icon: string;
   color: string;
 }
@@ -35,10 +38,16 @@ export class AdminComponent implements OnInit {
   loading = signal(true);
 
   stats = signal<SystemStat[]>([
-    { label: 'Total Users', value: '—', icon: 'group', color: '#23b79c' },
-    { label: 'Active Staff', value: '—', icon: 'badge', color: '#10b981' },
-    { label: 'Departments', value: '—', icon: 'domain', color: '#8b5cf6' },
-    { label: 'System Health', value: 'Online', icon: 'monitor_heart', color: '#059669' },
+    { labelKey: 'ADMIN.STAT.TOTAL_USERS', value: '—', icon: 'group', color: '#23b79c' },
+    { labelKey: 'ADMIN.STAT.ACTIVE_STAFF', value: '—', icon: 'badge', color: '#10b981' },
+    { labelKey: 'ADMIN.STAT.DEPARTMENTS', value: '—', icon: 'domain', color: '#8b5cf6' },
+    {
+      labelKey: 'ADMIN.STAT.SYSTEM_HEALTH',
+      value: '',
+      valueKey: 'ADMIN.STAT.ONLINE',
+      icon: 'monitor_heart',
+      color: '#059669',
+    },
   ]);
 
   // Role audit decision C1: only ROLE_ADMIN can reach this page (super
@@ -98,24 +107,30 @@ export class AdminComponent implements OnInit {
       next: (data) => {
         this.stats.set([
           {
-            label: 'Active Staff',
+            labelKey: 'ADMIN.STAT.ACTIVE_STAFF',
             value: data.staffing?.activeStaff ?? '—',
             icon: 'badge',
             color: '#10b981',
           },
           {
-            label: 'On Shift Today',
+            labelKey: 'ADMIN.STAT.ON_SHIFT_TODAY',
             value: data.staffing?.onShiftToday ?? '—',
             icon: 'schedule',
             color: '#23b79c',
           },
           {
-            label: "Today's Appointments",
+            labelKey: 'ADMIN.STAT.TODAY_APPOINTMENTS',
             value: data.appointments?.todayTotal ?? '—',
             icon: 'calendar_month',
             color: '#8b5cf6',
           },
-          { label: 'System Health', value: 'Online', icon: 'monitor_heart', color: '#059669' },
+          {
+            labelKey: 'ADMIN.STAT.SYSTEM_HEALTH',
+            value: '',
+            valueKey: 'ADMIN.STAT.ONLINE',
+            icon: 'monitor_heart',
+            color: '#059669',
+          },
         ]);
         this.loading.set(false);
       },

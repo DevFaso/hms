@@ -5,7 +5,16 @@
   "ADMIN": {
     "QUICK_ACCESS": "Acceso Rápido",
     "SUBTITLE": "Panel de administración",
-    "TITLE": "Administración"
+    "TITLE": "Administración",
+    "STAT": {
+      "TOTAL_USERS": "Total de usuarios",
+      "ACTIVE_STAFF": "Personal activo",
+      "DEPARTMENTS": "Departamentos",
+      "SYSTEM_HEALTH": "Estado del sistema",
+      "ON_SHIFT_TODAY": "En turno hoy",
+      "TODAY_APPOINTMENTS": "Citas de hoy",
+      "ONLINE": "En línea"
+    }
   },
   "ADT_INTAKE": {
     "TITLE": "Configuración ADT del proveedor de admisión",
@@ -1154,6 +1163,14 @@
       "MEDIAN_LABEL": "Mediana",
       "TREND_LABEL": "Tendencia 30 días",
       "SPARKLINE_ARIA": "Tendencia {{label}}, {{count}} puntos de datos"
+    },
+    "CARD": {
+      "TOTAL_PATIENTS": "Total de pacientes",
+      "INVOICES": "Facturas",
+      "LAB_ORDERS": "Solicitudes de laboratorio",
+      "PRESCRIPTIONS": "Prescripciones",
+      "USERS": "Usuarios",
+      "ACTIVE_HOSPITALS": "Hospitales activos"
     }
   },
   "ANNOUNCEMENTS": {
@@ -8019,7 +8036,11 @@
     "FINDING_MONITORING_REQUIRED": "Requiere vigilancia",
     "FINDING_ABNORMAL": "Anormal",
     "FINDING_CONCERNING_FOR_ANOMALY": "Sospecha de anomalía",
-    "FINDING_URGENT": "Urgente"
+    "FINDING_URGENT": "Urgente",
+    "BPD_MM": "DBP (mm)",
+    "HC_MM": "PC (mm)",
+    "AC_MM": "PA (mm)",
+    "FL_MM": "LF (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",
@@ -9523,7 +9544,9 @@
     "ENROLL_STARTING": "Configurando…",
     "ENROLL_TITLE": "Autenticación multifactor",
     "ENROLL_VERIFY": "Verificar",
-    "ENROLL_VERIFYING": "Verificando…"
+    "ENROLL_VERIFYING": "Verificando…",
+    "CHALLENGE_INVALID_CODE": "Introduzca un código válido (TOTP de 6 dígitos o código de respaldo de 8 caracteres).",
+    "ENROLL_INVALID_CODE": "Introduzca un código válido de 6 dígitos."
   },
   "LAB_OPS": {
     "AGING": "Antigüedad (>24h)",
