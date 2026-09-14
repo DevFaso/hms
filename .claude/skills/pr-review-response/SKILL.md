@@ -272,12 +272,18 @@ npm run lint             # eslint src/**/*.{ts,html}
 npm run format:check     # prettier --check src/**/*.{ts,html,scss,md,json}
 npm run i18n:parity      # every EN key present in FR and ES (strict)
 npm run i18n:referenced  # every key a template uses exists
+npm run i18n:translated  # FR values that are still the English string
+npm run i18n:enums       # enum values the API sends with no PORTAL.ENUM key
+npm run test:scripts     # the gate scripts own unit tests
 npm run build            # AOT: the template type errors lint misses
 npm run test:coverage    # Karma, ChromeHeadless, --watch=false, with coverage
 npm run coverage:check   # the coverage ratchet CI enforces
 ```
 
-That is the `lint-build-test` job of `frontend-ci.yml`, in its order.
+That is the `lint-build-test` job of `frontend-ci.yml`, in its order. When
+a step is added to that job, add it here in the same PR — this recipe
+silently fell two gates behind once, and a contributor who runs it, sees
+it exit 0 and pushes then fails CI on a gate the recipe promised to cover.
 `e2e:a11y` is its own job; run `npm run e2e` locally when a smoke route
 changed.
 
@@ -314,7 +320,8 @@ relied on `compileJava` passing rather than the full test task.
 ```bash
 # From repo root:
 (cd hospital-portal && npm run lint && npm run format:check \
-  && npm run i18n:parity && npm run i18n:referenced && npm run build \
+  && npm run i18n:parity && npm run i18n:referenced && npm run i18n:translated \
+  && npm run i18n:enums && npm run test:scripts && npm run build \
   && npm run test:coverage && npm run coverage:check) \
   && ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
 ```

@@ -5,15 +5,23 @@
     "and fails when one of its constants has no PORTAL.ENUM.<GROUP>.<VALUE> key —",
     "the pipe would Title-Case it into English and no other gate would notice.",
     "",
-    "A domain with no single backing enum carries a written reason instead and is",
-    "skipped. An UNDECLARED domain fails the gate on purpose: adding an",
-    "`enumLabel:` call should make someone say what the API can actually send.",
+    "Declare exactly one of:",
+    "  enum    one Java enum file",
+    "  enums   several, checked as a union — one badge, several emitters",
+    "  reason  why no enum backs it: a String column, a portal-side vocabulary,",
+    "          or a status a service DERIVES rather than reads. Name the method",
+    "          when it is derived, so the next reader can check it by hand.",
+    "",
+    "An UNDECLARED domain fails on purpose: adding an `enumLabel:` call should",
+    "make someone say what the API can actually send. So does a hollow entry",
+    "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
+    "out.",
     "",
     "`group` only needs setting when it is not the domain upper-snaked."
   ],
   "admissionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java" },
   "alertSeverity": {
-    "reason": "the dashboard renders CDS, labor, newborn and postpartum alerts through one badge; each has its own severity enum"
+    "reason": "the dashboard alert badge is its only call site, and ClinicalAlertDTO.severity is a String the service composes — CRITICAL / URGENT / WARNING / INFO, per its own comment and the portal ClinicalAlert union, all four keyed. The four *AlertSeverity enums do not reach this badge; if one ever does, declare them here as `enums` and key CAUTION and NONE."
   },
   "appointmentStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AppointmentStatus.java" },
   "auditEventType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditEventType.java" },
@@ -34,6 +42,7 @@
   "imagingModality": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java" },
   "imagingOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderStatus.java" },
   "imagingReportStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingReportStatus.java" },
+  "invoiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java" },
   "isolationPrecautionType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java" },
   "labOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java" },
   "leaveStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java" },
@@ -47,7 +56,7 @@
   "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
   "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
   "status": {
-    "reason": "the generic domain: 24 call sites render whatever status their own DTO carries, so there is no one enum to check"
+    "reason": "a deliberate shared pool across 13 call sites whose DTOs disagree, plus two vocabularies a service INVENTS and no enum holds: PatientMedicationServiceImpl.resolveStatus (ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD) and PatientLabResultServiceImpl.resolveStatus (PENDING / NORMAL / CRITICAL / ABNORMAL_HIGH / ABNORMAL_LOW). Every site whose field really carries one enum has been pointed at that enum's own domain instead — if you are about to add another `status` call, check first whether yours is one of those."
   },
   "taskPriority": {
     "reason": "shared by nurse tasks and in-basket items, which have separate priority vocabularies"

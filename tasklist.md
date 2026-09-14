@@ -2202,6 +2202,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **The portal lint and format gates stop at `src/`, so the scripts that
+  enforce every other gate are themselves unchecked.** `lint` globs
+  `src/**/*.{ts,html}` and `format:check` globs `src/**/*.{ts,html,scss,md,json}`,
+  which leaves all of `hospital-portal/scripts/` — five gate scripts now run
+  by CI — outside both. The correct fix is `{src,scripts}/**` on both globs,
+  but Prettier then rewrites four sibling gates this PR does not otherwise
+  touch (~330 lines, `check-i18n-coverage.mjs` and `check-i18n-untranslated.mjs`
+  among them, both shipped within the last week), so it belongs in its own
+  mechanical commit rather than buried in a translation PR. #659's own new
+  scripts were run through Prettier by hand; `i18n-enum-domains.json` was
+  deliberately left in its compact one-entry-per-line table form, which
+  Prettier would triple in length.
 - **71 enum-shaped fields are interpolated raw, skipping the EnumLabelPipe
   entirely.** Across 38 templates a value is rendered as `{{ o.modality }}`
   rather than `{{ o.modality | enumLabel: 'imagingModality' }}`, so the wire

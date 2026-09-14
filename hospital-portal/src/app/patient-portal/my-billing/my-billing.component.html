@@ -62,7 +62,7 @@
                 inv.balance | currency: 'XOF'
               }}</span>
               <span class="pli-status" [attr.data-status]="inv.status">{{
-                inv.status | enumLabel: 'status'
+                inv.status | enumLabel: 'invoiceStatus'
               }}</span>
               @if (inv.balance > 0 && inv.status !== 'DRAFT') {
                 <button class="pay-btn" (click)="openPayDialog(inv)">

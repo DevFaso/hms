@@ -204,7 +204,12 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('ENTERED_IN_ERROR', 'allergyVerificationStatus')).toBe(
       'Entered in Error',
     );
-    expect(pipe.transform('SNF', 'dischargeDisposition')).toBe('Skilled Nursing Facility');
+    expect(pipe.transform('SKILLED_NURSING_FACILITY', 'dischargeDisposition')).toBe(
+      'Skilled Nursing Facility',
+    );
+    // The short aliases (SNF / AMA / REHAB) were never emitted by
+    // DischargeDisposition; they now fall through to the prettifier.
+    expect(pipe.transform('SNF', 'dischargeDisposition')).toBe('Snf');
   });
 
   /* ── Phase 3 groups (audit + internal) ───────────────────── */
