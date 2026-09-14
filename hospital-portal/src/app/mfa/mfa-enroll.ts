@@ -65,7 +65,7 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? 'Failed to start enrollment.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_START_FAILED'));
         this.loading.set(false);
       },
     });
@@ -88,7 +88,7 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_WRONG_CODE'));
         this.loading.set(false);
       },
     });

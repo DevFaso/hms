@@ -1,18 +1,23 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { By } from '@angular/platform-browser';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, throwError } from 'rxjs';
 
 import { AnalyticsComponent } from './analytics';
 import { DashboardService, PlatformAnalytics } from '../services/dashboard.service';
 
 /**
- * The eight stat cards carried their English text inline (`label: 'Total
- * Patients'`) and the template rendered it verbatim, so the analytics
- * dashboard was English in every locale while the charts beside it were
- * translated. These cases pin the shape that fixed it: a card carries an i18n
- * KEY, never prose.
+ * The eight stat cards carried their English inline (`label: 'Total
+ * Patients'`) and the template rendered it verbatim, so this dashboard was
+ * English in every locale while the charts beside it were translated; the
+ * by-status breakdowns rendered the backend enum key itself.
+ *
+ * The fix has two halves — a key on the model AND a pipe in the template — so
+ * these cases assert through the rendered DOM. An earlier version of this spec
+ * read the signals off the class and stayed green when `| translate` was
+ * deleted, which is half a test for a two-part fix.
  */
 function analytics(overrides: Partial<PlatformAnalytics> = {}): PlatformAnalytics {
   return {
@@ -37,12 +42,24 @@ function analytics(overrides: Partial<PlatformAnalytics> = {}): PlatformAnalytic
 }
 
 describe('AnalyticsComponent', () => {
+  let fixture: ComponentFixture<AnalyticsComponent>;
   let component: AnalyticsComponent;
   let dashboard: jasmine.SpyObj<DashboardService>;
+  let translate: TranslateService;
+
+  const textOf = (selector: string) =>
+    fixture.debugElement
+      .queryAll(By.css(selector))
+      .map((el) => el.nativeElement.textContent.trim());
 
   beforeEach(() => {
-    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', ['getAnalytics']);
+    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', [
+      'getAnalytics',
+      'getKpiDashboard',
+    ]);
     dashboard.getAnalytics.and.returnValue(of(analytics()));
+    // The page embeds <app-kpi-cards>, which fetches on its own.
+    dashboard.getKpiDashboard.and.returnValue(throwError(() => new Error('not under test')));
 
     TestBed.configureTestingModule({
       imports: [AnalyticsComponent, TranslateModule.forRoot()],
@@ -52,41 +69,67 @@ describe('AnalyticsComponent', () => {
         { provide: DashboardService, useValue: dashboard },
       ],
     });
-    component = TestBed.createComponent(AnalyticsComponent).componentInstance;
-    component.ngOnInit();
+    translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    // Only the values under test; ngx-translate echoes the key for the rest,
+    // which is exactly what a missing key does on screen.
+    translate.setTranslation('fr', {
+      ANALYTICS: {
+        APPOINTMENTS: 'Rendez-vous',
+        CARD: { TOTAL_PATIENTS: 'Total des patients', ACTIVE_HOSPITALS: 'Hôpitaux actifs' },
+      },
+      PORTAL: {
+        ENUM: {
+          APPOINTMENT_STATUS: { SCHEDULED: 'Planifié', COMPLETED: 'Terminé' },
+          ENCOUNTER_STATUS: { IN_PROGRESS: 'En cours' },
+          INVOICE_STATUS: { PAID: 'Payée' },
+        },
+      },
+    });
+
+    fixture = TestBed.createComponent(AnalyticsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
   });
 
-  it('every stat card carries an i18n key, not English text', () => {
-    const cards = component.statCards();
-    expect(cards.length).toBe(8);
-    for (const card of cards) {
-      // A key, not prose: uppercase segments separated by dots.
+  it('renders the card labels in French, not the key and not English', () => {
+    const labels = textOf('.stat-label');
+    expect(labels.length).toBe(8);
+    expect(labels).toContain('Total des patients');
+    expect(labels).toContain('Hôpitaux actifs');
+    expect(labels).toContain('Rendez-vous');
+    // The two halves of the regression: raw English, or an unpiped key path.
+    expect(labels).not.toContain('Total Patients');
+    expect(labels).not.toContain('ANALYTICS.CARD.TOTAL_PATIENTS');
+  });
+
+  it('every stat card carries an i18n key, never prose', () => {
+    for (const card of component.statCards()) {
       expect(card.labelKey).toMatch(/^[A-Z][A-Z0-9_]*(\.[A-Z][A-Z0-9_]*)+$/);
     }
   });
 
-  it('the cards read the figures the API sent', () => {
-    const byKey = new Map(component.statCards().map((c) => [c.labelKey, c.value]));
-    expect(byKey.get('ANALYTICS.CARD.TOTAL_PATIENTS')).toBe(12);
-    expect(byKey.get('ANALYTICS.CARD.ACTIVE_HOSPITALS')).toBe(3);
-    expect(byKey.get('ANALYTICS.APPOINTMENTS')).toBe(30);
+  it('the cards show the figures the API sent', () => {
+    expect(textOf('.stat-value')).toContain('12');
+    expect(textOf('.stat-value')).toContain('3');
   });
 
-  it('keeps the raw enum value on the by-status rows so the pipe and the colour agree', () => {
-    // The template renders `item.label | enumLabel: 'appointmentStatus'` and
-    // passes the same `item.label` to statusColor(); translating it here would
-    // break the colour lookup and the pipe at once.
+  it('runs the by-status rows through the pipe while the colour keeps the raw value', () => {
+    expect(textOf('.status-label')).toEqual(['Planifié', 'Terminé', 'En cours', 'Payée']);
+    // statusColor() is handed the untranslated token; translating it upstream
+    // would break the pill colour and the pipe in one move.
     expect(component.appointmentsByStatus().map((r) => r.label)).toEqual([
       'SCHEDULED',
       'COMPLETED',
     ]);
-    expect(component.encountersByStatus().map((r) => r.label)).toEqual(['IN_PROGRESS']);
-    expect(component.invoicesByStatus().map((r) => r.label)).toEqual(['PAID']);
   });
 
-  it('renders no cards before the API answers', () => {
-    dashboard.getAnalytics.and.returnValue(of(null as unknown as PlatformAnalytics));
-    const fresh = TestBed.createComponent(AnalyticsComponent).componentInstance;
-    expect(fresh.statCards()).toEqual([]);
+  it('renders no cards when the analytics call fails', () => {
+    dashboard.getAnalytics.and.returnValue(throwError(() => new Error('boom')));
+    const failed = TestBed.createComponent(AnalyticsComponent);
+    failed.detectChanges();
+    expect(failed.componentInstance.statCards()).toEqual([]);
+    expect(failed.componentInstance.loading()).toBeFalse();
   });
 });

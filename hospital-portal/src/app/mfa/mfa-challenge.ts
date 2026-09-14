@@ -69,7 +69,7 @@ export class MfaChallengeComponent {
       next: (res) => {
         const token = res.accessToken;
         if (!token) {
-          this.error.set(res.message ?? 'Verification failed.');
+          this.error.set(res.message ?? this.translate.instant('MFA.CHALLENGE_VERIFY_FAILED'));
           this.loading.set(false);
           return;
         }
@@ -129,7 +129,7 @@ export class MfaChallengeComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.CHALLENGE_WRONG_CODE'));
       },
     });
   }

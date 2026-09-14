@@ -26,7 +26,7 @@
   <!-- Admin Sections Grid -->
   <h2 class="section-heading">{{ 'ADMIN.QUICK_ACCESS' | translate }}</h2>
   <div class="admin-grid">
-    @for (section of sections; track section.title) {
+    @for (section of sections; track section.titleKey) {
       <a class="admin-card" [routerLink]="section.route">
         <div
           class="card-icon"
@@ -36,8 +36,8 @@
           <span class="material-symbols-outlined">{{ section.icon }}</span>
         </div>
         <div class="card-body">
-          <h3 class="card-title">{{ section.title }}</h3>
-          <p class="card-desc">{{ section.description }}</p>
+          <h3 class="card-title">{{ section.titleKey | translate }}</h3>
+          <p class="card-desc">{{ section.descriptionKey | translate }}</p>
         </div>
         <span class="material-symbols-outlined card-arrow">arrow_forward</span>
       </a>

@@ -7,13 +7,24 @@
     "SUBTITLE": "Panel de administración",
     "TITLE": "Administración",
     "STAT": {
-      "TOTAL_USERS": "Total de usuarios",
       "ACTIVE_STAFF": "Personal activo",
-      "DEPARTMENTS": "Departamentos",
       "SYSTEM_HEALTH": "Estado del sistema",
       "ON_SHIFT_TODAY": "En turno hoy",
       "TODAY_APPOINTMENTS": "Citas de hoy",
-      "ONLINE": "En línea"
+      "ONLINE": "En línea",
+      "UNAVAILABLE": "No disponible"
+    },
+    "SECTION": {
+      "USERS_TITLE": "Gestión de usuarios",
+      "USERS_DESC": "Gestionar cuentas, roles y permisos",
+      "TRACKER_TITLE": "Seguimiento de pacientes",
+      "TRACKER_DESC": "Flujo de pacientes en tiempo real en el hospital",
+      "FRONT_DESK_TITLE": "Recepción",
+      "FRONT_DESK_DESC": "Puesto de recepción: llegadas, colas y recordatorios",
+      "NOTIFICATIONS_TITLE": "Notificaciones del sistema",
+      "NOTIFICATIONS_DESC": "Configurar plantillas de notificación y canales de envío",
+      "AUDIT_TITLE": "Registros de auditoría",
+      "AUDIT_DESC": "Consultar la pista de auditoría y los registros de acceso"
     }
   },
   "ADT_INTAKE": {
@@ -1171,7 +1182,8 @@
       "PRESCRIPTIONS": "Prescripciones",
       "USERS": "Usuarios",
       "ACTIVE_HOSPITALS": "Hospitales activos"
-    }
+    },
+    "TREND_BAR_TITLE": "{{count}} citas"
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Crear",
@@ -4849,6 +4861,7 @@
         "READY_FOR_DISCHARGE": "Listo para el alta",
         "SCHEDULED": "Programado",
         "TRIAGE": "Triaje",
+        "UNKNOWN": "Desconocido",
         "WAITING_FOR_PHYSICIAN": "Esperando al médico"
       },
       "LEAVE_STATUS": {
@@ -4998,7 +5011,8 @@
         "DRAFT": "Borrador",
         "PAID": "Pagada",
         "PARTIALLY_PAID": "Parcialmente pagada",
-        "SENT": "Enviada"
+        "SENT": "Enviada",
+        "UNKNOWN": "Desconocido"
       },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmada",
@@ -8040,7 +8054,9 @@
     "BPD_MM": "DBP (mm)",
     "HC_MM": "PC (mm)",
     "AC_MM": "PA (mm)",
-    "FL_MM": "LF (mm)"
+    "FL_MM": "LF (mm)",
+    "NT_MM": "TN (mm)",
+    "CRL_MM": "LCN (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",
@@ -9546,7 +9562,11 @@
     "ENROLL_VERIFY": "Verificar",
     "ENROLL_VERIFYING": "Verificando…",
     "CHALLENGE_INVALID_CODE": "Introduzca un código válido (TOTP de 6 dígitos o código de respaldo de 8 caracteres).",
-    "ENROLL_INVALID_CODE": "Introduzca un código válido de 6 dígitos."
+    "ENROLL_INVALID_CODE": "Introduzca un código válido de 6 dígitos.",
+    "CHALLENGE_VERIFY_FAILED": "Error de verificación.",
+    "CHALLENGE_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo.",
+    "ENROLL_START_FAILED": "No se pudo iniciar la configuración.",
+    "ENROLL_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo."
   },
   "LAB_OPS": {
     "AGING": "Antigüedad (>24h)",

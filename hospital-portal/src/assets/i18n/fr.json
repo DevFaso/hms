@@ -7,13 +7,24 @@
     "SUBTITLE": "Panneau d'administration",
     "TITLE": "Administration",
     "STAT": {
-      "TOTAL_USERS": "Total des utilisateurs",
       "ACTIVE_STAFF": "Personnel actif",
-      "DEPARTMENTS": "Services",
       "SYSTEM_HEALTH": "État du système",
-      "ON_SHIFT_TODAY": "En poste aujourd’hui",
+      "ON_SHIFT_TODAY": "En poste aujourd'hui",
       "TODAY_APPOINTMENTS": "Rendez-vous du jour",
-      "ONLINE": "En ligne"
+      "ONLINE": "En ligne",
+      "UNAVAILABLE": "Indisponible"
+    },
+    "SECTION": {
+      "USERS_TITLE": "Gestion des utilisateurs",
+      "USERS_DESC": "Gérer les comptes, les rôles et les autorisations",
+      "TRACKER_TITLE": "Suivi des patients",
+      "TRACKER_DESC": "Flux des patients en temps réel dans l'hôpital",
+      "FRONT_DESK_TITLE": "Accueil",
+      "FRONT_DESK_DESC": "Poste d'accueil : arrivées, files d'attente et rappels",
+      "NOTIFICATIONS_TITLE": "Notifications du système",
+      "NOTIFICATIONS_DESC": "Configurer les modèles de notification et les canaux d'envoi",
+      "AUDIT_TITLE": "Journaux d'audit",
+      "AUDIT_DESC": "Consulter la piste d'audit et les journaux d'accès"
     }
   },
   "ADT_INTAKE": {
@@ -1171,7 +1182,8 @@
       "PRESCRIPTIONS": "Ordonnances",
       "USERS": "Utilisateurs",
       "ACTIVE_HOSPITALS": "Hôpitaux actifs"
-    }
+    },
+    "TREND_BAR_TITLE": "{{count}} rendez-vous"
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Créer",
@@ -4815,6 +4827,7 @@
         "READY_FOR_DISCHARGE": "Prêt pour la sortie",
         "SCHEDULED": "Planifié",
         "TRIAGE": "Triage",
+        "UNKNOWN": "Inconnu",
         "WAITING_FOR_PHYSICIAN": "En attente du médecin"
       },
       "LEAVE_STATUS": {
@@ -4964,7 +4977,8 @@
         "DRAFT": "Brouillon",
         "PAID": "Payée",
         "PARTIALLY_PAID": "Partiellement payée",
-        "SENT": "Envoyée"
+        "SENT": "Envoyée",
+        "UNKNOWN": "Inconnu"
       },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmée",
@@ -8040,7 +8054,9 @@
     "BPD_MM": "BIP (mm)",
     "HC_MM": "PC (mm)",
     "AC_MM": "PA (mm)",
-    "FL_MM": "LF (mm)"
+    "FL_MM": "LF (mm)",
+    "NT_MM": "CN (mm)",
+    "CRL_MM": "LCC (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",
@@ -9546,7 +9562,11 @@
     "ENROLL_VERIFY": "Vérifier",
     "ENROLL_VERIFYING": "Vérification en cours…",
     "CHALLENGE_INVALID_CODE": "Saisissez un code valide (TOTP à 6 chiffres ou code de secours à 8 caractères).",
-    "ENROLL_INVALID_CODE": "Veuillez saisir un code valide à 6 chiffres."
+    "ENROLL_INVALID_CODE": "Veuillez saisir un code valide à 6 chiffres.",
+    "CHALLENGE_VERIFY_FAILED": "Échec de la vérification.",
+    "CHALLENGE_WRONG_CODE": "Code incorrect. Veuillez réessayer.",
+    "ENROLL_START_FAILED": "Impossible de démarrer la configuration.",
+    "ENROLL_WRONG_CODE": "Code incorrect. Veuillez réessayer."
   },
   "LAB_OPS": {
     "AGING": "Ancienneté (>24h)",

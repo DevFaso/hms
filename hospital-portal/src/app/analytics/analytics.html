@@ -51,7 +51,7 @@
                 <div
                   class="bar"
                   [style.height]="barHeight(point.count)"
-                  [title]="point.count + ' appointments'"
+                  [title]="'ANALYTICS.TREND_BAR_TITLE' | translate: { count: point.count }"
                 ></div>
                 <span class="bar-label">{{ shortDate(point.date) }}</span>
               </div>

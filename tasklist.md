@@ -2202,6 +2202,28 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **One label, three keys: the bundle has no shared vocabulary block.** The
+  house convention is per-feature blocks (`angular-portal-component` SKILL.md:
+  "find the nearest feature block, extend it"), so the same words are keyed
+  once per screen that shows them — "Active Staff" exists under DASHBOARD,
+  DEPARTMENTS and now ADMIN.STAT; "Today's Appointments" under DASHBOARD,
+  RECEPTION and ADMIN.STAT; "Lab Orders" under DASHBOARD, PATIENTS and
+  ANALYTICS.CARD. Of the 22 keys #661 added, 12 have an exact-text twin
+  somewhere else, and none of those twins is in the same block — reusing one
+  would mean a copy change on the dashboard silently rewording the admin
+  screen, which is why the convention exists. The EN spellings have already
+  drifted apart under it ("On Shift Today" vs "On-Shift Today", "Lab Orders"
+  vs "Lab orders", "Today's Appointments" vs "Today's appointments"), each
+  needing its own FR and ES entry. The fix is a COMMON.LABEL block plus a
+  dedup pass across all three locales, which is a cross-cutting i18n refactor
+  and a copy decision, not something to bury in a translation PR.
+- **`analytics.ts` and `admin.ts` had no spec before #661**, and neither did
+  the MFA pair, the maternity tabs, or most of `patient-portal/`. The two
+  specs #661 adds assert through the DOM because the fix has two halves (a key
+  on the model, a pipe in the template) and a class-level assertion covers
+  only the first — an earlier draft of the analytics spec stayed green with
+  `| translate` deleted. Worth copying that shape to the screens still
+  untested rather than writing class-level card assertions for them.
 - **The portal lint and format gates stop at `src/`, so the scripts that
   enforce every other gate are themselves unchecked.** `lint` globs
   `src/**/*.{ts,html}` and `format:check` globs `src/**/*.{ts,html,scss,md,json}`,
