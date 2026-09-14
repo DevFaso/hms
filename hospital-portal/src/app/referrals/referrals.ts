@@ -16,7 +16,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -37,6 +37,7 @@ export class ReferralsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -95,65 +96,82 @@ export class ReferralsComponent implements OnInit {
 
   urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
 
-  referralTypes = [
-    { value: 'CONSULTATION', label: 'Consultation' },
-    { value: 'SHARED_CARE', label: 'Shared Care' },
-    { value: 'TRANSFER_OF_CARE', label: 'Transfer of Care' },
+  /**
+   * Reuses the shared referral-type enum group so the picker reads the same as
+   * every referral-type badge. Localised on every read so the options follow a
+   * runtime language switch.
+   */
+  get referralTypes(): { value: string; label: string }[] {
+    return ['CONSULTATION', 'SHARED_CARE', 'TRANSFER_OF_CARE'].map((value) => ({
+      value,
+      label: this.translate.instant(`PORTAL.ENUM.REFERRAL_TYPE.${value}`),
+    }));
+  }
+
+  /**
+   * Target-specialty picker. Localised on every read so the options follow a
+   * runtime language switch; the wire value stays the raw enum.
+   */
+  private static readonly SPECIALTY_VALUES = [
+    'GENERAL_PRACTICE',
+    'INTERNAL_MEDICINE',
+    'FAMILY_MEDICINE',
+    'PEDIATRICS',
+    'EMERGENCY_MEDICINE',
+    'GENERAL_SURGERY',
+    'CARDIOTHORACIC_SURGERY',
+    'NEUROSURGERY',
+    'ORTHOPEDIC_SURGERY',
+    'PLASTIC_SURGERY',
+    'VASCULAR_SURGERY',
+    'UROLOGY',
+    'CARDIOLOGY',
+    'NEUROLOGY',
+    'GASTROENTEROLOGY',
+    'PULMONOLOGY',
+    'NEPHROLOGY',
+    'ENDOCRINOLOGY',
+    'RHEUMATOLOGY',
+    'HEMATOLOGY',
+    'ONCOLOGY',
+    'INFECTIOUS_DISEASE',
+    'OBSTETRICS_GYNECOLOGY',
+    'MATERNAL_FETAL_MEDICINE',
+    'REPRODUCTIVE_ENDOCRINOLOGY',
+    'MIDWIFERY',
+    'OPHTHALMOLOGY',
+    'OTOLARYNGOLOGY',
+    'AUDIOLOGY',
+    'PSYCHIATRY',
+    'PSYCHOLOGY',
+    'BEHAVIORAL_HEALTH',
+    'PHYSICAL_MEDICINE_REHABILITATION',
+    'PHYSICAL_THERAPY',
+    'OCCUPATIONAL_THERAPY',
+    'SPEECH_THERAPY',
+    'DERMATOLOGY',
+    'ALLERGY_IMMUNOLOGY',
+    'RADIOLOGY',
+    'INTERVENTIONAL_RADIOLOGY',
+    'PATHOLOGY',
+    'ANESTHESIOLOGY',
+    'PAIN_MANAGEMENT',
+    'PALLIATIVE_CARE',
+    'NUTRITION_DIETETICS',
+    'GENETICS',
+    'SLEEP_MEDICINE',
+    'GERIATRICS',
+    'SPORTS_MEDICINE',
+    'WOUND_CARE',
+    'OTHER',
   ];
 
-  specialties = [
-    { value: 'GENERAL_PRACTICE', label: 'General Practice' },
-    { value: 'INTERNAL_MEDICINE', label: 'Internal Medicine' },
-    { value: 'FAMILY_MEDICINE', label: 'Family Medicine' },
-    { value: 'PEDIATRICS', label: 'Pediatrics' },
-    { value: 'EMERGENCY_MEDICINE', label: 'Emergency Medicine' },
-    { value: 'GENERAL_SURGERY', label: 'General Surgery' },
-    { value: 'CARDIOTHORACIC_SURGERY', label: 'Cardiothoracic Surgery' },
-    { value: 'NEUROSURGERY', label: 'Neurosurgery' },
-    { value: 'ORTHOPEDIC_SURGERY', label: 'Orthopedic Surgery' },
-    { value: 'PLASTIC_SURGERY', label: 'Plastic Surgery' },
-    { value: 'VASCULAR_SURGERY', label: 'Vascular Surgery' },
-    { value: 'UROLOGY', label: 'Urology' },
-    { value: 'CARDIOLOGY', label: 'Cardiology' },
-    { value: 'NEUROLOGY', label: 'Neurology' },
-    { value: 'GASTROENTEROLOGY', label: 'Gastroenterology' },
-    { value: 'PULMONOLOGY', label: 'Pulmonology' },
-    { value: 'NEPHROLOGY', label: 'Nephrology' },
-    { value: 'ENDOCRINOLOGY', label: 'Endocrinology' },
-    { value: 'RHEUMATOLOGY', label: 'Rheumatology' },
-    { value: 'HEMATOLOGY', label: 'Hematology' },
-    { value: 'ONCOLOGY', label: 'Oncology' },
-    { value: 'INFECTIOUS_DISEASE', label: 'Infectious Disease' },
-    { value: 'OBSTETRICS_GYNECOLOGY', label: 'Obstetrics & Gynecology' },
-    { value: 'MATERNAL_FETAL_MEDICINE', label: 'Maternal-Fetal Medicine' },
-    { value: 'REPRODUCTIVE_ENDOCRINOLOGY', label: 'Reproductive Endocrinology' },
-    { value: 'MIDWIFERY', label: 'Midwifery' },
-    { value: 'OPHTHALMOLOGY', label: 'Ophthalmology' },
-    { value: 'OTOLARYNGOLOGY', label: 'Otolaryngology (ENT)' },
-    { value: 'AUDIOLOGY', label: 'Audiology' },
-    { value: 'PSYCHIATRY', label: 'Psychiatry' },
-    { value: 'PSYCHOLOGY', label: 'Psychology' },
-    { value: 'BEHAVIORAL_HEALTH', label: 'Behavioral Health' },
-    { value: 'PHYSICAL_MEDICINE_REHABILITATION', label: 'Physical Medicine & Rehabilitation' },
-    { value: 'PHYSICAL_THERAPY', label: 'Physical Therapy' },
-    { value: 'OCCUPATIONAL_THERAPY', label: 'Occupational Therapy' },
-    { value: 'SPEECH_THERAPY', label: 'Speech Therapy' },
-    { value: 'DERMATOLOGY', label: 'Dermatology' },
-    { value: 'ALLERGY_IMMUNOLOGY', label: 'Allergy & Immunology' },
-    { value: 'RADIOLOGY', label: 'Radiology' },
-    { value: 'INTERVENTIONAL_RADIOLOGY', label: 'Interventional Radiology' },
-    { value: 'PATHOLOGY', label: 'Pathology' },
-    { value: 'ANESTHESIOLOGY', label: 'Anesthesiology' },
-    { value: 'PAIN_MANAGEMENT', label: 'Pain Management' },
-    { value: 'PALLIATIVE_CARE', label: 'Palliative Care' },
-    { value: 'NUTRITION_DIETETICS', label: 'Nutrition & Dietetics' },
-    { value: 'GENETICS', label: 'Genetics' },
-    { value: 'SLEEP_MEDICINE', label: 'Sleep Medicine' },
-    { value: 'GERIATRICS', label: 'Geriatrics' },
-    { value: 'SPORTS_MEDICINE', label: 'Sports Medicine' },
-    { value: 'WOUND_CARE', label: 'Wound Care' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  get specialties(): { value: string; label: string }[] {
+    return ReferralsComponent.SPECIALTY_VALUES.map((value) => ({
+      value,
+      label: this.translate.instant(`REFERRALS.SPECIALTY_OPTION.${value}`),
+    }));
+  }
 
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
@@ -243,7 +261,7 @@ export class ReferralsComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('DEPARTMENTS.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -321,13 +339,13 @@ export class ReferralsComponent implements OnInit {
     this.saving.set(true);
     this.referralService.create(this.form).subscribe({
       next: () => {
-        this.toast.success('Referral created');
+        this.toast.success(this.translate.instant('REFERRALS.CREATED'));
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('REFERRALS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -345,13 +363,13 @@ export class ReferralsComponent implements OnInit {
     this.deleting.set(true);
     this.referralService.cancel(this.deletingRef()!.id, 'Cancelled by admin').subscribe({
       next: () => {
-        this.toast.success('Referral cancelled');
+        this.toast.success(this.translate.instant('REFERRALS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
         this.deleting.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Cancel failed');
+        this.toast.error(this.translate.instant('REFERRALS.CANCEL_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -362,13 +380,13 @@ export class ReferralsComponent implements OnInit {
     this.actionLoading.set(true);
     this.referralService.submit(r.id).subscribe({
       next: () => {
-        this.toast.success('Referral submitted');
+        this.toast.success(this.translate.instant('REFERRALS.SUBMIT_SUCCESS'));
         this.actionLoading.set(false);
         this.load();
         this.closeDetail();
       },
       error: () => {
-        this.toast.error('Submit failed');
+        this.toast.error(this.translate.instant('REFERRALS.SUBMIT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -391,14 +409,14 @@ export class ReferralsComponent implements OnInit {
     this.actionLoading.set(true);
     this.referralService.acknowledge(ref.id, this.acknowledgeNotes, providerId).subscribe({
       next: () => {
-        this.toast.success('Referral acknowledged');
+        this.toast.success(this.translate.instant('REFERRALS.ACKNOWLEDGE_SUCCESS'));
         this.closeAcknowledgeModal();
         this.actionLoading.set(false);
         this.load();
         this.closeDetail();
       },
       error: () => {
-        this.toast.error('Acknowledge failed');
+        this.toast.error(this.translate.instant('REFERRALS.ACKNOWLEDGE_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -423,14 +441,14 @@ export class ReferralsComponent implements OnInit {
       .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
       .subscribe({
         next: () => {
-          this.toast.success('Referral scheduled');
+          this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));
           this.closeScheduleModal();
           this.actionLoading.set(false);
           this.load();
           this.closeDetail();
         },
         error: () => {
-          this.toast.error('Schedule failed');
+          this.toast.error(this.translate.instant('REFERRALS.SCHEDULE_FAILED'));
           this.actionLoading.set(false);
         },
       });
@@ -441,13 +459,13 @@ export class ReferralsComponent implements OnInit {
     this.actionLoading.set(true);
     this.referralService.start(r.id).subscribe({
       next: () => {
-        this.toast.success('Consultation started');
+        this.toast.success(this.translate.instant('REFERRALS.START_SUCCESS'));
         this.actionLoading.set(false);
         this.load();
         this.closeDetail();
       },
       error: () => {
-        this.toast.error('Start failed');
+        this.toast.error(this.translate.instant('REFERRALS.START_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -469,14 +487,14 @@ export class ReferralsComponent implements OnInit {
     this.actionLoading.set(true);
     this.referralService.reject(ref.id, this.rejectReason).subscribe({
       next: () => {
-        this.toast.success('Referral rejected');
+        this.toast.success(this.translate.instant('REFERRALS.REJECT_SUCCESS'));
         this.closeRejectModal();
         this.actionLoading.set(false);
         this.load();
         this.closeDetail();
       },
       error: () => {
-        this.toast.error('Reject failed');
+        this.toast.error(this.translate.instant('REFERRALS.REJECT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -499,14 +517,14 @@ export class ReferralsComponent implements OnInit {
     this.actionLoading.set(true);
     this.referralService.complete(ref.id, this.completeSummary, this.completeFollowUp).subscribe({
       next: () => {
-        this.toast.success('Referral completed');
+        this.toast.success(this.translate.instant('REFERRALS.COMPLETE_SUCCESS'));
         this.closeCompleteModal();
         this.actionLoading.set(false);
         this.load();
         this.closeDetail();
       },
       error: () => {
-        this.toast.error('Complete failed');
+        this.toast.error(this.translate.instant('REFERRALS.COMPLETE_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -521,7 +539,7 @@ export class ReferralsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load referrals');
+        this.toast.error(this.translate.instant('REFERRALS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });

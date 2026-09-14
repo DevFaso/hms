@@ -15,7 +15,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -34,6 +34,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
   private readonly permissions = inject(PermissionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -111,7 +112,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load patients');
+        this.toast.error(this.translate.instant('PATIENTS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -228,7 +229,16 @@ export class PatientListComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Locale-aware gender label. Same three-tier lookup as the `enumLabel` pipe:
+   * the raw enum under `PORTAL.ENUM.GENDER.*` first, then a prettified fallback
+   * so an unmapped value never renders as a raw translation key.
+   */
   formatGender(g: string): string {
+    if (!g) return '';
+    const key = `PORTAL.ENUM.GENDER.${g.toUpperCase()}`;
+    const label = this.translate.instant(key);
+    if (typeof label === 'string' && label && label !== key) return label;
     return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase().replaceAll('_', ' ');
   }
 

@@ -9,7 +9,7 @@ import {
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
@@ -94,6 +94,7 @@ export class OrganizationDetailComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly organization = signal<OrganizationResponse | null>(null);
   readonly lifecycle = signal<TenantLifecycleResponse | null>(null);
@@ -126,7 +127,7 @@ export class OrganizationDetailComponent implements OnInit {
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {
-      this.toast.error('Missing organization id');
+      this.toast.error(this.translate.instant('TENANT_LIFECYCLE.TOAST.MISSING_ID'));
       void this.router.navigate(['/organizations']);
       return;
     }
@@ -149,9 +150,9 @@ export class OrganizationDetailComponent implements OnInit {
       ),
     }).subscribe(({ org, lc }) => {
       if (org.ok) this.organization.set(org.value);
-      else this.toast.error('Failed to load organization');
+      else this.toast.error(this.translate.instant('TENANT_LIFECYCLE.TOAST.ORG_LOAD_FAILED'));
       if (lc.ok) this.lifecycle.set(lc.value);
-      else this.toast.error('Failed to load lifecycle');
+      else this.toast.error(this.translate.instant('TENANT_LIFECYCLE.TOAST.LIFECYCLE_LOAD_FAILED'));
       this.loading.set(false);
     });
   }
@@ -195,11 +196,13 @@ export class OrganizationDetailComponent implements OnInit {
         this.lifecycle.set(lc);
         this.submitting.set(false);
         this.activeAction.set(null);
-        this.toast.success('Lifecycle action applied');
+        this.toast.success(this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_APPLIED'));
       },
       error: (err) => {
         this.submitting.set(false);
-        this.toast.error(err?.error?.message ?? 'Action failed');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED'),
+        );
       },
     });
   }

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -39,6 +39,7 @@ export class MtmReviewComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
   /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
   readonly scopeReady = this.roleContext.hasHospitalScope;
   /** Emits on every scope change so a response for the previous hospital can never land. */
@@ -88,7 +89,7 @@ export class MtmReviewComponent implements OnInit {
         },
         error: () => {
           this.loading.set(false);
-          this.toast.error('Failed to load MTM reviews');
+          this.toast.error(this.translate.instant('PHARMACY.MTM_LOAD_FAILED'));
         },
       });
   }
@@ -122,7 +123,7 @@ export class MtmReviewComponent implements OnInit {
 
   submit(): void {
     if (!this.form.patientId || !this.form.hospitalId) {
-      this.toast.error('Patient and hospital are required');
+      this.toast.error(this.translate.instant('PHARMACY.MTM_PATIENT_HOSPITAL_REQUIRED'));
       return;
     }
     this.saving.set(true);
@@ -131,14 +132,14 @@ export class MtmReviewComponent implements OnInit {
       : this.svc.startMtmReview(this.form);
     stream.subscribe({
       next: () => {
-        this.toast.success('MTM review saved');
+        this.toast.success(this.translate.instant('PHARMACY.MTM_SAVED'));
         this.saving.set(false);
         this.closeForm();
         this.loadReviews();
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to save MTM review');
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.MTM_SAVE_FAILED'));
       },
     });
   }

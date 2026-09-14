@@ -140,7 +140,7 @@ export class AppointmentDetailComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Appointment not found');
+        this.toast.error(this.translate.instant('APPOINTMENTS.NOT_FOUND'));
         this.loading.set(false);
         void this.router.navigate(['/appointments']);
       },
@@ -183,7 +183,7 @@ export class AppointmentDetailComponent implements OnInit {
   submitReschedule(): void {
     const appt = this.appointment();
     if (!appt || !this.rescheduleDate || !this.rescheduleStart || !this.rescheduleEnd) {
-      this.toast.error('Please fill in all required fields.');
+      this.toast.error(this.translate.instant('APPOINTMENTS.REQUIRED_FIELDS'));
       return;
     }
 
@@ -191,12 +191,12 @@ export class AppointmentDetailComponent implements OnInit {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (selectedDate < today) {
-      this.toast.error('Cannot schedule appointments in the past.');
+      this.toast.error(this.translate.instant('APPOINTMENTS.DATE_IN_PAST'));
       return;
     }
 
     if (this.rescheduleEnd <= this.rescheduleStart) {
-      this.toast.error('End time must be after start time.');
+      this.toast.error(this.translate.instant('APPOINTMENTS.END_BEFORE_START'));
       return;
     }
 
@@ -229,12 +229,14 @@ export class AppointmentDetailComponent implements OnInit {
     this.appointmentService.update(this.appointmentId, req).subscribe({
       next: (updated) => {
         this.appointment.set(updated);
-        this.toast.success('Appointment rescheduled successfully');
+        this.toast.success(this.translate.instant('APPOINTMENTS.RESCHEDULED'));
         this.showReschedule.set(false);
         this.saving.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to reschedule appointment');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -255,12 +257,14 @@ export class AppointmentDetailComponent implements OnInit {
     this.appointmentService.updateStatus(this.appointmentId, 'CANCEL').subscribe({
       next: (updated) => {
         this.appointment.set(updated);
-        this.toast.success('Appointment cancelled');
+        this.toast.success(this.translate.instant('APPOINTMENTS.CANCEL_SUCCESS'));
         this.showCancelConfirm.set(false);
         this.cancelling.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to cancel appointment');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('APPOINTMENTS.CANCEL_FAILED'),
+        );
         this.cancelling.set(false);
       },
     });
@@ -297,11 +301,13 @@ export class AppointmentDetailComponent implements OnInit {
     this.appointmentService.updateStatus(this.appointmentId, action).subscribe({
       next: (updated) => {
         this.appointment.set(updated);
-        this.toast.success('Status updated');
+        this.toast.success(this.translate.instant('APPOINTMENTS.STATUS_UPDATED'));
         this.saving.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to update status');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('APPOINTMENTS.STATUS_UPDATE_FAILED'),
+        );
         this.saving.set(false);
       },
     });

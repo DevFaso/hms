@@ -226,12 +226,12 @@ export class PlatformComponent implements OnInit {
         this.snapshot.set(snapshot);
         this.loading.set(false);
         if (!summary) {
-          this.error.set('Failed to load platform summary.');
+          this.error.set(this.translate.instant('PLATFORM.SUMMARY_LOAD_FAILED'));
         }
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Failed to load platform data. Please try again.');
+        this.error.set(this.translate.instant('PLATFORM.DATA_LOAD_FAILED'));
       },
     });
   }
@@ -784,7 +784,13 @@ export class PlatformComponent implements OnInit {
     lastRun: string;
   }): void {
     this.toast.info(
-      `${task.title}: ${task.nextAction} | ${task.metricLabel}: ${task.metricValue} | Last: ${task.lastRun}`,
+      this.translate.instant('PLATFORM.TOAST.TASK_DETAILS', {
+        title: task.title,
+        nextAction: task.nextAction,
+        metricLabel: task.metricLabel,
+        metricValue: task.metricValue,
+        lastRun: task.lastRun,
+      }),
     );
   }
 

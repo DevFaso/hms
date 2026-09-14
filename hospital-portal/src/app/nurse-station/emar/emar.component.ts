@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import {
@@ -37,12 +37,12 @@ interface BarcodeDetectorCtor {
 
 const FIVE_RIGHTS_ORDER: readonly FiveRightsCheck[] = ['PATIENT', 'DRUG', 'DOSE', 'ROUTE', 'TIME'];
 
-const FIVE_RIGHTS_LABELS: Record<FiveRightsCheck, string> = {
-  PATIENT: 'Right Patient',
-  DRUG: 'Right Drug',
-  DOSE: 'Right Dose',
-  ROUTE: 'Right Route',
-  TIME: 'Right Time',
+const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
+  PATIENT: 'EMAR.RIGHT.PATIENT',
+  DRUG: 'EMAR.RIGHT.DRUG',
+  DOSE: 'EMAR.RIGHT.DOSE',
+  ROUTE: 'EMAR.RIGHT.ROUTE',
+  TIME: 'EMAR.RIGHT.TIME',
 };
 
 /**
@@ -58,10 +58,6 @@ const FIVE_RIGHTS_LABELS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  // TranslateModule is here for the pharmacist-verification strings (Tier 2
-  // item 33). The rest of this template is still hard-coded English — a
-  // pre-existing gap, not swept here, but a new string that refuses a dose is
-  // not one to add to the pile untranslated.
   imports: [CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
@@ -85,7 +81,8 @@ export class EmarComponent implements OnInit, OnDestroy {
   protected readonly scannerError = signal<string | null>(null);
 
   protected readonly fiveRights = FIVE_RIGHTS_ORDER;
-  protected readonly fiveRightsLabel = (k: FiveRightsCheck) => FIVE_RIGHTS_LABELS[k];
+  protected readonly fiveRightsLabel = (k: FiveRightsCheck) =>
+    this.translate.instant(FIVE_RIGHTS_LABEL_KEYS[k]);
 
   protected readonly canVerify = computed(() => {
     const t = this.activeTask();
@@ -129,6 +126,7 @@ export class EmarComponent implements OnInit, OnDestroy {
 
   private readonly nurseTaskService = inject(NurseTaskService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private readonly destroyed$ = new Subject<void>();
   private loadSub?: Subscription;
   private scanLoop?: ReturnType<typeof setTimeout>;
@@ -244,15 +242,19 @@ export class EmarComponent implements OnInit, OnDestroy {
           this.verification.set(resp);
           this.verifyInFlight.set(false);
           if (resp.allPassed) {
-            this.toast.success('All five rights verified.');
+            this.toast.success(this.translate.instant('EMAR.TOAST.ALL_RIGHTS_VERIFIED'));
           } else {
-            this.toast.error(`Failed: ${resp.failedChecks.join(', ')}`);
+            this.toast.error(
+              this.translate.instant('EMAR.TOAST.RIGHTS_FAILED', {
+                checks: resp.failedChecks.map((c) => this.fiveRightsLabel(c)).join(', '),
+              }),
+            );
           }
         },
         error: () => {
           if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verifyInFlight.set(false);
-          this.toast.error('Verification failed. Try again.');
+          this.toast.error(this.translate.instant('EMAR.TOAST.VERIFY_FAILED'));
         },
       });
   }
@@ -274,13 +276,17 @@ export class EmarComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.administerInFlight.set(false);
-          this.toast.success(`Recorded as ${status}.`);
+          this.toast.success(
+            this.translate.instant('EMAR.TOAST.RECORDED', {
+              status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
+            }),
+          );
           this.closeTask();
           this.loadTasks();
         },
         error: () => {
           this.administerInFlight.set(false);
-          this.toast.error('Could not record administration.');
+          this.toast.error(this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'));
         },
       });
   }
@@ -296,9 +302,7 @@ export class EmarComponent implements OnInit, OnDestroy {
     const Detector = (globalThis as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
       .BarcodeDetector;
     if (!Detector) {
-      this.scannerError.set(
-        'Live scanner not supported on this device — type or paste the value below.',
-      );
+      this.scannerError.set(this.translate.instant('EMAR.SCANNER_UNSUPPORTED'));
       return;
     }
     try {
@@ -309,7 +313,7 @@ export class EmarComponent implements OnInit, OnDestroy {
       // Defer until template renders the video element.
       setTimeout(() => this.runDetectLoop(new Detector({ formats: ['qr_code', 'code_128'] })), 0);
     } catch {
-      this.scannerError.set('Camera permission denied — type or paste the value below.');
+      this.scannerError.set(this.translate.instant('EMAR.SCANNER_PERMISSION_DENIED'));
       this.stopScanner();
     }
   }
@@ -340,7 +344,14 @@ export class EmarComponent implements OnInit, OnDestroy {
         if (codes.length > 0) {
           const value = codes[0].rawValue;
           this.onScanInput(field, value);
-          this.toast.success(`Scanned ${field}: ${value.slice(0, 24)}`);
+          this.toast.success(
+            this.translate.instant('EMAR.TOAST.SCANNED', {
+              field: this.translate.instant(
+                field === 'patient' ? 'EMAR.SCAN_FIELD.PATIENT' : 'EMAR.SCAN_FIELD.MEDICATION',
+              ),
+              value: value.slice(0, 24),
+            }),
+          );
           this.stopScanner();
           return;
         }

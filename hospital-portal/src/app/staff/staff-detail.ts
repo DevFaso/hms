@@ -20,7 +20,7 @@ import {
   StaffLeaveResponse,
 } from '../services/staff-scheduling.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
@@ -39,6 +39,7 @@ export class StaffDetailComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   staff = signal<StaffResponse | null>(null);
   loading = signal(true);
@@ -115,7 +116,7 @@ export class StaffDetailComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load staff member');
+        this.toast.error(this.translate.instant('STAFF.LOAD_MEMBER_FAILED'));
         this.loading.set(false);
       },
     });
@@ -196,7 +197,15 @@ export class StaffDetailComponent implements OnInit {
     const { start } = this.getWeekRange();
     const monday = new Date(start + 'T00:00:00');
     const today = this.toISODate(new Date());
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayNames = [
+      'COMMON.WEEKDAY_SHORT_MON',
+      'COMMON.WEEKDAY_SHORT_TUE',
+      'COMMON.WEEKDAY_SHORT_WED',
+      'COMMON.WEEKDAY_SHORT_THU',
+      'COMMON.WEEKDAY_SHORT_FRI',
+      'COMMON.WEEKDAY_SHORT_SAT',
+      'COMMON.WEEKDAY_SHORT_SUN',
+    ].map((key) => this.translate.instant(key));
     return dayNames.map((label, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
@@ -231,7 +240,7 @@ export class StaffDetailComponent implements OnInit {
   }
 
   formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return 'Staff';
+    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
     return jobTitle
       .replaceAll('_', ' ')
       .toLowerCase()

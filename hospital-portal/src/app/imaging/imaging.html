@@ -590,7 +590,7 @@
             <label for="rep-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
             <select id="rep-modality" [(ngModel)]="reportForm.modality">
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m | enumLabel }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>

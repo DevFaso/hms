@@ -321,6 +321,37 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       EMERGENCY: 'Emergency',
       RECOVERY: 'Recovery',
     },
+    /* Isolation precautions (bed board). The prettifier would render these
+     * correctly in English, but without a group the badges can never be
+     * translated, so give them a real i18n path. */
+    isolationPrecautionType: {
+      CONTACT: 'Contact',
+      DROPLET: 'Droplet',
+      AIRBORNE: 'Airborne',
+      PROTECTIVE: 'Protective',
+    },
+    bloodProductType: {
+      WHOLE_BLOOD: 'Whole Blood',
+      PACKED_RED_CELLS: 'Packed Red Cells',
+      FRESH_FROZEN_PLASMA: 'Fresh Frozen Plasma',
+      PLATELETS: 'Platelets',
+      CRYOPRECIPITATE: 'Cryoprecipitate',
+    },
+    /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
+     * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */
+    imagingModality: {
+      XRAY: 'X-Ray',
+      CT: 'CT',
+      MRI: 'MRI',
+      ULTRASOUND: 'Ultrasound',
+      MAMMOGRAPHY: 'Mammography',
+      FLUOROSCOPY: 'Fluoroscopy',
+      PET: 'PET',
+      NUCLEAR_MEDICINE: 'Nuclear Medicine',
+      INTERVENTIONAL_RADIOLOGY: 'Interventional Radiology',
+      DEXA: 'DEXA',
+      OTHER: 'Other',
+    },
     dispenseStatus: {
       PENDING: 'Pending',
       COMPLETED: 'Completed',
@@ -606,9 +637,18 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     if (domain) {
       const domainMap = EnumLabelPipe.LABELS[domain];
       if (domainMap?.[value]) return domainMap[value];
-    }
-    for (const map of Object.values(EnumLabelPipe.LABELS)) {
-      if (map[value]) return map[value];
+    } else {
+      // Only when the caller named no domain. Scanning every group for a value
+      // ignores the domain the caller asked for, and the groups disagree:
+      // EXPIRED is "Deceased" under dischargeDisposition and "Expired" under
+      // status, so today the answer is decided by declaration order and
+      // re-ordering the map would silently relabel unrelated screens. Every
+      // call site now passes a domain, so a value its own group does not know
+      // falls to the prettifier below — English, but never another screen's
+      // meaning.
+      for (const map of Object.values(EnumLabelPipe.LABELS)) {
+        if (map[value]) return map[value];
+      }
     }
 
     // 3) Prettify — UPPER_SNAKE_CASE → Title Case

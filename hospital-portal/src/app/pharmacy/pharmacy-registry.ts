@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -20,6 +20,7 @@ export class PharmacyRegistryComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
   loading = signal(true);
@@ -67,7 +68,7 @@ export class PharmacyRegistryComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('PHARMACY.NO_HOSPITAL_ASSIGNED');
   }
 
   loadPharmacies(): void {
@@ -85,7 +86,7 @@ export class PharmacyRegistryComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load pharmacies');
+        this.toast.error(this.translate.instant('PHARMACY.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -149,7 +150,7 @@ export class PharmacyRegistryComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.name || !this.form.hospitalId) {
-      this.toast.error('Hospital and name are required');
+      this.toast.error(this.translate.instant('PHARMACY.TOAST.REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
@@ -160,13 +161,19 @@ export class PharmacyRegistryComponent implements OnInit {
 
     req$.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Pharmacy updated' : 'Pharmacy created');
+        this.toast.success(
+          this.translate.instant(existing ? 'PHARMACY.TOAST.UPDATED' : 'PHARMACY.TOAST.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadPharmacies();
       },
       error: (err) => {
-        const msg = err?.error?.message ?? `Failed to ${existing ? 'update' : 'create'} pharmacy`;
+        const msg =
+          err?.error?.message ??
+          this.translate.instant(
+            existing ? 'PHARMACY.TOAST.UPDATE_FAILED' : 'PHARMACY.TOAST.CREATE_FAILED',
+          );
         this.toast.error(msg);
         this.saving.set(false);
       },
@@ -189,13 +196,15 @@ export class PharmacyRegistryComponent implements OnInit {
     this.deleting.set(true);
     this.svc.deletePharmacy(item.id).subscribe({
       next: () => {
-        this.toast.success('Pharmacy deleted');
+        this.toast.success(this.translate.instant('PHARMACY.TOAST.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadPharmacies();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete pharmacy');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
