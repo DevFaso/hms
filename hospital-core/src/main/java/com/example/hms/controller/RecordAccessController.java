@@ -50,6 +50,16 @@ public class RecordAccessController {
         + "'ROLE_LAB_TECHNICIAN','ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
     static final String OPT_OUT_ROLES = "hasAnyAuthority("
         + "'ROLE_PATIENT','ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+    /**
+     * Revoking is not the same act as setting. An opt-out is the patient's own
+     * refusal of cross-hospital sharing; taking it away re-opens their record,
+     * so it stays with the patient and the two admin roles. A receptionist may
+     * still read the state and record an opt-out on the patient's behalf at the
+     * desk. This mirrors what the DELETE matcher enforces — the two layers
+     * agreeing at the NARROWER posture is the whole point of #654.
+     */
+    static final String OPT_OUT_REVOKE_ROLES = "hasAnyAuthority("
+        + "'ROLE_PATIENT','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
     private final RecordAccessPolicy recordAccessPolicy;
     private final RecordSharingOptOutService optOutService;
@@ -97,7 +107,7 @@ public class RecordAccessController {
     @Operation(summary = "Revoke the opt-out; the row stays for the disclosure report")
     @WriteAudited(skip = true, reason = "service emits CONSENT_UPDATE after commit")
     @DeleteMapping("/record-sharing/opt-out")
-    @PreAuthorize(OPT_OUT_ROLES)
+    @PreAuthorize(OPT_OUT_REVOKE_ROLES)
     public ResponseEntity<RecordSharingOptOutDTO> revoke(
             @PathVariable UUID patientId,
             @RequestHeader(name = "Accept-Language", required = false) String lang,

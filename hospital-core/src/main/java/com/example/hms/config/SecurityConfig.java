@@ -422,6 +422,17 @@ public class SecurityConfig {
                 // line, carrying exactly RecordAccessController.OPT_OUT_ROLES.
                 // Widening stops here: this is a single path, not a prefix, so
                 // the blanket still refuses a patient every other chart route.
+                // Revoking is narrower than reading or setting. The blanket
+                // DELETE /patients/** below admits only HOSPITAL_ADMIN and
+                // SUPER_ADMIN, and #654's all-verbs matcher silently handed the
+                // revoke to ROLE_RECEPTIONIST as well — who can then re-open a
+                // patient's record to other hospitals. Worse, the service
+                // resolves the patient with findByIdUnscoped, so that reach is
+                // not even limited to the receptionist's own hospital. DELETE
+                // is matched first and keeps the posture the blanket had.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_OPT_OUT)
+                .hasAnyAuthority(ROLE_PATIENT, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(API_PATIENT_OPT_OUT)
                 .hasAnyAuthority(ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 

@@ -134,6 +134,38 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
         verify(optOutService, never()).revoke(eq(otherPatientId), any(), any());
     }
 
+    /** A receptionist, as the desk staff who records an opt-out for a walk-in. */
+    private RequestPostProcessor receptionist() {
+        CustomUserDetails details = new CustomUserDetails(
+            UUID.randomUUID(), "reception01", "n/a", true,
+            List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST")));
+        return authentication(new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
+    }
+
+    @Test
+    @DisplayName("a receptionist reads and records an opt-out at the desk")
+    void receptionistReadsAndRecords() throws Exception {
+        when(optOutService.status(eq(otherPatientId), any())).thenReturn(inForce(false));
+        when(optOutService.optOut(eq(otherPatientId), any(), any(), any())).thenReturn(inForce(true));
+
+        mockMvc.perform(get(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()))
+            .andExpect(status().isOk());
+        mockMvc.perform(post(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()).with(csrf()))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("a receptionist may NOT revoke an opt-out — that re-opens the record to other hospitals")
+    void receptionistCannotRevoke() throws Exception {
+        mockMvc.perform(delete(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()).with(csrf()))
+            .andExpect(status().isForbidden());
+
+        // Not merely refused at the edge: the service is never reached. revoke()
+        // resolves the patient with findByIdUnscoped, so a receptionist who got
+        // through would not even be confined to their own hospital's patients.
+        verify(optOutService, never()).revoke(any(), any(), any());
+    }
+
     @Test
     @DisplayName("the rest of /patients stays shut to a patient, including their own chart")
     void theBlanketStillHolds() throws Exception {

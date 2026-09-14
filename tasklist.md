@@ -2202,6 +2202,27 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **The record-sharing opt-out service is not tenant-scoped.** Every path in
+  `RecordSharingOptOutServiceImpl` resolves the patient through
+  `requirePatient`, which calls `patientRepository.findByIdUnscoped`. So a
+  hospital admin at hospital A can read, set and revoke the opt-out of a
+  patient registered only at hospital B — a control over that patient's
+  cross-hospital sharing, exercised by a hospital with no relationship to
+  them. #656 narrows WHO may revoke; it does not scope WHICH patients any of
+  them may reach, because the fix is a tenant predicate on the finder plus a
+  decision about whether a super-admin in global view is the only role that
+  should cross tenants here. The E8 posture work is the right place for it.
+- **`ControllerAuthUtils.resolveUserId` falls back to the OIDC `sub`.** For a
+  `JwtAuthenticationToken` it tries `uid`, `userId`, `id`, then `sub`. The
+  Keycloak realm import writes no `uid` claim, so after the SSO flip `sub` is
+  the Keycloak subject, `patientRepository.findByUserId(sub)` is empty, and
+  `requireSelfIfPatient` refuses every patient their own opt-out — the exact
+  403 #654 was opened to fix, returning on the day SSO is enabled. It is
+  dormant today (`oidc.enabled` is false in every environment) and it reaches
+  further than this one endpoint: every self-service surface that resolves a
+  user id from the token breaks the same way. Either map a `uid` claim in the
+  realm export or resolve the Keycloak subject to a user row once at
+  authentication.
 - **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
   matcher that covers its path.** The record-sharing opt-out shipped admitting
   ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and
