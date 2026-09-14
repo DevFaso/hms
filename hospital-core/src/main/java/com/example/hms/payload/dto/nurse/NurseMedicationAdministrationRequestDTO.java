@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class NurseMedicationAdministrationRequestDTO {
 
-    @NotBlank(message = "Medication administration status is required.")
+    @NotBlank(message = "{nurseMedicationAdministration.status.required}")
     private String status;
 
     private String note;

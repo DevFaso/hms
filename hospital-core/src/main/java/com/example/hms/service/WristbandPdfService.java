@@ -22,6 +22,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,12 @@ import java.util.UUID;
  * printed human-readable only. QR is also the right symbology: the only
  * in-app camera scanner decodes qr_code/code_128, and a 36-char payload
  * as Code 128 would be impractically wide.
+ *
+ * <p>The few words on a label (DOB, MRN, Lot, EXP) come from the message
+ * bundle in the locale of the request that printed it, resolved once at
+ * each entry point as a {@link PdfLabels} and handed to the text block;
+ * dates follow the same locale. Names, numbers and barcodes are printed
+ * as stored.
  */
 @Service
 @RequiredArgsConstructor
@@ -52,13 +59,17 @@ public class WristbandPdfService {
     /** 3.5in x 1.1in label media, in PDF points. */
     private static final float LABEL_WIDTH = 252f;
     private static final float LABEL_HEIGHT = 79f;
+    /** Printed where a value is missing; an em dash is a WinAnsi glyph. */
+    private static final String DASH = "—";
 
     private final PatientRepository patientRepository;
     private final LabSpecimenRepository specimenRepository;
     private final StockLotRepository stockLotRepository;
+    private final MessageSource messageSource;
 
     @Transactional(readOnly = true)
     public byte[] generateWristbandPdf(UUID patientId, UUID hospitalId) {
+        PdfLabels t = PdfLabels.ofRequest(messageSource);
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         // 404-not-403: a scoped caller printing for an unregistered patient
@@ -71,15 +82,16 @@ public class WristbandPdfService {
         return renderLabel(cs -> {
             writeText(cs, 11, 8, LABEL_HEIGHT - 16,
                 truncate(safe(patient.getFirstName()) + " " + safe(patient.getLastName()), 28));
-            writeText(cs, 8, 8, LABEL_HEIGHT - 30,
-                "DOB: " + (patient.getDateOfBirth() != null ? patient.getDateOfBirth() : "—"));
-            writeText(cs, 8, 8, LABEL_HEIGHT - 42, "MRN: " + (mrn != null ? mrn : "—"));
-            writeText(cs, 6, 8, 8, "ID: " + patient.getId());
+            writeText(cs, 8, 8, LABEL_HEIGHT - 30, t.get("pdf.wristband.dob",
+                patient.getDateOfBirth() != null ? t.fmt(patient.getDateOfBirth()) : DASH));
+            writeText(cs, 8, 8, LABEL_HEIGHT - 42, t.get("pdf.wristband.mrn", mrn != null ? mrn : DASH));
+            writeText(cs, 6, 8, 8, t.get("pdf.wristband.id", String.valueOf(patient.getId())));
         }, wristbandQrPayload(patient));
     }
 
     @Transactional(readOnly = true)
     public byte[] generateSpecimenLabelPdf(UUID specimenId, UUID hospitalId) {
+        PdfLabels t = PdfLabels.ofRequest(messageSource);
         LabSpecimen specimen = specimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("Specimen not found with ID: " + specimenId));
         UUID orderHospitalId = specimen.getLabOrder() != null && specimen.getLabOrder().getHospital() != null
@@ -91,7 +103,7 @@ public class WristbandPdfService {
         Patient patient = specimen.getLabOrder() != null ? specimen.getLabOrder().getPatient() : null;
         String patientLine = patient != null
             ? truncate(safe(patient.getFirstName()) + " " + safe(patient.getLastName()), 28)
-            : "—";
+            : DASH;
         // The stored barcode_value ("LAB-" + accession) is what downstream
         // lab tooling expects — first surface to ever render it.
         String qrPayload = specimen.getBarcodeValue() != null
@@ -103,7 +115,7 @@ public class WristbandPdfService {
             writeText(cs, 8, 8, LABEL_HEIGHT - 30, patientLine);
             writeText(cs, 8, 8, LABEL_HEIGHT - 42,
                 truncate(safe(specimen.getSpecimenType()), 22)
-                    + (specimen.getCollectedAt() != null ? "  " + specimen.getCollectedAt() : ""));
+                    + (specimen.getCollectedAt() != null ? "  " + t.fmt(specimen.getCollectedAt()) : ""));
         }, qrPayload);
     }
 
@@ -125,6 +137,7 @@ public class WristbandPdfService {
      */
     @Transactional
     public byte[] generateStockLotLabelPdf(UUID stockLotId, UUID hospitalId) {
+        PdfLabels t = PdfLabels.ofRequest(messageSource);
         StockLot lot = stockLotRepository.findById(stockLotId)
             .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId));
 
@@ -148,11 +161,12 @@ public class WristbandPdfService {
         return renderLabel(cs -> {
             writeText(cs, 10, 8, LABEL_HEIGHT - 16, drugLine);
             writeText(cs, 8, 8, LABEL_HEIGHT - 30,
-                (strengthLine.isBlank() ? "" : strengthLine + "  ") + "Lot " + safe(lot.getLotNumber()));
+                (strengthLine.isBlank() ? "" : strengthLine + "  ")
+                    + t.get("pdf.stocklot.lot", safe(lot.getLotNumber())));
             // Expiry is on the label because the pharmacist reads it before
             // the scanner does, and V138 makes it a hard refusal.
             writeText(cs, 8, 8, LABEL_HEIGHT - 42,
-                "EXP: " + (lot.getExpiryDate() != null ? lot.getExpiryDate() : "—"));
+                t.get("pdf.stocklot.expiry", lot.getExpiryDate() != null ? t.fmt(lot.getExpiryDate()) : DASH));
             writeText(cs, 6, 8, 8, safe(lot.getBarcodeValue()));
         }, lot.getBarcodeValue());
     }
@@ -175,7 +189,7 @@ public class WristbandPdfService {
      */
     private static String drugNameOf(MedicationCatalogItem item) {
         if (item == null) {
-            return "—";
+            return DASH;
         }
         String generic = safe(item.getGenericName());
         return generic.isBlank() ? safe(item.getNameFr()) : generic;

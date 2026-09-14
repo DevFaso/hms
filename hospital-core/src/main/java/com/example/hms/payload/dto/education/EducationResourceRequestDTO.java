@@ -21,17 +21,17 @@ import java.util.UUID;
 @Builder
 public class EducationResourceRequestDTO {
     
-    @NotBlank(message = "Title is required")
+    @NotBlank(message = "{educationResource.title.required}")
     @Size(max = 500)
     private String title;
 
     @Size(max = 2000)
     private String description;
 
-    @NotNull(message = "Resource type is required")
+    @NotNull(message = "{educationResource.resourceType.required}")
     private EducationResourceType resourceType;
 
-    @NotNull(message = "Category is required")
+    @NotNull(message = "{educationResource.category.required}")
     private EducationCategory category;
 
     private Set<String> tags;

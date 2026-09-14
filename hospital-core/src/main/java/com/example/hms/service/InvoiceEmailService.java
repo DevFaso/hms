@@ -32,7 +32,7 @@ public class InvoiceEmailService {
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
 
-        Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.ENGLISH;
+        Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
 
         byte[] pdf = req.attachPdf()
             ? pdfInvoiceService.generateInvoicePdf(invoice, items, locale)

@@ -23,16 +23,16 @@ import java.util.UUID;
 @Schema(description = "Request for verifying a digital signature")
 public class SignatureVerificationRequestDTO {
 
-    @NotNull(message = "Report type is required")
+    @NotNull(message = "{signatureVerification.reportType.required}")
     @Schema(description = "Type of report being verified", example = "DISCHARGE_SUMMARY")
     private SignatureType reportType;
 
-    @NotNull(message = "Report ID is required")
+    @NotNull(message = "{signatureVerification.reportId.required}")
     @Schema(description = "ID of the report being verified")
     private UUID reportId;
 
-    @NotBlank(message = "Signature value is required for verification")
-    @Size(max = 2000, message = "Signature value cannot exceed 2000 characters")
+    @NotBlank(message = "{signatureVerification.signatureValue.required}")
+    @Size(max = 2000, message = "{signatureVerification.signatureValue.size}")
     @Schema(description = "Signature value to verify against stored hash", 
         example = "Dr. John Smith")
     private String signatureValue;
@@ -40,12 +40,12 @@ public class SignatureVerificationRequestDTO {
     @Schema(description = "Optional signature ID to verify specific signature")
     private UUID signatureId;
 
-    @Size(max = 45, message = "IP address cannot exceed 45 characters")
+    @Size(max = 45, message = "{signatureVerification.ipAddress.size}")
     @Schema(description = "IP address from which verification is performed", 
         example = "198.51.100.1")
     private String ipAddress;
 
-    @Size(max = 500, message = "Device info cannot exceed 500 characters")
+    @Size(max = 500, message = "{signatureVerification.deviceInfo.size}")
     @Schema(description = "Device/user agent information")
     private String deviceInfo;
 }

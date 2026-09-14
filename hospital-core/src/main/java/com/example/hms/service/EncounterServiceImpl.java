@@ -84,6 +84,8 @@ import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 
 
 @Slf4j
@@ -269,6 +271,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final LabOrderRepository labOrderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final ObgynReferralRepository obgynReferralRepository;
+    private final PatientLocaleResolver patientLocaleResolver;
     private final UserRepository userRepository;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
@@ -1964,8 +1967,14 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         String recipientUsername = patient.getUser().getUsername();
-        String hospitalName = encounter.getHospital() != null ? encounter.getHospital().getName() : "your hospital";
-        String message = "Your visit summary is now available from " + hospitalName + ".";
+        // Read by the patient, so rendered in the patient's stated language —
+        // never in the discharging clinician's request locale.
+        Locale locale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+        String hospitalName = encounter.getHospital() != null && encounter.getHospital().getName() != null
+            ? encounter.getHospital().getName()
+            : messageSource.getMessage("encounter.visitSummary.hospitalFallback", null, locale);
+        String message = messageSource.getMessage(
+            "encounter.visitSummary.notification", new Object[]{hospitalName}, locale);
         try {
             notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
         } catch (Exception ignored) {

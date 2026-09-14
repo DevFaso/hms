@@ -20,11 +20,11 @@ import java.util.UUID;
 @Schema(description = "Request to create or update immunization record")
 public class ImmunizationRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{immunization.patientId.required}")
     @Schema(description = "Patient ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     @Schema(description = "Hospital ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
@@ -35,12 +35,12 @@ public class ImmunizationRequestDTO {
     private UUID encounterId;
 
     // Vaccine Information
-    @NotBlank(message = "Vaccine code is required")
+    @NotBlank(message = "{immunization.vaccineCode.required}")
     @Size(max = 50)
     @Schema(description = "Vaccine CVX code", requiredMode = Schema.RequiredMode.REQUIRED)
     private String vaccineCode;
 
-    @NotBlank(message = "Vaccine display is required")
+    @NotBlank(message = "{immunization.vaccineDisplay.required}")
     @Size(max = 255)
     @Schema(description = "Vaccine name", requiredMode = Schema.RequiredMode.REQUIRED)
     private String vaccineDisplay;
@@ -54,7 +54,7 @@ public class ImmunizationRequestDTO {
     private String targetDisease;
 
     // Administration
-    @NotNull(message = "Administration date is required")
+    @NotNull(message = "{immunization.administrationDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @Schema(description = "Administration date", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate administrationDate;
@@ -98,7 +98,7 @@ public class ImmunizationRequestDTO {
     private String ndcCode;
 
     // Status
-    @NotBlank(message = "Status is required")
+    @NotBlank(message = "{immunization.status.required}")
     @Size(max = 50)
     @Schema(description = "Status", requiredMode = Schema.RequiredMode.REQUIRED)
     private String status;

@@ -21,18 +21,18 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SaleLineRequestDTO {
 
-    @NotNull(message = "Medication catalog item ID is required")
+    @NotNull(message = "{saleLine.medicationCatalogItemId.required}")
     private UUID medicationCatalogItemId;
 
     /** Optional: links the line to a specific stock lot for traceability. */
     private UUID stockLotId;
 
-    @NotNull(message = "Quantity is required")
-    @DecimalMin(value = "0.001", message = "Quantity must be greater than zero")
+    @NotNull(message = "{saleLine.quantity.required}")
+    @DecimalMin(value = "0.001", message = "{saleLine.quantity.positive}")
     private BigDecimal quantity;
 
-    @NotNull(message = "Unit price is required")
-    @DecimalMin(value = "0.0", message = "Unit price cannot be negative")
+    @NotNull(message = "{saleLine.unitPrice.required}")
+    @DecimalMin(value = "0.0", message = "{saleLine.unitPrice.min}")
     private BigDecimal unitPrice;
 
     @Size(max = 500)

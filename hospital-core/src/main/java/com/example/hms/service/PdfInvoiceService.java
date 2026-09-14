@@ -1,17 +1,20 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.InvoiceItem;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
+import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -21,13 +24,22 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * One-page invoice PDF. Labels come from the message bundle in the locale the caller resolved
+ * (the downloading user's request, or the language the invoice e-mail asked for); with no
+ * locale at all the product's first language, French. Amounts, numbers and identifiers are
+ * printed as stored.
+ */
 @Service
+@RequiredArgsConstructor
 public class PdfInvoiceService {
 
-    @SuppressWarnings({"java:S1172", "java:S107"}) // locale reserved for i18n; params needed by PDF layout
+    private final MessageSource messageSource;
+
     public byte[] generateInvoicePdf(BillingInvoice invoice,
                                      List<InvoiceItem> items,
                                      Locale locale) {
+        PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var page = new PDPage(PDRectangle.LETTER);
             doc.addPage(page);
@@ -44,17 +56,18 @@ public class PdfInvoiceService {
 
                 // Header text
                 y -= 80;
-                writeText(cs, 16, margin, y, "INVOICE " + invoice.getInvoiceNumber());
+                writeText(cs, 16, margin, y, t.get("pdf.invoice.title", safe(invoice.getInvoiceNumber())));
                 y -= 20;
-                writeText(cs, 11, margin, y, "Date: " + invoice.getInvoiceDate() + "    Due: " + invoice.getDueDate());
+                writeText(cs, 11, margin, y,
+                    t.get("pdf.invoice.dates", t.fmt(invoice.getInvoiceDate()), t.fmt(invoice.getDueDate())));
                 y -= 15;
-                writeText(cs, 11, margin, y, "Patient: " +
+                writeText(cs, 11, margin, y, t.get("pdf.invoice.patient",
                     safe(invoice.getPatient().getFirstName()) + " " +
                     safe(invoice.getPatient().getLastName()) + " " +
                     safe(invoice.getPatient().getMrnForHospital(invoice.getHospital().getId()))
-                );
+                ));
                 y -= 15;
-                writeText(cs, 11, margin, y, "Hospital: " + safe(invoice.getHospital().getName()));
+                writeText(cs, 11, margin, y, t.get("pdf.invoice.hospital", safe(invoice.getHospital().getName())));
 
                 // QR (invoice lookup URL or deep link)
                 y -= 90;
@@ -66,7 +79,12 @@ public class PdfInvoiceService {
                 y -= 10;
                 drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
                 y -= 14;
-                writeRow(cs, margin, y, "Description", "Category", "Qty", "Unit", "Total");
+                writeRow(cs, margin, y,
+                    t.get("pdf.invoice.col.description"),
+                    t.get("pdf.invoice.col.category"),
+                    t.get("pdf.invoice.col.qty"),
+                    t.get("pdf.invoice.col.unitPrice"),
+                    t.get("pdf.invoice.col.total"));
                 y -= 10;
                 drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
 
@@ -75,7 +93,7 @@ public class PdfInvoiceService {
                     y -= 16;
                     writeRow(cs, margin, y,
                         it.getItemDescription(),
-                        it.getItemCategory().name(),
+                        categoryLabel(t, it.getItemCategory()),
                         String.valueOf(it.getQuantity()),
                         it.getUnitPrice().toString(),
                         it.getTotalPrice().toString());
@@ -86,7 +104,8 @@ public class PdfInvoiceService {
                 y -= 20;
                 drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
                 y -= 18;
-                writeTextRight(cs, 12, page, margin, y, "Grand Total: " + invoice.getTotalAmount());
+                writeTextRight(cs, 12, page, margin, y,
+                    t.get("pdf.invoice.grandTotal", String.valueOf(invoice.getTotalAmount())));
             }
             try (var baos = new ByteArrayOutputStream()) {
                 doc.save(baos);
@@ -95,6 +114,14 @@ public class PdfInvoiceService {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate invoice PDF", e);
         }
+    }
+
+    /** The category's bundle label; the enum constant itself for a value the bundle does not know. */
+    private static String categoryLabel(PdfLabels t, ItemCategory category) {
+        if (category == null) {
+            return "";
+        }
+        return t.getOrCode("pdf.invoice.category." + category.name(), category.name());
     }
 
     private static void writeText(PDPageContentStream cs, int size, float x, float y, String text) throws IOException {

@@ -46,6 +46,9 @@ import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -72,6 +75,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final com.example.hms.service.pro.ProResponseService proResponseService;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final MessageSource messageSource;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -668,14 +672,18 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (documentedBy == null || documentedBy.getUsername() == null) {
             return;
         }
+        // Read by the documenting clinician: staff locale, not the request locale.
+        Locale locale = NotificationLocales.STAFF;
+        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
         String patientName = observation.getPatient() != null
             ? (observation.getPatient().getFirstName() + " " + observation.getPatient().getLastName()).trim()
-            : "patient";
+            : fallbackName;
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
             .forEach(alert -> {
-                String message = String.format("%s alert for %s: %s",
-                    alert.getType(), patientName.isBlank() ? "patient" : patientName, alert.getMessage());
+                String message = messageSource.getMessage("postpartum.alert.notification",
+                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
                 } catch (RuntimeException ex) {

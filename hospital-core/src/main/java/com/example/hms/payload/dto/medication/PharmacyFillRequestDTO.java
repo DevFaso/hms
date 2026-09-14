@@ -26,10 +26,10 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PharmacyFillRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{pharmacyFill.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     /**
@@ -38,7 +38,7 @@ public class PharmacyFillRequestDTO {
     private UUID prescriptionId;
 
     // Medication
-    @NotBlank(message = "Medication name is required")
+    @NotBlank(message = "{pharmacyFill.medicationName.required}")
     @Size(max = 255)
     private String medicationName;
 
@@ -55,7 +55,7 @@ public class PharmacyFillRequestDTO {
     private String dosageForm;
 
     // Dispensing
-    @NotNull(message = "Fill date is required")
+    @NotNull(message = "{pharmacyFill.fillDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fillDate;
 

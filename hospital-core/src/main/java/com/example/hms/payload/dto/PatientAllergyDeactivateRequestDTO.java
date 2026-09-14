@@ -17,7 +17,7 @@ import lombok.Setter;
 @Schema(description = "Payload used to retire an allergy entry with an audit justification.")
 public class PatientAllergyDeactivateRequestDTO {
 
-    @NotBlank(message = "A justification is required when deactivating an allergy entry.")
+    @NotBlank(message = "{patientAllergy.deactivation.reason.required}")
     @Size(max = 512)
     private String reason;
 }

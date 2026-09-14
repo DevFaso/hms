@@ -47,6 +47,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.i18n.TestMessageSources;
+import java.util.Locale;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 @DisplayName("EmergencyControlServiceImpl (MVP-7)")
 class EmergencyControlServiceImplTest {
@@ -79,7 +82,11 @@ class EmergencyControlServiceImplTest {
         service = new EmergencyControlServiceImpl(
             revocationService, featureFlagService, mfaEnrollmentRepository,
             mfaBackupCodeRepository, userRepository, auditEventLogService,
-            messagingTemplate, mfaService, assignmentRepository);
+            messagingTemplate, mfaService, assignmentRepository,
+            TestMessageSources.bundles());
+        // Response text follows the request locale; pin it so the assertions
+        // below read the English bundle whatever the JVM default is.
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
         // Default: non-strict MFA mode (matches application.yml default).
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
 
@@ -105,6 +112,7 @@ class EmergencyControlServiceImplTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        LocaleContextHolder.resetLocaleContext();
     }
 
     // ── forceLogoutAll ────────────────────────────────────────────────

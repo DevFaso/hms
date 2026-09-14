@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import java.util.Locale;
 
 /**
  * Critical-imaging-finding notification loop (Tier 2 item 27).
@@ -81,6 +84,7 @@ public class ImagingCriticalNotificationService {
     private final ImagingReportRepository imagingReportRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
+    private final MessageSource messageSource;
 
     /** Minutes an unacknowledged critical finding waits before escalation. */
     @Value("${hms.imaging.critical-escalation.escalate-after-minutes:30}")
@@ -254,28 +258,30 @@ public class ImagingCriticalNotificationService {
     /**
      * The alert text. Names the study and the patient and says where to act; the
      * impression is truncated rather than sent whole, because this same string
-     * goes down an SMS channel.
+     * goes down an SMS channel. Read by the ordering provider (and, on
+     * escalation, the desk's administrators) — never by the caller, and a sweep
+     * has no request locale anyway — so the body is in the staff locale.
      */
     private String buildMessage(ImagingReport report, boolean escalation) {
+        Locale locale = NotificationLocales.STAFF;
         ImagingOrder order = report.getImagingOrder();
-        String study = studyLabel(report, order);
-        String patientName = patientLabel(order);
-        String prefix = escalation
-            ? "ESCALATION - unacknowledged critical imaging finding: "
-            : "Critical imaging finding: ";
-        return prefix + study + " for " + patientName + "." + impressionSnippet(report)
-            + " Review and acknowledge in HMS.";
+        String study = studyLabel(report, order, locale);
+        String patientName = patientLabel(order, locale);
+        return messageSource.getMessage(
+            escalation ? "imaging.critical.escalation" : "imaging.critical.notification",
+            new Object[]{study, patientName, impressionSnippet(report)},
+            locale);
     }
 
     /** The report's own title if it has one, else the ordered study type. */
-    private String studyLabel(ImagingReport report, ImagingOrder order) {
+    private String studyLabel(ImagingReport report, ImagingOrder order, Locale locale) {
         if (report.getReportTitle() != null && !report.getReportTitle().isBlank()) {
             return report.getReportTitle();
         }
         if (order != null && order.getStudyType() != null && !order.getStudyType().isBlank()) {
             return order.getStudyType();
         }
-        return "Imaging study";
+        return messageSource.getMessage("imaging.critical.studyFallback", null, locale);
     }
 
     /**
@@ -285,14 +291,14 @@ public class ImagingCriticalNotificationService {
      * recorded name rendered the literal string "null" into an alert a clinician
      * reads and an SMS that goes out of the building.
      */
-    private String patientLabel(ImagingOrder order) {
+    private String patientLabel(ImagingOrder order, Locale locale) {
         if (order != null && order.getPatient() != null) {
             String fullName = order.getPatient().getFullName();
             if (fullName != null && !fullName.isBlank()) {
                 return fullName;
             }
         }
-        return "patient";
+        return messageSource.getMessage("patient.fallback.generic", null, locale);
     }
 
     private String impressionSnippet(ImagingReport report) {

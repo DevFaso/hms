@@ -26,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class SecurityRuleGovernanceServiceImplTest {
@@ -40,7 +41,8 @@ class SecurityRuleGovernanceServiceImplTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new SecurityRuleGovernanceServiceImpl(ruleSetRepository, objectMapper);
+        service = new SecurityRuleGovernanceServiceImpl(ruleSetRepository, objectMapper,
+            TestMessageSources.bundles());
         lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
         lenient().when(ruleSetRepository.findByCodeIgnoreCase(any())).thenReturn(Optional.empty());
     }

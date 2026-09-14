@@ -22,18 +22,18 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MaternalHistoryRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{maternalHistory.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     private UUID recordedByStaffId;
 
-    @NotNull(message = "Recorded date is required")
+    @NotNull(message = "{maternalHistory.recordedDate.required}")
     private LocalDateTime recordedDate;
 
-    @Size(max = 500, message = "Update reason cannot exceed 500 characters")
+    @Size(max = 500, message = "{maternalHistory.updateReason.size}")
     private String updateReason;
 
     // ===== Menstrual and Reproductive History =====
@@ -61,14 +61,14 @@ public class MaternalHistoryRequestDTO {
     private PsychosocialFactorsDTO psychosocialFactors;
 
     // ===== Clinical Assessment =====
-    @Size(max = 5000, message = "Clinical notes cannot exceed 5000 characters")
+    @Size(max = 5000, message = "{maternalHistory.clinicalNotes.size}")
     private String clinicalNotes;
 
     private Boolean dataComplete;
 
     private Boolean requiresSpecialistReferral;
 
-    @Size(max = 1000, message = "Specialist referral reason cannot exceed 1000 characters")
+    @Size(max = 1000, message = "{maternalHistory.specialistReferralReason.size}")
     private String specialistReferralReason;
 
     // ===== Nested DTOs =====

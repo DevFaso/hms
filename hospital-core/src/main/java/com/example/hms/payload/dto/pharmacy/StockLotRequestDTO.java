@@ -23,18 +23,18 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StockLotRequestDTO {
 
-    @NotNull(message = "Inventory item ID is required")
+    @NotNull(message = "{stockLot.inventoryItemId.required}")
     private UUID inventoryItemId;
 
-    @NotBlank(message = "Lot number is required")
+    @NotBlank(message = "{stockLot.lotNumber.required}")
     @Size(max = 80)
     private String lotNumber;
 
-    @NotNull(message = "Expiry date is required")
+    @NotNull(message = "{stockLot.expiryDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate expiryDate;
 
-    @NotNull(message = "Initial quantity is required")
+    @NotNull(message = "{stockLot.initialQuantity.required}")
     private BigDecimal initialQuantity;
 
     private BigDecimal remainingQuantity;
@@ -44,7 +44,7 @@ public class StockLotRequestDTO {
 
     private BigDecimal unitCost;
 
-    @NotNull(message = "Received date is required")
+    @NotNull(message = "{stockLot.receivedDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate receivedDate;
 

@@ -31,7 +31,7 @@ public class SmartPhraseRequestDTO {
     @NotBlank
     @Size(max = 64)
     @Pattern(regexp = "\\.[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}",
-        message = "trigger must start with '.' and use alphanumerics, dash or underscore")
+        message = "{smartPhrase.trigger.pattern}")
     @Schema(description = "Trigger token typed in a note section, e.g. '.normexam'.",
             example = ".normexam",
             requiredMode = Schema.RequiredMode.REQUIRED)

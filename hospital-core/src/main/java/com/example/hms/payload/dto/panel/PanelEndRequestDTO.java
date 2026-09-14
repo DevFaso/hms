@@ -16,7 +16,7 @@ import lombok.Setter;
 @Builder
 public class PanelEndRequestDTO {
 
-    @NotBlank(message = "A reason is required to end an empanelment")
+    @NotBlank(message = "{panelEnd.reason.required}")
     @Size(max = 500)
     private String reason;
 }

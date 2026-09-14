@@ -30,7 +30,7 @@ public class AdvanceDirectiveRequestDTO {
     @Schema(description = "Hospital the directive is recorded at; defaults to the caller's")
     private UUID hospitalId;
 
-    @NotNull(message = "Directive type is required.")
+    @NotNull(message = "{advanceDirective.directiveType.required}")
     private AdvanceDirectiveType directiveType;
 
     /** Defaults to ACTIVE when omitted — a newly recorded directive is in force. */

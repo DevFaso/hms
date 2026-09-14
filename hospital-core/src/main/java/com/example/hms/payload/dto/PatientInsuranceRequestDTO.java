@@ -62,7 +62,7 @@ public class PatientInsuranceRequestDTO {
     @Schema(description = "Whether this is the primary insurance", defaultValue = "true")
     private boolean primary = true;
 
-    @AssertTrue(message = "expirationDate must be on/after effectiveDate")
+    @AssertTrue(message = "{patientInsurance.dateRange.invalid}")
     @Schema(hidden = true)
     public boolean isDateRangeValid() {
         if (effectiveDate == null || expirationDate == null) return true;

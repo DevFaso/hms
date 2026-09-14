@@ -19,15 +19,15 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AdmissionDischargeRequestDTO {
 
-    @NotNull(message = "Discharge disposition is required")
+    @NotNull(message = "{admissionDischarge.dischargeDisposition.required}")
     private DischargeDisposition dischargeDisposition;
 
-    @NotBlank(message = "Discharge summary is required")
+    @NotBlank(message = "{admissionDischarge.dischargeSummary.required}")
     private String dischargeSummary;
 
     private String dischargeInstructions;
 
-    @NotNull(message = "Discharging provider ID is required")
+    @NotNull(message = "{admissionDischarge.dischargingProviderId.required}")
     private UUID dischargingProviderId;
 
     /**

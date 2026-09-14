@@ -19,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PermissionMatrixAuditEventRequestDTO {
 
-    @NotNull(message = "permission.matrix.audit.action.required")
+    @NotNull(message = "{permission.matrix.audit.action.required}")
     private PermissionMatrixAuditAction action;
 
     private PermissionMatrixEnvironment leftEnvironment;
@@ -28,11 +28,11 @@ public class PermissionMatrixAuditEventRequestDTO {
 
     private UUID snapshotId;
 
-    @Size(max = 512, message = "permission.matrix.audit.description.size")
+    @Size(max = 512, message = "{permission.matrix.audit.description.size}")
     private String description;
 
     private List<@Valid PermissionMatrixRowDTO> matrix;
 
-    @Size(max = 4000, message = "permission.matrix.audit.metadata.size")
+    @Size(max = 4000, message = "{permission.matrix.audit.metadata.size}")
     private String metadata;
 }

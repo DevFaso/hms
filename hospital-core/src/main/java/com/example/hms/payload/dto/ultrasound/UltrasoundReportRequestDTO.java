@@ -21,11 +21,11 @@ import java.time.LocalDate;
 @EqualsAndHashCode(callSuper = true)
 public class UltrasoundReportRequestDTO extends UltrasoundReportBaseDTO {
 
-    @NotNull(message = "Scan date is required")
+    @NotNull(message = "{ultrasoundReport.scanDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate scanDate;
 
-    @NotNull(message = "Finding category is required")
+    @NotNull(message = "{ultrasoundReport.findingCategory.required}")
     private UltrasoundFindingCategory findingCategory;
 
     // Report finalization

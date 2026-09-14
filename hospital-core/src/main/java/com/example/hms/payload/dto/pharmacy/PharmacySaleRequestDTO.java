@@ -23,16 +23,16 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PharmacySaleRequestDTO {
 
-    @NotNull(message = "Pharmacy ID is required")
+    @NotNull(message = "{pharmacySale.pharmacyId.required}")
     private UUID pharmacyId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     /** Nullable: anonymous walk-in sales are permitted. */
     private UUID patientId;
 
-    @NotNull(message = "Payment method is required")
+    @NotNull(message = "{pharmacySale.paymentMethod.required}")
     private PharmacyPaymentMethod paymentMethod;
 
     @Size(max = 10)
@@ -45,6 +45,6 @@ public class PharmacySaleRequestDTO {
     private String notes;
 
     @Valid
-    @NotEmpty(message = "At least one sale line is required")
+    @NotEmpty(message = "{pharmacySale.lines.required}")
     private List<SaleLineRequestDTO> lines;
 }

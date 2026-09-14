@@ -21,7 +21,7 @@ import java.util.UUID;
 @Schema(name = "UserRoleAssignmentBulkImportRequestDTO", description = "CSV-driven bulk import of user role assignments")
 public class UserRoleAssignmentBulkImportRequestDTO {
 
-    @NotBlank(message = "CSV content must be provided")
+    @NotBlank(message = "{userRoleAssignment.bulkImport.csvContent.required}")
     @Schema(description = "Raw CSV content including header row")
     private String csvContent;
 

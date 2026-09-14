@@ -25,23 +25,23 @@ public class PatientRequestDTO {
 
     private UUID id;
 
-    @NotBlank(message = "First name is required.")
+    @NotBlank(message = "{patient.firstName.required}")
     private String firstName;
 
-    @NotBlank(message = "Last name is required.")
+    @NotBlank(message = "{patient.lastName.required}")
     private String lastName;
 
-    @Size(max = 50, message = "Middle name cannot exceed 50 characters.")
+    @Size(max = 50, message = "{patient.middleName.size}")
     private String middleName;
 
-    @NotNull(message = "Date of birth is required.")
+    @NotNull(message = "{patient.dateOfBirth.required}")
     private LocalDate dateOfBirth;
 
-    @NotBlank(message = "Gender is required.")
-    @Size(max = 10, message = "Gender cannot exceed 10 characters.")
+    @NotBlank(message = "{patient.gender.required}")
+    @Size(max = 10, message = "{patient.gender.size}")
     private String gender;
 
-    @Size(max = 255, message = "Address cannot exceed 255 characters.")
+    @Size(max = 255, message = "{patient.address.size}")
     private String address;
 
     private String addressLine1;
@@ -53,17 +53,17 @@ public class PatientRequestDTO {
     private String country;
 
     /** Self-reported free text — optional (Tier 2 item 38). */
-    @Size(max = 100, message = "Ethnicity cannot exceed 100 characters.")
+    @Size(max = 100, message = "{patient.ethnicity.size}")
     private String ethnicity;
 
-    @NotBlank(message = "Primary phone number is required.")
-    @Size(max = 15, message = "Phone number cannot exceed 15 characters.")
+    @NotBlank(message = "{patient.phoneNumberPrimary.required}")
+    @Size(max = 15, message = "{patient.phoneNumberPrimary.size}")
     private String phoneNumberPrimary;
 
     private String phoneNumberSecondary;
 
     // Optional since V107 — phone-first: most patients have no email address.
-    @Email(message = "Email should be valid.")
+    @Email(message = "{patient.email.invalid}")
     private String email;
 
     /**
@@ -78,20 +78,20 @@ public class PatientRequestDTO {
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 
-    @Size(max = 5, message = "Blood type cannot exceed 5 characters.")
+    @Size(max = 5, message = "{patient.bloodType.size}")
     private String bloodType;
 
-    @Size(max = 255, message = "Allergies cannot exceed 255 characters.")
+    @Size(max = 255, message = "{patient.allergies.size}")
     private String allergies;
 
-    @Size(max = 500, message = "Medical history summary cannot exceed 500 characters.")
+    @Size(max = 500, message = "{patient.medicalHistorySummary.size}")
     private String medicalHistorySummary;
 
     private String preferredPharmacy;
     private String careTeamNotes;
     private List<String> chronicConditions;
 
-    @NotNull(message = "User ID is required.")
+    @NotNull(message = "{patient.userId.required}")
     private UUID userId;
 
     private UUID organizationId;

@@ -21,13 +21,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@LicenseRequiredForMedicalRoles(message = "License number is required for medical roles.")
+@LicenseRequiredForMedicalRoles(message = "{adminSignup.licenseNumber.required}")
 public class AdminSignupRequest {
     /** Optional: hospital name for registration (alternative to hospitalId). */
     @JsonProperty("hospitalName")
     private String hospitalName;
 
-    @NotBlank(message = "Username is required.")
+    @NotBlank(message = "{adminSignup.username.required}")
     private String username;
 
     // Optional for PATIENT registrations (phone-first: most patients have no
@@ -41,20 +41,20 @@ public class AdminSignupRequest {
     // is prompted to choose a permanent one on first login.
     private String password;
 
-    @NotBlank(message = "First name is required.")
+    @NotBlank(message = "{adminSignup.firstName.required}")
     private String firstName;
 
-    @NotBlank(message = "Last name is required.")
+    @NotBlank(message = "{adminSignup.lastName.required}")
     private String lastName;
 
-    @NotBlank(message = "Phone number is required.")
+    @NotBlank(message = "{adminSignup.phoneNumber.required}")
     private String phoneNumber;
 
     // IMPORTANT: keep nullable so receptionists aren't forced to send it
     @JsonProperty("hospitalId")
     private UUID hospitalId;
 
-    @NotEmpty(message = "At least one role is required.")
+    @NotEmpty(message = "{adminSignup.roleNames.required}")
     private Set<@NotBlank String> roleNames;
 
     private String licenseNumber;              // required only for medical/admin roles (validator)

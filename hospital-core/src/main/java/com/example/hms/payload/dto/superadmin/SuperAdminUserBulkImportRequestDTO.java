@@ -21,7 +21,7 @@ public class SuperAdminUserBulkImportRequestDTO {
      * Raw CSV data including the header row. Expected columns at minimum:
      * username,email,firstName,lastName,phoneNumber,roles
      */
-    @NotBlank(message = "CSV content must be provided.")
+    @NotBlank(message = "{superAdmin.userBulkImport.csvContent.required}")
     private String csvContent;
 
     /** Optional default hospital when column is absent. */

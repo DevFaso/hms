@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class StaffPaymentRequestDTO {
     @NotNull
-    @DecimalMin(value = "0.01", message = "Payment amount must be greater than zero")
+    @DecimalMin(value = "0.01", message = "{staffPayment.amount.min}")
     private BigDecimal amount;
     /** CASH | CARD | INSURANCE | OTHER */
     private String method;

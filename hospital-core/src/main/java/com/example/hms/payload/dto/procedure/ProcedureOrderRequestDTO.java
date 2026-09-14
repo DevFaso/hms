@@ -18,25 +18,25 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true)
 public class ProcedureOrderRequestDTO extends ProcedureOrderBaseDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{procedureOrder.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @Size(max = 50, message = "Procedure code must not exceed 50 characters")
+    @Size(max = 50, message = "{procedureOrder.procedureCode.size}")
     private String procedureCode;
 
-    @NotBlank(message = "Procedure name is required")
-    @Size(max = 255, message = "Procedure name must not exceed 255 characters")
+    @NotBlank(message = "{procedureOrder.procedureName.required}")
+    @Size(max = 255, message = "{procedureOrder.procedureName.size}")
     private String procedureName;
 
-    @Size(max = 100, message = "Procedure category must not exceed 100 characters")
+    @Size(max = 100, message = "{procedureOrder.procedureCategory.size}")
     private String procedureCategory;
 
-    @NotBlank(message = "Indication is required")
+    @NotBlank(message = "{procedureOrder.indication.required}")
     private String indication;
 
-    @NotNull(message = "Urgency level is required")
+    @NotNull(message = "{procedureOrder.urgency.required}")
     private ProcedureUrgency urgency;
 }

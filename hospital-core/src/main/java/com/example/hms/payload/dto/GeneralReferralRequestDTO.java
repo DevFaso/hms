@@ -21,35 +21,35 @@ import java.util.UUID;
 @AllArgsConstructor
 public class GeneralReferralRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{generalReferral.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     private UUID receivingHospitalId;
 
     private UUID sourceDepartmentId;
 
-    @NotNull(message = "Referring provider ID is required")
+    @NotNull(message = "{generalReferral.referringProviderId.required}")
     private UUID referringProviderId;
 
     private UUID receivingProviderId;
 
-    @NotNull(message = "Target specialty is required")
+    @NotNull(message = "{generalReferral.targetSpecialty.required}")
     private ReferralSpecialty targetSpecialty;
 
     private UUID targetDepartmentId;
 
     private String targetFacilityName;
 
-    @NotNull(message = "Referral type is required")
+    @NotNull(message = "{generalReferral.referralType.required}")
     private ReferralType referralType;
 
-    @NotNull(message = "Urgency is required")
+    @NotNull(message = "{generalReferral.urgency.required}")
     private ReferralUrgency urgency;
 
-    @NotBlank(message = "Referral reason is required")
+    @NotBlank(message = "{generalReferral.referralReason.required}")
     private String referralReason;
 
     private String clinicalIndication;

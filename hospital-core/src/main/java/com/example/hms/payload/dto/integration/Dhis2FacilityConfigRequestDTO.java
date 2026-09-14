@@ -9,26 +9,26 @@ import jakarta.validation.constraints.Size;
 
 public record Dhis2FacilityConfigRequestDTO(
 
-    @NotBlank(message = "DHIS2 base URL is required")
+    @NotBlank(message = "{dhis2FacilityConfig.baseUrl.required}")
     @Size(max = 512)
-    @Pattern(regexp = "^https?://.+", message = "DHIS2 base URL must be http(s)://")
+    @Pattern(regexp = "^https?://.+", message = "{dhis2FacilityConfig.baseUrl.pattern}")
     String baseUrl,
 
-    @NotNull(message = "DHIS2 auth mode is required")
+    @NotNull(message = "{dhis2FacilityConfig.authMode.required}")
     Dhis2AuthMode authMode,
 
-    @NotBlank(message = "Auth secret env-var name is required")
+    @NotBlank(message = "{dhis2FacilityConfig.authSecretEnvVar.required}")
     @Size(max = 128)
     @Pattern(regexp = "^[A-Z][A-Z0-9_]*$",
-        message = "Auth secret env-var name must be UPPER_SNAKE_CASE")
+        message = "{dhis2FacilityConfig.authSecretEnvVar.pattern}")
     String authSecretEnvVar,
 
-    @NotNull(message = "Default period type is required")
+    @NotNull(message = "{dhis2FacilityConfig.defaultPeriodType.required}")
     Dhis2PeriodType defaultPeriodType,
 
     @Size(max = 11)
     @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
-        message = "DHIS2 dataset UID must be 11 chars (letter + 10 alphanumeric)")
+        message = "{dhis2FacilityConfig.defaultDatasetUid.pattern}")
     String defaultDatasetUid,
 
     Boolean active

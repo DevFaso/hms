@@ -14,18 +14,18 @@ public record Dhis2DataElementMappingRequestDTO(
 
     @NotBlank
     @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
-        message = "DHIS2 dataElement UID must be 11 chars (letter + 10 alphanumeric)")
+        message = "{dhis2Mapping.dataElementUid.pattern}")
     String dhis2DataElementUid,
 
     @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
-        message = "DHIS2 categoryOptionCombo UID must be 11 chars when supplied")
+        message = "{dhis2Mapping.categoryOptionComboUid.pattern}")
     String dhis2CategoryOptionComboUid,
 
     @NotNull Dhis2PeriodType periodType,
 
     @NotBlank
     @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
-        message = "DHIS2 dataset UID must be 11 chars (letter + 10 alphanumeric)")
+        message = "{dhis2Mapping.datasetUid.pattern}")
     String datasetUid,
 
     Boolean active

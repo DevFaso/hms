@@ -19,22 +19,22 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ConsultationRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{consultation.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     private UUID encounterId;
 
-    @NotNull(message = "Consultation type is required")
+    @NotNull(message = "{consultation.consultationType.required}")
     private ConsultationType consultationType;
 
-    @NotBlank(message = "Specialty is required")
-    @Size(max = 100, message = "Specialty must not exceed 100 characters")
+    @NotBlank(message = "{consultation.specialty.required}")
+    @Size(max = 100, message = "{consultation.specialty.size}")
     private String specialtyRequested;
 
-    @NotBlank(message = "Reason for consultation is required")
+    @NotBlank(message = "{consultation.reasonForConsult.required}")
     private String reasonForConsult;
 
     private String clinicalQuestion;
@@ -43,7 +43,7 @@ public class ConsultationRequestDTO {
 
     private String currentMedications;
 
-    @NotNull(message = "Urgency level is required")
+    @NotNull(message = "{consultation.urgency.required}")
     private ConsultationUrgency urgency;
 
     private UUID preferredConsultantId;

@@ -29,12 +29,12 @@ public class EncounterTreatmentRequestDTO {
     private UUID staffId;
 
     @NotNull
-    @PastOrPresent(message = "performedAt cannot be in the future")
+    @PastOrPresent(message = "{encounterTreatment.performedAt.past}")
     private LocalDateTime performedAt;
 
-    @Size(max = 100, message = "Outcome must be at most 100 characters")
+    @Size(max = 100, message = "{encounterTreatment.outcome.size}")
     private String outcome;
 
-    @Size(max = 2000, message = "Notes must be at most 2000 characters")
+    @Size(max = 2000, message = "{encounterTreatment.notes.size}")
     private String notes;
 }

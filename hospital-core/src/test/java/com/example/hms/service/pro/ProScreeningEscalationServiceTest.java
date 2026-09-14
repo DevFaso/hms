@@ -41,6 +41,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class ProScreeningEscalationServiceTest {
@@ -51,6 +54,8 @@ class ProScreeningEscalationServiceTest {
     @Mock private PanelAssignmentRepository panelAssignmentRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks private ProScreeningEscalationService service;
 
@@ -119,7 +124,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(contains("EPDS safety item"), eq("midwife.kone"),
+        verify(notificationService).createNotification(contains("Item de sécurité EPDS"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
         verify(notificationService).createNotification(anyString(), eq("dr.ouedraogo"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
@@ -139,7 +144,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(contains("screen positive"), eq("midwife.kone"),
+        verify(notificationService).createNotification(contains("Dépistage EPDS positif"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.SCREEN_POSITIVE_TYPE));
         verify(notificationService, never()).createNotification(anyString(), anyString(),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
@@ -205,7 +210,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(smsService).send(eq("+22670000000"), contains("EPDS safety item"));
+        verify(smsService).send(eq("+22670000000"), contains("Item de sécurité EPDS"));
     }
 
     @Test
@@ -240,7 +245,7 @@ class ProScreeningEscalationServiceTest {
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(notificationService).createNotification(contains("ESCALATION"), eq("midwife.kone"),
+        verify(notificationService).createNotification(contains("ESCALADE"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.ESCALATION_TYPE));
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), eq("ROLE_HOSPITAL_ADMIN"));
         assertThat(response.getEscalationLevel()).isEqualTo((short) 1);

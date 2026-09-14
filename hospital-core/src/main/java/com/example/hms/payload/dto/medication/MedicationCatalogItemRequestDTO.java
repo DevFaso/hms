@@ -17,12 +17,12 @@ import java.util.UUID;
 @Builder
 public class MedicationCatalogItemRequestDTO {
 
-    @NotBlank(message = "Medication name (French) is required")
+    @NotBlank(message = "{medicationCatalogItem.nameFr.required}")
     @Size(max = 255)
     private String nameFr;
 
     @Size(max = 255)
-    @NotBlank(message = "Generic name is required")
+    @NotBlank(message = "{medicationCatalogItem.genericName.required}")
     private String genericName;
 
     @Size(max = 255)

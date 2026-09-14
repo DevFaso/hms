@@ -20,7 +20,7 @@ public class UserRequestDTO extends BaseUserDTO {
     private UUID id;
 
     /** Optional for updates; required for creation (enforce in service). */
-    @Size(min = 8, max = 64, message = "Password length must be 8–64 characters")
+    @Size(min = 8, max = 64, message = "{user.password.size}")
     @Schema(description = "Raw password; only provide on creation or password change")
     private String password;
 
@@ -36,6 +36,6 @@ public class UserRequestDTO extends BaseUserDTO {
     private String emergencyContactName;
 
     @Pattern(regexp = "^[+\\d][\\d\\-()\\s]{6,20}$",
-        message = "Emergency contact phone has invalid format")
+        message = "{user.emergencyContactPhone.pattern}")
     private String emergencyContactPhone;
 }

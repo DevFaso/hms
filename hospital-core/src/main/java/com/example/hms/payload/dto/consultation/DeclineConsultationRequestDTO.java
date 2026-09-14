@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeclineConsultationRequestDTO {
 
-    @NotBlank(message = "Decline reason is required")
-    @Size(max = 500, message = "Decline reason must not exceed 500 characters")
+    @NotBlank(message = "{declineConsultation.declineReason.required}")
+    @Size(max = 500, message = "{declineConsultation.declineReason.size}")
     private String declineReason;
 }

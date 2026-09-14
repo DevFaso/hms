@@ -23,15 +23,15 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class StockTransactionRequestDTO {
 
-    @NotNull(message = "Inventory item ID is required")
+    @NotNull(message = "{stockTransaction.inventoryItemId.required}")
     private UUID inventoryItemId;
 
     private UUID stockLotId;
 
-    @NotNull(message = "Transaction type is required")
+    @NotNull(message = "{stockTransaction.transactionType.required}")
     private StockTransactionType transactionType;
 
-    @NotNull(message = "Quantity is required")
+    @NotNull(message = "{stockTransaction.quantity.required}")
     private BigDecimal quantity;
 
     @Size(max = 500)
@@ -54,6 +54,6 @@ public class StockTransactionRequestDTO {
 
     private LocalDate expiryDate;
 
-    @DecimalMin(value = "0.0", message = "Unit cost cannot be negative")
+    @DecimalMin(value = "0.0", message = "{stockTransaction.unitCost.min}")
     private BigDecimal unitCost;
 }

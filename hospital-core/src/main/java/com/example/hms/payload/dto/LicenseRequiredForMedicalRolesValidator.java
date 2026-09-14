@@ -30,8 +30,11 @@ public class LicenseRequiredForMedicalRolesValidator
         boolean ok = lic != null && !lic.trim().isEmpty();
         if (!ok) {
             ctx.disableDefaultConstraintViolation();
+            // A template, not a sentence: Bean Validation resolves {key} through the
+            // application MessageSource in the request locale, exactly as the
+            // annotation messages do. The literal it replaced bypassed every bundle.
             ctx.buildConstraintViolationWithTemplate(
-                    "licenseNumber is required when roles include a medical role.")
+                    "{adminSignup.licenseNumber.required}")
                 .addPropertyNode("licenseNumber")
                 .addConstraintViolation();
         }

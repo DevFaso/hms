@@ -17,32 +17,32 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class SessionTemplateRequestDTO {
 
-    @NotNull(message = "A clinician is required.")
+    @NotNull(message = "{sessionTemplate.staffId.required}")
     private UUID staffId;
 
-    @NotNull(message = "A department is required.")
+    @NotNull(message = "{sessionTemplate.departmentId.required}")
     private UUID departmentId;
 
     /** Null = a general session that accepts any visit type. */
     private UUID visitTypeId;
 
     /** ISO-8601: 1 = Monday .. 7 = Sunday. */
-    @NotNull(message = "A weekday is required.")
-    @Min(value = 1, message = "Weekday must be 1 (Monday) to 7 (Sunday).")
-    @Max(value = 7, message = "Weekday must be 1 (Monday) to 7 (Sunday).")
+    @NotNull(message = "{sessionTemplate.dayOfWeek.required}")
+    @Min(value = 1, message = "{sessionTemplate.dayOfWeek.invalid}")
+    @Max(value = 7, message = "{sessionTemplate.dayOfWeek.invalid}")
     private Integer dayOfWeek;
 
-    @NotNull(message = "A start time is required.")
+    @NotNull(message = "{sessionTemplate.startTime.required}")
     private LocalTime startTime;
 
-    @NotNull(message = "An end time is required.")
+    @NotNull(message = "{sessionTemplate.endTime.required}")
     private LocalTime endTime;
 
-    @NotNull(message = "A slot length is required.")
-    @Min(value = 1, message = "Slots must be at least one minute long.")
+    @NotNull(message = "{sessionTemplate.slotMinutes.required}")
+    @Min(value = 1, message = "{sessionTemplate.slotMinutes.min}")
     private Integer slotMinutes;
 
-    @NotNull(message = "An effective-from date is required.")
+    @NotNull(message = "{sessionTemplate.effectiveFrom.required}")
     private LocalDate effectiveFrom;
 
     /** Null = open-ended. */

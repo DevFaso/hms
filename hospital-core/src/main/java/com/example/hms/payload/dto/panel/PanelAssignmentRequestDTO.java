@@ -19,10 +19,10 @@ import java.util.UUID;
 @Builder
 public class PanelAssignmentRequestDTO {
 
-    @NotNull(message = "providerStaffId is required")
+    @NotNull(message = "{panelAssignment.providerStaffId.required}")
     private UUID providerStaffId;
 
-    @NotNull(message = "panelRole is required")
+    @NotNull(message = "{panelAssignment.panelRole.required}")
     private PanelRole panelRole;
 
     /** Optional — defaults to today; may predate the row for backfilled paper panels. */

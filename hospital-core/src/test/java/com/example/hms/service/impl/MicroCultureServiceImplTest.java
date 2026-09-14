@@ -51,6 +51,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.i18n.TestMessageSources;
 
 /**
  * Microbiology culture reports (P3 #19): tenancy is 404-not-403 on reads AND
@@ -86,7 +87,8 @@ class MicroCultureServiceImplTest {
         service = new MicroCultureServiceImpl(
             cultureRepository, isolateRepository, susceptibilityRepository,
             labOrderRepository, specimenRepository, patientChartAccess,
-            staffRepository, userRepository, notificationService);
+            staffRepository, userRepository, notificationService,
+            TestMessageSources.bundles());
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();

@@ -27,7 +27,7 @@ public class PrenatalScheduleRequestDTO {
     private UUID staffId;
 
     @NotNull
-    @PastOrPresent(message = "Last menstrual period cannot be set in the future")
+    @PastOrPresent(message = "{prenatalSchedule.lastMenstrualPeriodDate.past}")
     private LocalDate lastMenstrualPeriodDate;
 
     private LocalDate estimatedDueDate;

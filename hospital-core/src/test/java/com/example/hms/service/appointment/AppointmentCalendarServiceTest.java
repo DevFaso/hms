@@ -52,7 +52,8 @@ class AppointmentCalendarServiceTest {
             null,                       // departmentRepository
             null,                       // slotInventoryService (P3 #22)
             null,                       // webhookPublisher (Tier 2 item 45)
-            null                        // appointmentLinks (AppointmentLinkProperties, PR #315)
+            null,                       // appointmentLinks (AppointmentLinkProperties, PR #315)
+            null                        // patientLocaleResolver (recipient language of the appointment mails)
         );
     }
 

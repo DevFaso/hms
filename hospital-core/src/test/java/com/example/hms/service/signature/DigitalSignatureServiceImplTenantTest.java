@@ -22,6 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 /** Tenant isolation for the admin signature listing (GET /signatures/all). */
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +37,8 @@ class DigitalSignatureServiceImplTenantTest {
     @Mock private DigitalSignatureMapper signatureMapper;
     @Mock private AuthService authService;
     @Mock private RoleValidator roleValidator;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private DigitalSignatureServiceImpl service;

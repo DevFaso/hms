@@ -15,7 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ConsultationUpdateDTO {
 
-    @NotNull(message = "Consultant ID is required")
+    @NotNull(message = "{consultation.consultantId.required}")
     private UUID consultantId;
 
     private LocalDateTime scheduledAt;

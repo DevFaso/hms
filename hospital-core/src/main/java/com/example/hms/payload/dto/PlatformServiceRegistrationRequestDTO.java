@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PlatformServiceRegistrationRequestDTO {
 
-    @NotNull(message = "Platform service type is required")
+    @NotNull(message = "{platformService.serviceType.required}")
     private PlatformServiceType serviceType;
 
     private String provider;
