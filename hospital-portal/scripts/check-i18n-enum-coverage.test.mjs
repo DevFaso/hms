@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { javaEnumConstants, groupOf } from './check-i18n-enum-coverage.mjs';
+import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = resolve(SCRIPT_DIR, '..', '..');
@@ -116,6 +116,31 @@ test('the real PrescriptionStatus keeps its partner-pharmacy statuses', () => {
     [],
   );
   assert.equal(constants.length, new Set(constants).size, 'constants must not repeat');
+});
+
+test('an astral character in a comment does not swallow the next constant', () => {
+  // blankCommentsAndStrings blanks by offset. Building its buffer with
+  // [...source] splits by CODE POINT while every offset is UTF-16, so one
+  // emoji shifted the mapping and silently dropped a constant — a dropped
+  // constant is never checked for a key and the gate still exits 0.
+  const plain = enumSource('  /* x */A,', '  B;');
+  const astral = enumSource('  /* \u{1F691} */A,', '  B;');
+  assert.deepEqual(javaEnumConstants(plain, 'E'), ['A', 'B']);
+  assert.deepEqual(javaEnumConstants(astral, 'E'), ['A', 'B']);
+});
+
+test('a comment that quotes the declaration does not hijack the parse', () => {
+  // The declaration regex used to run on the raw source while every offset
+  // after it ran on the blanked copy, so a see-also comment naming the enum
+  // sent the walk into a blanked region and failed a valid file.
+  const src = [
+    '/** Mirrors public enum E { OLD_A, OLD_B } in the legacy module. */',
+    'public enum E {',
+    '  A,',
+    '  B;',
+    '}',
+  ].join('\n');
+  assert.deepEqual(javaEnumConstants(src, 'E'), ['A', 'B']);
 });
 
 test('groupOf matches EnumLabelPipe.toUpperSnake, including on acronyms', () => {

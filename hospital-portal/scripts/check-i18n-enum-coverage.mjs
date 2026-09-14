@@ -32,7 +32,7 @@
  *
  * Missing keys FAIL — that is English on a French screen. Keys no declared
  * enum can emit are reported but do not fail: `status` is a deliberate shared
- * pool across 24 unrelated call sites, so its group holds far more than any
+ * pool across 13 unrelated call sites, so its group holds far more than any
  * one of them sends.
  *
  * WHAT THIS GATE CANNOT SEE, and neither can any other:
@@ -54,6 +54,7 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
+import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
@@ -68,113 +69,6 @@ const REPORT_ONLY = process.argv.includes('--report-only');
 const PIPE_CALL = /enumLabel\s*:\s*'([A-Za-z_][A-Za-z0-9_]*)'/g;
 /** Only these may appear in a declaration; anything else is a typo. */
 const DECLARATION_KEYS = ['enum', 'enums', 'group', 'reason'];
-
-/**
- * MUST stay identical to EnumLabelPipe.toUpperSnake (enum-label.pipe.ts), or
- * this gate verifies a group the pipe never reads. An underscore goes at a
- * lower/digit-to-upper boundary only: a domain like `patientMRN` is
- * PATIENT_MRN to the pipe, and splitting before every capital would have the
- * gate checking PATIENT_M_R_N and passing against a group nothing renders.
- */
-export const groupOf = (domain) => domain.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
-
-/**
- * The constants of a Java enum: the tokens before the `;` that ends the
- * constant list (or before the closing brace when there is no body).
- *
- * Comments AND string literals are blanked before that split, and for the same
- * reason. The first version of this parser split on the raw text and ended
- * `PrescriptionStatus` at the semicolon inside "Medication not in stock;
- * awaiting restock", silently hiding seven partner-pharmacy statuses — it
- * reported them as values the enum "cannot emit" and exited 0. A `;` inside a
- * constant's own argument, as in `A("x;y")`, does exactly the same thing.
- *
- * Constants are then read as tokens rather than line-by-line, so an annotated
- * constant (`@Deprecated A`), several on one line (`A, B, C`), and one that
- * carries a class body (`A { void f() {} },`) are all found.
- */
-export function javaEnumConstants(source, name) {
-  const decl = new RegExp(`enum\\s+${name}\\s*(?:implements[^{]*)?\\{`).exec(source);
-  if (!decl) return null;
-
-  const open = decl.index + decl[0].length - 1;
-  const blanked = blankCommentsAndStrings(source);
-
-  // Walk to the enum's own closing brace over the blanked copy, so a brace
-  // inside a comment or string cannot end it early.
-  let depth = 0;
-  let close = open;
-  for (; close < blanked.length; close += 1) {
-    if (blanked[close] === '{') depth += 1;
-    else if (blanked[close] === '}') {
-      depth -= 1;
-      if (depth === 0) break;
-    }
-  }
-
-  // The constant list ends at the first `;` at the enum's own brace depth —
-  // one nested inside a constant's class body does not end it.
-  const body = blanked.slice(open + 1, close);
-  let end = body.length;
-  depth = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    if (body[i] === '{' || body[i] === '(') depth += 1;
-    else if (body[i] === '}' || body[i] === ')') depth -= 1;
-    else if (body[i] === ';' && depth === 0) {
-      end = i;
-      break;
-    }
-  }
-
-  // In the constant list, a name is a bare token that is not part of an
-  // annotation and not inside a constant's arguments or class body.
-  const list = body.slice(0, end);
-  const names = [];
-  depth = 0;
-  for (const match of list.matchAll(/@?[A-Za-z_$][\w$]*|[(){}]/g)) {
-    const token = match[0];
-    if ('({'.includes(token)) depth += 1;
-    else if (')}'.includes(token)) depth -= 1;
-    else if (depth === 0 && !token.startsWith('@') && /^[A-Z][A-Z0-9_]*$/.test(token)) {
-      names.push(token);
-    }
-  }
-  return names;
-}
-
-/** Replace every comment and string literal with spaces, preserving offsets. */
-function blankCommentsAndStrings(source) {
-  const out = [...source];
-  let i = 0;
-  const blank = (from, to) => {
-    for (let k = from; k < to && k < out.length; k += 1) {
-      if (out[k] !== '\n') out[k] = ' ';
-    }
-  };
-  while (i < source.length) {
-    const two = source.slice(i, i + 2);
-    if (two === '/*') {
-      const end = source.indexOf('*/', i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      blank(i, stop);
-      i = stop;
-    } else if (two === '//') {
-      let end = source.indexOf('\n', i);
-      if (end === -1) end = source.length;
-      blank(i, end);
-      i = end;
-    } else if (source[i] === '"' || source[i] === "'") {
-      const quote = source[i];
-      let k = i + 1;
-      while (k < source.length && source[k] !== quote) k += source[k] === '\\' ? 2 : 1;
-      blank(i, k + 1);
-      i = k + 1;
-    } else {
-      i += 1;
-    }
-  }
-  return out.join('');
-}
 
 /** Fails on a hollow or misspelled entry rather than treating it as exempt. */
 function validateDeclaration(domain, entry, errors) {
@@ -198,7 +92,27 @@ function validateDeclaration(domain, entry, errors) {
     );
     return false;
   }
-  if ('reason' in entry && (typeof entry.reason !== 'string' || entry.reason.trim() === '')) {
+  // Counting the keys is not enough: `{"enums": []}` declared exactly one and
+  // checked nothing, which made it cheaper than the `{}` this function exists
+  // to reject, and `{"enum": null}` died on an unhandled TypeError instead of
+  // producing the message below.
+  const filled = (value) => typeof value === 'string' && value.trim() !== '';
+  if ('enum' in entry && !filled(entry.enum)) {
+    errors.push(`BAD DECLARATION ${domain} — enum must be a path to a .java file.`);
+    return false;
+  }
+  if (
+    'enums' in entry &&
+    (!Array.isArray(entry.enums) || entry.enums.length === 0 || !entry.enums.every(filled))
+  ) {
+    errors.push(`BAD DECLARATION ${domain} — enums must be a non-empty array of .java paths.`);
+    return false;
+  }
+  if ('group' in entry && !filled(entry.group)) {
+    errors.push(`BAD DECLARATION ${domain} — group must be a non-empty string.`);
+    return false;
+  }
+  if ('reason' in entry && !filled(entry.reason)) {
     errors.push(`BAD DECLARATION ${domain} — an exemption needs a reason someone can read.`);
     return false;
   }
@@ -212,7 +126,9 @@ function main() {
 
   /** domain -> the templates that pipe it, so a failure names somewhere to go. */
   const used = new Map();
-  for (const file of walk(SRC)) {
+  // .ts as well as .html: components with an inline `template:` were invisible
+  // to both the UNDECLARED check and the coverage check.
+  for (const file of walk(SRC, ['.html', '.ts'])) {
     const text = readFileSync(file, 'utf8');
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
       if (!used.has(domain)) used.set(domain, new Set());
@@ -225,6 +141,10 @@ function main() {
   let checked = 0;
   let covered = 0;
   let exempt = 0;
+  // Only the domains whose constants were actually compared: an undeclared,
+  // unparseable or bad-declaration domain contributes nothing and must not
+  // inflate the ratio a reader scans first.
+  let checkedDomains = 0;
 
   for (const domain of [...used.keys()].sort()) {
     const where = [...used.get(domain)].sort();
@@ -270,8 +190,16 @@ function main() {
     }
     if (broken) continue;
 
+    checkedDomains += 1;
     const group = entry.group ?? groupOf(domain);
     const keys = enumGroups[group] ?? {};
+    const enumName =
+      paths.length > 1
+        ? 'one of the declared enums'
+        : paths[0]
+            .split('/')
+            .pop()
+            .replace(/\.java$/, '');
     const missing = [...constants].filter((value) => !(value in keys));
     const extra = Object.keys(keys).filter((key) => !constants.has(key));
     checked += constants.size;
@@ -297,7 +225,7 @@ function main() {
 
   console.log(
     `[i18n-enum] ${used.size} piped domain(s): ${covered}/${checked} enum values keyed ` +
-      `across ${used.size - exempt} checked, ${exempt} exempt (not counted above)`,
+      `across ${checkedDomains} checked, ${exempt} exempt (not counted above)`,
   );
   for (const note of notes) console.log(`  note: ${note}`);
   for (const error of errors) console.error(`  ${error}`);
@@ -305,8 +233,8 @@ function main() {
   if (errors.length && !REPORT_ONLY) process.exit(1);
 }
 
-// Only run the gate when invoked as a command; the parser and groupOf are
-// imported by scripts/check-i18n-enum-coverage.test.mjs.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
-}
+// Unconditional, like every sibling gate. The `import.meta.url ===
+// process.argv[1]` guard this used to carry is false under a symlinked
+// directory or a drive-letter case difference — and a gate that prints nothing
+// and exits 0 is worse than no gate at all.
+main();
