@@ -53,6 +53,7 @@ class PatientRecordExportControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private PatientEverythingService everythingService;
+    @MockitoBean private com.example.hms.service.PatientRecordPdfService recordPdfService;
 
     @Test
     void streamsTheBundleAsANamedFhirJsonAttachment() throws Exception {
@@ -72,5 +73,22 @@ class PatientRecordExportControllerTest {
                 "attachment; filename=\"patient-record-" + patientId + ".json\""))
             .andExpect(content().contentTypeCompatibleWith("application/fhir+json"))
             .andExpect(content().string(org.hamcrest.Matchers.containsString("\"resourceType\": \"Bundle\"")));
+    }
+
+    @Test
+    void streamsTheChartAsANamedPdfAttachment() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        byte[] pdf = "%PDF-1.4 test".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(recordPdfService.render(patientId)).thenReturn(pdf);
+
+        mockMvc.perform(get("/patients/{id}/record.pdf", patientId)
+                .with(SecurityMockMvcRequestPostProcessors.authentication(
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "nurse.awa", "pw", AuthorityUtils.createAuthorityList("ROLE_NURSE")))))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Disposition",
+                "attachment; filename=\"patient-record-" + patientId + ".pdf\""))
+            .andExpect(content().contentType("application/pdf"))
+            .andExpect(content().bytes(pdf));
     }
 }

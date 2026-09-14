@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.example.hms.fhir.everything.PatientEverythingService;
+import com.example.hms.service.PatientRecordPdfService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class PatientRecordExportController {
 
     private final PatientEverythingService everythingService;
     private final FhirContext fhirContext;
+    private final PatientRecordPdfService recordPdfService;
 
     @Operation(summary = "Download a patient's full record as a FHIR bundle",
         description = "One self-contained application/fhir+json file (no pagination links). "
@@ -57,5 +59,21 @@ public class PatientRecordExportController {
                 "attachment; filename=\"patient-record-" + patientId + ".json\"")
             .contentType(MediaType.parseMediaType("application/fhir+json"))
             .body(json);
+    }
+
+    @Operation(summary = "Download a patient's chart as a printable PDF",
+        description = "Identity, storyboard and chart review on paper. Same roles, active-hospital scope, "
+            + "registration gate and PATIENT_EXPORT audit as the FHIR bundle; rows the cross-hospital rules hold "
+            + "back are counted, not listed.")
+    @GetMapping(value = "/{patientId}/record.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize(EXPORT_ROLES)
+    public ResponseEntity<byte[]> downloadRecordPdf(@PathVariable UUID patientId) {
+        byte[] pdf = recordPdfService.render(patientId);
+        log.info("Patient record PDF streamed for patient '{}' ({} bytes)", patientId, pdf.length);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"patient-record-" + patientId + ".pdf\"")
+            .contentType(MediaType.APPLICATION_PDF)
+            .body(pdf);
     }
 }
