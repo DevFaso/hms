@@ -8,6 +8,7 @@ import { RoleContextService } from './core/role-context.service';
 import { SessionScopeService } from './core/session-scope.service';
 import { AnalyticsService } from './core/services/analytics.service';
 import { environment } from '../environments/environment';
+import { DEFAULT_LANG, storedLang } from './shared/i18n/app-locale';
 
 @Component({
   selector: 'app-root',
@@ -35,8 +36,10 @@ export class AppComponent implements OnInit {
   private readonly analytics = inject(AnalyticsService);
 
   ngOnInit(): void {
-    this.translate.setDefaultLang('fr');
-    this.translate.use(localStorage.getItem('lang') || 'fr');
+    this.translate.setDefaultLang(DEFAULT_LANG);
+    const lang = storedLang();
+    this.translate.use(lang);
+    document.documentElement.lang = lang;
     this.analytics.init();
 
     // Bootstrap the XSRF-TOKEN cookie from the server so that the custom

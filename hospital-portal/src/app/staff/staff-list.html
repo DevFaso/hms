@@ -321,7 +321,7 @@
                     type="text"
                     [(ngModel)]="form.licenseNumber"
                     name="licenseNumber"
-                    placeholder="e.g., MED-12345"
+                    [placeholder]="'STAFF.LICENSE_NUMBER_PLACEHOLDER' | translate"
                   />
                 } @else {
                   <div class="locked-field">

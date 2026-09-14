@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import {
@@ -25,6 +25,7 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
 
@@ -101,7 +102,7 @@ export class InventoryDashboardComponent implements OnInit {
           this.stockLoading.set(false);
         },
         error: () => {
-          this.toast.error('Failed to load inventory');
+          this.toast.error(this.translate.instant('PHARMACY.INVENTORY_LOAD_FAILED'));
           this.stockLoading.set(false);
         },
       });
@@ -115,7 +116,7 @@ export class InventoryDashboardComponent implements OnInit {
         this.alertsLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load reorder alerts');
+        this.toast.error(this.translate.instant('PHARMACY.ALERTS_LOAD_FAILED'));
         this.alertsLoading.set(false);
       },
     });
@@ -129,7 +130,7 @@ export class InventoryDashboardComponent implements OnInit {
         this.expiryLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load expiring lots');
+        this.toast.error(this.translate.instant('PHARMACY.EXPIRING_LOAD_FAILED'));
         this.expiryLoading.set(false);
       },
     });
@@ -137,8 +138,8 @@ export class InventoryDashboardComponent implements OnInit {
 
   triggerReorderAlerts(): void {
     this.svc.triggerReorderAlerts().subscribe({
-      next: () => this.toast.success('Reorder alerts triggered'),
-      error: () => this.toast.error('Failed to trigger reorder alerts'),
+      next: () => this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED')),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED')),
     });
   }
 
@@ -176,19 +177,21 @@ export class InventoryDashboardComponent implements OnInit {
 
   submitCreateForm(): void {
     if (!this.createForm.pharmacyId || !this.createForm.medicationCatalogItemId) {
-      this.toast.error('Pharmacy and medication are required');
+      this.toast.error(this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
     this.svc.createInventoryItem(this.createForm).subscribe({
       next: () => {
-        this.toast.success('Inventory item created');
+        this.toast.success(this.translate.instant('PHARMACY.ITEM_CREATED'));
         this.closeCreateModal();
         this.saving.set(false);
         this.loadStockLevels();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create inventory item');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -201,9 +204,10 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   getStockStatusLabel(item: InventoryItemResponse): string {
-    if (item.quantityOnHand <= 0) return 'OUT OF STOCK';
-    if (item.quantityOnHand <= item.reorderThreshold) return 'LOW';
-    return 'IN STOCK';
+    if (item.quantityOnHand <= 0) return this.translate.instant('PHARMACY.OUT_OF_STOCK');
+    if (item.quantityOnHand <= item.reorderThreshold)
+      return this.translate.instant('PHARMACY.STOCK_LOW');
+    return this.translate.instant('PHARMACY.IN_STOCK');
   }
 
   getDaysUntilExpiry(expiryDate: string): number {

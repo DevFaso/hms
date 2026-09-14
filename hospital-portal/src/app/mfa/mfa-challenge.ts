@@ -1,6 +1,7 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -15,7 +16,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 @Component({
   selector: 'app-mfa-challenge',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './mfa-challenge.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'], // reuse same styles

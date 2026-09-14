@@ -304,7 +304,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'CONSULTATIONS.TYPE' | translate }}</span
               ><span class="field-value">{{
-                typeLabel[con.consultationType] || con.consultationType
+                con.consultationType | enumLabel: 'consultationType'
               }}</span>
             </div>
             <div class="detail-field">
@@ -519,7 +519,10 @@
                   <span class="picker-spinner"></span>
                 }
                 @if (patientDropdownOpen()) {
-                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                  <ul
+                    class="picker-dropdown"
+                    [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
+                  >
                     @for (p of patientSuggestions(); track p.id) {
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
@@ -547,7 +550,7 @@
                 id="con-hospitalId"
                 [ngModel]="form.hospitalId"
                 (ngModelChange)="onHospitalChange($event)"
-                title="Hospital"
+                [title]="'ENCOUNTERS.HOSPITAL' | translate"
               >
                 <option value="">{{ 'CONSULTATIONS.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
@@ -560,15 +563,23 @@
         <div class="form-row">
           <div class="field">
             <label for="con-type">{{ 'CONSULTATIONS.TYPE' | translate }}</label>
-            <select id="con-type" [(ngModel)]="form.consultationType" title="Consultation type">
+            <select
+              id="con-type"
+              [(ngModel)]="form.consultationType"
+              [title]="'CONSULTATIONS.TYPE_TITLE' | translate"
+            >
               @for (t of consultationTypes; track t) {
-                <option [value]="t">{{ typeLabel[t] || t }}</option>
+                <option [value]="t">{{ t | enumLabel: 'consultationType' }}</option>
               }
             </select>
           </div>
           <div class="field">
             <label for="con-urgency">{{ 'CONSULTATIONS.URGENCY' | translate }}</label>
-            <select id="con-urgency" [(ngModel)]="form.urgency" title="Urgency">
+            <select
+              id="con-urgency"
+              [(ngModel)]="form.urgency"
+              [title]="'CONSULTATIONS.URGENCY' | translate"
+            >
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ u }}</option>
               }
@@ -701,7 +712,7 @@
               id="assign-consultant"
               [value]="assignConsultantId()"
               (change)="assignConsultantId.set($any($event.target).value)"
-              title="Select consultant"
+              [title]="'CONSULTATIONS.SELECT_CONSULTANT' | translate"
             >
               <option value="">{{ 'CONSULTATIONS.SELECT_CONSULTANT' | translate }}</option>
               @for (s of filteredAssignStaff(); track s.id) {
@@ -769,8 +780,14 @@
       </div>
       <div class="modal-body">
         <p class="modal-context">
-          Schedule consultation for <strong>{{ schedulingItem()?.patientName }}</strong> —
-          <strong>{{ schedulingItem()?.specialtyRequested }}</strong>
+          {{
+            'CONSULTATIONS.SCHEDULE_CONTEXT'
+              | translate
+                : {
+                    patient: schedulingItem()?.patientName,
+                    specialty: schedulingItem()?.specialtyRequested,
+                  }
+          }}
         </p>
         <div class="field">
           <label for="sched-at">{{ 'CONSULTATIONS.SCHEDULED_DATE_TIME' | translate }} *</label>
@@ -822,8 +839,14 @@
       </div>
       <div class="modal-body">
         <p class="modal-context">
-          Complete consultation for <strong>{{ completingItem()?.patientName }}</strong> —
-          <strong>{{ completingItem()?.specialtyRequested }}</strong>
+          {{
+            'CONSULTATIONS.COMPLETE_CONTEXT'
+              | translate
+                : {
+                    patient: completingItem()?.patientName,
+                    specialty: completingItem()?.specialtyRequested,
+                  }
+          }}
         </p>
         <div class="field">
           <label for="complete-recommendations"
@@ -905,9 +928,14 @@
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
           <p>
-            Decline the consultation for <strong>{{ decliningItem()?.patientName }}</strong> —
-            <strong>{{ decliningItem()?.specialtyRequested }}</strong
-            >?
+            {{
+              'CONSULTATIONS.DECLINE_CONFIRM'
+                | translate
+                  : {
+                      patient: decliningItem()?.patientName,
+                      specialty: decliningItem()?.specialtyRequested,
+                    }
+            }}
           </p>
         </div>
         <div class="field" style="margin-top: 1rem">
@@ -959,9 +987,14 @@
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
           <p>
-            Cancel the consultation for <strong>{{ deletingItem()?.patientName }}</strong> —
-            <strong>{{ deletingItem()?.specialtyRequested }}</strong
-            >?
+            {{
+              'CONSULTATIONS.CANCEL_CONFIRM'
+                | translate
+                  : {
+                      patient: deletingItem()?.patientName,
+                      specialty: deletingItem()?.specialtyRequested,
+                    }
+            }}
           </p>
         </div>
         <div class="field" style="margin-top: 1rem">

@@ -590,7 +590,7 @@
             <label for="rep-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
             <select id="rep-modality" [(ngModel)]="reportForm.modality">
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m | enumLabel }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>
@@ -872,7 +872,7 @@
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"
-              placeholder="e.g. Chest X-Ray"
+              [placeholder]="'IMAGING.STUDY_TYPE_PLACEHOLDER' | translate"
             />
           </div>
           <div class="field">
@@ -881,7 +881,7 @@
               id="img-bodyRegion"
               type="text"
               [(ngModel)]="form.bodyRegion"
-              placeholder="e.g. Chest"
+              [placeholder]="'IMAGING.BODY_REGION_PLACEHOLDER' | translate"
             />
           </div>
         </div>

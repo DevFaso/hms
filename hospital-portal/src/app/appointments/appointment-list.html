@@ -33,7 +33,11 @@
         (input)="onSearchChange($any($event.target).value)"
       />
       @if (searchTerm) {
-        <button class="search-clear" title="Clear search" (click)="onSearchChange('')">
+        <button
+          class="search-clear"
+          [title]="'COMMON.CLEAR_SEARCH' | translate"
+          (click)="onSearchChange('')"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       }
@@ -89,7 +93,7 @@
       class="filter-toggle-btn"
       [class.has-filters]="activeFilterCount > 0"
       (click)="showFilters.set(!showFilters())"
-      title="More filters"
+      [title]="'COMMON.MORE_FILTERS' | translate"
     >
       <span class="material-symbols-outlined">tune</span>
       {{ 'COMMON.MORE' | translate }}
@@ -113,7 +117,7 @@
           [(ngModel)]="dateFrom"
           [max]="dateTo || undefined"
           (ngModelChange)="onFilterChange()"
-          title="Filter from date"
+          [title]="'APPOINTMENTS.FILTER_FROM_DATE_TITLE' | translate"
         />
       </div>
 
@@ -128,7 +132,7 @@
           [(ngModel)]="dateTo"
           [min]="dateFrom"
           (ngModelChange)="onFilterChange()"
-          title="Filter to date"
+          [title]="'APPOINTMENTS.FILTER_TO_DATE_TITLE' | translate"
         />
       </div>
 
@@ -140,7 +144,7 @@
           <select
             id="apptHospital"
             class="filter-select"
-            title="Filter by hospital"
+            [title]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
             [(ngModel)]="hospitalFilter"
             (ngModelChange)="onFilterChange()"
           >
@@ -305,7 +309,9 @@
               <td class="reason-cell" [title]="appt.reason">{{ appt.reason }}</td>
               <td>{{ appt.hospitalName }}</td>
               <td>
-                <span [class]="getStatusClass(appt.status)">{{ formatStatus(appt.status) }}</span>
+                <span [class]="getStatusClass(appt.status)">{{
+                  appt.status | enumLabel: 'appointmentStatus'
+                }}</span>
               </td>
               <td>
                 <a
@@ -338,8 +344,8 @@
             class="page-btn"
             [disabled]="currentPage() === 0"
             (click)="goToPage(currentPage() - 1)"
-            title="Previous"
-            aria-label="Previous page"
+            [title]="'COMMON.PREVIOUS' | translate"
+            [attr.aria-label]="'APPOINTMENTS.PAGER_PREV_LABEL' | translate"
           >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
@@ -349,7 +355,7 @@
                 class="page-btn page-num"
                 [class.active]="$index === currentPage()"
                 (click)="goToPage($index)"
-                [attr.aria-label]="'Page ' + ($index + 1)"
+                [attr.aria-label]="'APPOINTMENTS.PAGE_LABEL' | translate: { page: $index + 1 }"
                 [attr.aria-current]="$index === currentPage() ? 'page' : null"
               >
                 {{ $index + 1 }}
@@ -361,7 +367,7 @@
               class="page-btn page-num"
               [class.active]="currentPage() === 0"
               (click)="goToPage(0)"
-              aria-label="Page 1"
+              [attr.aria-label]="'APPOINTMENTS.PAGE_LABEL' | translate: { page: 1 }"
               [attr.aria-current]="currentPage() === 0 ? 'page' : null"
             >
               1
@@ -382,7 +388,7 @@
                   class="page-btn page-num"
                   [class.active]="$index === currentPage()"
                   (click)="goToPage($index)"
-                  [attr.aria-label]="'Page ' + ($index + 1)"
+                  [attr.aria-label]="'APPOINTMENTS.PAGE_LABEL' | translate: { page: $index + 1 }"
                   [attr.aria-current]="$index === currentPage() ? 'page' : null"
                 >
                   {{ $index + 1 }}
@@ -398,7 +404,7 @@
               class="page-btn page-num"
               [class.active]="currentPage() === totalPages - 1"
               (click)="goToPage(totalPages - 1)"
-              [attr.aria-label]="'Page ' + totalPages"
+              [attr.aria-label]="'APPOINTMENTS.PAGE_LABEL' | translate: { page: totalPages }"
               [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
             >
               {{ totalPages }}
@@ -408,8 +414,8 @@
             class="page-btn"
             [disabled]="currentPage() >= totalPages - 1"
             (click)="goToPage(currentPage() + 1)"
-            title="Next"
-            aria-label="Next page"
+            [title]="'COMMON.NEXT' | translate"
+            [attr.aria-label]="'APPOINTMENTS.PAGER_NEXT_LABEL' | translate"
           >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>

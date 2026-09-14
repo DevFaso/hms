@@ -114,8 +114,7 @@ describe('TriageFormComponent', () => {
 
     component.submit();
 
-    expect(mockToastService.error).toHaveBeenCalledWith(
-      'Failed to submit triage. Please try again.',
-    );
+    // No translations are loaded in the harness, so instant() echoes the key.
+    expect(mockToastService.error).toHaveBeenCalledWith('TRIAGE.SUBMIT_FAILED');
   });
 });

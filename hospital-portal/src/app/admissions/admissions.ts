@@ -173,13 +173,20 @@ export class AdmissionsComponent implements OnInit {
     'LEVEL_1_MINIMAL',
   ];
 
-  readonly acuityLabel: Record<string, string> = {
-    LEVEL_5_CRITICAL: 'Critical',
-    LEVEL_4_SEVERE: 'Severe',
-    LEVEL_3_MAJOR: 'Major',
-    LEVEL_2_MODERATE: 'Moderate',
-    LEVEL_1_MINIMAL: 'Minimal',
-  };
+  /**
+   * Localized acuity labels, indexed directly by the template
+   * (`acuityLabel[a.acuityLevel]`). A getter rather than a field so the
+   * labels follow a language switch instead of freezing at construction.
+   */
+  get acuityLabel(): Record<string, string> {
+    return {
+      LEVEL_5_CRITICAL: this.translate.instant('ADMISSIONS.ACUITY_CRITICAL'),
+      LEVEL_4_SEVERE: this.translate.instant('ADMISSIONS.ACUITY_SEVERE'),
+      LEVEL_3_MAJOR: this.translate.instant('ADMISSIONS.ACUITY_MAJOR'),
+      LEVEL_2_MODERATE: this.translate.instant('ADMISSIONS.ACUITY_MODERATE'),
+      LEVEL_1_MINIMAL: this.translate.instant('ADMISSIONS.ACUITY_MINIMAL'),
+    };
+  }
 
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
@@ -231,7 +238,7 @@ export class AdmissionsComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -411,13 +418,15 @@ export class AdmissionsComponent implements OnInit {
       : this.admissionService.create(this.form);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Admission updated' : 'Admission created');
+        this.toast.success(
+          this.translate.instant(this.editing() ? 'ADMISSIONS.UPDATED' : 'ADMISSIONS.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('ADMISSIONS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -435,13 +444,13 @@ export class AdmissionsComponent implements OnInit {
     this.deleting.set(true);
     this.admissionService.delete(this.deletingAdm()!.id).subscribe({
       next: () => {
-        this.toast.success('Admission deleted');
+        this.toast.success(this.translate.instant('ADMISSIONS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('ADMISSIONS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -560,7 +569,7 @@ export class AdmissionsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load admissions');
+        this.toast.error(this.translate.instant('ADMISSIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });

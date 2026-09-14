@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 import { Dhis2Service } from '../../../services/integrations/dhis2.service';
@@ -196,6 +196,7 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
   private readonly dhis2 = inject(Dhis2Service);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private listSub?: Subscription;
   private triggerSub?: Subscription;
 
@@ -232,12 +233,12 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
     this.triggerSub = this.dhis2.triggerExport(body).subscribe({
       next: () => {
         this.triggering.set(false);
-        this.toast.success('DHIS2 export triggered');
+        this.toast.success(this.translate.instant('DHIS2.PANEL.TRIGGERED'));
         this.refreshRuns();
       },
       error: () => {
         this.triggering.set(false);
-        this.toast.error('Could not trigger DHIS2 export');
+        this.toast.error(this.translate.instant('DHIS2.PANEL.TRIGGER_FAILED'));
       },
     });
   }

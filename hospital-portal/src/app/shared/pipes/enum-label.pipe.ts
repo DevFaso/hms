@@ -321,6 +321,37 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       EMERGENCY: 'Emergency',
       RECOVERY: 'Recovery',
     },
+    /* Isolation precautions (bed board). The prettifier would render these
+     * correctly in English, but without a group the badges can never be
+     * translated, so give them a real i18n path. */
+    isolationPrecautionType: {
+      CONTACT: 'Contact',
+      DROPLET: 'Droplet',
+      AIRBORNE: 'Airborne',
+      PROTECTIVE: 'Protective',
+    },
+    bloodProductType: {
+      WHOLE_BLOOD: 'Whole Blood',
+      PACKED_RED_CELLS: 'Packed Red Cells',
+      FRESH_FROZEN_PLASMA: 'Fresh Frozen Plasma',
+      PLATELETS: 'Platelets',
+      CRYOPRECIPITATE: 'Cryoprecipitate',
+    },
+    /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
+     * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */
+    imagingModality: {
+      XRAY: 'X-Ray',
+      CT: 'CT',
+      MRI: 'MRI',
+      ULTRASOUND: 'Ultrasound',
+      MAMMOGRAPHY: 'Mammography',
+      FLUOROSCOPY: 'Fluoroscopy',
+      PET: 'PET',
+      NUCLEAR_MEDICINE: 'Nuclear Medicine',
+      INTERVENTIONAL_RADIOLOGY: 'Interventional Radiology',
+      DEXA: 'DEXA',
+      OTHER: 'Other',
+    },
     dispenseStatus: {
       PENDING: 'Pending',
       COMPLETED: 'Completed',
@@ -607,6 +638,14 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       const domainMap = EnumLabelPipe.LABELS[domain];
       if (domainMap?.[value]) return domainMap[value];
     }
+    // Then every other group. 24 call sites pass the generic 'status' domain
+    // for values that only encounterStatus / labOrderStatus / ... define, and
+    // their curated casing ("Ready for Discharge") lives in those siblings.
+    // Restricting this scan to domain-less calls dropped them to the Title-Case
+    // prettifier. The scan's known hazard — EXPIRED is "Deceased" under
+    // dischargeDisposition and "Expired" under status, decided by declaration
+    // order — is real but pre-existing; the fix for it is the right domain at
+    // those call sites, not a narrower fallback here.
     for (const map of Object.values(EnumLabelPipe.LABELS)) {
       if (map[value]) return map[value];
     }

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -20,6 +20,7 @@ import {
 export class MedicationCatalogComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   items = signal<MedicationCatalogItemResponse[]>([]);
   filtered = signal<MedicationCatalogItemResponse[]>([]);
@@ -63,7 +64,7 @@ export class MedicationCatalogComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load medication catalog');
+        this.toast.error(this.translate.instant('PHARMACY.CATALOG_LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -139,15 +140,15 @@ export class MedicationCatalogComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.nameFr || !this.form.genericName) {
-      this.toast.error('Name (FR) and generic name are required');
+      this.toast.error(this.translate.instant('PHARMACY.MED_REQUIRED_FIELDS'));
       return;
     }
     if (!this.isAtcValid()) {
-      this.toast.error('ATC code must match WHO format L##LL## (e.g. J01CA04)');
+      this.toast.error(this.translate.instant('PHARMACY.ATC_FORMAT_HINT'));
       return;
     }
     if (!this.isRxNormValid()) {
-      this.toast.error('RxNorm code must be 1–12 digits');
+      this.toast.error(this.translate.instant('PHARMACY.RXNORM_FORMAT_HINT'));
       return;
     }
     this.saving.set(true);
@@ -158,13 +159,19 @@ export class MedicationCatalogComponent implements OnInit {
 
     req$.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Medication updated' : 'Medication created');
+        this.toast.success(
+          this.translate.instant(existing ? 'PHARMACY.MED_UPDATED' : 'PHARMACY.MED_CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadItems();
       },
       error: (err) => {
-        const msg = err?.error?.message ?? `Failed to ${existing ? 'update' : 'create'} medication`;
+        const msg =
+          err?.error?.message ??
+          this.translate.instant(
+            existing ? 'PHARMACY.MED_UPDATE_FAILED' : 'PHARMACY.MED_CREATE_FAILED',
+          );
         this.toast.error(msg);
         this.saving.set(false);
       },
@@ -187,13 +194,15 @@ export class MedicationCatalogComponent implements OnInit {
     this.deleting.set(true);
     this.svc.deleteMedication(item.id).subscribe({
       next: () => {
-        this.toast.success('Medication deleted');
+        this.toast.success(this.translate.instant('PHARMACY.MED_DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadItems();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete medication');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.MED_DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });

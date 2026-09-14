@@ -193,7 +193,7 @@
           <li>
             v{{ v.version }} — {{ v.updatedAt | date: 'short' }}
             @if (!v.active) {
-              <span class="badge">retired</span>
+              <span class="badge">{{ 'ORDER_SETS.VERSION_RETIRED' | translate }}</span>
             }
           </li>
         }

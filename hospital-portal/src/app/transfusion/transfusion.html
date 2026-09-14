@@ -96,7 +96,7 @@
                   <div class="cell-primary">{{ r.patientName }}</div>
                   <div class="cell-secondary">{{ r.patientMrn || '—' }}</div>
                 </td>
-                <td>{{ r.productType | enumLabel }}</td>
+                <td>{{ r.productType | enumLabel: 'bloodProductType' }}</td>
                 <td>{{ r.unitsRequested }}</td>
                 <td>
                   @if (r.patientAboGroup) {
@@ -179,7 +179,7 @@
             @for (u of units(); track u.id) {
               <tr class="data-row" [class.row-expired]="u.expired">
                 <td class="mono">{{ u.unitNumber }}</td>
-                <td>{{ u.productType | enumLabel }}</td>
+                <td>{{ u.productType | enumLabel: 'bloodProductType' }}</td>
                 <td>
                   <span class="group-badge"
                     >{{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }}</span
@@ -222,7 +222,7 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeRequest()">
       <div class="detail-panel">
         <div class="detail-header">
-          <h2>{{ req.patientName }} — {{ req.productType | enumLabel }}</h2>
+          <h2>{{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}</h2>
           <button class="btn-close" (click)="closeRequest()" [title]="'COMMON.CLOSE' | translate">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -408,7 +408,7 @@
             <label for="tx-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
             <select id="tx-product" [(ngModel)]="requestForm.productType">
               @for (p of productTypes; track p) {
-                <option [value]="p">{{ p | enumLabel }}</option>
+                <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
               }
             </select>
           </div>
@@ -538,7 +538,7 @@
             <label for="u-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
             <select id="u-product" [(ngModel)]="unitForm.productType">
               @for (p of productTypes; track p) {
-                <option [value]="p">{{ p | enumLabel }}</option>
+                <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
               }
             </select>
           </div>
@@ -615,7 +615,7 @@
             @for (u of assignableUnits(); track u.id) {
               <option [value]="u.id">
                 {{ u.unitNumber }} — {{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }} ({{
-                  u.productType | enumLabel
+                  u.productType | enumLabel: 'bloodProductType'
                 }})
               </option>
             }

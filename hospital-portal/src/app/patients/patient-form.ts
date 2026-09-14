@@ -111,7 +111,7 @@ export class PatientFormComponent implements OnInit {
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
         next: (list) => (this.hospitals = list),
-        error: () => this.toast.error('Failed to load hospitals'),
+        error: () => this.toast.error(this.translate.instant('PATIENTS.HOSPITALS_LOAD_FAILED')),
       });
     } else {
       this.hospitalService.getMyHospitalAsResponse().subscribe({
@@ -119,7 +119,7 @@ export class PatientFormComponent implements OnInit {
           this.hospitals = [h];
           this.form.hospitalId = h.id;
         },
-        error: () => this.toast.error('Failed to load hospital'),
+        error: () => this.toast.error(this.translate.instant('PATIENTS.HOSPITAL_LOAD_FAILED')),
       });
     }
 
@@ -178,7 +178,9 @@ export class PatientFormComponent implements OnInit {
   }
 
   get lockedHospitalName(): string {
-    return this.hospitals.length === 1 ? this.hospitals[0].name : 'No hospital assigned';
+    return this.hospitals.length === 1
+      ? this.hospitals[0].name
+      : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -309,11 +311,11 @@ export class PatientFormComponent implements OnInit {
       !this.form.country ||
       !this.form.city
     ) {
-      this.toast.error('Please fill in all required fields');
+      this.toast.error(this.translate.instant('PATIENTS.REQUIRED_FIELDS'));
       return;
     }
     if (!this.form.hospitalId) {
-      this.toast.error('Please select a hospital');
+      this.toast.error(this.translate.instant('PATIENTS.SELECT_HOSPITAL_FIRST'));
       return;
     }
 
@@ -373,7 +375,9 @@ export class PatientFormComponent implements OnInit {
             catchError((patientErr) => {
               // Compensate: remove the orphaned user account
               this.userService.delete(createdUserId!).subscribe();
-              this.toast.error(patientErr?.error?.message ?? 'Failed to register patient');
+              this.toast.error(
+                patientErr?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
+              );
               this.saving = false;
               return EMPTY;
             }),
@@ -399,7 +403,9 @@ export class PatientFormComponent implements OnInit {
           this.router.navigate(['/patients', patient.id]);
         },
         error: (err) => {
-          this.toast.error(err?.error?.message ?? 'Failed to register patient');
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
+          );
           this.saving = false;
         },
       });

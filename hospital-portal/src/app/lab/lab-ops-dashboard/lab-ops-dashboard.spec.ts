@@ -2,6 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { LabOpsDashboardComponent } from './lab-ops-dashboard';
 import { LabOpsSummary } from '../../services/dashboard.service';
 
@@ -36,7 +37,7 @@ describe('LabOpsDashboardComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [LabOpsDashboardComponent],
+      imports: [LabOpsDashboardComponent, TranslateModule.forRoot()],
       providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
 
@@ -97,7 +98,8 @@ describe('LabOpsDashboardComponent', () => {
     fixture.detectChanges();
 
     const tatCard = component.statCards().find((c) => c.key === 'avg_tat');
-    expect(tatCard?.value).toBe('N/A');
+    // No translations are loaded in the harness, so instant() echoes the key.
+    expect(tatCard?.value).toBe('LAB_OPS.NOT_AVAILABLE');
   });
 
   it('should compute 7 status rows', () => {
@@ -107,7 +109,7 @@ describe('LabOpsDashboardComponent', () => {
 
     const rows = component.statusRows();
     expect(rows.length).toBe(7);
-    expect(rows[0].label).toBe('Ordered');
+    expect(rows[0].label).toBe('PORTAL.ENUM.LAB_ORDER_STATUS.ORDERED');
     expect(rows[0].count).toBe(5);
   });
 
@@ -129,10 +131,10 @@ describe('LabOpsDashboardComponent', () => {
 
     const rows = component.priorityRows();
     expect(rows.length).toBe(3);
-    expect(rows[0].label).toBe('Routine');
+    expect(rows[0].label).toBe('PORTAL.ENUM.CONSULTATION_URGENCY.ROUTINE');
     expect(rows[0].count).toBe(30);
-    expect(rows[1].label).toBe('Urgent');
-    expect(rows[2].label).toBe('STAT');
+    expect(rows[1].label).toBe('PORTAL.ENUM.CONSULTATION_URGENCY.URGENT');
+    expect(rows[2].label).toBe('PORTAL.ENUM.CONSULTATION_URGENCY.STAT');
   });
 
   it('should compute 4 throughput cards', () => {
@@ -142,7 +144,7 @@ describe('LabOpsDashboardComponent', () => {
 
     const cards = component.throughputCards();
     expect(cards.length).toBe(4);
-    expect(cards[0].label).toBe('Completed This Week');
+    expect(cards[0].label).toBe('LAB_OPS.COMPLETED_THIS_WEEK');
     expect(cards[0].value).toBe(140);
   });
 

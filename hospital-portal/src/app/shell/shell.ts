@@ -39,6 +39,7 @@ import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
+import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 
 interface NavItem {
   icon: string;
@@ -98,7 +99,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
-  currentLang = signal(localStorage.getItem('lang') || 'fr');
+  currentLang = signal<string>(storedLang());
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
@@ -1769,8 +1770,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   switchLang(lang: string): void {
-    this.translate.use(lang);
-    this.currentLang.set(lang);
-    localStorage.setItem('lang', lang);
+    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
   }
 }

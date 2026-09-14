@@ -74,7 +74,6 @@
                 @if (editingId() === member.id) {
                   <select
                     class="role-select"
-                    title="Select lab role"
                     [attr.title]="'LAB_STAFF.SELECT_ROLE' | translate"
                     [ngModel]="editRoleCode()"
                     (ngModelChange)="editRoleCode.set($event)"

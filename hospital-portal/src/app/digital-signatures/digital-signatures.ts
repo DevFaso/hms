@@ -22,6 +22,7 @@ import {
   SignatureType,
 } from '../services/digital-signature.service';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
@@ -368,7 +369,7 @@ export class DigitalSignaturesComponent implements OnInit {
 
   formatDate(dt: string | undefined): string {
     if (!dt) return '—';
-    return new Date(dt).toLocaleDateString('en-US', {
+    return new Date(dt).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

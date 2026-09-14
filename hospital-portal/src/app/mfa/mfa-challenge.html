@@ -7,10 +7,10 @@
           fill="currentColor"
         />
       </svg>
-      <h1>Verify Your Identity</h1>
+      <h1>{{ 'MFA.CHALLENGE_TITLE' | translate }}</h1>
       @if (username) {
         <p class="subtitle">
-          Signed in as <strong>{{ username }}</strong>
+          {{ 'MFA.CHALLENGE_SIGNED_IN_AS' | translate: { username: username } }}
         </p>
       }
     </div>
@@ -24,15 +24,14 @@
     @if (!mfaEnrolled) {
       <!-- User has MFA required but not enrolled — redirect to enrollment -->
       <div class="step-content">
-        <p>
-          Your account requires multi-factor authentication, but you haven't set it up yet. Please
-          enroll now.
-        </p>
-        <button class="btn-primary" (click)="backToLogin()">Back to Login</button>
+        <p>{{ 'MFA.CHALLENGE_NOT_ENROLLED' | translate }}</p>
+        <button class="btn-primary" (click)="backToLogin()">
+          {{ 'RESET.BACK_TO_LOGIN' | translate }}
+        </button>
       </div>
     } @else {
       <div class="step-content">
-        <p>Enter the 6-digit code from your authenticator app, or an 8-character backup code.</p>
+        <p>{{ 'MFA.CHALLENGE_CODE_HINT' | translate }}</p>
         <form (ngSubmit)="submitCode()" class="verify-form">
           <input
             type="text"
@@ -45,10 +44,16 @@
             inputmode="numeric"
           />
           <button class="btn-primary" type="submit" [disabled]="loading()">
-            {{ loading() ? 'Verifying…' : 'Verify' }}
+            {{
+              loading()
+                ? ('MFA.CHALLENGE_VERIFYING' | translate)
+                : ('MFA.CHALLENGE_VERIFY' | translate)
+            }}
           </button>
         </form>
-        <button class="btn-link" (click)="backToLogin()">← Back to Login</button>
+        <button class="btn-link" (click)="backToLogin()">
+          ← {{ 'RESET.BACK_TO_LOGIN' | translate }}
+        </button>
       </div>
     }
   </div>

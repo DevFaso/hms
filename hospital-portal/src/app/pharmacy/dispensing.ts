@@ -10,7 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import {
@@ -41,6 +41,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly offlineQueue = inject(OfflineDispenseQueueService);
+  private readonly translate = inject(TranslateService);
 
   // Work queue
   workQueue = signal<WorkQueuePrescription[]>([]);
@@ -120,15 +121,24 @@ export class DispensingComponent implements OnInit, OnDestroy {
         firstValueFrom(this.svc.createDispense(req)).then((res) => res.data),
       );
       if (result.succeeded > 0) {
+        // Two whole sentences rather than a concatenated tail: the
+        // "still queued" clause does not sit in the same place in every
+        // language.
         this.toast.success(
-          `${result.succeeded} dispense(s) synchronisée(s)` +
-            (result.failed > 0 ? ` — ${result.failed} en attente` : ''),
+          result.failed > 0
+            ? this.translate.instant('PHARMACY.OFFLINE_SYNCED_WITH_PENDING', {
+                count: result.succeeded,
+                failed: result.failed,
+              })
+            : this.translate.instant('PHARMACY.OFFLINE_SYNCED', { count: result.succeeded }),
         );
         // Refresh the on-screen queue so the just-synced rows appear.
         this.loadRecentDispenses();
         this.loadWorkQueue();
       } else if (result.failed > 0) {
-        this.toast.error(`Échec — ${result.failed} dispense(s) restent en file d'attente`);
+        this.toast.error(
+          this.translate.instant('PHARMACY.OFFLINE_SYNC_FAILED', { count: result.failed }),
+        );
       }
     } finally {
       this.syncing.set(false);
@@ -148,7 +158,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
           this.loadStockLots();
         }
       },
-      error: () => this.toast.error('Failed to load pharmacies'),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.PHARMACIES_LOAD_FAILED')),
     });
   }
 
@@ -163,7 +173,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.queueLoading.set(false);
-        this.toast.error('Failed to load work queue');
+        this.toast.error(this.translate.instant('PHARMACY.WORK_QUEUE_LOAD_FAILED'));
       },
     });
   }
@@ -179,7 +189,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       error: () => {
         this.dispensesLoading.set(false);
         this.recentDispenses.set([]);
-        this.toast.error('Failed to load recent dispenses');
+        this.toast.error(this.translate.instant('PHARMACY.RECENT_DISPENSES_LOAD_FAILED'));
       },
     });
   }
@@ -288,7 +298,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.saving.set(true);
     this.svc.createDispense(this.form).subscribe({
       next: () => {
-        this.toast.success('Medication dispensed successfully');
+        this.toast.success(this.translate.instant('PHARMACY.DISPENSE_SUCCESS'));
         this.saving.set(false);
         this.showForm.set(false);
         this.selectedPrescription = null;
@@ -297,20 +307,21 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Dispense failed');
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
   }
 
   cancelDispense(id: string): void {
-    if (!confirm('Cancel this dispense and reverse stock changes?')) return;
+    if (!confirm(this.translate.instant('PHARMACY.CANCEL_DISPENSE_CONFIRM'))) return;
     this.svc.cancelDispense(id).subscribe({
       next: () => {
-        this.toast.success('Dispense cancelled');
+        this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));
         this.loadRecentDispenses();
         this.loadWorkQueue();
       },
-      error: (err) => this.toast.error(err?.error?.message ?? 'Cancel failed'),
+      error: (err) =>
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.CANCEL_FAILED')),
     });
   }
 

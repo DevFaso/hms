@@ -153,7 +153,7 @@
                   <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
                 } @else {
                   <select id="pHospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
-                    <option value="">— Select Hospital —</option>
+                    <option value="">{{ 'PHARMACY.SELECT_HOSPITAL_OPTION' | translate }}</option>
                     @for (h of hospitals(); track h.id) {
                       <option [value]="h.id">{{ h.name }}</option>
                     }
@@ -168,7 +168,7 @@
                   [(ngModel)]="form.name"
                   name="name"
                   required
-                  placeholder="e.g., Pharmacie Centrale"
+                  [placeholder]="'PHARMACY.PHARMACY_NAME_PLACEHOLDER' | translate"
                 />
               </div>
             </div>
@@ -177,7 +177,7 @@
               <div class="field">
                 <label for="pType">{{ 'PHARMACY.TYPE' | translate }}</label>
                 <select id="pType" [(ngModel)]="form.pharmacyType" name="pharmacyType">
-                  <option value="">— Select —</option>
+                  <option value="">{{ 'PHARMACY.SELECT_OPTION' | translate }}</option>
                   <option value="HOSPITAL_DISPENSARY">Dispensaire hospitalier</option>
                   <option value="COMMUNITY_PHARMACY">Pharmacie communautaire</option>
                   <option value="PARTNER_PHARMACY">Pharmacie partenaire</option>
@@ -186,7 +186,7 @@
               <div class="field">
                 <label for="pFulfillment">{{ 'PHARMACY.FULFILLMENT_MODE' | translate }}</label>
                 <select id="pFulfillment" [(ngModel)]="form.fulfillmentMode" name="fulfillmentMode">
-                  <option value="">— Select —</option>
+                  <option value="">{{ 'PHARMACY.SELECT_OPTION' | translate }}</option>
                   <option value="OUTPATIENT_HOSPITAL">Hôpital ambulatoire</option>
                   <option value="INPATIENT_DISPENSARY">Dispensaire hospitalier</option>
                   <option value="PARTNER_PHARMACY">Pharmacie partenaire</option>

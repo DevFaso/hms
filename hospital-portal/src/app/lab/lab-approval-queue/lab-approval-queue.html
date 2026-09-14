@@ -336,7 +336,7 @@
                     [attr.viewBox]="'0 0 520 200'"
                     xmlns="http://www.w3.org/2000/svg"
                     role="img"
-                    aria-label="Levey-Jennings QC control chart"
+                    [attr.aria-label]="'LAB_QC.CHART.ARIA_LABEL' | translate"
                   >
                     <!-- Zone background bands -->
                     @for (rect of group.zoneRects; track $index) {

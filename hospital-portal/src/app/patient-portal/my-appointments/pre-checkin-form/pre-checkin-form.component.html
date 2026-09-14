@@ -28,7 +28,11 @@
     }
 
     <!-- Step indicators -->
-    <div class="steps-indicator" role="tablist" aria-label="Pre-check-in steps">
+    <div
+      class="steps-indicator"
+      role="tablist"
+      [attr.aria-label]="'PRE_CHECKIN.STEPS_NAV_LABEL' | translate"
+    >
       <button
         type="button"
         class="step-btn"
@@ -194,7 +198,7 @@
                         <label>
                           <input
                             type="radio"
-                            title="Yes"
+                            [title]="'PRE_CHECKIN.YES' | translate"
                             [name]="q.id + '-' + question.id"
                             [checked]="answers().get(q.id)?.[question.id] === true"
                             (change)="onAnswerChange(q.id, question.id, true)"
@@ -204,7 +208,7 @@
                         <label>
                           <input
                             type="radio"
-                            title="No"
+                            [title]="'PRE_CHECKIN.NO' | translate"
                             [name]="q.id + '-' + question.id"
                             [checked]="answers().get(q.id)?.[question.id] === false"
                             (change)="onAnswerChange(q.id, question.id, false)"
@@ -234,7 +238,7 @@
                         type="number"
                         [id]="q.id + '-num-' + question.id"
                         [attr.placeholder]="question.text"
-                        title="Numeric answer"
+                        [title]="'PRE_CHECKIN.NUMERIC_ANSWER_TITLE' | translate"
                         [value]="answers().get(q.id)?.[question.id] ?? ''"
                         (input)="onAnswerChange(q.id, question.id, +$any($event.target).value)"
                       />
@@ -331,7 +335,7 @@
             <input
               type="checkbox"
               [(ngModel)]="consentAcknowledged"
-              title="Consent acknowledgement"
+              [title]="'PRE_CHECKIN.CONSENT_TITLE' | translate"
             />
             {{ 'PRE_CHECKIN.CONSENT' | translate }}
           </label>

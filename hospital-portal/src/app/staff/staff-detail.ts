@@ -20,8 +20,9 @@ import {
   StaffLeaveResponse,
 } from '../services/staff-scheduling.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
@@ -39,6 +40,7 @@ export class StaffDetailComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   staff = signal<StaffResponse | null>(null);
   loading = signal(true);
@@ -115,7 +117,7 @@ export class StaffDetailComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load staff member');
+        this.toast.error(this.translate.instant('STAFF.LOAD_MEMBER_FAILED'));
         this.loading.set(false);
       },
     });
@@ -196,12 +198,17 @@ export class StaffDetailComponent implements OnInit {
     const { start } = this.getWeekRange();
     const monday = new Date(start + 'T00:00:00');
     const today = this.toISODate(new Date());
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return dayNames.map((label, i) => {
+    // The locale already knows its weekday abbreviations; no keys to maintain.
+    const locale = currentLocale();
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const date = this.toISODate(d);
-      return { label, date, isToday: date === today };
+      return {
+        label: d.toLocaleDateString(locale, { weekday: 'short' }),
+        date,
+        isToday: date === today,
+      };
     });
   }
 
@@ -219,7 +226,7 @@ export class StaffDetailComponent implements OnInit {
     const s = new Date(start + 'T00:00:00');
     const e = new Date(end + 'T00:00:00');
     const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
+    return `${s.toLocaleDateString(currentLocale(), opts)} – ${e.toLocaleDateString(currentLocale(), { ...opts, year: 'numeric' })}`;
   }
 
   // ── Helpers ──
@@ -231,7 +238,7 @@ export class StaffDetailComponent implements OnInit {
   }
 
   formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return 'Staff';
+    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
     return jobTitle
       .replaceAll('_', ' ')
       .toLowerCase()
@@ -248,7 +255,7 @@ export class StaffDetailComponent implements OnInit {
 
   formatDate(date?: string): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -256,7 +263,7 @@ export class StaffDetailComponent implements OnInit {
   }
 
   formatShortDate(date: string): string {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(date + 'T00:00:00').toLocaleDateString(currentLocale(), {
       month: 'short',
       day: 'numeric',
     });

@@ -107,7 +107,7 @@
               type="text"
               [(ngModel)]="form.unit"
               name="unit"
-              placeholder="e.g. tablets, ml"
+              [placeholder]="'PHARMACY.UNIT_PLACEHOLDER' | translate"
             />
           </div>
         </div>

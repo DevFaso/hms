@@ -12,7 +12,13 @@
   >
     <header class="intake-dialog__header">
       <h3>{{ 'INTAKE.TITLE' | translate }}</h3>
-      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+      <button
+        class="btn-close"
+        (click)="dismissed.emit()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        &times;
+      </button>
     </header>
 
     <!-- Patient summary -->
@@ -41,7 +47,7 @@
             [ngModel]="chiefComplaint()"
             (ngModelChange)="chiefComplaint.set($event)"
             name="chiefComplaint"
-            placeholder="Detail the reason for visit..."
+            [placeholder]="'INTAKE.CHIEF_COMPLAINT_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </fieldset>
@@ -57,14 +63,14 @@
                 [ngModel]="allergy.allergenDisplay"
                 (ngModelChange)="allergy.allergenDisplay = $event"
                 [name]="'allergen_' + i"
-                placeholder="Allergen name *"
+                [placeholder]="'INTAKE.ALLERGEN_PLACEHOLDER' | translate"
               />
               <input
                 type="text"
                 [ngModel]="allergy.category"
                 (ngModelChange)="allergy.category = $event"
                 [name]="'allergyCategory_' + i"
-                placeholder="Category"
+                [placeholder]="'CHART.CATEGORY' | translate"
               />
               <select
                 [ngModel]="allergy.severity"
@@ -72,23 +78,23 @@
                 [name]="'allergySeverity_' + i"
                 [attr.aria-label]="'Allergy severity for row ' + (i + 1)"
               >
-                <option value="">Severity</option>
-                <option value="MILD">Mild</option>
-                <option value="MODERATE">Moderate</option>
-                <option value="SEVERE">Severe</option>
+                <option value="">{{ 'CHART.SEVERITY' | translate }}</option>
+                <option value="MILD">{{ 'CHART.SEVERITY_MILD' | translate }}</option>
+                <option value="MODERATE">{{ 'CHART.SEVERITY_MODERATE' | translate }}</option>
+                <option value="SEVERE">{{ 'CHART.SEVERITY_SEVERE' | translate }}</option>
               </select>
               <input
                 type="text"
                 [ngModel]="allergy.reaction"
                 (ngModelChange)="allergy.reaction = $event"
                 [name]="'allergyReaction_' + i"
-                placeholder="Reaction"
+                [placeholder]="'CHART.REACTION' | translate"
               />
               <button
                 type="button"
                 class="btn-remove"
                 (click)="removeAllergy(i)"
-                aria-label="Remove allergy"
+                [attr.aria-label]="'INTAKE.REMOVE_ALLERGY' | translate"
               >
                 &times;
               </button>
@@ -111,28 +117,28 @@
                 [ngModel]="med.medicationName"
                 (ngModelChange)="med.medicationName = $event"
                 [name]="'medName_' + i"
-                placeholder="Medication name *"
+                [placeholder]="'INTAKE.MED_NAME_PLACEHOLDER' | translate"
               />
               <input
                 type="text"
                 [ngModel]="med.dosage"
                 (ngModelChange)="med.dosage = $event"
                 [name]="'medDosage_' + i"
-                placeholder="Dosage"
+                [placeholder]="'PRESCRIPTIONS.DOSAGE' | translate"
               />
               <input
                 type="text"
                 [ngModel]="med.frequency"
                 (ngModelChange)="med.frequency = $event"
                 [name]="'medFrequency_' + i"
-                placeholder="Frequency"
+                [placeholder]="'PRESCRIPTIONS.FREQUENCY' | translate"
               />
               <input
                 type="text"
                 [ngModel]="med.route"
                 (ngModelChange)="med.route = $event"
                 [name]="'medRoute_' + i"
-                placeholder="Route"
+                [placeholder]="'PRESCRIPTIONS.ROUTE' | translate"
               />
               <label class="checkbox-label">
                 <input
@@ -141,13 +147,13 @@
                   (ngModelChange)="med.stillTaking = $event"
                   [name]="'medStillTaking_' + i"
                 />
-                Still taking
+                {{ 'INTAKE.STILL_TAKING' | translate }}
               </label>
               <button
                 type="button"
                 class="btn-remove"
                 (click)="removeMedication(i)"
-                aria-label="Remove medication"
+                [attr.aria-label]="'INTAKE.REMOVE_MEDICATION' | translate"
               >
                 &times;
               </button>
@@ -170,7 +176,7 @@
             [ngModel]="nursingAssessmentNotes()"
             (ngModelChange)="nursingAssessmentNotes.set($event)"
             name="nursingAssessmentNotes"
-            placeholder="Nursing assessment notes..."
+            [placeholder]="'INTAKE.ASSESSMENT_PLACEHOLDER' | translate"
           ></textarea>
         </div>
 
@@ -182,7 +188,7 @@
             [ngModel]="painAssessment()"
             (ngModelChange)="painAssessment.set($event)"
             name="painAssessment"
-            placeholder="Pain scale, location, quality..."
+            [placeholder]="'INTAKE.PAIN_PLACEHOLDER' | translate"
           ></textarea>
         </div>
 
@@ -194,7 +200,7 @@
             [ngModel]="fallRiskDetail()"
             (ngModelChange)="fallRiskDetail.set($event)"
             name="fallRiskDetail"
-            placeholder="Morse Fall Scale result, risk level..."
+            [placeholder]="'INTAKE.FALL_RISK_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </fieldset>

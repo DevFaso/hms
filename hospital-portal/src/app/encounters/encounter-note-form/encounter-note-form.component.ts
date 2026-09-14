@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { EncounterNoteRequest, EncounterNoteTemplate } from '../../services/encounter.service';
@@ -54,7 +55,7 @@ interface SmartPhrasePopupState {
 @Component({
   selector: 'app-encounter-note-form',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './encounter-note-form.component.html',
   styleUrl: './encounter-note-form.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

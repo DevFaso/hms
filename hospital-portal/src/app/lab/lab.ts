@@ -107,16 +107,19 @@ export class LabComponent implements OnInit {
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
-  orderChannels = [
-    { value: 'PORTAL', label: 'Portal' },
-    { value: 'ELECTRONIC', label: 'Electronic' },
-    { value: 'PHONE', label: 'Phone' },
-    { value: 'FAX', label: 'Fax' },
-    { value: 'EMAIL', label: 'Email' },
-    { value: 'WRITTEN', label: 'Written' },
-    { value: 'WALK_IN', label: 'Walk-In' },
-    { value: 'OTHER', label: 'Other' },
-  ];
+  /** Localised on every read so the options follow a runtime language switch. */
+  get orderChannels(): { value: string; label: string }[] {
+    return [
+      { value: 'PORTAL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PORTAL') },
+      { value: 'ELECTRONIC', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.ELECTRONIC') },
+      { value: 'PHONE', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PHONE') },
+      { value: 'FAX', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.FAX') },
+      { value: 'EMAIL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.EMAIL') },
+      { value: 'WRITTEN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WRITTEN') },
+      { value: 'WALK_IN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WALK_IN') },
+      { value: 'OTHER', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.OTHER') },
+    ];
+  }
 
   ngOnInit(): void {
     this.loadOrders();
@@ -174,7 +177,7 @@ export class LabComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -293,13 +296,15 @@ export class LabComponent implements OnInit {
       : this.labService.createOrder(this.form);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Lab order updated' : 'Lab order created');
+        this.toast.success(
+          this.translate.instant(this.editing() ? 'LAB.TOAST.UPDATED' : 'LAB.TOAST.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadOrders();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('LAB.TOAST.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -317,13 +322,13 @@ export class LabComponent implements OnInit {
     this.deleting.set(true);
     this.labService.deleteOrder(this.deletingOrder()!.id).subscribe({
       next: () => {
-        this.toast.success('Lab order deleted');
+        this.toast.success(this.translate.instant('LAB.TOAST.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadOrders();
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('LAB.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -339,7 +344,7 @@ export class LabComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load lab orders');
+        this.toast.error(this.translate.instant('LAB.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -446,13 +451,17 @@ export class LabComponent implements OnInit {
     this.processingApproval.set(true);
     this.labService.submitApprovalAction(def.id, req).subscribe({
       next: (updated) => {
-        this.toast.success(`Definition ${updated.approvalStatus.toLowerCase().replace(/_/g, ' ')}`);
+        this.toast.success(
+          this.translate.instant('LAB.TOAST.DEFINITION_STATUS_UPDATED', {
+            status: this.translate.instant(`LAB.APPROVAL_STATUS.${updated.approvalStatus}`),
+          }),
+        );
         this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
         this.closeApprovalModal();
         this.processingApproval.set(false);
       },
       error: () => {
-        this.toast.error('Approval action failed');
+        this.toast.error(this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
         this.processingApproval.set(false);
       },
     });
@@ -496,7 +505,7 @@ export class LabComponent implements OnInit {
         this.specimensLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load specimens');
+        this.toast.error(this.translate.instant('LAB.TOAST.SPECIMENS_LOAD_FAILED'));
         this.specimensLoading.set(false);
       },
     });
@@ -514,13 +523,13 @@ export class LabComponent implements OnInit {
       })
       .subscribe({
         next: () => {
-          this.toast.success('Specimen collected');
+          this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECTED'));
           this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
           this.specimenSaving.set(false);
           this.loadSpecimens(order.id);
         },
         error: () => {
-          this.toast.error('Failed to record specimen');
+          this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'));
           this.specimenSaving.set(false);
         },
       });
@@ -548,12 +557,12 @@ export class LabComponent implements OnInit {
     this.receivingSpecimenId.set(specimen.id);
     this.labService.receiveSpecimen(specimen.id).subscribe({
       next: () => {
-        this.toast.success('Specimen received');
+        this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVED'));
         this.receivingSpecimenId.set(null);
         this.loadSpecimens(order.id);
       },
       error: () => {
-        this.toast.error('Failed to receive specimen');
+        this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'));
         this.receivingSpecimenId.set(null);
       },
     });

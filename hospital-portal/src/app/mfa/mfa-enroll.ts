@@ -1,6 +1,7 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -13,7 +14,7 @@ import { MfaService } from '../auth/mfa.service';
 @Component({
   selector: 'app-mfa-enroll',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './mfa-enroll.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'],

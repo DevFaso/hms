@@ -12,7 +12,13 @@
   >
     <header class="checkin-dialog__header">
       <h3>{{ 'RECEPTION.CHECKIN_TITLE' | translate }}</h3>
-      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+      <button
+        class="btn-close"
+        (click)="dismissed.emit()"
+        [attr.aria-label]="'RECEPTION.CLOSE' | translate"
+      >
+        &times;
+      </button>
     </header>
 
     <!-- Patient summary strip -->
@@ -112,7 +118,7 @@
           [ngModel]="chiefComplaint()"
           (ngModelChange)="chiefComplaint.set($event)"
           name="chiefComplaint"
-          placeholder="Reason for visit..."
+          [placeholder]="'RECEPTION.REASON_PLACEHOLDER' | translate"
         ></textarea>
       </div>
 
@@ -140,7 +146,7 @@
           [ngModel]="notes()"
           (ngModelChange)="notes.set($event)"
           name="notes"
-          placeholder="Optional notes..."
+          [placeholder]="'RECEPTION.NOTES_PLACEHOLDER' | translate"
         ></textarea>
       </div>
 

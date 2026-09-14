@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
 
@@ -16,6 +16,7 @@ import { Notification, NotificationService } from '../services/notification.serv
 export class NotificationListComponent implements OnInit {
   private readonly notifService = inject(NotificationService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   notifications = signal<Notification[]>([]);
   filtered = signal<Notification[]>([]);
@@ -37,7 +38,7 @@ export class NotificationListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load notifications');
+        this.toast.error(this.translate.instant('NOTIFICATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -74,9 +75,9 @@ export class NotificationListComponent implements OnInit {
       next: () => {
         this.notifications.update((arr) => arr.map((n) => ({ ...n, read: true })));
         this.applyFilter();
-        this.toast.success('All notifications marked as read');
+        this.toast.success(this.translate.instant('NOTIFICATIONS.ALL_MARKED_READ'));
       },
-      error: () => this.toast.error('Failed to mark all as read'),
+      error: () => this.toast.error(this.translate.instant('NOTIFICATIONS.MARK_ALL_READ_FAILED')),
     });
   }
 

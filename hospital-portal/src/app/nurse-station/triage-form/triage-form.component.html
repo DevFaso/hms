@@ -12,7 +12,13 @@
   >
     <header class="triage-dialog__header">
       <h3>{{ 'TRIAGE.TITLE' | translate }}</h3>
-      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+      <button
+        class="btn-close"
+        (click)="dismissed.emit()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        &times;
+      </button>
     </header>
 
     <!-- Patient summary -->
@@ -69,7 +75,7 @@
             [ngModel]="chiefComplaint()"
             (ngModelChange)="chiefComplaint.set($event)"
             name="chiefComplaint"
-            placeholder="Reason for visit..."
+            [placeholder]="'APPOINTMENTS.REASON_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </fieldset>
@@ -271,7 +277,7 @@
             [ngModel]="roomAssignment()"
             (ngModelChange)="roomAssignment.set($event)"
             name="roomAssignment"
-            placeholder="e.g., ER-Bay-3"
+            [placeholder]="'TRIAGE.ROOM_ASSIGNMENT_PLACEHOLDER' | translate"
           />
         </div>
       </fieldset>

@@ -15,15 +15,16 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
+  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',
@@ -34,6 +35,7 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   private readonly permissions = inject(PermissionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -108,7 +110,7 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load appointments');
+        this.toast.error(this.translate.instant('APPOINTMENTS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -242,10 +244,6 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
       default:
         return base;
     }
-  }
-
-  formatStatus(status: string): string {
-    return status.replace(/_/g, ' ');
   }
 
   hospitalName(id: string): string {

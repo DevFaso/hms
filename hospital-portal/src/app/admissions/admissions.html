@@ -357,7 +357,11 @@
                   <div class="picker-spinner"></div>
                 }
                 @if (patientDropdownOpen()) {
-                  <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
+                  <div
+                    class="picker-dropdown"
+                    role="listbox"
+                    [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
+                  >
                     @for (p of patientSuggestions(); track p.id) {
                       <div
                         class="picker-option"

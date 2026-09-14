@@ -13,7 +13,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -36,6 +36,7 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -83,14 +84,19 @@ export class TreatmentPlansComponent implements OnInit {
     this.load();
   }
 
-  treatmentPlanStatuses = [
-    { value: 'DRAFT', label: 'Draft' },
-    { value: 'IN_REVIEW', label: 'In Review' },
-    { value: 'REVISIONS_REQUIRED', label: 'Revisions Required' },
-    { value: 'APPROVED', label: 'Approved' },
-    { value: 'ARCHIVED', label: 'Archived' },
-    { value: 'CANCELLED', label: 'Cancelled' },
-  ];
+  /**
+   * Status options for the plan form's select. Labels come from the shared
+   * `PORTAL.ENUM.TREATMENT_PLAN_STATUS` block so the dropdown reads in the
+   * user's language; the wire value stays the raw enum.
+   */
+  get treatmentPlanStatuses(): { value: string; label: string }[] {
+    return ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED', 'APPROVED', 'ARCHIVED', 'CANCELLED'].map(
+      (value) => ({
+        value,
+        label: this.translate.instant(`PORTAL.ENUM.TREATMENT_PLAN_STATUS.${value}`),
+      }),
+    );
+  }
 
   emptyForm(): TreatmentPlanRequest {
     return {
@@ -120,7 +126,7 @@ export class TreatmentPlansComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -217,13 +223,17 @@ export class TreatmentPlansComponent implements OnInit {
       : this.tpService.create(this.form);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Plan updated' : 'Plan created');
+        this.toast.success(
+          this.translate.instant(
+            this.editing() ? 'TREATMENT.PLAN_UPDATED' : 'TREATMENT.PLAN_CREATED',
+          ),
+        );
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('TREATMENT.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -238,7 +248,7 @@ export class TreatmentPlansComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load treatment plans');
+        this.toast.error(this.translate.instant('TREATMENT.LOAD_FAILED'));
         this.loading.set(false);
       },
     });

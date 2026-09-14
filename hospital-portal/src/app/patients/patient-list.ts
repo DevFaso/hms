@@ -15,15 +15,16 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
+  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',
@@ -34,6 +35,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
   private readonly permissions = inject(PermissionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -111,7 +113,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load patients');
+        this.toast.error(this.translate.instant('PATIENTS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -228,10 +230,11 @@ export class PatientListComponent implements OnInit, OnDestroy {
     }
   }
 
-  formatGender(g: string): string {
-    return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase().replaceAll('_', ' ');
-  }
-
+  /**
+   * Locale-aware gender label. Same three-tier lookup as the `enumLabel` pipe:
+   * the raw enum under `PORTAL.ENUM.GENDER.*` first, then a prettified fallback
+   * so an unmapped value never renders as a raw translation key.
+   */
   hospitalName(id: string): string {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }
