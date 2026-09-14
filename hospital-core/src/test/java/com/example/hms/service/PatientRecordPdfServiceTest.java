@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.RestrictedRowsDTO;
 import com.example.hms.payload.dto.chartreview.ChartReviewDTO;
 import com.example.hms.payload.dto.storyboard.PatientStoryboardDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -15,6 +16,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -207,6 +209,83 @@ class PatientRecordPdfServiceTest {
         assertThatThrownBy(() -> service.render(patientId)).isInstanceOf(ResourceNotFoundException.class);
         verify(storyboardService, never()).getStoryboard(any(), any());
         verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("the optional sections render: no active encounter, directives, an impression, consent, held rows")
+    void rendersTheOptionalSections() throws Exception {
+        // The happy-path fixture leaves these empty, so every branch below was
+        // unexercised: a chart with no active encounter, a code status carrying
+        // directives, imaging with an impression, procedures with and without
+        // consent, and rows another hospital withheld.
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        echoKeys();
+
+        PatientStoryboardDTO board = storyboard();
+        board.setActiveEncounter(null);
+        board.setCodeStatus(PatientStoryboardDTO.CodeStatusDTO.builder()
+            .status("DNR")
+            .directives(List.of(PatientStoryboardDTO.DirectiveSummaryDTO.builder()
+                .directiveType("LIVING_WILL").status("ACTIVE")
+                .effectiveDate(LocalDate.of(2024, 3, 9))
+                .description("No intubation").build()))
+            .build());
+        board.setRestrictedRows(List.of(
+            RestrictedRowsDTO.builder().hospitalName("Hospital C").departmentName("Maternity").count(4).build()));
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(board);
+
+        ChartReviewDTO chart = chart();
+        chart.setImaging(List.of(ChartReviewDTO.ImagingEntryDTO.builder()
+            .orderedAt(LocalDateTime.of(2026, 5, 10, 9, 30))
+            .modality("CT").studyType("Head").bodyRegion("Cranium").status("FINAL")
+            .reportImpression("No acute intracranial abnormality").build()));
+        chart.setProcedures(List.of(
+            ChartReviewDTO.ProcedureEntryDTO.builder()
+                .orderedAt(LocalDateTime.of(2026, 5, 11, 8, 0))
+                .procedureName("Lumbar puncture").procedureCategory("DIAGNOSTIC")
+                .urgency("ROUTINE").status("ORDERED").orderingProviderName("DoctorBF DoctorBL")
+                .consentObtained(true).build(),
+            ChartReviewDTO.ProcedureEntryDTO.builder()
+                .orderedAt(LocalDateTime.of(2026, 5, 12, 8, 0))
+                .procedureName("Paracentesis").procedureCategory("THERAPEUTIC")
+                .urgency("URGENT").status("ORDERED").orderingProviderName("DoctorBF DoctorBL")
+                .consentObtained(false).build()));
+        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+            .thenReturn(chart);
+
+        String text = textOf(service.render(patientId));
+
+        assertThat(text)
+            .contains("pdf.record.encounter.none",
+                "DNR", "LIVING_WILL", "pdf.record.directive.from", "No intubation",
+                "CT", "pdf.record.imaging.impression",
+                "Lumbar puncture", "pdf.record.procedure.consentObtained",
+                "Paracentesis", "pdf.record.procedure.consentNotRecorded",
+                // The count only; never the withheld rows themselves.
+                "pdf.record.heldRows")
+            .doesNotContain("Maternity", "Hospital C");
+    }
+
+    @Test
+    @DisplayName("a chief complaint on the active encounter is carried onto the page")
+    void rendersTheChiefComplaint() throws Exception {
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        echoKeys();
+
+        PatientStoryboardDTO board = storyboard();
+        board.getActiveEncounter().setChiefComplaint("Fièvre depuis trois jours");
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(board);
+        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+            .thenReturn(chart());
+
+        assertThat(textOf(service.render(patientId)))
+            .contains("pdf.record.encounter.chiefComplaint", "Fièvre depuis trois jours");
     }
 
     private PatientStoryboardDTO storyboard() {
