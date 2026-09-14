@@ -28,7 +28,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,7 +108,7 @@ class PatientRecordPdfServiceTest {
             e.setEncounterType("FOLLOW_UP");
             e.setChiefComplaint("Visit " + i + " " + "x".repeat(140));
             return e;
-        }).collect(Collectors.toList()));
+        }).toList());
         when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
             .thenReturn(chart);
 

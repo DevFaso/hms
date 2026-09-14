@@ -28,6 +28,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,81 +93,9 @@ public class PatientRecordPdfService {
 
     private byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart) {
         try (Pages pages = new Pages()) {
-            PatientStoryboardDTO.PatientHeaderDTO p = storyboard.getPatient();
-            String printedBy = SecurityUtils.getCurrentUsername();
-
-            pages.title("Patient record");
-            pages.text(safe(storyboard.getHospitalName()) + "   -   generated " + fmt(LocalDateTime.now())
-                + (printedBy != null ? "   -   printed by " + printedBy : ""));
-            pages.gap();
-
-            pages.heading("Identity");
-            if (p != null) {
-                pages.field("Name", p.getFullName());
-                pages.field("MRN", p.getMrn());
-                pages.field("Date of birth", fmt(p.getDateOfBirth())
-                    + (p.getAgeYears() != null ? " (" + p.getAgeYears() + " years)" : ""));
-                pages.field("Sex", p.getGender());
-                pages.field("Blood type", p.getBloodType());
-            }
-
-            pages.heading("Allergies");
-            pages.rows(storyboard.getAllergies(), a -> join(" - ",
-                a.getAllergenDisplay(), a.getSeverity(), a.getReaction(), a.getVerificationStatus()));
-
-            pages.heading("Problems");
-            pages.rows(storyboard.getProblems(), pr -> join(" - ",
-                pr.getProblemDisplay(), code(pr.getProblemCode()), pr.getStatus(),
-                pr.isChronic() ? "chronic" : null, pr.getOnsetDate() != null ? "since " + fmt(pr.getOnsetDate()) : null));
-
-            pages.heading("Active encounter");
-            PatientStoryboardDTO.ActiveEncounterDTO enc = storyboard.getActiveEncounter();
-            if (enc == null) {
-                pages.text("No active encounter.");
-            } else {
-                pages.text(join(" - ", enc.getEncounterType(), enc.getStatus(), fmt(enc.getEncounterDate()),
-                    enc.getDepartmentName(), enc.getStaffFullName(), enc.getRoomAssignment()));
-                if (enc.getChiefComplaint() != null) pages.wrapped("Chief complaint: " + enc.getChiefComplaint());
-            }
-
-            pages.heading("Code status");
-            PatientStoryboardDTO.CodeStatusDTO code = storyboard.getCodeStatus();
-            if (code == null || code.getStatus() == null) {
-                pages.text("Code status not documented.");
-            } else {
-                pages.text(code.getStatus());
-                pages.rows(code.getDirectives(), d -> join(" - ", d.getDirectiveType(), d.getStatus(),
-                    d.getEffectiveDate() != null ? "from " + fmt(d.getEffectiveDate()) : null, d.getDescription()));
-            }
-
-            pages.heading("Encounters");
-            pages.rows(chart.getEncounters(), e -> join(" - ", fmt(e.getEncounterDate()), e.getEncounterType(),
-                e.getStatus(), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
-
-            pages.heading("Notes");
-            pages.rows(chart.getNotes(), n -> join(" - ", fmt(n.getDocumentedAt()), n.getTemplate(),
-                n.getAuthorName(), n.isSigned() ? "signed" : "draft", n.getPreview()));
-
-            pages.heading("Results");
-            pages.rows(chart.getResults(), r -> join(" - ", fmt(r.getResultDate()),
-                safe(r.getTestName()) + code(r.getTestCode()),
-                join(" ", r.getResultValue(), r.getResultUnit()), r.getAbnormalFlag(), r.getOrderingStaffName()));
-
-            pages.heading("Medications");
-            pages.rows(chart.getMedications(), m -> join(" - ", fmt(m.getCreatedAt()), m.getMedicationName(),
-                m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), m.getStatus(),
-                m.getPrescriberName(), m.isControlledSubstance() ? "controlled" : null));
-
-            pages.heading("Imaging");
-            pages.rows(chart.getImaging(), i -> join(" - ", fmt(i.getOrderedAt()),
-                join(" ", i.getModality(), i.getStudyType(), i.getBodyRegion(), i.getLaterality()), i.getStatus(),
-                i.getReportImpression() != null ? "Impression: " + i.getReportImpression() : null));
-
-            pages.heading("Procedures");
-            pages.rows(chart.getProcedures(), pr -> join(" - ", fmt(pr.getOrderedAt()), pr.getProcedureName(),
-                pr.getProcedureCategory(), pr.getUrgency(), pr.getStatus(), pr.getOrderingProviderName(),
-                pr.isConsentObtained() ? "consent obtained" : "consent not recorded"));
-
+            writeIdentity(pages, storyboard);
+            writeStoryboard(pages, storyboard);
+            writeChart(pages, chart);
             int held = storyboard.getRestrictedRows() == null ? 0 : storyboard.getRestrictedRows().size();
             if (held > 0) {
                 pages.gap();
@@ -176,6 +105,84 @@ public class PatientRecordPdfService {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate the patient record PDF", e);
         }
+    }
+
+    private static void writeIdentity(Pages pages, PatientStoryboardDTO storyboard) throws IOException {
+        String printedBy = SecurityUtils.getCurrentUsername();
+        pages.title("Patient record");
+        pages.text(safe(storyboard.getHospitalName()) + "   -   generated " + fmt(LocalDateTime.now(ZoneOffset.UTC))
+            + " UTC" + (printedBy != null ? "   -   printed by " + printedBy : ""));
+        pages.gap();
+        pages.heading("Identity");
+        PatientStoryboardDTO.PatientHeaderDTO p = storyboard.getPatient();
+        if (p == null) return;
+        pages.field("Name", p.getFullName());
+        pages.field("MRN", p.getMrn());
+        pages.field("Date of birth", fmt(p.getDateOfBirth())
+            + (p.getAgeYears() != null ? " (" + p.getAgeYears() + " years)" : ""));
+        pages.field("Sex", p.getGender());
+        pages.field("Blood type", p.getBloodType());
+    }
+
+    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard) throws IOException {
+        pages.heading("Allergies");
+        pages.rows(storyboard.getAllergies(), a -> join(" - ",
+            a.getAllergenDisplay(), a.getSeverity(), a.getReaction(), a.getVerificationStatus()));
+
+        pages.heading("Problems");
+        pages.rows(storyboard.getProblems(), pr -> join(" - ",
+            pr.getProblemDisplay(), code(pr.getProblemCode()), pr.getStatus(),
+            pr.isChronic() ? "chronic" : null, pr.getOnsetDate() != null ? "since " + fmt(pr.getOnsetDate()) : null));
+
+        pages.heading("Active encounter");
+        PatientStoryboardDTO.ActiveEncounterDTO enc = storyboard.getActiveEncounter();
+        if (enc == null) {
+            pages.text("No active encounter.");
+        } else {
+            pages.text(join(" - ", enc.getEncounterType(), enc.getStatus(), fmt(enc.getEncounterDate()),
+                enc.getDepartmentName(), enc.getStaffFullName(), enc.getRoomAssignment()));
+            if (enc.getChiefComplaint() != null) pages.wrapped("Chief complaint: " + enc.getChiefComplaint());
+        }
+
+        pages.heading("Code status");
+        PatientStoryboardDTO.CodeStatusDTO code = storyboard.getCodeStatus();
+        if (code == null || code.getStatus() == null) {
+            pages.text("Code status not documented.");
+        } else {
+            pages.text(code.getStatus());
+            pages.rows(code.getDirectives(), d -> join(" - ", d.getDirectiveType(), d.getStatus(),
+                d.getEffectiveDate() != null ? "from " + fmt(d.getEffectiveDate()) : null, d.getDescription()));
+        }
+    }
+
+    private static void writeChart(Pages pages, ChartReviewDTO chart) throws IOException {
+        pages.heading("Encounters");
+        pages.rows(chart.getEncounters(), e -> join(" - ", fmt(e.getEncounterDate()), e.getEncounterType(),
+            e.getStatus(), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
+
+        pages.heading("Notes");
+        pages.rows(chart.getNotes(), n -> join(" - ", fmt(n.getDocumentedAt()), n.getTemplate(),
+            n.getAuthorName(), n.isSigned() ? "signed" : "draft", n.getPreview()));
+
+        pages.heading("Results");
+        pages.rows(chart.getResults(), r -> join(" - ", fmt(r.getResultDate()),
+            safe(r.getTestName()) + code(r.getTestCode()),
+            join(" ", r.getResultValue(), r.getResultUnit()), r.getAbnormalFlag(), r.getOrderingStaffName()));
+
+        pages.heading("Medications");
+        pages.rows(chart.getMedications(), m -> join(" - ", fmt(m.getCreatedAt()), m.getMedicationName(),
+            m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), m.getStatus(),
+            m.getPrescriberName(), m.isControlledSubstance() ? "controlled" : null));
+
+        pages.heading("Imaging");
+        pages.rows(chart.getImaging(), i -> join(" - ", fmt(i.getOrderedAt()),
+            join(" ", i.getModality(), i.getStudyType(), i.getBodyRegion(), i.getLaterality()), i.getStatus(),
+            i.getReportImpression() != null ? "Impression: " + i.getReportImpression() : null));
+
+        pages.heading("Procedures");
+        pages.rows(chart.getProcedures(), pr -> join(" - ", fmt(pr.getOrderedAt()), pr.getProcedureName(),
+            pr.getProcedureCategory(), pr.getUrgency(), pr.getStatus(), pr.getOrderingProviderName(),
+            pr.isConsentObtained() ? "consent obtained" : "consent not recorded"));
     }
 
     // ---------------------------------------------------------------- audit
