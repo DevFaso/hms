@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -60,6 +61,14 @@ public class RecordAccessController {
      */
     static final String OPT_OUT_REVOKE_ROLES = "hasAnyAuthority("
         + "'ROLE_PATIENT','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+    /**
+     * The staff half of the two SpEL sets above, as data, so requireSelfIfPatient
+     * asks the same question the annotation did. An annotation value must be a
+     * compile-time constant, so the strings cannot be derived from these lists;
+     * RecordAccessControllerTest pins that the two never drift apart.
+     */
+    static final List<String> OPT_OUT_STAFF = List.of("ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+    static final List<String> OPT_OUT_REVOKE_STAFF = List.of("ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
 
     private final RecordAccessPolicy recordAccessPolicy;
     private final RecordSharingOptOutService optOutService;
@@ -84,8 +93,9 @@ public class RecordAccessController {
             @PathVariable UUID patientId,
             @RequestHeader(name = "Accept-Language", required = false) String lang,
             Authentication auth) {
-        requireSelfIfPatient(patientId, auth);
-        return ResponseEntity.ok(optOutService.status(patientId, parseLocale(lang)));
+        requireSelfUnlessStaff(patientId, auth, OPT_OUT_STAFF);
+        UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
+        return ResponseEntity.ok(optOutService.status(patientId, actorUserId, parseLocale(lang)));
     }
 
     @Operation(summary = "Exclude this patient's record from cross-hospital reads",
@@ -98,7 +108,7 @@ public class RecordAccessController {
             @Valid @RequestBody(required = false) OptOutRequestDTO body,
             @RequestHeader(name = "Accept-Language", required = false) String lang,
             Authentication auth) {
-        requireSelfIfPatient(patientId, auth);
+        requireSelfUnlessStaff(patientId, auth, OPT_OUT_STAFF);
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
         String reason = body == null ? null : body.reason();
         return ResponseEntity.ok(optOutService.optOut(patientId, reason, actorUserId, parseLocale(lang)));
@@ -112,7 +122,9 @@ public class RecordAccessController {
             @PathVariable UUID patientId,
             @RequestHeader(name = "Accept-Language", required = false) String lang,
             Authentication auth) {
-        requireSelfIfPatient(patientId, auth);
+        // Admins only: a receptionist who is ALSO a patient passes the matcher and
+        // the annotation on ROLE_PATIENT, and must then be bound to their own row.
+        requireSelfUnlessStaff(patientId, auth, OPT_OUT_REVOKE_STAFF);
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
         return ResponseEntity.ok(optOutService.revoke(patientId, actorUserId, parseLocale(lang)));
     }
@@ -123,11 +135,8 @@ public class RecordAccessController {
      * is not this one, is refused with 403 — never 404, since the patient id
      * in the path is theirs to know or not.
      */
-    private void requireSelfIfPatient(UUID patientId, Authentication auth) {
-        boolean staff = authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST")
-            || authUtils.hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")
-            || authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
-        if (staff) return;
+    private void requireSelfUnlessStaff(UUID patientId, Authentication auth, List<String> staffRoles) {
+        if (staffRoles.stream().anyMatch(r -> authUtils.hasAuthority(auth, r))) return;
         UUID userId = authUtils.resolveUserId(auth).orElse(null);
         boolean own = userId != null && patientRepository.findByUserId(userId)
             .map(p -> patientId.equals(p.getId()))

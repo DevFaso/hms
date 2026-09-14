@@ -1691,7 +1691,7 @@ all exist and are reachable.
   own answer (schedule/admission-bounded, with a tail after discharge) is the
   place to start. This is the item to build first and alone: #49 through #53
   are all consumers of it.
-- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, behind `app.record-access.cross-hospital-reads-enabled` (OFF); 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
+- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, LIVE since #600 removed `app.record-access.cross-hospital-reads-enabled` (E9 #58, 2026-09-12) — there is no flag; `readableHospitalIds` widens unconditionally once `decide` permits; 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
   ⚠ Raw grep says 148, but ~42 of those are the repository declarations
   themselves and 3 are definitions: the real **call-site** surface is ~103, of
@@ -2202,27 +2202,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
-- **The record-sharing opt-out service is not tenant-scoped.** Every path in
-  `RecordSharingOptOutServiceImpl` resolves the patient through
-  `requirePatient`, which calls `patientRepository.findByIdUnscoped`. So a
-  hospital admin at hospital A can read, set and revoke the opt-out of a
-  patient registered only at hospital B — a control over that patient's
-  cross-hospital sharing, exercised by a hospital with no relationship to
-  them. #656 narrows WHO may revoke; it does not scope WHICH patients any of
-  them may reach, because the fix is a tenant predicate on the finder plus a
-  decision about whether a super-admin in global view is the only role that
-  should cross tenants here. The E8 posture work is the right place for it.
-- **`ControllerAuthUtils.resolveUserId` falls back to the OIDC `sub`.** For a
-  `JwtAuthenticationToken` it tries `uid`, `userId`, `id`, then `sub`. The
-  Keycloak realm import writes no `uid` claim, so after the SSO flip `sub` is
-  the Keycloak subject, `patientRepository.findByUserId(sub)` is empty, and
-  `requireSelfIfPatient` refuses every patient their own opt-out — the exact
-  403 #654 was opened to fix, returning on the day SSO is enabled. It is
-  dormant today (`oidc.enabled` is false in every environment) and it reaches
-  further than this one endpoint: every self-service surface that resolves a
-  user id from the token breaks the same way. Either map a `uid` claim in the
-  realm export or resolve the Keycloak subject to a user row once at
-  authentication.
+- **A staff revoke of a sharing opt-out is not written to the audit row with the
+  actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
+  userId + patientId under a description that reads as the patient's own act
+  ("opt-out revoked") whichever admin did it. Since #656 the service is
+  tenant-scoped, so the actor is at least a hospital the patient is registered
+  at — but a patient disputing a re-opened record still has to join users and
+  assignments by hand to learn who. The `details` map is already there; add
+  the authorities and the active hospital, and make the description say
+  self-revoke vs staff-revoke. No schema change.
 - **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
   matcher that covers its path.** The record-sharing opt-out shipped admitting
   ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and

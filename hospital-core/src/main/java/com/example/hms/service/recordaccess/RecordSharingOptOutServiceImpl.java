@@ -10,6 +10,8 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.recordaccess.RecordSharingOptOutDTO;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContext;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
@@ -47,8 +49,8 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
 
     @Override
     @Transactional(readOnly = true)
-    public RecordSharingOptOutDTO status(UUID patientId, Locale locale) {
-        requirePatient(patientId, locale);
+    public RecordSharingOptOutDTO status(UUID patientId, UUID actorUserId, Locale locale) {
+        requirePatient(patientId, actorUserId, locale);
         return optOutRepository.findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId)
             .map(row -> toDto(patientId, row))
             .orElseGet(() -> RecordSharingOptOutDTO.none(patientId));
@@ -57,7 +59,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional
     public RecordSharingOptOutDTO optOut(UUID patientId, String reason, UUID actorUserId, Locale locale) {
-        Patient patient = requirePatient(patientId, locale);
+        Patient patient = requirePatient(patientId, actorUserId, locale);
         if (optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
             throw new ConflictException(messageSource.getMessage(
                 "recordaccess.optout.already", new Object[]{patientId}, locale));
@@ -77,7 +79,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional
     public RecordSharingOptOutDTO revoke(UUID patientId, UUID actorUserId, Locale locale) {
-        requirePatient(patientId, locale);
+        requirePatient(patientId, actorUserId, locale);
         PatientRecordSharingOptOut row = optOutRepository
             .findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId)
             .orElseThrow(() -> new ConflictException(messageSource.getMessage(
@@ -90,10 +92,30 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
         return toDto(patientId, row);
     }
 
-    private Patient requirePatient(UUID patientId, Locale locale) {
-        return Optional.ofNullable(patientId)
-            .flatMap(patientRepository::findByIdUnscoped)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
+    /**
+     * Who may reach this patient's consent row. A patient reaches their own; a
+     * super-admin in global view reaches any; every staff role goes through the
+     * tenant-scoped finder, which answers only for hospitals the actor is
+     * assigned to AND the patient is registered at. Until #656 every path used
+     * findByIdUnscoped, so a hospital admin at A could read, set and revoke the
+     * opt-out of a patient known only to B - and since #600 removed the
+     * cross-hospital-reads flag, a revoke re-opens that chart for real.
+     * A refusal is 404, not 403: the row's existence is itself tenant data.
+     */
+    private Patient requirePatient(UUID patientId, UUID actorUserId, Locale locale) {
+        if (patientId == null) {
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        }
+        boolean globalView = HospitalContextHolder.getContext()
+            .map(HospitalContext::isSuperAdmin)
+            .orElse(false);
+        boolean self = actorUserId != null && patientRepository.findByUserId(actorUserId)
+            .map(own -> patientId.equals(own.getId()))
+            .orElse(false);
+        Optional<Patient> found = (globalView || self)
+            ? patientRepository.findByIdUnscoped(patientId)
+            : patientRepository.findById(patientId);
+        return found.orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
     }
 
     /**

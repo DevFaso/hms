@@ -9,6 +9,8 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.recordaccess.RecordSharingOptOutDTO;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContext;
 import com.example.hms.service.AuditEventLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,7 +61,8 @@ class RecordSharingOptOutServiceImplTest {
     void setUp() {
         Patient patient = new Patient();
         patient.setId(patientId);
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        // Default actor is staff: the tenant-scoped finder answers. Self and global view stub the unscoped one.
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(messageSource.getMessage(anyString(), any(), any())).thenReturn("msg");
         when(optOutRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -70,7 +73,7 @@ class RecordSharingOptOutServiceImplTest {
         when(optOutRepository.findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId))
             .thenReturn(Optional.empty());
 
-        RecordSharingOptOutDTO dto = service.status(patientId, Locale.ENGLISH);
+        RecordSharingOptOutDTO dto = service.status(patientId, actorUserId, Locale.ENGLISH);
 
         assertThat(dto.inForce()).isFalse();
         assertThat(dto.patientId()).isEqualTo(patientId);
@@ -140,9 +143,52 @@ class RecordSharingOptOutServiceImplTest {
     @DisplayName("an unknown patient is a 404 carrying the key, not resolved prose")
     void unknownPatient() {
         UUID ghost = UUID.randomUUID();
-        when(patientRepository.findByIdUnscoped(ghost)).thenReturn(Optional.empty());
+        when(patientRepository.findById(ghost)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.status(ghost, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.status(ghost, actorUserId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("staff outside the patient's hospitals get 404 and nothing is written - the tenant finder decides")
+    void staffOutsideTenantCannotReach() {
+        UUID elsewhere = UUID.randomUUID();
+        when(patientRepository.findById(elsewhere)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.optOut(elsewhere, "x", actorUserId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.revoke(elsewhere, actorUserId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(patientRepository, never()).findByIdUnscoped(elsewhere);
+        verify(optOutRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("the patient reaches their OWN row without any hospital scope")
+    void patientReachesOwnRowUnscoped() {
+        Patient own = new Patient();
+        own.setId(patientId);
+        when(patientRepository.findByUserId(actorUserId)).thenReturn(Optional.of(own));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());   // a patient has no tenant
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(own));
+
+        assertThat(service.status(patientId, actorUserId, Locale.ENGLISH)).isNotNull();
+        verify(patientRepository).findByIdUnscoped(patientId);
+    }
+
+    @Test
+    @DisplayName("a super-admin in global view crosses tenants")
+    void superAdminGlobalViewCrossesTenants() {
+        Patient target = new Patient();
+        target.setId(patientId);
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        try {
+            when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(target));
+            assertThat(service.status(patientId, actorUserId, Locale.ENGLISH)).isNotNull();
+            verify(patientRepository).findByIdUnscoped(patientId);
+        } finally {
+            HospitalContextHolder.clear();
+        }
     }
 }

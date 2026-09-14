@@ -79,21 +79,34 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
         when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(mine));
     }
 
-    /** A signed-in patient, as the JWT filter builds one: CustomUserDetails carrying the user id. */
-    private RequestPostProcessor patient() {
-        CustomUserDetails details = new CustomUserDetails(
-            userId, "patient001", "n/a", true, List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+    /** A signed-in user as the JWT filter builds one: CustomUserDetails carrying the user id and the roles. */
+    private static RequestPostProcessor signedInAs(UUID id, String username, String... roles) {
+        CustomUserDetails details = new CustomUserDetails(id, username, "n/a", true,
+            java.util.Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList());
         return authentication(new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
     }
 
-    private RecordSharingOptOutDTO inForce(boolean value) {
-        return new RecordSharingOptOutDTO(myPatientId, value, LocalDateTime.now(), null, null);
+    private RequestPostProcessor patient() {
+        return signedInAs(userId, "patient001", "ROLE_PATIENT");
+    }
+
+    private RequestPostProcessor receptionist() {
+        return signedInAs(UUID.randomUUID(), "reception01", "ROLE_RECEPTIONIST");
+    }
+
+    /** The same person, receptionist by day and a patient of the hospital: authorities are the union. */
+    private RequestPostProcessor receptionistWhoIsAlsoAPatient() {
+        return signedInAs(userId, "reception01", "ROLE_RECEPTIONIST", "ROLE_PATIENT");
+    }
+
+    private RecordSharingOptOutDTO inForce(UUID patientId, boolean value) {
+        return new RecordSharingOptOutDTO(patientId, value, LocalDateTime.now(), null, null);
     }
 
     @Test
     @DisplayName("a patient reads the opt-out on their own record — the dev 403")
     void patientReadsOwnOptOut() throws Exception {
-        when(optOutService.status(eq(myPatientId), any())).thenReturn(inForce(false));
+        when(optOutService.status(eq(myPatientId), eq(userId), any())).thenReturn(inForce(myPatientId, false));
 
         mockMvc.perform(get(OPT_OUT_PATH, myPatientId).contextPath(API).with(patient()))
             .andExpect(status().isOk())
@@ -103,7 +116,7 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
     @Test
     @DisplayName("a patient revokes their own opt-out — DELETE admitted only admins")
     void patientRevokesOwnOptOut() throws Exception {
-        when(optOutService.revoke(eq(myPatientId), eq(userId), any())).thenReturn(inForce(false));
+        when(optOutService.revoke(eq(myPatientId), eq(userId), any())).thenReturn(inForce(myPatientId, false));
 
         mockMvc.perform(delete(OPT_OUT_PATH, myPatientId).contextPath(API).with(patient()).with(csrf()))
             .andExpect(status().isOk());
@@ -112,7 +125,7 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
     @Test
     @DisplayName("a patient opts out of their own record")
     void patientOptsOutOfOwnRecord() throws Exception {
-        when(optOutService.optOut(eq(myPatientId), any(), eq(userId), any())).thenReturn(inForce(true));
+        when(optOutService.optOut(eq(myPatientId), any(), eq(userId), any())).thenReturn(inForce(myPatientId, true));
 
         mockMvc.perform(post(OPT_OUT_PATH, myPatientId).contextPath(API).with(patient()).with(csrf()))
             .andExpect(status().isOk())
@@ -129,29 +142,25 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
         mockMvc.perform(delete(OPT_OUT_PATH, otherPatientId).contextPath(API).with(patient()).with(csrf()))
             .andExpect(status().isForbidden());
 
-        verify(optOutService, never()).status(eq(otherPatientId), any());
+        verify(optOutService, never()).status(eq(otherPatientId), any(), any());
         verify(optOutService, never()).optOut(eq(otherPatientId), any(), any(), any());
         verify(optOutService, never()).revoke(eq(otherPatientId), any(), any());
     }
 
-    /** A receptionist, as the desk staff who records an opt-out for a walk-in. */
-    private RequestPostProcessor receptionist() {
-        CustomUserDetails details = new CustomUserDetails(
-            UUID.randomUUID(), "reception01", "n/a", true,
-            List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST")));
-        return authentication(new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
-    }
-
     @Test
-    @DisplayName("a receptionist reads and records an opt-out at the desk")
+    @DisplayName("a receptionist reads and records an opt-out at the desk, and the service is asked for that patient")
     void receptionistReadsAndRecords() throws Exception {
-        when(optOutService.status(eq(otherPatientId), any())).thenReturn(inForce(false));
-        when(optOutService.optOut(eq(otherPatientId), any(), any(), any())).thenReturn(inForce(true));
+        when(optOutService.status(eq(otherPatientId), any(), any())).thenReturn(inForce(otherPatientId, false));
+        when(optOutService.optOut(eq(otherPatientId), any(), any(), any())).thenReturn(inForce(otherPatientId, true));
 
         mockMvc.perform(get(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.patientId").value(otherPatientId.toString()));
         mockMvc.perform(post(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()).with(csrf()))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.inForce").value(true));
+
+        verify(optOutService).optOut(eq(otherPatientId), any(), any(), any());
     }
 
     @Test
@@ -159,11 +168,36 @@ class RecordSharingOptOutSecurityIT extends BaseIT {
     void receptionistCannotRevoke() throws Exception {
         mockMvc.perform(delete(OPT_OUT_PATH, otherPatientId).contextPath(API).with(receptionist()).with(csrf()))
             .andExpect(status().isForbidden());
-
-        // Not merely refused at the edge: the service is never reached. revoke()
-        // resolves the patient with findByIdUnscoped, so a receptionist who got
-        // through would not even be confined to their own hospital's patients.
         verify(optOutService, never()).revoke(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a receptionist who is also a patient revokes their OWN opt-out only")
+    void dualRoleReceptionistIsBoundToTheirOwnRow() throws Exception {
+        // Both the matcher and the annotation admit this caller on ROLE_PATIENT; the
+        // self-check must then bind them to their own row, not wave them through as staff.
+        when(optOutService.revoke(eq(myPatientId), eq(userId), any())).thenReturn(inForce(myPatientId, false));
+
+        mockMvc.perform(delete(OPT_OUT_PATH, otherPatientId).contextPath(API)
+                .with(receptionistWhoIsAlsoAPatient()).with(csrf()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(delete(OPT_OUT_PATH, myPatientId).contextPath(API)
+                .with(receptionistWhoIsAlsoAPatient()).with(csrf()))
+            .andExpect(status().isOk());
+
+        verify(optOutService, never()).revoke(eq(otherPatientId), any(), any());
+    }
+
+    @Test
+    @DisplayName("the two admin roles revoke through the real chain — the positive side of the posture")
+    void adminsRevoke() throws Exception {
+        for (String role : List.of("ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN")) {
+            UUID admin = UUID.randomUUID();
+            when(optOutService.revoke(eq(otherPatientId), eq(admin), any())).thenReturn(inForce(otherPatientId, false));
+            mockMvc.perform(delete(OPT_OUT_PATH, otherPatientId).contextPath(API)
+                    .with(signedInAs(admin, role.toLowerCase(), role)).with(csrf()))
+                .andExpect(status().isOk());
+        }
     }
 
     @Test
