@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 
 import { RouterModule } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { DashboardService, LabOpsSummary } from '../../services/dashboard.service';
 import { ToastService } from '../../core/toast.service';
 
@@ -30,7 +31,7 @@ interface StatusRow {
 @Component({
   selector: 'app-lab-ops-dashboard',
   standalone: true,
-  imports: [RouterModule],
+  imports: [RouterModule, TranslateModule],
   templateUrl: './lab-ops-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-ops-dashboard.scss',

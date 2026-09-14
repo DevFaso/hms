@@ -2,6 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { LabOpsDashboardComponent } from './lab-ops-dashboard';
 import { LabOpsSummary } from '../../services/dashboard.service';
 
@@ -36,7 +37,7 @@ describe('LabOpsDashboardComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [LabOpsDashboardComponent],
+      imports: [LabOpsDashboardComponent, TranslateModule.forRoot()],
       providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
 

@@ -40,7 +40,7 @@
     class="modal-overlay"
     role="button"
     tabindex="0"
-    aria-label="Close dialog"
+    [attr.aria-label]="'CHECKOUT.CLOSE' | translate"
     (click)="closePayDialog()"
     (keydown.enter)="closePayDialog()"
     (keydown.escape)="closePayDialog()"

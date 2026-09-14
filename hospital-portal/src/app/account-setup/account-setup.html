@@ -26,7 +26,7 @@
               type="text"
               id="newUsername"
               [(ngModel)]="newUsername"
-              placeholder="e.g. john.doe"
+              [placeholder]="'SETUP.USERNAME_PLACEHOLDER' | translate"
               maxlength="50"
               autocomplete="username"
               [disabled]="loading"

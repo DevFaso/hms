@@ -2,7 +2,7 @@
   <header class="page-header">
     <h1>
       <span class="material-symbols-outlined header-icon">monitoring</span>
-      Lab Operations Dashboard
+      {{ 'LAB_OPS.TITLE' | translate }}
     </h1>
     @if (summary()) {
       <p class="subtitle">Hospital snapshot as of {{ summary()!.asOfDate }}</p>
@@ -13,7 +13,7 @@
   @if (loading()) {
     <div class="loading-overlay">
       <div class="spinner"></div>
-      <p>Loading lab operations data&hellip;</p>
+      <p>{{ 'LAB_OPS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -38,7 +38,7 @@
       <div class="breakdown-card">
         <h2>
           <span class="material-symbols-outlined">stacked_bar_chart</span>
-          Order Status Pipeline
+          {{ 'LAB_OPS.STATUS_PIPELINE' | translate }}
         </h2>
         <div class="bar-rows">
           @for (row of statusRows(); track row) {
@@ -61,7 +61,7 @@
       <div class="breakdown-card">
         <h2>
           <span class="material-symbols-outlined">priority_high</span>
-          Priority Distribution
+          {{ 'LAB_OPS.PRIORITY_DISTRIBUTION' | translate }}
         </h2>
         <div class="bar-rows">
           @for (row of priorityRows(); track row) {
@@ -82,7 +82,7 @@
         <!-- Throughput mini-stats -->
         <h2 class="mt-section">
           <span class="material-symbols-outlined">speed</span>
-          Throughput
+          {{ 'LAB_OPS.THROUGHPUT' | translate }}
         </h2>
         <div class="throughput-grid">
           @for (t of throughputCards(); track t) {

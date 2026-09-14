@@ -27,7 +27,7 @@
         [(ngModel)]="selectedEventType"
         (change)="onEventTypeChange()"
         class="filter-select"
-        aria-label="Filter by event type"
+        [attr.aria-label]="'AUDIT.FILTER_BY_EVENT_TYPE' | translate"
       >
         <option value="">{{ 'AUDIT.ALL_EVENT_TYPES' | translate }}</option>
         @for (et of eventTypes(); track et.eventType) {

@@ -6,7 +6,7 @@
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">add</span>
-      New Hospital
+      {{ 'HOSPITALS.NEW' | translate }}
     </button>
   </div>
 
@@ -178,7 +178,7 @@
                   type="tel"
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
-                  placeholder="e.g., +22625000001"
+                  [placeholder]="'HOSPITALS.PHONE_PLACEHOLDER' | translate"
                   minlength="10"
                   maxlength="15"
                   required
@@ -219,7 +219,7 @@
                   type="text"
                   [(ngModel)]="form.country"
                   name="country"
-                  placeholder="e.g., Burkina Faso, USA, France"
+                  [placeholder]="'HOSPITALS.COUNTRY_PLACEHOLDER' | translate"
                   required
                 />
               </div>
@@ -230,7 +230,7 @@
                   type="text"
                   [(ngModel)]="form.city"
                   name="city"
-                  placeholder="e.g., Ouagadougou, Paris, New York"
+                  [placeholder]="'HOSPITALS.CITY_PLACEHOLDER' | translate"
                   required
                 />
               </div>
@@ -244,7 +244,7 @@
                   type="text"
                   [(ngModel)]="form.province"
                   name="province"
-                  placeholder="e.g., Kadiogo"
+                  [placeholder]="'HOSPITALS.PROVINCE_PLACEHOLDER' | translate"
                 />
               </div>
               <div class="field">
@@ -254,7 +254,7 @@
                   type="text"
                   [(ngModel)]="form.region"
                   name="region"
-                  placeholder="e.g., Centre, Île-de-France"
+                  [placeholder]="'HOSPITALS.REGION_PLACEHOLDER' | translate"
                 />
               </div>
             </div>
@@ -267,7 +267,7 @@
                   type="text"
                   [(ngModel)]="form.sector"
                   name="sector"
-                  placeholder="e.g., Secteur 30"
+                  [placeholder]="'HOSPITALS.SECTOR_PLACEHOLDER' | translate"
                 />
               </div>
               <div class="field">
@@ -277,7 +277,7 @@
                   type="text"
                   [(ngModel)]="form.address"
                   name="address"
-                  placeholder="e.g., Avenue Yalgado"
+                  [placeholder]="'HOSPITALS.ADDRESS_PLACEHOLDER' | translate"
                 />
               </div>
             </div>
@@ -290,7 +290,7 @@
                   type="text"
                   [(ngModel)]="form.poBox"
                   name="poBox"
-                  placeholder="e.g., BP 7022"
+                  [placeholder]="'HOSPITALS.PO_BOX_PLACEHOLDER' | translate"
                 />
               </div>
               <div class="field">

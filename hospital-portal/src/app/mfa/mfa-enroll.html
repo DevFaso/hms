@@ -7,7 +7,7 @@
           fill="currentColor"
         />
       </svg>
-      <h1>Multi-Factor Authentication</h1>
+      <h1>{{ 'MFA.ENROLL_TITLE' | translate }}</h1>
     </div>
 
     @if (error()) {
@@ -20,11 +20,10 @@
     @if (step() === 'start') {
       <div class="step-content">
         <p>
-          Your account requires multi-factor authentication. Set up a TOTP authenticator app (e.g.
-          Google Authenticator, Authy) to secure your account.
+          {{ 'MFA.ENROLL_INTRO' | translate }}
         </p>
         <button class="btn-primary" (click)="startEnrollment()" [disabled]="loading()">
-          {{ loading() ? 'Setting up…' : 'Begin Setup' }}
+          {{ (loading() ? 'MFA.ENROLL_STARTING' : 'MFA.ENROLL_BEGIN') | translate }}
         </button>
       </div>
     }
@@ -32,22 +31,29 @@
     <!-- STEP: QR Code -->
     @if (step() === 'qr') {
       <div class="step-content">
-        <p>Scan this QR code with your authenticator app:</p>
+        <p>{{ 'MFA.ENROLL_SCAN_QR' | translate }}</p>
         <div class="qr-container">
-          <img [src]="qrCodeDataUrl" alt="TOTP QR Code" width="200" height="200" />
+          <img
+            [src]="qrCodeDataUrl"
+            [alt]="'MFA.ENROLL_QR_ALT' | translate"
+            width="200"
+            height="200"
+          />
         </div>
         <p class="manual-entry">
-          Or enter this secret manually:
+          {{ 'MFA.ENROLL_SECRET_MANUAL' | translate }}
           <code class="secret-code">{{ secret }}</code>
         </p>
-        <button class="btn-primary" (click)="proceedToVerify()">Next</button>
+        <button class="btn-primary" (click)="proceedToVerify()">
+          {{ 'COMMON.NEXT' | translate }}
+        </button>
       </div>
     }
 
     <!-- STEP: Verify -->
     @if (step() === 'verify') {
       <div class="step-content">
-        <p>Enter the 6-digit code from your authenticator app to verify enrollment:</p>
+        <p>{{ 'MFA.ENROLL_ENTER_CODE' | translate }}</p>
         <form (ngSubmit)="submitVerification()" class="verify-form">
           <input
             type="text"
@@ -60,7 +66,7 @@
             inputmode="numeric"
           />
           <button class="btn-primary" type="submit" [disabled]="loading()">
-            {{ loading() ? 'Verifying…' : 'Verify' }}
+            {{ (loading() ? 'MFA.ENROLL_VERIFYING' : 'MFA.ENROLL_VERIFY') | translate }}
           </button>
         </form>
       </div>
@@ -69,10 +75,9 @@
     <!-- STEP: Backup Codes -->
     @if (step() === 'backup') {
       <div class="step-content">
-        <h2>Backup Codes</h2>
+        <h2>{{ 'MFA.ENROLL_BACKUP_TITLE' | translate }}</h2>
         <p>
-          Save these backup codes in a safe place. Each code can only be used once if you lose
-          access to your authenticator app.
+          {{ 'MFA.ENROLL_BACKUP_DESC' | translate }}
         </p>
         <div class="backup-codes">
           @for (code of backupCodes; track code) {
@@ -80,8 +85,12 @@
           }
         </div>
         <div class="backup-actions">
-          <button class="btn-secondary" (click)="copyBackupCodes()">Copy Codes</button>
-          <button class="btn-primary" (click)="finish()">Done — Go to Login</button>
+          <button class="btn-secondary" (click)="copyBackupCodes()">
+            {{ 'MFA.ENROLL_COPY_CODES' | translate }}
+          </button>
+          <button class="btn-primary" (click)="finish()">
+            {{ 'MFA.ENROLL_DONE' | translate }}
+          </button>
         </div>
       </div>
     }

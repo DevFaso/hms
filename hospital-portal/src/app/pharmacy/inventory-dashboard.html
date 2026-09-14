@@ -189,7 +189,9 @@
                 <td>{{ lot.expiryDate | date: 'mediumDate' }}</td>
                 <td>
                   @if (getDaysUntilExpiry(lot.expiryDate) <= 0) {
-                    <span class="expiry-badge expired">EXPIRED</span>
+                    <span class="expiry-badge expired">{{
+                      'DASHBOARD.EXPIRED_LABEL' | translate
+                    }}</span>
                   } @else {
                     <span
                       class="expiry-badge"
@@ -247,7 +249,7 @@
                 name="medicationCatalogItemId"
                 required
               >
-                <option value="">— Select Medication —</option>
+                <option value="">{{ 'PHARMACY.SELECT_MEDICATION_OPTION' | translate }}</option>
                 @for (m of medications(); track m.id) {
                   <option [value]="m.id">{{ m.nameFr }} ({{ m.genericName }})</option>
                 }
@@ -271,7 +273,7 @@
                   type="text"
                   [(ngModel)]="createForm.unit"
                   name="unit"
-                  placeholder="e.g., TABLET"
+                  [placeholder]="'PHARMACY.UNIT_CODE_PLACEHOLDER' | translate"
                 />
               </div>
             </div>

@@ -9,7 +9,7 @@
     <div class="user-section">
       <div class="avatar-lock">
         @if (userAvatarUrl) {
-          <img [src]="userAvatarUrl" alt="Avatar" class="avatar-img" />
+          <img [src]="userAvatarUrl" [alt]="'LOCK.AVATAR_ALT' | translate" class="avatar-img" />
         } @else {
           {{ userInitials }}
         }
@@ -44,7 +44,7 @@
           class="toggle-password"
           (click)="togglePassword()"
           tabindex="-1"
-          aria-label="Toggle password visibility"
+          [attr.aria-label]="'LOCK.TOGGLE_PASSWORD' | translate"
         >
           <span class="material-symbols-outlined">
             {{ showPassword ? 'visibility_off' : 'visibility' }}

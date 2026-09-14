@@ -40,7 +40,7 @@
               name="transactionType"
               required
             >
-              <option value="">— Select Type —</option>
+              <option value="">{{ 'PHARMACY.SELECT_TYPE_OPTION' | translate }}</option>
               @for (t of transactionTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
@@ -49,7 +49,7 @@
           <div class="field">
             <label for="txItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
             <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
-              <option value="">— Select Item —</option>
+              <option value="">{{ 'PHARMACY.SELECT_ITEM_OPTION' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
                   {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
@@ -139,7 +139,7 @@
                 name="adjustmentReasonCode"
                 required
               >
-                <option value="">— Select Reason —</option>
+                <option value="">{{ 'PHARMACY.SELECT_REASON_OPTION' | translate }}</option>
                 @for (code of adjustmentReasonCodes; track code) {
                   <option [value]="code">{{ code }}</option>
                 }
@@ -169,7 +169,7 @@
                 name="transferDestinationPharmacyId"
                 required
               >
-                <option value="">— Select Destination Pharmacy —</option>
+                <option value="">{{ 'PHARMACY.SELECT_DESTINATION_OPTION' | translate }}</option>
                 @for (p of transferDestinationOptions(); track p.id) {
                   <option [value]="p.id">{{ p.name }}</option>
                 }

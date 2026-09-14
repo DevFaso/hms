@@ -1,26 +1,28 @@
 <section class="emar" data-testid="emar-root">
   <header class="emar__header">
-    <h1 class="emar__title">Inpatient eMAR</h1>
+    <h1 class="emar__title">{{ 'EMAR.TITLE' | translate }}</h1>
     <p class="emar__subtitle">
-      Bedside five-rights barcode-scan verification for due medication doses.
+      {{ 'EMAR.SUBTITLE' | translate }}
     </p>
   </header>
 
   @switch (state()) {
     @case ('loading') {
       <div class="emar__state emar__state--loading" data-testid="emar-loading">
-        Loading due medications…
+        {{ 'EMAR.LOADING' | translate }}
       </div>
     }
     @case ('error') {
       <div class="emar__state emar__state--error" data-testid="emar-error">
-        <p>We couldn't load due doses. Please try again.</p>
-        <button type="button" class="emar__btn" (click)="loadTasks()">Retry</button>
+        <p>{{ 'EMAR.LOAD_ERROR' | translate }}</p>
+        <button type="button" class="emar__btn" (click)="loadTasks()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
       </div>
     }
     @case ('empty') {
       <div class="emar__state emar__state--empty" data-testid="emar-empty">
-        No medication doses are due right now.
+        {{ 'EMAR.EMPTY' | translate }}
       </div>
     }
     @case ('ready') {
@@ -67,7 +69,7 @@
                 </p>
               </div>
               <button type="button" class="emar__btn emar__btn--ghost" (click)="closeTask()">
-                Close
+                {{ 'COMMON.CLOSE' | translate }}
               </button>
             </header>
 
@@ -86,13 +88,13 @@
             }
 
             <section class="emar__scan">
-              <h3>1. Scan patient wristband</h3>
+              <h3>{{ 'EMAR.STEP_SCAN_PATIENT' | translate }}</h3>
               <div class="emar__scan-row">
                 <input
                   type="text"
                   class="emar__input"
                   data-testid="emar-patient-scan"
-                  placeholder="Patient wristband value"
+                  [placeholder]="'EMAR.PATIENT_SCAN_PLACEHOLDER' | translate"
                   [value]="patientScan()"
                   (input)="onScanInput('patient', $any($event.target).value)"
                 />
@@ -102,17 +104,17 @@
                   data-testid="emar-scan-patient"
                   (click)="startScanner('patient')"
                 >
-                  Scan
+                  {{ 'EMAR.SCAN' | translate }}
                 </button>
               </div>
 
-              <h3>2. Scan medication label</h3>
+              <h3>{{ 'EMAR.STEP_SCAN_MEDICATION' | translate }}</h3>
               <div class="emar__scan-row">
                 <input
                   type="text"
                   class="emar__input"
                   data-testid="emar-med-scan"
-                  placeholder="Medication barcode value"
+                  [placeholder]="'EMAR.MEDICATION_SCAN_PLACEHOLDER' | translate"
                   [value]="medicationScan()"
                   (input)="onScanInput('medication', $any($event.target).value)"
                 />
@@ -122,17 +124,17 @@
                   data-testid="emar-scan-medication"
                   (click)="startScanner('medication')"
                 >
-                  Scan
+                  {{ 'EMAR.SCAN' | translate }}
                 </button>
               </div>
 
-              <h3>3. Confirm dose &amp; route</h3>
+              <h3>{{ 'EMAR.STEP_CONFIRM_DOSE' | translate }}</h3>
               <div class="emar__scan-row">
                 <input
                   type="text"
                   class="emar__input"
                   data-testid="emar-dose"
-                  placeholder="Dose"
+                  [placeholder]="'NURSE.DOSE' | translate"
                   [value]="doseScan()"
                   (input)="onDoseInput($any($event.target).value)"
                 />
@@ -140,7 +142,7 @@
                   type="text"
                   class="emar__input"
                   data-testid="emar-route"
-                  placeholder="Route"
+                  [placeholder]="'NURSE.ROUTE' | translate"
                   [value]="routeScan()"
                   (input)="onRouteInput($any($event.target).value)"
                 />
@@ -155,9 +157,11 @@
                     playsinline
                     muted
                   ></video>
-                  <p class="emar__scanner-hint">Aim at the {{ field }} barcode…</p>
+                  <p class="emar__scanner-hint">
+                    {{ 'EMAR.SCANNER_HINT_' + field.toUpperCase() | translate }}
+                  </p>
                   <button type="button" class="emar__btn emar__btn--ghost" (click)="stopScanner()">
-                    Cancel scanner
+                    {{ 'EMAR.SCANNER_CANCEL' | translate }}
                   </button>
                 </div>
               }
@@ -175,9 +179,9 @@
                 (click)="verify()"
               >
                 @if (verifyInFlight()) {
-                  Verifying…
+                  {{ 'EMAR.VERIFYING' | translate }}
                 } @else {
-                  Verify five rights
+                  {{ 'EMAR.VERIFY_FIVE_RIGHTS' | translate }}
                 }
               </button>
 
@@ -201,7 +205,7 @@
 
                 @if (needsOverride()) {
                   <label class="emar__override">
-                    <span>Override reason (required to proceed past failed rights)</span>
+                    <span>{{ 'EMAR.OVERRIDE_REASON_LABEL' | translate }}</span>
                     <textarea
                       data-testid="emar-override-reason"
                       class="emar__input emar__input--multiline"
@@ -225,7 +229,7 @@
                 "
                 (click)="administer('GIVEN')"
               >
-                Record GIVEN
+                {{ 'EMAR.ACTION_RECORD_GIVEN' | translate }}
               </button>
               <button
                 type="button"
@@ -234,7 +238,7 @@
                 [disabled]="administerInFlight()"
                 (click)="administer('HELD')"
               >
-                Hold
+                {{ 'NURSE.HOLD' | translate }}
               </button>
               <button
                 type="button"
@@ -243,13 +247,13 @@
                 [disabled]="administerInFlight()"
                 (click)="administer('REFUSED')"
               >
-                Refused
+                {{ 'MED_HISTORY.STATUS_REFUSED' | translate }}
               </button>
             </section>
           </article>
         } @else {
           <div class="emar__placeholder" data-testid="emar-placeholder">
-            Select a due dose to begin verification.
+            {{ 'EMAR.PLACEHOLDER_SELECT_DOSE' | translate }}
           </div>
         }
       </div>

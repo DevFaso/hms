@@ -25,7 +25,7 @@
  * at it; it is not a way to make the build green.
  *
  * FR fails the build. ES is reported against a ratchet (ES_MAX_UNTRANSLATED,
- * seeded at the 1377 it stands at today)
+ * seeded at the 1377 it stands at today) counting only keys it has not pinned
  * rather than failing, because the ES backfill has not been done and pinning
  * ~1000 untranslated Spanish strings into an allowlist would be a lie about
  * their state. The ratchet still stops ES getting worse.
@@ -150,8 +150,16 @@ for (const locale of ENFORCED_LOCALES) {
 }
 
 for (const [locale, ceiling] of Object.entries(RATCHET_LOCALES)) {
-    const count = identicalKeys(baseline, readLocale(locale)).length;
-    console.log(`[i18n-untranslated] ${locale.toUpperCase()}: ${count} identical to EN (ceiling ${ceiling})`);
+    // A ratcheted locale may still pin individual keys: "Avatar" and "Error" are
+    // the Spanish too, and counting them as debt would push the ceiling up for a
+    // correct translation. Only unpinned keys count against it.
+    const pinned = allowlist[locale] ?? {};
+    const identical = identicalKeys(baseline, readLocale(locale));
+    const count = identical.filter(key => pinned[key] !== baseline.get(key)).length;
+    console.log(
+        `[i18n-untranslated] ${locale.toUpperCase()}: ${identical.length} identical to EN ` +
+        `(${count} unpinned, ceiling ${ceiling})`
+    );
     if (count > ceiling) {
         console.error(
             `  ${locale.toUpperCase()} went backwards: ${count} > ${ceiling}. Translate the new keys, ` +
