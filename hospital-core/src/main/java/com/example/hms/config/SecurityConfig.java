@@ -101,6 +101,18 @@ public class SecurityConfig {
         "/patients/*/intake-output", "/patients/*/intake-output/**"
     };
 
+    /**
+     * E8 #52 — the patient's own sharing opt-out, and the only /patients/*
+     * surface a PATIENT reaches. RecordAccessController already admits them
+     * (OPT_OUT_ROLES) and pins the row to their own record
+     * (requireSelfIfPatient), but the matcher layer never let the check run:
+     * the GET blanket below lists no patient role and DELETE lists only
+     * HOSPITAL_ADMIN and SUPER_ADMIN, while POST matches the bare /patients
+     * alone and so fell through to authenticated(). A patient could close the
+     * door and then neither see that it was closed nor open it again.
+     */
+    static final String API_PATIENT_OPT_OUT = "/patients/*/record-sharing/opt-out";
+
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
 
@@ -404,6 +416,14 @@ public class SecurityConfig {
                 // registration role set (see PhoneVerificationController).
                 .requestMatchers("/patients/phone-verification", "/patients/phone-verification/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
+                // ---------------- Patient sharing opt-out (E8 #52) ----------------
+                // Ahead of the chart patterns and the blanket, all verbs on one
+                // line, carrying exactly RecordAccessController.OPT_OUT_ROLES.
+                // Widening stops here: this is a single path, not a prefix, so
+                // the blanket still refuses a patient every other chart route.
+                .requestMatchers(API_PATIENT_OPT_OUT)
+                .hasAnyAuthority(ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // -------------------- Patient chart (E9 #67, D5) --------------------
                 // First match wins: the chart sub-resources sit ahead of the
