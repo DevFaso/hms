@@ -3210,7 +3210,7 @@
                   >
                   <span class="sched-reason">
                     {{ formatInvoiceAmount(inv.totalAmount) }} ·
-                    {{ inv.status | enumLabel: 'invoiceStatus' }}
+                    {{ (inv.status | enumLabel: 'invoiceStatus') || '—' }}
                   </span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>

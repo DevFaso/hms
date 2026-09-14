@@ -288,4 +288,20 @@ describe('BillingComponent', () => {
     expect(badges).not.toContain('PARTIALLY PAID');
     expect(badges).not.toContain('PARTIALLY_PAID');
   });
+
+  it('falls back to — when an invoice has no status', () => {
+    // formatStatus() returned '—' for a null status and EnumLabelPipe returns
+    // '', so converting the badge to the pipe dropped the placeholder and left
+    // an empty chip. This is the assertion that used to cover it, moved to the
+    // DOM because that is where the fallback now lives.
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice({ status: undefined })])));
+
+    fixture.detectChanges();
+
+    const badges = Array.from(
+      fixture.nativeElement.querySelectorAll('.status-badge') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(badges).toContain('—');
+    expect(badges).not.toContain('');
+  });
 });

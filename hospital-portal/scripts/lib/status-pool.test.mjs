@@ -53,15 +53,6 @@ const TIMELINE_SECTIONS = {
   PROCEDURE: () => constantsOf('ProcedureOrderStatus.java', 'ProcedureOrderStatus'),
 };
 
-/** Groups that own a value the timeline can render; the pool copies from them. */
-const OWNING_GROUPS = [
-  'ENCOUNTER_STATUS',
-  'PRESCRIPTION_STATUS',
-  'IMAGING_REPORT_STATUS',
-  'IMAGING_ORDER_STATUS',
-  'PROCEDURE_ORDER_STATUS',
-];
-
 const pool = () =>
   JSON.parse(readFileSync(resolve(PORTAL, 'src/assets/i18n/en.json'), 'utf8')).PORTAL.ENUM.STATUS;
 
@@ -89,35 +80,16 @@ test('PORTAL.ENUM.STATUS keys every value the chart-review timeline can render',
   );
 });
 
-test('the pool holds a wording one of its owning groups actually uses', () => {
-  // The pool duplicates these values by design. Copying rather than
-  // re-translating is what keeps the tab and the timeline reading the same
-  // words; a later edit to one side only is the drift this catches.
-  //
-  // It is membership, not equality: one value can be owned by several groups
-  // that legitimately disagree on gender agreement — CANCELLED is "Annulé" for
-  // an encounter and "Annulée" for a procedure order — and a single pooled
-  // badge can only carry one of them.
-  for (const locale of ['en', 'fr', 'es']) {
-    const enums = JSON.parse(
-      readFileSync(resolve(PORTAL, `src/assets/i18n/${locale}.json`), 'utf8'),
-    ).PORTAL.ENUM;
-    const owned = new Map();
-    for (const group of OWNING_GROUPS) {
-      for (const [value, text] of Object.entries(enums[group] ?? {})) {
-        if (!owned.has(value)) owned.set(value, new Set());
-        owned.get(value).add(text);
-      }
-    }
-    const drift = [];
-    for (const [value, texts] of owned) {
-      if (value in enums.STATUS && !texts.has(enums.STATUS[value])) {
-        drift.push(
-          `${locale} ${value}: pool "${enums.STATUS[value]}" is not ` +
-            `[${[...texts].join(' | ')}]`,
-        );
-      }
-    }
-    assert.deepEqual(drift, [], `pooled wording drifted from its source: ${drift.join('; ')}`);
-  }
-});
+/*
+ * There is deliberately NO test that the pool matches the group a value comes
+ * from. That invariant is false, and enforcing it caused a regression: the
+ * pool is a COMPROMISE vocabulary whose subject differs from any single
+ * owning group. DISCONTINUED is « Interrompu » in the pool because
+ * my-medications renders it against « le médicament », and « Interrompue » in
+ * PRESCRIPTION_STATUS because that group's subject is « une ordonnance ».
+ * Copying one over the other broke grammar on three patient-facing screens.
+ *
+ * What matters is coverage, above: a value with NO key renders Title-Cased
+ * English, which is never right. Which French word is right is a judgement,
+ * not an invariant.
+ */

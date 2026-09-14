@@ -182,7 +182,7 @@
               <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                  inv.status | enumLabel: 'invoiceStatus'
+                  (inv.status | enumLabel: 'invoiceStatus') || '—'
                 }}</span>
               </td>
               <td class="actions-cell">
@@ -315,7 +315,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                inv.status | enumLabel: 'invoiceStatus'
+                (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
             </div>
             <div class="detail-field">

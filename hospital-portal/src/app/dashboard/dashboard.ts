@@ -2091,7 +2091,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }).format(amount ?? 0);
   }
 
-  /** Mirrors the billing page's status rendering (underscores → spaces). */
   private initProfile(): void {
     const profile = this.auth.getUserProfile();
     const first = profile?.firstName ?? '';

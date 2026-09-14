@@ -2248,7 +2248,42 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scripts were run through Prettier by hand; `i18n-enum-domains.json` was
   deliberately left in its compact one-entry-per-line table form, which
   Prettier would triple in length.
-- **223 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **Six round-3 findings on the raw-enum gate and the new enum groups, deferred
+  from #663 by the user.** None is reachable by a user today; all are hardening
+  of the gate or of a fallback path, and each was confirmed against the tree.
+  1. `rawEnumRenders` reports the line of the attribute NAME for a hit inside
+     an attribute value, so a `[title]`/`[matTooltip]` expression Prettier
+     wrapped points the build error at the wrong line. The line-number test
+     covers only the element-text path.
+  2. `TEXT_IF_INTERPOLATED` makes `<option value="{{ o.status }}">` a finding
+     even when the option's own label is piped — the same class-vs-label
+     confusion the gate exists to remove, in the other direction. No site has
+     the interpolated form today.
+  3. Five of the ten entries in `TEXT_ATTRS`/`TEXT_IF_INTERPOLATED`
+     (`mattooltip`, `matbadge`, `aria-valuetext`, `label`, `value`) match
+     nothing in the repo — there is no Angular Material here. The list reads
+     as general HTML semantics but is really four live entries plus config a
+     future reader has to re-verify.
+  4. `PORTAL.ENUM.STATUS.RESULTED` was reworded in FRENCH ONLY
+     ("Résultats rendus") to break a collision with the newly-pooled
+     `RESULTS_AVAILABLE`, so one wire value now has two French renderings —
+     `LAB_ORDER_STATUS.RESULTED` still reads "Résultats disponibles".
+     `scripts/i18n-enum-collisions.json` is the tool for that and already pins
+     two such pairs; decide whether these two are genuine synonyms and pin
+     them, or give RESULTED a distinct wording in BOTH groups.
+  5. None of the five domains #663 added (`immunizationStatus`, `marTaskStatus`,
+     `platformServiceStatus`, `platformReleaseStatus`, `procedureOrderStatus`)
+     has a group in `EnumLabelPipe.LABELS`, so they lack the tier-2 net every
+     pre-existing domain carries: with a key unported the pipe falls to the
+     tier-3 prettifier and renders "Pre Op Clearance Pending" rather than the
+     curated "Pre-Op Clearance Pending".
+  6. One negative assertion in the chart-review timeline spec excludes a string
+     the pipe cannot produce, and its comment mis-states the fallback order —
+     tier 2's cross-group LABELS scan runs before the prettifier, so an unkeyed
+     `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
+     Discharge". The positive assertion still catches the regression; the
+     exclusion is dead weight.
+- **221 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
