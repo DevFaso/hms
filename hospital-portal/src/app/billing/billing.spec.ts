@@ -249,7 +249,7 @@ describe('BillingComponent', () => {
     expect(stats.balance).toBe(300);
   });
 
-  it('maps statuses to badge classes and display labels', () => {
+  it('maps statuses to badge classes', () => {
     expect(component.getStatusClass('PAID')).toContain('status-paid');
     expect(component.getStatusClass('PARTIALLY_PAID')).toContain('status-partial');
     expect(component.getStatusClass('CANCELLED')).toContain('status-cancelled');

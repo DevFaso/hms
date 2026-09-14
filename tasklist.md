@@ -2264,8 +2264,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   element text or a text-bearing attribute, and has its own tests, because a
   scan that silently stops matching reports zero findings and reads as a win.
   It still cannot see two shapes: an expression whose variable is not
-  enum-named (`{{ formatStatus(s) }}` over a status list — two live English
-  renders in `billing.html` were found by hand, not by the gate), and a method
+  enum-named (`{{ formatStatus(s) }}` over a status list, `{{ st }}` over a
+  status array — two live English renders in `billing.html` were found by hand,
+  and the identical shape in `platform.html`, its status filter and its
+  status-change buttons, was missed on that pass and caught only by review),
+  and a method
   call whose return value it cannot know (`{{ statusLabel(culture.status) }}`
   translates, `{{ taskActionIcon(task.status) }}` is a Material icon name).
   `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site

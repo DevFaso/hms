@@ -411,7 +411,11 @@ export class PlatformComponent implements OnInit {
         }
         this.saving.set(false);
         this.toast.success(
-          this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', { status: newStatus }),
+          this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', {
+            // The badge on this page renders the same value through enumLabel;
+            // interpolating the raw token here produced "modifié en DECOMMISSIONED".
+            status: this.translate.instant('PORTAL.ENUM.PLATFORM_SERVICE_STATUS.' + newStatus),
+          }),
         );
       },
       error: (err) => {

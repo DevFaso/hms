@@ -162,6 +162,68 @@ describe('ChartReviewComponent', () => {
       expect(pills).withContext(`${tab} still raw`).not.toContain(wire);
     }
   });
+
+  it('translates the timeline pill for every section, not just the tabs', () => {
+    // One badge, six emitters: the timeline pill carries Encounter status, a
+    // note's SIGNED/DRAFT, AbnormalFlag, Prescription status, an imaging
+    // report-or-order status and ProcedureOrder status. It resolves through the
+    // shared `status` pool, which was missing 27 of those values — so the same
+    // record read French in the tab and English in the timeline above it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          STATUS: {
+            READY_FOR_DISCHARGE: 'pret-pour-la-sortie',
+            RESULTS_AVAILABLE: 'resultats-disponibles',
+            POSTPONED: 'reporte',
+          },
+        },
+      },
+    });
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'e-9',
+        section: 'ENCOUNTER',
+        occurredAt: '2026-04-29T10:00:00',
+        title: 'A',
+        status: 'READY_FOR_DISCHARGE',
+      },
+      {
+        id: 'i-9',
+        section: 'IMAGING',
+        occurredAt: '2026-04-28T10:00:00',
+        title: 'B',
+        status: 'RESULTS_AVAILABLE',
+      },
+      {
+        id: 'p-9',
+        section: 'PROCEDURE',
+        occurredAt: '2026-04-27T10:00:00',
+        title: 'C',
+        status: 'POSTPONED',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+
+    setPatient('p-10');
+
+    const pills = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid="chart-review-panel-timeline"] .chart-review__pill',
+      ) as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    for (const expected of ['pret-pour-la-sortie', 'resultats-disponibles', 'reporte']) {
+      expect(pills).withContext(`timeline pill ${expected}`).toContain(expected);
+    }
+    // Title-Cased English is what an unkeyed value falls through to.
+    for (const english of ['Ready For Discharge', 'Results Available', 'Postponed']) {
+      expect(pills).withContext(`still English: ${english}`).not.toContain(english);
+    }
+  });
 });
 
 function populatedChart(patientId = 'p-1'): ChartReview {

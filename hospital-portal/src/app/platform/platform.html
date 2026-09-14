@@ -225,7 +225,7 @@
         >
           <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (st of statusOptions; track st) {
-            <option [value]="st">{{ st }}</option>
+            <option [value]="st">{{ st | enumLabel: 'platformServiceStatus' }}</option>
           }
         </select>
       </div>
@@ -652,7 +652,7 @@
                   [disabled]="st === selectedService()!.status || saving()"
                   (click)="changeServiceStatus(selectedService()!, st)"
                 >
-                  {{ st }}
+                  {{ st | enumLabel: 'platformServiceStatus' }}
                 </button>
               }
             </div>

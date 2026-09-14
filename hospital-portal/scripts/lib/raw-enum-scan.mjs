@@ -87,13 +87,23 @@ const TEXT_ATTRS = new Set([
 ]);
 
 /**
+ * `value` is read only when it is written as a plain interpolated attribute:
+ * `value="{{ x.status }}"` is painted into the field, while `[value]="x.status"`
+ * on an `<option>` is the form value behind a label rendered separately.
+ */
+const TEXT_IF_INTERPOLATED = new Set(['value']);
+
+/**
  * One attribute assignment. The name may be plain (`title=`), bound
  * (`[title]=`, `[attr.aria-label]=`), an event (`(click)=`), a template ref
  * (`#row=`) or a structural directive (`*ngIf=`); the shape of the name is
- * what tells us whether the value is read.
+ * what tells us whether the value is read. Both quote styles: Prettier
+ * normalises these templates to double quotes, but a scan that silently stops
+ * seeing half the markup is the failure mode this file exists to prevent.
  */
-const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*"([^"]*)"/g;
+const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
+const COMMENT = /<!--[\s\S]*?-->/g;
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
 
 /**
@@ -111,6 +121,9 @@ function attrName(raw) {
     .toLowerCase();
 }
 
+/** Same length, same newlines — so every offset below still points at the original. */
+const blank = (text) => text.replace(/[^\n]/g, ' ');
+
 /**
  * @returns {{expr: string, line: number}[]} one entry per raw render, in file
  * order. An expression piped in the same binding is not reported, so
@@ -120,27 +133,41 @@ function attrName(raw) {
 export function rawEnumRenders(html) {
   const hits = [];
   const lineAt = (index) => html.slice(0, index).split('\n').length;
-  const collect = (body, index) => {
+
+  const collectExpr = (body, index) => {
     if (RESOLVED.test(body)) return;
     for (const field of body.matchAll(FIELD)) hits.push({ expr: field[0], line: lineAt(index) });
   };
 
-  // Blank every attribute value, scanning the text-bearing ones on the way
-  // past. What is left is element text content — the words on screen — so an
-  // interpolation inside class="…" or [attr.data-status]="…" is not counted.
-  const text = html.split('');
-  for (const attr of html.matchAll(ATTR)) {
-    const valueAt = attr.index + attr[0].indexOf('="') + 2;
-    if (TEXT_ATTRS.has(attrName(attr[1]))) {
-      collect(attr[2], attr.index);
-    }
-    for (let i = valueAt; i < valueAt + attr[2].length; i++) {
-      if (text[i] !== '\n') text[i] = ' ';
-    }
-  }
+  // Each `{{ … }}` is judged on its own. Testing the whole attribute value at
+  // once let one resolved half excuse a raw one beside it, so
+  // `alt="{{ p.severity }} {{ p.when | date }}"` went uncounted.
+  const collectValue = (value, index) => {
+    const parts = [...value.matchAll(INTERPOLATION)];
+    if (!parts.length) return collectExpr(value, index);
+    for (const part of parts) collectExpr(part[1], index);
+  };
 
-  for (const binding of text.join('').matchAll(INTERPOLATION)) {
-    collect(binding[1], binding.index);
-  }
+  // Commented-out markup is not on screen; counting it mints baseline pins for
+  // dead code, and uncommenting the block then reports them stale.
+  let work = html.replace(COMMENT, blank);
+
+  // Blank every attribute value, scanning the text-bearing ones on the way
+  // past. Blanking through replace() keeps the offsets exact — hand-computed
+  // ones were wrong for `class = "…"`, where the spaces the regex permits
+  // shifted the window onto the attribute NAME.
+  work = work.replace(ATTR, (match, name, doubled, singled, offset) => {
+    const value = doubled ?? singled ?? '';
+    const plain = !/^[[(@*#]/.test(name);
+    const key = attrName(name);
+    if (TEXT_ATTRS.has(key) || (plain && TEXT_IF_INTERPOLATED.has(key))) {
+      collectValue(value, offset);
+    }
+    return blank(match);
+  });
+
+  // What is left is element text content — the words on screen.
+  for (const binding of work.matchAll(INTERPOLATION)) collectExpr(binding[1], binding.index);
+
   return hits.sort((a, b) => a.line - b.line);
 }

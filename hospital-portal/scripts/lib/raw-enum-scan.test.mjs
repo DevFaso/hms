@@ -114,3 +114,42 @@ test('blanking an attribute keeps the line numbers honest', () => {
   );
   assert.deepEqual(rawEnumRenders(html), [{ expr: 'y.status', line: 4 }]);
 });
+
+test('a resolved half does not excuse a raw one in the same attribute', () => {
+  // The whole attribute value used to be tested for a resolving pipe at once,
+  // so a badge tooltip combining a status and a timestamp went uncounted.
+  assert.deepEqual(exprs('<img alt="{{ p.severity }} {{ p.when | date }}">'), ['p.severity']);
+  assert.deepEqual(exprs(`<td title="{{ a.status }} / {{ b.status | enumLabel: 'x' }}">`), [
+    'a.status',
+  ]);
+});
+
+test('spaces around the equals sign do not shift the blanking window', () => {
+  // Hand-computed offsets put the window on the attribute NAME here, blanking
+  // `class = "` and leaving the tail of the value to be scanned as text.
+  assert.deepEqual(exprs('<td class = "{{ f(y.status) }}">'), []);
+  assert.deepEqual(exprs('<td title = "{{ y.status }}">'), ['y.status']);
+});
+
+test('a single-quoted attribute is an attribute', () => {
+  assert.deepEqual(exprs("<span class='badge {{ f(o.status) }}'>ok</span>"), []);
+  assert.deepEqual(exprs("<span title='{{ o.status }}'>ok</span>"), ['o.status']);
+});
+
+test('an interpolated value= is painted; a [value] binding is not', () => {
+  assert.deepEqual(exprs('<input value="{{ v.status }}">'), ['v.status']);
+  // `<option [value]="b.status">` carries the form value; its label is separate.
+  assert.deepEqual(exprs('<option [value]="b.status">x</option>'), []);
+});
+
+test('commented-out markup is not on screen', () => {
+  // Counting it mints baseline pins for dead code, and uncommenting the block
+  // then reports those pins stale.
+  assert.deepEqual(exprs('<!-- {{ z.status }} -->'), []);
+  assert.deepEqual(exprs('<!-- note -->\n<td>{{ z.status }}</td>'), ['z.status']);
+});
+
+test('a comment keeps the lines below it honest', () => {
+  const html = ['<!--', '  {{ ignored.status }}', '-->', '{{ real.status }}'].join('\n');
+  assert.deepEqual(rawEnumRenders(html), [{ expr: 'real.status', line: 4 }]);
+});
