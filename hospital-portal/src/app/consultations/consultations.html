@@ -323,7 +323,7 @@
               <span class="field-label">{{ 'CONSULTATIONS.URGENCY' | translate }}</span
               ><span class="field-value"
                 ><span class="urgency-badge {{ getUrgencyClass(con.urgency) }}">{{
-                  con.urgency
+                  con.urgency | enumLabel: 'consultationUrgency'
                 }}</span></span
               >
             </div>
@@ -331,7 +331,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(con.status) }}">{{
-                  con.status
+                  con.status | enumLabel: 'consultationStatus'
                 }}</span></span
               >
             </div>

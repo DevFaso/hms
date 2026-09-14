@@ -4726,6 +4726,7 @@
         "UPDATE": "Mis à jour"
       },
       "GENDER": {
+        "ALL": "Tous",
         "FEMALE": "Féminin",
         "MALE": "Masculin",
         "NON_BINARY": "Non binaire",
@@ -5033,6 +5034,7 @@
         "ASSIGNMENT_CONFIRMED": "Affectation confirmée",
         "BREAK_GLASS_ACCESS": "Accès en urgence",
         "CLAIM_SUBMITTED": "Demande de remboursement envoyée",
+        "COMPARISON_RUN": "Comparaison exécutée",
         "CONFIGURATION_CHANGED": "Configuration modifiée",
         "CONSENT_GRANTED": "Consentement accordé",
         "CONSENT_REVOKED": "Consentement révoqué",
@@ -5048,6 +5050,7 @@
         "DISPENSE_SUBSTITUTED": "Substitution dispensée",
         "ENCOUNTER_AUTOCREATED": "Consultation créée automatiquement",
         "ENCOUNTER_UPDATE": "Consultation modifiée",
+        "EXPORT_GENERATED": "Export généré",
         "HOSPITAL_ARCHIVED": "Hôpital archivé",
         "HOSPITAL_PURGED": "Hôpital purgé",
         "HOSPITAL_PURGE_CANCELLED": "Purge d'hôpital annulée",
@@ -5121,6 +5124,7 @@
         "SECURITY_ALERT_TRIGGERED": "Alerte de sécurité déclenchée",
         "SECURITY_POLICY_UPDATED": "Politique de sécurité modifiée",
         "SESSION_TERMINATED": "Session révoquée",
+        "SNAPSHOT_PUBLISHED": "Instantané publié",
         "STOCK_ADJUSTMENT": "Ajustement de stock",
         "STOCK_RECEIPT": "Stock réceptionné",
         "STOCK_REORDER_ALERT": "Alerte de réapprovisionnement",

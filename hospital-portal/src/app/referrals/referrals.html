@@ -274,7 +274,7 @@
               <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span
               ><span class="field-value"
                 ><span class="urgency-badge {{ getUrgencyClass(ref.urgency) }}">{{
-                  ref.urgency
+                  ref.urgency | enumLabel: 'referralUrgency'
                 }}</span></span
               >
             </div>
@@ -292,7 +292,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(ref.status) }}">{{
-                  ref.status
+                  ref.status | enumLabel: 'referralStatus'
                 }}</span></span
               >
             </div>

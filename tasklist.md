@@ -2248,22 +2248,25 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scripts were run through Prettier by hand; `i18n-enum-domains.json` was
   deliberately left in its compact one-entry-per-line table form, which
   Prettier would triple in length.
-- **71 enum-shaped fields are interpolated raw, skipping the EnumLabelPipe
-  entirely.** Across 38 templates a value is rendered as `{{ o.modality }}`
-  rather than `{{ o.modality | enumLabel: 'imagingModality' }}`, so the wire
-  token reaches the screen even where the French key already exists and is
-  correct — `imaging.html` alone does it six times, and `audit-logs.html`
-  renders `{{ l.eventType }}` twice beside a profile page that pipes the same
-  field. The enum gate added in #659 cannot see these: it checks that a piped
-  domain is fully keyed, not that a field which should be piped is. Each site
-  needs its own judgement — `leave.reason`, `appt.reason` and `med.frequency`
-  are free text a human typed and must stay raw — so it is a sweep of 71
-  decisions, not a regex. Scoped out of the keys-and-gate PR deliberately.
-  ⚠ The 71 is a floor, not a total: the scanner matches a field *named*
-  `.status` / `.type` / `.modality`, so it never saw `enc.encounterType`,
-  of which #660 found and piped six more (one patient-facing). Re-derive
-  the list with a pattern that also matches a field whose name ENDS in an
-  enum-ish word before trusting the count.
+- **278 enum-shaped fields are still rendered without `| enumLabel`.** A value
+  written as `{{ order.status }}` rather than
+  `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
+  screen in every language while every other gate stays green: the key exists,
+  it is translated, it is simply never asked for. The count here has been wrong
+  twice — 71 when the scanner matched only a field NAMED `.status`/`.type` (so
+  it never saw `enc.encounterType`), then 187 when it matched only
+  `{{ x.status }}` and `{{ x.status || 'y' }}` (so a `??`, a ternary, a
+  `[title]` binding and a two-step optional chain were all invisible). The
+  scan in `scripts/lib/raw-enum-scan.mjs` now covers all of those and has its
+  own tests, because a scan that silently stops matching reports zero findings
+  and reads as a win.
+  `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
+  that is not pinned fails the build and is named, and a pin whose site is
+  gone is reported stale. Work it down in tranches: trace each field to the
+  DTO the API fills — `taskPriority` covers two vocabularies, `alertSeverity`
+  is a String the service composes, `.type` is either encounterType or
+  vitalType depending on the screen — and leave the free text a clinician
+  typed (`appt.reason`, `med.frequency`, `lab.result`) pinned where it is.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

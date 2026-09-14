@@ -48,7 +48,8 @@
           >
           @if (p.gender) {
             <span class="meta-tag"
-              ><span class="material-symbols-outlined">person</span> {{ p.gender }}</span
+              ><span class="material-symbols-outlined">person</span>
+              {{ p.gender | enumLabel: 'gender' }}</span
             >
           }
           @if (p.dateOfBirth) {
@@ -387,7 +388,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
-              ><span class="value">{{ p.gender ?? '—' }}</span>
+              ><span class="value">{{ p.gender ? (p.gender | enumLabel: 'gender') : '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span

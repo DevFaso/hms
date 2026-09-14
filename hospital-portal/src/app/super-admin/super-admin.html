@@ -181,7 +181,7 @@
             </div>
             <div class="audit-body">
               <div class="audit-line">
-                <strong>{{ event.eventType }}</strong>
+                <strong>{{ event.eventType | enumLabel: 'auditEventType' }}</strong>
                 @if (event.entityType) {
                   <span class="audit-entity">· {{ event.entityType }}</span>
                 }

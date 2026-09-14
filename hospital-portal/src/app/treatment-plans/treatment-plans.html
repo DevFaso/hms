@@ -185,7 +185,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(plan.status) }}">{{
-                  plan.status
+                  plan.status | enumLabel: 'treatmentPlanStatus'
                 }}</span></span
               >
             </div>

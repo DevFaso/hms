@@ -20,6 +20,7 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface ControlTowerStat {
   key: string;
@@ -66,7 +67,7 @@ interface ActivityRow {
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, DatePipe],
+  imports: [CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
   templateUrl: './super-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',

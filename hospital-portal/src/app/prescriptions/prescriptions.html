@@ -261,7 +261,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(rx.status) }}">{{
-                  rx.status
+                  rx.status | enumLabel: 'prescriptionStatus'
                 }}</span></span
               >
             </div>

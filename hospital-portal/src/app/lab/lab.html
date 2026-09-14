@@ -120,7 +120,7 @@
               </td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(order.status)">{{
-                  order.status
+                  order.status | enumLabel: 'labOrderStatus'
                 }}</span>
               </td>
               <td>
