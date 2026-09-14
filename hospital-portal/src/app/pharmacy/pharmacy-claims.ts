@@ -8,6 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslateService } from '@ngx-translate/core';
 import {
   PharmacyClaimResponse,
   PharmacyClaimStatus,
@@ -37,6 +38,7 @@ interface StatusOption {
 export class PharmacyClaimsComponent implements OnInit {
   private readonly pharmacy = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly loading = signal(false);
   readonly claims = signal<PharmacyClaimResponse[]>([]);
@@ -62,7 +64,7 @@ export class PharmacyClaimsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Impossible de charger les demandes de remboursement');
+        this.toast.error(this.translate.instant('PHARMACY.CLAIMS_LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -81,58 +83,58 @@ export class PharmacyClaimsComponent implements OnInit {
   submit(c: PharmacyClaimResponse): void {
     this.pharmacy.submitClaim(c.id).subscribe({
       next: () => {
-        this.toast.success('Demande soumise au payeur');
+        this.toast.success(this.translate.instant('PHARMACY.CLAIM_SUBMITTED'));
         this.load();
       },
-      error: () => this.toast.error('Échec de la soumission'),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED')),
     });
   }
 
   accept(c: PharmacyClaimResponse): void {
     this.pharmacy.acceptClaim(c.id).subscribe({
       next: () => {
-        this.toast.success('Demande acceptée');
+        this.toast.success(this.translate.instant('PHARMACY.CLAIM_ACCEPTED'));
         this.load();
       },
-      error: () => this.toast.error("Impossible d'accepter la demande"),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED')),
     });
   }
 
   reject(c: PharmacyClaimResponse): void {
-    const reason = window.prompt('Motif du rejet ?');
+    const reason = window.prompt(this.translate.instant('PHARMACY.CLAIM_REJECT_REASON_PROMPT'));
     if (!reason || !reason.trim()) {
       return;
     }
     this.pharmacy.rejectClaim(c.id, reason).subscribe({
       next: () => {
-        this.toast.success('Demande rejetée');
+        this.toast.success(this.translate.instant('PHARMACY.CLAIM_REJECTED'));
         this.load();
       },
-      error: () => this.toast.error('Échec du rejet'),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED')),
     });
   }
 
   pay(c: PharmacyClaimResponse): void {
     this.pharmacy.payClaim(c.id).subscribe({
       next: () => {
-        this.toast.success('Paiement enregistré');
+        this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
         this.load();
       },
-      error: () => this.toast.error("Échec de l'enregistrement du paiement"),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
     });
   }
 
   exportCsv(): void {
     this.pharmacy.exportClaimsCsv(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.csv'),
-      error: () => this.toast.error("Échec de l'export CSV"),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED')),
     });
   }
 
   exportFhir(): void {
     this.pharmacy.exportClaimsFhir(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.fhir.json'),
-      error: () => this.toast.error("Échec de l'export FHIR"),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED')),
     });
   }
 

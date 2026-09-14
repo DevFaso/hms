@@ -21,7 +21,7 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note-form.component';
 import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -54,6 +54,7 @@ export class EncountersComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
 
   /**
    * Signal exposure for the cross-tenant chip + Hospital column toggle
@@ -184,9 +185,7 @@ export class EncountersComponent implements OnInit {
           },
         });
       } else {
-        this.toast.error(
-          'No hospital is associated with your account. Please contact an administrator.',
-        );
+        this.toast.error(this.translate.instant('ENCOUNTERS.NO_HOSPITAL'));
       }
     }
 
@@ -350,13 +349,17 @@ export class EncountersComponent implements OnInit {
       : this.encounterService.create(payload);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Encounter updated' : 'Encounter created');
+        this.toast.success(
+          this.translate.instant(
+            this.editing() ? 'ENCOUNTERS.UPDATE_SUCCESS' : 'ENCOUNTERS.CREATE_SUCCESS',
+          ),
+        );
         this.closeModal();
         this.loadEncounters();
         this.saving.set(false);
       },
       error: () => {
-        this.toast.error('Failed to save encounter');
+        this.toast.error(this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -376,13 +379,13 @@ export class EncountersComponent implements OnInit {
     this.deleting.set(true);
     this.encounterService.delete(enc.id).subscribe({
       next: () => {
-        this.toast.success('Encounter deleted');
+        this.toast.success(this.translate.instant('ENCOUNTERS.DELETED'));
         this.cancelDelete();
         this.loadEncounters();
         this.deleting.set(false);
       },
       error: () => {
-        this.toast.error('Failed to delete encounter');
+        this.toast.error(this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -414,7 +417,7 @@ export class EncountersComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load encounters');
+        this.toast.error(this.translate.instant('ENCOUNTERS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -477,7 +480,7 @@ export class EncountersComponent implements OnInit {
     this.savingNote.set(true);
     this.encounterService.addNote(enc.id, payload).subscribe({
       next: (note) => {
-        this.toast.success('Note saved');
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SAVED'));
         this.savingNote.set(false);
         this.showNoteForm.set(false);
         this.noteState.set(note ?? null);
@@ -486,7 +489,9 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         // Surface the backend refusal verbatim (house rule) — a signed-note
         // lock or client-asserted-signature refusal must reach the clinician.
-        this.toast.error(err?.error?.message ?? 'Failed to save note');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
+        );
         this.savingNote.set(false);
       },
     });
@@ -505,12 +510,14 @@ export class EncountersComponent implements OnInit {
     this.encounterService.signNote(enc.id).subscribe({
       next: (note) => {
         this.signingNote.set(false);
-        this.toast.success('Note signed');
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
         this.noteState.set(note ?? null);
       },
       error: (err) => {
         this.signingNote.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to sign note');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+        );
       },
     });
   }
@@ -522,12 +529,14 @@ export class EncountersComponent implements OnInit {
     this.encounterService.cosignNote(enc.id).subscribe({
       next: (note) => {
         this.cosigningNote.set(false);
-        this.toast.success('Note co-signed');
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
         this.noteState.set(note ?? null);
       },
       error: (err) => {
         this.cosigningNote.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to co-sign note');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+        );
       },
     });
   }
@@ -566,14 +575,14 @@ export class EncountersComponent implements OnInit {
       .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })
       .subscribe({
         next: () => {
-          this.toast.success('Addendum recorded');
+          this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
           this.addendumContent = '';
           this.showAddendumForm.set(false);
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },
         error: () => {
-          this.toast.error('Failed to record addendum');
+          this.toast.error(this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'));
           this.addendumSaving.set(false);
         },
       });
@@ -593,13 +602,13 @@ export class EncountersComponent implements OnInit {
     this.transitioning.set(true);
     this.encounterService.completeExamination(enc.id).subscribe({
       next: (updated) => {
-        this.toast.success('Examination completed');
+        this.toast.success(this.translate.instant('ENCOUNTERS.EXAM_COMPLETED'));
         this.transitioning.set(false);
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
       error: () => {
-        this.toast.error('Failed to complete examination');
+        this.toast.error(this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'));
         this.transitioning.set(false);
       },
     });
@@ -609,13 +618,13 @@ export class EncountersComponent implements OnInit {
     this.transitioning.set(true);
     this.encounterService.markReadyForDischarge(enc.id).subscribe({
       next: (updated) => {
-        this.toast.success('Marked ready for discharge');
+        this.toast.success(this.translate.instant('ENCOUNTERS.MARKED_READY_FOR_DISCHARGE'));
         this.transitioning.set(false);
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
       error: () => {
-        this.toast.error('Failed to update encounter status');
+        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
         this.transitioning.set(false);
       },
     });
@@ -631,7 +640,7 @@ export class EncountersComponent implements OnInit {
         this.avsLoading.set(false);
       },
       error: () => {
-        this.toast.error('No after-visit summary available for this encounter');
+        this.toast.error(this.translate.instant('ENCOUNTERS.AVS_NONE'));
         this.avsLoading.set(false);
       },
     });

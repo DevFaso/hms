@@ -224,7 +224,7 @@ describe('DispensingComponent', () => {
     component.submitDispense();
 
     expect(pharmacySvc.createDispense).toHaveBeenCalledWith(component.form);
-    expect(toastSvc.success).toHaveBeenCalledWith('Medication dispensed successfully');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_SUCCESS');
     expect(component.showForm()).toBeFalse();
   });
 
@@ -255,7 +255,7 @@ describe('DispensingComponent', () => {
     component.cancelDispense('d-1');
 
     expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1');
-    expect(toastSvc.success).toHaveBeenCalledWith('Dispense cancelled');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
   });
 
   // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────

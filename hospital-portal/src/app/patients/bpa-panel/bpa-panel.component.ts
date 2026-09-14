@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
@@ -55,6 +55,7 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
   private readonly bpa = inject(BpaService);
   private readonly ackService = inject(CdsAcknowledgementService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
@@ -82,7 +83,7 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
 
   protected override(): void {
     if (!this.reason.trim()) {
-      this.toast.error('Please provide a reason to override this critical advisory.');
+      this.toast.error(this.translate.instant('BPA.OVERRIDE_REASON_REQUIRED'));
       return;
     }
     this.submitDecision('OVERRIDDEN');
@@ -120,7 +121,7 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
         },
         error: () => {
           this.submitting.set(false);
-          this.toast.error('Could not record advisory acknowledgement.');
+          this.toast.error(this.translate.instant('BPA.ACK_FAILED'));
         },
       });
   }

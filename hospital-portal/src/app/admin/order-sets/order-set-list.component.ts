@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
@@ -136,6 +136,7 @@ export class OrderSetListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
   private readonly searchSubject = new Subject<string>();
   private searchSub?: Subscription;
 
@@ -175,20 +176,20 @@ export class OrderSetListComponent implements OnInit {
   }
 
   protected deactivate(os: OrderSetSummary): void {
-    const reason = globalThis.prompt('Deactivation reason:');
+    const reason = globalThis.prompt(this.translate.instant('ORDER_SETS.DEACTIVATE_REASON_PROMPT'));
     if (!reason?.trim()) return;
     const actor = this.auth.getUserProfile()?.staffId ?? '';
     if (!actor) {
-      this.toast.error('No active staff context');
+      this.toast.error(this.translate.instant('ORDER_SETS.NO_STAFF_CONTEXT'));
       return;
     }
     this.orderSetService.deactivate(os.id, reason.trim(), actor).subscribe({
       next: () => {
-        this.toast.success('Order set deactivated');
+        this.toast.success(this.translate.instant('ORDER_SETS.DEACTIVATED'));
         // Refresh list.
         this.searchSubject.next(this.searchTerm());
       },
-      error: () => this.toast.error('Could not deactivate order set'),
+      error: () => this.toast.error(this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED')),
     });
   }
 }

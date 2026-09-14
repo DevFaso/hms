@@ -11,7 +11,7 @@ import {
 import { stateColor as lifecycleStateColor } from './organization-detail';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-organization-list',
@@ -25,6 +25,7 @@ export class OrganizationListComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   /**
    * Only super admins can open /organizations/:id (gated by RoleGuard).
@@ -119,7 +120,7 @@ export class OrganizationListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load organizations');
+        this.toast.error(this.translate.instant('ORGANIZATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -173,7 +174,7 @@ export class OrganizationListComponent implements OnInit {
       !this.createForm.contactEmail ||
       !this.createForm.timezone
     ) {
-      this.toast.error('Name, code, contact email, and timezone are required');
+      this.toast.error(this.translate.instant('ORGANIZATIONS.REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
@@ -184,14 +185,18 @@ export class OrganizationListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Organization updated' : 'Organization created');
+        this.toast.success(
+          this.translate.instant(existing ? 'ORGANIZATIONS.UPDATED' : 'ORGANIZATIONS.CREATED'),
+        );
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ORGANIZATIONS.OPERATION_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -213,14 +218,16 @@ export class OrganizationListComponent implements OnInit {
     this.deleting.set(true);
     this.orgService.delete(org.id).subscribe({
       next: () => {
-        this.toast.success('Organization deleted');
+        this.toast.success(this.translate.instant('ORGANIZATIONS.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingOrg.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete organization');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ORGANIZATIONS.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });

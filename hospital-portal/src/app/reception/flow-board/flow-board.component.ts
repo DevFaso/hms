@@ -9,7 +9,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
 import { FlowBoard, ReceptionQueueItem } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
@@ -35,6 +35,7 @@ export class FlowBoardComponent implements OnChanges {
   @Output() statusChanged = new EventEmitter<FlowBoardStatusChange>();
 
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly columns: { key: ColKey; labelKey: string; colorClass: string }[] = [
     { key: 'scheduled', labelKey: 'RECEPTION.SCHEDULED', colorClass: 'col-scheduled' },
@@ -81,7 +82,7 @@ export class FlowBoardComponent implements OnChanges {
     const newStatus = this.colStatusMap[targetKey];
 
     if (!newStatus || !draggedItem?.encounterId) {
-      this.toast.info('Cannot move this card — check the patient in first.');
+      this.toast.info(this.translate.instant('RECEPTION.CANNOT_MOVE_CARD'));
       return;
     }
 

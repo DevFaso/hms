@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EncounterService,
   EncounterResponse,
@@ -36,6 +36,7 @@ export class TriageFormComponent {
 
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Vital signs ────────────────────────── */
   temperatureCelsius = signal<number | null>(null);
@@ -71,12 +72,17 @@ export class TriageFormComponent {
   /* ── UI state ───────────────────────────── */
   saving = signal(false);
 
+  /**
+   * Localised once at construction. Kept as a stable array (not a getter) because
+   * the template tracks each option by identity; the form is re-created per
+   * encounter, so a language switch is picked up on the next open.
+   */
   readonly esiOptions = [
-    { value: 1, label: 'ESI 1 – Resuscitation' },
-    { value: 2, label: 'ESI 2 – Emergent' },
-    { value: 3, label: 'ESI 3 – Urgent' },
-    { value: 4, label: 'ESI 4 – Less Urgent' },
-    { value: 5, label: 'ESI 5 – Non-Urgent' },
+    { value: 1, label: this.translate.instant('TRIAGE.ESI_OPTION_1') },
+    { value: 2, label: this.translate.instant('TRIAGE.ESI_OPTION_2') },
+    { value: 3, label: this.translate.instant('TRIAGE.ESI_OPTION_3') },
+    { value: 4, label: this.translate.instant('TRIAGE.ESI_OPTION_4') },
+    { value: 5, label: this.translate.instant('TRIAGE.ESI_OPTION_5') },
   ];
 
   get canSubmit(): boolean {
@@ -85,7 +91,7 @@ export class TriageFormComponent {
 
   submit(): void {
     if (!this.encounter?.id) {
-      this.toast.error('No encounter selected for triage');
+      this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
       return;
     }
 
@@ -113,12 +119,12 @@ export class TriageFormComponent {
     this.encounterService.submitTriage(this.encounter.id, request).subscribe({
       next: (response) => {
         this.saving.set(false);
-        this.toast.success('Triage completed successfully');
+        this.toast.success(this.translate.instant('TRIAGE.COMPLETED'));
         this.triageCompleted.emit(response);
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? 'Failed to submit triage. Please try again.';
+        const msg = err?.error?.message ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

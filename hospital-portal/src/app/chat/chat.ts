@@ -209,7 +209,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.loadConversations();
     } else {
       this.loading.set(false);
-      this.error.set('Unable to identify current user. Please log out and log back in.');
+      this.error.set(this.translate.instant('CHAT.NO_USER_IDENTITY'));
     }
   }
 
@@ -225,9 +225,9 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         const status = err?.status;
         if (status === 403) {
-          this.error.set('You do not have permission to access chat.');
+          this.error.set(this.translate.instant('CHAT.ACCESS_DENIED'));
         } else {
-          this.error.set('Failed to load conversations. Please try again.');
+          this.error.set(this.translate.instant('CHAT.CONVERSATIONS_LOAD_FAILED'));
         }
       },
     });
@@ -288,7 +288,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         );
       },
       error: () => {
-        this.toast.error('Failed to send message');
+        this.toast.error(this.translate.instant('CHAT.SEND_FAILED'));
         this.sendingMessage.set(false);
       },
     });
@@ -487,7 +487,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.loadingUsers.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load users');
+        this.toast.error(this.translate.instant('CHAT.USERS_LOAD_FAILED'));
         this.loadingUsers.set(false);
       },
     });
@@ -532,7 +532,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: (msgs) => {
         this.messages.set(msgs ?? []);
         this.hydrateAttachments(msgs ?? []);
-        this.toast.success('Messages refreshed');
+        this.toast.success(this.translate.instant('CHAT.MESSAGES_REFRESHED'));
       },
     });
   }

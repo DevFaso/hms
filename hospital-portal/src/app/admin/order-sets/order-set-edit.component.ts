@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   OrderItemType,
@@ -105,6 +105,7 @@ export class OrderSetEditComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -146,19 +147,21 @@ export class OrderSetEditComponent implements OnInit {
   protected save(): void {
     const itemsOut = this.items().map((it) => this.toPersisted(it));
     if (itemsOut.length === 0) {
-      this.toast.error('Add at least one order item');
+      this.toast.error(this.translate.instant('ORDER_SETS.ITEM_REQUIRED'));
       return;
     }
     const missing = itemsOut.findIndex((it) => !this.itemDisplayName(it));
     if (missing !== -1) {
-      this.toast.error(`Item #${missing + 1} is missing a name`);
+      this.toast.error(
+        this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: missing + 1 }),
+      );
       return;
     }
 
     const hospitalId = this.roleContext.activeHospitalId ?? '';
     const staffId = this.auth.getUserProfile()?.staffId ?? '';
     if (!hospitalId || !staffId) {
-      this.toast.error('Missing hospital or staff context');
+      this.toast.error(this.translate.instant('ORDER_SETS.CONTEXT_MISSING'));
       return;
     }
 
@@ -180,12 +183,12 @@ export class OrderSetEditComponent implements OnInit {
     op$.subscribe({
       next: () => {
         this.saving.set(false);
-        this.toast.success('Order set saved');
+        this.toast.success(this.translate.instant('ORDER_SETS.SAVED'));
         this.router.navigate(['/admin/order-sets']);
       },
       error: () => {
         this.saving.set(false);
-        this.toast.error('Could not save order set');
+        this.toast.error(this.translate.instant('ORDER_SETS.SAVE_FAILED'));
       },
     });
   }

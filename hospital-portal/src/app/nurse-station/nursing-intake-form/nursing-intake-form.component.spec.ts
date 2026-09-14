@@ -146,15 +146,13 @@ describe('NursingIntakeFormComponent', () => {
 
     component.submit();
 
-    expect(mockToastService.error).toHaveBeenCalledWith(
-      'Failed to submit nursing intake. Please try again.',
-    );
+    expect(mockToastService.error).toHaveBeenCalledWith('INTAKE.SUBMIT_FAILED');
   });
 
   it('should show error toast when no encounter selected', () => {
     component.encounter = null;
     component.submit();
-    expect(mockToastService.error).toHaveBeenCalledWith('No encounter selected for nursing intake');
+    expect(mockToastService.error).toHaveBeenCalledWith('INTAKE.NO_ENCOUNTER');
   });
 
   it('should track items by index', () => {

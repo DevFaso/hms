@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   NotificationService,
   NotificationPreferenceUpdate,
@@ -24,7 +24,8 @@ const CHANNELS = ['IN_APP', 'EMAIL', 'SMS', 'PUSH'] as const;
 
 interface PrefRow {
   notificationType: string;
-  label: string;
+  /** i18n key for the row label — resolved in the template so it follows a language switch. */
+  labelKey: string;
   channels: Record<string, boolean>;
 }
 
@@ -58,14 +59,14 @@ interface PrefRow {
             <tr>
               <th>{{ 'NOTIFICATIONS.NOTIFICATION_TYPE' | translate }}</th>
               @for (ch of channels; track ch) {
-                <th class="channel-col">{{ formatChannel(ch) }}</th>
+                <th class="channel-col">{{ channelLabelKey(ch) | translate }}</th>
               }
             </tr>
           </thead>
           <tbody>
             @for (row of rows(); track row.notificationType) {
               <tr>
-                <td class="type-label">{{ row.label }}</td>
+                <td class="type-label">{{ row.labelKey | translate }}</td>
                 @for (ch of channels; track ch) {
                   <td class="channel-col">
                     <label class="toggle">
@@ -235,6 +236,7 @@ interface PrefRow {
 export class NotificationSettingsComponent implements OnInit {
   private readonly notifService = inject(NotificationService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   channels = CHANNELS;
   loading = signal(true);
@@ -246,15 +248,16 @@ export class NotificationSettingsComponent implements OnInit {
     this.loadPreferences();
   }
 
-  formatChannel(ch: string): string {
-    return ch.replace('_', ' ');
+  /** i18n key for a delivery channel column header. */
+  channelLabelKey(ch: string): string {
+    return `NOTIFICATIONS.CHANNEL_${ch}`;
   }
 
   private loadPreferences(): void {
     // Build default grid — all enabled
     const defaultRows: PrefRow[] = NOTIFICATION_TYPES.map((t) => ({
       notificationType: t,
-      label: this.formatType(t),
+      labelKey: `NOTIFICATIONS.TYPE_${t}`,
       channels: Object.fromEntries(CHANNELS.map((ch) => [ch, true])),
     }));
 
@@ -291,19 +294,12 @@ export class NotificationSettingsComponent implements OnInit {
       next: () => {
         this.saving.set(false);
         this.dirty.set(false);
-        this.toast.success('Preferences saved');
+        this.toast.success(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVED'));
       },
       error: () => {
         this.saving.set(false);
-        this.toast.error('Failed to save preferences');
+        this.toast.error(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVE_FAILED'));
       },
     });
-  }
-
-  private formatType(t: string): string {
-    return t
-      .split('_')
-      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
-      .join(' ');
   }
 }

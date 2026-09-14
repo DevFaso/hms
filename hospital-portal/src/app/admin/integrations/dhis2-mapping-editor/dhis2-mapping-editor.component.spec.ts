@@ -126,6 +126,6 @@ describe('Dhis2MappingEditorComponent', () => {
     (component as any).onAdd();
 
     expect(dhis2.createMapping).toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Mapping added');
+    expect(toast.success).toHaveBeenCalledWith('DHIS2.MAPPINGS.ADDED');
   });
 });

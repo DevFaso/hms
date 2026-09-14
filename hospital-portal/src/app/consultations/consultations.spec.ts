@@ -229,7 +229,14 @@ describe('ConsultationsComponent', () => {
         assignedAt: '2026-08-10T09:00:00',
       }),
     );
-    expect(events.map((e) => e.label)).toEqual(['Requested', 'Assigned', 'Completed']);
+    // The labels are translated now. The harness loads TranslateModule.forRoot()
+    // with no translations, so instant() echoes the key — which still pins the
+    // exact label each event carries, and pins the ordering the test is about.
+    expect(events.map((e) => e.label)).toEqual([
+      'CONSULTATIONS.REQUESTED',
+      'CONSULTATIONS.ASSIGNED',
+      'CONSULTATIONS.COMPLETED',
+    ]);
   });
 
   it('submitForm creates the consultation and reloads', () => {

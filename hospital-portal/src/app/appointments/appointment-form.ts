@@ -10,7 +10,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 interface DeptOption {
   id: string;
@@ -33,6 +33,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   saving = signal(false);
 
@@ -235,7 +236,7 @@ export class AppointmentFormComponent implements OnInit {
     // For multi-hospital users, check against the form's selected hospital.
     const activeHospital = this.form.hospitalId ?? this.lockedHospitalId;
     if (activeHospital && s.hospitalId && s.hospitalId !== activeHospital) {
-      this.toast.error('Cannot assign staff from another hospital');
+      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_OTHER_HOSPITAL'));
       return;
     }
 
@@ -337,7 +338,7 @@ export class AppointmentFormComponent implements OnInit {
   onEndTimeChange(): void {
     if (this.form.startTime && this.form.endTime) {
       if (this.form.endTime <= this.form.startTime) {
-        this.timeError.set('End time must be after start time');
+        this.timeError.set(this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START'));
       } else {
         this.timeError.set(null);
       }
@@ -347,8 +348,9 @@ export class AppointmentFormComponent implements OnInit {
   private validateTimes(): boolean {
     if (!this.form.startTime || !this.form.endTime) return true;
     if (this.form.endTime <= this.form.startTime) {
-      this.timeError.set('End time must be after start time');
-      this.toast.error('End time must be after start time');
+      const msg = this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START');
+      this.timeError.set(msg);
+      this.toast.error(msg);
       return false;
     }
     this.timeError.set(null);
@@ -358,16 +360,16 @@ export class AppointmentFormComponent implements OnInit {
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
     if (!this.form.appointmentDate || !this.form.startTime) {
-      this.toast.error('Date and start time are required');
+      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.DATE_TIME_REQUIRED'));
       return;
     }
     if (this.form.endTime && !this.validateTimes()) return;
     if (!this.form.patientId) {
-      this.toast.error('Please select a patient');
+      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.PATIENT_REQUIRED'));
       return;
     }
     if (!this.form.staffId) {
-      this.toast.error('Please select a doctor / staff member');
+      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_REQUIRED'));
       return;
     }
 
@@ -382,11 +384,13 @@ export class AppointmentFormComponent implements OnInit {
 
     this.appointmentService.create(payload).subscribe({
       next: () => {
-        this.toast.success('Appointment created successfully');
+        this.toast.success(this.translate.instant('APPOINTMENTS.TOAST.CREATED'));
         this.router.navigate(['/appointments']);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create appointment');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
+        );
         this.saving.set(false);
       },
     });

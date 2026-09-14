@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 import { Dhis2Service } from '../../../services/integrations/dhis2.service';
@@ -205,6 +205,7 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
   private readonly dhis2 = inject(Dhis2Service);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private listSub?: Subscription;
 
   ngOnDestroy(): void {
@@ -241,13 +242,13 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     this.dhis2.createMapping(hospitalId, this.newRow).subscribe({
       next: () => {
         this.saving.set(false);
-        this.toast.success('Mapping added');
+        this.toast.success(this.translate.instant('DHIS2.MAPPINGS.ADDED'));
         this.newRow = this.emptyRow();
         this.refresh();
       },
       error: () => {
         this.saving.set(false);
-        this.toast.error('Could not add mapping');
+        this.toast.error(this.translate.instant('DHIS2.MAPPINGS.ADD_FAILED'));
       },
     });
   }
@@ -257,10 +258,10 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     if (!hospitalId) return;
     this.dhis2.deleteMapping(id, hospitalId).subscribe({
       next: () => {
-        this.toast.success('Mapping deleted');
+        this.toast.success(this.translate.instant('DHIS2.MAPPINGS.DELETED'));
         this.refresh();
       },
-      error: () => this.toast.error('Could not delete mapping'),
+      error: () => this.toast.error(this.translate.instant('DHIS2.MAPPINGS.DELETE_FAILED')),
     });
   }
 

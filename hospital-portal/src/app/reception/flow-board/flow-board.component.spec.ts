@@ -113,9 +113,7 @@ describe('FlowBoardComponent', () => {
 
       expect(prev.length).toBe(1);
       expect(dest.length).toBe(0);
-      expect(toastSpy.info).toHaveBeenCalledWith(
-        'Cannot move this card — check the patient in first.',
-      );
+      expect(toastSpy.info).toHaveBeenCalledWith('RECEPTION.CANNOT_MOVE_CARD');
     });
 
     it('should not mutate board when dropping into unmappable column', () => {
