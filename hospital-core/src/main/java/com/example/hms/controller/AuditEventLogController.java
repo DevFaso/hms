@@ -21,7 +21,10 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.example.hms.controller.support.ControllerAuthUtils;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,10 +59,14 @@ public class AuditEventLogController {
      */
     private static final String AUDIT_READ_ROLES =
         "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
+    /** The same set as {@link #AUDIT_READ_ROLES}, as authorities, for the in-method check. */
+    private static final List<String> AUDIT_READER_AUTHORITIES = List.of(
+        "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
 
     private final AuditEventLogService auditService;
     private final AuditEventLogRepository auditRepository;
     private final AuditEventLogMapper auditMapper;
+    private final ControllerAuthUtils authUtils;
 
     @PostMapping
     @Operation(summary = "Log an Audit Event", description = "Creates a new audit log entry and returns it.")
@@ -103,15 +110,33 @@ public class AuditEventLogController {
         return ResponseEntity.ok(auditService.getAuditLogsByHospital(hospitalId, pageable));
     }
 
+    /**
+     * Audit readers may look at anyone; everyone else may look at themselves. The
+     * profile's Activity tab asks for the caller's own id, and for a patient the
+     * old rule answered 403, which the portal turns into the full-page Access
+     * Denied screen (dev, 2026-09-13).
+     */
     @GetMapping("/user/{userId}")
-    @PreAuthorize(AUDIT_READ_ROLES)
-    @Operation(summary = "Get Audit Logs by User", description = "Retrieve audit logs for a specific user based on their UUID.")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get Audit Logs by User",
+        description = "Retrieve audit logs for a specific user based on their UUID. Audit readers may name any user; other callers only themselves.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByUser(
         @Parameter(description = "UUID of the user", required = true)
         @PathVariable UUID userId,
-        @PageableDefault(size = 20) Pageable pageable) {
+        @PageableDefault(size = 20) Pageable pageable,
+        Authentication auth) {
+        requireSelfUnlessAuditReader(userId, auth);
         return ResponseEntity.ok(auditService.getAuditLogsByUser(userId, pageable));
+    }
+
+    private void requireSelfUnlessAuditReader(UUID userId, Authentication auth) {
+        boolean reader = AUDIT_READER_AUTHORITIES.stream().anyMatch(a -> authUtils.hasAuthority(auth, a));
+        if (reader) return;
+        UUID self = authUtils.resolveUserId(auth).orElse(null);
+        if (self == null || !self.equals(userId)) {
+            throw new AccessDeniedException("Only audit readers may view another user's activity.");
+        }
     }
 
     @GetMapping("/event-types-summary")

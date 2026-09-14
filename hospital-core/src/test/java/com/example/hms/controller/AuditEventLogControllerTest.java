@@ -39,6 +39,8 @@ class AuditEventLogControllerTest {
     @Mock private AuditEventLogService auditService;
     @Mock private AuditEventLogRepository auditRepository;
     @Mock private AuditEventLogMapper auditMapper;
+    @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+    @Mock private org.springframework.security.core.Authentication auth;
 
     @InjectMocks private AuditEventLogController controller;
 
@@ -102,11 +104,34 @@ class AuditEventLogControllerTest {
         UUID userId = UUID.randomUUID();
         Page<AuditEventLogResponseDTO> dtoPage = new PageImpl<>(List.of(responseDTO));
         when(auditService.getAuditLogsByUser(userId, pageable)).thenReturn(dtoPage);
+        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(true);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getLogsByUser(userId, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getLogsByUser(userId, pageable, auth);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody().getContent()).hasSize(1);
+    }
+
+    /** The profile's Activity tab: a patient reads their own activity without an audit role. */
+    @Test
+    void getLogsByUserLetsAnyoneReadTheirOwnActivity() {
+        UUID userId = UUID.randomUUID();
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(auditService.getAuditLogsByUser(userId, pageable)).thenReturn(new PageImpl<>(List.of(responseDTO)));
+
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getLogsByUser(userId, pageable, auth);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void getLogsByUserRefusesAnotherUsersActivityWithoutAnAuditRole() {
+        UUID other = UUID.randomUUID();
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(UUID.randomUUID()));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.getLogsByUser(other, pageable, auth))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        org.mockito.Mockito.verifyNoInteractions(auditService);
     }
 
     // ─── getLogsByEventTypeAndStatus ─────────────────────────────
