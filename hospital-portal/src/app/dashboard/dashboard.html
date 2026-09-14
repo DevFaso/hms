@@ -860,7 +860,7 @@
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
                   <span [class]="'appt-status appt-status-' + c.status.toLowerCase()">{{
-                    c.status | titlecase
+                    c.status | enumLabel: 'consultationStatus'
                   }}</span>
                   @if (c.overdue) {
                     <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
@@ -1004,7 +1004,14 @@
                     [class]="getIntegrationStatusClass(svc.status)"
                     style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px"
                   >
-                    {{ svc.status | titlecase }}
+                    <!--
+                      HospitalAdminDashboardServiceImpl.buildIntegrationStatus
+                      substitutes the literal "UNKNOWN" for a service row whose
+                      status is null, so PLATFORM_SERVICE_STATUS carries a key
+                      PlatformServiceStatus itself cannot emit. The enum gate
+                      reports it as an extra key; that is why.
+                    -->
+                    {{ svc.status | enumLabel: 'platformServiceStatus' }}
                   </span>
                 </div>
               </div>
@@ -1123,7 +1130,7 @@
                     evt.status !== 'SUCCESS' && evt.status !== 'FAILURE'
                   "
                 >
-                  {{ evt.status | titlecase }}
+                  {{ evt.status | enumLabel: 'auditStatus' }}
                 </span>
               </div>
             }
@@ -2887,7 +2894,7 @@
                   </span>
                 </div>
                 <span class="appt-status-chip" [attr.data-status]="appt.status">
-                  {{ appt.status | titlecase }}
+                  {{ appt.status | enumLabel: 'appointmentStatus' }}
                 </span>
               </div>
             }
@@ -3002,7 +3009,7 @@
                     ${{ inv.balance.toFixed(2) }}
                   </span>
                   <span class="bill-status" [attr.data-status]="inv.status">
-                    {{ inv.status | titlecase }}
+                    {{ inv.status | enumLabel: 'invoiceStatus' }}
                   </span>
                 </div>
               </div>
@@ -3202,7 +3209,7 @@
                   >
                   <span class="sched-reason">
                     {{ formatInvoiceAmount(inv.totalAmount) }} ·
-                    {{ formatInvoiceStatus(inv.status) }}
+                    {{ inv.status | enumLabel: 'invoiceStatus' }}
                   </span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>

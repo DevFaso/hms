@@ -130,7 +130,7 @@
                     <td>{{ e.departmentName || '—' }}</td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(e.status)">
-                        {{ e.status || '—' }}
+                        {{ (e.status | enumLabel: 'encounterStatus') || '—' }}
                       </span>
                     </td>
                     <td>{{ e.chiefComplaint || '—' }}</td>
@@ -313,7 +313,7 @@
                     </td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(m.status)">
-                        {{ m.status || '—' }}
+                        {{ (m.status | enumLabel: 'prescriptionStatus') || '—' }}
                       </span>
                     </td>
                     <td>{{ m.prescriberName || '—' }}</td>
@@ -351,7 +351,7 @@
                       <span class="chart-review__muted">· {{ i.laterality }}</span>
                     }
                     <span class="chart-review__pill" [ngClass]="statusClass(i.status)">
-                      {{ i.status || '—' }}
+                      {{ (i.status | enumLabel: 'imagingOrderStatus') || '—' }}
                     </span>
                   </header>
                   <p class="chart-review__card-meta">
@@ -431,7 +431,7 @@
                     <td>{{ p.urgency || '—' }}</td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(p.status)">
-                        {{ p.status || '—' }}
+                        {{ (p.status | enumLabel: 'procedureOrderStatus') || '—' }}
                       </span>
                     </td>
                     <td>{{ p.orderingProviderName || '—' }}</td>

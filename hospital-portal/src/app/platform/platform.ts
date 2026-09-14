@@ -12,6 +12,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin, catchError, of } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   PlatformService,
   PlatformSummary,
@@ -105,7 +106,7 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',

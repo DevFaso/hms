@@ -254,7 +254,7 @@
                     <td>{{ m.dueTime | date: 'shortTime' }}</td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
-                        m.status
+                        m.status | enumLabel: 'marTaskStatus'
                       }}</span>
                     </td>
                     <td class="action-cell">
@@ -778,7 +778,7 @@
                     <td>{{ a.mrn || '—' }}</td>
                     <td>
                       <span class="status-badge status-{{ a.status | lowercase }}">{{
-                        a.status
+                        a.status | enumLabel: 'admissionStatus'
                       }}</span>
                     </td>
                     <td>

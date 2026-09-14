@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { ChartReviewComponent } from './chart-review.component';
@@ -114,6 +114,53 @@ describe('ChartReviewComponent', () => {
     // Timeline rendered against the second (current) patient's payload
     const timelineTitles = fixture.nativeElement.querySelectorAll('.chart-review__timeline-title');
     expect(timelineTitles.length).toBeGreaterThan(0);
+  });
+
+  it('resolves each tab status through its own domain, not one shared pool', () => {
+    // ChartReviewServiceImpl fills these four from four different entities —
+    // Encounter, Prescription, ImagingOrder, ProcedureOrder — so they are four
+    // vocabularies that happen to share a field name. Piping them all through
+    // one domain would Title-Case whichever values that domain does not hold,
+    // and the enum-coverage gate would still read green because the domain it
+    // was given IS fully keyed. Each sentinel below is reachable only from its
+    // own PORTAL.ENUM group.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          ENCOUNTER_STATUS: { IN_PROGRESS: 'consultation-en-cours' },
+          PRESCRIPTION_STATUS: { SIGNED: 'ordonnance-signee' },
+          IMAGING_ORDER_STATUS: { ORDERED: 'imagerie-demandee' },
+          PROCEDURE_ORDER_STATUS: { SCHEDULED: 'intervention-planifiee' },
+        },
+      },
+    });
+    chartSpy.getChartReview.and.returnValue(of(populatedChart()));
+    setPatient('p-9');
+
+    const cases: [string, string, string][] = [
+      ['encounters', 'consultation-en-cours', 'IN_PROGRESS'],
+      ['medications', 'ordonnance-signee', 'SIGNED'],
+      ['imaging', 'imagerie-demandee', 'ORDERED'],
+      ['procedures', 'intervention-planifiee', 'SCHEDULED'],
+    ];
+    for (const [tab, expected, wire] of cases) {
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="chart-review-tab-${tab}"]`,
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      const pills = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          `[data-testid="chart-review-panel-${tab}"] .chart-review__pill`,
+        ) as NodeListOf<HTMLElement>,
+      ).map((el) => (el.textContent ?? '').trim());
+      expect(pills).withContext(`${tab} pill`).toContain(expected);
+      expect(pills).withContext(`${tab} still raw`).not.toContain(wire);
+    }
   });
 });
 

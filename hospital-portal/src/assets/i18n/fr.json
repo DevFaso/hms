@@ -5216,6 +5216,42 @@
         "PET": "TEP",
         "ULTRASOUND": "Échographie",
         "XRAY": "Radiographie"
+      },
+      "IMMUNIZATION_STATUS": {
+        "COMPLETED": "Administré",
+        "DEFERRED": "Différé",
+        "ENTERED_IN_ERROR": "Saisi par erreur",
+        "NOT_DONE": "Non administré",
+        "REFUSED": "Refusé"
+      },
+      "MAR_TASK_STATUS": {
+        "COMPLETED": "Administré",
+        "DUE": "À administrer",
+        "OVERDUE": "En retard"
+      },
+      "PLATFORM_RELEASE_STATUS": {
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
+        "IN_PROGRESS": "En cours",
+        "SCHEDULED": "Planifiée"
+      },
+      "PLATFORM_SERVICE_STATUS": {
+        "ACTIVE": "Actif",
+        "DECOMMISSIONED": "Déclassé",
+        "INACTIVE": "Inactif",
+        "PENDING": "En attente",
+        "PILOT": "Pilote",
+        "UNKNOWN": "Inconnu"
+      },
+      "PROCEDURE_ORDER_STATUS": {
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
+        "IN_PROGRESS": "En cours",
+        "ORDERED": "Prescrite",
+        "POSTPONED": "Reportée",
+        "PRE_OP_CLEARANCE_PENDING": "Validation préopératoire en attente",
+        "READY_FOR_PROCEDURE": "Prête pour l'intervention",
+        "SCHEDULED": "Planifiée"
       }
     },
     "DOCUMENTS": {

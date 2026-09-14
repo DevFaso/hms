@@ -7,6 +7,23 @@
  * two-step optional chain were all invisible, so four new raw renders left the
  * count unchanged. Every one of those shapes has a case in
  * lib/raw-enum-scan.test.mjs.
+ *
+ * The second version overshot in the other direction. It scanned `{{ … }}`
+ * anywhere in the file, including inside an attribute VALUE, so
+ *
+ *     <span class="status-badge {{ getStatusClass(o.status) }}">
+ *       {{ o.status | enumLabel: 'labOrderStatus' }}
+ *     </span>
+ *
+ * was reported as a raw render of `o.status` — while the label one line below
+ * it was piped. The interpolation feeds a CSS class name; nobody reads it. A
+ * quarter of the sites the first baseline pinned were that shape, which both
+ * overstated the debt and pointed the next tranche at templates that were
+ * already done. Worse as a gate: adding a `statusClass()` helper to a template
+ * would have failed the build for a render that does not exist.
+ *
+ * So an interpolation now counts only where a person reads it — in element
+ * text content, or in the value of a text-bearing attribute.
  */
 
 /**
@@ -52,21 +69,47 @@ const FIELD = new RegExp(
   'gi',
 );
 
-/** Attributes whose value a person reads. `[style.background]` is not one. */
-const TEXT_ATTRS = ['title', 'alt', 'placeholder', 'aria-label', 'aria-description', 'matTooltip'];
+/**
+ * Attributes whose value a person reads. Everything else — `class`, `style`,
+ * `id`, `data-*`, `routerLink`, a `(click)` handler, a `#ref` — is machinery,
+ * and an enum inside one is not on screen.
+ */
+const TEXT_ATTRS = new Set([
+  'title',
+  'alt',
+  'placeholder',
+  'aria-label',
+  'aria-description',
+  'aria-valuetext',
+  'label',
+  'mattooltip',
+  'matbadge',
+]);
 
-/** `{{ … }}` and `[title]="…"` / `[attr.aria-label]="…"`. */
+/**
+ * One attribute assignment. The name may be plain (`title=`), bound
+ * (`[title]=`, `[attr.aria-label]=`), an event (`(click)=`), a template ref
+ * (`#row=`) or a structural directive (`*ngIf=`); the shape of the name is
+ * what tells us whether the value is read.
+ */
+const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*"([^"]*)"/g;
+
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
-const ATTR_BINDING = new RegExp(
-  String.raw`\[(?:attr\.)?(?:${TEXT_ATTRS.join('|')})\]\s*=\s*"([^"]*)"`,
-  'gi',
-);
 
 /**
  * An expression already handed to a pipe that resolves it — enumLabel does the
  * job, and translate/date/number/currency mean the value is not a bare enum.
  */
 const RESOLVED = /\|\s*(enumLabel|translate|date|number|currency|percent)\b/;
+
+/** `[attr.aria-label]` and `[title]` and `matTooltip` all reduce to a name. */
+function attrName(raw) {
+  return raw
+    .replace(/^[[(@*#]+/, '')
+    .replace(/[\])]+$/, '')
+    .replace(/^attr\./i, '')
+    .toLowerCase();
+}
 
 /**
  * @returns {{expr: string, line: number}[]} one entry per raw render, in file
@@ -77,16 +120,27 @@ const RESOLVED = /\|\s*(enumLabel|translate|date|number|currency|percent)\b/;
 export function rawEnumRenders(html) {
   const hits = [];
   const lineAt = (index) => html.slice(0, index).split('\n').length;
+  const collect = (body, index) => {
+    if (RESOLVED.test(body)) return;
+    for (const field of body.matchAll(FIELD)) hits.push({ expr: field[0], line: lineAt(index) });
+  };
 
-  for (const source of [INTERPOLATION, ATTR_BINDING]) {
-    source.lastIndex = 0;
-    for (const binding of html.matchAll(source)) {
-      const body = binding[1];
-      if (RESOLVED.test(body)) continue;
-      for (const field of body.matchAll(FIELD)) {
-        hits.push({ expr: field[0], line: lineAt(binding.index) });
-      }
+  // Blank every attribute value, scanning the text-bearing ones on the way
+  // past. What is left is element text content — the words on screen — so an
+  // interpolation inside class="…" or [attr.data-status]="…" is not counted.
+  const text = html.split('');
+  for (const attr of html.matchAll(ATTR)) {
+    const valueAt = attr.index + attr[0].indexOf('="') + 2;
+    if (TEXT_ATTRS.has(attrName(attr[1]))) {
+      collect(attr[2], attr.index);
     }
+    for (let i = valueAt; i < valueAt + attr[2].length; i++) {
+      if (text[i] !== '\n') text[i] = ' ';
+    }
+  }
+
+  for (const binding of text.join('').matchAll(INTERPOLATION)) {
+    collect(binding[1], binding.index);
   }
   return hits.sort((a, b) => a.line - b.line);
 }

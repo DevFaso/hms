@@ -286,7 +286,7 @@
                 <td>{{ svc.provider || '—' }}</td>
                 <td>
                   <span class="status-pill" [ngClass]="serviceStatusClass(svc.status)">{{
-                    svc.status
+                    svc.status | enumLabel: 'platformServiceStatus'
                   }}</span>
                 </td>
                 <td>
@@ -496,7 +496,7 @@
             <div class="release-header">
               <h3>{{ rel.name }}</h3>
               <span class="status-pill" [ngClass]="releaseStatusClass(rel.status)">{{
-                rel.status
+                rel.status | enumLabel: 'platformReleaseStatus'
               }}</span>
             </div>
             @if (rel.description) {

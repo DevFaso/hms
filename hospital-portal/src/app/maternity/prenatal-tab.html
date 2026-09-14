@@ -133,7 +133,7 @@
               <td>{{ a.gestationalWeek }}</td>
               <td>{{ a.appointmentDate | date: 'mediumDate' }}</td>
               <td>{{ a.startTime || '—' }}</td>
-              <td>{{ a.status || '—' }}</td>
+              <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">
                 <button
                   class="btn-secondary btn-sm"

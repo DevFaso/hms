@@ -2092,10 +2092,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   /** Mirrors the billing page's status rendering (underscores → spaces). */
-  formatInvoiceStatus(status: string): string {
-    return status ? status.replace(/_/g, ' ') : '—';
-  }
-
   private initProfile(): void {
     const profile = this.auth.getUserProfile();
     const first = profile?.firstName ?? '';

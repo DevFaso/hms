@@ -2248,18 +2248,26 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scripts were run through Prettier by hand; `i18n-enum-domains.json` was
   deliberately left in its compact one-entry-per-line table form, which
   Prettier would triple in length.
-- **278 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **223 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
   it is translated, it is simply never asked for. The count here has been wrong
-  twice — 71 when the scanner matched only a field NAMED `.status`/`.type` (so
-  it never saw `enc.encounterType`), then 187 when it matched only
+  three times — 71 when the scanner matched only a field NAMED `.status`/`.type`
+  (so it never saw `enc.encounterType`), then 187 when it matched only
   `{{ x.status }}` and `{{ x.status || 'y' }}` (so a `??`, a ternary, a
-  `[title]` binding and a two-step optional chain were all invisible). The
-  scan in `scripts/lib/raw-enum-scan.mjs` now covers all of those and has its
-  own tests, because a scan that silently stops matching reports zero findings
-  and reads as a win.
+  `[title]` binding and a two-step optional chain were all invisible), then 278
+  when it counted interpolations inside an ATTRIBUTE — `class="badge {{
+  getStatusClass(o.status) }}"` is a CSS class name nobody reads, and 38 of
+  those pins sat on templates whose label beside them was already piped. The
+  scan in `scripts/lib/raw-enum-scan.mjs` now counts an interpolation only in
+  element text or a text-bearing attribute, and has its own tests, because a
+  scan that silently stops matching reports zero findings and reads as a win.
+  It still cannot see two shapes: an expression whose variable is not
+  enum-named (`{{ formatStatus(s) }}` over a status list — two live English
+  renders in `billing.html` were found by hand, not by the gate), and a method
+  call whose return value it cannot know (`{{ statusLabel(culture.status) }}`
+  translates, `{{ taskActionIcon(task.status) }}` is a Material icon name).
   `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
   that is not pinned fails the build and is named, and a pin whose site is
   gone is reported stale. Work it down in tranches: trace each field to the
@@ -2267,6 +2275,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   is a String the service composes, `.type` is either encounterType or
   vitalType depending on the screen — and leave the free text a clinician
   typed (`appt.reason`, `med.frequency`, `lab.result`) pinned where it is.
+  The status tranche is done: 47 status/state sites went to 9, and those 9 were
+  each traced and are NOT debt — `getApptStatusLabel` (dashboard, x2) and
+  `statusLabel` (micro, x2) already resolve through translate.instant;
+  `taskActionLabel`/`taskActionIcon` (platform), `countFor` (integration-health)
+  and the super-admin ternary return an icon name or a number, not a label; and
+  `h.state`/`p.state` are postal address lines, not enums. The baseline has no
+  field to record that, and `--write-baseline` rewrites its `$comment`, so it is
+  written here instead — do not re-trace them. Next clusters: `.reason` (14),
+  `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
+  text that should stay pinned.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

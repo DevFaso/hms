@@ -5250,6 +5250,42 @@
         "PET": "PET",
         "ULTRASOUND": "Ecografía",
         "XRAY": "Radiografía"
+      },
+      "IMMUNIZATION_STATUS": {
+        "COMPLETED": "Administrada",
+        "DEFERRED": "Diferida",
+        "ENTERED_IN_ERROR": "Registrada por error",
+        "NOT_DONE": "No administrada",
+        "REFUSED": "Rechazada"
+      },
+      "MAR_TASK_STATUS": {
+        "COMPLETED": "Administrada",
+        "DUE": "Por administrar",
+        "OVERDUE": "Atrasada"
+      },
+      "PLATFORM_RELEASE_STATUS": {
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "IN_PROGRESS": "En curso",
+        "SCHEDULED": "Programada"
+      },
+      "PLATFORM_SERVICE_STATUS": {
+        "ACTIVE": "Activo",
+        "DECOMMISSIONED": "Fuera de servicio",
+        "INACTIVE": "Inactivo",
+        "PENDING": "Pendiente",
+        "PILOT": "Piloto",
+        "UNKNOWN": "Desconocido"
+      },
+      "PROCEDURE_ORDER_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Solicitado",
+        "POSTPONED": "Aplazado",
+        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
+        "READY_FOR_PROCEDURE": "Listo para el procedimiento",
+        "SCHEDULED": "Programado"
       }
     },
     "DOCUMENTS": {

@@ -77,3 +77,40 @@ test('the word list still covers the fields the tranches piped', () => {
   }
   assert.ok(ENUM_WORDS.length >= 27, 'ENUM_WORDS shrank — findings would drop silently');
 });
+
+test('an interpolation inside a CSS class is not a render', () => {
+  // The second version's blind spot, and a quarter of the first baseline: the
+  // class name is machinery, and the label beside it was usually already piped.
+  assert.deepEqual(exprs('<span class="status-badge {{ getStatusClass(o.status) }}"></span>'), []);
+  assert.deepEqual(exprs('<span class="pill" [ngClass]="statusClass(e.status)"></span>'), []);
+  assert.deepEqual(exprs('<span class="s-{{ a.status | lowercase }}"></span>'), []);
+});
+
+test('the real shape: class interpolation beside a translated label', () => {
+  const html = [
+    '<span class="status-badge {{ statusClass(r.status) }}">',
+    "  {{ 'TRANSFUSION.REQUEST_STATUS_' + r.status | translate }}",
+    '</span>',
+  ].join('\n');
+  assert.deepEqual(exprs(html), []);
+});
+
+test('the text beside a class binding is still a render', () => {
+  const html = '<span class="pill" [ngClass]="statusClass(e.status)">{{ e.status }}</span>';
+  assert.deepEqual(rawEnumRenders(html), [{ expr: 'e.status', line: 1 }]);
+});
+
+test('a data attribute is machinery; a title is read', () => {
+  assert.deepEqual(exprs('<td [attr.data-status]="shift.status"></td>'), []);
+  assert.deepEqual(exprs('<td [title]="shift.status"></td>'), ['shift.status']);
+  assert.deepEqual(exprs('<td matTooltip="{{ x.priority }}"></td>'), ['x.priority']);
+});
+
+test('blanking an attribute keeps the line numbers honest', () => {
+  // Attribute values are blanked in place, newlines kept, so a render below a
+  // multi-line tag still reports its own line.
+  const html = ['<span', '  class="a {{ f(x.status) }}"', '>', '  {{ y.status }}', '</span>'].join(
+    '\n',
+  );
+  assert.deepEqual(rawEnumRenders(html), [{ expr: 'y.status', line: 4 }]);
+});

@@ -15,9 +15,7 @@
     "An UNDECLARED domain fails on purpose: adding an `enumLabel:` call should",
     "make someone say what the API can actually send. So does a hollow entry",
     "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
-    "out.",
-    "",
-    "`group` only needs setting when it is not the domain upper-snaked."
+    "out."
   ],
   "admissionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java" },
   "alertSeverity": {
@@ -47,15 +45,24 @@
   "imagingModality": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java" },
   "imagingOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderStatus.java" },
   "imagingReportStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingReportStatus.java" },
+  "immunizationStatus": {
+    "reason": "PatientImmunization.status is a free String column (length 50), not an enum, so nothing can verify it. Its vocabulary is the comment on the field and the portal form that writes it: COMPLETED / NOT_DONE / REFUSED / DEFERRED / ENTERED_IN_ERROR."
+  },
   "invoiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java" },
   "isolationPrecautionType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java" },
   "labOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java" },
   "leaveStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java" },
+  "marTaskStatus": {
+    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription and the clock — COMPLETED when a GIVEN MAR row exists, else OVERDUE or DUE against a naive created-at-plus-four-hours window. nurse-station.html also guards on GIVEN, which resolveMarStatus never returns, so GIVEN is deliberately not keyed — keying a value nothing emits is how the phantom DISCHARGE_DISPOSITION vocabulary got here."
+  },
   "mtmReviewStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java" },
   "permissions": {
     "reason": "ProxyResponseDTO.permissions is a free-form String, not an enum"
   },
+  "platformReleaseStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformReleaseStatus.java" },
+  "platformServiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformServiceStatus.java" },
   "prescriptionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PrescriptionStatus.java" },
+  "procedureOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureOrderStatus.java" },
   "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
   "referralUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralUrgency.java" },
   "relationship": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java" },

@@ -5250,6 +5250,42 @@
         "PET": "PET",
         "ULTRASOUND": "Ultrasound",
         "XRAY": "X-Ray"
+      },
+      "IMMUNIZATION_STATUS": {
+        "COMPLETED": "Completed",
+        "DEFERRED": "Deferred",
+        "ENTERED_IN_ERROR": "Entered in Error",
+        "NOT_DONE": "Not Done",
+        "REFUSED": "Refused"
+      },
+      "MAR_TASK_STATUS": {
+        "COMPLETED": "Completed",
+        "DUE": "Due",
+        "OVERDUE": "Overdue"
+      },
+      "PLATFORM_RELEASE_STATUS": {
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "IN_PROGRESS": "In Progress",
+        "SCHEDULED": "Scheduled"
+      },
+      "PLATFORM_SERVICE_STATUS": {
+        "ACTIVE": "Active",
+        "DECOMMISSIONED": "Decommissioned",
+        "INACTIVE": "Inactive",
+        "PENDING": "Pending",
+        "PILOT": "Pilot",
+        "UNKNOWN": "Unknown"
+      },
+      "PROCEDURE_ORDER_STATUS": {
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "IN_PROGRESS": "In Progress",
+        "ORDERED": "Ordered",
+        "POSTPONED": "Postponed",
+        "PRE_OP_CLEARANCE_PENDING": "Pre-Op Clearance Pending",
+        "READY_FOR_PROCEDURE": "Ready for Procedure",
+        "SCHEDULED": "Scheduled"
       }
     },
     "DOCUMENTS": {

@@ -298,7 +298,7 @@
                   {{ im.administrationDate ? (im.administrationDate | date: 'mediumDate') : '—' }}
                 </td>
                 <td>{{ doseLabel(im) }}</td>
-                <td>{{ im.status || '—' }}</td>
+                <td>{{ (im.status | enumLabel: 'immunizationStatus') || '—' }}</td>
                 <td>
                   {{ im.nextDoseDueDate ? (im.nextDoseDueDate | date: 'mediumDate') : '—' }}
                   @if (isOverdue(im)) {

@@ -343,7 +343,7 @@
                       <span
                         class="shift-status-dot"
                         [attr.data-status]="shift.status"
-                        [title]="shift.status"
+                        [title]="shift.status | enumLabel: 'shiftStatus'"
                       ></span>
                     </div>
                   } @empty {
