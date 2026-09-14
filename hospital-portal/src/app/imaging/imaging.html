@@ -131,7 +131,9 @@
                   <div class="cell-secondary">{{ o.patientMrn }}</div>
                 </td>
                 <td>
-                  <span class="modality-badge">{{ o.modality }}</span>
+                  <span class="modality-badge">{{
+                    o.modality | enumLabel: 'imagingModality'
+                  }}</span>
                 </td>
                 <td>{{ o.studyType || '—' }}</td>
                 <td>{{ o.bodyRegion || '—' }}</td>
@@ -266,7 +268,9 @@
                   <div class="cell-secondary">{{ r.reportTitle }}</div>
                 </td>
                 <td>
-                  <span class="modality-badge">{{ r.modality }}</span>
+                  <span class="modality-badge">{{
+                    r.modality | enumLabel: 'imagingModality'
+                  }}</span>
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
@@ -409,7 +413,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ rep.modality }}</span>
+              ><span class="field-value">{{ rep.modality | enumLabel: 'imagingModality' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
@@ -685,7 +689,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ ord.modality }}</span>
+              ><span class="field-value">{{ ord.modality | enumLabel: 'imagingModality' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.STUDY_TYPE' | translate }}</span

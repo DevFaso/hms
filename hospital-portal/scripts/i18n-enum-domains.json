@@ -24,7 +24,12 @@
     "reason": "the dashboard alert badge is its only call site, and ClinicalAlertDTO.severity is a String the service composes — CRITICAL / URGENT / WARNING / INFO, per its own comment and the portal ClinicalAlert union, all four keyed. The four *AlertSeverity enums do not reach this badge; if one ever does, declare them here as `enums` and key CAUTION and NONE."
   },
   "appointmentStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AppointmentStatus.java" },
-  "auditEventType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditEventType.java" },
+  "auditEventType": {
+    "enums": [
+      "hospital-core/src/main/java/com/example/hms/enums/AuditEventType.java",
+      "hospital-core/src/main/java/com/example/hms/enums/PermissionMatrixAuditAction.java"
+    ]
+  },
   "auditStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java" },
   "bedStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java" },
   "bloodProductType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BloodProductType.java" },
@@ -37,7 +42,7 @@
   "encounterStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterStatus.java" },
   "encounterType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterType.java" },
   "gender": {
-    "reason": "Patient.gender is a String, not an enum; the portal's own filter list is the only vocabulary"
+    "reason": "two String sources, neither an enum: Patient.gender, whose vocabulary is the portal's own filter list (MALE / FEMALE / OTHER / PREFER_NOT_TO_SAY), and the lab reference range, whose LabTestReferenceRangeDTO.gender is @Pattern(\"ALL|MALE|FEMALE\") — ALL is keyed for that one and belongs to no patient"
   },
   "imagingModality": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java" },
   "imagingOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderStatus.java" },
@@ -52,6 +57,7 @@
   },
   "prescriptionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PrescriptionStatus.java" },
   "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
+  "referralUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralUrgency.java" },
   "relationship": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java" },
   "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
   "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
