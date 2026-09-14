@@ -629,7 +629,7 @@ class NurseTaskServiceImplTest {
             // dueTime = lastRecorded + window = fixedNow - 1h + 2h = fixedNow + 1h
             assertThat(task.getDueTime()).isEqualTo(fixedNow.plusHours(1));
             assertThat(task.isOverdue()).isFalse();
-            assertThat(task.getType()).isEqualTo("Routine");
+            assertThat(task.getType()).isEqualTo("ROUTINE");
         }
     }
 
@@ -657,7 +657,7 @@ class NurseTaskServiceImplTest {
             NurseVitalTaskResponseDTO task = vitals.get(0);
             // dueTime = lastRecorded + window = fixedNow - 6h + 2h = fixedNow - 4h -> overdue
             assertThat(task.isOverdue()).isTrue();
-            assertThat(task.getType()).isEqualTo("Full Set");
+            assertThat(task.getType()).isEqualTo("FULL_SET");
         }
     }
 

@@ -92,7 +92,7 @@
               <td>
                 <span class="code-badge">{{ org.code }}</span>
               </td>
-              <td>{{ org.type ? formatType(org.type) : '—' }}</td>
+              <td>{{ (org.type | enumLabel: 'organizationType') || '—' }}</td>
               <td>{{ org.primaryContactEmail || '—' }}</td>
               <td>
                 <span class="count-chip">{{ org.hospitals.length }}</span>
@@ -246,7 +246,7 @@
                   {{ 'ORGANIZATIONS.SELECT_TYPE' | translate }}
                 </option>
                 @for (t of orgTypes(); track t) {
-                  <option [value]="t">{{ formatType(t) }}</option>
+                  <option [value]="t">{{ t | enumLabel: 'organizationType' }}</option>
                 }
               </select>
             </div>

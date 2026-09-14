@@ -5313,6 +5313,49 @@
         "PRE_OP_CLEARANCE_PENDING": "Pre-Op Clearance Pending",
         "READY_FOR_PROCEDURE": "Ready for Procedure",
         "SCHEDULED": "Scheduled"
+      },
+      "NOTIFICATION_TYPE": {
+        "APPOINTMENT_REMINDER": "Appointment Reminder",
+        "BILLING": "Billing",
+        "DISCHARGE_SUMMARY": "Discharge Summary",
+        "GENERAL": "General",
+        "LAB_RESULT": "Lab Result",
+        "MEDICATION_REFILL": "Medication Refill",
+        "PROXY_ACCESS": "Proxy Access",
+        "SYSTEM": "System"
+      },
+      "ORGANIZATION_TYPE": {
+        "ACADEMIC_CENTER": "Academic Center",
+        "ACADEMIC_MEDICAL_CENTER": "Academic Medical Center",
+        "AMBULATORY": "Ambulatory Network",
+        "COMMUNITY_HOSPITAL": "Community Hospital",
+        "GOVERNMENT_AGENCY": "Government Agency",
+        "HEALTHCARE_NETWORK": "Healthcare Network",
+        "HEALTH_SYSTEM": "Health System",
+        "HOSPITAL": "Hospital",
+        "HOSPITAL_CHAIN": "Hospital Chain",
+        "PEDIATRIC_SYSTEM": "Pediatric System",
+        "PRIVATE_PRACTICE": "Private Practice",
+        "REGIONAL_NETWORK": "Regional Network",
+        "RESEARCH_INSTITUTION": "Research Institution",
+        "SPECIALTY_GROUP": "Specialty Group",
+        "SPECIALTY_NETWORK": "Specialty Network"
+      },
+      "POSTPARTUM_ALERT_TYPE": {
+        "EDUCATION": "Education",
+        "FOLLOW_UP": "Follow-Up",
+        "HEMORRHAGE": "Haemorrhage",
+        "INFECTION": "Infection",
+        "PAIN": "Pain",
+        "PSYCHOSOCIAL": "Psychosocial"
+      },
+      "SNAPSHOT_ITEM_TYPE": {
+        "LAB": "Lab",
+        "VITALS": "Vitals"
+      },
+      "VITAL_TASK_TYPE": {
+        "FULL_SET": "Full Set",
+        "ROUTINE": "Routine"
       }
     },
     "DOCUMENTS": {

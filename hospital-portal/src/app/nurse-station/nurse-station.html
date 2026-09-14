@@ -183,7 +183,7 @@
                         <div class="cell-primary">{{ v.patientName }}</div>
                       }
                     </td>
-                    <td>{{ v.type }}</td>
+                    <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
                     <td>
                       @if (v.overdue) {

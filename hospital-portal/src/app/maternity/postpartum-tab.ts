@@ -47,6 +47,7 @@ import {
 import { nowLocalDatetime } from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 
@@ -59,6 +60,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
     TranslateModule,
     PatientPickerComponent,
     ProInstrumentFormComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './postpartum-tab.html',
   styleUrl: './maternity.scss',

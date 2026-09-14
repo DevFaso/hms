@@ -2283,7 +2283,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
      Discharge". The positive assertion still catches the regression; the
      exclusion is dead weight.
-- **221 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **214 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
@@ -2301,11 +2301,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   It still cannot see two shapes: an expression whose variable is not
   enum-named (`{{ formatStatus(s) }}` over a status list, `{{ st }}` over a
   status array — two live English renders in `billing.html` were found by hand,
-  and the identical shape in `platform.html`, its status filter and its
-  status-change buttons, was missed on that pass and caught only by review),
+  the identical shape in `platform.html`, its status filter and its
+  status-change buttons, was missed on that pass and caught only by review,
+  and `organization-list.html` had it a third time, in the cell AND the type
+  dropdown — three tranches, three instances, none of them gate-visible),
   and a method
   call whose return value it cannot know (`{{ statusLabel(culture.status) }}`
   translates, `{{ taskActionIcon(task.status) }}` is a Material icon name).
+  A THIRD thing the gate cannot see, found by the `.type` tranche: a field
+  rendered raw because the BACKEND sent a word rather than a token.
+  `PatientSnapshotServiceImpl` stamped the literals "Vitals", "Lab" and
+  "Encounter", and `NurseTaskServiceImpl` "Full Set" / "Routine", so four of
+  the seven sites in that tranche were not a missing pipe at all — no portal
+  change could have fixed them, and the gate reports them identically to a
+  missing pipe. When a traced field turns out to be a display string, the fix
+  is a token on the server plus a key, not a pipe.
   `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
   that is not pinned fails the build and is named, and a pin whose site is
   gone is reported stale. Work it down in tranches: trace each field to the

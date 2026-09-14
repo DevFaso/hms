@@ -12,11 +12,12 @@ import { stateColor as lifecycleStateColor } from './organization-detail';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
@@ -240,13 +241,6 @@ export class OrganizationListComponent implements OnInit {
   }
 
   /** Convert SCREAMING_SNAKE enum value to Title Case display label */
-  formatType(value: string): string {
-    return value
-      .split('_')
-      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
-      .join(' ');
-  }
-
   lifecycleColor(state: OrganizationLifecycleState | undefined): string {
     return lifecycleStateColor(state);
   }

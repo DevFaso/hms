@@ -5279,6 +5279,49 @@
         "PRE_OP_CLEARANCE_PENDING": "Autorisation pré-op en attente",
         "READY_FOR_PROCEDURE": "Prêt pour la procédure",
         "SCHEDULED": "Planifié"
+      },
+      "NOTIFICATION_TYPE": {
+        "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+        "BILLING": "Facturation",
+        "DISCHARGE_SUMMARY": "Compte rendu de sortie",
+        "GENERAL": "Général",
+        "LAB_RESULT": "Résultat de laboratoire",
+        "MEDICATION_REFILL": "Renouvellement d'ordonnance",
+        "PROXY_ACCESS": "Accès délégué",
+        "SYSTEM": "Système"
+      },
+      "ORGANIZATION_TYPE": {
+        "ACADEMIC_CENTER": "Centre universitaire",
+        "ACADEMIC_MEDICAL_CENTER": "Centre hospitalier universitaire",
+        "AMBULATORY": "Réseau ambulatoire",
+        "COMMUNITY_HOSPITAL": "Hôpital communautaire",
+        "GOVERNMENT_AGENCY": "Organisme public",
+        "HEALTHCARE_NETWORK": "Réseau de santé",
+        "HEALTH_SYSTEM": "Système de santé",
+        "HOSPITAL": "Hôpital",
+        "HOSPITAL_CHAIN": "Chaîne hospitalière",
+        "PEDIATRIC_SYSTEM": "Système pédiatrique",
+        "PRIVATE_PRACTICE": "Cabinet privé",
+        "REGIONAL_NETWORK": "Réseau régional",
+        "RESEARCH_INSTITUTION": "Institut de recherche",
+        "SPECIALTY_GROUP": "Groupe spécialisé",
+        "SPECIALTY_NETWORK": "Réseau spécialisé"
+      },
+      "POSTPARTUM_ALERT_TYPE": {
+        "EDUCATION": "Éducation",
+        "FOLLOW_UP": "Suivi",
+        "HEMORRHAGE": "Hémorragie",
+        "INFECTION": "Infection",
+        "PAIN": "Douleur",
+        "PSYCHOSOCIAL": "Psychosocial"
+      },
+      "SNAPSHOT_ITEM_TYPE": {
+        "LAB": "Laboratoire",
+        "VITALS": "Constantes"
+      },
+      "VITAL_TASK_TYPE": {
+        "FULL_SET": "Bilan complet",
+        "ROUTINE": "Routine"
       }
     },
     "DOCUMENTS": {

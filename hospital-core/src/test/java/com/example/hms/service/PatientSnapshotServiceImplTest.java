@@ -43,6 +43,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -347,7 +348,7 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getPendingOrders().size());
         PatientSnapshotDTO.OrderItem order = result.getPendingOrders().get(0);
-        assertEquals("Lab", order.getType());
+        assertEquals("LAB", order.getType());
         assertEquals("Lipid Panel", order.getDescription());
     }
 
@@ -930,7 +931,7 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
         assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
         assertEquals("Unknown", note.getAuthor()); // null staff â†’ Unknown
-        assertEquals("Encounter", note.getType()); // null encounterType â†’ Encounter
+        assertNull(note.getType()); // no encounter type -> no note type
         assertEquals("", note.getDate()); // null date â†’ empty
     }
 

@@ -251,7 +251,7 @@
                 <td>
                   @for (alert of o.alerts ?? []; track $index) {
                     <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
-                      {{ alert.type }}
+                      {{ alert.type | enumLabel: 'postpartumAlertType' }}
                     </span>
                   }
                 </td>
@@ -332,7 +332,7 @@
                 <td>
                   @for (alert of a.alerts ?? []; track $index) {
                     <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
-                      {{ alert.type }}
+                      {{ alert.type | enumLabel: 'postpartumAlertType' }}
                     </span>
                   }
                 </td>

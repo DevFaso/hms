@@ -133,7 +133,7 @@
               <div class="vitals-grid">
                 @for (v of pt.recentVitals; track v.type + v.timestamp) {
                   <div class="vital-item">
-                    <span class="vital-type">{{ v.type }}</span>
+                    <span class="vital-type">{{ v.type | enumLabel: 'snapshotItemType' }}</span>
                     <span class="vital-value">{{ v.value }}</span>
                   </div>
                 }
@@ -192,7 +192,7 @@
             } @else {
               @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
                 <div class="order-row">
-                  <span class="order-type-badge">{{ o.type }}</span>
+                  <span class="order-type-badge">{{ o.type | enumLabel: 'snapshotItemType' }}</span>
                   <span class="order-desc">{{ o.description }}</span>
                 </div>
               }
@@ -219,7 +219,9 @@
               @for (n of pt.recentNotes; track n.date + n.type) {
                 <div class="note-row">
                   <div class="note-header">
-                    <span class="note-type">{{ n.type }}</span>
+                    <span class="note-type">{{
+                      (n.type | enumLabel: 'encounterType') || '—'
+                    }}</span>
                     <span class="note-author">{{ n.author }}</span>
                   </div>
                   <span class="note-snippet">{{ n.snippet }}</span>

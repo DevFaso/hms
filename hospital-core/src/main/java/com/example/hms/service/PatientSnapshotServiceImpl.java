@@ -255,7 +255,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     : patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, PageRequest.of(0, 5));
             account(reach, hospitalId, rows.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
             rows.forEach(v -> vitals.add(PatientSnapshotDTO.VitalItem.builder()
-                            .type("Vitals")
+                            .type("VITALS")
                             .value(summarizeVitals(v))
                             .timestamp(v.getRecordedAt() != null ? v.getRecordedAt().format(DATE_FMT) : "")
                             .build()));
@@ -322,7 +322,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             || o.getStatus() == com.example.hms.enums.LabOrderStatus.IN_PROGRESS)
                     .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
-                            .type("Lab")
+                            .type("LAB")
                             .description(o.getLabTestDefinition() != null ? o.getLabTestDefinition().getName() : "Lab Order")
                             .orderedAt(o.getOrderDatetime() != null ? o.getOrderDatetime().format(DATE_FMT) : "")
                             .build()));
@@ -361,7 +361,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .limit(5)
                     .forEach(e -> recentNotes.add(PatientSnapshotDTO.NoteItem.builder()
                             .author(e.getStaff() != null ? e.getStaff().getFullName() : "Unknown")
-                            .type(e.getEncounterType() != null ? e.getEncounterType().name() : "Encounter")
+                            .type(e.getEncounterType() != null ? e.getEncounterType().name() : null)
                             .date(e.getEncounterDate() != null ? e.getEncounterDate().format(DATE_FMT) : "")
                             .snippet(truncateSnippet(e.getNotes()))
                             .build()));

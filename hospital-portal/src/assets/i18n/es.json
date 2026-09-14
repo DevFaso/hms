@@ -5313,6 +5313,49 @@
         "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
         "READY_FOR_PROCEDURE": "Listo para el procedimiento",
         "SCHEDULED": "Programada"
+      },
+      "NOTIFICATION_TYPE": {
+        "APPOINTMENT_REMINDER": "Recordatorio de cita",
+        "BILLING": "Facturación",
+        "DISCHARGE_SUMMARY": "Informe de alta",
+        "GENERAL": "General",
+        "LAB_RESULT": "Resultado de laboratorio",
+        "MEDICATION_REFILL": "Renovación de medicamento",
+        "PROXY_ACCESS": "Acceso delegado",
+        "SYSTEM": "Sistema"
+      },
+      "ORGANIZATION_TYPE": {
+        "ACADEMIC_CENTER": "Centro académico",
+        "ACADEMIC_MEDICAL_CENTER": "Centro médico académico",
+        "AMBULATORY": "Red ambulatoria",
+        "COMMUNITY_HOSPITAL": "Hospital comunitario",
+        "GOVERNMENT_AGENCY": "Organismo público",
+        "HEALTHCARE_NETWORK": "Red sanitaria",
+        "HEALTH_SYSTEM": "Sistema de salud",
+        "HOSPITAL": "Hospital",
+        "HOSPITAL_CHAIN": "Cadena hospitalaria",
+        "PEDIATRIC_SYSTEM": "Sistema pediátrico",
+        "PRIVATE_PRACTICE": "Consulta privada",
+        "REGIONAL_NETWORK": "Red regional",
+        "RESEARCH_INSTITUTION": "Institución de investigación",
+        "SPECIALTY_GROUP": "Grupo de especialidades",
+        "SPECIALTY_NETWORK": "Red de especialidades"
+      },
+      "POSTPARTUM_ALERT_TYPE": {
+        "EDUCATION": "Educación",
+        "FOLLOW_UP": "Seguimiento",
+        "HEMORRHAGE": "Hemorragia",
+        "INFECTION": "Infección",
+        "PAIN": "Dolor",
+        "PSYCHOSOCIAL": "Psicosocial"
+      },
+      "SNAPSHOT_ITEM_TYPE": {
+        "LAB": "Laboratorio",
+        "VITALS": "Constantes vitales"
+      },
+      "VITAL_TASK_TYPE": {
+        "FULL_SET": "Conjunto completo",
+        "ROUTINE": "Rutina"
       }
     },
     "DOCUMENTS": {
