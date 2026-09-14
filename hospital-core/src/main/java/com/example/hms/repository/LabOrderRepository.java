@@ -36,10 +36,10 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     @Query(value = """
     SELECT * FROM lab_orders l
     WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid))
-      AND (:startDate IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp))
-      AND (:endDate IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))
+      AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp))
+      AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))
     """,
-            countQuery = "SELECT count(*) FROM lab_orders l WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid)) AND (:startDate IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp)) AND (:endDate IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))",
+            countQuery = "SELECT count(*) FROM lab_orders l WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid)) AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp)) AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))",
             nativeQuery = true)
     Page<LabOrder> searchNative(
             @Param("patientId") UUID patientId,

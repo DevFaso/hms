@@ -120,8 +120,8 @@ public interface AuditEventLogRepository
      * setting, so it only logged HHH90003003.)
      */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
-           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
-           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) " +
+           "(CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) " +
            "ORDER BY a.eventTimestamp DESC")
     Page<AuditEventLog> findByDateRange(@Param("fromDate") LocalDateTime fromDate,
                                         @Param("toDate") LocalDateTime toDate,
@@ -135,8 +135,8 @@ public interface AuditEventLogRepository
      * to {@link #findByDateRangeAndEventTypeNotIn}.
      */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
-           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
-           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
+           "(CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) AND " +
            "a.eventType IN :eventTypes " +
            "ORDER BY a.eventTimestamp DESC")
     Page<AuditEventLog> findByDateRangeAndEventTypeIn(@Param("fromDate") LocalDateTime fromDate,
@@ -162,8 +162,8 @@ public interface AuditEventLogRepository
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE "
            + "a.patientId = :patientId "
            + "AND a.eventType IN :eventTypes "
-           + "AND (:fromDate IS NULL OR a.eventTimestamp >= :fromDate) "
-           + "AND (:toDate IS NULL OR a.eventTimestamp <= :toDate) "
+           + "AND (CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) "
            + "ORDER BY a.eventTimestamp DESC")
     Page<AuditEventLog> findDisclosuresForPatient(@Param("patientId") UUID patientId,
                                                   @Param("eventTypes") Collection<AuditEventType> eventTypes,
@@ -185,8 +185,8 @@ public interface AuditEventLogRepository
            + "FROM AuditEventLog a "
            + "WHERE a.patientId = :patientId "
            + "AND a.eventType IN :eventTypes "
-           + "AND (:fromDate IS NULL OR a.eventTimestamp >= :fromDate) "
-           + "AND (:toDate IS NULL OR a.eventTimestamp <= :toDate) "
+           + "AND (CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) "
            + "GROUP BY a.eventType, a.entityType")
     List<Object[]> countDisclosureCategoriesForPatient(@Param("patientId") UUID patientId,
                                                        @Param("eventTypes") Collection<AuditEventType> eventTypes,
@@ -195,8 +195,8 @@ public interface AuditEventLogRepository
 
     /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
-           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
-           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
+           "(CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) AND " +
            "a.eventType NOT IN :eventTypes " +
            "ORDER BY a.eventTimestamp DESC")
     Page<AuditEventLog> findByDateRangeAndEventTypeNotIn(@Param("fromDate") LocalDateTime fromDate,

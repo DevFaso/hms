@@ -35,8 +35,8 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
         select o from PostpartumObservation o
         where o.patient.id = :patientId
           and (:hospitalId is null or o.hospital.id = :hospitalId)
-          and (:from is null or o.observationTime >= :from)
-          and (:to is null or o.observationTime <= :to)
+          and (cast(:from as LocalDateTime) is null or o.observationTime >= :from)
+          and (cast(:to as LocalDateTime) is null or o.observationTime <= :to)
         order by o.observationTime desc
     """)
     List<PostpartumObservation> findWithinRange(

@@ -21,8 +21,8 @@ public interface FrontendAuditEventRepository extends JpaRepository<FrontendAudi
      * size (the aggregation service caps it server-side).
      */
     @Query("SELECT f FROM FrontendAuditEvent f WHERE "
-        + "(:fromDate IS NULL OR f.occurredAt >= :fromDate) AND "
-        + "(:toDate   IS NULL OR f.occurredAt <= :toDate) "
+        + "(CAST(:fromDate AS LocalDateTime) IS NULL OR f.occurredAt >= :fromDate) AND "
+        + "(CAST(:toDate AS LocalDateTime) IS NULL OR f.occurredAt <= :toDate) "
         + "ORDER BY f.occurredAt DESC")
     List<FrontendAuditEvent> findInDateRangeOrdered(
         @Param("fromDate") LocalDateTime fromDate,
@@ -30,8 +30,8 @@ public interface FrontendAuditEventRepository extends JpaRepository<FrontendAudi
         Pageable pageable);
 
     @Query("SELECT COUNT(f) FROM FrontendAuditEvent f WHERE "
-        + "(:fromDate IS NULL OR f.occurredAt >= :fromDate) AND "
-        + "(:toDate   IS NULL OR f.occurredAt <= :toDate)")
+        + "(CAST(:fromDate AS LocalDateTime) IS NULL OR f.occurredAt >= :fromDate) AND "
+        + "(CAST(:toDate AS LocalDateTime) IS NULL OR f.occurredAt <= :toDate)")
     long countInDateRange(
         @Param("fromDate") LocalDateTime fromDate,
         @Param("toDate") LocalDateTime toDate);
