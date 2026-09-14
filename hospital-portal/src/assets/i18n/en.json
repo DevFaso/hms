@@ -5,7 +5,27 @@
   "ADMIN": {
     "QUICK_ACCESS": "Quick Access",
     "SUBTITLE": "Admin panel",
-    "TITLE": "Administration"
+    "TITLE": "Administration",
+    "STAT": {
+      "ACTIVE_STAFF": "Active Staff",
+      "SYSTEM_HEALTH": "System Health",
+      "ON_SHIFT_TODAY": "On Shift Today",
+      "TODAY_APPOINTMENTS": "Today's Appointments",
+      "ONLINE": "Online",
+      "UNAVAILABLE": "Unavailable"
+    },
+    "SECTION": {
+      "USERS_TITLE": "User Management",
+      "USERS_DESC": "Manage user accounts, roles, and permissions",
+      "TRACKER_TITLE": "Patient Tracker",
+      "TRACKER_DESC": "Live patient flow across the hospital",
+      "FRONT_DESK_TITLE": "Front Desk",
+      "FRONT_DESK_DESC": "Reception cockpit: check-in, queues, and recalls",
+      "NOTIFICATIONS_TITLE": "System Notifications",
+      "NOTIFICATIONS_DESC": "Configure notification templates and delivery channels",
+      "AUDIT_TITLE": "Audit Logs",
+      "AUDIT_DESC": "View system audit trail and access logs"
+    }
   },
   "ADT_INTAKE": {
     "TITLE": "ADT intake provider config",
@@ -1154,7 +1174,16 @@
       "MEDIAN_LABEL": "Median",
       "TREND_LABEL": "30-day trend",
       "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points"
-    }
+    },
+    "CARD": {
+      "TOTAL_PATIENTS": "Total Patients",
+      "INVOICES": "Invoices",
+      "LAB_ORDERS": "Lab Orders",
+      "PRESCRIPTIONS": "Prescriptions",
+      "USERS": "Users",
+      "ACTIVE_HOSPITALS": "Active Hospitals"
+    },
+    "TREND_BAR_TITLE": "{{count}} appointments"
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Create",
@@ -4832,6 +4861,7 @@
         "READY_FOR_DISCHARGE": "Ready for Discharge",
         "SCHEDULED": "Scheduled",
         "TRIAGE": "Triage",
+        "UNKNOWN": "Unknown",
         "WAITING_FOR_PHYSICIAN": "Waiting for Physician"
       },
       "LEAVE_STATUS": {
@@ -4981,7 +5011,8 @@
         "DRAFT": "Draft",
         "PAID": "Paid",
         "PARTIALLY_PAID": "Partially Paid",
-        "SENT": "Sent"
+        "SENT": "Sent",
+        "UNKNOWN": "Unknown"
       },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmed",
@@ -8019,7 +8050,13 @@
     "FINDING_MONITORING_REQUIRED": "Monitoring required",
     "FINDING_ABNORMAL": "Abnormal",
     "FINDING_CONCERNING_FOR_ANOMALY": "Concerning for anomaly",
-    "FINDING_URGENT": "Urgent"
+    "FINDING_URGENT": "Urgent",
+    "BPD_MM": "BPD (mm)",
+    "HC_MM": "HC (mm)",
+    "AC_MM": "AC (mm)",
+    "FL_MM": "FL (mm)",
+    "NT_MM": "NT (mm)",
+    "CRL_MM": "CRL (mm)"
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",
@@ -9523,7 +9560,13 @@
     "ENROLL_STARTING": "Setting up…",
     "ENROLL_TITLE": "Multi-Factor Authentication",
     "ENROLL_VERIFY": "Verify",
-    "ENROLL_VERIFYING": "Verifying…"
+    "ENROLL_VERIFYING": "Verifying…",
+    "CHALLENGE_INVALID_CODE": "Enter a valid code (6-digit TOTP or 8-character backup code).",
+    "ENROLL_INVALID_CODE": "Please enter a valid 6-digit code.",
+    "CHALLENGE_VERIFY_FAILED": "Verification failed.",
+    "CHALLENGE_WRONG_CODE": "Invalid code. Please try again.",
+    "ENROLL_START_FAILED": "Failed to start enrollment.",
+    "ENROLL_WRONG_CODE": "Invalid code. Please try again."
   },
   "LAB_OPS": {
     "AGING": "Aging (>24h)",

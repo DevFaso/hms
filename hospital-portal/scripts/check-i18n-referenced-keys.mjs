@@ -62,14 +62,22 @@ function flatten(node, prefix = '', out = new Set()) {
 }
 
 // A key is only reported when it is demonstrably handed to ngx-translate:
-// the `| translate` pipe, translate.instant/get/stream, or the shell's
-// `translationKey:` nav field. Bare uppercase strings are NOT assumed to be
-// keys — enum values and constants look identical.
+// the `| translate` pipe, translate.instant/get/stream, or one of the object
+// fields whose whole purpose is to hold a key — the shell's `translationKey:`
+// and the dashboards' `labelKey:` / `valueKey:`. Bare uppercase strings are
+// NOT assumed to be keys: enum values and constants look identical.
+//
+// The field list matters more than it looks. A stat card that keeps its key
+// in `labelKey` and renders `card.labelKey | translate` gives the pipe
+// pattern only a variable to look at, so a typo'd key shipped as raw text on
+// the dashboard with every i18n gate green. A new field of this kind belongs
+// here on the commit that introduces it.
 const KEY = '([A-Z][A-Z0-9_]*(?:\\.[A-Z0-9_]+)+)';
 const PATTERNS = [
   new RegExp(`['"\`]${KEY}['"\`]\\s*\\|\\s*translate`, 'g'),
   new RegExp(`translate\\.(?:instant|get|stream)\\(\\s*['"\`]${KEY}['"\`]`, 'g'),
   new RegExp(`translationKey:\\s*['"\`]${KEY}['"\`]`, 'g'),
+  new RegExp(`(?:labelKey|valueKey):\\s*['"\`]${KEY}['"\`]`, 'g'),
 ];
 
 const defined = flatten(JSON.parse(readFileSync(EN, 'utf8')));
