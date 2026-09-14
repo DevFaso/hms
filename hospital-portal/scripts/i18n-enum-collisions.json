@@ -1,0 +1,33 @@
+{
+  "$comment": [
+    "Pairs of enum values that render as the same word in a locale, and are",
+    "accepted. Everything else fails check-i18n-enum-coverage.mjs.",
+    "",
+    "PERMISSIONS pairs a bare scope with its VIEW_ form and translates both",
+    "as the noun; ALERT_SEVERITY carries WARN and WARNING from two different",
+    "emitters. The STATUS pairs are the ones worth revisiting: ACKNOWLEDGED",
+    "and CONFIRMED, and in FR DENIED and REJECTED, are distinct states a",
+    "user cannot tell apart. They are pinned because they predate the check,",
+    "not because they are right."
+  ],
+  "allowed": [
+    "ALERT_SEVERITY[en]:WARN+WARNING",
+    "ALERT_SEVERITY[es]:WARN+WARNING",
+    "ALERT_SEVERITY[fr]:WARN+WARNING",
+    "PERMISSIONS[en]:APPOINTMENTS+VIEW_APPOINTMENTS",
+    "PERMISSIONS[en]:BILLING+VIEW_BILLING",
+    "PERMISSIONS[en]:LAB_RESULTS+VIEW_LAB_RESULTS",
+    "PERMISSIONS[en]:MEDICATIONS+VIEW_MEDICATIONS",
+    "PERMISSIONS[es]:APPOINTMENTS+VIEW_APPOINTMENTS",
+    "PERMISSIONS[es]:BILLING+VIEW_BILLING",
+    "PERMISSIONS[es]:LAB_RESULTS+VIEW_LAB_RESULTS",
+    "PERMISSIONS[es]:MEDICATIONS+VIEW_MEDICATIONS",
+    "PERMISSIONS[fr]:APPOINTMENTS+VIEW_APPOINTMENTS",
+    "PERMISSIONS[fr]:BILLING+VIEW_BILLING",
+    "PERMISSIONS[fr]:LAB_RESULTS+VIEW_LAB_RESULTS",
+    "PERMISSIONS[fr]:MEDICATIONS+VIEW_MEDICATIONS",
+    "STATUS[es]:ACKNOWLEDGED+CONFIRMED",
+    "STATUS[fr]:ACKNOWLEDGED+CONFIRMED",
+    "STATUS[fr]:DENIED+REJECTED"
+  ]
+}

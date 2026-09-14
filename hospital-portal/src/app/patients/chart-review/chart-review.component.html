@@ -123,7 +123,9 @@
                 @for (e of c.encounters; track e.id) {
                   <tr>
                     <td>{{ e.encounterDate | date: 'mediumDate' }}</td>
-                    <td>{{ e.encounterType || '—' }}</td>
+                    <td>
+                      {{ e.encounterType ? (e.encounterType | enumLabel: 'encounterType') : '—' }}
+                    </td>
                     <td>{{ e.staffFullName || '—' }}</td>
                     <td>{{ e.departmentName || '—' }}</td>
                     <td>

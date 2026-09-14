@@ -132,6 +132,7 @@ export class EncountersComponent implements OnInit {
     'FOLLOW_UP',
     'SURGERY',
     'LAB',
+    'TELEHEALTH',
   ];
 
   // Delete

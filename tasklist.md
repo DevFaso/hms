@@ -2202,6 +2202,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **The enum gate cannot see an `enumLabel:` inside a component's inline
+  `template:`.** `check-i18n-enum-coverage.mjs` walks `.html` only. Widening
+  it to `.ts` was tried twice in #660 and withdrawn twice: raw, it recorded
+  the pipe's own TSDoc examples as call sites, so any future doc example
+  would break the build; blanking comments first also blanked the
+  single-quoted domain argument the regex needs, so it matched nothing at
+  all while shipping a comment claiming coverage. The honest fix is a real
+  TS-aware scan (template literals, regex literals and `//` inside a
+  backtick string all matter — one apostrophe in `Aujourd'hui` defeats the
+  naive blanker), which is a parser, not a one-line glob. No component in
+  `src/app` carries such a call today, so the blind spot is real and empty;
+  it becomes urgent the first time someone writes one.
 - **One label, three keys: the bundle has no shared vocabulary block.** The
   house convention is per-feature blocks (`angular-portal-component` SKILL.md:
   "find the nearest feature block, extend it"), so the same words are keyed
@@ -2247,6 +2259,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   needs its own judgement — `leave.reason`, `appt.reason` and `med.frequency`
   are free text a human typed and must stay raw — so it is a sweep of 71
   decisions, not a regex. Scoped out of the keys-and-gate PR deliberately.
+  ⚠ The 71 is a floor, not a total: the scanner matches a field *named*
+  `.status` / `.type` / `.modality`, so it never saw `enc.encounterType`,
+  of which #660 found and piped six more (one patient-facing). Re-derive
+  the list with a pattern that also matches a field whose name ENDS in an
+  enum-ish word before trusting the count.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

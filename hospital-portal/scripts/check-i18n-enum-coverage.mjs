@@ -26,14 +26,18 @@
  *   "reason": why no enum backs it (a String column, a portal-side vocabulary,
  *             or a status a service *derives* rather than reads)
  *
+ * The group is always toUpperSnake(domain), exactly as EnumLabelPipe computes
+ * it. There is no override, on purpose — see lib/enum-domains.mjs.
+ *
  * An undeclared domain fails, and so does a hollow or misspelled entry: the
  * point is that adding an `enumLabel:` call makes someone say where its values
  * come from, and `{}` must not be the cheapest way to silence the question.
  *
  * Missing keys FAIL — that is English on a French screen. Keys no declared
- * enum can emit are reported but do not fail: `status` is a deliberate shared
- * pool across 24 unrelated call sites, so its group holds far more than any
- * one of them sends.
+ * enum can emit are reported but do not fail: a group may deliberately hold
+ * more than one enum sends. (`status` is the shared pool, but it is
+ * reason-exempt and returns before that comparison, so it never produces the
+ * note.)
  *
  * WHAT THIS GATE CANNOT SEE, and neither can any other:
  *   - a *derived* status — `PatientMedicationServiceImpl.resolveStatus` invents
@@ -54,156 +58,25 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
+import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
+import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
 const REPO_DIR = resolve(PORTAL_DIR, '..');
 const SRC = resolve(PORTAL_DIR, 'src', 'app');
-const EN_PATH = resolve(PORTAL_DIR, 'src', 'assets', 'i18n', 'en.json');
+const I18N_DIR = resolve(PORTAL_DIR, 'src', 'assets', 'i18n');
+const BASELINE = 'en';
+/** A collision is only a defect in the locale it happens in, so check all three. */
+const LOCALES = [BASELINE, 'fr', 'es'];
+const EN_PATH = resolve(I18N_DIR, `${BASELINE}.json`);
 const DOMAINS_PATH = resolve(SCRIPT_DIR, 'i18n-enum-domains.json');
+const COLLISIONS_PATH = resolve(SCRIPT_DIR, 'i18n-enum-collisions.json');
 
 const REPORT_ONLY = process.argv.includes('--report-only');
 
 /** `| enumLabel: 'prescriptionStatus'`, with whatever whitespace. */
 const PIPE_CALL = /enumLabel\s*:\s*'([A-Za-z_][A-Za-z0-9_]*)'/g;
-/** Only these may appear in a declaration; anything else is a typo. */
-const DECLARATION_KEYS = ['enum', 'enums', 'group', 'reason'];
-
-/**
- * MUST stay identical to EnumLabelPipe.toUpperSnake (enum-label.pipe.ts), or
- * this gate verifies a group the pipe never reads. An underscore goes at a
- * lower/digit-to-upper boundary only: a domain like `patientMRN` is
- * PATIENT_MRN to the pipe, and splitting before every capital would have the
- * gate checking PATIENT_M_R_N and passing against a group nothing renders.
- */
-export const groupOf = (domain) => domain.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
-
-/**
- * The constants of a Java enum: the tokens before the `;` that ends the
- * constant list (or before the closing brace when there is no body).
- *
- * Comments AND string literals are blanked before that split, and for the same
- * reason. The first version of this parser split on the raw text and ended
- * `PrescriptionStatus` at the semicolon inside "Medication not in stock;
- * awaiting restock", silently hiding seven partner-pharmacy statuses — it
- * reported them as values the enum "cannot emit" and exited 0. A `;` inside a
- * constant's own argument, as in `A("x;y")`, does exactly the same thing.
- *
- * Constants are then read as tokens rather than line-by-line, so an annotated
- * constant (`@Deprecated A`), several on one line (`A, B, C`), and one that
- * carries a class body (`A { void f() {} },`) are all found.
- */
-export function javaEnumConstants(source, name) {
-  const decl = new RegExp(`enum\\s+${name}\\s*(?:implements[^{]*)?\\{`).exec(source);
-  if (!decl) return null;
-
-  const open = decl.index + decl[0].length - 1;
-  const blanked = blankCommentsAndStrings(source);
-
-  // Walk to the enum's own closing brace over the blanked copy, so a brace
-  // inside a comment or string cannot end it early.
-  let depth = 0;
-  let close = open;
-  for (; close < blanked.length; close += 1) {
-    if (blanked[close] === '{') depth += 1;
-    else if (blanked[close] === '}') {
-      depth -= 1;
-      if (depth === 0) break;
-    }
-  }
-
-  // The constant list ends at the first `;` at the enum's own brace depth —
-  // one nested inside a constant's class body does not end it.
-  const body = blanked.slice(open + 1, close);
-  let end = body.length;
-  depth = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    if (body[i] === '{' || body[i] === '(') depth += 1;
-    else if (body[i] === '}' || body[i] === ')') depth -= 1;
-    else if (body[i] === ';' && depth === 0) {
-      end = i;
-      break;
-    }
-  }
-
-  // In the constant list, a name is a bare token that is not part of an
-  // annotation and not inside a constant's arguments or class body.
-  const list = body.slice(0, end);
-  const names = [];
-  depth = 0;
-  for (const match of list.matchAll(/@?[A-Za-z_$][\w$]*|[(){}]/g)) {
-    const token = match[0];
-    if ('({'.includes(token)) depth += 1;
-    else if (')}'.includes(token)) depth -= 1;
-    else if (depth === 0 && !token.startsWith('@') && /^[A-Z][A-Z0-9_]*$/.test(token)) {
-      names.push(token);
-    }
-  }
-  return names;
-}
-
-/** Replace every comment and string literal with spaces, preserving offsets. */
-function blankCommentsAndStrings(source) {
-  const out = [...source];
-  let i = 0;
-  const blank = (from, to) => {
-    for (let k = from; k < to && k < out.length; k += 1) {
-      if (out[k] !== '\n') out[k] = ' ';
-    }
-  };
-  while (i < source.length) {
-    const two = source.slice(i, i + 2);
-    if (two === '/*') {
-      const end = source.indexOf('*/', i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      blank(i, stop);
-      i = stop;
-    } else if (two === '//') {
-      let end = source.indexOf('\n', i);
-      if (end === -1) end = source.length;
-      blank(i, end);
-      i = end;
-    } else if (source[i] === '"' || source[i] === "'") {
-      const quote = source[i];
-      let k = i + 1;
-      while (k < source.length && source[k] !== quote) k += source[k] === '\\' ? 2 : 1;
-      blank(i, k + 1);
-      i = k + 1;
-    } else {
-      i += 1;
-    }
-  }
-  return out.join('');
-}
-
-/** Fails on a hollow or misspelled entry rather than treating it as exempt. */
-function validateDeclaration(domain, entry, errors) {
-  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
-    errors.push(`BAD DECLARATION ${domain} — the value must be an object.`);
-    return false;
-  }
-  const unknown = Object.keys(entry).filter((key) => !DECLARATION_KEYS.includes(key));
-  if (unknown.length) {
-    errors.push(
-      `BAD DECLARATION ${domain} — unknown propert${unknown.length > 1 ? 'ies' : 'y'} ` +
-        `${unknown.join(', ')}; expected one of ${DECLARATION_KEYS.join(', ')}.`,
-    );
-    return false;
-  }
-  const sources = ['enum', 'enums', 'reason'].filter((key) => key in entry);
-  if (sources.length !== 1) {
-    errors.push(
-      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / reason ` +
-        `(found ${sources.length ? sources.join(' + ') : 'none'}).`,
-    );
-    return false;
-  }
-  if ('reason' in entry && (typeof entry.reason !== 'string' || entry.reason.trim() === '')) {
-    errors.push(`BAD DECLARATION ${domain} — an exemption needs a reason someone can read.`);
-    return false;
-  }
-  return true;
-}
 
 function main() {
   const en = JSON.parse(readFileSync(EN_PATH, 'utf8'));
@@ -212,6 +85,12 @@ function main() {
 
   /** domain -> the templates that pipe it, so a failure names somewhere to go. */
   const used = new Map();
+  // .html only. Scanning .ts for an inline `template:` was tried twice and
+  // withdrawn: raw, it recorded the pipe's own TSDoc examples as call sites;
+  // blanked, it erased the single-quoted domain argument the regex needs and
+  // matched nothing at all. No component in src/app carries an `enumLabel:` in
+  // an inline template today, so the blind spot is real but empty — it is
+  // recorded in tasklist.md rather than guarded by a check that does not work.
   for (const file of walk(SRC)) {
     const text = readFileSync(file, 'utf8');
     for (const [, domain] of text.matchAll(PIPE_CALL)) {
@@ -225,6 +104,12 @@ function main() {
   let checked = 0;
   let covered = 0;
   let exempt = 0;
+  // Only the domains whose constants were actually compared: an undeclared,
+  // unparseable or bad-declaration domain contributes nothing and must not
+  // inflate the ratio a reader scans first.
+  let checkedDomains = 0;
+  /** Every group a piped domain resolves to, whether or not it is enum-backed. */
+  const groupsInUse = new Set();
 
   for (const domain of [...used.keys()].sort()) {
     const where = [...used.get(domain)].sort();
@@ -240,6 +125,7 @@ function main() {
     const entry = declared[domain];
     if (!validateDeclaration(domain, entry, errors)) continue;
 
+    groupsInUse.add(groupOf(domain));
     if (entry.reason) {
       exempt += 1;
       notes.push(`${domain}: not checked — ${entry.reason}`);
@@ -256,13 +142,21 @@ function main() {
         broken = true;
         continue;
       }
-      const name = path
-        .split('/')
-        .pop()
-        .replace(/\.java$/, '');
+      const name = enumNameOf(path);
+      // null and [] are different failures, and the lib's contract says so:
+      // null means no enum of that name is in the file — almost always a
+      // filename/type-name mismatch in the declaration, not a parser problem.
       const found = javaEnumConstants(readFileSync(javaPath, 'utf8'), name);
-      if (!found || found.length === 0) {
-        errors.push(`UNPARSEABLE ENUM ${domain} -> ${path} (no constants found for ${name}).`);
+      if (found === null) {
+        errors.push(
+          `NO SUCH ENUM ${domain} -> ${path} contains no \`enum ${name}\`; ` +
+            `check the declaration names the file whose type it means.`,
+        );
+        broken = true;
+        continue;
+      }
+      if (found.length === 0) {
+        errors.push(`UNPARSEABLE ENUM ${domain} -> ${path} (enum ${name} parsed to no constants).`);
         broken = true;
         continue;
       }
@@ -270,22 +164,18 @@ function main() {
     }
     if (broken) continue;
 
-    const group = entry.group ?? groupOf(domain);
+    checkedDomains += 1;
+    const group = groupOf(domain);
     const keys = enumGroups[group] ?? {};
+    const enumName = paths.length > 1 ? 'one of the declared enums' : enumNameOf(paths[0]);
     const missing = [...constants].filter((value) => !(value in keys));
     const extra = Object.keys(keys).filter((key) => !constants.has(key));
     checked += constants.size;
     covered += constants.size - missing.length;
     for (const value of missing) {
       errors.push(
-        `UNKEYED ${group}.${value} — ${
-          paths.length > 1
-            ? 'one of the declared enums'
-            : paths[0]
-                .split('/')
-                .pop()
-                .replace(/\.java$/, '')
-        } ` + `can send it and ${where[0]} pipes it, so it renders Title-Cased English.`,
+        `UNKEYED ${group}.${value} — ${enumName} can send it and ${where[0]} ` +
+          `pipes it, so it renders Title-Cased English.`,
       );
     }
     if (extra.length) {
@@ -295,9 +185,72 @@ function main() {
     }
   }
 
+  // Two distinct states that render as the same word are invisible to every
+  // other gate: parity, referenced-key and untranslated are all green on a
+  // pool where ACKNOWLEDGED and CONFIRMED both read "Confirmé". This runs over
+  // every group a piped domain resolves to — including the reason-exempt ones,
+  // which is where the shared pool lives and where the collisions actually
+  // are. Reported, not failed: some pairs are genuine synonyms.
+  // A declaration nobody pipes is never validated, so its path is never
+  // checked: delete the last `| enumLabel: 'wardType'` from a template, or move
+  // WardType.java in a backend refactor, and the entry rots until the next
+  // person adds that pipe and inherits a MISSING ENUM FILE they did not cause.
+  for (const domain of Object.keys(declared).sort()) {
+    if (domain.startsWith('$') || used.has(domain)) continue;
+    const entry = declared[domain];
+    if (!validateDeclaration(domain, entry, errors)) continue;
+    for (const path of entry.enums ?? (entry.enum ? [entry.enum] : [])) {
+      if (!existsSync(resolve(REPO_DIR, path))) {
+        errors.push(`ORPHAN DECLARATION ${domain} -> ${path} does not exist and nothing pipes it.`);
+      }
+    }
+    notes.push(`${domain}: declared but no template pipes it — drop it, or the pipe went missing`);
+  }
+
+  // Two distinct states rendering as one word is invisible to parity,
+  // referenced-key and untranslated alike — which is how ON_HOLD shipped with
+  // the value PENDING already had. Reporting alone was not enough: on a tree
+  // that already had 18, the new one would have been note 19 in a green build.
+  // So the known ones are pinned and anything else fails, exactly as
+  // check-i18n-untranslated.mjs pins its shared words.
+  const pinned = new Set(JSON.parse(readFileSync(COLLISIONS_PATH, 'utf8')).allowed);
+  const seen = new Set();
+  for (const locale of LOCALES) {
+    const groups =
+      locale === BASELINE
+        ? enumGroups
+        : (JSON.parse(readFileSync(resolve(I18N_DIR, `${locale}.json`), 'utf8'))?.PORTAL?.ENUM ??
+          {});
+    for (const group of [...groupsInUse].sort()) {
+      const byText = new Map();
+      for (const [key, text] of Object.entries(groups[group] ?? {})) {
+        if (!byText.has(text)) byText.set(text, []);
+        byText.get(text).push(key);
+      }
+      for (const [text, ks] of byText) {
+        if (ks.length < 2) continue;
+        const id = `${group}[${locale}]:${ks.slice().sort().join('+')}`;
+        seen.add(id);
+        const where = `${group} [${locale}]: ${ks.join(' and ')} both render ${JSON.stringify(text)}`;
+        if (pinned.has(id)) notes.push(`${where} (pinned)`);
+        else
+          errors.push(
+            `COLLISION ${where} — two states a user cannot tell apart. Give one ` +
+              `its own wording, or pin it in scripts/i18n-enum-collisions.json ` +
+              `as ${JSON.stringify(id)} if they are genuine synonyms.`,
+          );
+      }
+    }
+  }
+  for (const id of pinned) {
+    if (!seen.has(id)) {
+      errors.push(`STALE COLLISION PIN ${id} no longer collides; drop it from the allowlist.`);
+    }
+  }
+
   console.log(
     `[i18n-enum] ${used.size} piped domain(s): ${covered}/${checked} enum values keyed ` +
-      `across ${used.size - exempt} checked, ${exempt} exempt (not counted above)`,
+      `across ${checkedDomains} checked, ${exempt} exempt (not counted above)`,
   );
   for (const note of notes) console.log(`  note: ${note}`);
   for (const error of errors) console.error(`  ${error}`);
@@ -305,8 +258,8 @@ function main() {
   if (errors.length && !REPORT_ONLY) process.exit(1);
 }
 
-// Only run the gate when invoked as a command; the parser and groupOf are
-// imported by scripts/check-i18n-enum-coverage.test.mjs.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
-}
+// Unconditional, like every sibling gate. The `import.meta.url ===
+// process.argv[1]` guard this used to carry is false under a symlinked
+// directory or a drive-letter case difference — and a gate that prints nothing
+// and exits 0 is worse than no gate at all.
+main();

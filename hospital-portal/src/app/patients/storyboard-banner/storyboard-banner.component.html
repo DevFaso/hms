@@ -120,7 +120,7 @@
               @if (enc.encounterType) {
                 <div class="storyboard__kv-row">
                   <dt>{{ 'STORYBOARD.TYPE' | translate }}</dt>
-                  <dd>{{ enc.encounterType }}</dd>
+                  <dd>{{ enc.encounterType | enumLabel: 'encounterType' }}</dd>
                 </div>
               }
               @if (enc.status) {
