@@ -102,8 +102,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            WHERE (:patientId IS NULL OR bi.patient.id = :patientId)
            AND (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
            AND (:statuses IS NULL OR bi.status IN :statuses)
-           AND (:fromDate IS NULL OR bi.invoiceDate >= :fromDate)
-           AND (:toDate IS NULL OR bi.invoiceDate <= :toDate)
+           AND (CAST(:fromDate AS LocalDate) IS NULL OR bi.invoiceDate >= :fromDate)
+           AND (CAST(:toDate AS LocalDate) IS NULL OR bi.invoiceDate <= :toDate)
            """)
     Page<BillingInvoice> findAllWithFilters(
         @Param("patientId") UUID patientId,

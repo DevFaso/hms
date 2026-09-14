@@ -117,8 +117,8 @@ public interface MaternalHistoryRepository extends JpaRepository<MaternalHistory
           AND (:riskCategory IS NULL OR mh.riskCategory = :riskCategory)
           AND (:dataComplete IS NULL OR mh.dataComplete = :dataComplete)
           AND (:reviewedByProvider IS NULL OR mh.reviewedByProvider = :reviewedByProvider)
-          AND (:dateFrom IS NULL OR mh.recordedDate >= :dateFrom)
-          AND (:dateTo IS NULL OR mh.recordedDate <= :dateTo)
+          AND (CAST(:dateFrom AS LocalDateTime) IS NULL OR mh.recordedDate >= :dateFrom)
+          AND (CAST(:dateTo AS LocalDateTime) IS NULL OR mh.recordedDate <= :dateTo)
         ORDER BY mh.recordedDate DESC
         """)
     Page<MaternalHistory> searchMaternalHistory(
