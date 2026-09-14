@@ -2202,6 +2202,17 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **71 enum-shaped fields are interpolated raw, skipping the EnumLabelPipe
+  entirely.** Across 38 templates a value is rendered as `{{ o.modality }}`
+  rather than `{{ o.modality | enumLabel: 'imagingModality' }}`, so the wire
+  token reaches the screen even where the French key already exists and is
+  correct — `imaging.html` alone does it six times, and `audit-logs.html`
+  renders `{{ l.eventType }}` twice beside a profile page that pipes the same
+  field. The enum gate added in #659 cannot see these: it checks that a piped
+  domain is fully keyed, not that a field which should be piped is. Each site
+  needs its own judgement — `leave.reason`, `appt.reason` and `med.frequency`
+  are free text a human typed and must stay raw — so it is a sweep of 71
+  decisions, not a regex. Scoped out of the keys-and-gate PR deliberately.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

@@ -1,0 +1,64 @@
+{
+  "$comment": [
+    "Every domain a template pipes through `| enumLabel: '<domain>'`, and where",
+    "its values come from. check-i18n-enum-coverage.mjs reads the named Java enum",
+    "and fails when one of its constants has no PORTAL.ENUM.<GROUP>.<VALUE> key —",
+    "the pipe would Title-Case it into English and no other gate would notice.",
+    "",
+    "A domain with no single backing enum carries a written reason instead and is",
+    "skipped. An UNDECLARED domain fails the gate on purpose: adding an",
+    "`enumLabel:` call should make someone say what the API can actually send.",
+    "",
+    "`group` only needs setting when it is not the domain upper-snaked."
+  ],
+  "admissionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java" },
+  "alertSeverity": {
+    "reason": "the dashboard renders CDS, labor, newborn and postpartum alerts through one badge; each has its own severity enum"
+  },
+  "appointmentStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AppointmentStatus.java" },
+  "auditEventType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditEventType.java" },
+  "auditStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java" },
+  "bedStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java" },
+  "bloodProductType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BloodProductType.java" },
+  "consultationStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationStatus.java" },
+  "consultationType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationType.java" },
+  "consultationUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationUrgency.java" },
+  "dischargeDisposition": { "enum": "hospital-core/src/main/java/com/example/hms/enums/DischargeDisposition.java" },
+  "dispenseStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/DispenseStatus.java" },
+  "educationCategory": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EducationCategory.java" },
+  "encounterStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterStatus.java" },
+  "encounterType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterType.java" },
+  "gender": {
+    "reason": "Patient.gender is a String, not an enum; the portal's own filter list is the only vocabulary"
+  },
+  "imagingModality": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java" },
+  "imagingOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderStatus.java" },
+  "imagingReportStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingReportStatus.java" },
+  "isolationPrecautionType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java" },
+  "labOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java" },
+  "leaveStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java" },
+  "mtmReviewStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java" },
+  "permissions": {
+    "reason": "ProxyResponseDTO.permissions is a free-form String, not an enum"
+  },
+  "prescriptionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PrescriptionStatus.java" },
+  "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
+  "relationship": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java" },
+  "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
+  "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
+  "status": {
+    "reason": "the generic domain: 24 call sites render whatever status their own DTO carries, so there is no one enum to check"
+  },
+  "taskPriority": {
+    "reason": "shared by nurse tasks and in-basket items, which have separate priority vocabularies"
+  },
+  "treatmentPlanStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanStatus.java" },
+  "treatmentPlanTaskStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanTaskStatus.java" },
+  "vitalSource": {
+    "reason": "PatientVitalSign.source is a String; the portal owns the vocabulary"
+  },
+  "vitalType": {
+    "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"
+  },
+  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" }
+}

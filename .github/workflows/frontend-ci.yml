@@ -59,6 +59,20 @@ jobs:
       - name: i18n translation check
         run: npm run i18n:translated
 
+      # And all three of those only see keys that EXIST. The EnumLabelPipe
+      # Title-Cases any enum value with no PORTAL.ENUM key, so a value the
+      # API can send but nobody keyed renders English and no gate above
+      # notices. This one reads the backend enum behind every domain a
+      # template pipes and fails when one of its constants has no key.
+      - name: i18n enum-coverage check
+        run: npm run i18n:enums
+
+      # That gate reads Java, so its parser is the thing most likely to lie
+      # quietly: the first version ended the constant list at a semicolon
+      # inside a Javadoc sentence and hid seven real prescription statuses.
+      - name: Gate script tests
+        run: npm run test:scripts
+
       - name: Build
         run: npm run build
 
