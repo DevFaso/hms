@@ -50,7 +50,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional(readOnly = true)
     public RecordSharingOptOutDTO status(UUID patientId, UUID actorUserId, Locale locale) {
-        requirePatient(patientId, actorUserId, locale);
+        requirePatient(patientId, actorUserId);
         return optOutRepository.findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId)
             .map(row -> toDto(patientId, row))
             .orElseGet(() -> RecordSharingOptOutDTO.none(patientId));
@@ -59,7 +59,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional
     public RecordSharingOptOutDTO optOut(UUID patientId, String reason, UUID actorUserId, Locale locale) {
-        Patient patient = requirePatient(patientId, actorUserId, locale);
+        Patient patient = requirePatient(patientId, actorUserId);
         if (optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
             throw new ConflictException(messageSource.getMessage(
                 "recordaccess.optout.already", new Object[]{patientId}, locale));
@@ -79,7 +79,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional
     public RecordSharingOptOutDTO revoke(UUID patientId, UUID actorUserId, Locale locale) {
-        requirePatient(patientId, actorUserId, locale);
+        requirePatient(patientId, actorUserId);
         PatientRecordSharingOptOut row = optOutRepository
             .findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId)
             .orElseThrow(() -> new ConflictException(messageSource.getMessage(
@@ -102,7 +102,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
      * cross-hospital-reads flag, a revoke re-opens that chart for real.
      * A refusal is 404, not 403: the row's existence is itself tenant data.
      */
-    private Patient requirePatient(UUID patientId, UUID actorUserId, Locale locale) {
+    private Patient requirePatient(UUID patientId, UUID actorUserId) {
         if (patientId == null) {
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }

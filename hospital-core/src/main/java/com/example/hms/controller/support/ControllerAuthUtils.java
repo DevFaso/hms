@@ -251,7 +251,9 @@ public class ControllerAuthUtils {
      * Check whether the authentication has a given granted authority (case-insensitive).
      */
     public boolean hasAuthority(Authentication auth, String authority) {
-        if (auth == null || auth.getAuthorities() == null) {
+        // getAuthorities() is non-null by the Authentication contract, so only
+        // the authentication itself can be absent.
+        if (auth == null) {
             return false;
         }
         return auth.getAuthorities().stream()
