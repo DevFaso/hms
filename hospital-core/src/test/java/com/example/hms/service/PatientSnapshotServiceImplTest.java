@@ -279,6 +279,9 @@ class PatientSnapshotServiceImplTest {
 
         assertFalse(result.getRecentVitals().isEmpty());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
+        // The sibling of the LAB token: a revert to the word "Vitals"
+        // passed the whole suite until this line existed.
+        assertEquals("VITALS", v.getType());
         assertTrue(v.getValue().contains("T:37.0°C"));
         assertTrue(v.getValue().contains("HR:80"));
         assertTrue(v.getValue().contains("BP:120/80"));
@@ -656,7 +659,7 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_pendingOrderWithNullTestDef_shouldUseFallback() {
+    void getSnapshot_pendingOrderWithNullTestDef_shouldSendNullNotAWord() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -678,7 +681,7 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getPendingOrders().size());
-        assertEquals("Lab Order", result.getPendingOrders().get(0).getDescription());
+        assertNull(result.getPendingOrders().get(0).getDescription());
     }
 
     @Test
@@ -930,7 +933,7 @@ class PatientSnapshotServiceImplTest {
         assertFalse(result.getRecentNotes().isEmpty());
         PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
         assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
-        assertEquals("Unknown", note.getAuthor()); // null staff â†’ Unknown
+        assertNull(note.getAuthor()); // null staff -> no author, not a word â†’ Unknown
         assertNull(note.getType()); // no encounter type -> no note type
         assertEquals("", note.getDate()); // null date â†’ empty
     }

@@ -286,7 +286,7 @@ class NurseTaskServiceImplTest {
         List<NurseOrderTaskResponseDTO> all = service.getOrderTasks(nurseId, hospitalId, null, 20);
         assertThat(all)
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .containsExactly("Lab", "Procedure"); // sorted by due time; other patient's order filtered
+            .containsExactly("LAB", "PROCEDURE"); // sorted by due time; other patient's order filtered
         assertThat(all.get(0).getPriority()).isEqualTo("STAT");
         assertThat(all.get(0).getPatientName()).isEqualTo("Ann Assigned");
 
@@ -294,7 +294,7 @@ class NurseTaskServiceImplTest {
         assertThat(statOnly)
             .singleElement()
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .isEqualTo("Lab");
+            .isEqualTo("LAB");
     }
 
     @Test
@@ -2780,7 +2780,7 @@ class NurseTaskServiceImplTest {
 
         assertThat(tasks)
             .extracting(NurseOrderTaskResponseDTO::getOrderType, NurseOrderTaskResponseDTO::getPatientName)
-            .containsExactly(tuple("Lab", "Ann Assigned"), tuple("Imaging", "Ann Assigned"));
+            .containsExactly(tuple("LAB", "Ann Assigned"), tuple("IMAGING", "Ann Assigned"));
     }
 
     @Test

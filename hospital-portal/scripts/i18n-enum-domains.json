@@ -56,7 +56,12 @@
     "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription and the clock — COMPLETED when a GIVEN MAR row exists, else OVERDUE or DUE against a naive created-at-plus-four-hours window. nurse-station.html also guards on GIVEN, which resolveMarStatus never returns, so GIVEN is deliberately not keyed — keying a value nothing emits is how the phantom DISCHARGE_DISPOSITION vocabulary got here."
   },
   "mtmReviewStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java" },
-  "notificationType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/NotificationType.java" },
+  "notificationType": {
+    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across 13 call sites: APPOINTMENT_REMINDER, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
+  },
+  "orderTaskType": {
+    "reason": "no enum holds it: NurseTaskServiceImpl stamps a fixed token per order source on the nurse station board — LAB, IMAGING, PROCEDURE. All three were the English words Lab, Imaging and Procedure until the tranche that keyed them."
+  },
   "organizationType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/OrganizationType.java" },
   "permissions": {
     "reason": "ProxyResponseDTO.permissions is a free-form String, not an enum"
@@ -81,12 +86,12 @@
     "reason": "shared by nurse tasks and in-basket items, which have separate priority vocabularies"
   },
   "treatmentPlanStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanStatus.java" },
-  "treatmentPlanTaskStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanTaskStatus.java" },
-  "vitalTaskType": {
-    "reason": "no enum holds it: NurseTaskServiceImpl derives it from whether the vitals round is overdue — FULL_SET when it is, else ROUTINE. Both were the English words Full Set and Routine until the tranche that keyed them."
-  },
+  "treatmentPlanTaskStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanTaskStatus.java" },
   "vitalSource": {
     "reason": "PatientVitalSign.source is a String; the portal owns the vocabulary"
+  },
+  "vitalTaskType": {
+    "reason": "no enum holds it: NurseTaskServiceImpl derives it from whether the vitals round is overdue — FULL_SET when it is, else ROUTINE. Both were the English words Full Set and Routine until the tranche that keyed them."
   },
   "vitalType": {
     "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"

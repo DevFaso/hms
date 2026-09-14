@@ -426,6 +426,9 @@ describe('NurseStationComponent — two-tier polling', () => {
     ).map((el) => (el.textContent ?? '').trim());
     expect(cells).toContain('Bilan complet');
     expect(cells).not.toContain('FULL_SET');
-    expect(cells).not.toContain('Full Set');
+    // Deliberately no assertion against the old server literal "Full Set":
+    // this spec sets the signal directly, so that string is not in its
+    // universe and the check could never fail. NurseTaskServiceImplTest
+    // pins the wire value instead.
   });
 });

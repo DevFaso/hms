@@ -121,6 +121,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private static final String TYPE_ROUTINE = "ROUTINE";
     private static final String TYPE_FULL_SET = "FULL_SET";
+    private static final String ORDER_TYPE_LAB = "LAB";
+    private static final String ORDER_TYPE_IMAGING = "IMAGING";
+    private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -549,7 +552,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             Patient patient = order.getPatient();
             String labPatientName = listedNameOf(patient, scope, "lab order", order.getId());
             if (labPatientName == null) continue;
-            tasks.add(orderTask(order.getId(), patient.getId(), labPatientName, "Lab",
+            tasks.add(orderTask(order.getId(), patient.getId(), labPatientName, ORDER_TYPE_LAB,
                 normalizePriority(order.getPriority()), order.getOrderDatetime()));
         }
         for (ImagingOrder order : imagingOrderRepository
@@ -557,7 +560,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             Patient patient = order.getPatient();
             String imagingPatientName = listedNameOf(patient, scope, "imaging order", order.getId());
             if (imagingPatientName == null) continue;
-            tasks.add(orderTask(order.getId(), patient.getId(), imagingPatientName, "Imaging",
+            tasks.add(orderTask(order.getId(), patient.getId(), imagingPatientName, ORDER_TYPE_IMAGING,
                 order.getPriority() != null ? order.getPriority().name() : PRIORITY_ROUTINE,
                 order.getOrderedAt()));
         }
@@ -566,7 +569,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             Patient patient = order.getPatient();
             String procedurePatientName = listedNameOf(patient, scope, "procedure order", order.getId());
             if (procedurePatientName == null) continue;
-            tasks.add(orderTask(order.getId(), patient.getId(), procedurePatientName, "Procedure",
+            tasks.add(orderTask(order.getId(), patient.getId(), procedurePatientName, ORDER_TYPE_PROCEDURE,
                 order.getUrgency() != null ? order.getUrgency().name() : PRIORITY_ROUTINE,
                 order.getScheduledDatetime() != null ? order.getScheduledDatetime() : order.getOrderedAt()));
         }

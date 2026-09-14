@@ -4652,131 +4652,10 @@
       "PRINT": "Imprimir resumen"
     },
     "ENUM": {
-      "VITAL_TYPE": {
-        "BLOOD_PRESSURE": "Presión arterial",
-        "HEART_RATE": "Frecuencia cardíaca",
-        "TEMPERATURE": "Temperatura corporal",
-        "WEIGHT": "Peso",
-        "HEIGHT": "Estatura",
-        "OXYGEN_SATURATION": "Saturación de oxígeno (SpO₂)",
-        "RESPIRATORY_RATE": "Frecuencia respiratoria",
-        "BMI": "IMC",
-        "BLOOD_GLUCOSE": "Glucemia"
-      },
-      "VITAL_SOURCE": {
-        "NURSE_STATION": "Puesto de enfermería",
-        "CLINICAL": "Clínico",
-        "HOME": "Medición en casa",
-        "SELF_REPORTED": "Autodeclarado",
-        "DEVICE": "Dispositivo conectado",
-        "TRIAGE": "Triaje"
-      },
-      "ENCOUNTER_TYPE": {
-        "CONSULTATION": "Consulta",
-        "EMERGENCY": "Urgencia",
-        "FOLLOW_UP": "Seguimiento",
-        "INPATIENT": "Hospitalizado",
-        "LAB": "Laboratorio",
-        "OUTPATIENT": "Ambulatorio",
-        "SURGERY": "Cirugía",
-        "TELEHEALTH": "Telesalud"
-      },
-      "STATUS": {
+      "ABNORMAL_FLAG": {
         "ABNORMAL": "Anormal",
-        "ABNORMAL_HIGH": "Anormal - alto",
-        "ABNORMAL_LOW": "Anormal - bajo",
-        "ACKNOWLEDGED": "Confirmado",
-        "ACTIVE": "Activo",
-        "ADDENDUM": "Anexo",
-        "AMENDED": "Enmendado",
-        "APPROVED": "Aprobado",
-        "ARRIVED": "Llegó",
-        "AWAITING_RESULTS": "Esperando resultados",
-        "CANCELLED": "Cancelado",
-        "CHECKED_IN": "Registrado",
-        "COMPLETED": "Completado",
-        "CONFIRMED": "Confirmado",
-        "CONFIRMED_UNDERSTANDING": "Comprendido",
-        "CORRECTED": "Corregido",
         "CRITICAL": "Crítico",
-        "DENIED": "Denegado",
-        "DISCHARGED": "Dado de alta",
-        "DISCONTINUED": "Suspendido",
-        "DISPENSED": "Dispensado",
-        "DRAFT": "Borrador",
-        "ELIGIBLE": "Elegible",
-        "ERROR": "Error",
-        "EXPIRED": "Vencido",
-        "FAILED": "Fallido",
-        "FEEDBACK_PROVIDED": "Comentarios enviados",
-        "FINAL": "Final",
-        "INACTIVE": "Inactivo",
-        "INVALID": "Inválido",
-        "IN_PROGRESS": "En curso",
-        "NEEDS_CLARIFICATION": "Requiere aclaración",
-        "NORMAL": "Normal",
-        "NOT_ELIGIBLE": "No elegible",
-        "NOT_STARTED": "No iniciado",
-        "NO_SHOW": "No asistió",
-        "ON_HOLD": "En pausa",
-        "ORDERED": "Solicitado",
-        "OVERDUE": "Atrasado",
-        "PAID": "Pagado",
-        "PARTIAL": "Parcial",
-        "PARTIALLY_FILLED": "Parcialmente surtida",
-        "PARTIALLY_PAID": "Parcialmente pagado",
-        "PARTNER_ACCEPTED": "Aceptada por el socio",
-        "PARTNER_DISPENSED": "Dispensada por el socio",
-        "PARTNER_REJECTED": "Rechazada por el socio",
-        "PENDING": "Pendiente",
-        "PENDING_AUTHORIZATION": "Pendiente de autorización",
-        "PENDING_CLARIFICATION": "Pendiente de aclaración",
-        "PENDING_SIGNATURE": "Pendiente de firma",
-        "PENDING_STOCK": "En espera de stock",
-        "POSTPONED": "Pospuesta",
-        "PRELIMINARY": "Preliminar",
-        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
-        "PRINTED_FOR_PATIENT": "Impresa para el paciente",
-        "READY_FOR_DISCHARGE": "Listo para el alta",
-        "READY_FOR_PICKUP": "Listo para recoger",
-        "READY_FOR_PROCEDURE": "Listo para el procedimiento",
-        "REFILL_REQUESTED": "Renovación solicitada",
-        "REJECTED": "Rechazado",
-        "RELEASED": "Publicado",
-        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
-        "RESCHEDULED": "Reprogramado",
-        "RESULTED": "Con resultados",
-        "RESULTS_AVAILABLE": "Resultados disponibles",
-        "REVIEWED": "Revisado",
-        "REVOKED": "Revocado",
-        "SCHEDULED": "Programado",
-        "SENT_TO_PARTNER": "Enviada al socio",
-        "SIGNED": "Firmado",
-        "SUBMITTED": "Enviado",
-        "TRANSFERRED": "Transferido",
-        "TRANSMISSION_FAILED": "Error de transmisión",
-        "TRANSMITTED": "Transmitida",
-        "TRIAGE": "Triaje",
-        "UNKNOWN": "Desconocido",
-        "VERIFIED": "Verificado",
-        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
-      },
-      "ROLE": {
-        "ADMIN": "Administrador(a)",
-        "DOCTOR": "Doctor",
-        "HOSPITAL_ADMIN": "Administrador(a) de hospital",
-        "LAB_DIRECTOR": "Director(a) de Laboratorio",
-        "LAB_TECHNICIAN": "Técnico(a) de Laboratorio",
-        "MIDWIFE": "Matrón(a)",
-        "NURSE": "Enfermero(a)",
-        "PATIENT": "Paciente",
-        "PHARMACIST": "Farmacéutico(a)",
-        "QUALITY_MANAGER": "Gestor(a) de Calidad",
-        "RADIOLOGIST": "Radiólogo(a)",
-        "RECEPTIONIST": "Recepcionista",
-        "SUPER_ADMIN": "Superadministrador(a)",
-        "SURGEON": "Cirujano(a)",
-        "THERAPIST": "Terapeuta"
+        "NORMAL": "Normal"
       },
       "ACCESS_TYPE": {
         "CREATE": "Creado",
@@ -4786,122 +4665,19 @@
         "READ": "Consultado",
         "UPDATE": "Actualizado"
       },
-      "GENDER": {
-        "ALL": "Todos",
-        "FEMALE": "Femenino",
-        "MALE": "Masculino",
-        "NON_BINARY": "No binario",
-        "OTHER": "Otro",
-        "PREFER_NOT_TO_SAY": "Prefiere no decirlo"
+      "ACTOR_TYPE": {
+        "SYSTEM": "Sistema",
+        "USER": "Usuario"
       },
-      "RELATIONSHIP": {
-        "PARENT": "Padre/Madre",
-        "SPOUSE": "Cónyuge",
-        "CHILD": "Hijo/Hija",
-        "CAREGIVER": "Cuidador(a)",
-        "LEGAL_GUARDIAN": "Tutor legal",
-        "SIBLING": "Hermano/Hermana",
-        "OTHER": "Otro"
-      },
-      "PERMISSIONS": {
-        "ALL": "Acceso completo",
-        "APPOINTMENTS": "Citas",
-        "APPOINTMENTS,LAB_RESULTS,MEDICATIONS": "Citas, resultados de laboratorio y medicamentos",
-        "BILLING": "Facturación",
-        "LAB_RESULTS": "Resultados de laboratorio",
-        "MEDICATIONS": "Medicamentos",
-        "VIEW_APPOINTMENTS": "Citas",
-        "VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS": "Citas, medicamentos y resultados de laboratorio",
-        "VIEW_BILLING": "Facturación",
-        "VIEW_LAB_RESULTS": "Resultados de laboratorio",
-        "VIEW_MEDICATIONS": "Medicamentos",
-        "VIEW_RECORDS": "Historia clínica",
-        "VITALS": "Signos vitales"
-      },
-      "PAYMENT_METHOD": {
-        "BANK_TRANSFER": "Transferencia bancaria",
-        "CARD": "Tarjeta de crédito / débito",
-        "CASH": "Efectivo",
-        "INSURANCE": "Seguro",
-        "MOBILE_MONEY": "Dinero móvil"
-      },
-      "PRESCRIPTION_STATUS": {
-        "CANCELLED": "Cancelada",
-        "DISCONTINUED": "Suspendida",
-        "DISPENSED": "Dispensada",
-        "DRAFT": "Borrador",
-        "PARTIALLY_FILLED": "Parcialmente surtida",
-        "PARTNER_ACCEPTED": "Aceptada por el socio",
-        "PARTNER_DISPENSED": "Dispensada por el socio",
-        "PARTNER_REJECTED": "Rechazada por el socio",
-        "PENDING_CLARIFICATION": "Pendiente de aclaración",
-        "PENDING_SIGNATURE": "Pendiente de firma",
-        "PENDING_STOCK": "En espera de stock",
-        "PRINTED_FOR_PATIENT": "Impresa para el paciente",
-        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
-        "SENT_TO_PARTNER": "Enviada al socio",
-        "SIGNED": "Firmada",
-        "TRANSMISSION_FAILED": "Error de transmisión",
-        "TRANSMITTED": "Transmitida"
-      },
-      "CONSULTATION_STATUS": {
-        "ACKNOWLEDGED": "Confirmada",
-        "ASSIGNED": "Asignada",
-        "CANCELLED": "Cancelada",
-        "COMPLETED": "Completada",
-        "DECLINED": "Rechazada",
-        "IN_PROGRESS": "En curso",
-        "REQUESTED": "Solicitada",
-        "SCHEDULED": "Programada"
-      },
-      "CONSULTATION_URGENCY": {
-        "EMERGENCY": "Emergencia",
-        "ROUTINE": "Rutinaria",
-        "STAT": "STAT",
-        "URGENT": "Urgente"
-      },
-      "CONSULTATION_TYPE": {
-        "CURBSIDE_CONSULT": "Consulta informal",
-        "EMERGENCY_CONSULT": "Consulta de emergencia",
-        "FOLLOW_UP_CONSULT": "Consulta de seguimiento",
-        "INPATIENT_CONSULT": "Consulta hospitalaria",
-        "OUTPATIENT_CONSULT": "Consulta externa"
-      },
-      "APPOINTMENT_STATUS": {
-        "CANCELLED": "Cancelada",
-        "CHECKED_IN": "Registrada",
-        "COMPLETED": "Completada",
-        "CONFIRMED": "Confirmada",
-        "FAILED": "Fallida",
-        "IN_PROGRESS": "En curso",
-        "NO_SHOW": "No asistió",
-        "PENDING": "Pendiente",
-        "RESCHEDULED": "Reprogramada",
-        "SCHEDULED": "Programada",
-        "UNKNOWN": "Desconocida"
-      },
-      "ENCOUNTER_STATUS": {
-        "ARRIVED": "Llegó",
-        "AWAITING_RESULTS": "Esperando resultados",
+      "ADMISSION_STATUS": {
+        "ACTIVE": "Activo",
+        "AWAITING_DISCHARGE": "En espera de alta",
         "CANCELLED": "Cancelado",
-        "COMPLETED": "Completado",
-        "IN_PROGRESS": "En curso",
-        "READY_FOR_DISCHARGE": "Listo para el alta",
-        "SCHEDULED": "Programado",
-        "TRIAGE": "Triaje",
-        "UNKNOWN": "Desconocido",
-        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
-      },
-      "LEAVE_STATUS": {
-        "APPROVED": "Aprobada",
-        "CANCELLED": "Cancelada",
+        "DECEASED": "Fallecido",
+        "DISCHARGED": "Dado de alta",
+        "ON_LEAVE": "De permiso",
         "PENDING": "Pendiente",
-        "REJECTED": "Rechazada"
-      },
-      "SHIFT_STATUS": {
-        "CANCELLED": "Cancelado",
-        "COMPLETED": "Completado",
-        "SCHEDULED": "Programado"
+        "TRANSFERRED": "Transferido"
       },
       "ALERT_SEVERITY": {
         "CRITICAL": "Crítica",
@@ -4915,133 +4691,6 @@
         "WARN": "Advertencia",
         "WARNING": "Advertencia"
       },
-      "TASK_PRIORITY": {
-        "CRITICAL": "Crítica",
-        "HIGH": "Alta",
-        "LOW": "Baja",
-        "NORMAL": "Normal",
-        "ROUTINE": "Rutinaria",
-        "URGENT": "Urgente"
-      },
-      "LAB_ORDER_STATUS": {
-        "CANCELLED": "Cancelado",
-        "COLLECTED": "Recogido",
-        "COMPLETED": "Completado",
-        "IN_PROGRESS": "En curso",
-        "ORDERED": "Solicitado",
-        "PENDING": "Pendiente",
-        "RECEIVED": "Recibido",
-        "RESULTED": "Con resultados",
-        "VERIFIED": "Verificado"
-      },
-      "ABNORMAL_FLAG": {
-        "ABNORMAL": "Anormal",
-        "CRITICAL": "Crítico",
-        "NORMAL": "Normal"
-      },
-      "VALIDATION_STUDY_TYPE": {
-        "ACCURACY": "Exactitud",
-        "CARRYOVER": "Arrastre",
-        "INTERFERENCE": "Interferencia",
-        "LINEARITY": "Linealidad",
-        "METHOD_COMPARISON": "Comparación de métodos",
-        "PRECISION": "Precisión",
-        "REFERENCE_RANGE": "Rango de referencia"
-      },
-      "ADMISSION_STATUS": {
-        "ACTIVE": "Activo",
-        "AWAITING_DISCHARGE": "En espera de alta",
-        "CANCELLED": "Cancelado",
-        "DECEASED": "Fallecido",
-        "DISCHARGED": "Dado de alta",
-        "ON_LEAVE": "De permiso",
-        "PENDING": "Pendiente",
-        "TRANSFERRED": "Transferido"
-      },
-      "BED_STATUS": {
-        "AVAILABLE": "Disponible",
-        "MAINTENANCE": "Mantenimiento",
-        "OCCUPIED": "Ocupada",
-        "OUT_OF_SERVICE": "Fuera de servicio",
-        "RESERVED": "Reservada"
-      },
-      "DISPENSE_STATUS": {
-        "CANCELLED": "Cancelado",
-        "COMPLETED": "Dispensado",
-        "PARTIAL": "Parcial",
-        "PENDING": "Pendiente"
-      },
-      "IMAGING_ORDER_STATUS": {
-        "CANCELLED": "Cancelado",
-        "COMPLETED": "Completado",
-        "DRAFT": "Borrador",
-        "IN_PROGRESS": "En curso",
-        "ORDERED": "Solicitado",
-        "PENDING_AUTHORIZATION": "Pendiente de autorización",
-        "RESULTS_AVAILABLE": "Resultados disponibles",
-        "SCHEDULED": "Programado"
-      },
-      "IMAGING_REPORT_STATUS": {
-        "ADDENDUM": "Anexo",
-        "AMENDED": "Enmendado",
-        "CANCELLED": "Cancelado",
-        "CORRECTED": "Corregido",
-        "DRAFT": "Borrador",
-        "ERROR": "Error",
-        "FINAL": "Final",
-        "PRELIMINARY": "Preliminar"
-      },
-      "TREATMENT_PLAN_STATUS": {
-        "APPROVED": "Aprobado",
-        "ARCHIVED": "Archivado",
-        "CANCELLED": "Cancelado",
-        "DRAFT": "Borrador",
-        "IN_REVIEW": "En revisión",
-        "REVISIONS_REQUIRED": "Revisiones requeridas"
-      },
-      "REFERRAL_STATUS": {
-        "ACKNOWLEDGED": "Confirmada",
-        "CANCELLED": "Cancelada",
-        "COMPLETED": "Completada",
-        "DRAFT": "Borrador",
-        "EXPIRED": "Vencida",
-        "IN_PROGRESS": "En curso",
-        "REJECTED": "Rechazada",
-        "SCHEDULED": "Programada",
-        "SUBMITTED": "Enviada"
-      },
-      "REFERRAL_URGENCY": {
-        "EMERGENCY": "Emergencia",
-        "PRIORITY": "Prioritaria",
-        "ROUTINE": "Rutinaria",
-        "URGENT": "Urgente"
-      },
-      "REFERRAL_TYPE": {
-        "CONSULTATION": "Consulta",
-        "EMERGENCY_TRANSFER": "Transferencia de emergencia",
-        "SHARED_CARE": "Atención compartida",
-        "TRANSFER_OF_CARE": "Transferencia de atención"
-      },
-      "MTM_REVIEW_STATUS": {
-        "COMPLETED": "Completado",
-        "DRAFT": "Borrador",
-        "REFERRED": "Referido"
-      },
-      "SIGNATURE_STATUS": {
-        "EXPIRED": "Vencida",
-        "INVALID": "Inválida",
-        "PENDING": "Pendiente",
-        "REVOKED": "Revocada",
-        "SIGNED": "Firmada"
-      },
-      "INVOICE_STATUS": {
-        "CANCELLED": "Cancelada",
-        "DRAFT": "Borrador",
-        "PAID": "Pagada",
-        "PARTIALLY_PAID": "Parcialmente pagada",
-        "SENT": "Enviada",
-        "UNKNOWN": "Desconocido"
-      },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmada",
         "ENTERED_IN_ERROR": "Registrada por error",
@@ -5049,35 +4698,18 @@
         "REFUTED": "Refutada",
         "UNCONFIRMED": "No confirmada"
       },
-      "DISCHARGE_DISPOSITION": {
-        "AGAINST_MEDICAL_ADVICE": "Contra consejo médico",
-        "EXPIRED": "Fallecido",
-        "HOME": "Domicilio",
-        "HOME_WITH_HOME_HEALTH": "Domicilio con atención domiciliaria",
-        "HOSPICE_FACILITY": "Centro de cuidados paliativos",
-        "HOSPICE_HOME": "Cuidados paliativos en domicilio",
-        "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
-        "LONG_TERM_CARE_FACILITY": "Centro de cuidados a largo plazo",
-        "OTHER": "Otro",
-        "PSYCHIATRIC_FACILITY": "Centro psiquiátrico",
-        "REHABILITATION_FACILITY": "Centro de rehabilitación",
-        "SKILLED_NURSING_FACILITY": "Centro de enfermería especializada",
-        "TRANSFERRED_TO_ANOTHER_HOSPITAL": "Traslado a otro hospital"
-      },
-      "AUDIT_STATUS": {
-        "APPROVED": "Aprobado",
-        "CANCELLED": "Cancelado",
-        "COMPLETED": "Completado",
-        "ERROR": "Error",
-        "FAILURE": "Fallo",
+      "APPOINTMENT_STATUS": {
+        "CANCELLED": "Cancelada",
+        "CHECKED_IN": "Registrada",
+        "COMPLETED": "Completada",
+        "CONFIRMED": "Confirmada",
+        "FAILED": "Fallida",
         "IN_PROGRESS": "En curso",
+        "NO_SHOW": "No asistió",
         "PENDING": "Pendiente",
-        "REJECTED": "Rechazado",
-        "SUCCESS": "Éxito"
-      },
-      "ACTOR_TYPE": {
-        "SYSTEM": "Sistema",
-        "USER": "Usuario"
+        "RESCHEDULED": "Reprogramada",
+        "SCHEDULED": "Programada",
+        "UNKNOWN": "Desconocida"
       },
       "AUDIT_EVENT_TYPE": {
         "ACCESS": "Acceso",
@@ -5214,26 +4846,74 @@
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook registrado",
         "WEBHOOK_ENDPOINT_UPDATED": "Webhook actualizado"
       },
-      "TREATMENT_PLAN_TASK_STATUS": {
+      "AUDIT_STATUS": {
+        "APPROVED": "Aprobado",
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "ERROR": "Error",
+        "FAILURE": "Fallo",
+        "IN_PROGRESS": "En curso",
+        "PENDING": "Pendiente",
+        "REJECTED": "Rechazado",
+        "SUCCESS": "Éxito"
+      },
+      "BED_STATUS": {
+        "AVAILABLE": "Disponible",
+        "MAINTENANCE": "Mantenimiento",
+        "OCCUPIED": "Ocupada",
+        "OUT_OF_SERVICE": "Fuera de servicio",
+        "RESERVED": "Reservada"
+      },
+      "BLOOD_PRODUCT_TYPE": {
+        "CRYOPRECIPITATE": "Crioprecipitado",
+        "FRESH_FROZEN_PLASMA": "Plasma fresco congelado",
+        "PACKED_RED_CELLS": "Concentrado de hematíes",
+        "PLATELETS": "Plaquetas",
+        "WHOLE_BLOOD": "Sangre total"
+      },
+      "CONSULTATION_STATUS": {
+        "ACKNOWLEDGED": "Confirmada",
+        "ASSIGNED": "Asignada",
         "CANCELLED": "Cancelada",
         "COMPLETED": "Completada",
+        "DECLINED": "Rechazada",
         "IN_PROGRESS": "En curso",
-        "PENDING": "Pendiente"
+        "REQUESTED": "Solicitada",
+        "SCHEDULED": "Programada"
       },
-      "WARD_TYPE": {
-        "CCU": "Unidad coronaria",
-        "EMERGENCY": "Urgencias",
-        "GENERAL": "Medicina general",
-        "ICU": "UCI",
-        "ISOLATION": "Aislamiento",
-        "MATERNITY": "Maternidad",
-        "NICU": "UCIN",
-        "PEDIATRIC": "Pediatría",
-        "PRIVATE": "Habitación individual",
-        "PSYCHIATRIC": "Psiquiatría",
-        "RECOVERY": "Recuperación",
-        "SEMI_PRIVATE": "Habitación doble",
-        "SURGICAL": "Cirugía"
+      "CONSULTATION_TYPE": {
+        "CURBSIDE_CONSULT": "Consulta informal",
+        "EMERGENCY_CONSULT": "Consulta de emergencia",
+        "FOLLOW_UP_CONSULT": "Consulta de seguimiento",
+        "INPATIENT_CONSULT": "Consulta hospitalaria",
+        "OUTPATIENT_CONSULT": "Consulta externa"
+      },
+      "CONSULTATION_URGENCY": {
+        "EMERGENCY": "Emergencia",
+        "ROUTINE": "Rutinaria",
+        "STAT": "STAT",
+        "URGENT": "Urgente"
+      },
+      "DISCHARGE_DISPOSITION": {
+        "AGAINST_MEDICAL_ADVICE": "Contra consejo médico",
+        "EXPIRED": "Fallecido",
+        "HOME": "Domicilio",
+        "HOME_WITH_HOME_HEALTH": "Domicilio con atención domiciliaria",
+        "HOSPICE_FACILITY": "Centro de cuidados paliativos",
+        "HOSPICE_HOME": "Cuidados paliativos en domicilio",
+        "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+        "LONG_TERM_CARE_FACILITY": "Centro de cuidados a largo plazo",
+        "OTHER": "Otro",
+        "PSYCHIATRIC_FACILITY": "Centro psiquiátrico",
+        "REHABILITATION_FACILITY": "Centro de rehabilitación",
+        "SKILLED_NURSING_FACILITY": "Centro de enfermería especializada",
+        "TRANSFERRED_TO_ANOTHER_HOSPITAL": "Traslado a otro hospital"
+      },
+      "DISPENSE_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Dispensado",
+        "PARTIAL": "Parcial",
+        "PENDING": "Pendiente"
       },
       "EDUCATION_CATEGORY": {
         "BIRTH_PLAN": "Plan de parto",
@@ -5252,18 +4932,35 @@
         "ULTRASOUND_SCANS": "Ecografías y estudios",
         "WARNING_SIGNS": "Señales de alarma"
       },
-      "ISOLATION_PRECAUTION_TYPE": {
-        "AIRBORNE": "Aéreo",
-        "CONTACT": "Contacto",
-        "DROPLET": "Gotas",
-        "PROTECTIVE": "Protector"
+      "ENCOUNTER_STATUS": {
+        "ARRIVED": "Llegó",
+        "AWAITING_RESULTS": "Esperando resultados",
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "IN_PROGRESS": "En curso",
+        "READY_FOR_DISCHARGE": "Listo para el alta",
+        "SCHEDULED": "Programado",
+        "TRIAGE": "Triaje",
+        "UNKNOWN": "Desconocido",
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
       },
-      "BLOOD_PRODUCT_TYPE": {
-        "CRYOPRECIPITATE": "Crioprecipitado",
-        "FRESH_FROZEN_PLASMA": "Plasma fresco congelado",
-        "PACKED_RED_CELLS": "Concentrado de hematíes",
-        "PLATELETS": "Plaquetas",
-        "WHOLE_BLOOD": "Sangre total"
+      "ENCOUNTER_TYPE": {
+        "CONSULTATION": "Consulta",
+        "EMERGENCY": "Urgencia",
+        "FOLLOW_UP": "Seguimiento",
+        "INPATIENT": "Hospitalizado",
+        "LAB": "Laboratorio",
+        "OUTPATIENT": "Ambulatorio",
+        "SURGERY": "Cirugía",
+        "TELEHEALTH": "Telesalud"
+      },
+      "GENDER": {
+        "ALL": "Todos",
+        "FEMALE": "Femenino",
+        "MALE": "Masculino",
+        "NON_BINARY": "No binario",
+        "OTHER": "Otro",
+        "PREFER_NOT_TO_SAY": "Prefiere no decirlo"
       },
       "IMAGING_MODALITY": {
         "CT": "TC",
@@ -5278,6 +4975,26 @@
         "ULTRASOUND": "Ecografía",
         "XRAY": "Radiografía"
       },
+      "IMAGING_ORDER_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "DRAFT": "Borrador",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Solicitado",
+        "PENDING_AUTHORIZATION": "Pendiente de autorización",
+        "RESULTS_AVAILABLE": "Resultados disponibles",
+        "SCHEDULED": "Programado"
+      },
+      "IMAGING_REPORT_STATUS": {
+        "ADDENDUM": "Anexo",
+        "AMENDED": "Enmendado",
+        "CANCELLED": "Cancelado",
+        "CORRECTED": "Corregido",
+        "DRAFT": "Borrador",
+        "ERROR": "Error",
+        "FINAL": "Final",
+        "PRELIMINARY": "Preliminar"
+      },
       "IMMUNIZATION_STATUS": {
         "COMPLETED": "Completada",
         "DEFERRED": "Diferida",
@@ -5285,44 +5002,66 @@
         "NOT_DONE": "No realizada",
         "REFUSED": "Rechazada"
       },
+      "INVOICE_STATUS": {
+        "CANCELLED": "Cancelada",
+        "DRAFT": "Borrador",
+        "PAID": "Pagada",
+        "PARTIALLY_PAID": "Parcialmente pagada",
+        "SENT": "Enviada",
+        "UNKNOWN": "Desconocido"
+      },
+      "ISOLATION_PRECAUTION_TYPE": {
+        "AIRBORNE": "Aéreo",
+        "CONTACT": "Contacto",
+        "DROPLET": "Gotas",
+        "PROTECTIVE": "Protector"
+      },
+      "LAB_ORDER_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COLLECTED": "Recogido",
+        "COMPLETED": "Completado",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Solicitado",
+        "PENDING": "Pendiente",
+        "RECEIVED": "Recibido",
+        "RESULTED": "Con resultados",
+        "VERIFIED": "Verificado"
+      },
+      "LEAVE_STATUS": {
+        "APPROVED": "Aprobada",
+        "CANCELLED": "Cancelada",
+        "PENDING": "Pendiente",
+        "REJECTED": "Rechazada"
+      },
       "MAR_TASK_STATUS": {
         "COMPLETED": "Administrada",
         "DUE": "Por administrar",
         "OVERDUE": "Atrasada"
       },
-      "PLATFORM_RELEASE_STATUS": {
-        "CANCELLED": "Cancelada",
-        "COMPLETED": "Completada",
-        "IN_PROGRESS": "En curso",
-        "SCHEDULED": "Programada"
-      },
-      "PLATFORM_SERVICE_STATUS": {
-        "ACTIVE": "Activo",
-        "DECOMMISSIONED": "Fuera de servicio",
-        "INACTIVE": "Inactivo",
-        "PENDING": "Pendiente",
-        "PILOT": "Piloto",
-        "UNKNOWN": "Desconocido"
-      },
-      "PROCEDURE_ORDER_STATUS": {
-        "CANCELLED": "Cancelada",
-        "COMPLETED": "Completada",
-        "IN_PROGRESS": "En curso",
-        "ORDERED": "Ordenada",
-        "POSTPONED": "Pospuesta",
-        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
-        "READY_FOR_PROCEDURE": "Listo para el procedimiento",
-        "SCHEDULED": "Programada"
+      "MTM_REVIEW_STATUS": {
+        "COMPLETED": "Completado",
+        "DRAFT": "Borrador",
+        "REFERRED": "Referido"
       },
       "NOTIFICATION_TYPE": {
         "APPOINTMENT_REMINDER": "Recordatorio de cita",
-        "BILLING": "Facturación",
+        "CRITICAL_IMAGING_FINDING": "Hallazgo de imagen crítico",
+        "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalamiento — hallazgo de imagen crítico",
+        "CRITICAL_LAB_RESULT": "Resultado de laboratorio crítico",
+        "CRITICAL_LAB_RESULT_ESCALATION": "Escalamiento — resultado de laboratorio crítico",
         "DISCHARGE_SUMMARY": "Informe de alta",
-        "GENERAL": "General",
-        "LAB_RESULT": "Resultado de laboratorio",
+        "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
-        "PROXY_ACCESS": "Acceso delegado",
-        "SYSTEM": "Sistema"
+        "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
+        "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
+        "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
+        "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
+        "REORDER_ALERT": "Alerta de reabastecimiento"
+      },
+      "ORDER_TASK_TYPE": {
+        "IMAGING": "Imagenología",
+        "LAB": "Laboratorio",
+        "PROCEDURE": "Procedimiento"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centro académico",
@@ -5341,6 +5080,42 @@
         "SPECIALTY_GROUP": "Grupo de especialidades",
         "SPECIALTY_NETWORK": "Red de especialidades"
       },
+      "PAYMENT_METHOD": {
+        "BANK_TRANSFER": "Transferencia bancaria",
+        "CARD": "Tarjeta de crédito / débito",
+        "CASH": "Efectivo",
+        "INSURANCE": "Seguro",
+        "MOBILE_MONEY": "Dinero móvil"
+      },
+      "PERMISSIONS": {
+        "ALL": "Acceso completo",
+        "APPOINTMENTS": "Citas",
+        "APPOINTMENTS,LAB_RESULTS,MEDICATIONS": "Citas, resultados de laboratorio y medicamentos",
+        "BILLING": "Facturación",
+        "LAB_RESULTS": "Resultados de laboratorio",
+        "MEDICATIONS": "Medicamentos",
+        "VIEW_APPOINTMENTS": "Citas",
+        "VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS": "Citas, medicamentos y resultados de laboratorio",
+        "VIEW_BILLING": "Facturación",
+        "VIEW_LAB_RESULTS": "Resultados de laboratorio",
+        "VIEW_MEDICATIONS": "Medicamentos",
+        "VIEW_RECORDS": "Historia clínica",
+        "VITALS": "Signos vitales"
+      },
+      "PLATFORM_RELEASE_STATUS": {
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "IN_PROGRESS": "En curso",
+        "SCHEDULED": "Programada"
+      },
+      "PLATFORM_SERVICE_STATUS": {
+        "ACTIVE": "Activo",
+        "DECOMMISSIONED": "Fuera de servicio",
+        "INACTIVE": "Inactivo",
+        "PENDING": "Pendiente",
+        "PILOT": "Piloto",
+        "UNKNOWN": "Desconocido"
+      },
       "POSTPARTUM_ALERT_TYPE": {
         "EDUCATION": "Educación",
         "FOLLOW_UP": "Seguimiento",
@@ -5349,13 +5124,248 @@
         "PAIN": "Dolor",
         "PSYCHOSOCIAL": "Psicosocial"
       },
+      "PRESCRIPTION_STATUS": {
+        "CANCELLED": "Cancelada",
+        "DISCONTINUED": "Suspendida",
+        "DISPENSED": "Dispensada",
+        "DRAFT": "Borrador",
+        "PARTIALLY_FILLED": "Parcialmente surtida",
+        "PARTNER_ACCEPTED": "Aceptada por el socio",
+        "PARTNER_DISPENSED": "Dispensada por el socio",
+        "PARTNER_REJECTED": "Rechazada por el socio",
+        "PENDING_CLARIFICATION": "Pendiente de aclaración",
+        "PENDING_SIGNATURE": "Pendiente de firma",
+        "PENDING_STOCK": "En espera de stock",
+        "PRINTED_FOR_PATIENT": "Impresa para el paciente",
+        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
+        "SENT_TO_PARTNER": "Enviada al socio",
+        "SIGNED": "Firmada",
+        "TRANSMISSION_FAILED": "Error de transmisión",
+        "TRANSMITTED": "Transmitida"
+      },
+      "PROCEDURE_ORDER_STATUS": {
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Ordenada",
+        "POSTPONED": "Pospuesta",
+        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
+        "READY_FOR_PROCEDURE": "Listo para el procedimiento",
+        "SCHEDULED": "Programada"
+      },
+      "REFERRAL_STATUS": {
+        "ACKNOWLEDGED": "Confirmada",
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "DRAFT": "Borrador",
+        "EXPIRED": "Vencida",
+        "IN_PROGRESS": "En curso",
+        "REJECTED": "Rechazada",
+        "SCHEDULED": "Programada",
+        "SUBMITTED": "Enviada"
+      },
+      "REFERRAL_TYPE": {
+        "CONSULTATION": "Consulta",
+        "EMERGENCY_TRANSFER": "Transferencia de emergencia",
+        "SHARED_CARE": "Atención compartida",
+        "TRANSFER_OF_CARE": "Transferencia de atención"
+      },
+      "REFERRAL_URGENCY": {
+        "EMERGENCY": "Emergencia",
+        "PRIORITY": "Prioritaria",
+        "ROUTINE": "Rutinaria",
+        "URGENT": "Urgente"
+      },
+      "RELATIONSHIP": {
+        "PARENT": "Padre/Madre",
+        "SPOUSE": "Cónyuge",
+        "CHILD": "Hijo/Hija",
+        "CAREGIVER": "Cuidador(a)",
+        "LEGAL_GUARDIAN": "Tutor legal",
+        "SIBLING": "Hermano/Hermana",
+        "OTHER": "Otro"
+      },
+      "ROLE": {
+        "ADMIN": "Administrador(a)",
+        "DOCTOR": "Doctor",
+        "HOSPITAL_ADMIN": "Administrador(a) de hospital",
+        "LAB_DIRECTOR": "Director(a) de Laboratorio",
+        "LAB_TECHNICIAN": "Técnico(a) de Laboratorio",
+        "MIDWIFE": "Matrón(a)",
+        "NURSE": "Enfermero(a)",
+        "PATIENT": "Paciente",
+        "PHARMACIST": "Farmacéutico(a)",
+        "QUALITY_MANAGER": "Gestor(a) de Calidad",
+        "RADIOLOGIST": "Radiólogo(a)",
+        "RECEPTIONIST": "Recepcionista",
+        "SUPER_ADMIN": "Superadministrador(a)",
+        "SURGEON": "Cirujano(a)",
+        "THERAPIST": "Terapeuta"
+      },
+      "SHIFT_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "SCHEDULED": "Programado"
+      },
+      "SIGNATURE_STATUS": {
+        "EXPIRED": "Vencida",
+        "INVALID": "Inválida",
+        "PENDING": "Pendiente",
+        "REVOKED": "Revocada",
+        "SIGNED": "Firmada"
+      },
       "SNAPSHOT_ITEM_TYPE": {
         "LAB": "Laboratorio",
         "VITALS": "Constantes vitales"
       },
+      "STATUS": {
+        "ABNORMAL": "Anormal",
+        "ABNORMAL_HIGH": "Anormal - alto",
+        "ABNORMAL_LOW": "Anormal - bajo",
+        "ACKNOWLEDGED": "Confirmado",
+        "ACTIVE": "Activo",
+        "ADDENDUM": "Anexo",
+        "AMENDED": "Enmendado",
+        "APPROVED": "Aprobado",
+        "ARRIVED": "Llegó",
+        "AWAITING_RESULTS": "Esperando resultados",
+        "CANCELLED": "Cancelado",
+        "CHECKED_IN": "Registrado",
+        "COMPLETED": "Completado",
+        "CONFIRMED": "Confirmado",
+        "CONFIRMED_UNDERSTANDING": "Comprendido",
+        "CORRECTED": "Corregido",
+        "CRITICAL": "Crítico",
+        "DENIED": "Denegado",
+        "DISCHARGED": "Dado de alta",
+        "DISCONTINUED": "Suspendido",
+        "DISPENSED": "Dispensado",
+        "DRAFT": "Borrador",
+        "ELIGIBLE": "Elegible",
+        "ERROR": "Error",
+        "EXPIRED": "Vencido",
+        "FAILED": "Fallido",
+        "FEEDBACK_PROVIDED": "Comentarios enviados",
+        "FINAL": "Final",
+        "INACTIVE": "Inactivo",
+        "INVALID": "Inválido",
+        "IN_PROGRESS": "En curso",
+        "NEEDS_CLARIFICATION": "Requiere aclaración",
+        "NORMAL": "Normal",
+        "NOT_ELIGIBLE": "No elegible",
+        "NOT_STARTED": "No iniciado",
+        "NO_SHOW": "No asistió",
+        "ON_HOLD": "En pausa",
+        "ORDERED": "Solicitado",
+        "OVERDUE": "Atrasado",
+        "PAID": "Pagado",
+        "PARTIAL": "Parcial",
+        "PARTIALLY_FILLED": "Parcialmente surtida",
+        "PARTIALLY_PAID": "Parcialmente pagado",
+        "PARTNER_ACCEPTED": "Aceptada por el socio",
+        "PARTNER_DISPENSED": "Dispensada por el socio",
+        "PARTNER_REJECTED": "Rechazada por el socio",
+        "PENDING": "Pendiente",
+        "PENDING_AUTHORIZATION": "Pendiente de autorización",
+        "PENDING_CLARIFICATION": "Pendiente de aclaración",
+        "PENDING_SIGNATURE": "Pendiente de firma",
+        "PENDING_STOCK": "En espera de stock",
+        "POSTPONED": "Pospuesta",
+        "PRELIMINARY": "Preliminar",
+        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
+        "PRINTED_FOR_PATIENT": "Impresa para el paciente",
+        "READY_FOR_DISCHARGE": "Listo para el alta",
+        "READY_FOR_PICKUP": "Listo para recoger",
+        "READY_FOR_PROCEDURE": "Listo para el procedimiento",
+        "REFILL_REQUESTED": "Renovación solicitada",
+        "REJECTED": "Rechazado",
+        "RELEASED": "Publicado",
+        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
+        "RESCHEDULED": "Reprogramado",
+        "RESULTED": "Con resultados",
+        "RESULTS_AVAILABLE": "Resultados disponibles",
+        "REVIEWED": "Revisado",
+        "REVOKED": "Revocado",
+        "SCHEDULED": "Programado",
+        "SENT_TO_PARTNER": "Enviada al socio",
+        "SIGNED": "Firmado",
+        "SUBMITTED": "Enviado",
+        "TRANSFERRED": "Transferido",
+        "TRANSMISSION_FAILED": "Error de transmisión",
+        "TRANSMITTED": "Transmitida",
+        "TRIAGE": "Triaje",
+        "UNKNOWN": "Desconocido",
+        "VERIFIED": "Verificado",
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
+      },
+      "TASK_PRIORITY": {
+        "CRITICAL": "Crítica",
+        "HIGH": "Alta",
+        "LOW": "Baja",
+        "NORMAL": "Normal",
+        "ROUTINE": "Rutinaria",
+        "URGENT": "Urgente"
+      },
+      "TREATMENT_PLAN_STATUS": {
+        "APPROVED": "Aprobado",
+        "ARCHIVED": "Archivado",
+        "CANCELLED": "Cancelado",
+        "DRAFT": "Borrador",
+        "IN_REVIEW": "En revisión",
+        "REVISIONS_REQUIRED": "Revisiones requeridas"
+      },
+      "TREATMENT_PLAN_TASK_STATUS": {
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "IN_PROGRESS": "En curso",
+        "PENDING": "Pendiente"
+      },
+      "VALIDATION_STUDY_TYPE": {
+        "ACCURACY": "Exactitud",
+        "CARRYOVER": "Arrastre",
+        "INTERFERENCE": "Interferencia",
+        "LINEARITY": "Linealidad",
+        "METHOD_COMPARISON": "Comparación de métodos",
+        "PRECISION": "Precisión",
+        "REFERENCE_RANGE": "Rango de referencia"
+      },
+      "VITAL_SOURCE": {
+        "NURSE_STATION": "Puesto de enfermería",
+        "CLINICAL": "Clínico",
+        "HOME": "Medición en casa",
+        "SELF_REPORTED": "Autodeclarado",
+        "DEVICE": "Dispositivo conectado",
+        "TRIAGE": "Triaje"
+      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Conjunto completo",
         "ROUTINE": "Rutina"
+      },
+      "VITAL_TYPE": {
+        "BLOOD_PRESSURE": "Presión arterial",
+        "HEART_RATE": "Frecuencia cardíaca",
+        "TEMPERATURE": "Temperatura corporal",
+        "WEIGHT": "Peso",
+        "HEIGHT": "Estatura",
+        "OXYGEN_SATURATION": "Saturación de oxígeno (SpO₂)",
+        "RESPIRATORY_RATE": "Frecuencia respiratoria",
+        "BMI": "IMC",
+        "BLOOD_GLUCOSE": "Glucemia"
+      },
+      "WARD_TYPE": {
+        "CCU": "Unidad coronaria",
+        "EMERGENCY": "Urgencias",
+        "GENERAL": "Medicina general",
+        "ICU": "UCI",
+        "ISOLATION": "Aislamiento",
+        "MATERNITY": "Maternidad",
+        "NICU": "UCIN",
+        "PEDIATRIC": "Pediatría",
+        "PRIVATE": "Habitación individual",
+        "PSYCHIATRIC": "Psiquiatría",
+        "RECOVERY": "Recuperación",
+        "SEMI_PRIVATE": "Habitación doble",
+        "SURGICAL": "Cirugía"
       }
     },
     "DOCUMENTS": {
@@ -9685,5 +9695,8 @@
     "STATUS_PIPELINE": "Flujo de estados de las solicitudes",
     "THROUGHPUT": "Rendimiento",
     "TITLE": "Panel de operaciones del laboratorio"
+  },
+  "SNAPSHOT": {
+    "ORDER": "Orden"
   }
 }

@@ -193,7 +193,9 @@
               @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
                 <div class="order-row">
                   <span class="order-type-badge">{{ o.type | enumLabel: 'snapshotItemType' }}</span>
-                  <span class="order-desc">{{ o.description }}</span>
+                  <span class="order-desc">{{
+                    o.description || ('SNAPSHOT.ORDER' | translate)
+                  }}</span>
                 </div>
               }
             }
@@ -222,7 +224,7 @@
                     <span class="note-type">{{
                       (n.type | enumLabel: 'encounterType') || '—'
                     }}</span>
-                    <span class="note-author">{{ n.author }}</span>
+                    <span class="note-author">{{ n.author || '—' }}</span>
                   </div>
                   <span class="note-snippet">{{ n.snippet }}</span>
                 </div>

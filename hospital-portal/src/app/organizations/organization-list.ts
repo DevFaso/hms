@@ -18,11 +18,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   selector: 'app-organization-list',
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  providers: [EnumLabelPipe],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
 })
 export class OrganizationListComponent implements OnInit {
+  private readonly enumLabel = inject(EnumLabelPipe);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
@@ -138,7 +140,10 @@ export class OrganizationListComponent implements OnInit {
         (o) =>
           o.name.toLowerCase().includes(term) ||
           o.code.toLowerCase().includes(term) ||
-          (o.type?.toLowerCase().includes(term) ?? false),
+          (o.type?.toLowerCase().includes(term) ?? false) ||
+          // The Type column renders a translated label; searching has to
+          // match what is on screen, not only the wire token behind it.
+          this.typeLabel(o.type).toLowerCase().includes(term),
       ),
     );
   }
@@ -241,6 +246,11 @@ export class OrganizationListComponent implements OnInit {
   }
 
   /** Convert SCREAMING_SNAKE enum value to Title Case display label */
+  /** The label the Type column shows, so the filter can match it. */
+  private typeLabel(value: string | undefined): string {
+    return value ? this.enumLabel.transform(value, 'organizationType') : '';
+  }
+
   lifecycleColor(state: OrganizationLifecycleState | undefined): string {
     return lifecycleStateColor(state);
   }

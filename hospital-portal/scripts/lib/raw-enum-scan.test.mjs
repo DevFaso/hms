@@ -75,7 +75,8 @@ test('the word list still covers the fields the tranches piped', () => {
   for (const word of ['status', 'type', 'urgency', 'modality', 'gender', 'severity']) {
     assert.ok(ENUM_WORDS.includes(word), `${word} missing from ENUM_WORDS`);
   }
-  assert.ok(ENUM_WORDS.length >= 27, 'ENUM_WORDS shrank — findings would drop silently');
+  assert.ok(ENUM_WORDS.includes('role'), 'role missing from ENUM_WORDS');
+  assert.ok(ENUM_WORDS.length >= 28, 'ENUM_WORDS shrank — findings would drop silently');
 });
 
 test('an interpolation inside a CSS class is not a render', () => {

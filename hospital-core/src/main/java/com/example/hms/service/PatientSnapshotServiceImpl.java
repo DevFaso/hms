@@ -323,7 +323,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
                             .type("LAB")
-                            .description(o.getLabTestDefinition() != null ? o.getLabTestDefinition().getName() : "Lab Order")
+                            .description(o.getLabTestDefinition() != null ? o.getLabTestDefinition().getName() : null)
                             .orderedAt(o.getOrderDatetime() != null ? o.getOrderDatetime().format(DATE_FMT) : "")
                             .build()));
         } catch (Exception e) {
@@ -360,7 +360,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             java.util.Comparator.reverseOrder()))
                     .limit(5)
                     .forEach(e -> recentNotes.add(PatientSnapshotDTO.NoteItem.builder()
-                            .author(e.getStaff() != null ? e.getStaff().getFullName() : "Unknown")
+                            .author(e.getStaff() != null ? e.getStaff().getFullName() : null)
                             .type(e.getEncounterType() != null ? e.getEncounterType().name() : null)
                             .date(e.getEncounterDate() != null ? e.getEncounterDate().format(DATE_FMT) : "")
                             .snippet(truncateSnippet(e.getNotes()))
