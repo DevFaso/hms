@@ -29,7 +29,7 @@ import { EnumLabelService } from '../../core/enum-label.service';
  * Usage:
  * ```html
  * {{ 'BLOOD_PRESSURE' | enumLabel }}              <!-- "Blood Pressure" -->
- * {{ rx.status | enumLabel: 'prescriptionStatus' }}<!-- "Signee" in French -->
+ * {{ rx.status | enumLabel: 'prescriptionStatus' }}<!-- "Signée" in French -->
  * {{ enc.status | enumLabel: 'encounterStatus' }}
  * {{ alert.severity | enumLabel: 'alertSeverity' }}
  * ```

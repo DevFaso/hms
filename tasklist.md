@@ -2326,7 +2326,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      both.
   9. `my-notifications.component.ts` imports both `CommonModule` and
      `DatePipe`; the former re-exports the latter.
-- **215 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **239 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
@@ -2401,9 +2401,44 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   are fed by a field the API does not send, so no pipe could have been verified
   on them; they stay pinned, with the trace in the next bullet. A pin is a
   claim that someone looked — it is not a claim that the site is live.
-  Next clusters: `.reason` (14),
+  The count went UP in that tranche, 215 → 239, and that is the gate getting
+  less blind rather than the tree getting worse: keying JOB_TITLE for the
+  snapshot drawer made it obvious that `title` was not in ENUM_WORDS either, so
+  `.jobTitle` had never been scanned at all. Adding it surfaced 24 sites, 9 of
+  them the same `JobTitle` enum the drawer now translates. **That is the next
+  tranche**, and it is not only missing pipes: `staff-detail` and `staff-list`
+  call a hand-rolled `formatJobTitle()` that is tier 3 of EnumLabelService
+  reimplemented (`replaceAll('_', ' ')` + Title Case), the dashboard uses
+  `| titlecase`, and `staff-list` has a filter chip doing `.replaceAll('_',
+  ' ')` — four ways of spelling "render it in English", none of which any gate
+  could see. The other 15 are `.title` fields (notification, in-basket,
+  education, questionnaire) and are almost certainly free text a person typed;
+  they are pinned as such, unverified, because this tranche traced the
+  `.jobTitle` half only.
+  Next clusters after that: `.reason` (14),
   `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
   text that should stay pinned.
+- **`bareRole` normalises the role token per portal call site, not at the one
+  place the server could.** The portal maps it in three `.map()`s
+  (`getMyAccessLog`, `getMyDisclosures`, `getSchedulingProviders`) because both
+  spellings and the `Unknown Role` sentence are already in
+  `audit_event_logs.role_name` and no backend WRITE can fix rows written years
+  ago. The READ path, though, does have single choke points:
+  `DisclosureAccountingServiceImpl.toEntry()` line 118 feeds both audit
+  surfaces, and `PatientPortalServiceImpl.getProvidersForDepartment` line 595
+  feeds the picker — stripping there would cover legacy rows too AND every
+  future client, and would let the portal drop all three maps. Deferred from
+  #665 because it changes two backend services and their tests for no
+  user-visible difference in this client; worth doing with the
+  `AuditEventLogMapper` twin above, in one pass.
+- **`OrganizationListComponent` unsubscribes its language subscription and
+  nothing else.** #665 gave it an `ngOnDestroy` for `langSub`; the two HTTP
+  subscriptions `ngOnInit` opens (`orgService.list`, `orgService.getTypes`) are
+  still unmanaged, so a response landing after the user navigates away runs
+  `applyFilter()` and `loading.set(false)` on a destroyed component, and an
+  error toasts for a page nobody is on. Routing all three through
+  `takeUntilDestroyed` would remove the field and the hook together. Pre-dates
+  #665; that PR is just the first to give the class a destroy hook.
 - **The patient's care team is permanently empty, in two places.**
   `GET /me/patient/care-team` returns `CareTeamDTO { primaryCare,
   primaryCareHistory }`; the portal's interface for the same endpoint declares

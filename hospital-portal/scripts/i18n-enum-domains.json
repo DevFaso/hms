@@ -79,7 +79,8 @@
   "role": {
     "roles": [
       "hospital-core/src/main/resources/db/migration",
-      "hospital-core/src/main/java/com/example/hms/seed/RoleSeeder.java"
+      "hospital-core/src/main/java/com/example/hms/seed/RoleSeeder.java",
+      "hospital-core/src/main/java/com/example/hms/bootstrap/DevSyntheticDataSeeder.java"
     ]
   },
   "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },

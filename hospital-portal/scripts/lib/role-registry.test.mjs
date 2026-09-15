@@ -9,19 +9,34 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { roleNamesFrom, bareRoleName } from './role-registry.mjs';
+import { walk } from './walk.mjs';
+import { validateDeclaration } from './enum-domains.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = resolve(SCRIPT_DIR, '..', '..', '..');
-const MIGRATIONS = resolve(REPO_DIR, 'hospital-core/src/main/resources/db/migration');
-const SEEDER = resolve(
-  REPO_DIR,
-  'hospital-core/src/main/java/com/example/hms/seed/RoleSeeder.java',
+const DOMAINS = JSON.parse(
+  readFileSync(resolve(SCRIPT_DIR, '..', 'i18n-enum-domains.json'), 'utf8'),
 );
+
+/**
+ * Exactly what check-i18n-enum-coverage.mjs gathers, from the same
+ * declaration.
+ *
+ * This used to be a flat `readdirSync` over the migration folder while the
+ * gate used a recursive `walk` over the DECLARED paths — so a migration in a
+ * subfolder, or a source added to the declaration, would be read by the gate
+ * and not by the test that exists to prove they agree.
+ */
+const declaredSources = () =>
+  DOMAINS.role.roles
+    .map((path) => resolve(REPO_DIR, path))
+    .flatMap((full) => (full.endsWith('.java') ? [full] : walk(full, ['.sql', '.java'])))
+    .map((path) => ({ path, text: readFileSync(path, 'utf8') }));
 
 const sql = (text) => [{ path: 'V1__x.sql', text }];
 const java = (text) => [{ path: 'RoleSeeder.java', text }];
@@ -39,11 +54,22 @@ test('reads the names out of a roles INSERT', () => {
   );
 });
 
-test('an unquoted schema name is the same table', () => {
-  assert.deepEqual(
-    roleNamesFrom(sql(`INSERT INTO security.roles (code) VALUES ('ROLE_MIDWIFE');`)),
-    ['MIDWIFE'],
-  );
+test('every spelling of the same table is the same table', () => {
+  // A spelling the parser misses is a role that ships unkeyed, and only a
+  // grand total of zero is an error — which the other 33 names prevent.
+  for (const table of [
+    `"security".roles`,
+    `security.roles`,
+    `"security"."roles"`,
+    `security . roles`,
+    `roles`,
+  ]) {
+    assert.deepEqual(
+      roleNamesFrom(sql(`INSERT INTO ${table} (code) VALUES ('ROLE_MIDWIFE');`)),
+      ['MIDWIFE'],
+      `INSERT INTO ${table} was not read`,
+    );
+  }
 });
 
 test('a role named only in a DELETE is not seeded by it', () => {
@@ -87,15 +113,19 @@ test('an INSERT into another table is ignored', () => {
   );
 });
 
-test("reads RoleSeeder's catalog", () => {
+test('reads a Java seeder whatever shape its catalog takes', () => {
+  // Tying this to `roles.put(` coupled the gate to a local variable's name.
+  // RoleSeeder uses a map, DevSyntheticDataSeeder a String[]; both are
+  // declared sources.
   assert.deepEqual(
     roleNamesFrom(
       java(
         `roles.put("ROLE_STAFF",   "General support staff");\n` +
-          `roles.put( "ROLE_LAB_MANAGER", "Lab manager" );`,
+          `catalog.put( "ROLE_LAB_MANAGER", "Lab manager" );\n` +
+          `String[] codes = { "ROLE_MIDWIFE", ROLE_CONSTANT };`,
       ),
     ),
-    ['LAB_MANAGER', 'STAFF'],
+    ['LAB_MANAGER', 'MIDWIFE', 'STAFF'],
   );
 });
 
@@ -125,6 +155,13 @@ test('names are deduped across sources and sorted', () => {
   );
 });
 
+test('a role literal in Java prose is still only read from a declared seeder', () => {
+  // The .java rule is broad ON PURPOSE, and the declaration is what keeps it
+  // honest: only files someone listed as role sources are read at all.
+  assert.deepEqual(roleNamesFrom([{ path: 'SecurityConfig.java', text: `"ROLE_X"` }]), ['X']);
+  assert.deepEqual(roleNamesFrom([{ path: 'SecurityConfig.txt', text: `"ROLE_X"` }]), []);
+});
+
 test('a source that is neither .sql nor .java contributes nothing', () => {
   assert.deepEqual(roleNamesFrom([{ path: 'notes.md', text: `'ROLE_DOCTOR'` }]), []);
 });
@@ -135,12 +172,25 @@ test('bareRoleName strips the prefix once and leaves bare names alone', () => {
   assert.equal(bareRoleName('ROLE_ROLE_X'), 'ROLE_X');
 });
 
+test('the role domain declares sources that exist and validate', () => {
+  const errors = [];
+  assert.equal(validateDeclaration('role', DOMAINS.role, errors), true, errors.join('; '));
+  assert.ok(DOMAINS.role.roles.length >= 2, 'the migrations are not the only writer');
+});
+
+test('every declared Java seeder contributes at least one role', () => {
+  // The Java half yields nothing today that the migrations do not, so a
+  // parser that quietly stopped matching would be invisible in the total.
+  for (const source of declaredSources().filter((s) => s.path.endsWith('.java'))) {
+    assert.ok(
+      roleNamesFrom([source]).length > 0,
+      `${source.path} is declared as a role source but parses to no roles`,
+    );
+  }
+});
+
 test('the real migrations parse to the registry the portal keys', () => {
-  const sources = readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith('.sql'))
-    .map((f) => ({ path: `${MIGRATIONS}/${f}`, text: readFileSync(`${MIGRATIONS}/${f}`, 'utf8') }));
-  sources.push({ path: SEEDER, text: readFileSync(SEEDER, 'utf8') });
-  const names = roleNamesFrom(sources);
+  const names = roleNamesFrom(declaredSources());
 
   // A floor, not an exact count: a migration that adds a role should fail the
   // COVERAGE gate with an UNKEYED line naming it, not this test with an

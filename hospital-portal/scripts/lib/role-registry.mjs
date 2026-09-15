@@ -35,11 +35,30 @@ const SQL_COMMENT = /--[^\n]*/g;
 const JAVA_LINE_COMMENT = /\/\/[^\n]*/g;
 const JAVA_BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
 
-/** An `INSERT INTO "security".roles ...;` statement, comments already gone. */
-const ROLES_INSERT = /INSERT\s+INTO\s+"?security"?\.roles\b[\s\S]*?;/gi;
-/** A seeded name inside one of those, or inside RoleSeeder's catalog. */
+/**
+ * An `INSERT INTO "security".roles ...;` statement, comments already gone.
+ * Either identifier may be quoted, and the schema may be omitted under a set
+ * `search_path` — a spelling the parser misses is a role that ships unkeyed,
+ * and nothing else would notice, because only a grand total of zero is an
+ * error.
+ */
+const ROLES_INSERT = /INSERT\s+INTO\s+(?:"?security"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?;/gi;
+/** A seeded name inside one of those. */
 const ROLE_LITERAL = /'(ROLE_[A-Z0-9_]+)'/g;
-const SEEDER_PUT = /roles\.put\(\s*"(ROLE_[A-Z0-9_]+)"/g;
+/**
+ * Any `"ROLE_X"` literal in a declared Java seeder.
+ *
+ * Deliberately not tied to the shape of the call. The first version matched
+ * `roles.put("ROLE_X"`, which couples the gate to a local variable being
+ * named `roles`: rename it, switch to `Map.of(...)`, or use a `String[]` as
+ * `DevSyntheticDataSeeder` does, and the source silently yields nothing. It
+ * cannot even be caught by a total-is-zero check, because the migrations are
+ * a superset today. `RoleRegistryTest` reads any Java string literal for the
+ * same reason. Over-matching inside a file someone declared AS a seeder is
+ * safe: an extra name is a keyed label nothing sends, which the coverage gate
+ * reports as a note.
+ */
+const SEEDER_LITERAL = /"(ROLE_[A-Z0-9_]+)"/g;
 
 const ROLE_PREFIX = 'ROLE_';
 
@@ -50,7 +69,7 @@ const blank = (text) => text.replaceAll(/[^\n]/g, ' ');
  * Bare role names from a set of `{ path, text }` sources, sorted and deduped.
  *
  * A `.sql` source contributes the literals inside its role INSERTs; a `.java`
- * source contributes its `roles.put("ROLE_X", …)` catalog. Anything else
+ * source contributes every `"ROLE_X"` literal it names. Anything else
  * contributes nothing — silently, because the gate validates the paths.
  */
 export function roleNamesFrom(sources) {
@@ -63,7 +82,7 @@ export function roleNamesFrom(sources) {
       }
     } else if (path.endsWith('.java')) {
       const clean = text.replaceAll(JAVA_BLOCK_COMMENT, blank).replaceAll(JAVA_LINE_COMMENT, blank);
-      for (const [, name] of clean.matchAll(SEEDER_PUT)) names.add(name);
+      for (const [, name] of clean.matchAll(SEEDER_LITERAL)) names.add(name);
     }
   }
   return [...names].map(bareRoleName).sort();

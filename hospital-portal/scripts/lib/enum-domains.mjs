@@ -18,8 +18,8 @@
  * out of them. It is a list of paths for the same reason `enums` is — one
  * badge, several places that fill it.
  *
- * There is deliberately no `group` override. EnumLabelPipe computes the group
- * as toUpperSnake(domain) with no way to redirect it, so an override here
+ * There is deliberately no `group` override. EnumLabelService computes the
+ * group as toUpperSnake(domain) with no way to redirect it, so an override here
  * could only ever point the gate at a group the pipe does not read — and
  * pointing it at a group that happens to hold the constants (the shared STATUS
  * pool, say) would turn the gate green while every value renders Title-Cased
@@ -54,7 +54,11 @@ export function validateDeclaration(domain, entry, errors) {
     );
     return false;
   }
-  const sources = ['enum', 'enums', 'roles', 'reason'].filter((key) => key in entry);
+  // DECLARATION_KEYS itself, not a second copy of it: this list and the one
+  // above had to be edited together to add `roles`, and updating only the
+  // first would have let a new kind through the unknown-property check while
+  // this one stopped counting it as a source.
+  const sources = DECLARATION_KEYS.filter((key) => key in entry);
   if (sources.length !== 1) {
     errors.push(
       `BAD DECLARATION ${domain} — declare exactly one of enum / enums / roles / reason ` +

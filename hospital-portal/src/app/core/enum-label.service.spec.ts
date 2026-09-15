@@ -33,7 +33,10 @@ describe('EnumLabelService', () => {
     translate.setTranslation('en', { PORTAL: { ENUM: { ROLE: { NURSE: 'Charge Nurse' } } } }, true);
     const pipe = TestBed.runInInjectionContext(() => new EnumLabelPipe());
     try {
-      expect(pipe.transform('NURSE', 'role')).toBe(service.transform('NURSE', 'role'));
+      // The reference, not the answer: comparing two equal strings would pass
+      // just as happily against a private per-pipe copy of the vocabulary,
+      // which is the shape this extraction exists to remove.
+      expect((pipe as unknown as { labels: EnumLabelService }).labels).toBe(service);
       expect(pipe.transform('NURSE', 'role')).toBe('Charge Nurse');
     } finally {
       pipe.ngOnDestroy();
