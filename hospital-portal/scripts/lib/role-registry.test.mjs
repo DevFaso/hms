@@ -82,7 +82,29 @@ test('the last statement in a file needs no trailing semicolon', () => {
   ]);
 });
 
-test('a dollar-quoted body is opaque, apostrophes and all', () => {
+test('a role seeded inside a DO block is still a seeded role', () => {
+  // The first fix for the apostrophe case BLANKED the body, which hid the
+  // conditional-seed idiom entirely — trading one silent drop for another.
+  // The body is its own lexical scope instead: its quotes and comments are
+  // handled, and an unterminated one cannot reach past the closing tag.
+  const D = '$' + '$';
+  assert.deepEqual(
+    roleNamesFrom(
+      sql(
+        `DO ${D} BEGIN IF NOT EXISTS (SELECT 1 FROM "security".roles WHERE code = 'ROLE_X')
+` +
+          `  THEN INSERT INTO "security".roles (code) VALUES ('ROLE_BLOOD_BANK');
+` +
+          `END IF; END ${D};`,
+      ),
+    ),
+    // ROLE_X is named in the guard's SELECT, not seeded by the INSERT, and the
+    // statement match starts at INSERT — so it is correctly not a role here.
+    ['BLOOD_BANK'],
+  );
+});
+
+test('a dollar-quoted body cannot desync the statements around it', () => {
   // 21 migrations here use $$, and one apostrophe inside a body — `patient's`
   // — used to open a string that swallowed the rest of the file, taking every
   // role INSERT after it with it. Same desync as the `;`-in-a-description bug

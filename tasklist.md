@@ -2401,7 +2401,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   are fed by a field the API does not send, so no pipe could have been verified
   on them; they stay pinned, with the trace in the next bullet. A pin is a
   claim that someone looked — it is not a claim that the site is live.
-  The count went UP in that tranche, 215 → 237, and that is the gate getting
+  The count went UP in that tranche, 218 → 237, and that is the gate getting
   less blind rather than the tree getting worse. ENUM_WORDS matches a field
   that ENDS with one of its entries, so `role` never saw `roleName` and nothing
   saw `jobTitle` at all. A "not a lowercase letter" boundary would have covered
@@ -2431,8 +2431,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
   text that should stay pinned.
 - **`bareRole` normalises the role token per portal call site, not at the one
-  place the server could.** The portal maps it in three `.map()`s
-  (`getMyAccessLog`, `getMyDisclosures`, `getSchedulingProviders`) because both
+  place the server could.** The portal maps it in two `.map()`s
+  (`getMyDisclosures` and `getSchedulingProviders`) because both
   spellings and the `Unknown Role` sentence are already in
   `audit_event_logs.role_name` and no backend WRITE can fix rows written years
   ago. The READ path, though, does have single choke points:

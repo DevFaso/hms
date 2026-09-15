@@ -51,15 +51,23 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
    */
   private readonly cdr = inject(ChangeDetectorRef, { optional: true });
   private readonly langSub: Subscription;
+  private readonly translationSub: Subscription;
 
   constructor() {
-    // The service drops its memo on the same event; this half only asks the
-    // host to re-run its template, matching ngx-translate's own pipe.
+    // Both halves listen to both events. The service drops its memo; this one
+    // asks the host to re-run its template, matching ngx-translate's own pipe.
+    // Clearing the memo without marking the host dirty is a half-fix: an
+    // OnPush component keeps the label it already rendered until something
+    // unrelated triggers change detection.
     this.langSub = this.translate.onLangChange.subscribe(() => this.cdr?.markForCheck());
+    this.translationSub = this.translate.onTranslationChange.subscribe(() =>
+      this.cdr?.markForCheck(),
+    );
   }
 
   ngOnDestroy(): void {
     this.langSub.unsubscribe();
+    this.translationSub.unsubscribe();
   }
 
   transform(value: string | null | undefined, domain?: string): string {

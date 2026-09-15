@@ -62,7 +62,7 @@ import { fileURLToPath } from 'node:url';
 import { walk } from './lib/walk.mjs';
 import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
-import { roleNamesFrom } from './lib/role-registry.mjs';
+import { roleNamesFrom, READABLE } from './lib/role-registry.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
@@ -150,7 +150,20 @@ function main() {
           broken = true;
           continue;
         }
-        for (const file of statSync(full).isDirectory() ? walk(full, ['.sql', '.java']) : [full]) {
+        const isDir = statSync(full).isDirectory();
+        // An extensionless regular file passes the declaration check as though
+        // it were a folder, reaches the parser and falls out of its extension
+        // switch with no message — and UNPARSEABLE ROLE REGISTRY only fires on
+        // a grand total of zero, which 160 migrations prevent forever.
+        if (!isDir && !READABLE.some((ext) => full.endsWith(ext))) {
+          errors.push(
+            `UNREADABLE ROLE SOURCE ${domain} -> ${path} is a file the registry ` +
+              `parser cannot read (${READABLE.join(', ')}).`,
+          );
+          broken = true;
+          continue;
+        }
+        for (const file of isDir ? walk(full, READABLE) : [full]) {
           sources.push({ path: file, text: readFileSync(file, 'utf8') });
         }
       }

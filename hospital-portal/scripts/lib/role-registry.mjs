@@ -80,6 +80,10 @@ const SYNTAX = {
  * dollar-quoted body — `patient's`, `l'hopital` — opened a string that
  * swallowed the rest of the file, so every role INSERT after it vanished.
  * Sticky rather than a slice, so a `$` that is not a quote costs one test.
+ *
+ * The body is SCANNED, not blanked — see `scanRange`. Blanking it would hide
+ * the `DO $$ … INSERT … $$` conditional-seed idiom, which is the shape a
+ * future migration is most likely to use.
  */
 const DOLLAR_TAG = /\$(?:[A-Za-z_]\w*)?\$/y;
 
@@ -117,54 +121,72 @@ export function sqlViews(source, ext) {
       if (out[k] !== '\n') out[k] = ' ';
     }
   };
-  let i = 0;
-  while (i < source.length) {
-    const two = source.slice(i, i + 2);
-    if (two === syntax.line) {
-      let end = source.indexOf('\n', i);
-      if (end === -1) end = source.length;
-      blank(noComments, i, end);
-      blank(scanned, i, end);
-      i = end;
-    } else if (two === syntax.block[0]) {
-      const end = source.indexOf(syntax.block[1], i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      blank(noComments, i, stop);
-      blank(scanned, i, stop);
-      i = stop;
-    } else if (syntax.dollar && source[i] === '$' && dollarTagAt(source, i)) {
-      const tag = dollarTagAt(source, i);
-      const end = source.indexOf(tag, i + tag.length);
-      const close = end === -1 ? source.length : end;
-      // The body is opaque: it may hold quotes, semicolons and `--` that mean
-      // nothing to the statement around it.
-      blank(scanned, i + tag.length, close);
-      i = end === -1 ? source.length : end + tag.length;
-    } else if (syntax.quotes.includes(source[i])) {
-      const quote = source[i];
-      let k = i + 1;
-      while (k < source.length) {
-        if (!syntax.escapeByDoubling && source[k] === '\\') {
-          k += 2;
-          continue;
-        }
-        if (source[k] === quote) {
-          // `'it''s'` is one SQL string, not two.
-          if (syntax.escapeByDoubling && source[k + 1] === quote) {
+
+  /**
+   * One lexical scope. A dollar-quoted body is scanned as its own scope
+   * rather than blanked, which is the difference between the two ways this
+   * can go wrong:
+   *
+   *  - blank it, and `DO $$ … INSERT INTO "security".roles … $$` becomes
+   *    invisible. That is the conditional-seed idiom, and twenty-one
+   *    migrations here already use `DO $$`.
+   *  - scan it in the OUTER scope, and one apostrophe in a prose body —
+   *    `COMMENT ON TABLE roles IS $$the patient's catalogue$$` — opens a
+   *    string that swallows the rest of the file.
+   *
+   * Recursing gives both: the body's own quotes and comments are handled, and
+   * an unterminated one cannot reach past the closing tag.
+   */
+  const scanRange = (from, to) => {
+    let i = from;
+    while (i < to) {
+      const two = source.slice(i, i + 2);
+      if (two === syntax.line) {
+        let end = source.indexOf('\n', i);
+        if (end === -1 || end > to) end = to;
+        blank(noComments, i, end);
+        blank(scanned, i, end);
+        i = end;
+      } else if (two === syntax.block[0]) {
+        const end = source.indexOf(syntax.block[1], i + 2);
+        const stop = end === -1 || end + 2 > to ? to : end + 2;
+        blank(noComments, i, stop);
+        blank(scanned, i, stop);
+        i = stop;
+      } else if (syntax.dollar && source[i] === '$' && dollarTagAt(source, i)) {
+        const tag = dollarTagAt(source, i);
+        const end = source.indexOf(tag, i + tag.length);
+        const close = end === -1 || end > to ? to : end;
+        scanRange(i + tag.length, close);
+        i = close === to ? to : close + tag.length;
+      } else if (syntax.quotes.includes(source[i])) {
+        const quote = source[i];
+        let k = i + 1;
+        while (k < to) {
+          if (!syntax.escapeByDoubling && source[k] === '\\') {
             k += 2;
             continue;
           }
-          break;
+          if (source[k] === quote) {
+            // `'it''s'` is one SQL string, not two.
+            if (syntax.escapeByDoubling && source[k + 1] === quote) {
+              k += 2;
+              continue;
+            }
+            break;
+          }
+          k += 1;
         }
-        k += 1;
+        // Contents only: the quotes stay, so the token still reads as a literal.
+        blank(scanned, i + 1, Math.min(k, to));
+        i = Math.min(k + 1, to);
+      } else {
+        i += 1;
       }
-      // Contents only: the quotes stay, so the token still reads as a literal.
-      blank(scanned, i + 1, k);
-      i = k + 1;
-    } else {
-      i += 1;
     }
-  }
+  };
+
+  scanRange(0, source.length);
   return { noComments: noComments.join(''), scanned: scanned.join('') };
 }
 
@@ -185,13 +207,13 @@ export function roleNamesFrom(sources) {
     if (ext === '.sql') {
       for (const match of scanned.matchAll(ROLES_INSERT)) {
         const statement = noComments.slice(match.index, match.index + match[0].length);
-        for (const [, name] of statement.matchAll(ROLE_LITERAL)) names.add(name);
+        for (const [, name] of statement.matchAll(ROLE_LITERAL)) names.add(bareRoleName(name));
       }
     } else {
-      for (const [, name] of noComments.matchAll(SEEDER_LITERAL)) names.add(name);
+      for (const [, name] of noComments.matchAll(SEEDER_LITERAL)) names.add(bareRoleName(name));
     }
   }
-  return [...names].map(bareRoleName).sort();
+  return [...names].sort();
 }
 
 /** `ROLE_DOCTOR` -> `DOCTOR`; anything without the prefix is already bare. */
