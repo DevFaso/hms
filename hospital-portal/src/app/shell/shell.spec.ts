@@ -43,13 +43,11 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
       'getUserProfile',
       'hasAnyRole',
       'getSubject',
-      'formatRole',
       'logout',
     ]);
     authStub.getUserProfile.and.returnValue(null);
     authStub.hasAnyRole.and.callFake((rs: string[]) => rs.some((r) => opts.roles.includes(r)));
     authStub.getSubject.and.returnValue(null);
-    authStub.formatRole.and.callFake((r: string) => r);
     Object.defineProperty(authStub, 'currentProfile', { value: () => null });
 
     // Wildcard owners (super admin / admin) get every permission; other
@@ -680,13 +678,11 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
       'getUserProfile',
       'hasAnyRole',
       'getSubject',
-      'formatRole',
       'logout',
     ]);
     authStub.getUserProfile.and.returnValue(null);
     authStub.hasAnyRole.and.returnValue(false);
     authStub.getSubject.and.returnValue(null);
-    authStub.formatRole.and.callFake((r: string) => r);
     Object.defineProperty(authStub, 'currentProfile', { value: () => null });
 
     const permStub: Partial<PermissionService> = {
@@ -859,19 +855,16 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
   function build(roles: string[], activeRole: string) {
     // Same shape as the harness above: ngOnInit calls getUserProfile and
-    // formatRole, so a partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
       'hasAnyRole',
       'getSubject',
-      'formatRole',
       'logout',
     ]);
     authStub.getUserProfile.and.returnValue(null);
     authStub.hasAnyRole.and.callFake((rs: string[]) => rs.some((r) => roles.includes(r)));
     // null subject skips the websocket branch in ngOnInit.
     authStub.getSubject.and.returnValue(null);
-    authStub.formatRole.and.callFake((r: string) => r);
     Object.defineProperty(authStub, 'currentProfile', { value: () => null });
 
     // Unlike the harness above, these tests DO run ngOnInit (they assert on

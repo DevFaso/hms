@@ -250,7 +250,7 @@
           <select [ngModel]="formRoleId()" (ngModelChange)="formRoleId.set($event)">
             <option value="">—</option>
             @for (r of roles(); track r.id) {
-              <option [value]="r.id">{{ r.name }}</option>
+              <option [value]="r.id">{{ r.name | roleLabel }}</option>
             }
           </select>
         </label>
@@ -328,7 +328,7 @@
             <select [ngModel]="formRoleId()" (ngModelChange)="formRoleId.set($event)">
               <option value="">—</option>
               @for (r of roles(); track r.id) {
-                <option [value]="r.id">{{ r.name }}</option>
+                <option [value]="r.id">{{ r.name | roleLabel }}</option>
               }
             </select>
           </label>
@@ -587,7 +587,7 @@
               >
                 <option value="">—</option>
                 @for (r of roles(); track r.id) {
-                  <option [value]="r.id">{{ r.name }}</option>
+                  <option [value]="r.id">{{ r.name | roleLabel }}</option>
                 }
               </select>
             </label>

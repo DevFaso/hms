@@ -40,6 +40,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 interface NavItem {
   icon: string;
@@ -67,6 +68,7 @@ interface NavItem {
     TranslateModule,
     SkipLinkComponent,
     BrandMarkComponent,
+    RoleLabelPipe,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -126,13 +128,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!u) return '?';
     return `${u.firstName?.charAt(0) ?? ''}${u.lastName?.charAt(0) ?? ''}`.toUpperCase();
   });
+  /**
+   * The role the user chose at login (or the only one they hold), as the RAW
+   * token. The template pipes it: a `computed()` cannot depend on the active
+   * language, so formatting here would freeze the label until some unrelated
+   * signal changed.
+   */
   userRole = computed(() => {
-    // Show the role the user chose at login (or the only role they hold)
     const active = this.roleContext.activeRole;
-    if (active) return this.auth.formatRole(active);
+    if (active) return active;
     const u = this.auth.currentProfile() ?? this.userProfile();
     if (!u || u.roles.length === 0) return '';
-    return this.auth.formatRole(u.roles[0]);
+    return u.roles[0];
   });
   userAvatarUrl = computed(() => {
     const u = this.auth.currentProfile() ?? this.userProfile();

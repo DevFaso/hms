@@ -49,11 +49,9 @@ describe('LockScreenComponent — unlock', () => {
       'setRefreshToken',
       'getUserProfile',
       'getSubject',
-      'formatRole',
     ]);
     auth.getUserProfile.and.returnValue(null);
     auth.getSubject.and.returnValue('doctor_b');
-    auth.formatRole.and.callFake((r: string) => r);
     auth.refreshTokenRequest.and.returnValue(of(FRESH_TOKENS));
 
     idle = jasmine.createSpyObj<IdleService>('IdleService', ['unlock', 'lock', 'start', 'stop']);

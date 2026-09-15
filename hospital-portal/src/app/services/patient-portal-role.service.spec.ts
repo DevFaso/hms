@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
-import { PatientPortalService, bareRole } from './patient-portal.service';
+import { PatientPortalService } from './patient-portal.service';
+import { bareRole } from '../core/role-token';
 
 /**
  * Role tokens reach the portal in two spellings and one sentence.
