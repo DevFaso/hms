@@ -61,6 +61,20 @@ export const ENUM_WORDS = [
   'action',
   'channel',
   'role',
+  // Whole field names, not tails. The FIELD regex ends each alternative
+  // with `\b`, so an entry only ever matches a field that ENDS with it:
+  // `role` never saw `roleName`. A "not a lowercase letter" boundary would
+  // cover every camelCase suffix at once, but the regex carries the `i`
+  // flag, which case-folds a lookahead's character class too — `(?![a-z])`
+  // rejects `N` as well. So each one is spelled out.
+  //
+  // `jobTitle` rather than `title`: a `.title` is a heading someone typed
+  // (a notification, an article, a questionnaire), and pinning sixteen of
+  // those as enum debt would tax every future one for no signal. A
+  // `.jobTitle` is JobTitle.name(), every time.
+  'jobTitle',
+  'roleName',
+  'roleCode',
 ];
 
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */

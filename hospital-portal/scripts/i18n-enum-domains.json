@@ -50,6 +50,7 @@
   },
   "invoiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java" },
   "isolationPrecautionType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java" },
+  "jobTitle": { "enum": "hospital-core/src/main/java/com/example/hms/enums/JobTitle.java" },
   "labOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java" },
   "leaveStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java" },
   "marTaskStatus": {
@@ -75,6 +76,13 @@
   "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
   "referralUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralUrgency.java" },
   "relationship": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java" },
+  "role": {
+    "roles": [
+      "hospital-core/src/main/resources/db/migration",
+      "hospital-core/src/main/java/com/example/hms/seed/RoleSeeder.java",
+      "hospital-core/src/main/java/com/example/hms/bootstrap/DevSyntheticDataSeeder.java"
+    ]
+  },
   "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
   "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
   "snapshotItemType": {

@@ -196,7 +196,7 @@
             <span class="pli-sub">
               <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
               @if (entry.actorRole) {
-                · {{ entry.actorRole }}
+                · {{ entry.actorRole | enumLabel: 'role' }}
               }
               @if (entry.hospitalName) {
                 · {{ entry.hospitalName }}

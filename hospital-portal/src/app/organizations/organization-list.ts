@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { Subscription, merge } from 'rxjs';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -13,18 +21,18 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
-  providers: [EnumLabelPipe],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
 })
-export class OrganizationListComponent implements OnInit {
-  private readonly enumLabel = inject(EnumLabelPipe);
+export class OrganizationListComponent implements OnInit, OnDestroy {
+  private readonly enumLabel = inject(EnumLabelService);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
@@ -100,6 +108,8 @@ export class OrganizationListComponent implements OnInit {
     'UTC',
   ];
 
+  private langSub?: Subscription;
+
   currentPage = signal(0);
   totalPages = signal(0);
   totalElements = signal(0);
@@ -109,6 +119,22 @@ export class OrganizationListComponent implements OnInit {
     this.orgService.getTypes().subscribe({
       next: (types) => this.orgTypes.set(types),
     });
+    // The filter matches the Type column's TRANSLATED label, so the rows that
+    // match change with the language. Without this, a row matched under French
+    // labels stays listed once the cell reads English, and one that would now
+    // match stays hidden until the next keystroke.
+    //
+    // Both events, for the same reason EnumLabelService clears its memo on
+    // both: a bundle merged after first paint changes the labels without
+    // changing the language, and the cells re-render while the filter would
+    // not have.
+    this.langSub = merge(this.translate.onLangChange, this.translate.onTranslationChange).subscribe(
+      () => this.applyFilter(),
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.langSub?.unsubscribe();
   }
 
   loadOrganizations(page = 0): void {

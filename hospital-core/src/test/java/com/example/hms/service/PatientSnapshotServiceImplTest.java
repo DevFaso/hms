@@ -685,7 +685,7 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_careTeamWithNullJobTitle_shouldFallbackToStaff() {
+    void getSnapshot_careTeamWithNullJobTitle_shouldSendNoRole() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -709,7 +709,12 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getCareTeam().size());
-        assertEquals("Staff", result.getCareTeam().get(0).getRole());
+        // Was the literal "Staff" — an English word the portal cannot translate,
+        // because the server had already chosen the language. The drawer renders
+        // an em dash for null. The non-null arm is pinned by
+        // getSnapshot_withCareTeam_shouldMapFromEncounters, which already asserts
+        // the enum NAME rather than JobTitle.getTitle().
+        assertNull(result.getCareTeam().get(0).getRole());
         assertEquals("Nurse Anon", result.getCareTeam().get(0).getName());
     }
 

@@ -9,6 +9,7 @@ import {
   RecordSharingOptOut,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -22,7 +23,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, TranslateModule],
+  imports: [CommonModule, DatePipe, EnumLabelPipe, FormsModule, TranslateModule],
   templateUrl: './my-sharing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],

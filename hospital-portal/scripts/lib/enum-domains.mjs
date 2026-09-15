@@ -12,17 +12,32 @@
 /**
  * Only these may appear in a declaration; anything else is a typo.
  *
- * There is deliberately no `group` override. EnumLabelPipe computes the group
- * as toUpperSnake(domain) with no way to redirect it, so an override here
+ * `roles` is the one vocabulary that is not a Java type at all: roles are
+ * rows in `security.roles`, so the declaration names the migration folder
+ * and the seeder that create them, and lib/role-registry.mjs reads the set
+ * out of them. It is a list of paths for the same reason `enums` is — one
+ * badge, several places that fill it.
+ *
+ * There is deliberately no `group` override. EnumLabelService computes the
+ * group as toUpperSnake(domain) with no way to redirect it, so an override here
  * could only ever point the gate at a group the pipe does not read — and
  * pointing it at a group that happens to hold the constants (the shared STATUS
  * pool, say) would turn the gate green while every value renders Title-Cased
  * English. A validated escape hatch is worse than none.
  */
-export const DECLARATION_KEYS = ['enum', 'enums', 'reason'];
+export const DECLARATION_KEYS = ['enum', 'enums', 'roles', 'reason'];
 
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 const javaPath = (value) => filled(value) && value.endsWith('.java');
+/**
+ * A role source is a folder, or a file lib/role-registry.mjs can read.
+ * Without the extension check a declared `RoleSeeder.kt` validates, exists,
+ * is handed to the parser and dropped by its final `else` with no message —
+ * and the only error that could have caught it, UNPARSEABLE ROLE REGISTRY,
+ * fires on a grand total of zero, which 160 migration files prevent forever.
+ */
+const rolePath = (value) =>
+  filled(value) && (!/\.[A-Za-z0-9]+$/.test(value) || /\.(sql|java)$/.test(value));
 
 /**
  * Push a message per problem and return false, or return true.
@@ -48,10 +63,14 @@ export function validateDeclaration(domain, entry, errors) {
     );
     return false;
   }
-  const sources = ['enum', 'enums', 'reason'].filter((key) => key in entry);
+  // DECLARATION_KEYS itself, not a second copy of it: this list and the one
+  // above had to be edited together to add `roles`, and updating only the
+  // first would have let a new kind through the unknown-property check while
+  // this one stopped counting it as a source.
+  const sources = DECLARATION_KEYS.filter((key) => key in entry);
   if (sources.length !== 1) {
     errors.push(
-      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / reason ` +
+      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / roles / reason ` +
         `(found ${sources.length ? sources.join(' + ') : 'none'}).`,
     );
     return false;
@@ -65,6 +84,16 @@ export function validateDeclaration(domain, entry, errors) {
     (!Array.isArray(entry.enums) || entry.enums.length === 0 || !entry.enums.every(javaPath))
   ) {
     errors.push(`BAD DECLARATION ${domain} — enums must be a non-empty array of .java paths.`);
+    return false;
+  }
+  if (
+    'roles' in entry &&
+    (!Array.isArray(entry.roles) || entry.roles.length === 0 || !entry.roles.every(rolePath))
+  ) {
+    errors.push(
+      `BAD DECLARATION ${domain} — roles must be a non-empty array of folders ` +
+        `or .sql / .java files that create them.`,
+    );
     return false;
   }
   if ('reason' in entry && !filled(entry.reason)) {

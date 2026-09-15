@@ -2283,22 +2283,22 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
      Discharge". The positive assertion still catches the regression; the
      exclusion is dead weight.
-- **Nine round-3 findings on #664, deferred by the user to ride with the
-  `.role` tranche.** None is reachable by a user today; several are one edit
-  each, and two of them change the shape the next tranche should follow.
-  1. `EnumLabelPipe` is injected as a component PROVIDER in
+- **Six of the nine round-3 findings on #664 are still open.** 1, 2 and 7
+  shipped with the `.role` tranche and are struck below; the rest are still
+  one edit each and none is reachable by a user today.
+  1. ~~`EnumLabelPipe` is injected as a component PROVIDER in
      `organization-list.ts` so the filter can call `transform()` from
      TypeScript. It is the only such construction in the portal, and it gives
      that instance its own `ChangeDetectorRef`, its own `onLangChange`
      subscription and a `memo` separate from the template's. Extract the
      three-tier lookup into an injectable `EnumLabelService` the pipe
-     delegates to — **the `.role` tranche wants the same trick on five more
-     screens, so do this first**.
-  2. The organization filter matches a locale-dependent label but only re-runs
-     on keystroke, so the list goes stale when the language changes: a row
-     matched under French labels stays listed once the cell reads English. A
-     `computed()` over `searchTerm` + `organizations()`, or a re-run on
-     `onLangChange`, holds.
+     delegates to.~~ Done with the `.role` tranche: `core/enum-label.service.ts`
+     holds the vocabulary and the lookup, the pipe is 68 lines of delegation,
+     and the component injects the service.
+  2. ~~The organization filter matches a locale-dependent label but only
+     re-runs on keystroke, so the list goes stale when the language
+     changes.~~ Done: it re-runs on `onLangChange`, with a spec that switches
+     both ways and fails without the subscription.
   3. `snapshotItemType` {VITALS, LAB} and `orderTaskType` {LAB, IMAGING,
      PROCEDURE} both key LAB for a lab-order badge — 5 tokens over 2 groups ×
      3 locales with the shared one duplicated. One `orderSourceType` covering
@@ -2315,10 +2315,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      `o.description || ('SNAPSHOT.ORDER' | translate)` and `n.author || '—'` —
      have no spec, though both are reachable (a lab order whose test
      definition was deleted; a note whose staff row is gone).
-  7. `organization-list.spec.ts`'s `RoleContextService` stub omits
-     `isSuperAdmin`, which the component reads at construction. The spec passes
-     only because it never renders; the first rendering assertion added there
-     will fail on `isSuperAdmin is not a function`.
+  7. ~~`organization-list.spec.ts`'s `RoleContextService` stub omits
+     `isSuperAdmin`, which the component reads at construction.~~ Done: it
+     uses the shared `roleContextStub`, and the spec renders now, which is
+     what would have hit it.
   8. `SNAPSHOT.ORDER` is a new root namespace holding one key, while the other
      16 keys in that template are `DASHBOARD.*`. Its French, « Prescription »,
      also reads as a medication order under a badge that already says
@@ -2326,7 +2326,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      both.
   9. `my-notifications.component.ts` imports both `CommonModule` and
      `DatePipe`; the former re-exports the latter.
-- **218 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **237 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
@@ -2360,14 +2360,27 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   change could have fixed them, and the gate reports them identically to a
   missing pipe. When a traced field turns out to be a display string, the fix
   is a token on the server plus a key, not a pipe.
-  `role` joined ENUM_WORDS in that tranche and surfaced five sites the gate
-  had never seen, so **the `.role` cluster is the next tranche**: the care
-  team panel in the snapshot drawer and on the dashboard, my-care-team,
-  my-appointments and my-sharing all render `JobTitle.name()` or an actor
-  role raw. It needs a ~35-value JobTitle vocabulary, which is why it is a
-  tranche of its own rather than a rider on the `.type` one, and it carries
-  one backend literal with it: PatientSnapshotServiceImpl still falls back
-  to the word "Staff" when a staff member has no job title.
+  `role` joined ENUM_WORDS in the `.type` tranche and surfaced five sites the
+  gate had never seen. The `.role` tranche took them and found that the five
+  render THREE different things, not one vocabulary: the snapshot drawer's care
+  team carries `JobTitle.name()` (31 constants); my-appointments and my-sharing
+  carry `security.roles.name`, which is a DB registry and not a Java enum at
+  all; and two of the five are unreachable (next bullet). Two consequences
+  worth keeping:
+  - Roles are rows, so the enum gate learned a fourth declaration kind,
+    `roles`, which derives the vocabulary from the migrations the way
+    `RoleRegistryTest` does — 33 names today, and a migration that adds one
+    fails the i18n gate until it is keyed. `lib/role-registry.mjs` deliberately
+    does NOT subtract the V159 DELETEs: they are conditional on nobody holding
+    the role, and `audit_event_logs.role_name` keeps the string forever
+    regardless, so a patient's access log can show a retired role for years.
+  - One column holds two spellings of one role. `WriteAuditInterceptor` strips
+    the `ROLE_` prefix on purpose and `AuditEventLogServiceImpl` does not, so
+    both forms are in `role_name` on every environment and old rows keep
+    theirs. Normalising at the portal boundary (`bareRole`) is not a
+    workaround — there is no single backend write to fix — and it is also
+    where the `Unknown Role` sentence becomes null. Fixing the two writers to
+    agree would still leave every row written before the fix.
   `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
   that is not pinned fails the build and is named, and a pin whose site is
   gone is reported stale. Work it down in tranches: trace each field to the
@@ -2382,9 +2395,124 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   and the super-admin ternary return an icon name or a number, not a label; and
   `h.state`/`p.state` are postal address lines, not enums. The baseline has no
   field to record that, and `--write-baseline` rewrites its `$comment`, so it is
-  written here instead — do not re-trace them. Next clusters: `.reason` (14),
+  written here instead — do not re-trace them.
+  A FOURTH thing the gate cannot see, found by the `.role` tranche: a site that
+  renders raw because it never renders at all. Two of that tranche's five sites
+  are fed by a field the API does not send, so no pipe could have been verified
+  on them; they stay pinned, with the trace in the next bullet. A pin is a
+  claim that someone looked — it is not a claim that the site is live.
+  The count went UP in that tranche, 218 → 237, and that is the gate getting
+  less blind rather than the tree getting worse. ENUM_WORDS matches a field
+  that ENDS with one of its entries, so `role` never saw `roleName` and nothing
+  saw `jobTitle` at all. A "not a lowercase letter" boundary would have covered
+  every camelCase suffix at once, but the FIELD regex carries the `i` flag,
+  which case-folds a lookahead's character class too — `(?![a-z])` rejects `N`
+  as well — so each suffix needs its own entry. `jobTitle`, `roleName` and
+  `roleCode` surfaced 22 sites nothing had ever scanned, and **they are the
+  next tranche**, in that order:
+  - 14 `.roleName` / `.roleCode` renders across 12 templates — /users,
+    audit-logs, profile, staff-detail, admin-assignments (×2), the super-admin
+    emergency picker and audit search, chat, lab-staff-list, scheduling (×2),
+    consultations, and the five onboarding role-welcome screens — all showing
+    `ROLE_DOCTOR` verbatim. **The vocabulary for these already shipped**: it is
+    the same `PORTAL.ENUM.ROLE` the sharing page and the booking picker now
+    use, so each is a `bareRole` + one pipe.
+  - 8 `.jobTitle` renders, whose 31-value bundle also already ships. Not only
+    missing pipes: `staff-detail` and `staff-list` call a hand-rolled
+    `formatJobTitle()` that is tier 3 of EnumLabelService reimplemented
+    (`replaceAll('_', ' ')` + Title Case), the dashboard uses `| titlecase`,
+    and `staff-list` has a filter chip doing `.replaceAll('_', ' ')` — four
+    ways of spelling "render it in English", none of which any gate could see.
+  `title` was tried as the ENUM_WORDS entry first and withdrawn: it pinned 16
+  free-text headings (notification, in-basket, education, questionnaire) as
+  enum debt and would have taxed every future one for no signal. A `.title` is
+  prose someone typed; a `.jobTitle` is `JobTitle.name()`, every time.
+  Next clusters after that: `.reason` (14),
   `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
   text that should stay pinned.
+- **`bareRole` normalises the role token per portal call site, not at the one
+  place the server could.** The portal maps it in two `.map()`s
+  (`getMyDisclosures` and `getSchedulingProviders`) because both
+  spellings and the `Unknown Role` sentence are already in
+  `audit_event_logs.role_name` and no backend WRITE can fix rows written years
+  ago. The READ path, though, does have single choke points:
+  `DisclosureAccountingServiceImpl.toEntry()` line 118 feeds both audit
+  surfaces, and `PatientPortalServiceImpl.getProvidersForDepartment` line 595
+  feeds the picker — stripping there would cover legacy rows too AND every
+  future client, and would let the portal drop all three maps. Deferred from
+  #665 because it changes two backend services and their tests for no
+  user-visible difference in this client; worth doing with the
+  `AuditEventLogMapper` twin above, in one pass.
+- **`OrganizationListComponent` unsubscribes its language subscription and
+  nothing else.** #665 gave it an `ngOnDestroy` for `langSub`; the two HTTP
+  subscriptions `ngOnInit` opens (`orgService.list`, `orgService.getTypes`) are
+  still unmanaged, so a response landing after the user navigates away runs
+  `applyFilter()` and `loading.set(false)` on a destroyed component, and an
+  error toasts for a page nobody is on. Routing all three through
+  `takeUntilDestroyed` would remove the field and the hook together. Pre-dates
+  #665; that PR is just the first to give the class a destroy hook.
+- **The patient's care team is permanently empty, in two places.**
+  `GET /me/patient/care-team` returns `CareTeamDTO { primaryCare,
+  primaryCareHistory }`; the portal's interface for the same endpoint declares
+  `{ members: CareTeamMember[] }`. Nothing reconciles them, so
+  `my-care-team.component` sets `team.members ?? []` and always renders its
+  empty state, and the dashboard's "My care team" card is behind
+  `@if (myCareTeam()?.members?.length)` and never appears. The backend has the
+  data — a current PCP and the full history, with hospital and dates — and the
+  page that would show it has been dead since it was written. Found while
+  tracing the `.role` tranche: those two components hold two of its five sites,
+  and their `.role` renders stay pinned because a pipe on a template nobody
+  reaches cannot be verified. The fix is a product decision first: "care team"
+  as the PCP history the endpoint returns, or as the treating staff the
+  snapshot drawer already derives from encounters. It is not an i18n change.
+- **`AuditEventLogMapper` stamps "Unknown Role" too.** The write path is the
+  one the patient's sharing page reads, and the portal now maps that sentence
+  to null; the READ mapper has its own copy of the same literal, feeding the
+  admin audit surface, and `DashboardConfigurationServiceImpl` has a third.
+  Three constants, one string, no shared definition. #665 fixed the twin
+  literal (`"Staff"`) at its root one file over and then patched this one only
+  on the patient path, so `audit-logs.html:107` and
+  `super-admin/audit-search:233` still render the English sentence to a French
+  clinician. Returning null at the mapper fixes every client at once, which is
+  what the `"Staff"` fix did.
+- **Six one-edit follow-ups from #665's round 3, for the `.roleName` tranche.**
+  Each was verified against the tree and deferred because it widens a PR that
+  had already grown a gate change; all six land naturally in the tranche that
+  translates the 14 `roleName` sites.
+  1. `bareRole` lives in `patient-portal.service.ts`, but the tranche's sites
+     are staff screens served by other services. It belongs in `src/app/core/`,
+     beside the `EnumLabelService` #665 extracted for the same reason —
+     otherwise each of those components imports from a patient-portal module
+     or re-implements the strip, and the `Unknown Role` sentinel drifts.
+  2. `UNKNOWN_ROLE = 'Unknown Role'` couples the portal to an exact Java
+     literal that three backend files stamp independently. Reword any of them
+     and the sentinel silently stops matching; a guard asserting the Java
+     literal equals the TS constant (the shape `MigrationRegistrationTest`
+     uses) holds it.
+  3. The `roles` declaration validates a path's extension but nothing counts
+     what each path CONTRIBUTES, so a declared folder holding no `.sql`/`.java`
+     yields zero in silence — `UNPARSEABLE ROLE REGISTRY` only fires on a grand
+     total of zero, which 160 migrations prevent. Per-source accounting (each
+     declared path must yield ≥ 1) closes it; `role-registry.test.mjs` already
+     does this for `.java`, the gate does not.
+  4. `role-registry.test.mjs`'s `declaredSources()` re-implements the gate's
+     existsSync / statSync / walk gathering rather than sharing it, and its own
+     comment records that the two had already drifted once. Both use the
+     exported `READABLE` now, so the extension list is no longer duplicated,
+     but the eight lines around it still are: `roleSourcesFrom(paths)` in the
+     lib, called by both, is the fix.
+  5. `sqlViews` builds both character-array views for every source — including
+     `.java`, which never reads `scanned`, and all ~165 migrations, of which 5
+     contain a role INSERT. An `INSERT INTO` pre-filter and skipping the second
+     view for Java removes nearly all of it. It is also exported and imported
+     nowhere: test it directly or make it module-private.
+  6. `OrganizationListComponent.filtered` is manual derivable state recomputed
+     at three call sites, and #665's `onLangChange` subscription is the third
+     patch on that shape. A `computed()` over `organizations()`, a `searchTerm`
+     signal and a `lang` signal derives it once and makes the subscription and
+     the manual calls unnecessary — the next writer of `organizations` that
+     forgets `applyFilter()` leaves the list stale exactly as the language
+     switch did.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act
