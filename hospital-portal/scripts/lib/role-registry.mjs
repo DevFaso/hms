@@ -2,13 +2,15 @@
  * The role vocabulary, read where it actually lives: the migrations.
  *
  * Every other enum domain names a Java enum. Roles are not an enum — they are
- * rows in `security.roles`, created by migrations and by the dev-profile
- * RoleSeeder, and a hospital admin can add more at runtime from the Roles
- * screen. So the gate reads the same sources `RoleRegistryTest` reads, for the
- * same reason: a role becomes real the moment a migration creates it, and
+ * rows in `security.roles`, created by migrations and by two seeders, and a
+ * hospital admin can add more at runtime from the Roles screen. So the gate
+ * reads the files that create them, for the reason `RoleRegistryTest` reads
+ * the migrations: a role becomes real the moment one of them creates it, and
  * nothing else in the tree lists them all.
  *
- * TWO DELIBERATE DIFFERENCES from RoleRegistryTest:
+ * NOT the same parse as RoleRegistryTest, and worth knowing how it differs —
+ * two regexes over the same SQL with different blind spots is how a role goes
+ * missing quietly:
  *
  *  1. **DELETEs are not subtracted.** V159 retires seven roles, but only
  *     `WHERE NOT EXISTS` a user still holds one — so on any environment where
@@ -18,29 +20,27 @@
  *     can show a retired role years after the row is gone. For i18n the union
  *     of everything ever seeded is the honest set; for guard coverage it is
  *     not, which is why that test subtracts and this does not.
- *  2. **Names come back bare** (`DOCTOR`, not `ROLE_DOCTOR`), because that is
+ *  2. **The seeders count too.** RoleRegistryTest reads only the migration
+ *     folder; this reads whatever `scripts/i18n-enum-domains.json` declares,
+ *     which includes `RoleSeeder` and `DevSyntheticDataSeeder`.
+ *  3. **Names come back bare** (`DOCTOR`, not `ROLE_DOCTOR`), because that is
  *     what the portal pipes. `security.roles.name` carries the prefix, the
  *     write-audit interceptor strips it, and `AuditEventLogServiceImpl` does
  *     not — so the column holds both spellings of one role. The portal
- *     normalises to the bare form at the service boundary
- *     (`bareRole` in patient-portal.service.ts) and the bundle keys that.
+ *     normalises to the bare form at the service boundary (`bareRole` in
+ *     patient-portal.service.ts) and the bundle keys that.
  *
  * Pure function on text, like {@link javaEnumConstants}, so the gate stays the
  * only thing that touches the filesystem.
  */
 
-/** `-- ...` to end of line. V30 carries its rollback DELETE as a comment. */
-const SQL_COMMENT = /--[^\n]*/g;
-/** `//` and `/* *\/` in Java. */
-const JAVA_LINE_COMMENT = /\/\/[^\n]*/g;
-const JAVA_BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
-
 /**
- * An `INSERT INTO "security".roles ...;` statement, comments already gone.
+ * An `INSERT INTO "security".roles ...;` statement.
+ *
  * Either identifier may be quoted, and the schema may be omitted under a set
- * `search_path` — a spelling the parser misses is a role that ships unkeyed,
- * and nothing else would notice, because only a grand total of zero is an
- * error.
+ * `search_path`. A spelling the parser misses is a role that ships unkeyed and
+ * nothing notices, because only a grand total of zero is an error and the
+ * other thirty names make that impossible.
  */
 const ROLES_INSERT = /INSERT\s+INTO\s+(?:"?security"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?;/gi;
 /** A seeded name inside one of those. */
@@ -62,27 +62,105 @@ const SEEDER_LITERAL = /"(ROLE_[A-Z0-9_]+)"/g;
 
 const ROLE_PREFIX = 'ROLE_';
 
-/** Keep the newlines so a blanked comment cannot join two statements. */
-const blank = (text) => text.replaceAll(/[^\n]/g, ' ');
+/** Extensions this module knows how to read. The gate rejects the rest. */
+export const READABLE = ['.sql', '.java'];
+
+const SYNTAX = {
+  '.sql': { line: '--', block: ['/*', '*/'], quotes: "'", escapeByDoubling: true },
+  '.java': { line: '//', block: ['/*', '*/'], quotes: '"\'', escapeByDoubling: false },
+};
+
+/**
+ * Two views of one source, offsets preserved: `noComments` has comments
+ * blanked, `scanned` has string CONTENTS blanked as well.
+ *
+ * Both are needed, and the reason is the bug this replaced. Statement
+ * boundaries have to be found where a `;` inside a description cannot end a
+ * statement early and a `--` inside one cannot start a comment — that is
+ * `scanned`. But the role names live inside those very strings, so they have
+ * to be read back out of `noComments` over the same offsets. Matching both on
+ * one view loses either the boundaries or the names.
+ *
+ * `V2__seed_roles.sql` seeds twenty-four roles in a SINGLE statement, so one
+ * semicolon in one description used to drop every role after it, silently, and
+ * with the count still comfortably above any floor a test could assert.
+ *
+ * Same shape and the same reason as `blankCommentsAndStrings` in
+ * java-enum.mjs, which the enum parser needed for a `;` inside a Javadoc.
+ */
+export function sqlViews(source, ext) {
+  const syntax = SYNTAX[ext];
+  const noComments = source.split('');
+  const scanned = source.split('');
+  const blank = (out, from, to) => {
+    for (let k = from; k < to && k < out.length; k += 1) {
+      if (out[k] !== '\n') out[k] = ' ';
+    }
+  };
+  let i = 0;
+  while (i < source.length) {
+    const two = source.slice(i, i + 2);
+    if (two === syntax.line) {
+      let end = source.indexOf('\n', i);
+      if (end === -1) end = source.length;
+      blank(noComments, i, end);
+      blank(scanned, i, end);
+      i = end;
+    } else if (two === syntax.block[0]) {
+      const end = source.indexOf(syntax.block[1], i + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      blank(noComments, i, stop);
+      blank(scanned, i, stop);
+      i = stop;
+    } else if (syntax.quotes.includes(source[i])) {
+      const quote = source[i];
+      let k = i + 1;
+      while (k < source.length) {
+        if (!syntax.escapeByDoubling && source[k] === '\\') {
+          k += 2;
+          continue;
+        }
+        if (source[k] === quote) {
+          // `'it''s'` is one SQL string, not two.
+          if (syntax.escapeByDoubling && source[k + 1] === quote) {
+            k += 2;
+            continue;
+          }
+          break;
+        }
+        k += 1;
+      }
+      // Contents only: the quotes stay, so the token still reads as a literal.
+      blank(scanned, i + 1, k);
+      i = k + 1;
+    } else {
+      i += 1;
+    }
+  }
+  return { noComments: noComments.join(''), scanned: scanned.join('') };
+}
 
 /**
  * Bare role names from a set of `{ path, text }` sources, sorted and deduped.
  *
  * A `.sql` source contributes the literals inside its role INSERTs; a `.java`
  * source contributes every `"ROLE_X"` literal it names. Anything else
- * contributes nothing — silently, because the gate validates the paths.
+ * contributes nothing — which is why the gate refuses to declare a source it
+ * cannot read, rather than letting it drop out here in silence.
  */
 export function roleNamesFrom(sources) {
   const names = new Set();
   for (const { path, text } of sources) {
-    if (path.endsWith('.sql')) {
-      const clean = text.replaceAll(SQL_COMMENT, blank);
-      for (const [statement] of clean.matchAll(ROLES_INSERT)) {
+    const ext = READABLE.find((e) => path.endsWith(e));
+    if (!ext) continue;
+    const { noComments, scanned } = sqlViews(text, ext);
+    if (ext === '.sql') {
+      for (const match of scanned.matchAll(ROLES_INSERT)) {
+        const statement = noComments.slice(match.index, match.index + match[0].length);
         for (const [, name] of statement.matchAll(ROLE_LITERAL)) names.add(name);
       }
-    } else if (path.endsWith('.java')) {
-      const clean = text.replaceAll(JAVA_BLOCK_COMMENT, blank).replaceAll(JAVA_LINE_COMMENT, blank);
-      for (const [, name] of clean.matchAll(SEEDER_LITERAL)) names.add(name);
+    } else {
+      for (const [, name] of noComments.matchAll(SEEDER_LITERAL)) names.add(name);
     }
   }
   return [...names].map(bareRoleName).sort();

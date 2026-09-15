@@ -9,11 +9,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { roleNamesFrom, bareRoleName } from './role-registry.mjs';
+import { roleNamesFrom, bareRoleName, READABLE } from './role-registry.mjs';
 import { walk } from './walk.mjs';
 import { validateDeclaration } from './enum-domains.mjs';
 
@@ -35,7 +35,10 @@ const DOMAINS = JSON.parse(
 const declaredSources = () =>
   DOMAINS.role.roles
     .map((path) => resolve(REPO_DIR, path))
-    .flatMap((full) => (full.endsWith('.java') ? [full] : walk(full, ['.sql', '.java'])))
+    // statSync, not the extension: the gate branches on isDirectory(), and a
+    // declared `.sql` FILE sent this helper's `walk` into readdirSync on a
+    // regular file. Both path shapes validate, so both have to work here.
+    .flatMap((full) => (statSync(full).isDirectory() ? walk(full, READABLE) : [full]))
     .map((path) => ({ path, text: readFileSync(path, 'utf8') }));
 
 const sql = (text) => [{ path: 'V1__x.sql', text }];
@@ -98,6 +101,40 @@ test('a commented-out INSERT is not a seeded role', () => {
   assert.deepEqual(
     roleNamesFrom(sql(`-- INSERT INTO "security".roles (code) VALUES ('ROLE_PLANNED');`)),
     [],
+  );
+  assert.deepEqual(
+    roleNamesFrom(sql(`/* INSERT INTO "security".roles (code) VALUES ('ROLE_PLANNED'); */`)),
+    [],
+  );
+});
+
+test('punctuation inside a description does not end the statement', () => {
+  // V2 seeds twenty-four roles in ONE statement, each with a prose
+  // description. A `;` in one of them used to drop every role after it, and
+  // a `--` used to comment out the rest of the line — silently, and with the
+  // total still well above any floor a test could asserted against.
+  assert.deepEqual(
+    roleNamesFrom(
+      sql(
+        `INSERT INTO "security".roles (code, description) VALUES\n` +
+          `  ('ROLE_A', 'Runs the bench; signs the results'),\n` +
+          `  ('ROLE_B', 'Covid--19 lead'),\n` +
+          `  ('ROLE_C', 'it''s a role; really');`,
+      ),
+    ),
+    ['A', 'B', 'C'],
+  );
+});
+
+test('a role name that only appears in prose is still only prose', () => {
+  // The names are read back out of the statement, so a mention inside a
+  // description is indistinguishable from a seeded code. That over-match is
+  // accepted — an extra name is a keyed label nothing sends, which the
+  // coverage gate reports as a note — but it should not reach OUTSIDE the
+  // statement.
+  assert.deepEqual(
+    roleNamesFrom(sql(`SELECT 'ROLE_ELSEWHERE'; INSERT INTO roles (code) VALUES ('ROLE_D');`)),
+    ['D'],
   );
 });
 

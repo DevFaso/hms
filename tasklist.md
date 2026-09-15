@@ -2326,7 +2326,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      both.
   9. `my-notifications.component.ts` imports both `CommonModule` and
      `DatePipe`; the former re-exports the latter.
-- **239 enum-shaped fields are still rendered without `| enumLabel`.** A value
+- **237 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
   screen in every language while every other gate stays green: the key exists,
@@ -2401,20 +2401,32 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   are fed by a field the API does not send, so no pipe could have been verified
   on them; they stay pinned, with the trace in the next bullet. A pin is a
   claim that someone looked — it is not a claim that the site is live.
-  The count went UP in that tranche, 215 → 239, and that is the gate getting
-  less blind rather than the tree getting worse: keying JOB_TITLE for the
-  snapshot drawer made it obvious that `title` was not in ENUM_WORDS either, so
-  `.jobTitle` had never been scanned at all. Adding it surfaced 24 sites, 9 of
-  them the same `JobTitle` enum the drawer now translates. **That is the next
-  tranche**, and it is not only missing pipes: `staff-detail` and `staff-list`
-  call a hand-rolled `formatJobTitle()` that is tier 3 of EnumLabelService
-  reimplemented (`replaceAll('_', ' ')` + Title Case), the dashboard uses
-  `| titlecase`, and `staff-list` has a filter chip doing `.replaceAll('_',
-  ' ')` — four ways of spelling "render it in English", none of which any gate
-  could see. The other 15 are `.title` fields (notification, in-basket,
-  education, questionnaire) and are almost certainly free text a person typed;
-  they are pinned as such, unverified, because this tranche traced the
-  `.jobTitle` half only.
+  The count went UP in that tranche, 215 → 237, and that is the gate getting
+  less blind rather than the tree getting worse. ENUM_WORDS matches a field
+  that ENDS with one of its entries, so `role` never saw `roleName` and nothing
+  saw `jobTitle` at all. A "not a lowercase letter" boundary would have covered
+  every camelCase suffix at once, but the FIELD regex carries the `i` flag,
+  which case-folds a lookahead's character class too — `(?![a-z])` rejects `N`
+  as well — so each suffix needs its own entry. `jobTitle`, `roleName` and
+  `roleCode` surfaced 22 sites nothing had ever scanned, and **they are the
+  next tranche**, in that order:
+  - 14 `.roleName` / `.roleCode` renders across 12 templates — /users,
+    audit-logs, profile, staff-detail, admin-assignments (×2), the super-admin
+    emergency picker and audit search, chat, lab-staff-list, scheduling (×2),
+    consultations, and the five onboarding role-welcome screens — all showing
+    `ROLE_DOCTOR` verbatim. **The vocabulary for these already shipped**: it is
+    the same `PORTAL.ENUM.ROLE` the sharing page and the booking picker now
+    use, so each is a `bareRole` + one pipe.
+  - 8 `.jobTitle` renders, whose 31-value bundle also already ships. Not only
+    missing pipes: `staff-detail` and `staff-list` call a hand-rolled
+    `formatJobTitle()` that is tier 3 of EnumLabelService reimplemented
+    (`replaceAll('_', ' ')` + Title Case), the dashboard uses `| titlecase`,
+    and `staff-list` has a filter chip doing `.replaceAll('_', ' ')` — four
+    ways of spelling "render it in English", none of which any gate could see.
+  `title` was tried as the ENUM_WORDS entry first and withdrawn: it pinned 16
+  free-text headings (notification, in-basket, education, questionnaire) as
+  enum debt and would have taxed every future one for no signal. A `.title` is
+  prose someone typed; a `.jobTitle` is `JobTitle.name()`, every time.
   Next clusters after that: `.reason` (14),
   `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
   text that should stay pinned.

@@ -39,6 +39,18 @@ test('a roles declaration must name somewhere to read them from', () => {
   assert.match(check({ roles: [] }).errors[0], /non-empty array/);
 });
 
+test('a role source the parser cannot read is refused, not dropped', () => {
+  // role-registry.mjs reads .sql and .java. Anything else used to validate,
+  // exist, reach the parser and fall out of its final `else` in silence —
+  // and UNPARSEABLE ROLE REGISTRY only fires on a grand total of zero, which
+  // 160 migration files make impossible.
+  assert.equal(check({ roles: [MIGRATIONS] }).ok, true, 'a folder is the normal case');
+  assert.equal(check({ roles: [`${MIGRATIONS}/V2__seed_roles.sql`] }).ok, true);
+  assert.equal(check({ roles: [JAVA] }).ok, true);
+  assert.equal(check({ roles: ['hospital-core/src/main/kotlin/RoleSeeder.kt'] }).ok, false);
+  assert.match(check({ roles: ['x/RoleSeeder.kt'] }).errors[0], /\.sql \/ \.java/);
+});
+
 test('roles is a source like the others, not an extra', () => {
   assert.equal(check({ enum: JAVA, roles: [MIGRATIONS] }).ok, false);
   assert.match(check({}).errors[0], /enum \/ enums \/ roles \/ reason/);

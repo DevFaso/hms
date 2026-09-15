@@ -29,6 +29,15 @@ export const DECLARATION_KEYS = ['enum', 'enums', 'roles', 'reason'];
 
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 const javaPath = (value) => filled(value) && value.endsWith('.java');
+/**
+ * A role source is a folder, or a file lib/role-registry.mjs can read.
+ * Without the extension check a declared `RoleSeeder.kt` validates, exists,
+ * is handed to the parser and dropped by its final `else` with no message —
+ * and the only error that could have caught it, UNPARSEABLE ROLE REGISTRY,
+ * fires on a grand total of zero, which 160 migration files prevent forever.
+ */
+const rolePath = (value) =>
+  filled(value) && (!/\.[A-Za-z0-9]+$/.test(value) || /\.(sql|java)$/.test(value));
 
 /**
  * Push a message per problem and return false, or return true.
@@ -79,11 +88,11 @@ export function validateDeclaration(domain, entry, errors) {
   }
   if (
     'roles' in entry &&
-    (!Array.isArray(entry.roles) || entry.roles.length === 0 || !entry.roles.every(filled))
+    (!Array.isArray(entry.roles) || entry.roles.length === 0 || !entry.roles.every(rolePath))
   ) {
     errors.push(
-      `BAD DECLARATION ${domain} — roles must be a non-empty array of paths to the ` +
-        `migrations and seeders that create them.`,
+      `BAD DECLARATION ${domain} — roles must be a non-empty array of folders ` +
+        `or .sql / .java files that create them.`,
     );
     return false;
   }
