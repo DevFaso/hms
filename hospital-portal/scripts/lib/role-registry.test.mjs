@@ -65,6 +65,7 @@ test('every spelling of the same table is the same table', () => {
     `security.roles`,
     `"security"."roles"`,
     `security . roles`,
+    `public.roles`,
     `roles`,
   ]) {
     assert.deepEqual(
@@ -73,6 +74,43 @@ test('every spelling of the same table is the same table', () => {
       `INSERT INTO ${table} was not read`,
     );
   }
+});
+
+test('the last statement in a file needs no trailing semicolon', () => {
+  assert.deepEqual(roleNamesFrom(sql(`INSERT INTO roles (code) VALUES ('ROLE_MIDWIFE')`)), [
+    'MIDWIFE',
+  ]);
+});
+
+test('a dollar-quoted body is opaque, apostrophes and all', () => {
+  // 21 migrations here use $$, and one apostrophe inside a body — `patient's`
+  // — used to open a string that swallowed the rest of the file, taking every
+  // role INSERT after it with it. Same desync as the `;`-in-a-description bug
+  // above, through a door the first fix did not model.
+  const D = '$' + '$';
+  assert.deepEqual(
+    roleNamesFrom(
+      sql(
+        `COMMENT ON TABLE roles IS ${D}the patient's catalogue${D};\n` +
+          `INSERT INTO "security".roles (code) VALUES ('ROLE_MIDWIFE');`,
+      ),
+    ),
+    ['MIDWIFE'],
+  );
+  // A tagged body, with a semicolon and a doubled quote inside it.
+  assert.deepEqual(
+    roleNamesFrom(
+      sql(
+        `DO $fn$ BEGIN RAISE NOTICE 'it''s; fine'; END $fn$;\n` +
+          `INSERT INTO roles (code) VALUES ('ROLE_MIDWIFE');`,
+      ),
+    ),
+    ['MIDWIFE'],
+  );
+  // A bare `$` that is not a quote costs nothing.
+  assert.deepEqual(roleNamesFrom(sql(`-- cost: $5\nINSERT INTO roles (c) VALUES ('ROLE_X');`)), [
+    'X',
+  ]);
 });
 
 test('a role named only in a DELETE is not seeded by it', () => {

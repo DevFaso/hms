@@ -37,12 +37,14 @@
 /**
  * An `INSERT INTO "security".roles ...;` statement.
  *
- * Either identifier may be quoted, and the schema may be omitted under a set
- * `search_path`. A spelling the parser misses is a role that ships unkeyed and
- * nothing notices, because only a grand total of zero is an error and the
- * other thirty names make that impossible.
+ * Either identifier may be quoted, the schema may be any schema or omitted
+ * entirely under a set `search_path`, and the trailing `;` may be absent on
+ * the last statement in a file. A spelling the parser misses is a role that
+ * ships unkeyed and nothing notices, because only a grand total of zero is an
+ * error and the other thirty names make that impossible.
  */
-const ROLES_INSERT = /INSERT\s+INTO\s+(?:"?security"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?;/gi;
+const ROLES_INSERT =
+  /INSERT\s+INTO\s+(?:"?[A-Za-z_]\w*"?\s*\.\s*)?"?roles"?[\s(][\s\S]*?(?:;|$)/gi;
 /** A seeded name inside one of those. */
 const ROLE_LITERAL = /'(ROLE_[A-Z0-9_]+)'/g;
 /**
@@ -66,9 +68,20 @@ const ROLE_PREFIX = 'ROLE_';
 export const READABLE = ['.sql', '.java'];
 
 const SYNTAX = {
-  '.sql': { line: '--', block: ['/*', '*/'], quotes: "'", escapeByDoubling: true },
+  '.sql': { line: '--', block: ['/*', '*/'], quotes: "'", escapeByDoubling: true, dollar: true },
   '.java': { line: '//', block: ['/*', '*/'], quotes: '"\'', escapeByDoubling: false },
 };
+
+/**
+ * `$$` or `$tag$`, anchored — Postgres dollar quoting.
+ *
+ * Twenty-one migrations in this repo already use it, and this repo has a rule
+ * about it (`liquibase-do-block-split-statements`). One apostrophe inside a
+ * dollar-quoted body — `patient's`, `l'hopital` — opened a string that
+ * swallowed the rest of the file, so every role INSERT after it vanished.
+ * Sticky rather than a slice, so a `$` that is not a quote costs one test.
+ */
+const DOLLAR_TAG = /\$(?:[A-Za-z_]\w*)?\$/y;
 
 /**
  * Two views of one source, offsets preserved: `noComments` has comments
@@ -88,6 +101,13 @@ const SYNTAX = {
  * Same shape and the same reason as `blankCommentsAndStrings` in
  * java-enum.mjs, which the enum parser needed for a `;` inside a Javadoc.
  */
+/** The dollar-quote tag opening at `i`, or null. */
+function dollarTagAt(source, i) {
+  DOLLAR_TAG.lastIndex = i;
+  const match = DOLLAR_TAG.exec(source);
+  return match ? match[0] : null;
+}
+
 export function sqlViews(source, ext) {
   const syntax = SYNTAX[ext];
   const noComments = source.split('');
@@ -112,6 +132,14 @@ export function sqlViews(source, ext) {
       blank(noComments, i, stop);
       blank(scanned, i, stop);
       i = stop;
+    } else if (syntax.dollar && source[i] === '$' && dollarTagAt(source, i)) {
+      const tag = dollarTagAt(source, i);
+      const end = source.indexOf(tag, i + tag.length);
+      const close = end === -1 ? source.length : end;
+      // The body is opaque: it may hold quotes, semicolons and `--` that mean
+      // nothing to the statement around it.
+      blank(scanned, i + tag.length, close);
+      i = end === -1 ? source.length : end + tag.length;
     } else if (syntax.quotes.includes(source[i])) {
       const quote = source[i];
       let k = i + 1;

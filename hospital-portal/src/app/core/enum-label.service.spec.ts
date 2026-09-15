@@ -54,6 +54,22 @@ describe('EnumLabelService', () => {
     expect(service.transform('MIDWIFE', 'role')).toBe('Midwife');
   });
 
+  it('drops a cached label when the bundle changes under it', () => {
+    // A bundle merged after first paint fires onTranslationChange, not
+    // onLangChange, and the memo key does not change. Under the old per-pipe
+    // memo the Title-Cased English cached before the bundle arrived died with
+    // that pipe instance; the singleton would serve it to the whole app.
+    expect(service.transform('MIDWIFE', 'role')).toBe('Midwife');
+
+    translate.setTranslation(
+      'en',
+      { PORTAL: { ENUM: { ROLE: { MIDWIFE: 'Nurse-Midwife' } } } },
+      true,
+    );
+
+    expect(service.transform('MIDWIFE', 'role')).toBe('Nurse-Midwife');
+  });
+
   it('falls through to Title Case, which is the reason the enum gate exists', () => {
     // No key, no LABELS entry: a French page reads English and nothing warns.
     expect(service.transform('BLOOD_BANK_OFFICER', 'role')).toBe('Blood Bank Officer');

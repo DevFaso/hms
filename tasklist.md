@@ -2469,7 +2469,48 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   one the patient's sharing page reads, and the portal now maps that sentence
   to null; the READ mapper has its own copy of the same literal, feeding the
   admin audit surface, and `DashboardConfigurationServiceImpl` has a third.
-  Three constants, one string, no shared definition.
+  Three constants, one string, no shared definition. #665 fixed the twin
+  literal (`"Staff"`) at its root one file over and then patched this one only
+  on the patient path, so `audit-logs.html:107` and
+  `super-admin/audit-search:233` still render the English sentence to a French
+  clinician. Returning null at the mapper fixes every client at once, which is
+  what the `"Staff"` fix did.
+- **Six one-edit follow-ups from #665's round 3, for the `.roleName` tranche.**
+  Each was verified against the tree and deferred because it widens a PR that
+  had already grown a gate change; all six land naturally in the tranche that
+  translates the 14 `roleName` sites.
+  1. `bareRole` lives in `patient-portal.service.ts`, but the tranche's sites
+     are staff screens served by other services. It belongs in `src/app/core/`,
+     beside the `EnumLabelService` #665 extracted for the same reason —
+     otherwise each of those components imports from a patient-portal module
+     or re-implements the strip, and the `Unknown Role` sentinel drifts.
+  2. `UNKNOWN_ROLE = 'Unknown Role'` couples the portal to an exact Java
+     literal that three backend files stamp independently. Reword any of them
+     and the sentinel silently stops matching; a guard asserting the Java
+     literal equals the TS constant (the shape `MigrationRegistrationTest`
+     uses) holds it.
+  3. The `roles` declaration validates a path's extension but nothing counts
+     what each path CONTRIBUTES, so a declared folder holding no `.sql`/`.java`
+     yields zero in silence — `UNPARSEABLE ROLE REGISTRY` only fires on a grand
+     total of zero, which 160 migrations prevent. Per-source accounting (each
+     declared path must yield ≥ 1) closes it; `role-registry.test.mjs` already
+     does this for `.java`, the gate does not.
+  4. `check-i18n-enum-coverage.mjs` hardcodes `walk(full, ['.sql', '.java'])`
+     while the test uses the `READABLE` constant the lib exports for exactly
+     that. The same eight lines written twice; `roleSourcesFrom(paths)` in the
+     lib removes the duplication and the drift.
+  5. `sqlViews` builds both character-array views for every source — including
+     `.java`, which never reads `scanned`, and all ~165 migrations, of which 5
+     contain a role INSERT. An `INSERT INTO` pre-filter and skipping the second
+     view for Java removes nearly all of it. It is also exported and imported
+     nowhere: test it directly or make it module-private.
+  6. `OrganizationListComponent.filtered` is manual derivable state recomputed
+     at three call sites, and #665's `onLangChange` subscription is the third
+     patch on that shape. A `computed()` over `organizations()`, a `searchTerm`
+     signal and a `lang` signal derives it once and makes the subscription and
+     the manual calls unnecessary — the next writer of `organizations` that
+     forgets `applyFilter()` leaves the list stale exactly as the language
+     switch did.
 - **A staff revoke of a sharing opt-out is not written to the audit row with the
   actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
   userId + patientId under a description that reads as the patient's own act

@@ -83,17 +83,6 @@ describe('PatientPortalService — role tokens at the boundary', () => {
       });
   });
 
-  it('normalises the actor role on the access log', (done) => {
-    service.getMyAccessLog().subscribe((entries) => {
-      expect(entries.map((e) => e.actorRole)).toEqual(['DOCTOR']);
-      done();
-    });
-
-    httpMock
-      .expectOne((r) => r.url.endsWith('/me/patient/access-log'))
-      .flush({ data: { content: [{ id: 'a-1', actorRole: 'ROLE_DOCTOR' }] } });
-  });
-
   it('normalises the role on a bookable provider', (done) => {
     // getProvidersForDepartment sends assignment.getRole().getName(), which
     // always carries the prefix, and omits the key entirely when the provider

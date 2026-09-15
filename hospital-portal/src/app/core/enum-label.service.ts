@@ -29,16 +29,29 @@ export class EnumLabelService implements OnDestroy {
   /** Memoised lookups: key = `${lang}|${domain ?? ''}|${value}`. */
   private readonly memo = new Map<string, string>();
   private readonly langSub: Subscription;
+  private readonly translationSub: Subscription;
 
   constructor() {
-    // The memo key already carries the language, so this is about bounding
-    // memory rather than correctness — a stale entry is unreachable, not
-    // wrong. Clearing keeps the map the size of one locale's vocabulary.
+    // Two events, for two different reasons.
+    //
+    // onLangChange: the memo key already carries the language, so this one is
+    // about bounding memory rather than correctness — a stale entry is
+    // unreachable, not wrong. Clearing keeps the map the size of one locale.
+    //
+    // onTranslationChange: this one IS correctness, and it matters more now
+    // that the memo is a singleton. A bundle merged after first paint — a
+    // lazily registered feature bundle, a retry after a failed loader fetch —
+    // fires only this event, and the key does not change. Under the old
+    // per-pipe memo a Title-Cased English fallback cached before the bundle
+    // arrived died with that pipe instance; here it would be served to every
+    // binding in the app for the rest of the session.
     this.langSub = this.translate.onLangChange.subscribe(() => this.memo.clear());
+    this.translationSub = this.translate.onTranslationChange.subscribe(() => this.memo.clear());
   }
 
   ngOnDestroy(): void {
     this.langSub.unsubscribe();
+    this.translationSub.unsubscribe();
   }
 
   /** English fallback labels. Authoritative source is the locale JSON files

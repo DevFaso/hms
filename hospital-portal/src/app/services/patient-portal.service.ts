@@ -1114,30 +1114,21 @@ export class PatientPortalService {
   // ── Access Log ─────────────────────────────────────────────────────
 
   /**
-   * No `catchError(() => of([]))` here, deliberately, and unlike most calls
+   * Every access event, with per-category counts across the whole history.
+   * The counts are what make the list usable: routine chart opens outnumber
+   * everything else, so a flat date-sorted list buries the emergency override
+   * or the release to another hospital that the patient came to find.
+   *
+   * No `catchError(() => of(...))` here, deliberately, and unlike most calls
    * in this service. An empty access log renders as "Nobody has accessed
    * your records yet" — swallowing a 500 into that turns an outage into an
    * affirmative and false statement about who has read the patient's chart.
    * The component distinguishes failure from empty. Tier 2 item 39.
-   */
-  getMyAccessLog(): Observable<AccessLogEntry[]> {
-    return this.http
-      .get<ApiWrapper<PageWrapper<AccessLogEntry>>>(`${this.base}/access-log`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        map((r) =>
-          (r.data?.content ?? []).map((e) => ({ ...e, actorRole: bareRole(e.actorRole) })),
-        ),
-      );
-  }
-
-  /**
-   * The same events as {@link getMyAccessLog} plus per-category counts across
-   * the whole history. The counts are what make the list usable: routine
-   * chart opens outnumber everything else, so a flat date-sorted list buries
-   * the emergency override or the release to another hospital that the
-   * patient came to find.
+   *
+   * This replaced a `getMyAccessLog()` that returned the same events without
+   * the counts. Nothing had called it since; it was removed rather than
+   * carried, because a normalisation nobody can reach is a claim no screen
+   * makes.
    */
   getMyDisclosures(): Observable<DisclosureAccounting> {
     return this.http
