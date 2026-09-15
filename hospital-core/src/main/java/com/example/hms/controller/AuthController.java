@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import static com.example.hms.config.SecurityConstants.ROLE_PREFIX;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -53,6 +54,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -255,9 +257,23 @@ public class AuthController {
             log.debug("🔐 [LOGIN] AuthenticationManager succeeded; building tokens...");
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Collect ALL roles the user holds across assignments
+            // Collect ALL roles the user holds across assignments.
+            //
+            // An authority is not necessarily a role. Spring Security 7's
+            // DaoAuthenticationProvider adds a FactorGrantedAuthority —
+            // FACTOR_PASSWORD — to record WHICH authentication factor was
+            // satisfied, for its multi-factor support. It arrived with the
+            // Spring Boot 4.1 upgrade and it is not something a user can hold,
+            // select, or be authorised by.
+            //
+            // Unfiltered it broke three things at once: every single-role user
+            // suddenly had two authorities and so was forced through the
+            // role picker; the picker offered "FACTOR PASSWORD" as a card; and
+            // selecting it passed the holds-this-role check below and minted a
+            // token whose only role no guard admits.
             var allRoles = authentication.getAuthorities().stream()
-                    .map(auth -> auth.getAuthority())
+                    .map(GrantedAuthority::getAuthority)
+                    .filter(authority -> authority != null && authority.startsWith(ROLE_PREFIX))
                     .distinct()
                     .toList();
 
