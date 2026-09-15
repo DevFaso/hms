@@ -249,9 +249,9 @@
             @if (pt.careTeam.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_TEAM_ASSIGNED' | translate }}</span>
             } @else {
-              @for (m of pt.careTeam; track m.name + m.role) {
+              @for (m of pt.careTeam; track $index) {
                 <div class="team-row">
-                  <span class="team-role">{{ m.role }}</span>
+                  <span class="team-role">{{ (m.role | enumLabel: 'jobTitle') || '—' }}</span>
                   <span class="team-name">{{ m.name }}</span>
                 </div>
               }

@@ -23,6 +23,8 @@
  *
  *   "enum":   one Java enum file
  *   "enums":  several, checked as a union — one badge, several emitters
+ *   "roles": the paths whose INSERTs define `security.roles` — the one
+ *             vocabulary that is rows, not a Java type
  *   "reason": why no enum backs it (a String column, a portal-side vocabulary,
  *             or a status a service *derives* rather than reads)
  *
@@ -53,13 +55,14 @@
  *   node scripts/check-i18n-enum-coverage.mjs
  *   node scripts/check-i18n-enum-coverage.mjs --report-only   # never exit non-zero
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { walk } from './lib/walk.mjs';
 import { javaEnumConstants, groupOf } from './lib/java-enum.mjs';
 import { validateDeclaration, enumNameOf } from './lib/enum-domains.mjs';
+import { roleNamesFrom } from './lib/role-registry.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const PORTAL_DIR = resolve(SCRIPT_DIR, '..');
@@ -132,55 +135,88 @@ function main() {
       continue;
     }
 
-    const paths = entry.enums ?? [entry.enum];
     const constants = new Set();
     let broken = false;
-    for (const path of paths) {
-      const javaPath = resolve(REPO_DIR, path);
-      if (!existsSync(javaPath)) {
-        errors.push(`MISSING ENUM FILE ${domain} -> ${path} does not exist.`);
-        broken = true;
-        continue;
+    let sourceName;
+    if (entry.roles) {
+      // Not a Java type: the vocabulary is `security.roles`, read out of the
+      // migrations that create it. See lib/role-registry.mjs for why DELETEs
+      // are not subtracted and why the names come back bare.
+      const sources = [];
+      for (const path of entry.roles) {
+        const full = resolve(REPO_DIR, path);
+        if (!existsSync(full)) {
+          errors.push(`MISSING ROLE SOURCE ${domain} -> ${path} does not exist.`);
+          broken = true;
+          continue;
+        }
+        for (const file of statSync(full).isDirectory() ? walk(full, ['.sql', '.java']) : [full]) {
+          sources.push({ path: file, text: readFileSync(file, 'utf8') });
+        }
       }
-      const name = enumNameOf(path);
-      // null and [] are different failures, and the lib's contract says so:
-      // null means no enum of that name is in the file — almost always a
-      // filename/type-name mismatch in the declaration, not a parser problem.
-      const found = javaEnumConstants(readFileSync(javaPath, 'utf8'), name);
-      if (found === null) {
-        errors.push(
-          `NO SUCH ENUM ${domain} -> ${path} contains no \`enum ${name}\`; ` +
-            `check the declaration names the file whose type it means.`,
-        );
-        broken = true;
-        continue;
+      if (!broken) {
+        const found = roleNamesFrom(sources);
+        if (found.length === 0) {
+          errors.push(
+            `UNPARSEABLE ROLE REGISTRY ${domain} -> ${entry.roles.join(', ')} ` +
+              `produced no role names; the INSERTs moved or the parser broke.`,
+          );
+          broken = true;
+        }
+        for (const value of found) constants.add(value);
       }
-      if (found.length === 0) {
-        errors.push(`UNPARSEABLE ENUM ${domain} -> ${path} (enum ${name} parsed to no constants).`);
-        broken = true;
-        continue;
+      sourceName = 'a seeded role';
+    } else {
+      const paths = entry.enums ?? [entry.enum];
+      for (const path of paths) {
+        const javaPath = resolve(REPO_DIR, path);
+        if (!existsSync(javaPath)) {
+          errors.push(`MISSING ENUM FILE ${domain} -> ${path} does not exist.`);
+          broken = true;
+          continue;
+        }
+        const name = enumNameOf(path);
+        // null and [] are different failures, and the lib's contract says so:
+        // null means no enum of that name is in the file — almost always a
+        // filename/type-name mismatch in the declaration, not a parser problem.
+        const found = javaEnumConstants(readFileSync(javaPath, 'utf8'), name);
+        if (found === null) {
+          errors.push(
+            `NO SUCH ENUM ${domain} -> ${path} contains no \`enum ${name}\`; ` +
+              `check the declaration names the file whose type it means.`,
+          );
+          broken = true;
+          continue;
+        }
+        if (found.length === 0) {
+          errors.push(
+            `UNPARSEABLE ENUM ${domain} -> ${path} (enum ${name} parsed to no constants).`,
+          );
+          broken = true;
+          continue;
+        }
+        for (const value of found) constants.add(value);
       }
-      for (const value of found) constants.add(value);
+      sourceName = paths.length > 1 ? 'one of the declared enums' : enumNameOf(paths[0]);
     }
     if (broken) continue;
 
     checkedDomains += 1;
     const group = groupOf(domain);
     const keys = enumGroups[group] ?? {};
-    const enumName = paths.length > 1 ? 'one of the declared enums' : enumNameOf(paths[0]);
     const missing = [...constants].filter((value) => !(value in keys));
     const extra = Object.keys(keys).filter((key) => !constants.has(key));
     checked += constants.size;
     covered += constants.size - missing.length;
     for (const value of missing) {
       errors.push(
-        `UNKEYED ${group}.${value} — ${enumName} can send it and ${where[0]} ` +
+        `UNKEYED ${group}.${value} — ${sourceName} can send it and ${where[0]} ` +
           `pipes it, so it renders Title-Cased English.`,
       );
     }
     if (extra.length) {
       notes.push(
-        `${group}: ${extra.length} key(s) no declared enum can emit — ${extra.join(', ')}`,
+        `${group}: ${extra.length} key(s) no declared source can emit — ${extra.join(', ')}`,
       );
     }
   }
@@ -199,7 +235,7 @@ function main() {
     if (domain.startsWith('$') || used.has(domain)) continue;
     const entry = declared[domain];
     if (!validateDeclaration(domain, entry, errors)) continue;
-    for (const path of entry.enums ?? (entry.enum ? [entry.enum] : [])) {
+    for (const path of entry.enums ?? entry.roles ?? (entry.enum ? [entry.enum] : [])) {
       if (!existsSync(resolve(REPO_DIR, path))) {
         errors.push(`ORPHAN DECLARATION ${domain} -> ${path} does not exist and nothing pipes it.`);
       }

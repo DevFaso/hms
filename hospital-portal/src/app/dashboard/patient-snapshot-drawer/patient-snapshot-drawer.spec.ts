@@ -57,6 +57,7 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
         ENUM: {
           SNAPSHOT_ITEM_TYPE: { VITALS: 'Constantes', LAB: 'Laboratoire' },
           ENCOUNTER_TYPE: { INPATIENT: 'Hospitalisation' },
+          JOB_TITLE: { MIDWIFE: 'Sage-femme' },
         },
       },
     });
@@ -104,5 +105,33 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     fixture.detectChanges();
 
     expect(textOf('.note-type')).toEqual(['—']);
+  });
+
+  it('translates a care-team job title', () => {
+    // buildCareTeam sends JobTitle.name(). The panel rendered it raw, so a
+    // French midwife read MIDWIFE, and the enum gate could not see it either:
+    // the value was never piped, so no domain covered it.
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({ careTeam: [{ role: 'MIDWIFE', name: 'Awa Sawadogo' }] }),
+    );
+    fixture.componentInstance.teamOpen.set(true);
+    fixture.detectChanges();
+
+    expect(textOf('.team-role')).toEqual(['Sage-femme']);
+  });
+
+  it('falls back to — when the staff member has no job title', () => {
+    // The service used to send the word "Staff" here, which no pipe can
+    // translate because the server had already chosen the language.
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({ careTeam: [{ role: null, name: 'Awa Sawadogo' }] }),
+    );
+    fixture.componentInstance.teamOpen.set(true);
+    fixture.detectChanges();
+
+    expect(textOf('.team-role')).toEqual(['—']);
+    expect(textOf('.team-name')).toEqual(['Awa Sawadogo']);
   });
 });

@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -685,7 +686,7 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_careTeamWithNullJobTitle_shouldFallbackToStaff() {
+    void getSnapshot_careTeamWithNullJobTitle_shouldSendNoRole() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -709,8 +710,43 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getCareTeam().size());
-        assertEquals("Staff", result.getCareTeam().get(0).getRole());
+        // Was the literal "Staff" — an English word the portal cannot translate,
+        // because the server had already chosen the language. The drawer renders
+        // an em dash for null.
+        assertNull(result.getCareTeam().get(0).getRole());
         assertEquals("Nurse Anon", result.getCareTeam().get(0).getName());
+    }
+
+    @Test
+    void getSnapshot_careTeamWithJobTitle_shouldSendTheEnumName() {
+        // JobTitle carries a display title ("Nurse Practitioner") beside its
+        // name. Sending the title would put an English word on a French page
+        // that no key can cover; the name is what PORTAL.ENUM.JOB_TITLE keys.
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        Staff staffMember = mock(Staff.class);
+        when(staffMember.getJobTitle()).thenReturn(JobTitle.NURSE_PRACTITIONER);
+        when(staffMember.getFullName()).thenReturn("Awa Sawadogo");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getStaff()).thenReturn(staffMember);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+
+        assertEquals(1, result.getCareTeam().size());
+        assertEquals("NURSE_PRACTITIONER", result.getCareTeam().get(0).getRole());
     }
 
     @Test

@@ -20,10 +20,28 @@ const check = (entry) => {
 
 const JAVA = 'hospital-core/src/main/java/com/example/hms/enums/Foo.java';
 
-test('accepts the three declared forms', () => {
+const MIGRATIONS = 'hospital-core/src/main/resources/db/migration';
+
+test('accepts the four declared forms', () => {
   assert.equal(check({ enum: JAVA }).ok, true);
   assert.equal(check({ enums: [JAVA, JAVA] }).ok, true);
+  assert.equal(check({ roles: [MIGRATIONS] }).ok, true);
   assert.equal(check({ reason: 'a String column, not an enum' }).ok, true);
+});
+
+test('a roles declaration must name somewhere to read them from', () => {
+  // Roles are rows, not a Java type, so the paths are a folder and a seeder
+  // rather than a .java file — but an empty list still checks nothing.
+  assert.equal(check({ roles: [] }).ok, false);
+  assert.equal(check({ roles: MIGRATIONS }).ok, false);
+  assert.equal(check({ roles: [''] }).ok, false);
+  assert.equal(check({ roles: [null] }).ok, false);
+  assert.match(check({ roles: [] }).errors[0], /non-empty array/);
+});
+
+test('roles is a source like the others, not an extra', () => {
+  assert.equal(check({ enum: JAVA, roles: [MIGRATIONS] }).ok, false);
+  assert.match(check({}).errors[0], /enum \/ enums \/ roles \/ reason/);
 });
 
 test('an empty enums array does not silence a domain', () => {

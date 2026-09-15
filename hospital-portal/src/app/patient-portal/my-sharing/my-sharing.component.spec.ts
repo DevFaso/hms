@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MySharingComponent } from './my-sharing.component';
 import {
@@ -25,7 +25,7 @@ describe('MySharingComponent', () => {
   const entry = (over: Partial<AccessLogEntry> = {}): AccessLogEntry => ({
     id: 'a1',
     actor: 'Dr Alice Traore',
-    actorRole: 'Doctor',
+    actorRole: 'DOCTOR',
     hospitalName: 'City Clinic',
     eventType: 'PATIENT_ACCESS',
     entityType: 'PATIENT',
@@ -310,5 +310,23 @@ describe('MySharingComponent', () => {
     expect(component.categoryLabelKey(entry({ category: 'INSURANCE' }))).toBe(
       'PORTAL.SHARING.CATEGORY.INSURANCE',
     );
+  });
+
+  it('translates the actor role on an access-log row', () => {
+    // `entry.actorRole` rendered raw, so a patient in Ouagadougou read
+    // DOCTOR beside the name of whoever opened their chart. The service
+    // normalises the two wire spellings to one bare token (see bareRole);
+    // the row translates it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', { PORTAL: { ENUM: { ROLE: { DOCTOR: 'Médecin' } } } }, true);
+    disclosureResponse = () => of(accounting([entry()]));
+
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Médecin');
+    expect(text).not.toContain('DOCTOR');
   });
 });

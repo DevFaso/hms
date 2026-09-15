@@ -12,6 +12,12 @@
 /**
  * Only these may appear in a declaration; anything else is a typo.
  *
+ * `roles` is the one vocabulary that is not a Java type at all: roles are
+ * rows in `security.roles`, so the declaration names the migration folder
+ * and the seeder that create them, and lib/role-registry.mjs reads the set
+ * out of them. It is a list of paths for the same reason `enums` is — one
+ * badge, several places that fill it.
+ *
  * There is deliberately no `group` override. EnumLabelPipe computes the group
  * as toUpperSnake(domain) with no way to redirect it, so an override here
  * could only ever point the gate at a group the pipe does not read — and
@@ -19,7 +25,7 @@
  * pool, say) would turn the gate green while every value renders Title-Cased
  * English. A validated escape hatch is worse than none.
  */
-export const DECLARATION_KEYS = ['enum', 'enums', 'reason'];
+export const DECLARATION_KEYS = ['enum', 'enums', 'roles', 'reason'];
 
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 const javaPath = (value) => filled(value) && value.endsWith('.java');
@@ -48,10 +54,10 @@ export function validateDeclaration(domain, entry, errors) {
     );
     return false;
   }
-  const sources = ['enum', 'enums', 'reason'].filter((key) => key in entry);
+  const sources = ['enum', 'enums', 'roles', 'reason'].filter((key) => key in entry);
   if (sources.length !== 1) {
     errors.push(
-      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / reason ` +
+      `BAD DECLARATION ${domain} — declare exactly one of enum / enums / roles / reason ` +
         `(found ${sources.length ? sources.join(' + ') : 'none'}).`,
     );
     return false;
@@ -65,6 +71,16 @@ export function validateDeclaration(domain, entry, errors) {
     (!Array.isArray(entry.enums) || entry.enums.length === 0 || !entry.enums.every(javaPath))
   ) {
     errors.push(`BAD DECLARATION ${domain} — enums must be a non-empty array of .java paths.`);
+    return false;
+  }
+  if (
+    'roles' in entry &&
+    (!Array.isArray(entry.roles) || entry.roles.length === 0 || !entry.roles.every(filled))
+  ) {
+    errors.push(
+      `BAD DECLARATION ${domain} — roles must be a non-empty array of paths to the ` +
+        `migrations and seeders that create them.`,
+    );
     return false;
   }
   if ('reason' in entry && !filled(entry.reason)) {

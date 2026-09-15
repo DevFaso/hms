@@ -143,20 +143,20 @@ test('a comment that quotes the declaration does not hijack the parse', () => {
   assert.deepEqual(javaEnumConstants(src, 'E'), ['A', 'B']);
 });
 
-test('groupOf matches EnumLabelPipe.toUpperSnake, including on acronyms', () => {
+test('groupOf matches EnumLabelService.toUpperSnake, including on acronyms', () => {
   // The pipe splits at a lower/digit-to-upper boundary only. Splitting before
   // every capital would send the gate to PATIENT_M_R_N while the pipe reads
   // PATIENT_MRN — green gate, English screen.
-  const pipe = readFileSync(
-    resolve(SCRIPT_DIR, '..', '..', 'src/app/shared/pipes/enum-label.pipe.ts'),
+  const service = readFileSync(
+    resolve(SCRIPT_DIR, '..', '..', 'src/app/core/enum-label.service.ts'),
     'utf8',
   );
   const toUpperSnake =
     /toUpperSnake\(camel: string\): string \{\s*return camel\.replaceAll\(([^;]+)\)\.toUpperCase\(\);/.exec(
-      pipe,
+      service,
     );
-  assert.ok(toUpperSnake, 'could not find EnumLabelPipe.toUpperSnake — keep this test honest');
-  assert.match(toUpperSnake[1], /\(\[a-z0-9\]\)\(\[A-Z\]\)/, 'the pipe changed its snake rule');
+  assert.ok(toUpperSnake, 'could not find EnumLabelService.toUpperSnake — keep this test honest');
+  assert.match(toUpperSnake[1], /\(\[a-z0-9\]\)\(\[A-Z\]\)/, 'the lookup changed its snake rule');
 
   assert.equal(groupOf('prescriptionStatus'), 'PRESCRIPTION_STATUS');
   assert.equal(groupOf('status'), 'STATUS');

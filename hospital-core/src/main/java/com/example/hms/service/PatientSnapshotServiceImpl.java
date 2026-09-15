@@ -338,7 +338,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             encounters.stream()
                     .filter(e -> e.getStaff() != null)
                     .map(e -> PatientSnapshotDTO.CareTeamMember.builder()
-                            .role(e.getStaff().getJobTitle() != null ? e.getStaff().getJobTitle().name() : "Staff")
+                            .role(e.getStaff().getJobTitle() != null ? e.getStaff().getJobTitle().name() : null)
                             .name(e.getStaff().getFullName())
                             .build())
                     .distinct()

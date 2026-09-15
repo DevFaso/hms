@@ -25,10 +25,11 @@
  * at it; it is not a way to make the build green.
  *
  * FR fails the build. ES is reported against a ratchet (ES_MAX_UNTRANSLATED,
- * seeded at the 1377 it stands at today) counting only keys it has not pinned
- * rather than failing, because the ES backfill has not been done and pinning
- * ~1000 untranslated Spanish strings into an allowlist would be a lie about
- * their state. The ratchet still stops ES getting worse.
+ * seeded at the 1377 it was first measured at, and only ever lowered) counting
+ * only keys it has not pinned rather than failing, because the ES backfill has
+ * not been done and pinning ~1000 untranslated Spanish strings into an
+ * allowlist would be a lie about their state. The ratchet still stops ES
+ * getting worse.
  *
  * Pure Node, no dependencies — same shape as the sibling gate.
  *
@@ -53,7 +54,7 @@ const BASELINE_LOCALE = 'en';
 /** Fails the build. */
 const ENFORCED_LOCALES = ['fr'];
 /** Reported against a ceiling, not allowlisted — see the header. */
-const RATCHET_LOCALES = { es: Number(process.env.ES_MAX_UNTRANSLATED ?? '1377') };
+const RATCHET_LOCALES = { es: Number(process.env.ES_MAX_UNTRANSLATED ?? '1376') };
 
 const REPORT_ONLY = process.argv.includes('--report-only');
 const WRITE_ALLOWLIST = process.argv.includes('--write-allowlist');
