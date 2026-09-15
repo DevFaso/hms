@@ -104,6 +104,40 @@ test('a role seeded inside a DO block is still a seeded role', () => {
   );
 });
 
+test('punctuation inside a dollar-quoted VALUE does not end the statement', () => {
+  // The round that made a `DO $$` seed visible re-opened this one level down:
+  // the body was scanned in place, so its own `;` survived into the view the
+  // statement matcher reads. Dollar-quoting is the idiomatic way to write a
+  // description containing an apostrophe, so this is the shape a French seed
+  // description takes.
+  const D = '$' + '$';
+  assert.deepEqual(
+    roleNamesFrom(
+      sql(
+        `INSERT INTO "security".roles (code, description) VALUES\n` +
+          `  ('ROLE_A', 'plain'),\n` +
+          `  ('ROLE_B', ${D}Gere l'acces; valide les resultats${D}),\n` +
+          `  ('ROLE_C', 'plain');`,
+      ),
+    ),
+    ['A', 'B', 'C'],
+  );
+  assert.deepEqual(
+    roleNamesFrom(sql(`INSERT INTO roles (description, code) VALUES (${D}Covid--19 lead${D}, 'ROLE_T');`)),
+    ['T'],
+  );
+});
+
+test('a nested block comment ends where it really ends', () => {
+  // Postgres nests them. Stopping at the first `*/` let a commented-out INSERT
+  // back out — and an extra parsed name is an UNKEYED build failure, not a
+  // note, so a deliberately retired role would have failed the build.
+  assert.deepEqual(
+    roleNamesFrom(sql(`/* superseded: /* old */ INSERT INTO roles (c) VALUES ('ROLE_K'); */`)),
+    [],
+  );
+});
+
 test('a dollar-quoted body cannot desync the statements around it', () => {
   // 21 migrations here use $$, and one apostrophe inside a body — `patient's`
   // — used to open a string that swallowed the rest of the file, taking every

@@ -2495,10 +2495,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      total of zero, which 160 migrations prevent. Per-source accounting (each
      declared path must yield ≥ 1) closes it; `role-registry.test.mjs` already
      does this for `.java`, the gate does not.
-  4. `check-i18n-enum-coverage.mjs` hardcodes `walk(full, ['.sql', '.java'])`
-     while the test uses the `READABLE` constant the lib exports for exactly
-     that. The same eight lines written twice; `roleSourcesFrom(paths)` in the
-     lib removes the duplication and the drift.
+  4. `role-registry.test.mjs`'s `declaredSources()` re-implements the gate's
+     existsSync / statSync / walk gathering rather than sharing it, and its own
+     comment records that the two had already drifted once. Both use the
+     exported `READABLE` now, so the extension list is no longer duplicated,
+     but the eight lines around it still are: `roleSourcesFrom(paths)` in the
+     lib, called by both, is the fix.
   5. `sqlViews` builds both character-array views for every source — including
      `.java`, which never reads `scanned`, and all ~165 migrations, of which 5
      contain a role INSERT. An `INSERT INTO` pre-filter and skipping the second

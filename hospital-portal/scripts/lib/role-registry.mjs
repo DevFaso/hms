@@ -57,8 +57,12 @@ const ROLE_LITERAL = /'(ROLE_[A-Z0-9_]+)'/g;
  * cannot even be caught by a total-is-zero check, because the migrations are
  * a superset today. `RoleRegistryTest` reads any Java string literal for the
  * same reason. Over-matching inside a file someone declared AS a seeder is
- * safe: an extra name is a keyed label nothing sends, which the coverage gate
- * reports as a note.
+ * accepted, but it is NOT free: a parsed name the bundle has no key for is an
+ * UNKEYED build failure, not a note (the note is the other direction — a key
+ * no source emits). So a `hasAuthority("ROLE_FOO")` added to one of these two
+ * files fails `npm run i18n:enums` until FOO is keyed. That is the trade: a
+ * parser that cannot be silently defeated by a refactor, at the cost of
+ * occasionally asking for a key nobody sends.
  */
 const SEEDER_LITERAL = /"(ROLE_[A-Z0-9_]+)"/g;
 
@@ -116,6 +120,8 @@ export function sqlViews(source, ext) {
   const syntax = SYNTAX[ext];
   const noComments = source.split('');
   const scanned = source.split('');
+  /** Ranges of dollar-quoted bodies, for roleNamesFrom to parse on their own. */
+  const dollarBodies = [];
   const blank = (out, from, to) => {
     for (let k = from; k < to && k < out.length; k += 1) {
       if (out[k] !== '\n') out[k] = ' ';
@@ -123,19 +129,25 @@ export function sqlViews(source, ext) {
   };
 
   /**
-   * One lexical scope. A dollar-quoted body is scanned as its own scope
-   * rather than blanked, which is the difference between the two ways this
-   * can go wrong:
+   * One lexical scope, and a dollar-quoted body is NOT part of it.
    *
-   *  - blank it, and `DO $$ … INSERT INTO "security".roles … $$` becomes
-   *    invisible. That is the conditional-seed idiom, and twenty-one
-   *    migrations here already use `DO $$`.
+   * Three attempts, because the body has to be two contradictory things at
+   * once and only one of them belongs in this view:
+   *
    *  - scan it in the OUTER scope, and one apostrophe in a prose body —
    *    `COMMENT ON TABLE roles IS $$the patient's catalogue$$` — opens a
    *    string that swallows the rest of the file.
+   *  - blank it, and `DO $$ … INSERT INTO "security".roles … $$` becomes
+   *    invisible. That is the conditional-seed idiom, and twenty-one
+   *    migrations here already use `DO $$`.
+   *  - scan it as a NESTED scope, and its own punctuation survives into
+   *    `scanned`, so a `;` in `('ROLE_B', $$runs the bench; signs$$)` ends the
+   *    statement early and drops every role after it — the bug of two rounds
+   *    ago, one level down.
    *
-   * Recursing gives both: the body's own quotes and comments are handled, and
-   * an unterminated one cannot reach past the closing tag.
+   * So: blanked HERE, where the only question is where statements end, and
+   * returned as a range for {@link roleNamesFrom} to parse separately, where
+   * the question is which roles a file seeds. Neither view has to compromise.
    */
   const scanRange = (from, to) => {
     let i = from;
@@ -148,8 +160,24 @@ export function sqlViews(source, ext) {
         blank(scanned, i, end);
         i = end;
       } else if (two === syntax.block[0]) {
-        const end = source.indexOf(syntax.block[1], i + 2);
-        const stop = end === -1 || end + 2 > to ? to : end + 2;
+        // Postgres nests block comments, so the first `*/` need not close the
+        // one that opened. Ending there let a commented-out INSERT back out —
+        // and an extra parsed name is an UNKEYED build failure, not a note.
+        let depth = 1;
+        let k = i + 2;
+        while (k < to && depth > 0) {
+          const pair = source.slice(k, k + 2);
+          if (pair === syntax.block[0]) {
+            depth += 1;
+            k += 2;
+          } else if (pair === syntax.block[1]) {
+            depth -= 1;
+            k += 2;
+          } else {
+            k += 1;
+          }
+        }
+        const stop = Math.min(k, to);
         blank(noComments, i, stop);
         blank(scanned, i, stop);
         i = stop;
@@ -157,7 +185,8 @@ export function sqlViews(source, ext) {
         const tag = dollarTagAt(source, i);
         const end = source.indexOf(tag, i + tag.length);
         const close = end === -1 || end > to ? to : end;
-        scanRange(i + tag.length, close);
+        blank(scanned, i + tag.length, close);
+        dollarBodies.push([i + tag.length, close]);
         i = close === to ? to : close + tag.length;
       } else if (syntax.quotes.includes(source[i])) {
         const quote = source[i];
@@ -187,7 +216,7 @@ export function sqlViews(source, ext) {
   };
 
   scanRange(0, source.length);
-  return { noComments: noComments.join(''), scanned: scanned.join('') };
+  return { noComments: noComments.join(''), scanned: scanned.join(''), dollarBodies };
 }
 
 /**
@@ -200,18 +229,25 @@ export function sqlViews(source, ext) {
  */
 export function roleNamesFrom(sources) {
   const names = new Set();
-  for (const { path, text } of sources) {
-    const ext = READABLE.find((e) => path.endsWith(e));
-    if (!ext) continue;
-    const { noComments, scanned } = sqlViews(text, ext);
+  const addFrom = (text, ext) => {
+    const { noComments, scanned, dollarBodies } = sqlViews(text, ext);
     if (ext === '.sql') {
       for (const match of scanned.matchAll(ROLES_INSERT)) {
         const statement = noComments.slice(match.index, match.index + match[0].length);
         for (const [, name] of statement.matchAll(ROLE_LITERAL)) names.add(bareRoleName(name));
       }
+      // Each dollar-quoted body is its own little SQL file: a `DO $$ … $$`
+      // block seeds roles, and a prose one seeds none. Parsing them here
+      // rather than in the view is what lets the view blank them, so their
+      // punctuation can never reach the statement boundaries around them.
+      for (const [from, to] of dollarBodies) addFrom(text.slice(from, to), ext);
     } else {
       for (const [, name] of noComments.matchAll(SEEDER_LITERAL)) names.add(bareRoleName(name));
     }
+  };
+  for (const { path, text } of sources) {
+    const ext = READABLE.find((e) => path.endsWith(e));
+    if (ext) addFrom(text, ext);
   }
   return [...names].sort();
 }

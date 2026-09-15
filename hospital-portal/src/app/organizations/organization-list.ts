@@ -6,7 +6,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { Subscription, merge } from 'rxjs';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -123,7 +123,14 @@ export class OrganizationListComponent implements OnInit, OnDestroy {
     // match change with the language. Without this, a row matched under French
     // labels stays listed once the cell reads English, and one that would now
     // match stays hidden until the next keystroke.
-    this.langSub = this.translate.onLangChange.subscribe(() => this.applyFilter());
+    //
+    // Both events, for the same reason EnumLabelService clears its memo on
+    // both: a bundle merged after first paint changes the labels without
+    // changing the language, and the cells re-render while the filter would
+    // not have.
+    this.langSub = merge(this.translate.onLangChange, this.translate.onTranslationChange).subscribe(
+      () => this.applyFilter(),
+    );
   }
 
   ngOnDestroy(): void {
