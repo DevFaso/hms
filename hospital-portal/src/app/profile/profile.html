@@ -79,7 +79,7 @@
           <p class="user-username">&#64;{{ user()!.username }}</p>
           <div class="role-badges">
             @for (role of allRoles(); track role.id || role.code) {
-              <span class="role-badge">{{ role.displayName }}</span>
+              <span class="role-badge">{{ role.token | roleLabel }}</span>
             }
           </div>
           <div class="user-meta">

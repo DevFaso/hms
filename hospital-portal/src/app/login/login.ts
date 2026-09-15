@@ -20,11 +20,12 @@ import { safeReturnUrl } from '../auth/return-url';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent],
+  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent, RoleLabelPipe],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./login.scss'],
@@ -424,11 +425,6 @@ export class Login implements OnInit, AfterViewInit {
     this.availableRoles = [];
     this.password = '';
     this.error = '';
-  }
-
-  /** Human-readable role label, e.g. "ROLE_DOCTOR" → "Doctor" */
-  formatRoleName(role: string): string {
-    return this.auth.formatRole(role);
   }
 
   /** Material icon for a role — used in the role-picker cards. */

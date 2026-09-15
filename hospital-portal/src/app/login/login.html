@@ -242,7 +242,7 @@
           @for (role of availableRoles; track role) {
             <button type="button" class="role-card" (click)="selectRole(role)" [disabled]="loading">
               <span class="material-symbols-outlined role-card-icon">{{ roleIcon(role) }}</span>
-              <span class="role-card-label">{{ formatRoleName(role) }}</span>
+              <span class="role-card-label">{{ role | roleLabel }}</span>
             </button>
           }
         </div>

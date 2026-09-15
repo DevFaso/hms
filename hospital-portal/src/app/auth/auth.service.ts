@@ -371,13 +371,6 @@ export class AuthService {
     return best;
   }
 
-  formatRole(role: string): string {
-    return role
-      .replace(/^ROLE_/, '')
-      .replaceAll('_', ' ')
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   getSubject(): string | null {
     return this.decodePayload()?.sub ?? null;
   }

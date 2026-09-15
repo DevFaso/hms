@@ -120,12 +120,10 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       'setUserProfile',
       'getUserProfile',
       'resolveLandingPath',
-      'formatRole',
     ]);
     authSpy.getRoles.and.returnValue(['ROLE_SUPER_ADMIN']);
     authSpy.getUserProfile.and.returnValue(null);
     authSpy.resolveLandingPath.and.returnValue('/dashboard');
-    authSpy.formatRole.and.callFake((r: string) => r);
 
     TestBed.configureTestingModule({
       imports: [Login, TranslateModule.forRoot()],

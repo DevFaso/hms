@@ -15,6 +15,7 @@ import { RoleService, RoleResponse } from '../services/role.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
@@ -28,7 +29,7 @@ type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | n
 @Component({
   selector: 'app-admin-assignments',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './admin-assignments.html',
   styleUrl: './admin-assignments.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
