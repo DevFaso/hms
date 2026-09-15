@@ -60,6 +60,7 @@ export const ENUM_WORDS = [
   'source',
   'action',
   'channel',
+  'role',
 ];
 
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */

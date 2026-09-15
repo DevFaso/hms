@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription } from 'rxjs';
 import { NurseStationComponent } from './nurse-station';
 import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
@@ -391,5 +391,44 @@ describe('NurseStationComponent — two-tier polling', () => {
     const tabs = fixture.nativeElement.querySelector('.section-tabs');
     expect(tabs).not.toBeNull();
     expect(tabs.closest('.station-layout')).toBeNull();
+  });
+
+  it('translates the vitals-round type the server used to spell in English', () => {
+    // NurseTaskServiceImpl stamped the words "Full Set" and "Routine", so a
+    // French nurse read English here whatever the portal did. It sends
+    // FULL_SET / ROUTINE now and the column translates them.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { VITAL_TASK_TYPE: { FULL_SET: 'Bilan complet', ROUTINE: 'Routine' } } },
+    });
+    // ngOnInit runs on the first detectChanges and the spies return of([]),
+    // which would overwrite the row below. Let it settle first.
+    fixture.detectChanges();
+    component.vitals.set([
+      {
+        id: 'v-1',
+        // No patientId: the name cell then renders a plain div instead of a
+        // routerLink, so this test needs no router wiring to reach the type cell.
+        patientId: '',
+        patientName: 'Awa Traoré',
+        type: 'FULL_SET',
+        dueTime: '2026-09-14T10:00:00',
+        overdue: true,
+      },
+    ]);
+    component.activeSection.set('vitals');
+    fixture.detectChanges();
+
+    const cells = Array.from(
+      fixture.nativeElement.querySelectorAll('td') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(cells).toContain('Bilan complet');
+    expect(cells).not.toContain('FULL_SET');
+    // Deliberately no assertion against the old server literal "Full Set":
+    // this spec sets the signal directly, so that string is not in its
+    // universe and the check could never fail. NurseTaskServiceImplTest
+    // pins the wire value instead.
   });
 });

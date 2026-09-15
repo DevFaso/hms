@@ -64,7 +64,9 @@
                   [attr.title]="'PORTAL.NOTIFICATIONS.UNREAD' | translate"
                 ></span>
               }
-              <span class="notif-type badge">{{ n.type }}</span>
+              @if (n.type) {
+                <span class="notif-type badge">{{ n.type | enumLabel: 'notificationType' }}</span>
+              }
               <span class="notif-date text-muted">{{ n.createdAt | date: 'medium' }}</span>
             </div>
             <p class="notif-message">{{ n.message }}</p>

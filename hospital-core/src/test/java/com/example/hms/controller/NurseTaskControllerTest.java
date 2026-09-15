@@ -74,7 +74,7 @@ class NurseTaskControllerTest {
     void getDueVitalsDefaultWindowAndNoAssignee() {
         List<NurseVitalTaskResponseDTO> vitals = List.of(
             NurseVitalTaskResponseDTO.builder()
-                .id(UUID.randomUUID()).patientName("Alice").type("Routine")
+                .id(UUID.randomUUID()).patientName("Alice").type("ROUTINE")
                 .dueTime(LocalDateTime.now()).overdue(false).build()
         );
         when(nurseTaskService.getDueVitals(eq(null), eq(HOSPITAL_ID), any(Duration.class)))

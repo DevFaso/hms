@@ -5313,6 +5313,68 @@
         "PRE_OP_CLEARANCE_PENDING": "Pre-Op Clearance Pending",
         "READY_FOR_PROCEDURE": "Ready for Procedure",
         "SCHEDULED": "Scheduled"
+      },
+      "NOTIFICATION_TYPE": {
+        "APPOINTMENT_REMINDER": "Appointment Reminder",
+        "CRITICAL_IMAGING_FINDING": "Critical Imaging Finding",
+        "CRITICAL_IMAGING_FINDING_ESCALATION": "Critical Imaging Finding Escalation",
+        "CRITICAL_LAB_RESULT": "Critical Lab Result",
+        "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
+        "DISCHARGE_SUMMARY": "Discharge Summary",
+        "LICENSE_EXPIRY": "License Expiry",
+        "MEDICATION_REFILL": "Medication Refill",
+        "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
+        "PRO_CRITICAL_ITEM": "Critical PRO Item",
+        "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
+        "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
+        "REORDER_ALERT": "Reorder Alert"
+      },
+      "ORGANIZATION_TYPE": {
+        "ACADEMIC_CENTER": "Academic Center",
+        "ACADEMIC_MEDICAL_CENTER": "Academic Medical Center",
+        "AMBULATORY": "Ambulatory Network",
+        "COMMUNITY_HOSPITAL": "Community Hospital",
+        "GOVERNMENT_AGENCY": "Government Agency",
+        "HEALTHCARE_NETWORK": "Healthcare Network",
+        "HEALTH_SYSTEM": "Health System",
+        "HOSPITAL": "Hospital",
+        "HOSPITAL_CHAIN": "Hospital Chain",
+        "PEDIATRIC_SYSTEM": "Pediatric System",
+        "PRIVATE_PRACTICE": "Private Practice",
+        "REGIONAL_NETWORK": "Regional Network",
+        "RESEARCH_INSTITUTION": "Research Institution",
+        "SPECIALTY_GROUP": "Specialty Group",
+        "SPECIALTY_NETWORK": "Specialty Network"
+      },
+      "POSTPARTUM_ALERT_TYPE": {
+        "EDUCATION": "Education",
+        "FOLLOW_UP": "Follow-Up",
+        "HEMORRHAGE": "Hemorrhage",
+        "INFECTION": "Infection",
+        "PAIN": "Pain",
+        "PSYCHOSOCIAL": "Psychosocial"
+      },
+      "SNAPSHOT_ITEM_TYPE": {
+        "LAB": "Lab",
+        "VITALS": "Vitals"
+      },
+      "VITAL_TASK_TYPE": {
+        "FULL_SET": "Full Set",
+        "ROUTINE": "Routine"
+      },
+      "ORDER_TASK_TYPE": {
+        "IMAGING": "Imaging",
+        "LAB": "Lab",
+        "PROCEDURE": "Procedure"
+      },
+      "NEWBORN_ALERT_TYPE": {
+        "APGAR": "Apgar",
+        "CARDIOVASCULAR": "Cardiovascular",
+        "GENERAL": "General",
+        "GLUCOSE": "Glucose",
+        "OXYGENATION": "Oxygenation",
+        "RESPIRATORY": "Respiratory",
+        "THERMOREGULATION": "Thermoregulation"
       }
     },
     "DOCUMENTS": {
@@ -9642,5 +9704,8 @@
     "STATUS_PIPELINE": "Order Status Pipeline",
     "THROUGHPUT": "Throughput",
     "TITLE": "Lab Operations Dashboard"
+  },
+  "SNAPSHOT": {
+    "ORDER": "Order"
   }
 }

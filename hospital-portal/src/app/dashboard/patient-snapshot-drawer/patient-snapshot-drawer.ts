@@ -3,11 +3,12 @@ import { ChangeDetectionStrategy, Component, input, output, signal } from '@angu
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientSnapshot } from '../../services/dashboard.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

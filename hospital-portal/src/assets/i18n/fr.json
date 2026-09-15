@@ -5279,6 +5279,68 @@
         "PRE_OP_CLEARANCE_PENDING": "Autorisation pré-op en attente",
         "READY_FOR_PROCEDURE": "Prêt pour la procédure",
         "SCHEDULED": "Planifié"
+      },
+      "NOTIFICATION_TYPE": {
+        "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+        "CRITICAL_IMAGING_FINDING": "Découverte d'imagerie critique",
+        "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalade — découverte d'imagerie critique",
+        "CRITICAL_LAB_RESULT": "Résultat de laboratoire critique",
+        "CRITICAL_LAB_RESULT_ESCALATION": "Escalade — résultat de laboratoire critique",
+        "DISCHARGE_SUMMARY": "Compte rendu de sortie",
+        "LICENSE_EXPIRY": "Expiration de licence",
+        "MEDICATION_REFILL": "Renouvellement d'ordonnance",
+        "POSITIVE_CULTURE_RESULT": "Culture positive",
+        "PRO_CRITICAL_ITEM": "Élément PRO critique",
+        "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
+        "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",
+        "REORDER_ALERT": "Alerte de réapprovisionnement"
+      },
+      "ORGANIZATION_TYPE": {
+        "ACADEMIC_CENTER": "Centre universitaire",
+        "ACADEMIC_MEDICAL_CENTER": "Centre hospitalier universitaire",
+        "AMBULATORY": "Réseau ambulatoire",
+        "COMMUNITY_HOSPITAL": "Hôpital communautaire",
+        "GOVERNMENT_AGENCY": "Organisme public",
+        "HEALTHCARE_NETWORK": "Réseau de santé",
+        "HEALTH_SYSTEM": "Système de santé",
+        "HOSPITAL": "Hôpital",
+        "HOSPITAL_CHAIN": "Chaîne hospitalière",
+        "PEDIATRIC_SYSTEM": "Système pédiatrique",
+        "PRIVATE_PRACTICE": "Cabinet privé",
+        "REGIONAL_NETWORK": "Réseau régional",
+        "RESEARCH_INSTITUTION": "Institut de recherche",
+        "SPECIALTY_GROUP": "Groupe spécialisé",
+        "SPECIALTY_NETWORK": "Réseau spécialisé"
+      },
+      "POSTPARTUM_ALERT_TYPE": {
+        "EDUCATION": "Éducation",
+        "FOLLOW_UP": "Suivi",
+        "HEMORRHAGE": "Hémorragie",
+        "INFECTION": "Infection",
+        "PAIN": "Douleur",
+        "PSYCHOSOCIAL": "Psychosocial"
+      },
+      "SNAPSHOT_ITEM_TYPE": {
+        "LAB": "Laboratoire",
+        "VITALS": "Constantes"
+      },
+      "VITAL_TASK_TYPE": {
+        "FULL_SET": "Bilan complet",
+        "ROUTINE": "Routine"
+      },
+      "ORDER_TASK_TYPE": {
+        "IMAGING": "Imagerie",
+        "LAB": "Laboratoire",
+        "PROCEDURE": "Intervention"
+      },
+      "NEWBORN_ALERT_TYPE": {
+        "APGAR": "Apgar",
+        "CARDIOVASCULAR": "Cardiovasculaire",
+        "GENERAL": "Général",
+        "GLUCOSE": "Glycémie",
+        "OXYGENATION": "Oxygénation",
+        "RESPIRATORY": "Respiratoire",
+        "THERMOREGULATION": "Thermorégulation"
       }
     },
     "DOCUMENTS": {
@@ -9642,5 +9704,8 @@
     "STATUS_PIPELINE": "Suivi des statuts des demandes",
     "THROUGHPUT": "Débit",
     "TITLE": "Tableau de bord des opérations du laboratoire"
+  },
+  "SNAPSHOT": {
+    "ORDER": "Prescription"
   }
 }

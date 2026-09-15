@@ -286,7 +286,7 @@ class NurseTaskServiceImplTest {
         List<NurseOrderTaskResponseDTO> all = service.getOrderTasks(nurseId, hospitalId, null, 20);
         assertThat(all)
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .containsExactly("Lab", "Procedure"); // sorted by due time; other patient's order filtered
+            .containsExactly("LAB", "PROCEDURE"); // sorted by due time; other patient's order filtered
         assertThat(all.get(0).getPriority()).isEqualTo("STAT");
         assertThat(all.get(0).getPatientName()).isEqualTo("Ann Assigned");
 
@@ -294,7 +294,7 @@ class NurseTaskServiceImplTest {
         assertThat(statOnly)
             .singleElement()
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .isEqualTo("Lab");
+            .isEqualTo("LAB");
     }
 
     @Test
@@ -629,7 +629,7 @@ class NurseTaskServiceImplTest {
             // dueTime = lastRecorded + window = fixedNow - 1h + 2h = fixedNow + 1h
             assertThat(task.getDueTime()).isEqualTo(fixedNow.plusHours(1));
             assertThat(task.isOverdue()).isFalse();
-            assertThat(task.getType()).isEqualTo("Routine");
+            assertThat(task.getType()).isEqualTo("ROUTINE");
         }
     }
 
@@ -657,7 +657,7 @@ class NurseTaskServiceImplTest {
             NurseVitalTaskResponseDTO task = vitals.get(0);
             // dueTime = lastRecorded + window = fixedNow - 6h + 2h = fixedNow - 4h -> overdue
             assertThat(task.isOverdue()).isTrue();
-            assertThat(task.getType()).isEqualTo("Full Set");
+            assertThat(task.getType()).isEqualTo("FULL_SET");
         }
     }
 
@@ -2780,7 +2780,7 @@ class NurseTaskServiceImplTest {
 
         assertThat(tasks)
             .extracting(NurseOrderTaskResponseDTO::getOrderType, NurseOrderTaskResponseDTO::getPatientName)
-            .containsExactly(tuple("Lab", "Ann Assigned"), tuple("Imaging", "Ann Assigned"));
+            .containsExactly(tuple("LAB", "Ann Assigned"), tuple("IMAGING", "Ann Assigned"));
     }
 
     @Test
