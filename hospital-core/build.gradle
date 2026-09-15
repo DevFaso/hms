@@ -50,9 +50,9 @@ dependencies {
     implementation 'io.hypersistence:hypersistence-utils-hibernate-73:3.15.5'
 
     // PDF generation
-    implementation 'com.itextpdf:kernel:8.0.2'
-    implementation 'com.itextpdf:layout:8.0.2'
-    implementation 'com.itextpdf:barcodes:8.0.2'
+    implementation 'com.itextpdf:kernel:9.7.1'
+    implementation 'com.itextpdf:layout:9.7.1'
+    implementation 'com.itextpdf:barcodes:9.7.1'
     implementation 'org.apache.pdfbox:pdfbox:2.0.34'
 
     // QR / Barcode
