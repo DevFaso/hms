@@ -5366,6 +5366,15 @@
         "IMAGING": "Imaging",
         "LAB": "Lab",
         "PROCEDURE": "Procedure"
+      },
+      "NEWBORN_ALERT_TYPE": {
+        "APGAR": "Apgar",
+        "CARDIOVASCULAR": "Cardiovascular",
+        "GENERAL": "General",
+        "GLUCOSE": "Glucose",
+        "OXYGENATION": "Oxygenation",
+        "RESPIRATORY": "Respiratory",
+        "THERMOREGULATION": "Thermoregulation"
       }
     },
     "DOCUMENTS": {

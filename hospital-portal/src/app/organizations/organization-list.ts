@@ -245,7 +245,6 @@ export class OrganizationListComponent implements OnInit {
     }
   }
 
-  /** Convert SCREAMING_SNAKE enum value to Title Case display label */
   /** The label the Type column shows, so the filter can match it. */
   private typeLabel(value: string | undefined): string {
     return value ? this.enumLabel.transform(value, 'organizationType') : '';

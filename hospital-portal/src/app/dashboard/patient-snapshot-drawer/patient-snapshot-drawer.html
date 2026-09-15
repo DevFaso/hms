@@ -190,7 +190,7 @@
             @if (pt.pendingOrders.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_PENDING_ORDERS' | translate }}</span>
             } @else {
-              @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
+              @for (o of pt.pendingOrders; track $index) {
                 <div class="order-row">
                   <span class="order-type-badge">{{ o.type | enumLabel: 'snapshotItemType' }}</span>
                   <span class="order-desc">{{
@@ -218,7 +218,7 @@
             @if (pt.recentNotes.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_RECENT_NOTES' | translate }}</span>
             } @else {
-              @for (n of pt.recentNotes; track n.date + n.type) {
+              @for (n of pt.recentNotes; track $index) {
                 <div class="note-row">
                   <div class="note-header">
                     <span class="note-type">{{

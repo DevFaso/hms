@@ -235,7 +235,8 @@ export interface PatientSnapshot {
   activeMedications: { name: string; dose: string; frequency: string }[];
   recentVitals: { type: string; value: string; timestamp: string }[];
   latestLabs: { test: string; value: string; flag: string; date: string }[];
-  pendingOrders: { type: string; description: string; orderedAt: string }[];
+  // `description` is null when the lab order has no test definition.
+  pendingOrders: { type: string; description: string | null; orderedAt: string }[];
   // `type` is null when the encounter has no type, and `author` when the
   // staff record is gone — PatientSnapshotServiceImpl sends null rather
   // than an English word for either.

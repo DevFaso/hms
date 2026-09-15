@@ -2283,6 +2283,49 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
      `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
      Discharge". The positive assertion still catches the regression; the
      exclusion is dead weight.
+- **Nine round-3 findings on #664, deferred by the user to ride with the
+  `.role` tranche.** None is reachable by a user today; several are one edit
+  each, and two of them change the shape the next tranche should follow.
+  1. `EnumLabelPipe` is injected as a component PROVIDER in
+     `organization-list.ts` so the filter can call `transform()` from
+     TypeScript. It is the only such construction in the portal, and it gives
+     that instance its own `ChangeDetectorRef`, its own `onLangChange`
+     subscription and a `memo` separate from the template's. Extract the
+     three-tier lookup into an injectable `EnumLabelService` the pipe
+     delegates to — **the `.role` tranche wants the same trick on five more
+     screens, so do this first**.
+  2. The organization filter matches a locale-dependent label but only re-runs
+     on keystroke, so the list goes stale when the language changes: a row
+     matched under French labels stays listed once the cell reads English. A
+     `computed()` over `searchTerm` + `organizations()`, or a re-run on
+     `onLangChange`, holds.
+  3. `snapshotItemType` {VITALS, LAB} and `orderTaskType` {LAB, IMAGING,
+     PROCEDURE} both key LAB for a lab-order badge — 5 tokens over 2 groups ×
+     3 locales with the shared one duplicated. One `orderSourceType` covering
+     all four would carry the same information with one rationale.
+  4. `PatientSnapshotServiceImpl` still stamps the literal `"Lab Test"` in the
+     `latestLabs` builder — the direct sibling of the `"Lab Order"` this
+     tranche replaced with null, one collapsible section above it in the same
+     drawer. No gate can see it: the field is not enum-named, so it is not
+     even pinned.
+  5. `NurseTaskServiceImpl.TYPE_ROUTINE` and `PRIORITY_ROUTINE` now both hold
+     `"ROUTINE"` — a vitals-round type and an order priority, indistinguishable
+     at the call site. They differed before the tranche tokenized the first.
+  6. The two null branches the tranche introduced —
+     `o.description || ('SNAPSHOT.ORDER' | translate)` and `n.author || '—'` —
+     have no spec, though both are reachable (a lab order whose test
+     definition was deleted; a note whose staff row is gone).
+  7. `organization-list.spec.ts`'s `RoleContextService` stub omits
+     `isSuperAdmin`, which the component reads at construction. The spec passes
+     only because it never renders; the first rendering assertion added there
+     will fail on `isSuperAdmin is not a function`.
+  8. `SNAPSHOT.ORDER` is a new root namespace holding one key, while the other
+     16 keys in that template are `DASHBOARD.*`. Its French, « Prescription »,
+     also reads as a medication order under a badge that already says
+     « Laboratoire » — `DASHBOARD.LAB_ORDER` / « Demande de laboratoire » fixes
+     both.
+  9. `my-notifications.component.ts` imports both `CommonModule` and
+     `DatePipe`; the former re-exports the latter.
 - **218 enum-shaped fields are still rendered without `| enumLabel`.** A value
   written as `{{ order.status }}` rather than
   `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
