@@ -43,6 +43,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 
 class ChatMessageServiceImplTest {
     @Mock private ChatMessageRepository chatMessageRepository;
@@ -54,6 +56,8 @@ class ChatMessageServiceImplTest {
     @Mock private NotificationService notificationService;
     @Mock private ChatAttachmentRepository chatAttachmentRepository;
     @Mock private FileUploadService fileUploadService;
+    @Mock private PatientRepository patientRepository;
+    @Mock private PatientLocaleResolver patientLocaleResolver;
 
     @InjectMocks
     private ChatMessageServiceImpl chatMessageService;

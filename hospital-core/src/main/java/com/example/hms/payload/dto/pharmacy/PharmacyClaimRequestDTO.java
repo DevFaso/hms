@@ -21,13 +21,13 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PharmacyClaimRequestDTO {
 
-    @NotNull(message = "Dispense ID is required")
+    @NotNull(message = "{pharmacyClaim.dispenseId.required}")
     private UUID dispenseId;
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{pharmacyClaim.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
     @Size(max = 255)
@@ -35,7 +35,7 @@ public class PharmacyClaimRequestDTO {
 
     private PharmacyClaimStatus claimStatus;
 
-    @NotNull(message = "Claim amount is required")
+    @NotNull(message = "{pharmacyClaim.amount.required}")
     private BigDecimal amount;
 
     @Size(max = 10)

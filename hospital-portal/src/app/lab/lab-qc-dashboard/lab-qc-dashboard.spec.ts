@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LabQcDashboardComponent } from './lab-qc-dashboard';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -72,7 +72,7 @@ describe('LabQcDashboardComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LabQcDashboardComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: LabService, useValue: mockLabService },
         { provide: ToastService, useValue: mockToastService },

@@ -25,23 +25,6 @@
   }
 
   @if (!loading() && patient(); as p) {
-    <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
-    <app-storyboard-banner
-      [patientId]="p.id"
-      [refreshToken]="accessEpoch()"
-      (openRestricted)="openRestrictedRows()"
-    />
-
-    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
-    <app-break-glass-banner
-      [patientId]="p.id"
-      [hospitalId]="currentHospitalId()"
-      (sessionChanged)="onBreakGlassSessionChanged()"
-    />
-
-    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
-    <app-bpa-panel [patientId]="p.id" />
-
     <!-- Header -->
     <div class="detail-header">
       <app-patient-photo
@@ -65,7 +48,18 @@
           >
           @if (p.gender) {
             <span class="meta-tag"
-              ><span class="material-symbols-outlined">person</span> {{ p.gender }}</span
+              ><span class="material-symbols-outlined">person</span>
+              {{ p.gender | enumLabel: 'gender' }}</span
+            >
+          }
+          @if (p.dateOfBirth) {
+            <span class="meta-tag" data-testid="header-dob"
+              ><span class="material-symbols-outlined">cake</span> {{ p.dateOfBirth }}</span
+            >
+          }
+          @if (p.bloodType) {
+            <span class="meta-tag" data-testid="header-blood-type"
+              ><span class="material-symbols-outlined">bloodtype</span> {{ p.bloodType }}</span
             >
           }
           <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
@@ -92,7 +86,7 @@
           [disabled]="recordDownloadLoading()"
           [title]="'PATIENTS.DOWNLOAD_RECORD_TITLE' | translate"
         >
-          <span class="material-symbols-outlined">download</span>
+          <span class="material-symbols-outlined">picture_as_pdf</span>
           {{ 'PATIENTS.DOWNLOAD_RECORD' | translate }}
         </button>
       }
@@ -110,6 +104,23 @@
         </button>
       }
     </div>
+
+    <!-- Storyboard — allergies / problems / active encounter / code status. Identity is the header above. -->
+    <app-storyboard-banner
+      [patientId]="p.id"
+      [refreshToken]="accessEpoch()"
+      (openRestricted)="openRestrictedRows()"
+    />
+
+    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
+    <app-break-glass-banner
+      [patientId]="p.id"
+      [hospitalId]="currentHospitalId()"
+      (sessionChanged)="onBreakGlassSessionChanged()"
+    />
+
+    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
+    <app-bpa-panel [patientId]="p.id" />
 
     <!-- Tabs -->
     <div class="tabs">
@@ -377,7 +388,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
-              ><span class="value">{{ p.gender ?? '—' }}</span>
+              ><span class="value">{{ p.gender ? (p.gender | enumLabel: 'gender') : '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
@@ -674,7 +685,9 @@
                 <tr>
                   <td class="date-cell">{{ enc.encounterDate | date: 'mediumDate' }}</td>
                   <td>
-                    <span class="encounter-type">{{ enc.encounterType }}</span>
+                    <span class="encounter-type">{{
+                      enc.encounterType | enumLabel: 'encounterType'
+                    }}</span>
                   </td>
                   <td>{{ enc.staffFullName || enc.staffName || '—' }}</td>
                   <td>{{ enc.departmentName || '—' }}</td>

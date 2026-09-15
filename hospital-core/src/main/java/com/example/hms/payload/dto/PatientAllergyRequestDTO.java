@@ -25,7 +25,7 @@ public class PatientAllergyRequestDTO {
     @Schema(description = "Hospital scope for the allergy entry. Defaults to the authenticated hospital if omitted.")
     private UUID hospitalId;
 
-    @NotBlank(message = "Allergen display name is required.")
+    @NotBlank(message = "{patientAllergy.allergenDisplay.required}")
     @Size(max = 255)
     private String allergenDisplay;
 

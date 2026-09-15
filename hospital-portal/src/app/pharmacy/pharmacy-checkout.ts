@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PharmacyService,
   DispenseResponse,
@@ -25,12 +25,14 @@ import { ToastService } from '../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, DatePipe, DecimalPipe],
   templateUrl: './pharmacy-checkout.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',
 })
 export class PharmacyCheckoutComponent {
   private readonly svc = inject(PharmacyService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   dispenseId = '';
   amount: number | null = null;
@@ -50,7 +52,7 @@ export class PharmacyCheckoutComponent {
 
   loadDispense(): void {
     if (!this.dispenseId) {
-      this.toast.error('Dispense ID requis');
+      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED'));
       return;
     }
     this.loading.set(true);
@@ -60,7 +62,9 @@ export class PharmacyCheckoutComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Dispense introuvable');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
+        );
         this.dispense.set(null);
         this.loading.set(false);
       },
@@ -70,17 +74,17 @@ export class PharmacyCheckoutComponent {
   submit(): void {
     const d = this.dispense();
     if (!d) {
-      this.toast.error('Veuillez charger un dispense');
+      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_LOAD_DISPENSE_FIRST'));
       return;
     }
     if (!this.amount || this.amount <= 0) {
-      this.toast.error('Montant invalide');
+      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_INVALID_AMOUNT'));
       return;
     }
     const hospitalId = this.auth.getHospitalId();
     const userId = this.auth.getUserId();
     if (!hospitalId || !userId) {
-      this.toast.error('Utilisateur ou hôpital introuvable');
+      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_USER_OR_HOSPITAL_MISSING'));
       return;
     }
 
@@ -100,11 +104,11 @@ export class PharmacyCheckoutComponent {
     this.svc.createPayment(req).subscribe({
       next: (res) => {
         this.receipt.set(res?.data ?? null);
-        this.toast.success('Paiement enregistré');
+        this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
         this.loading.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Échec du paiement');
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
         this.loading.set(false);
       },
     });

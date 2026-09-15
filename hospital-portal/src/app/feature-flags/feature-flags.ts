@@ -1,7 +1,14 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 
@@ -24,13 +31,15 @@ interface FlagOverride {
 @Component({
   selector: 'app-feature-flags',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './feature-flags.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',
 })
 export class FeatureFlagsComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   loading = signal(true);
   flags = signal<FeatureFlag[]>([]);
@@ -72,7 +81,7 @@ export class FeatureFlagsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load feature flags');
+        this.toast.error(this.translate.instant('FLAGS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -99,9 +108,14 @@ export class FeatureFlagsComponent implements OnInit {
           this.flags.update((list) =>
             list.map((f) => (f.key === flag.key ? { ...f, enabled: newEnabled } : f)),
           );
-          this.toast.success(`${flag.key} ${newEnabled ? 'enabled' : 'disabled'}`);
+          this.toast.success(
+            this.translate.instant(newEnabled ? 'FLAGS.FLAG_ENABLED' : 'FLAGS.FLAG_DISABLED', {
+              key: flag.key,
+            }),
+          );
         },
-        error: () => this.toast.error(`Failed to toggle ${flag.key}`),
+        error: () =>
+          this.toast.error(this.translate.instant('FLAGS.TOGGLE_FAILED', { key: flag.key })),
       });
   }
 
@@ -111,9 +125,12 @@ export class FeatureFlagsComponent implements OnInit {
       .subscribe({
         next: () => {
           this.loadFlags();
-          this.toast.success(`Override removed for ${flag.key}`);
+          this.toast.success(this.translate.instant('FLAGS.OVERRIDE_REMOVED', { key: flag.key }));
         },
-        error: () => this.toast.error(`Failed to remove override for ${flag.key}`),
+        error: () =>
+          this.toast.error(
+            this.translate.instant('FLAGS.OVERRIDE_REMOVE_FAILED', { key: flag.key }),
+          ),
       });
   }
 
@@ -131,7 +148,7 @@ export class FeatureFlagsComponent implements OnInit {
   createFlag(): void {
     const key = this.newFlagKey().trim();
     if (!key) {
-      this.toast.error('Flag key is required');
+      this.toast.error(this.translate.instant('FLAGS.KEY_REQUIRED'));
       return;
     }
     this.saving.set(true);
@@ -145,11 +162,11 @@ export class FeatureFlagsComponent implements OnInit {
           this.loadFlags();
           this.closeCreate();
           this.saving.set(false);
-          this.toast.success(`Flag "${key}" created`);
+          this.toast.success(this.translate.instant('FLAGS.CREATED', { key }));
         },
         error: () => {
           this.saving.set(false);
-          this.toast.error('Failed to create flag');
+          this.toast.error(this.translate.instant('FLAGS.CREATE_FAILED'));
         },
       });
   }

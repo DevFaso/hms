@@ -16,13 +16,13 @@ import java.util.List;
 @AllArgsConstructor
 public class PermissionMatrixRowDTO {
 
-    @NotBlank(message = "permission.matrix.domain.required")
-    @Size(max = 255, message = "permission.matrix.domain.size")
+    @NotBlank(message = "{permission.matrix.domain.required}")
+    @Size(max = 255, message = "{permission.matrix.domain.size}")
     private String domain;
 
-    @NotEmpty(message = "permission.matrix.actions.required")
-    private List<@NotBlank(message = "permission.matrix.action.required") String> actions;
+    @NotEmpty(message = "{permission.matrix.actions.required}")
+    private List<@NotBlank(message = "{permission.matrix.action.required}") String> actions;
 
-    @NotEmpty(message = "permission.matrix.owners.required")
-    private List<@NotBlank(message = "permission.matrix.owner.required") String> owners;
+    @NotEmpty(message = "{permission.matrix.owners.required}")
+    private List<@NotBlank(message = "{permission.matrix.owner.required}") String> owners;
 }

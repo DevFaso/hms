@@ -114,7 +114,7 @@ public class ImagingReportUpsertRequestDTO {
     @Size(max = 1000)
     private String contrastDetails;
 
-    @DecimalMin(value = "0.0", message = "Radiation dose cannot be negative.")
+    @DecimalMin(value = "0.0", message = "{imagingReport.radiationDoseMgy.min}")
     private BigDecimal radiationDoseMgy;
 
     /**

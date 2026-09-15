@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -33,6 +33,7 @@ import {
   standalone: true,
   imports: [CommonModule, DatePipe, FormsModule, TranslateModule, ProInstrumentFormComponent],
   templateUrl: './my-screenings.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-screenings.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyScreeningsComponent implements OnInit {

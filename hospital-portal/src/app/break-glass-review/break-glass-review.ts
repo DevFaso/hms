@@ -1,4 +1,11 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DatePipe, SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -31,6 +38,7 @@ import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospit
     HospitalScopeHintComponent,
   ],
   templateUrl: './break-glass-review.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './break-glass-review.scss',
 })
 export class BreakGlassReviewComponent {

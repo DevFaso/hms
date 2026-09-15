@@ -36,6 +36,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 /**
  * The critical-imaging chain (Tier 2 item 27).
@@ -61,6 +63,8 @@ class ImagingCriticalNotificationServiceTest {
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private ImagingCriticalNotificationService service;
@@ -130,7 +134,7 @@ class ImagingCriticalNotificationServiceTest {
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService).createNotification(
             message.capture(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING"));
-        assertThat(message.getValue()).contains("Critical imaging finding");
+        assertThat(message.getValue()).contains("Résultat d'imagerie critique");
         assertThat(report.getCriticalNotifiedAt()).isNotNull();
     }
 
@@ -157,7 +161,7 @@ class ImagingCriticalNotificationServiceTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService).createNotification(message.capture(), anyString(), anyString());
-        assertThat(message.getValue()).contains("Imaging study").doesNotContain("null");
+        assertThat(message.getValue()).contains("Examen d'imagerie").doesNotContain("null");
     }
 
     @Test
@@ -173,7 +177,7 @@ class ImagingCriticalNotificationServiceTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService).createNotification(message.capture(), anyString(), anyString());
-        assertThat(message.getValue()).contains("for patient.").doesNotContain("null");
+        assertThat(message.getValue()).contains("pour patient.").doesNotContain("null");
     }
 
     @Test

@@ -133,7 +133,7 @@
               <div class="vitals-grid">
                 @for (v of pt.recentVitals; track v.type + v.timestamp) {
                   <div class="vital-item">
-                    <span class="vital-type">{{ v.type }}</span>
+                    <span class="vital-type">{{ v.type | enumLabel: 'snapshotItemType' }}</span>
                     <span class="vital-value">{{ v.value }}</span>
                   </div>
                 }
@@ -190,10 +190,12 @@
             @if (pt.pendingOrders.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_PENDING_ORDERS' | translate }}</span>
             } @else {
-              @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
+              @for (o of pt.pendingOrders; track $index) {
                 <div class="order-row">
-                  <span class="order-type-badge">{{ o.type }}</span>
-                  <span class="order-desc">{{ o.description }}</span>
+                  <span class="order-type-badge">{{ o.type | enumLabel: 'snapshotItemType' }}</span>
+                  <span class="order-desc">{{
+                    o.description || ('SNAPSHOT.ORDER' | translate)
+                  }}</span>
                 </div>
               }
             }
@@ -216,11 +218,13 @@
             @if (pt.recentNotes.length === 0) {
               <span class="no-data">{{ 'DASHBOARD.NO_RECENT_NOTES' | translate }}</span>
             } @else {
-              @for (n of pt.recentNotes; track n.date + n.type) {
+              @for (n of pt.recentNotes; track $index) {
                 <div class="note-row">
                   <div class="note-header">
-                    <span class="note-type">{{ n.type }}</span>
-                    <span class="note-author">{{ n.author }}</span>
+                    <span class="note-type">{{
+                      (n.type | enumLabel: 'encounterType') || '—'
+                    }}</span>
+                    <span class="note-author">{{ n.author || '—' }}</span>
                   </div>
                   <span class="note-snippet">{{ n.snippet }}</span>
                 </div>
@@ -234,7 +238,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('team')">
           <span class="material-symbols-outlined section-icon">groups</span>
-          <span class="section-title">Care Team</span>
+          <span class="section-title">{{ 'NAV.CARE_TEAM' | translate }}</span>
           <span class="section-count">{{ pt.careTeam.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             teamOpen() ? 'expand_less' : 'expand_more'
@@ -243,11 +247,11 @@
         @if (teamOpen()) {
           <div class="section-body">
             @if (pt.careTeam.length === 0) {
-              <span class="no-data">No team assigned</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_TEAM_ASSIGNED' | translate }}</span>
             } @else {
-              @for (m of pt.careTeam; track m.name + m.role) {
+              @for (m of pt.careTeam; track m.name + (m.role ?? '')) {
                 <div class="team-row">
-                  <span class="team-role">{{ m.role }}</span>
+                  <span class="team-role">{{ (m.role | enumLabel: 'jobTitle') || '—' }}</span>
                   <span class="team-name">{{ m.name }}</span>
                 </div>
               }

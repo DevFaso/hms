@@ -16,6 +16,6 @@ import java.util.UUID;
 @Builder
 public class HospitalOrganizationAssignmentRequest {
 
-    @NotNull(message = "Organization identifier is required")
+    @NotNull(message = "{hospitalOrganizationAssignment.organizationId.required}")
     private UUID organizationId;
 }

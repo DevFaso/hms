@@ -44,6 +44,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 
 @Slf4j
 @Service
@@ -84,6 +87,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final NotificationService notificationService;
     private final ChatAttachmentRepository chatAttachmentRepository;
     private final FileUploadService fileUploadService;
+    private final PatientRepository patientRepository;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     @Override
     @Transactional
@@ -169,8 +174,15 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
 
+        // The bell entry is read by the RECIPIENT, so it is rendered in their
+        // language, not the sender's request locale: a patient's stated
+        // language when they have one, otherwise the staff locale.
+        Locale recipientLocale = patientRepository.findByUserId(recipient.getId())
+            .map(patient -> patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK))
+            .orElse(NotificationLocales.STAFF);
         notificationService.createNotification(
-            "New message from " + sender.getFirstName() + " " + sender.getLastName(),
+            messageSource.getMessage("chat.newMessage.notification",
+                new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()}, recipientLocale),
             recipient.getUsername()
         );
 

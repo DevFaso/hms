@@ -80,6 +80,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import java.util.Map;
 import java.util.Set;
 import com.example.hms.enums.SensitivityCategory;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 
 @ExtendWith(MockitoExtension.class)
 class EncounterServiceImplTest {
@@ -110,7 +111,7 @@ class EncounterServiceImplTest {
     @Mock private DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private NotificationService notificationService;
     @Mock private EmailService emailService;
-    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock private tools.jackson.databind.ObjectMapper objectMapper;
     @Mock private com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     @Mock private com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     @Mock private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
@@ -119,6 +120,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private com.example.hms.service.PatientTrackerEventPublisher trackerEventPublisher;
     @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+    @Mock private PatientLocaleResolver patientLocaleResolver;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -831,6 +833,11 @@ class EncounterServiceImplTest {
         when(checkOutMapper.serializeDiagnoses(List.of("Upper respiratory infection"))).thenReturn("[\"Upper respiratory infection\"]");
         when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any())).thenReturn(avs);
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
@@ -887,6 +894,11 @@ class EncounterServiceImplTest {
         doThrow(new RuntimeException("smtp down")).when(emailService)
             .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
@@ -912,6 +924,11 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
@@ -956,6 +973,11 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         service.checkOut(encounterId, request, "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
@@ -985,6 +1007,11 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         service.checkOut(encounterId, request, "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
@@ -1016,6 +1043,11 @@ class EncounterServiceImplTest {
                 .build())
             .build();
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
@@ -1039,6 +1071,11 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(result).isNotNull();
@@ -1056,6 +1093,11 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
         CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("COMPLETED");
@@ -1116,6 +1158,11 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
@@ -1144,6 +1191,11 @@ class EncounterServiceImplTest {
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         service.checkOut(encounterId, request, "doctor1", true, null);
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
@@ -1607,9 +1659,8 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
-        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        // The request keeps the recorded attending, so neither the role check nor the
+        // assignment lookup runs (see updateEncounter_keepingTheRecordedAttending_...).
         when(encounterMapper.mergeEncounter(
                 any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                 any(Encounter.class),
@@ -1627,6 +1678,11 @@ class EncounterServiceImplTest {
         when(prescriptionRepository.findByEncounter_Id(org.mockito.ArgumentMatchers.eq(encounterId), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale, true, null);
 
         assertThat(result).isNotNull();
@@ -1714,9 +1770,8 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
-        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        // The request keeps the recorded attending, so neither the role check nor the
+        // assignment lookup runs (see updateEncounter_keepingTheRecordedAttending_...).
         when(encounterMapper.mergeEncounter(
                 any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                 any(Encounter.class),
@@ -1730,6 +1785,11 @@ class EncounterServiceImplTest {
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
 
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
         service.updateEncounter(encounterId, request, locale, true, null);
 
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
@@ -1922,5 +1982,177 @@ class EncounterServiceImplTest {
         verify(encounterRepository, never()).findByPatient_Id(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // =====================================================================
+    // An update that keeps the recorded attending does not re-credential them
+    // =====================================================================
+
+    /**
+     * dev, 2026-09-13: a nurse's edit on a doctor's encounter was refused with
+     * "not authorized to be attending" because that doctor's role assignment had
+     * since been hard-deleted. The attending of record is not being chosen again
+     * by an update that keeps them, so neither the role check nor the assignment
+     * lookup runs, and the encounter keeps the assignment it already carries.
+     */
+    @Test
+    void updateEncounter_keepingTheRecordedAttending_doesNotRecredentialThem() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+
+        User staffUser = User.builder().username("doctor_b").build();
+        staffUser.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+
+        UserRoleHospitalAssignment recorded = new UserRoleHospitalAssignment();
+        recorded.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.ARRIVED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(recorded);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.ARRIVED);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(recorded);
+        merged.setEncounterDate(existing.getEncounterDate());
+        merged.setNotes("ghftghh");
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+        request.setNotes("ghftghh");
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class),
+                any(Patient.class),
+                any(Staff.class),
+                any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
+            .thenReturn(new EncounterResponseDTO());
+
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
+        service.updateEncounter(encounterId, request, locale, false, hospitalId);
+
+        verify(roleValidator, never()).isDoctor(any(), any());
+        verify(roleValidator, never()).isNurse(any(), any());
+        verify(roleValidator, never()).isHospitalAdmin(any(), any());
+        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(encounterMapper).mergeEncounter(
+            any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+            eq(existing), eq(patient), eq(staff), eq(hospital),
+            org.mockito.ArgumentMatchers.<Appointment>isNull(),
+            eq(recorded));
+    }
+
+    /** Choosing a different attending on an update is a choice, and is credentialed as one. */
+    @Test
+    void updateEncounter_choosingANewAttending_stillCredentialsThem() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID recordedStaffId = UUID.randomUUID();
+        UUID newStaffId = UUID.randomUUID();
+        UUID newUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+
+        Staff recordedStaff = Staff.builder().hospital(hospital).build();
+        recordedStaff.setId(recordedStaffId);
+        User newUser = User.builder().username("nurse_c").build();
+        newUser.setId(newUserId);
+        Staff newStaff = Staff.builder().user(newUser).hospital(hospital).build();
+        newStaff.setId(newStaffId);
+
+        UserRoleHospitalAssignment recorded = new UserRoleHospitalAssignment();
+        recorded.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.ARRIVED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(recordedStaff);
+        existing.setAssignment(recorded);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(newStaffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(newStaffId)).thenReturn(Optional.of(newStaff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(roleValidator.isDoctor(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isNurse(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isHospitalAdmin(newUserId, hospitalId)).thenReturn(false);
+
+        // The after-visit summary bell entry is rendered through the message
+        // source in the patient's language; lenient, since not every path notifies.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenReturn("Votre résumé de visite est disponible.");
+        assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, false, hospitalId))
+            .isInstanceOf(BusinessException.class);
+
+        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(encounterRepository, never()).save(any(Encounter.class));
     }
 }

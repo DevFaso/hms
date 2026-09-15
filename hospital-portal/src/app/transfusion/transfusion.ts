@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -52,6 +59,7 @@ type Tab = 'requests' | 'units';
     HospitalScopeHintComponent,
   ],
   templateUrl: './transfusion.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './transfusion.scss',
 })
 export class TransfusionComponent implements OnInit {

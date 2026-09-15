@@ -1,4 +1,4 @@
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { HospitalService } from '../services/hospital.service';
@@ -13,7 +13,7 @@ describe('hospitalCacheInterceptor', () => {
     hospitals = jasmine.createSpyObj<HospitalService>('HospitalService', ['forgetFirstPage']);
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([hospitalCacheInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([hospitalCacheInterceptor])),
         provideHttpClientTesting(),
         { provide: HospitalService, useValue: hospitals },
       ],

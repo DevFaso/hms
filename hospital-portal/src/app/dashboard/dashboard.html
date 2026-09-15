@@ -45,6 +45,12 @@
       </div>
       @if (isDoctor()) {
         <div class="doctor-hero-info">
+          @if (hospitalName(); as hospital) {
+            <span class="doctor-chip hospital-chip" data-testid="hero-hospital">
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ hospital }}
+            </span>
+          }
           @if (specialization()) {
             <span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
@@ -67,6 +73,22 @@
               [attr.aria-label]="'DASHBOARD.SEARCH_PATIENTS' | translate"
             />
           </div>
+        </div>
+      }
+      @if ((isNurse() || isMidwife()) && (hospitalName() || departmentName())) {
+        <div class="doctor-hero-info" data-testid="hero-context">
+          @if (hospitalName(); as hospital) {
+            <span class="doctor-chip hospital-chip" data-testid="hero-hospital">
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ hospital }}
+            </span>
+          }
+          @if (departmentName(); as dept) {
+            <span class="doctor-chip dept-chip">
+              <span class="material-symbols-outlined">domain</span>
+              {{ dept }}
+            </span>
+          }
         </div>
       }
     </div>
@@ -98,26 +120,30 @@
     }
 
     <div class="hero-actions">
-      @if (permissions.hasPermission('Create Appointments')) {
-        <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
-          <span class="material-symbols-outlined">calendar_add_on</span>
-          {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
-        </a>
-      }
-      @if (permissions.hasPermission('Create Encounters')) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
-          <span class="material-symbols-outlined">stethoscope</span>
-          {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
-        </a>
-      }
-      @if (
-        permissions.hasPermission('Register Patients') &&
-        !permissions.hasPermission('Create Encounters')
-      ) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
-          <span class="material-symbols-outlined">person_add</span>
-          {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
-        </a>
+      <!-- Shortcuts only where no Quick Actions strip already carries them
+           (hasQuickActionsStrip), so Start Encounter is never on the page twice. -->
+      @if (!hasQuickActionsStrip()) {
+        @if (permissions.hasPermission('Create Appointments')) {
+          <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
+            <span class="material-symbols-outlined">calendar_add_on</span>
+            {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
+          </a>
+        }
+        @if (permissions.hasPermission('Create Encounters')) {
+          <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
+            <span class="material-symbols-outlined">stethoscope</span>
+            {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
+          </a>
+        }
+        @if (
+          permissions.hasPermission('Register Patients') &&
+          !permissions.hasPermission('Create Encounters')
+        ) {
+          <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
+            <span class="material-symbols-outlined">person_add</span>
+            {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
+          </a>
+        }
       }
       <button
         class="hero-btn hero-btn-ghost"
@@ -671,8 +697,11 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
-              <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
+              <span>{{ $safeNavigationMigration(paymentTrend()[0]?.date) | date: 'MMM d' }}</span>
+              <span>{{
+                $safeNavigationMigration(paymentTrend()[paymentTrend().length - 1]?.date)
+                  | date: 'MMM d'
+              }}</span>
             </div>
           </div>
         </section>
@@ -826,12 +855,13 @@
                 <div class="sched-info" style="flex: 1">
                   <span class="sched-name">{{ c.patientName }}</span>
                   <span class="sched-reason"
-                    >{{ c.specialtyRequested }} — {{ c.urgency | titlecase }}</span
+                    >{{ c.specialtyRequested }} —
+                    {{ c.urgency | enumLabel: 'consultationUrgency' }}</span
                   >
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
                   <span [class]="'appt-status appt-status-' + c.status.toLowerCase()">{{
-                    c.status | titlecase
+                    c.status | enumLabel: 'consultationStatus'
                   }}</span>
                   @if (c.overdue) {
                     <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
@@ -975,7 +1005,14 @@
                     [class]="getIntegrationStatusClass(svc.status)"
                     style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px"
                   >
-                    {{ svc.status | titlecase }}
+                    <!--
+                      HospitalAdminDashboardServiceImpl.buildIntegrationStatus
+                      substitutes the literal "UNKNOWN" for a service row whose
+                      status is null, so PLATFORM_SERVICE_STATUS carries a key
+                      PlatformServiceStatus itself cannot emit. The enum gate
+                      reports it as an extra key; that is why.
+                    -->
+                    {{ svc.status | enumLabel: 'platformServiceStatus' }}
                   </span>
                 </div>
               </div>
@@ -1080,7 +1117,7 @@
                 <div class="audit-body">
                   <span class="audit-actor">{{ evt.userName ?? 'System' }}</span>
                   <span class="audit-summary"
-                    >{{ evt.eventType | titlecase }}
+                    >{{ evt.eventType | enumLabel: 'auditEventType' }}
                     @if (evt.entityType || evt.resourceName) {
                       — {{ evt.entityType ?? '' }} {{ evt.resourceName ?? '' }}
                     }
@@ -1094,7 +1131,7 @@
                     evt.status !== 'SUCCESS' && evt.status !== 'FAILURE'
                   "
                 >
-                  {{ evt.status | titlecase }}
+                  {{ evt.status | enumLabel: 'auditStatus' }}
                 </span>
               </div>
             }
@@ -1548,6 +1585,21 @@
           ><span class="stat-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
         </div>
       </a>
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="tasksToComplete() === 0"
+        [class.stat-card-active]="tasksToComplete() > 0"
+        routerLink="/nurse-station"
+        data-testid="nurse-tasks-stat"
+      >
+        <div class="stat-icon-wrap">
+          <span class="material-symbols-outlined stat-icon">checklist</span>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value">{{ tasksToComplete() }}</span
+          ><span class="stat-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
+        </div>
+      </a>
     </section>
 
     <!-- Quick Actions promoted above the workspace so the most-used flows
@@ -1743,41 +1795,6 @@
                   }
                 </div>
               }
-            </div>
-          </section>
-        }
-
-        @if (inboxCounts(); as ic) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
-                <h2 class="card-title">{{ 'DASHBOARD.INBOX' | translate }}</h2>
-                @if (totalInboxCount() > 0) {
-                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
-                }
-              </div>
-              <a routerLink="/chat" class="card-link">{{ 'DASHBOARD.OPEN' | translate }}</a>
-            </div>
-            <div class="inbox-items">
-              <a routerLink="/chat" class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-chat">
-                  <span class="material-symbols-outlined">chat</span>
-                </div>
-                <span class="inbox-row-label">{{ 'DASHBOARD.MESSAGES' | translate }}</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
-                  ic.unreadMessages
-                }}</span>
-              </a>
-              <div class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-task">
-                  <span class="material-symbols-outlined">checklist</span>
-                </div>
-                <span class="inbox-row-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
-                  ic.tasksToComplete
-                }}</span>
-              </div>
             </div>
           </section>
         }
@@ -2196,7 +2213,10 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value">
-                  @if (labDirectorDashboard()?.avgTurnaroundMinutesToday !== null) {
+                  @if (
+                    $safeNavigationMigration(labDirectorDashboard()?.avgTurnaroundMinutesToday) !==
+                    null
+                  ) {
                     {{ labDirectorDashboard()!.avgTurnaroundMinutesToday! | number: '1.0-0' }}
                   } @else {
                     N/A
@@ -2323,7 +2343,9 @@
               </div>
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
-                  @if (qualityManagerDashboard()?.qualityPassRate !== null) {
+                  @if (
+                    $safeNavigationMigration(qualityManagerDashboard()?.qualityPassRate) !== null
+                  ) {
                     {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
                   } @else {
                     N/A
@@ -2873,7 +2895,7 @@
                   </span>
                 </div>
                 <span class="appt-status-chip" [attr.data-status]="appt.status">
-                  {{ appt.status | titlecase }}
+                  {{ appt.status | enumLabel: 'appointmentStatus' }}
                 </span>
               </div>
             }
@@ -2988,7 +3010,7 @@
                     ${{ inv.balance.toFixed(2) }}
                   </span>
                   <span class="bill-status" [attr.data-status]="inv.status">
-                    {{ inv.status | titlecase }}
+                    {{ inv.status | enumLabel: 'invoiceStatus' }}
                   </span>
                 </div>
               </div>
@@ -3188,7 +3210,7 @@
                   >
                   <span class="sched-reason">
                     {{ formatInvoiceAmount(inv.totalAmount) }} ·
-                    {{ formatInvoiceStatus(inv.status) }}
+                    {{ (inv.status | enumLabel: 'invoiceStatus') || '—' }}
                   </span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>

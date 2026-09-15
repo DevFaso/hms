@@ -12,7 +12,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AssignConsultationRequestDTO {
 
-    @NotNull(message = "Consultant ID is required")
+    @NotNull(message = "{consultation.consultantId.required}")
     private UUID consultantId;
 
     private String assignmentNote;

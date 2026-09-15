@@ -45,6 +45,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.service.i18n.PatientLocaleResolver;
+import java.util.Locale;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RefillApprovalServiceImpl")
@@ -57,6 +63,8 @@ class RefillApprovalServiceImplTest {
     @Mock private ControllerAuthUtils authUtils;
     @Mock private RoleValidator roleValidator;
     @Mock private Authentication auth;
+    @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks private RefillApprovalServiceImpl service;
 
@@ -70,6 +78,9 @@ class RefillApprovalServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // The decision body is rendered in the PATIENT's language; these
+        // fixtures read it in English so the wording assertions stay literal.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.ENGLISH);
         userId = UUID.randomUUID();
         staffId = UUID.randomUUID();
         refillId = UUID.randomUUID();

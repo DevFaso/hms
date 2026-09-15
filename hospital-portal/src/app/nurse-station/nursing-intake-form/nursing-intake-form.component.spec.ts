@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NursingIntakeFormComponent } from './nursing-intake-form.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import {
   EncounterService,
   EncounterResponse,
@@ -41,7 +41,7 @@ describe('NursingIntakeFormComponent', () => {
     await TestBed.configureTestingModule({
       imports: [NursingIntakeFormComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: EncounterService, useValue: mockEncounterService },
         { provide: ToastService, useValue: mockToastService },
@@ -146,15 +146,13 @@ describe('NursingIntakeFormComponent', () => {
 
     component.submit();
 
-    expect(mockToastService.error).toHaveBeenCalledWith(
-      'Failed to submit nursing intake. Please try again.',
-    );
+    expect(mockToastService.error).toHaveBeenCalledWith('INTAKE.SUBMIT_FAILED');
   });
 
   it('should show error toast when no encounter selected', () => {
     component.encounter = null;
     component.submit();
-    expect(mockToastService.error).toHaveBeenCalledWith('No encounter selected for nursing intake');
+    expect(mockToastService.error).toHaveBeenCalledWith('INTAKE.NO_ENCOUNTER');
   });
 
   it('should track items by index', () => {

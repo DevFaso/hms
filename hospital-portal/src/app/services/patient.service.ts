@@ -323,8 +323,14 @@ export class PatientService {
   }
 
   /** Tier 2 item 44 — the chart's record download (was print-only). */
+  /** The FHIR bundle export, for another system to import. Kept for interop; the chart button downloads the PDF. */
   downloadFhirRecord(id: string): Observable<Blob> {
     return this.http.get(`/patients/${id}/fhir-record`, { responseType: 'blob' });
+  }
+
+  /** The chart as a printable PDF: same roles, scope and export audit as the FHIR bundle. */
+  downloadRecordPdf(id: string): Observable<Blob> {
+    return this.http.get(`/patients/${id}/record.pdf`, { responseType: 'blob' });
   }
 
   getById(id: string, hospitalId?: string): Observable<PatientResponse> {

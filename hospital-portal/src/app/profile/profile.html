@@ -35,7 +35,7 @@
               <img
                 [src]="user()!.profileImageUrl"
                 [alt]="fullName()"
-                title="Profile photo"
+                [title]="'PROFILE.PHOTO_TITLE' | translate"
                 class="avatar-img"
               />
             } @else {
@@ -509,30 +509,29 @@
               <!-- Inline enrollment: QR step -->
               @if (mfaStep() === 'qr') {
                 <div class="mfa-enroll-inline">
-                  <p>
-                    Scan this QR code with your authenticator app (Google Authenticator, Authy,
-                    etc.):
-                  </p>
+                  <p>{{ 'PROFILE.MFA_SCAN_QR' | translate }}</p>
                   <div class="qr-container">
                     <img
                       [src]="mfaEnrollment()!.qrCodeDataUrl"
-                      alt="TOTP QR Code"
+                      [alt]="'PROFILE.MFA_QR_ALT' | translate"
                       width="180"
                       height="180"
                     />
                   </div>
                   <p class="manual-entry">
-                    Or enter this secret manually:
+                    {{ 'PROFILE.MFA_MANUAL_SECRET' | translate }}
                     <code class="secret-code">{{ mfaEnrollment()!.secret }}</code>
                   </p>
-                  <button class="btn-primary" (click)="mfaStep.set('verify')">Next</button>
+                  <button class="btn-primary" (click)="mfaStep.set('verify')">
+                    {{ 'COMMON.NEXT' | translate }}
+                  </button>
                 </div>
               }
 
               <!-- Inline enrollment: Verify step -->
               @else if (mfaStep() === 'verify') {
                 <div class="mfa-enroll-inline">
-                  <p>Enter the 6-digit code from your authenticator app to verify:</p>
+                  <p>{{ 'PROFILE.MFA_ENTER_CODE' | translate }}</p>
                   <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
                     <input
                       type="text"
@@ -554,16 +553,20 @@
               <!-- Inline enrollment: Backup codes step -->
               @else if (mfaStep() === 'backup') {
                 <div class="mfa-enroll-inline">
-                  <h4>Backup Codes</h4>
-                  <p>Save these codes in a safe place. Each can only be used once.</p>
+                  <h4>{{ 'PROFILE.BACKUP_CODES' | translate }}</h4>
+                  <p>{{ 'PROFILE.BACKUP_CODES_HINT' | translate }}</p>
                   <div class="backup-codes-grid">
                     @for (code of mfaEnrollment()!.backupCodes; track code) {
                       <code class="backup-code">{{ code }}</code>
                     }
                   </div>
                   <div class="backup-actions">
-                    <button class="btn-secondary" (click)="copyMfaBackupCodes()">Copy Codes</button>
-                    <button class="btn-primary" (click)="finishMfaEnrollment()">Done</button>
+                    <button class="btn-secondary" (click)="copyMfaBackupCodes()">
+                      {{ 'PROFILE.COPY_CODES' | translate }}
+                    </button>
+                    <button class="btn-primary" (click)="finishMfaEnrollment()">
+                      {{ 'PROFILE.DONE' | translate }}
+                    </button>
                   </div>
                 </div>
               }
@@ -625,17 +628,19 @@
               @if (showAddRecovery()) {
                 <!-- Add Recovery Contact Form -->
                 <div class="recovery-form">
-                  <h4>Add Recovery Contact</h4>
+                  <h4>{{ 'PROFILE.ADD_RECOVERY_CONTACT' | translate }}</h4>
                   <div class="form-row">
-                    <label class="form-label" for="recovery-type">Type</label>
+                    <label class="form-label" for="recovery-type">{{
+                      'COMMON.TYPE' | translate
+                    }}</label>
                     <select
                       id="recovery-type"
                       class="form-control"
                       [ngModel]="newRecoveryType()"
                       (ngModelChange)="newRecoveryType.set($event)"
                     >
-                      <option value="EMAIL">Email</option>
-                      <option value="PHONE">Phone</option>
+                      <option value="EMAIL">{{ 'PROFILE.EMAIL' | translate }}</option>
+                      <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
                     </select>
                   </div>
                   <div class="form-row">
@@ -660,7 +665,7 @@
                         [ngModel]="newRecoveryPrimary()"
                         (ngModelChange)="newRecoveryPrimary.set($event)"
                       />
-                      Set as primary contact
+                      {{ 'PROFILE.SET_PRIMARY_CONTACT' | translate }}
                     </label>
                   </div>
                   @if (recoveryError()) {
@@ -674,7 +679,9 @@
                     >
                       {{ recoverySaving() ? 'Saving…' : 'Save' }}
                     </button>
-                    <button class="btn-secondary" (click)="cancelAddRecovery()">Cancel</button>
+                    <button class="btn-secondary" (click)="cancelAddRecovery()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
                   </div>
                 </div>
               } @else {
@@ -702,7 +709,7 @@
                                 (click)="sendVerificationCode(rc)"
                                 [disabled]="verificationSending()"
                               >
-                                Verify
+                                {{ 'PROFILE.VERIFY' | translate }}
                               </button>
                             }
                           }
@@ -712,7 +719,7 @@
                         </div>
                         <button
                           class="btn-icon-danger"
-                          title="Remove"
+                          [title]="'COMMON.REMOVE' | translate"
                           (click)="removeRecoveryContact(rc)"
                           [disabled]="recoverySaving()"
                         >
@@ -722,12 +729,14 @@
                       @if (verifyingContactId() === rc.id && verificationCodeSent()) {
                         <div class="verification-form">
                           <p class="verification-hint">
-                            Enter the 6-digit code sent to <strong>{{ rc.contactValue }}</strong>
+                            {{
+                              'PROFILE.ENTER_CODE_SENT_TO' | translate: { contact: rc.contactValue }
+                            }}
                           </p>
                           <div class="form-row">
-                            <label class="form-label" for="verification-code"
-                              >Verification Code</label
-                            >
+                            <label class="form-label" for="verification-code">{{
+                              'PROFILE.VERIFICATION_CODE' | translate
+                            }}</label>
                             <input
                               id="verification-code"
                               class="form-control verification-input"
@@ -750,14 +759,14 @@
                               {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
                             </button>
                             <button class="btn-secondary" (click)="cancelVerification()">
-                              Cancel
+                              {{ 'COMMON.CANCEL' | translate }}
                             </button>
                             <button
                               class="btn-link"
                               (click)="sendVerificationCode(rc)"
                               [disabled]="verificationSending()"
                             >
-                              Resend Code
+                              {{ 'PROFILE.RESEND_CODE' | translate }}
                             </button>
                           </div>
                         </div>
@@ -774,7 +783,7 @@
                 <div class="card-actions">
                   <button class="btn-primary" (click)="openAddRecovery()">
                     <span class="material-symbols-outlined">add</span>
-                    Add Contact
+                    {{ 'PROFILE.ADD_CONTACT' | translate }}
                   </button>
                 </div>
               }
@@ -903,7 +912,9 @@
                       </div>
                       <div class="timeline-content">
                         <div class="timeline-header">
-                          <span class="timeline-type">{{ formatEventType(event.eventType) }}</span>
+                          <span class="timeline-type">{{
+                            event.eventType | enumLabel: 'auditEventType'
+                          }}</span>
                           <span class="timeline-time">{{
                             formatTimestamp(event.eventTimestamp)
                           }}</span>

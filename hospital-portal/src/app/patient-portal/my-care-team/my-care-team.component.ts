@@ -1,13 +1,14 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, CareTeamMember } from '../../services/patient-portal.service';
 
 @Component({
   selector: 'app-my-care-team',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   templateUrl: './my-care-team.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-care-team.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyCareTeamComponent implements OnInit {

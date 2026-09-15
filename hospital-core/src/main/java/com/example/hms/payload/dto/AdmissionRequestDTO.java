@@ -21,31 +21,31 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AdmissionRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{admission.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotNull(message = "Admitting provider ID is required")
+    @NotNull(message = "{admission.admittingProviderId.required}")
     private UUID admittingProviderId;
 
     private UUID departmentId;
 
     private String roomBed;
 
-    @NotNull(message = "Admission type is required")
+    @NotNull(message = "{admission.admissionType.required}")
     private AdmissionType admissionType;
 
-    @NotNull(message = "Acuity level is required")
+    @NotNull(message = "{admission.acuityLevel.required}")
     private AcuityLevel acuityLevel;
 
-    @NotNull(message = "Admission date/time is required")
+    @NotNull(message = "{admission.admissionDateTime.required}")
     private LocalDateTime admissionDateTime;
 
     private LocalDateTime expectedDischargeDateTime;
 
-    @NotBlank(message = "Chief complaint is required")
+    @NotBlank(message = "{admission.chiefComplaint.required}")
     private String chiefComplaint;
 
     private String primaryDiagnosisCode;

@@ -12,9 +12,9 @@ import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanRequestDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewDTO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -249,7 +249,7 @@ public class TreatmentPlanMapper {
         }
         try {
             return objectMapper.readValue(json, STRING_LIST_TYPE);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to deserialize treatment plan payload: {}", e.getMessage());
             return Collections.emptyList();
         }
@@ -269,7 +269,7 @@ public class TreatmentPlanMapper {
         }
         try {
             return objectMapper.writeValueAsString(sanitized);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Unable to serialize treatment plan payload", e);
         }
     }

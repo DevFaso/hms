@@ -21,13 +21,13 @@ public record Dhis2TriggerRequestDTO(
 
     @NotBlank
     @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
-        message = "datasetUid must be 11 chars (letter + 10 alphanumeric)")
+        message = "{dhis2Trigger.datasetUid.pattern}")
     String datasetUid,
 
     @NotNull Dhis2PeriodType periodType,
 
     @NotBlank
     @Pattern(regexp = "^(\\d{4}(\\d{2})?|\\d{4}W\\d{1,2})$",
-        message = "periodIso must match YYYY, YYYYMM, or YYYYW##")
+        message = "{dhis2Trigger.periodIso.pattern}")
     String periodIso
 ) { }

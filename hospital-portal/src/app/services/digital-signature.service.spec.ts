@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { DigitalSignatureService } from './digital-signature.service';
 
@@ -9,7 +9,11 @@ describe('DigitalSignatureService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), DigitalSignatureService],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        DigitalSignatureService,
+      ],
     });
     service = TestBed.inject(DigitalSignatureService);
     httpMock = TestBed.inject(HttpTestingController);

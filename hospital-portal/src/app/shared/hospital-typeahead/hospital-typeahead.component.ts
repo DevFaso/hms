@@ -13,7 +13,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -48,7 +48,7 @@ import { HospitalResponse, HospitalService } from '../../services/hospital.servi
 @Component({
   selector: 'app-hospital-typeahead',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hospital-typeahead.component.html',
   styleUrl: './hospital-typeahead.component.scss',

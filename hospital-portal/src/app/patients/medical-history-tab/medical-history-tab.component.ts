@@ -1,4 +1,12 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -15,6 +23,7 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
@@ -28,8 +37,9 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 @Component({
   selector: 'app-medical-history-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './medical-history-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medical-history-tab.component.scss',
 })
 export class MedicalHistoryTabComponent implements OnInit {

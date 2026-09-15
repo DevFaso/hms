@@ -99,7 +99,9 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
             <label for="empi-sex">{{ 'EMPI.FIELD.SEX' | translate }}</label>
             <select id="empi-sex" name="sex" [(ngModel)]="form.sex" data-testid="empi-sex">
               <option value="">{{ 'EMPI.FIELD.SEX_PLACEHOLDER' | translate }}</option>
-              <option *ngFor="let opt of sexOptions" [value]="opt">{{ opt }}</option>
+              @for (opt of sexOptions; track opt) {
+                <option [value]="opt">{{ opt }}</option>
+              }
             </select>
           </div>
           <div class="form-row form-row--span-2">
@@ -129,142 +131,147 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         </div>
       </form>
 
-      <p *ngIf="disabled()" class="empi-panel__error" data-testid="empi-disabled">
-        {{ 'EMPI.DISABLED' | translate }}
-      </p>
-
-      <p *ngIf="error()" class="empi-panel__error" data-testid="empi-error">
-        {{ 'EMPI.ERROR' | translate }}
-      </p>
-
-      <ng-container *ngIf="!error() && !disabled() && searched()">
-        <p *ngIf="results().length === 0" class="empi-panel__empty" data-testid="empi-empty">
-          {{ 'EMPI.NO_MATCHES' | translate }}
+      @if (disabled()) {
+        <p class="empi-panel__error" data-testid="empi-disabled">
+          {{ 'EMPI.DISABLED' | translate }}
         </p>
+      }
 
-        <table *ngIf="results().length > 0" class="data-table" data-testid="empi-results">
-          <thead>
-            <tr>
-              <th scope="col">{{ 'EMPI.COL_PATIENT' | translate }}</th>
-              <th scope="col">{{ 'EMPI.COL_SCORE' | translate }}</th>
-              <th scope="col">{{ 'EMPI.COL_BREAKDOWN' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              *ngFor="let match of results(); trackBy: trackByPatientId"
-              [attr.data-patient-id]="match.patientId"
-            >
-              <td>{{ match.displayName }}</td>
-              <td>
-                <span
-                  class="empi-panel__score"
-                  [class.empi-panel__score--high]="match.score >= 0.85"
-                  [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
-                  [class.empi-panel__score--low]="match.score < 0.7"
-                >
-                  {{ (match.score * 100 | number: '1.0-1') + '%' }}
-                </span>
-              </td>
-              <td>
-                <span
-                  class="empi-panel__chip"
-                  [class.empi-panel__chip--match]="match.nameMatched"
-                  [class.empi-panel__chip--miss]="!match.nameMatched"
-                >
-                  {{ 'EMPI.BREAKDOWN.NAME' | translate }}
-                </span>
-                <span
-                  class="empi-panel__chip"
-                  [class.empi-panel__chip--match]="match.dobMatched"
-                  [class.empi-panel__chip--miss]="!match.dobMatched"
-                >
-                  {{ 'EMPI.BREAKDOWN.DOB' | translate }}
-                </span>
-                <span
-                  class="empi-panel__chip"
-                  [class.empi-panel__chip--match]="match.sexMatched"
-                  [class.empi-panel__chip--miss]="!match.sexMatched"
-                >
-                  {{ 'EMPI.BREAKDOWN.SEX' | translate }}
-                </span>
-                <span
-                  class="empi-panel__chip"
-                  [class.empi-panel__chip--match]="match.nationalIdMatched"
-                  [class.empi-panel__chip--miss]="!match.nationalIdMatched"
-                >
-                  {{ 'EMPI.BREAKDOWN.NATIONAL_ID' | translate }}
-                </span>
-              </td>
-              <td class="actions">
-                <button
-                  type="button"
-                  class="btn-primary"
-                  (click)="confirmMatch(match)"
-                  [attr.data-testid]="'empi-confirm-' + match.patientId"
-                >
-                  {{ 'EMPI.CONFIRM_MATCH' | translate }}
-                </button>
-                <button
-                  *ngIf="isAdmin"
-                  type="button"
-                  class="btn-secondary"
-                  (click)="toggleMergeSelection(match)"
-                  [attr.data-testid]="'empi-select-' + match.patientId"
-                >
-                  {{
-                    (isSelectedForMerge(match.patientId)
-                      ? 'EMPI.MERGE_DESELECT'
-                      : 'EMPI.MERGE_SELECT'
-                    ) | translate
-                  }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      @if (error()) {
+        <p class="empi-panel__error" data-testid="empi-error">
+          {{ 'EMPI.ERROR' | translate }}
+        </p>
+      }
 
-        <div
-          *ngIf="isAdmin && mergeSelection().length === 2"
-          class="empi-panel__merge-bar"
-          data-testid="empi-merge-bar"
-        >
-          <p>
-            {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
-            <strong>{{ mergeSelection()[0].displayName }}</strong>
-            · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
-            {{ mergeSelection()[1].displayName }}
+      @if (!error() && !disabled() && searched()) {
+        @if (results().length === 0) {
+          <p class="empi-panel__empty" data-testid="empi-empty">
+            {{ 'EMPI.NO_MATCHES' | translate }}
           </p>
-          <div class="actions">
-            <button type="button" class="btn-secondary" (click)="swapMergeSelection()">
-              {{ 'EMPI.MERGE_SWAP' | translate }}
-            </button>
+        }
+        @if (results().length > 0) {
+          <table class="data-table" data-testid="empi-results">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'EMPI.COL_PATIENT' | translate }}</th>
+                <th scope="col">{{ 'EMPI.COL_SCORE' | translate }}</th>
+                <th scope="col">{{ 'EMPI.COL_BREAKDOWN' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (match of results(); track trackByPatientId($index, match)) {
+                <tr [attr.data-patient-id]="match.patientId">
+                  <td>{{ match.displayName }}</td>
+                  <td>
+                    <span
+                      class="empi-panel__score"
+                      [class.empi-panel__score--high]="match.score >= 0.85"
+                      [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
+                      [class.empi-panel__score--low]="match.score < 0.7"
+                    >
+                      {{ (match.score * 100 | number: '1.0-1') + '%' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.nameMatched"
+                      [class.empi-panel__chip--miss]="!match.nameMatched"
+                    >
+                      {{ 'EMPI.BREAKDOWN.NAME' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.dobMatched"
+                      [class.empi-panel__chip--miss]="!match.dobMatched"
+                    >
+                      {{ 'EMPI.BREAKDOWN.DOB' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.sexMatched"
+                      [class.empi-panel__chip--miss]="!match.sexMatched"
+                    >
+                      {{ 'EMPI.BREAKDOWN.SEX' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.nationalIdMatched"
+                      [class.empi-panel__chip--miss]="!match.nationalIdMatched"
+                    >
+                      {{ 'EMPI.BREAKDOWN.NATIONAL_ID' | translate }}
+                    </span>
+                  </td>
+                  <td class="actions">
+                    <button
+                      type="button"
+                      class="btn-primary"
+                      (click)="confirmMatch(match)"
+                      [attr.data-testid]="'empi-confirm-' + match.patientId"
+                    >
+                      {{ 'EMPI.CONFIRM_MATCH' | translate }}
+                    </button>
+                    @if (isAdmin) {
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        (click)="toggleMergeSelection(match)"
+                        [attr.data-testid]="'empi-select-' + match.patientId"
+                      >
+                        {{
+                          (isSelectedForMerge(match.patientId)
+                            ? 'EMPI.MERGE_DESELECT'
+                            : 'EMPI.MERGE_SELECT'
+                          ) | translate
+                        }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+        @if (isAdmin && mergeSelection().length === 2) {
+          <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
+            <p>
+              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+              <strong>{{ mergeSelection()[0].displayName }}</strong>
+              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+              {{ mergeSelection()[1].displayName }}
+            </p>
+            <div class="actions">
+              <button type="button" class="btn-secondary" (click)="swapMergeSelection()">
+                {{ 'EMPI.MERGE_SWAP' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                (click)="executeMerge()"
+                [disabled]="merging()"
+                data-testid="empi-merge"
+              >
+                {{ (mergeArmed() ? 'EMPI.MERGE_CONFIRM_BUTTON' : 'EMPI.MERGE_BUTTON') | translate }}
+              </button>
+            </div>
+            <p class="empi-panel__merge-hint">{{ 'EMPI.MERGE_HINT' | translate }}</p>
+          </div>
+        }
+        @if (results().length > 0) {
+          <div class="empi-panel__new-patient">
+            <p>{{ 'EMPI.NOT_THIS_ONE' | translate }}</p>
             <button
               type="button"
-              class="btn-primary"
-              (click)="executeMerge()"
-              [disabled]="merging()"
-              data-testid="empi-merge"
+              class="btn-secondary"
+              (click)="newPatientFromForm()"
+              data-testid="empi-new-patient"
             >
-              {{ (mergeArmed() ? 'EMPI.MERGE_CONFIRM_BUTTON' : 'EMPI.MERGE_BUTTON') | translate }}
+              {{ 'EMPI.CREATE_NEW_PATIENT' | translate }}
             </button>
           </div>
-          <p class="empi-panel__merge-hint">{{ 'EMPI.MERGE_HINT' | translate }}</p>
-        </div>
-
-        <div *ngIf="results().length > 0" class="empi-panel__new-patient">
-          <p>{{ 'EMPI.NOT_THIS_ONE' | translate }}</p>
-          <button
-            type="button"
-            class="btn-secondary"
-            (click)="newPatientFromForm()"
-            data-testid="empi-new-patient"
-          >
-            {{ 'EMPI.CREATE_NEW_PATIENT' | translate }}
-          </button>
-        </div>
-      </ng-container>
+        }
+      }
     </section>
   `,
   styles: [

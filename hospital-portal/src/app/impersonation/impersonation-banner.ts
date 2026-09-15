@@ -1,5 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -8,8 +8,9 @@ import { ImpersonationService } from '../services/impersonation.service';
 @Component({
   selector: 'app-impersonation-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   templateUrl: './impersonation-banner.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './impersonation-banner.scss',
 })
 export class ImpersonationBannerComponent {

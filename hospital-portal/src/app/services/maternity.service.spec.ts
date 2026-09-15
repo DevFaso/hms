@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { MaternityService } from './maternity.service';
 
@@ -9,7 +9,7 @@ describe('MaternityService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), MaternityService],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), MaternityService],
     });
     service = TestBed.inject(MaternityService);
     httpMock = TestBed.inject(HttpTestingController);

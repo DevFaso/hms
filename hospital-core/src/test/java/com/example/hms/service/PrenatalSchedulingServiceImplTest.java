@@ -47,6 +47,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.service.i18n.PatientLocaleResolver;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
@@ -63,6 +66,8 @@ class PrenatalSchedulingServiceImplTest {
     private AppointmentService appointmentService;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private PatientLocaleResolver patientLocaleResolver;
 
     private PrenatalSchedulingServiceImpl service;
     private static final String SCHEDULER_USERNAME = "scheduler";
@@ -83,8 +88,13 @@ class PrenatalSchedulingServiceImplTest {
             staffRepository,
             appointmentService,
             notificationService,
-            fixedClock
+            fixedClock,
+            TestMessageSources.bundles(),
+            patientLocaleResolver
         );
+        // The patient in these fixtures states no language: the resolver
+        // answers the fallback, which is what production does too.
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
 
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();

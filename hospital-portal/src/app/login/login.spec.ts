@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -33,7 +33,7 @@ describe('Login — KC-2b SSO entry point', () => {
     TestBed.configureTestingModule({
       imports: [Login, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: OidcAuthService, useValue: oidcSpy },
@@ -130,7 +130,7 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     TestBed.configureTestingModule({
       imports: [Login, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: OidcAuthService, useValue: oidcSpy },
@@ -145,6 +145,43 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
 
   afterEach(() => {
     httpMock.verify();
+  });
+
+  it('the resend-activation dialog opens alone and posts the address', () => {
+    component.openForgotPassword();
+    component.openResendActivation();
+    expect(component.resendActivationMode).toBeTrue();
+    expect(component.forgotPasswordMode).toBeFalse();
+
+    component.resendActivationEmail = ' a@b.c ';
+    component.submitResendActivation();
+    const req = httpMock.expectOne(
+      (r) =>
+        r.method === 'POST' &&
+        r.url === '/auth/resend-verification' &&
+        r.params.get('email') === 'a@b.c',
+    );
+    req.flush({ message: 'If the email is registered, a new verification link has been sent.' });
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
+    expect(component.resendActivationLoading).toBeFalse();
+  });
+
+  it('the resend-activation dialog gives the same answer on a backend error (no enumeration)', () => {
+    component.openResendActivation();
+    component.resendActivationEmail = 'a@b.c';
+    component.submitResendActivation();
+    httpMock
+      .expectOne((r) => r.url === '/auth/resend-verification')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
+    expect(component.error).toBe('');
+  });
+
+  it('the resend-activation dialog refuses an empty address without a request', () => {
+    component.openResendActivation();
+    component.submitResendActivation();
+    httpMock.expectNone((r) => r.url === '/auth/resend-verification');
+    expect(component.error).toBe('LOGIN.ENTER_EMAIL');
   });
 
   it('seeds globalView=true and clears effective hospital scope after JWT-only login', () => {

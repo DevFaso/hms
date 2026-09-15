@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -35,7 +35,7 @@ describe('DataResidencyPolicyComponent (MVP-9c)', () => {
     TestBed.configureTestingModule({
       imports: [DataResidencyPolicyComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: RegionPolicyService, useValue: service },
@@ -187,7 +187,7 @@ describe('DataResidencyPolicyComponent (MVP-9c)', () => {
     TestBed.configureTestingModule({
       imports: [DataResidencyPolicyComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: RegionPolicyService, useValue: service },

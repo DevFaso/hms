@@ -9,6 +9,7 @@ import {
   ViewChild,
   ElementRef,
   AfterViewChecked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -71,6 +72,7 @@ type SectionType =
     PatientPickerComponent,
   ],
   templateUrl: './nurse-station.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nurse-station.scss',
 })
 export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecked {

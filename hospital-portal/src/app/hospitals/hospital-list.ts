@@ -1,5 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
@@ -7,13 +7,14 @@ import { OrganizationService, OrganizationResponse } from '../services/organizat
 
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule],
   templateUrl: './hospital-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hospital-list.scss',
 })
 export class HospitalListComponent implements OnInit {
@@ -21,6 +22,7 @@ export class HospitalListComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   /**
    * Copilot review fix — the lifecycle detail page is gated to
@@ -64,7 +66,7 @@ export class HospitalListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load hospitals');
+        this.toast.error(this.translate.instant('HOSPITALS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -125,7 +127,7 @@ export class HospitalListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.name || !this.form.city || !this.form.country || !this.form.phoneNumber) {
-      this.toast.error('Name, city, country, and phone number are required');
+      this.toast.error(this.translate.instant('HOSPITALS.REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
@@ -141,14 +143,18 @@ export class HospitalListComponent implements OnInit {
 
     request$.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Hospital updated' : 'Hospital created');
+        this.toast.success(
+          this.translate.instant(existing ? 'HOSPITALS.UPDATED' : 'HOSPITALS.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadHospitals();
       },
       error: (err) => {
         const body = err?.error;
-        let msg = `Failed to ${existing ? 'update' : 'create'} hospital`;
+        let msg = this.translate.instant(
+          existing ? 'HOSPITALS.UPDATE_FAILED' : 'HOSPITALS.CREATE_FAILED',
+        );
         if (body?.fieldErrors) {
           msg = Object.values(body.fieldErrors).join('. ');
         } else if (body?.message) {
@@ -177,13 +183,13 @@ export class HospitalListComponent implements OnInit {
     this.deleting.set(true);
     this.hospitalService.delete(hospital.id).subscribe({
       next: () => {
-        this.toast.success('Hospital deleted');
+        this.toast.success(this.translate.instant('HOSPITALS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadHospitals();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete hospital');
+        this.toast.error(err?.error?.message ?? this.translate.instant('HOSPITALS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });

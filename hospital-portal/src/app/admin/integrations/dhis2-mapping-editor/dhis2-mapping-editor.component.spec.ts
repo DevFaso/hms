@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -35,7 +35,7 @@ describe('Dhis2MappingEditorComponent', () => {
         { provide: Dhis2Service, useValue: dhis2 },
         { provide: RoleContextService, useValue: roleContext },
         { provide: ToastService, useValue: toast },
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
       ],
     });
@@ -126,6 +126,6 @@ describe('Dhis2MappingEditorComponent', () => {
     (component as any).onAdd();
 
     expect(dhis2.createMapping).toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Mapping added');
+    expect(toast.success).toHaveBeenCalledWith('DHIS2.MAPPINGS.ADDED');
   });
 });

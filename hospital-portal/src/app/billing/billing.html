@@ -63,7 +63,7 @@
       class="tab"
       [class.active]="activeTab() === 'all'"
       (click)="setTab('all')"
-      title="All invoices"
+      [title]="'BILLING.TAB_ALL_TITLE' | translate"
     >
       {{ 'COMMON.ALL' | translate }} ({{ invoices().length }})
     </button>
@@ -79,7 +79,7 @@
       class="tab"
       [class.active]="activeTab() === 'paid'"
       (click)="setTab('paid')"
-      title="Paid invoices"
+      [title]="'BILLING.TAB_PAID_TITLE' | translate"
     >
       {{ 'BILLING.PAID' | translate }} ({{ stats().paid }})
     </button>
@@ -87,7 +87,7 @@
       class="tab"
       [class.active]="activeTab() === 'overdue'"
       (click)="setTab('overdue')"
-      title="Overdue invoices"
+      [title]="'BILLING.TAB_OVERDUE_TITLE' | translate"
     >
       {{ 'BILLING.OVERDUE' | translate }} ({{ stats().overdue }})
     </button>
@@ -114,7 +114,7 @@
       >
         <option value="">{{ 'BILLING.ALL_STATUSES' | translate }}</option>
         @for (s of invoiceStatuses; track s) {
-          <option [value]="s">{{ formatStatus(s) }}</option>
+          <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
         }
       </select>
       <label class="date-filter">
@@ -182,19 +182,23 @@
               <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                  formatStatus(inv.status)
+                  (inv.status | enumLabel: 'invoiceStatus') || '—'
                 }}</span>
               </td>
               <td class="actions-cell">
                 <div class="action-group">
                   <button
                     class="action-link view-link"
-                    title="View invoice details"
+                    [title]="'BILLING.VIEW_DETAILS_TITLE' | translate"
                     (click)="viewInvoice(inv)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)">
+                  <button
+                    class="action-link"
+                    [title]="'BILLING.DOWNLOAD_PDF' | translate"
+                    (click)="downloadPdf(inv.id)"
+                  >
                     <span class="material-symbols-outlined">picture_as_pdf</span>
                   </button>
                   @if (canPayInvoice(inv)) {
@@ -216,14 +220,18 @@
                     </button>
                   }
                   @if (canEdit) {
-                    <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)">
+                    <button
+                      class="action-link edit-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(inv)"
+                    >
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                   }
                   @if (canDelete) {
                     <button
                       class="action-link delete-link"
-                      title="Delete"
+                      [title]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(inv)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -274,7 +282,11 @@
       <div class="detail-panel">
         <div class="panel-header">
           <h2>Invoice {{ inv.invoiceNumber }}</h2>
-          <button class="close-btn" title="Close detail panel" (click)="closeDetail()">
+          <button
+            class="close-btn"
+            [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            (click)="closeDetail()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -303,7 +315,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                formatStatus(inv.status)
+                (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -392,7 +404,7 @@
             <label for="bill-status">{{ 'COMMON.STATUS' | translate }} *</label>
             <select id="bill-status" [(ngModel)]="form.status" required>
               @for (s of invoiceStatuses; track s) {
-                <option [value]="s">{{ formatStatus(s) }}</option>
+                <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
               }
             </select>
           </div>
@@ -484,8 +496,7 @@
       </div>
       <div class="modal-body">
         <p class="delete-warning">
-          Are you sure you want to delete invoice <strong>{{ deletingInv()?.invoiceNumber }}</strong
-          >? This action cannot be undone.
+          {{ 'BILLING.DELETE_CONFIRM' | translate: { invoice: deletingInv()?.invoiceNumber } }}
         </p>
       </div>
       <div class="modal-actions">

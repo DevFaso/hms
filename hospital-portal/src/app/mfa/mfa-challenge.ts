@@ -1,6 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -15,11 +16,13 @@ import { SessionScopeService } from '../core/session-scope.service';
 @Component({
   selector: 'app-mfa-challenge',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './mfa-challenge.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'], // reuse same styles
 })
 export class MfaChallengeComponent {
+  private readonly translate = inject(TranslateService);
   private readonly mfaService = inject(MfaService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -56,7 +59,7 @@ export class MfaChallengeComponent {
 
   submitCode(): void {
     if (!this.code || this.code.length < 6) {
-      this.error.set('Enter a valid code (6-digit TOTP or 8-character backup code).');
+      this.error.set(this.translate.instant('MFA.CHALLENGE_INVALID_CODE'));
       return;
     }
     this.loading.set(true);
@@ -66,7 +69,7 @@ export class MfaChallengeComponent {
       next: (res) => {
         const token = res.accessToken;
         if (!token) {
-          this.error.set(res.message ?? 'Verification failed.');
+          this.error.set(res.message ?? this.translate.instant('MFA.CHALLENGE_VERIFY_FAILED'));
           this.loading.set(false);
           return;
         }
@@ -126,7 +129,7 @@ export class MfaChallengeComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.CHALLENGE_WRONG_CODE'));
       },
     });
   }

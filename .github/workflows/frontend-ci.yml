@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: hospital-portal/package-lock.json
 
@@ -50,6 +50,36 @@ jobs:
       - name: i18n referenced-key check
         run: npm run i18n:referenced
 
+      # Both gates above only ask whether a key EXISTS. A key copied from EN
+      # and never translated is present and non-empty, so both stayed green
+      # while 1041 French values were still the English string — on a
+      # French-first product, that is the whole defect. This one fails when a
+      # FR value is byte-identical to EN and is not pinned in
+      # scripts/i18n-untranslated-allowlist.json with the exact shared text.
+      - name: i18n translation check
+        run: npm run i18n:translated
+
+      # And all three of those only see keys that EXIST. The EnumLabelPipe
+      # Title-Cases any enum value with no PORTAL.ENUM key, so a value the
+      # API can send but nobody keyed renders English and no gate above
+      # notices. This one reads the backend enum behind every domain a
+      # template pipes and fails when one of its constants has no key.
+      - name: i18n enum-coverage check
+        run: npm run i18n:enums
+
+      # And that gate only sees domains a template PIPES. A field that should
+      # be piped and is not puts the wire token on screen in every language,
+      # with every other gate green. Deciding each site needs a person, so this
+      # one ratchets rather than fails: the count may not grow.
+      - name: i18n raw-enum ratchet
+        run: npm run i18n:raw-enums
+
+      # That gate reads Java, so its parser is the thing most likely to lie
+      # quietly: the first version ended the constant list at a semicolon
+      # inside a Javadoc sentence and hid seven real prescription statuses.
+      - name: Gate script tests
+        run: npm run test:scripts
+
       - name: Build
         run: npm run build
 
@@ -74,12 +104,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: hospital-portal/package-lock.json
 
@@ -105,7 +135,7 @@ jobs:
 
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-a11y-report
           path: hospital-portal/playwright-report/

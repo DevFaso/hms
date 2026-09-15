@@ -1,10 +1,18 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin, catchError, of } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   PlatformService,
   PlatformSummary,
@@ -98,8 +106,9 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './platform.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
 })
 export class PlatformComponent implements OnInit {
@@ -218,12 +227,12 @@ export class PlatformComponent implements OnInit {
         this.snapshot.set(snapshot);
         this.loading.set(false);
         if (!summary) {
-          this.error.set('Failed to load platform summary.');
+          this.error.set(this.translate.instant('PLATFORM.SUMMARY_LOAD_FAILED'));
         }
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Failed to load platform data. Please try again.');
+        this.error.set(this.translate.instant('PLATFORM.DATA_LOAD_FAILED'));
       },
     });
   }
@@ -402,7 +411,11 @@ export class PlatformComponent implements OnInit {
         }
         this.saving.set(false);
         this.toast.success(
-          this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', { status: newStatus }),
+          this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', {
+            // The badge on this page renders the same value through enumLabel;
+            // interpolating the raw token here produced "modifié en DECOMMISSIONED".
+            status: this.translate.instant('PORTAL.ENUM.PLATFORM_SERVICE_STATUS.' + newStatus),
+          }),
         );
       },
       error: (err) => {
@@ -776,7 +789,13 @@ export class PlatformComponent implements OnInit {
     lastRun: string;
   }): void {
     this.toast.info(
-      `${task.title}: ${task.nextAction} | ${task.metricLabel}: ${task.metricValue} | Last: ${task.lastRun}`,
+      this.translate.instant('PLATFORM.TOAST.TASK_DETAILS', {
+        title: task.title,
+        nextAction: task.nextAction,
+        metricLabel: task.metricLabel,
+        metricValue: task.metricValue,
+        lastRun: task.lastRun,
+      }),
     );
   }
 

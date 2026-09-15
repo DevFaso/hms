@@ -125,7 +125,11 @@
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.ADD_RECALL' | translate }}</h2>
-      <button class="btn-icon-close" (click)="showAddForm.set(false)" aria-label="Close">
+      <button
+        class="btn-icon-close"
+        (click)="showAddForm.set(false)"
+        [attr.aria-label]="'RECEPTION.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>

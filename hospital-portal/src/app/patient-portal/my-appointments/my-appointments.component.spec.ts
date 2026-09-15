@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyAppointmentsComponent } from './my-appointments.component';
 import { PatientPortalService, PortalAppointment } from '../../services/patient-portal.service';
@@ -116,6 +116,34 @@ describe('MyAppointmentsComponent', () => {
       component.onDepartmentChange();
       expect(portalService.getSchedulingProviders).toHaveBeenCalledWith('h1', 'd1');
       expect(component.providers().length).toBe(1);
+    });
+
+    it('translates the role beside each provider in the picker', () => {
+      // The option read `Dr Kabore — DOCTOR`: the role came straight off the
+      // wire into a string concatenation, which no pipe could reach.
+      const translate = TestBed.inject(TranslateService);
+      translate.setFallbackLang('fr');
+      translate.use('fr');
+      translate.setTranslation('fr', { PORTAL: { ENUM: { ROLE: { DOCTOR: 'Médecin' } } } }, true);
+      portalService.getSchedulingProviders.and.returnValue(
+        of([
+          { id: 's1', name: 'Dr Kaboré', role: 'DOCTOR' },
+          { id: 's2', name: 'Awa Sawadogo' },
+        ]),
+      );
+      component.openBookingForm();
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.onDepartmentChange();
+      fixture.detectChanges();
+
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('#provider option'),
+      ).map((o) => (o.textContent ?? '').replaceAll(/\s+/g, ' ').trim());
+      expect(options).toContain('Dr Kaboré — Médecin');
+      // No role on the assignment means no dash and no empty label.
+      expect(options).toContain('Awa Sawadogo');
+      expect(options.join(' ')).not.toContain('DOCTOR');
     });
   });
 

@@ -46,6 +46,8 @@ import {
 } from '../shared/pro-instrument-form/pro-instrument-form.component';
 import { nowLocalDatetime } from '../shared/date-utils';
 
+import { currentLocale } from '../shared/i18n/app-locale';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 
@@ -58,6 +60,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
     TranslateModule,
     PatientPickerComponent,
     ProInstrumentFormComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './postpartum-tab.html',
   styleUrl: './maternity.scss',
@@ -356,7 +359,9 @@ export class PostpartumTabComponent {
 
   /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
   deliveryLabel(d: DeliveryRecordResponse): string {
-    const when = d.birthDateTime ? new Date(d.birthDateTime).toLocaleDateString() : '';
+    const when = d.birthDateTime
+      ? new Date(d.birthDateTime).toLocaleDateString(currentLocale())
+      : '';
     return `${when} — ${d.deliveryMode ?? ''}`.trim();
   }
 

@@ -48,7 +48,7 @@
               </span>
             </div>
             <span class="portal-status-chip" [attr.data-status]="enc.status">{{
-              enc.status | enumLabel: 'status'
+              enc.status | enumLabel: 'encounterStatus'
             }}</span>
           </div>
 
@@ -90,7 +90,7 @@
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.STATUS' | translate }}</span>
                   <span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
-                    enc.status | enumLabel: 'status'
+                    enc.status | enumLabel: 'encounterStatus'
                   }}</span>
                 </div>
               </div>

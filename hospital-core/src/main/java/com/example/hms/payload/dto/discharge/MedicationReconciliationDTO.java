@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder
 public class MedicationReconciliationDTO {
 
-    @NotBlank(message = "Medication name is required")
+    @NotBlank(message = "{medicationReconciliation.medicationName.required}")
     @Size(max = 255)
     private String medicationName;
 
@@ -37,7 +37,7 @@ public class MedicationReconciliationDTO {
     @Size(max = 100)
     private String frequency;
 
-    @NotNull(message = "Reconciliation action is required")
+    @NotNull(message = "{medicationReconciliation.reconciliationAction.required}")
     private MedicationReconciliationAction reconciliationAction;
 
     private Boolean wasOnAdmission;

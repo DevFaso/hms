@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,6 +31,7 @@ import com.example.hms.model.Announcement;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
@@ -84,7 +86,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.emar.FiveRightsVerificationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -284,7 +286,7 @@ class NurseTaskServiceImplTest {
         List<NurseOrderTaskResponseDTO> all = service.getOrderTasks(nurseId, hospitalId, null, 20);
         assertThat(all)
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .containsExactly("Lab", "Procedure"); // sorted by due time; other patient's order filtered
+            .containsExactly("LAB", "PROCEDURE"); // sorted by due time; other patient's order filtered
         assertThat(all.get(0).getPriority()).isEqualTo("STAT");
         assertThat(all.get(0).getPatientName()).isEqualTo("Ann Assigned");
 
@@ -292,7 +294,7 @@ class NurseTaskServiceImplTest {
         assertThat(statOnly)
             .singleElement()
             .extracting(NurseOrderTaskResponseDTO::getOrderType)
-            .isEqualTo("Lab");
+            .isEqualTo("LAB");
     }
 
     @Test
@@ -627,7 +629,7 @@ class NurseTaskServiceImplTest {
             // dueTime = lastRecorded + window = fixedNow - 1h + 2h = fixedNow + 1h
             assertThat(task.getDueTime()).isEqualTo(fixedNow.plusHours(1));
             assertThat(task.isOverdue()).isFalse();
-            assertThat(task.getType()).isEqualTo("Routine");
+            assertThat(task.getType()).isEqualTo("ROUTINE");
         }
     }
 
@@ -655,7 +657,7 @@ class NurseTaskServiceImplTest {
             NurseVitalTaskResponseDTO task = vitals.get(0);
             // dueTime = lastRecorded + window = fixedNow - 6h + 2h = fixedNow - 4h -> overdue
             assertThat(task.isOverdue()).isTrue();
-            assertThat(task.getType()).isEqualTo("Full Set");
+            assertThat(task.getType()).isEqualTo("FULL_SET");
         }
     }
 
@@ -2722,5 +2724,111 @@ class NurseTaskServiceImplTest {
         assertThatCode(() -> service.recordMedicationAdministration(
             rx.getId(), UUID.randomUUID(), hospitalId, givenRequest()))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getOrderTasksSkipsAnOrderWhosePatientNoLongerExists() {
+        // dev, 2026-09-13: a hard-deleted patient left an imaging order behind; the lazy
+        // proxy threw EntityNotFoundException on getFullName() and the whole board was a 500.
+        // One orphan of each kind, one live lab and one live imaging order.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID livePatientId = UUID.randomUUID();
+        UUID gonePatientId = UUID.randomUUID();
+
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(livePatientId, "Ann Assigned", "Ann", "Assigned"),
+                patient(gonePatientId, "Gone Patient", "Gone", "Patient")));
+
+        Patient live = mock(Patient.class);
+        when(live.getId()).thenReturn(livePatientId);
+        when(live.getFullName()).thenReturn("Ann Assigned");
+        Patient gone = mock(Patient.class);
+        when(gone.getId()).thenReturn(gonePatientId);
+        when(gone.getFullName()).thenThrow(new jakarta.persistence.EntityNotFoundException(
+            "Unable to find com.example.hms.model.Patient with id " + gonePatientId));
+
+        LabOrder liveDraw = mock(LabOrder.class);
+        when(liveDraw.getId()).thenReturn(UUID.randomUUID());
+        when(liveDraw.getPatient()).thenReturn(live);
+        when(liveDraw.getPriority()).thenReturn("ROUTINE");
+        when(liveDraw.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 9, 13, 8, 0));
+        LabOrder orphanedDraw = mock(LabOrder.class);
+        when(orphanedDraw.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedDraw.getPatient()).thenReturn(gone);
+        when(labOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(liveDraw, orphanedDraw));
+
+        ImagingOrder liveScan = mock(ImagingOrder.class);
+        when(liveScan.getId()).thenReturn(UUID.randomUUID());
+        when(liveScan.getPatient()).thenReturn(live);
+        when(liveScan.getPriority()).thenReturn(null);
+        when(liveScan.getOrderedAt()).thenReturn(LocalDateTime.of(2026, 9, 13, 9, 0));
+        ImagingOrder orphanedImaging = mock(ImagingOrder.class);
+        when(orphanedImaging.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedImaging.getPatient()).thenReturn(gone);
+        when(imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(eq(hospitalId), any()))
+            .thenReturn(List.of(orphanedImaging, liveScan));
+
+        ProcedureOrder orphanedProcedure = mock(ProcedureOrder.class);
+        when(orphanedProcedure.getId()).thenReturn(UUID.randomUUID());
+        when(orphanedProcedure.getPatient()).thenReturn(gone);
+        when(procedureOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(orphanedProcedure));
+
+        List<NurseOrderTaskResponseDTO> tasks = service.getOrderTasks(nurseId, hospitalId, null, 20);
+
+        assertThat(tasks)
+            .extracting(NurseOrderTaskResponseDTO::getOrderType, NurseOrderTaskResponseDTO::getPatientName)
+            .containsExactly(tuple("LAB", "Ann Assigned"), tuple("IMAGING", "Ann Assigned"));
+    }
+
+    @Test
+    void recordMedicationAdministrationOverrideSurvivesSerializationFailure() {
+        // A mapper that fails: the five-rights override falls back to toString, the dose is still recorded.
+        ObjectMapper failingMapper = mock(ObjectMapper.class);
+        when(failingMapper.writeValueAsString(any())).thenThrow(tools.jackson.databind.exc.MismatchedInputException.from((tools.jackson.core.JsonParser) null, Object.class, "boom"));
+        NurseTaskServiceImpl failing = new NurseTaskServiceImpl(
+            nurseDashboardService, prescriptionRepository, marRepository,
+            vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
+            admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
+            nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
+            nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
+            fiveRightsService, failingMapper);
+
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Patient mockPatient = mock(Patient.class);
+        when(mockPatient.getId()).thenReturn(patientId);
+        when(mockPatient.getFullName()).thenReturn("John Doe");
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+
+        Prescription rx = mock(Prescription.class);
+        when(rx.getId()).thenReturn(rxId);
+        when(rx.getPatient()).thenReturn(mockPatient);
+        when(rx.getHospital()).thenReturn(mockHospital);
+        when(rx.getMedicationName()).thenReturn("Ceftriaxone");
+        when(rx.getDosage()).thenReturn("2");
+        when(rx.getDoseUnit()).thenReturn("g");
+        when(rx.getRoute()).thenReturn("IV");
+        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.of(mock(Staff.class)));
+
+        ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        request.setOverrideReason("Pre-eMAR rollout dose; verified manually by charge nurse.");
+
+        NurseMedicationTaskResponseDTO result = failing.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
+
+        assertThat(result.getStatus()).isEqualTo("GIVEN");
+        assertThat(captor.getValue().getFiveRightsOverrides()).startsWith("[");
     }
 }

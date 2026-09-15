@@ -1,5 +1,5 @@
-import { Component, inject, signal, output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, output, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -11,8 +11,9 @@ import { IdleService } from '../core/idle.service';
 @Component({
   selector: 'app-lock-screen',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './lock-screen.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',
 })
 export class LockScreenComponent {

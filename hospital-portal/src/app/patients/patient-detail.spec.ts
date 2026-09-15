@@ -1,6 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -46,7 +46,7 @@ describe('PatientDetailComponent', () => {
     patientServiceSpy = jasmine.createSpyObj('PatientService', [
       'getById',
       'addressHistory',
-      'downloadFhirRecord',
+      'downloadRecordPdf',
     ]);
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
@@ -131,7 +131,7 @@ describe('PatientDetailComponent', () => {
       imports: [PatientDetailComponent, TranslateModule.forRoot()],
       providers: [
         provideRouter([]),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -520,7 +520,7 @@ describe('PatientDetailComponent', () => {
       });
 
     it("shows the server's own wording, which names the remedy", async () => {
-      patientServiceSpy.downloadFhirRecord.and.returnValue(
+      patientServiceSpy.downloadRecordPdf.and.returnValue(
         throwError(() =>
           errorOf(404, {
             message: 'Patient/p1 is not registered at your active hospital.',
@@ -538,7 +538,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('falls back to the wrong-hospital key when the 404 body is unparseable', async () => {
-      patientServiceSpy.downloadFhirRecord.and.returnValue(
+      patientServiceSpy.downloadRecordPdf.and.returnValue(
         throwError(() => errorOf(404, '<html>gateway</html>')),
       );
 
@@ -549,7 +549,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('keeps the generic message for a non-404, so a 500 is not blamed on scope', async () => {
-      patientServiceSpy.downloadFhirRecord.and.returnValue(
+      patientServiceSpy.downloadRecordPdf.and.returnValue(
         throwError(() => errorOf(500, 'not json')),
       );
 
@@ -560,7 +560,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('handles an error with no Blob body at all (network failure)', () => {
-      patientServiceSpy.downloadFhirRecord.and.returnValue(
+      patientServiceSpy.downloadRecordPdf.and.returnValue(
         throwError(() => new HttpErrorResponse({ status: 0, error: new ProgressEvent('error') })),
       );
 
@@ -571,7 +571,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('clears the loading flag so the button is not stuck after a failure', async () => {
-      patientServiceSpy.downloadFhirRecord.and.returnValue(
+      patientServiceSpy.downloadRecordPdf.and.returnValue(
         throwError(() => errorOf(404, { message: 'nope' })),
       );
 

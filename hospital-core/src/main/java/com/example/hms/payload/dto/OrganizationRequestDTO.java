@@ -15,18 +15,18 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OrganizationRequestDTO {
 
-    @NotBlank(message = "Organization name is required")
-    @Size(max = 255, message = "Organization name must not exceed 255 characters")
+    @NotBlank(message = "{organization.name.required}")
+    @Size(max = 255, message = "{organization.name.size}")
     private String name;
 
-    @NotBlank(message = "Organization code is required")
-    @Size(max = 100, message = "Organization code must not exceed 100 characters")
+    @NotBlank(message = "{organization.code.required}")
+    @Size(max = 100, message = "{organization.code.size}")
     private String code;
 
-    @Size(max = 500, message = "Description must not exceed 500 characters")
+    @Size(max = 500, message = "{organization.description.size}")
     private String description;
 
-    @NotNull(message = "Organization type is required")
+    @NotNull(message = "{organization.type.required}")
     private OrganizationType type;
 
     @Builder.Default

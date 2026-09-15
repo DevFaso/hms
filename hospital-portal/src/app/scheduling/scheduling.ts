@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from 'rxjs';
@@ -17,12 +17,14 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-scheduling',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './scheduling.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './scheduling.scss',
 })
 export class SchedulingComponent implements OnInit {
@@ -330,7 +332,7 @@ export class SchedulingComponent implements OnInit {
     const s = new Date(start + 'T00:00:00');
     const e = new Date(end + 'T00:00:00');
     const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
+    return `${s.toLocaleDateString(currentLocale(), opts)} – ${e.toLocaleDateString(currentLocale(), { ...opts, year: 'numeric' })}`;
   }
 
   // ── Leaves ──
@@ -390,7 +392,7 @@ export class SchedulingComponent implements OnInit {
 
   formatDate(date?: string): string {
     if (!date) return '—';
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(date + 'T00:00:00').toLocaleDateString(currentLocale(), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -398,7 +400,7 @@ export class SchedulingComponent implements OnInit {
   }
 
   formatShortDate(date: string): string {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(date + 'T00:00:00').toLocaleDateString(currentLocale(), {
       month: 'short',
       day: 'numeric',
     });

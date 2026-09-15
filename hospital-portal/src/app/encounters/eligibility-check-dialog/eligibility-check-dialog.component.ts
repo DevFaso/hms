@@ -9,8 +9,9 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EligibilityCheckType,
   EligibilityResponse,
@@ -35,7 +36,7 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -43,20 +44,28 @@ interface SchemeOption {
 export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
   private readonly eligibilityService = inject(EligibilityService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   @Input() open = false;
   @Input() patientId: string | null = null;
   @Input() hospitalId: string | null = null;
   @Output() readonly closed = new EventEmitter<void>();
 
-  readonly schemes: SchemeOption[] = [
-    { value: 'NHIS_GH', label: 'NHIS — Ghana' },
-    { value: 'NHIA_NG', label: 'NHIA — Nigeria' },
-    { value: 'CNAMGS_GA', label: 'CNAMGS — Gabon' },
-    { value: 'MUTUELLE_RW', label: 'Mutuelle — Rwanda' },
-    { value: 'MUTUELLE_BF', label: 'RAMU — Burkina Faso' },
-    { value: 'GENERIC', label: 'Generic / private payer' },
-  ];
+  /**
+   * Scheme picker options. The five national schemes are proper nouns and stay
+   * verbatim in every locale; only the catch-all entry is prose. Localised on
+   * every read so the list follows a runtime language switch.
+   */
+  get schemes(): SchemeOption[] {
+    return [
+      { value: 'NHIS_GH', label: 'NHIS — Ghana' },
+      { value: 'NHIA_NG', label: 'NHIA — Nigeria' },
+      { value: 'CNAMGS_GA', label: 'CNAMGS — Gabon' },
+      { value: 'MUTUELLE_RW', label: 'Mutuelle — Rwanda' },
+      { value: 'MUTUELLE_BF', label: 'RAMU — Burkina Faso' },
+      { value: 'GENERIC', label: this.translate.instant('ENCOUNTERS.ELIGIBILITY.SCHEME_GENERIC') },
+    ];
+  }
 
   readonly types: EligibilityCheckType[] = ['COVERAGE', 'PRIOR_AUTH'];
 
@@ -98,15 +107,15 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
 
   run(): void {
     if (!this.patientId || !this.hospitalId) {
-      this.toast.error('Patient or hospital context is missing.');
+      this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT'));
       return;
     }
     if (!this.memberId().trim()) {
-      this.toast.error('Member id is required.');
+      this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.MEMBER_ID_REQUIRED'));
       return;
     }
     if (this.checkType() === 'PRIOR_AUTH' && !this.serviceCode().trim()) {
-      this.toast.error('Service code is required for prior-auth.');
+      this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.SERVICE_CODE_REQUIRED'));
       return;
     }
     this.running.set(true);
@@ -128,13 +137,15 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
         this.running.set(false);
         this.toast.success(
           resp.status === 'ELIGIBLE'
-            ? 'Coverage active.'
-            : `Result: ${resp.status.replace('_', ' ').toLowerCase()}.`,
+            ? this.translate.instant('ENCOUNTERS.ELIGIBILITY.COVERAGE_ACTIVE')
+            : this.translate.instant('ENCOUNTERS.ELIGIBILITY.RESULT', {
+                status: this.translate.instant(`PORTAL.ENUM.STATUS.${resp.status}`),
+              }),
         );
       },
       error: () => {
         this.running.set(false);
-        this.toast.error('Eligibility check failed.');
+        this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.CHECK_FAILED'));
       },
     });
   }

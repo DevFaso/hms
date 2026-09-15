@@ -2,7 +2,7 @@
   class="drawer-overlay"
   role="button"
   tabindex="0"
-  aria-label="Close drawer"
+  [attr.aria-label]="'RECEPTION.CLOSE_DRAWER' | translate"
   (click)="panelClosed.emit()"
   (keydown.enter)="panelClosed.emit()"
   (keydown.escape)="panelClosed.emit()"
@@ -10,7 +10,11 @@
 <div class="drawer-panel">
   <div class="drawer-header">
     <h2>{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
-    <button class="btn-icon-close" (click)="panelClosed.emit()" aria-label="Close">
+    <button
+      class="btn-icon-close"
+      (click)="panelClosed.emit()"
+      [attr.aria-label]="'RECEPTION.CLOSE' | translate"
+    >
       <span class="material-symbols-outlined">close</span>
     </button>
   </div>
@@ -186,7 +190,7 @@
     class="attest-backdrop"
     role="button"
     tabindex="0"
-    aria-label="Close attestation modal"
+    [attr.aria-label]="'RECEPTION.CLOSE_ATTESTATION_MODAL' | translate"
     (click)="showAttestModal.set(false)"
     (keydown.escape)="showAttestModal.set(false)"
   ></div>
@@ -198,7 +202,11 @@
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>
-      <button class="btn-icon-close" (click)="showAttestModal.set(false)" aria-label="Close">
+      <button
+        class="btn-icon-close"
+        (click)="showAttestModal.set(false)"
+        [attr.aria-label]="'RECEPTION.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>

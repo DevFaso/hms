@@ -55,6 +55,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class LaborServiceImplTest {
@@ -89,7 +90,8 @@ class LaborServiceImplTest {
             episodeRepository, entryRepository, deliveryRecordRepository,
             patientRepository, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
-            notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder);
+            notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
+            TestMessageSources.bundles());
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -244,7 +246,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).createNotification(contains("labor alert"), eq("midwife.nina"));
+        verify(notificationService).createNotification(contains("Alerte de travail"), eq("midwife.nina"));
     }
 
     @Test

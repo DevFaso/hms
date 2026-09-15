@@ -36,8 +36,8 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
         select a from NewbornAssessment a
         where a.patient.id = :patientId
           and (:hospitalId is null or a.hospital.id = :hospitalId)
-          and (:from is null or a.assessmentTime >= :from)
-          and (:to is null or a.assessmentTime <= :to)
+          and (cast(:from as LocalDateTime) is null or a.assessmentTime >= :from)
+          and (cast(:to as LocalDateTime) is null or a.assessmentTime <= :to)
         order by a.assessmentTime desc
     """)
     List<NewbornAssessment> findWithinRange(

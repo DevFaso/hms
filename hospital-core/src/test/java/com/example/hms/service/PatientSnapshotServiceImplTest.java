@@ -43,6 +43,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -278,6 +279,9 @@ class PatientSnapshotServiceImplTest {
 
         assertFalse(result.getRecentVitals().isEmpty());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
+        // The sibling of the LAB token: a revert to the word "Vitals"
+        // passed the whole suite until this line existed.
+        assertEquals("VITALS", v.getType());
         assertTrue(v.getValue().contains("T:37.0°C"));
         assertTrue(v.getValue().contains("HR:80"));
         assertTrue(v.getValue().contains("BP:120/80"));
@@ -347,7 +351,7 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getPendingOrders().size());
         PatientSnapshotDTO.OrderItem order = result.getPendingOrders().get(0);
-        assertEquals("Lab", order.getType());
+        assertEquals("LAB", order.getType());
         assertEquals("Lipid Panel", order.getDescription());
     }
 
@@ -655,7 +659,7 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_pendingOrderWithNullTestDef_shouldUseFallback() {
+    void getSnapshot_pendingOrderWithNullTestDef_shouldSendNullNotAWord() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -677,11 +681,11 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getPendingOrders().size());
-        assertEquals("Lab Order", result.getPendingOrders().get(0).getDescription());
+        assertNull(result.getPendingOrders().get(0).getDescription());
     }
 
     @Test
-    void getSnapshot_careTeamWithNullJobTitle_shouldFallbackToStaff() {
+    void getSnapshot_careTeamWithNullJobTitle_shouldSendNoRole() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -705,7 +709,12 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getCareTeam().size());
-        assertEquals("Staff", result.getCareTeam().get(0).getRole());
+        // Was the literal "Staff" — an English word the portal cannot translate,
+        // because the server had already chosen the language. The drawer renders
+        // an em dash for null. The non-null arm is pinned by
+        // getSnapshot_withCareTeam_shouldMapFromEncounters, which already asserts
+        // the enum NAME rather than JobTitle.getTitle().
+        assertNull(result.getCareTeam().get(0).getRole());
         assertEquals("Nurse Anon", result.getCareTeam().get(0).getName());
     }
 
@@ -929,8 +938,8 @@ class PatientSnapshotServiceImplTest {
         assertFalse(result.getRecentNotes().isEmpty());
         PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
         assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
-        assertEquals("Unknown", note.getAuthor()); // null staff â†’ Unknown
-        assertEquals("Encounter", note.getType()); // null encounterType â†’ Encounter
+        assertNull(note.getAuthor()); // null staff -> no author, not a word â†’ Unknown
+        assertNull(note.getType()); // no encounter type -> no note type
         assertEquals("", note.getDate()); // null date â†’ empty
     }
 

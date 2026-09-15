@@ -1,5 +1,12 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -27,6 +34,7 @@ interface ActionDialog {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './hospital-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hospital-detail.scss',
 })
 export class HospitalDetailComponent implements OnInit {

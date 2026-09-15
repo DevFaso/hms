@@ -20,7 +20,14 @@ public class LocaleConfig {
             Locale.of("es")
     );
 
-    private static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
+    /**
+     * French-first product: a request that names no supported language, or
+     * none at all (a scheduled job, a partner integration, a curl), is answered
+     * in French. Until 2026-09-14 this was ENGLISH, so every API message fell
+     * back to English whenever the browser's own Accept-Language did not say
+     * fr — which, on a laptop set up in English, was every request.
+     */
+    private static final Locale DEFAULT_LOCALE = Locale.FRENCH;
 
     @Bean
     public LocaleResolver localeResolver() {

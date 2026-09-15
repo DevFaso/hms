@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { Dhis2Service } from '../../../services/integrations/dhis2.service';
 import {
@@ -167,17 +167,15 @@ type Tab = 'config' | 'mappings' | 'exports';
             {{ 'COMMON.SAVE' | translate }}
           </button>
 
-          <p
-            *ngIf="loadedConfig() as cfg"
-            class="dhis2-admin__last-export"
-            data-testid="dhis2-config-last-export"
-          >
-            {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
-            {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
-            ·
-            {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
-            {{ cfg.authSecretConfigured ? '✓' : '✗' }}
-          </p>
+          @if (loadedConfig(); as cfg) {
+            <p class="dhis2-admin__last-export" data-testid="dhis2-config-last-export">
+              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
+              {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
+              ·
+              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
+              {{ cfg.authSecretConfigured ? '✓' : '✗' }}
+            </p>
+          }
         </form>
       </section>
 
@@ -187,7 +185,9 @@ type Tab = 'config' | 'mappings' | 'exports';
         aria-labelledby="dhis2-tab-mappings"
         [hidden]="activeTab() !== 'mappings'"
       >
-        <app-dhis2-mapping-editor *ngIf="activeTab() === 'mappings'" />
+        @if (activeTab() === 'mappings') {
+          <app-dhis2-mapping-editor />
+        }
       </section>
 
       <section
@@ -196,7 +196,9 @@ type Tab = 'config' | 'mappings' | 'exports';
         aria-labelledby="dhis2-tab-exports"
         [hidden]="activeTab() !== 'exports'"
       >
-        <app-dhis2-export-panel *ngIf="activeTab() === 'exports'" />
+        @if (activeTab() === 'exports') {
+          <app-dhis2-export-panel />
+        }
       </section>
     </section>
   `,
@@ -265,6 +267,7 @@ export class Dhis2AdminPageComponent implements OnInit {
   private readonly dhis2 = inject(Dhis2Service);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   ngOnInit(): void {
     const hospitalId = this.roleContext.activeHospitalId;
@@ -302,11 +305,11 @@ export class Dhis2AdminPageComponent implements OnInit {
       next: (cfg) => {
         this.loadedConfig.set(cfg);
         this.saving.set(false);
-        this.toast.success('DHIS2 facility config saved');
+        this.toast.success(this.translate.instant('DHIS2.CONFIG.SAVED'));
       },
       error: () => {
         this.saving.set(false);
-        this.toast.error('Could not save DHIS2 facility config');
+        this.toast.error(this.translate.instant('DHIS2.CONFIG.SAVE_FAILED'));
       },
     });
   }

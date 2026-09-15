@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin } from 'rxjs';
@@ -9,6 +16,7 @@ import {
   LabValidationSummary,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 interface QcPoint {
   x: number;
@@ -47,6 +55,7 @@ interface QcChartGroup {
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',
 })
 export class LabQcDashboardComponent implements OnInit {
@@ -199,7 +208,7 @@ export class LabQcDashboardComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone = this.classifyZone(dev);
-        const dateStr = new Date(e.recordedAt).toLocaleDateString('en-US', {
+        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
@@ -223,7 +232,10 @@ export class LabQcDashboardComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+          month: 'short',
+          day: 'numeric',
+        });
       xAxisLabels.push({ x: xToSvg(0), label: fmtDate(levelEvents[0]) });
       if (n > 2) {
         const mid = Math.floor(n / 2);

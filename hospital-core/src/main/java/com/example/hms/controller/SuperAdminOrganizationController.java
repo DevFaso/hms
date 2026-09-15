@@ -39,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.MessageSource;
 
 @RestController
 @RequestMapping("/super-admin/organizations")
@@ -51,6 +52,7 @@ public class SuperAdminOrganizationController {
     private final HospitalService hospitalService;
     private final OrganizationLifecycleService lifecycleService;
     private final OrganizationRegionService regionService;
+    private final MessageSource messageSource;
 
     @GetMapping("/summary")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -102,7 +104,7 @@ public class SuperAdminOrganizationController {
             .id(created.getId())
             .code(created.getCode())
             .name(created.getName())
-            .message("Organization created successfully.")
+            .message(messageSource.getMessage("organization.created", null, LocaleContextHolder.getLocale()))
             .build();
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

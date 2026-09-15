@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { ChatService, ChatAttachment, ChatSendRequest } from './chat.service';
 
@@ -9,7 +9,7 @@ describe('ChatService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [ChatService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [ChatService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(ChatService);
     httpMock = TestBed.inject(HttpTestingController);

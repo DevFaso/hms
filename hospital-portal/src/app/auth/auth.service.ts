@@ -405,8 +405,15 @@ export class AuthService {
    * claims are never consulted — they are frozen at login while the server
    * resolves the scope live.
    */
+  /**
+   * The hospital the current request is scoped to: what the interceptor
+   * sends as `X-Hospital-Id`. Staff get their assignment; a super-admin gets
+   * the chip's pick, or `null` in global view, never the primary hospital by
+   * default (design call #5), so a page keyed on this id and the header the
+   * backend reads can no longer disagree.
+   */
   getHospitalId(): string | null {
-    return this.roleContext.activeHospitalId ?? this.getUserProfile()?.primaryHospitalId ?? null;
+    return this.roleContext.effectiveHospitalIdForRequest();
   }
 
   hasAnyRole(expected: string[]): boolean {

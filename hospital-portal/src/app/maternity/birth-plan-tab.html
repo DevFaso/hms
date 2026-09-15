@@ -67,7 +67,7 @@
             <td>
               {{
                 p.introduction?.expectedDueDate
-                  ? (p.introduction?.expectedDueDate | date: 'mediumDate')
+                  ? ($safeNavigationMigration(p.introduction?.expectedDueDate) | date: 'mediumDate')
                   : '—'
               }}
             </td>
@@ -176,7 +176,7 @@
             {{ 'MATERNITY.EDD' | translate }}:
             {{
               p.introduction?.expectedDueDate
-                ? (p.introduction?.expectedDueDate | date: 'mediumDate')
+                ? ($safeNavigationMigration(p.introduction?.expectedDueDate) | date: 'mediumDate')
                 : '—'
             }}
             · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·

@@ -133,12 +133,14 @@
                 </td>
               }
               <td>
-                <div class="cell-primary">{{ r.patientName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ r.patientName || ('COMMON.UNKNOWN' | translate) }}
+                </div>
                 <div class="cell-secondary">{{ r.patientMrn }}</div>
               </td>
               <td>{{ r.targetSpecialty || '—' }}</td>
               <td>{{ r.referringProviderName || '—' }}</td>
-              <td>{{ r.receivingProviderName || 'Unassigned' }}</td>
+              <td>{{ r.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate) }}</td>
               <td>
                 <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{
                   r.urgency | enumLabel: 'consultationUrgency'
@@ -162,7 +164,7 @@
                     <button
                       class="action-link submit"
                       (click)="submitReferral(r)"
-                      title="Submit referral"
+                      [title]="'REFERRALS.SUBMIT_REFERRAL' | translate"
                     >
                       <span class="material-symbols-outlined">send</span>
                     </button>
@@ -171,7 +173,7 @@
                     <button
                       class="action-link acknowledge"
                       (click)="openAcknowledge(r)"
-                      title="Acknowledge referral"
+                      [title]="'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate"
                     >
                       <span class="material-symbols-outlined">task_alt</span>
                     </button>
@@ -180,7 +182,7 @@
                     <button
                       class="action-link reject"
                       (click)="openReject(r)"
-                      title="Reject referral"
+                      [title]="'REFERRALS.REJECT_REFERRAL' | translate"
                     >
                       <span class="material-symbols-outlined">block</span>
                     </button>
@@ -189,7 +191,7 @@
                     <button
                       class="action-link schedule"
                       (click)="openSchedule(r)"
-                      title="Schedule appointment"
+                      [title]="'REFERRALS.SCHEDULE_APPOINTMENT' | translate"
                     >
                       <span class="material-symbols-outlined">event</span>
                     </button>
@@ -198,7 +200,7 @@
                     <button
                       class="action-link start"
                       (click)="startReferral(r)"
-                      title="Start consultation"
+                      [title]="'REFERRALS.START_CONSULTATION' | translate"
                     >
                       <span class="material-symbols-outlined">play_circle</span>
                     </button>
@@ -207,7 +209,7 @@
                     <button
                       class="action-link complete"
                       (click)="openComplete(r)"
-                      title="Complete referral"
+                      [title]="'REFERRALS.COMPLETE_REFERRAL' | translate"
                     >
                       <span class="material-symbols-outlined">check_circle</span>
                     </button>
@@ -272,7 +274,7 @@
               <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span
               ><span class="field-value"
                 ><span class="urgency-badge {{ getUrgencyClass(ref.urgency) }}">{{
-                  ref.urgency
+                  ref.urgency | enumLabel: 'referralUrgency'
                 }}</span></span
               >
             </div>
@@ -282,13 +284,15 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.RECEIVING_PROVIDER' | translate }}</span
-              ><span class="field-value">{{ ref.receivingProviderName || 'Unassigned' }}</span>
+              ><span class="field-value">{{
+                ref.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate)
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(ref.status) }}">{{
-                  ref.status
+                  ref.status | enumLabel: 'referralStatus'
                 }}</span></span
               >
             </div>
@@ -299,17 +303,17 @@
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Scheduled</span
+              <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
               ><span class="field-value">{{
                 ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Appointment Location</span
+              <span class="field-label">{{ 'REFERRALS.APPOINTMENT_LOCATION' | translate }}</span
               ><span class="field-value">{{ ref.appointmentLocation || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Started</span
+              <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span
               ><span class="field-value">{{
                 ref.startedAt ? (ref.startedAt | date: 'medium') : '—'
               }}</span>
@@ -347,25 +351,27 @@
           }
           @if (ref.completionSummary) {
             <div class="detail-notes">
-              <span class="field-label">Completion Summary</span>
+              <span class="field-label">{{ 'REFERRALS.COMPLETION_SUMMARY' | translate }}</span>
               <p>{{ ref.completionSummary }}</p>
             </div>
           }
           @if (ref.followUpRecommendations) {
             <div class="detail-notes">
-              <span class="field-label">Follow-Up Recommendations</span>
+              <span class="field-label">{{
+                'REFERRALS.FOLLOW_UP_RECOMMENDATIONS' | translate
+              }}</span>
               <p>{{ ref.followUpRecommendations }}</p>
             </div>
           }
           @if (ref.acknowledgementNotes) {
             <div class="detail-notes">
-              <span class="field-label">Acknowledgement Notes</span>
+              <span class="field-label">{{ 'REFERRALS.ACKNOWLEDGEMENT_NOTES' | translate }}</span>
               <p>{{ ref.acknowledgementNotes }}</p>
             </div>
           }
           @if (ref.cancellationReason) {
             <div class="detail-notes">
-              <span class="field-label">Cancellation Reason</span>
+              <span class="field-label">{{ 'REFERRALS.CANCELLATION_REASON' | translate }}</span>
               <p>{{ ref.cancellationReason }}</p>
             </div>
           }
@@ -379,7 +385,11 @@
                 [disabled]="actionLoading()"
               >
                 <span class="material-symbols-outlined">send</span>
-                {{ actionLoading() ? 'Submitting…' : 'Submit Referral' }}
+                {{
+                  actionLoading()
+                    ? ('REFERRALS.SUBMITTING' | translate)
+                    : ('REFERRALS.SUBMIT_REFERRAL' | translate)
+                }}
               </button>
             }
             @if (ref.status === 'SUBMITTED') {
@@ -389,37 +399,41 @@
                 [disabled]="actionLoading()"
               >
                 <span class="material-symbols-outlined">task_alt</span>
-                Acknowledge
+                {{ 'REFERRALS.ACTION_ACKNOWLEDGE' | translate }}
               </button>
             }
             @if (['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)) {
               <button class="btn-danger" (click)="openReject(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">block</span>
-                Reject
+                {{ 'REFERRALS.ACTION_REJECT' | translate }}
               </button>
             }
             @if (ref.status === 'ACKNOWLEDGED') {
               <button class="btn-primary" (click)="openSchedule(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">event</span>
-                Schedule
+                {{ 'REFERRALS.ACTION_SCHEDULE' | translate }}
               </button>
             }
             @if (['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)) {
               <button class="btn-primary" (click)="startReferral(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">play_circle</span>
-                {{ actionLoading() ? 'Starting…' : 'Start' }}
+                {{
+                  actionLoading()
+                    ? ('REFERRALS.STARTING' | translate)
+                    : ('REFERRALS.ACTION_START' | translate)
+                }}
               </button>
             }
             @if (['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)) {
               <button class="btn-primary" (click)="openComplete(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">check_circle</span>
-                Complete
+                {{ 'REFERRALS.ACTION_COMPLETE' | translate }}
               </button>
             }
             @if (!['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(ref.status)) {
               <button class="btn-danger" (click)="confirmCancel(ref)">
                 <span class="material-symbols-outlined">cancel</span>
-                Cancel
+                {{ 'COMMON.CANCEL' | translate }}
               </button>
             }
           </div>
@@ -485,7 +499,10 @@
                   <span class="picker-spinner"></span>
                 }
                 @if (patientDropdownOpen()) {
-                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                  <ul
+                    class="picker-dropdown"
+                    [attr.aria-label]="'REFERRALS.PATIENT_SUGGESTIONS' | translate"
+                  >
                     @for (p of patientSuggestions(); track p.id) {
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
@@ -519,7 +536,7 @@
                   id="ref-hospitalId"
                   [ngModel]="form.hospitalId"
                   (ngModelChange)="onSourceHospitalChange($event)"
-                  title="Source Hospital"
+                  [title]="'REFERRALS.SOURCE_HOSPITAL' | translate"
                 >
                   <option value="">{{ 'REFERRALS.SELECT_SOURCE_HOSPITAL' | translate }}</option>
                   @for (h of hospitals(); track h.id) {
@@ -533,7 +550,7 @@
               <select
                 id="ref-sourceDept"
                 [(ngModel)]="form.sourceDepartmentId"
-                title="Source Department"
+                [title]="'REFERRALS.SOURCE_DEPARTMENT' | translate"
               >
                 <option value="">{{ 'REFERRALS.SELECT_DEPARTMENT' | translate }}</option>
                 @for (d of sourceDepartments(); track d.id) {
@@ -556,7 +573,7 @@
                 id="ref-recvHospital"
                 [ngModel]="form.receivingHospitalId"
                 (ngModelChange)="onReceivingHospitalChange($event)"
-                title="Destination Hospital"
+                [title]="'REFERRALS.DESTINATION_HOSPITAL' | translate"
               >
                 <option value="">{{ 'REFERRALS.SELECT_DEST_HOSPITAL' | translate }}</option>
                 @for (h of allHospitals(); track h.id) {
@@ -572,7 +589,7 @@
                 id="ref-targetDept"
                 [(ngModel)]="form.targetDepartmentId"
                 [disabled]="!form.receivingHospitalId"
-                title="Destination Department"
+                [title]="'REFERRALS.DESTINATION_DEPARTMENT' | translate"
               >
                 <option value="">{{ 'REFERRALS.SELECT_DEPARTMENT' | translate }}</option>
                 @for (d of targetDepartments(); track d.id) {
@@ -587,7 +604,11 @@
         <div class="form-row">
           <div class="field">
             <label for="ref-specialty">{{ 'REFERRALS.TARGET_SPECIALTY' | translate }} *</label>
-            <select id="ref-specialty" [(ngModel)]="form.targetSpecialty" title="Target specialty">
+            <select
+              id="ref-specialty"
+              [(ngModel)]="form.targetSpecialty"
+              [title]="'REFERRALS.TARGET_SPECIALTY' | translate"
+            >
               <option value="">{{ 'REFERRALS.SELECT_SPECIALTY' | translate }}</option>
               @for (s of specialties; track s.value) {
                 <option [value]="s.value">{{ s.label }}</option>
@@ -596,7 +617,11 @@
           </div>
           <div class="field">
             <label for="ref-urgency">{{ 'REFERRALS.URGENCY' | translate }} *</label>
-            <select id="ref-urgency" [(ngModel)]="form.urgency" title="Urgency">
+            <select
+              id="ref-urgency"
+              [(ngModel)]="form.urgency"
+              [title]="'REFERRALS.URGENCY' | translate"
+            >
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ u }}</option>
               }
@@ -606,7 +631,11 @@
         <div class="form-row">
           <div class="field">
             <label for="ref-type">{{ 'REFERRALS.REFERRAL_TYPE' | translate }} *</label>
-            <select id="ref-type" [(ngModel)]="form.referralType" title="Referral type">
+            <select
+              id="ref-type"
+              [(ngModel)]="form.referralType"
+              [title]="'REFERRALS.REFERRAL_TYPE' | translate"
+            >
               @for (t of referralTypes; track t.value) {
                 <option [value]="t.value">{{ t.label }}</option>
               }
@@ -683,9 +712,14 @@
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
           <p>
-            Cancel the referral for <strong>{{ deletingRef()?.patientName }}</strong> to
-            <strong>{{ deletingRef()?.targetSpecialty }}</strong
-            >?
+            {{
+              'REFERRALS.CANCEL_CONFIRM'
+                | translate
+                  : {
+                      name: deletingRef()?.patientName,
+                      specialty: deletingRef()?.targetSpecialty,
+                    }
+            }}
           </p>
         </div>
       </div>
@@ -714,22 +748,33 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>Acknowledge Referral</h2>
-        <button class="modal-close" (click)="closeAcknowledgeModal()" title="Close">&times;</button>
+        <h2>{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeAcknowledgeModal()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <p>
-          Acknowledge the referral for <strong>{{ acknowledgingRef()?.patientName }}</strong> ({{
-            acknowledgingRef()?.targetSpecialty
-          }}). You will be assigned as the receiving provider.
+          {{
+            'REFERRALS.ACKNOWLEDGE_CONFIRM'
+              | translate
+                : {
+                    name: acknowledgingRef()?.patientName,
+                    specialty: acknowledgingRef()?.targetSpecialty,
+                  }
+          }}
         </p>
         <div class="field">
-          <label for="ack-notes">Acknowledgement Notes *</label>
+          <label for="ack-notes">{{ 'REFERRALS.ACKNOWLEDGEMENT_NOTES' | translate }} *</label>
           <textarea
             id="ack-notes"
             [(ngModel)]="acknowledgeNotes"
             rows="3"
-            placeholder="Enter acknowledgement notes…"
+            [placeholder]="'REFERRALS.ACK_NOTES_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>
@@ -742,7 +787,11 @@
           (click)="executeAcknowledge()"
           [disabled]="actionLoading() || !acknowledgeNotes.trim()"
         >
-          {{ actionLoading() ? 'Acknowledging…' : 'Acknowledge' }}
+          {{
+            actionLoading()
+              ? ('REFERRALS.ACKNOWLEDGING' | translate)
+              : ('REFERRALS.ACTION_ACKNOWLEDGE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -758,26 +807,37 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>Schedule Referral</h2>
-        <button class="modal-close" (click)="closeScheduleModal()" title="Close">&times;</button>
+        <h2>{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeScheduleModal()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <p>
-          Schedule an appointment for <strong>{{ schedulingRef()?.patientName }}</strong> ({{
-            schedulingRef()?.targetSpecialty
-          }}).
+          {{
+            'REFERRALS.SCHEDULE_CONFIRM'
+              | translate
+                : {
+                    name: schedulingRef()?.patientName,
+                    specialty: schedulingRef()?.targetSpecialty,
+                  }
+          }}
         </p>
         <div class="field">
-          <label for="schedule-time">Appointment Date & Time *</label>
+          <label for="schedule-time">{{ 'REFERRALS.APPOINTMENT_DATETIME' | translate }} *</label>
           <input id="schedule-time" type="datetime-local" [(ngModel)]="scheduleAppointmentTime" />
         </div>
         <div class="field">
-          <label for="schedule-location">Location</label>
+          <label for="schedule-location">{{ 'APPOINTMENTS.LOCATION' | translate }}</label>
           <input
             id="schedule-location"
             type="text"
             [(ngModel)]="scheduleLocation"
-            placeholder="e.g. Clinic 3 — Room 204"
+            [placeholder]="'REFERRALS.LOCATION_PLACEHOLDER' | translate"
             maxlength="300"
           />
         </div>
@@ -791,7 +851,11 @@
           (click)="executeSchedule()"
           [disabled]="actionLoading() || !scheduleAppointmentTime"
         >
-          {{ actionLoading() ? 'Scheduling…' : 'Schedule' }}
+          {{
+            actionLoading()
+              ? ('REFERRALS.SCHEDULING' | translate)
+              : ('REFERRALS.ACTION_SCHEDULE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -807,23 +871,34 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>Reject Referral</h2>
-        <button class="modal-close" (click)="closeRejectModal()" title="Close">&times;</button>
+        <h2>{{ 'REFERRALS.REJECT_REFERRAL' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeRejectModal()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <p>
-          Reject the referral for <strong>{{ rejectingRef()?.patientName }}</strong> ({{
-            rejectingRef()?.targetSpecialty
-          }}). The referring provider will be notified.
+          {{
+            'REFERRALS.REJECT_CONFIRM'
+              | translate
+                : {
+                    name: rejectingRef()?.patientName,
+                    specialty: rejectingRef()?.targetSpecialty,
+                  }
+          }}
         </p>
         <div class="field">
-          <label for="reject-reason">Reason *</label>
+          <label for="reject-reason">{{ 'REFERRALS.REASON' | translate }} *</label>
           <textarea
             id="reject-reason"
             [(ngModel)]="rejectReason"
             rows="3"
             maxlength="500"
-            placeholder="Why is this referral being declined?"
+            [placeholder]="'REFERRALS.REJECT_REASON_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>
@@ -836,7 +911,11 @@
           (click)="executeReject()"
           [disabled]="actionLoading() || !rejectReason.trim()"
         >
-          {{ actionLoading() ? 'Rejecting…' : 'Reject' }}
+          {{
+            actionLoading()
+              ? ('REFERRALS.REJECTING' | translate)
+              : ('REFERRALS.ACTION_REJECT' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -852,31 +931,44 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>Complete Referral</h2>
-        <button class="modal-close" (click)="closeCompleteModal()" title="Close">&times;</button>
+        <h2>{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeCompleteModal()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <p>
-          Mark the referral for <strong>{{ completingRef()?.patientName }}</strong> ({{
-            completingRef()?.targetSpecialty
-          }}) as completed.
+          {{
+            'REFERRALS.COMPLETE_CONFIRM'
+              | translate
+                : {
+                    name: completingRef()?.patientName,
+                    specialty: completingRef()?.targetSpecialty,
+                  }
+          }}
         </p>
         <div class="field">
-          <label for="complete-summary">Completion Summary *</label>
+          <label for="complete-summary">{{ 'REFERRALS.COMPLETION_SUMMARY' | translate }} *</label>
           <textarea
             id="complete-summary"
             [(ngModel)]="completeSummary"
             rows="3"
-            placeholder="Enter completion summary…"
+            [placeholder]="'REFERRALS.COMPLETION_SUMMARY_PLACEHOLDER' | translate"
           ></textarea>
         </div>
         <div class="field">
-          <label for="complete-followup">Follow-Up Recommendations</label>
+          <label for="complete-followup">{{
+            'REFERRALS.FOLLOW_UP_RECOMMENDATIONS' | translate
+          }}</label>
           <textarea
             id="complete-followup"
             [(ngModel)]="completeFollowUp"
             rows="2"
-            placeholder="Optional follow-up recommendations…"
+            [placeholder]="'REFERRALS.FOLLOW_UP_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>
@@ -889,7 +981,11 @@
           (click)="executeComplete()"
           [disabled]="actionLoading() || !completeSummary.trim()"
         >
-          {{ actionLoading() ? 'Completing…' : 'Complete' }}
+          {{
+            actionLoading()
+              ? ('REFERRALS.COMPLETING' | translate)
+              : ('REFERRALS.ACTION_COMPLETE' | translate)
+          }}
         </button>
       </div>
     </div>

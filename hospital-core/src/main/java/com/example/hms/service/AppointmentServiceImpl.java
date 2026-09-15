@@ -92,9 +92,18 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
 
+    /** MessageSource varargs: an empty array, never null (Sonar S4449). */
+    private static final Object[] NO_ARGS = new Object[0];
+
     /** The resourceType every appointment webhook payload names (item 45). */
     private static final String WEBHOOK_RESOURCE_APPOINTMENT = "Appointment";
     private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
+    /**
+     * The language the patient asked to be written to in. A mail is read by
+     * the patient, so the request's {@code locale} parameter (the registrar's
+     * browser) is never the one used for it.
+     */
+    private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -357,6 +366,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // and a notification failure must never roll back the booking itself.
         if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
             try {
+                Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentConfirmationEmail(
                     patient.getEmail(),
                     patient.getFirstName() + " " + patient.getLastName(),
@@ -367,7 +377,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                     hospital.getEmail(),
                     hospital.getPhoneNumber(),
                     rescheduleLink,
-                    cancelLink
+                    cancelLink,
+                    mailLocale
                 );
             } catch (RuntimeException ex) {
                 log.warn("Failed to send appointment confirmation email for {}: {}", saved.getId(), ex.getMessage());
@@ -620,6 +631,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Patient pt = saved.getPatient();
                 Staff st   = saved.getStaff();
                 Hospital h = saved.getHospital();
+                Locale mailLocale = patientLocaleResolver.resolve(pt, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentRescheduledEmail(
                     pt.getEmail(),
                     pt.getFirstName() + " " + pt.getLastName(),
@@ -629,7 +641,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     h.getEmail(), h.getPhoneNumber(),
                     frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId(),
-                    frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId());
+                    frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId(),
+                    mailLocale);
             } catch (Exception e) {
                 log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
             }
@@ -736,22 +749,25 @@ public class AppointmentServiceImpl implements AppointmentService {
         // never roll back the status change itself.
         if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
             try {
+                Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 switch (newStatus) {
                     case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink,
+                        mailLocale);
                     case RESCHEDULED -> emailService.sendAppointmentRescheduledEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink,
+                        mailLocale);
                     case CANCELLED -> emailService.sendAppointmentCancelledEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
                     case COMPLETED -> emailService.sendAppointmentCompletedEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
                     case NO_SHOW -> emailService.sendAppointmentNoShowEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
                     default -> {
                         // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
                     }
@@ -778,7 +794,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
-                throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+                throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, locale));
             }
         }
     // On GET, return full details (existing mapping)
@@ -1096,7 +1112,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void requireHospitalScope(User user, UUID hospitalId, Locale locale) {
         if (!hasHospitalAccess(user, hospitalId)) {
-            throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+            throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, locale));
         }
     }
 

@@ -55,7 +55,11 @@ public class ControllerAuthUtils {
         }
         if (auth instanceof JwtAuthenticationToken token) {
             Jwt jwt = token.getToken();
-            for (String claim : List.of("uid", "userId", "id", "sub")) {
+            // "appUserId" is what keycloak/realm-export.json maps from the user
+            // attribute app_user_id; it is the HMS user id. Without it the loop fell
+            // through to the Keycloak subject, which matches no users row, and every
+            // self-service surface would have refused its owner the day SSO went on.
+            for (String claim : List.of("appUserId", "uid", "userId", "id", "sub")) {
                 String raw = jwt.getClaimAsString(claim);
                 if (raw != null && !raw.isBlank()) {
                     try {
@@ -247,7 +251,9 @@ public class ControllerAuthUtils {
      * Check whether the authentication has a given granted authority (case-insensitive).
      */
     public boolean hasAuthority(Authentication auth, String authority) {
-        if (auth == null || auth.getAuthorities() == null) {
+        // getAuthorities() is non-null by the Authentication contract, so only
+        // the authentication itself can be absent.
+        if (auth == null) {
             return false;
         }
         return auth.getAuthorities().stream()

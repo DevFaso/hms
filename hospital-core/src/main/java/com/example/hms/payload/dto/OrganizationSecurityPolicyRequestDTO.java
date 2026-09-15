@@ -17,21 +17,21 @@ import java.util.UUID;
 @AllArgsConstructor
 public class OrganizationSecurityPolicyRequestDTO {
 
-    @NotBlank(message = "Policy name is required")
-    @Size(max = 255, message = "Policy name must not exceed 255 characters")
+    @NotBlank(message = "{organizationSecurityPolicy.name.required}")
+    @Size(max = 255, message = "{organizationSecurityPolicy.name.size}")
     private String name;
 
-    @NotBlank(message = "Policy code is required")
-    @Size(max = 100, message = "Policy code must not exceed 100 characters")
+    @NotBlank(message = "{organizationSecurityPolicy.code.required}")
+    @Size(max = 100, message = "{organizationSecurityPolicy.code.size}")
     private String code;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
+    @Size(max = 1000, message = "{organizationSecurityPolicy.description.size}")
     private String description;
 
-    @NotNull(message = "Policy type is required")
+    @NotNull(message = "{organizationSecurityPolicy.policyType.required}")
     private SecurityPolicyType policyType;
 
-    @NotNull(message = "Organization ID is required")
+    @NotNull(message = "{organizationSecurityPolicy.organizationId.required}")
     private UUID organizationId;
 
     @Builder.Default

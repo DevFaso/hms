@@ -10,10 +10,10 @@ import java.util.UUID;
 @Data
 public class EmpiMergeRequestDTO {
 
-    @NotNull(message = "Secondary identity identifier is required")
+    @NotNull(message = "{empiMerge.secondaryIdentityId.required}")
     private UUID secondaryIdentityId;
 
-    @NotNull(message = "Merge type is required")
+    @NotNull(message = "{empiMerge.mergeType.required}")
     private EmpiMergeType mergeType;
 
     @Size(max = 50)

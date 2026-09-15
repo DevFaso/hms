@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { RefillApprovalService, RefillRequest } from './refill-approval.service';
 
@@ -22,7 +22,7 @@ describe('RefillApprovalService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [RefillApprovalService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [RefillApprovalService, provideHttpClient(withXhr()), provideHttpClientTesting()],
     });
     service = TestBed.inject(RefillApprovalService);
     httpMock = TestBed.inject(HttpTestingController);

@@ -131,7 +131,9 @@
                   <div class="cell-secondary">{{ o.patientMrn }}</div>
                 </td>
                 <td>
-                  <span class="modality-badge">{{ o.modality }}</span>
+                  <span class="modality-badge">{{
+                    o.modality | enumLabel: 'imagingModality'
+                  }}</span>
                 </td>
                 <td>{{ o.studyType || '—' }}</td>
                 <td>{{ o.bodyRegion || '—' }}</td>
@@ -266,7 +268,9 @@
                   <div class="cell-secondary">{{ r.reportTitle }}</div>
                 </td>
                 <td>
-                  <span class="modality-badge">{{ r.modality }}</span>
+                  <span class="modality-badge">{{
+                    r.modality | enumLabel: 'imagingModality'
+                  }}</span>
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
@@ -409,7 +413,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ rep.modality }}</span>
+              ><span class="field-value">{{ rep.modality | enumLabel: 'imagingModality' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
@@ -590,7 +594,7 @@
             <label for="rep-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
             <select id="rep-modality" [(ngModel)]="reportForm.modality">
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m | enumLabel }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>
@@ -685,7 +689,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ ord.modality }}</span>
+              ><span class="field-value">{{ ord.modality | enumLabel: 'imagingModality' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.STUDY_TYPE' | translate }}</span
@@ -711,7 +715,7 @@
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
-                  ord.status
+                  ord.status | enumLabel: 'imagingOrderStatus'
                 }}</span></span
               >
             </div>
@@ -752,7 +756,7 @@
                 <div class="report-card" [attr.data-testid]="'imaging-report-' + rep.id">
                   <div class="report-meta">
                     <span class="status-badge {{ getStatusClass(rep.reportStatus) }}">{{
-                      rep.reportStatus
+                      rep.reportStatus | enumLabel: 'imagingReportStatus'
                     }}</span>
                     <span class="report-author">{{
                       rep.interpretingProviderName || rep.performedByName
@@ -872,7 +876,7 @@
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"
-              placeholder="e.g. Chest X-Ray"
+              [placeholder]="'IMAGING.STUDY_TYPE_PLACEHOLDER' | translate"
             />
           </div>
           <div class="field">
@@ -881,7 +885,7 @@
               id="img-bodyRegion"
               type="text"
               [(ngModel)]="form.bodyRegion"
-              placeholder="e.g. Chest"
+              [placeholder]="'IMAGING.BODY_REGION_PLACEHOLDER' | translate"
             />
           </div>
         </div>

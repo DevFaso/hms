@@ -26,42 +26,42 @@ import java.util.UUID;
 @Builder
 public class DischargeSummaryRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{dischargeSummary.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Encounter ID is required")
+    @NotNull(message = "{dischargeSummary.encounterId.required}")
     private UUID encounterId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotNull(message = "Discharging provider ID is required")
+    @NotNull(message = "{dischargeSummary.dischargingProviderId.required}")
     private UUID dischargingProviderId;
 
-    @NotNull(message = "Assignment ID is required")
+    @NotNull(message = "{dischargeSummary.assignmentId.required}")
     private UUID assignmentId;
 
     // Link to approval if one exists
     private UUID approvalRecordId;
 
-    @NotNull(message = "Discharge date is required")
+    @NotNull(message = "{dischargeSummary.dischargeDate.required}")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate dischargeDate;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime dischargeTime;
 
-    @NotNull(message = "Discharge disposition is required")
+    @NotNull(message = "{dischargeSummary.disposition.required}")
     private DischargeDisposition disposition;
 
-    @NotBlank(message = "Discharge diagnosis is required")
-    @Size(max = 5000, message = "Discharge diagnosis must not exceed 5000 characters")
+    @NotBlank(message = "{dischargeSummary.dischargeDiagnosis.required}")
+    @Size(max = 5000, message = "{dischargeSummary.dischargeDiagnosis.size}")
     private String dischargeDiagnosis;
 
-    @Size(max = 5000, message = "Hospital course must not exceed 5000 characters")
+    @Size(max = 5000, message = "{dischargeSummary.hospitalCourse.size}")
     private String hospitalCourse;
 
-    @Size(max = 2000, message = "Discharge condition must not exceed 2000 characters")
+    @Size(max = 2000, message = "{dischargeSummary.dischargeCondition.size}")
     private String dischargeCondition;
 
     // Structured instructions

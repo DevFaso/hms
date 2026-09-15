@@ -235,9 +235,14 @@ export interface PatientSnapshot {
   activeMedications: { name: string; dose: string; frequency: string }[];
   recentVitals: { type: string; value: string; timestamp: string }[];
   latestLabs: { test: string; value: string; flag: string; date: string }[];
-  pendingOrders: { type: string; description: string; orderedAt: string }[];
-  recentNotes: { author: string; type: string; date: string; snippet: string }[];
-  careTeam: { role: string; name: string }[];
+  // `description` is null when the lab order has no test definition.
+  pendingOrders: { type: string; description: string | null; orderedAt: string }[];
+  // `type` is null when the encounter has no type, and `author` when the
+  // staff record is gone — PatientSnapshotServiceImpl sends null rather
+  // than an English word for either.
+  recentNotes: { author: string | null; type: string | null; date: string; snippet: string }[];
+  // `role` is null when the encounter staff has no job title on file.
+  careTeam: { role: string | null; name: string }[];
 }
 
 interface ApiWrapper<T> {

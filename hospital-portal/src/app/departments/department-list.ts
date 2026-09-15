@@ -1,5 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
@@ -38,8 +38,9 @@ interface DepartmentRequest {
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './department-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-list.scss',
 })
 export class DepartmentListComponent implements OnInit {

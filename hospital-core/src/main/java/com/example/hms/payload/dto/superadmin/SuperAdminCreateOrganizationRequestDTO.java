@@ -16,27 +16,27 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SuperAdminCreateOrganizationRequestDTO {
 
-    @NotBlank(message = "Organization name is required")
-    @Size(max = 255, message = "Organization name must not exceed 255 characters")
+    @NotBlank(message = "{superAdmin.organization.name.required}")
+    @Size(max = 255, message = "{superAdmin.organization.name.size}")
     private String name;
 
-    @NotBlank(message = "Organization code is required")
-    @Size(max = 100, message = "Organization code must not exceed 100 characters")
+    @NotBlank(message = "{superAdmin.organization.code.required}")
+    @Size(max = 100, message = "{superAdmin.organization.code.size}")
     private String code;
 
-    @NotBlank(message = "Timezone is required")
-    @Size(max = 120, message = "Timezone must not exceed 120 characters")
+    @NotBlank(message = "{superAdmin.organization.timezone.required}")
+    @Size(max = 120, message = "{superAdmin.organization.timezone.size}")
     private String timezone;
 
-    @NotBlank(message = "Primary contact email is required")
-    @Email(message = "Invalid email format")
-    @Size(max = 255, message = "Contact email must not exceed 255 characters")
+    @NotBlank(message = "{superAdmin.organization.contactEmail.required}")
+    @Email(message = "{superAdmin.organization.contactEmail.invalid}")
+    @Size(max = 255, message = "{superAdmin.organization.contactEmail.size}")
     private String contactEmail;
 
-    @Size(max = 32, message = "Contact phone must not exceed 32 characters")
+    @Size(max = 32, message = "{superAdmin.organization.contactPhone.size}")
     private String contactPhone;
 
-    @Size(max = 1000, message = "Notes must not exceed 1000 characters")
+    @Size(max = 1000, message = "{superAdmin.organization.notes.size}")
     private String notes;
 
     private OrganizationType type;

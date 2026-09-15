@@ -56,6 +56,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.Map;
+import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class PostpartumCareServiceImplTest {
@@ -104,7 +105,8 @@ class PostpartumCareServiceImplTest {
             new PostpartumObservationMapper(),
             proResponseService,
             recordAccessPolicy,
-            reachRecorder
+            reachRecorder,
+            TestMessageSources.bundles()
         );
 
         patientId = UUID.randomUUID();

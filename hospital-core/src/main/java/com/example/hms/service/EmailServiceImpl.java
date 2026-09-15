@@ -3,20 +3,42 @@ package com.example.hms.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Year;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Composes every transactional mail from the message bundle.
+ *
+ * <p>A mail is read by its recipient, so every body is rendered in the
+ * recipient's language — never the request's. The appointment mails take the
+ * patient's stated language from the caller; the account and staff mails have
+ * no per-user language to read yet and render in
+ * {@link EmailService#DEFAULT_RECIPIENT_LOCALE}.
+ *
+ * <p>The HTML skeleton lives here. Only the human sentences live in the bundle,
+ * one key per sentence, so a wording change retranslates one line. Every
+ * dynamic value is a MessageFormat argument, escaped with {@link #escapeHtml}
+ * before it goes in — the bundle never sees raw user input.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailServiceImpl implements EmailService {
+
+    private final JavaMailSender mailSender;
+    private final MessageSource messageSource;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -38,84 +60,213 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.properties.mail.smtp.auth:true}")
     private String smtpAuthProperty;
 
-    private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
-    private static final String GENERIC_GREETING = "there";
+    private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
+
+    // Bundle keys used by more than one mail.
+    // Markup fragments repeated across the mails (Sonar S1192).
+    private static final String HTML_BR = "<br/>";
+    private static final String HTML_CENTER_BLOCK = "<div style=\"text-align:center;margin:32px 0;\">";
+    private static final String HTML_A_OPEN = "<a href=\"";
+    private static final String HTML_STRONG_OPEN = "<strong>";
+    private static final String HTML_STRONG_CLOSE = "</strong>";
+    private static final String HTML_STRONG_CLOSE_SP = "</strong> ";
+    private static final String HTML_P_DIV_CLOSE = "</p></div>";
+    private static final String HTML_DIV_BACKGROUND = "<div style=\"background:";
+    private static final String HTML_STYLE_ATTR = "\" style=\"";
+    private static final String COLOR_BRAND_TINT = "#bfdbfe";
+    private static final String KEY_BRAND = "email.common.brand";
+    private static final String KEY_GREETING_HI = "email.common.greeting.hi";
+    private static final String KEY_GREETING_DEAR = "email.common.greeting.dear";
+    private static final String KEY_GREETING_ANONYMOUS = "email.common.greeting.anonymous";
+    private static final String KEY_SIGNIN_BUTTON = "email.common.signin.button";
+    private static final String KEY_LINK_FALLBACK = "email.common.link.fallback";
+    private static final String KEY_UNEXPECTED_TITLE = "email.common.unexpected.title";
+    private static final String KEY_ACTIVATION_BUTTON = "email.activation.button";
+    private static final String KEY_ROLE_ASSIGNMENT_SUBJECT = "email.role.assignment.subject";
+    private static final String KEY_APPOINTMENT_CONTACT = "email.appointment.contact";
+    private static final String KEY_LABEL_DATE = "email.appointment.label.date";
+    private static final String KEY_LABEL_TIME = "email.appointment.label.time";
+
+    // Shared HTML fragments.
     /** Opening wrapper for the body column of every templated email. */
     private static final String BODY_OPEN = "<div style=\"padding:36px 40px;\">";
-    private static final String HI_PARAGRAPH = "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi ";
+    private static final String GREETING_PARAGRAPH_OPEN = "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">";
+    private static final String BODY_PARAGRAPH_OPEN = "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">";
+    private static final String CLOSE_PARAGRAPH = "</p>";
+    private static final String CLOSE_DIV = "</div>";
+    private static final String HR = "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>";
+    private static final String ALERT_BOX_OPEN = "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
+        + "padding:16px 20px;margin-bottom:24px;\">";
+    private static final String ALERT_TITLE_OPEN = "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">";
+    private static final String ALERT_TEXT_OPEN = "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">";
+    private static final String PRIMARY_BUTTON_STYLE = "display:inline-block;"
+        + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
+        + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
+        + "font-weight:600;letter-spacing:0.3px;";
+    private static final String GRADIENT_BLUE = "linear-gradient(135deg,#1e40af,#2563eb)";
+    private static final String GRADIENT_NAVY = "linear-gradient(135deg,#1e3a5f,#2563eb)";
+    private static final String GRADIENT_GREEN = "linear-gradient(135deg,#065f46,#059669)";
+    private static final String LINK_STYLE = "style=\"color:#2563eb;\"";
 
     /** Returns the app login URL, driven by the configured frontend base URL. */
     private String loginUrl() {
         return frontendBaseUrl + "/login";
     }
 
-    private static String resolveRoleLabel(String roleDisplayName, boolean isPatient) {
-        if (isPatient) return "Patient";
-        return (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
+    // -------------------------------------------------------------------------
+    // Bundle access
+    // -------------------------------------------------------------------------
+
+    /**
+     * One bundle sentence in the recipient's language. Arguments are inserted
+     * verbatim by MessageFormat, so anything user-supplied must already be
+     * {@link #escapeHtml escaped}.
+     */
+    private String text(Locale locale, String key, Object... args) {
+        return messageSource.getMessage(key, args, locale);
     }
 
+    private static Locale recipientLocale(Locale locale) {
+        return locale != null ? locale : DEFAULT_RECIPIENT_LOCALE;
+    }
+
+    private static boolean hasText(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    /** "Hi {name}," or the anonymous greeting when no name is known. */
+    private String greetingHi(Locale locale, String displayName) {
+        return hasText(displayName)
+            ? text(locale, KEY_GREETING_HI, escapeHtml(displayName))
+            : text(locale, KEY_GREETING_ANONYMOUS);
+    }
+
+    /** Long date in the recipient's language: "5 septembre 2026", "September 5, 2026". */
+    private static String humanDate(LocalDate date, Locale locale) {
+        return DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale).format(date);
+    }
+
+    // -------------------------------------------------------------------------
+    // Appointment mails (recipient: the patient)
+    // -------------------------------------------------------------------------
+
     @Override
-    public void sendAppointmentRescheduledEmail(String to, String patientName, String hospitalName, String staffName, String newAppointmentDate, String newAppointmentTime, String hospitalEmail, String hospitalPhone, String rescheduleLink, String cancelLink) {
+    public void sendAppointmentRescheduledEmail(String to, String patientName, String hospitalName, String staffName,
+                                                String newAppointmentDate, String newAppointmentTime,
+                                                String hospitalEmail, String hospitalPhone,
+                                                String rescheduleLink, String cancelLink, Locale locale) {
         validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
         log.info("📧 Sending appointment rescheduled email to: {}", to);
-        String body = """
-            <h2>Appointment Rescheduled</h2>
-            <p>Dear %s,</p>
-            <p>Your appointment at <strong>%s</strong> with Dr. %s has been rescheduled.</p>
-            <p><strong>New Date:</strong> %s<br>
-            <strong>New Time:</strong> %s</p>
-            <p>If you need to reschedule again or cancel, please use the links below:</p>
-            <p><a href="%s">Reschedule Appointment</a><br>
-            <a href="%s">Cancel Appointment</a></p>
-            <p>If you have any questions, contact us at %s or call us at %s.</p>
-            """.formatted(patientName, hospitalName, staffName, newAppointmentDate, newAppointmentTime, rescheduleLink, cancelLink, hospitalEmail, hospitalPhone);
-        sendHtml(List.of(to), List.of(), List.of(), "Appointment Rescheduled", body);
+        String subject = text(l, "email.appointment.rescheduled.subject");
+        String body = heading(subject)
+            + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
+            + paragraph(text(l, "email.appointment.rescheduled.body.intro", escapeHtml(hospitalName), escapeHtml(staffName)))
+            + appointmentDetails(l, "email.appointment.label.newDate", "email.appointment.label.newTime",
+                newAppointmentDate, newAppointmentTime)
+            + appointmentLinks(l, "email.appointment.rescheduled.links.intro", rescheduleLink, cancelLink)
+            + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("✅ Appointment rescheduled email sent to {}", to);
     }
 
     @Override
-    public void sendAppointmentCancelledEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone) {
+    public void sendAppointmentCancelledEmail(String to, String patientName, String hospitalName, String staffName,
+                                              String appointmentDate, String appointmentTime,
+                                              String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
         log.info("📧 Sending appointment cancelled email to: {}", to);
-        String body = """
-            <h2>Appointment Cancelled</h2>
-            <p>Dear %s,</p>
-            <p>Your appointment at <strong>%s</strong> with Dr. %s on %s at %s has been cancelled.</p>
-            <p>If you have any questions, contact us at %s or call us at %s.</p>
-            """.formatted(patientName, hospitalName, staffName, appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-        sendHtml(List.of(to), List.of(), List.of(), "Appointment Cancelled", body);
+        String subject = text(l, "email.appointment.cancelled.subject");
+        String body = heading(subject)
+            + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
+            + paragraph(text(l, "email.appointment.cancelled.body.intro", escapeHtml(hospitalName), escapeHtml(staffName),
+                escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
+            + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("✅ Appointment cancelled email sent to {}", to);
     }
 
     @Override
-    public void sendAppointmentCompletedEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone) {
+    public void sendAppointmentCompletedEmail(String to, String patientName, String hospitalName, String staffName,
+                                              String appointmentDate, String appointmentTime,
+                                              String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
         log.info("📧 Sending appointment completed email to: {}", to);
-        String body = """
-            <h2>Appointment Completed</h2>
-            <p>Dear %s,</p>
-            <p>Your appointment at <strong>%s</strong> with Dr. %s on %s at %s has been marked as completed.</p>
-            <p>If you have any questions, contact us at %s or call us at %s.</p>
-            """.formatted(patientName, hospitalName, staffName, appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-        sendHtml(List.of(to), List.of(), List.of(), "Appointment Completed", body);
+        String subject = text(l, "email.appointment.completed.subject");
+        String body = heading(subject)
+            + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
+            + paragraph(text(l, "email.appointment.completed.body.intro", escapeHtml(hospitalName), escapeHtml(staffName),
+                escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
+            + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("✅ Appointment completed email sent to {}", to);
     }
 
     @Override
-    public void sendAppointmentNoShowEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone) {
+    public void sendAppointmentNoShowEmail(String to, String patientName, String hospitalName, String staffName,
+                                           String appointmentDate, String appointmentTime,
+                                           String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
         log.info("📧 Sending appointment no-show email to: {}", to);
-        String body = """
-            <h2>Appointment No-Show</h2>
-            <p>Dear %s,</p>
-            <p>Your appointment at <strong>%s</strong> with Dr. %s on %s at %s was marked as no-show.</p>
-            <p>If you have any questions or wish to reschedule, contact us at %s or call us at %s.</p>
-            """.formatted(patientName, hospitalName, staffName, appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-        sendHtml(List.of(to), List.of(), List.of(), "Appointment No-Show", body);
+        String subject = text(l, "email.appointment.noshow.subject");
+        String body = heading(subject)
+            + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
+            + paragraph(text(l, "email.appointment.noshow.body.intro", escapeHtml(hospitalName), escapeHtml(staffName),
+                escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
+            + paragraph(text(l, "email.appointment.noshow.contact", escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("✅ Appointment no-show email sent to {}", to);
     }
 
-    private final JavaMailSender mailSender;
+    @Override
+    public void sendAppointmentConfirmationEmail(String to, String patientName, String hospitalName, String staffName,
+                                                 String appointmentDate, String appointmentTime,
+                                                 String hospitalEmail, String hospitalPhone,
+                                                 String rescheduleLink, String cancelLink, Locale locale) {
+        validateAddresses(List.of(to));
+        Locale l = recipientLocale(locale);
+        log.info("📧 Sending appointment confirmation email to: {}", to);
+        String subject = text(l, "email.appointment.confirmed.subject");
+        String body = heading(subject)
+            + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
+            + paragraph(text(l, "email.appointment.confirmed.body.intro", escapeHtml(hospitalName), escapeHtml(staffName)))
+            + appointmentDetails(l, KEY_LABEL_DATE, KEY_LABEL_TIME, appointmentDate, appointmentTime)
+            + appointmentLinks(l, "email.appointment.links.intro", rescheduleLink, cancelLink)
+            + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
+        log.info("✅ Appointment confirmation email sent to {}", to);
+    }
+
+    private static String heading(String s) {
+        return "<h2>" + s + "</h2>";
+    }
+
+    private static String paragraph(String s) {
+        return "<p>" + s + CLOSE_PARAGRAPH;
+    }
+
+    private static String anchor(String rawUrl) {
+        String url = escapeHtml(rawUrl);
+        return HTML_A_OPEN + url + "\">" + url + "</a>";
+    }
+
+    private String appointmentDetails(Locale l, String dateLabelKey, String timeLabelKey, String date, String time) {
+        return "<p><strong>" + text(l, dateLabelKey) + HTML_STRONG_CLOSE_SP + escapeHtml(date) + "<br>"
+            + HTML_STRONG_OPEN + text(l, timeLabelKey) + HTML_STRONG_CLOSE_SP + escapeHtml(time) + CLOSE_PARAGRAPH;
+    }
+
+    private String appointmentLinks(Locale l, String introKey, String rescheduleLink, String cancelLink) {
+        return paragraph(text(l, introKey))
+            + "<p><a href=\"" + escapeHtml(rescheduleLink) + "\">" + text(l, "email.appointment.links.reschedule") + "</a><br>"
+            + HTML_A_OPEN + escapeHtml(cancelLink) + "\">" + text(l, "email.appointment.links.cancel") + "</a></p>";
+    }
+
+    // -------------------------------------------------------------------------
+    // Transport
+    // -------------------------------------------------------------------------
 
     @Override
     public boolean deliversRealEmail() {
@@ -129,113 +280,6 @@ public class EmailServiceImpl implements EmailService {
         }
         return configuredMailUsername != null && !configuredMailUsername.isBlank()
             && configuredMailPassword != null && !configuredMailPassword.isBlank();
-    }
-
-    @Override
-    public void sendAppointmentConfirmationEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone, String rescheduleLink, String cancelLink) {
-        validateAddresses(List.of(to));
-        log.info("📧 Sending appointment confirmation email to: {}", to);
-
-        String body = """
-            <h2>Appointment Confirmation</h2>
-            <p>Dear %s,</p>
-            <p>Your appointment at <strong>%s</strong> with Dr. %s is confirmed.</p>
-            <p><strong>Date:</strong> %s<br>
-            <strong>Time:</strong> %s</p>
-            <p>If you need to reschedule or cancel, please use the links below:</p>
-            <p><a href="%s">Reschedule Appointment</a><br>
-            <a href="%s">Cancel Appointment</a></p>
-            <p>If you have any questions, contact us at %s or call us at %s.</p>
-            """.formatted(patientName, hospitalName, staffName, appointmentDate, appointmentTime, rescheduleLink, cancelLink, hospitalEmail, hospitalPhone);
-
-        sendHtml(List.of(to), List.of(), List.of(), "Appointment Confirmation", body);
-        log.info("✅ Appointment confirmation email sent to {}", to);
-    }
-
-    @Override
-    public void sendRoleAssignmentConfirmationEmail(String to,
-                                                    String userName,
-                                                    String roleDisplayName,
-                                                    String hospitalDisplayName,
-                                                    String confirmationCode,
-                                                    String assignmentCode,
-                                                    String profileCompletionUrl,
-                                                    String tempUsername,
-                                                    String tempPassword) {
-        validateAddresses(List.of(to));
-        log.info("📧 Sending role assignment confirmation email to: {}", to);
-
-        String safeUserName = (userName != null && !userName.isBlank()) ? userName : GENERIC_GREETING;
-        String safeHospital = (hospitalDisplayName != null && !hospitalDisplayName.isBlank()) ? hospitalDisplayName : "our hospital network";
-
-        boolean isPatient = roleDisplayName != null
-                && roleDisplayName.toUpperCase(java.util.Locale.ROOT).contains("PATIENT");
-        String safeRole = resolveRoleLabel(roleDisplayName, isPatient);
-
-        String buttonLabel = isPatient ? "Activate Your Account" : "Verify Your Role Assignment";
-        String linkSection = "";
-        if (profileCompletionUrl != null && !profileCompletionUrl.isBlank()) {
-            linkSection = """
-                <p style="margin:24px 0;">
-                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">%s</a>
-                </p>
-                <p style="font-size: 14px; color: #666;">Click the button above to open the verification page, then enter the 6-digit code shown in this email.<br />If the button doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
-                """.formatted(profileCompletionUrl, buttonLabel, profileCompletionUrl, profileCompletionUrl);
-        }
-
-        String credentialsSection = "";
-        if (tempUsername != null && !tempUsername.isBlank() && tempPassword != null && !tempPassword.isBlank()) {
-            credentialsSection = """
-                <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;">
-                    <p style="margin:0 0 8px;font-weight:600;color:#0369a1;">Your Temporary Login Credentials</p>
-                    <p style="margin:4px 0;"><strong>Username:</strong> %s</p>
-                    <p style="margin:4px 0;"><strong>Temporary Password:</strong> <code style="background:#e0f2fe;padding:2px 6px;border-radius:4px;">%s</code></p>
-                    <p style="margin:8px 0 0;font-size:13px;color:#0369a1;">Please sign in and change your password immediately after activation.</p>
-                </div>
-                """.formatted(tempUsername, tempPassword);
-        }
-
-        String subject;
-        String body;
-        if (isPatient) {
-            subject = "Welcome to " + safeHospital + " — Activate Your Patient Account";
-            body = """
-                <h2>Welcome to %s</h2>
-                <p>Hi %s,</p>
-                <p>A patient account has been created for you at <strong>%s</strong>.</p>
-                <p>To activate your account, click the button below and enter this <strong>6-digit verification code</strong>:</p>
-                <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; text-align: center; \
-                background: #f8fafc; border: 2px dashed #2563eb; border-radius: 8px; padding: 16px; margin: 16px 0;">%s</p>
-                %s
-                %s
-                <p><strong>Your account will remain inactive until you enter this code.</strong></p>
-                <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:16px 0;">
-                    <p style="margin:0;font-size:13px;color:#991b1b;"><strong>Didn't request this account?</strong> \
-                If you did not register at this hospital, please ignore this email or contact the hospital administrator. \
-                No action is needed — the account will not be activated.</p>
-                </div>
-                <p style="color:#666;font-size:13px;">This verification code expires 48 hours after it was sent.</p>
-                """.formatted(safeHospital, safeUserName, safeHospital, confirmationCode,
-                              credentialsSection, linkSection);
-        } else {
-            subject = "Action Required: Confirm Your Hospital Role Assignment";
-            body = """
-                <h2>Verify Your New Role Assignment</h2>
-                <p>Hi %s,</p>
-                <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
-                <p>To activate your assignment, click the verification link below and enter this code:</p>
-                    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
-                <p>Assignment reference: <strong>%s</strong></p>
-                %s
-                %s
-                <p><strong>Your account will remain inactive until you verify this code.</strong></p>
-                <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
-                <p style="color:#666">This code expires 48 hours after it was sent.</p>
-                """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
-        }
-
-        sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Role assignment confirmation email sent to {}", to);
     }
 
     @Override
@@ -267,6 +311,104 @@ public class EmailServiceImpl implements EmailService {
         });
     }
 
+    // -------------------------------------------------------------------------
+    // Role assignment (recipient: the assignee — a patient or a staff member)
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void sendRoleAssignmentConfirmationEmail(String to,
+                                                    String userName,
+                                                    String roleDisplayName,
+                                                    String hospitalDisplayName,
+                                                    String confirmationCode,
+                                                    String assignmentCode,
+                                                    String profileCompletionUrl,
+                                                    String tempUsername,
+                                                    String tempPassword) {
+        validateAddresses(List.of(to));
+        // The assignee is a User, which records no language (see
+        // EmailService#DEFAULT_RECIPIENT_LOCALE). A patient at this point has
+        // no medical history yet either, so the resolver would answer the same.
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        log.info("📧 Sending role assignment confirmation email to: {}", to);
+
+        boolean isPatient = roleDisplayName != null
+                && roleDisplayName.toUpperCase(Locale.ROOT).contains("PATIENT");
+        // Plain for the subject line, escaped for the HTML body.
+        String hospitalPlain = hasText(hospitalDisplayName)
+            ? hospitalDisplayName : text(l, "email.role.assignment.fallback.hospital");
+        String hospitalHtml = escapeHtml(hospitalPlain);
+        // Only the staff mail names the role; the patient mail never did.
+        String roleHtml = hasText(roleDisplayName) ? escapeHtml(roleDisplayName) : text(l, "email.role.assignment.fallback.role");
+        String codeHtml = escapeHtml(confirmationCode);
+        String greeting = greetingHi(l, userName);
+
+        String linkSection = "";
+        if (hasText(profileCompletionUrl)) {
+            String url = escapeHtml(profileCompletionUrl);
+            String buttonLabel = text(l, isPatient ? "email.patient.welcome.button" : "email.role.assignment.button");
+            linkSection = "<p style=\"margin:24px 0;\">"
+                + HTML_A_OPEN + url + "\" style=\"background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;"
+                + "text-decoration:none;display:inline-block;\">" + buttonLabel + "</a></p>"
+                + "<p style=\"font-size: 14px; color: #666;\">" + text(l, "email.role.assignment.link.help")
+                + "<br />" + text(l, "email.role.assignment.link.fallback")
+                + "<br /><a href=\"" + url + "\">" + url + "</a></p>";
+        }
+
+        String credentialsSection = "";
+        if (hasText(tempUsername) && hasText(tempPassword)) {
+            credentialsSection = "<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;\">"
+                + "<p style=\"margin:0 0 8px;font-weight:600;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.title") + CLOSE_PARAGRAPH
+                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.username") + HTML_STRONG_CLOSE_SP
+                + escapeHtml(tempUsername) + CLOSE_PARAGRAPH
+                + "<p style=\"margin:4px 0;\"><strong>" + text(l, "email.role.assignment.credentials.password") + HTML_STRONG_CLOSE_SP
+                + "<code style=\"background:#e0f2fe;padding:2px 6px;border-radius:4px;\">" + escapeHtml(tempPassword) + "</code></p>"
+                + "<p style=\"margin:8px 0 0;font-size:13px;color:#0369a1;\">" + text(l, "email.role.assignment.credentials.change") + CLOSE_PARAGRAPH
+                + CLOSE_DIV;
+        }
+
+        String subject;
+        String body;
+        if (isPatient) {
+            subject = text(l, "email.patient.welcome.subject", hospitalPlain);
+            body = heading(text(l, "email.patient.welcome.heading", hospitalHtml))
+                + paragraph(greeting)
+                + paragraph(text(l, "email.patient.welcome.body.created", hospitalHtml))
+                + paragraph(text(l, "email.patient.welcome.body.instructions"))
+                + "<p style=\"font-size: 28px; font-weight: bold; letter-spacing: 6px; text-align: center; "
+                + "background: #f8fafc; border: 2px dashed #2563eb; border-radius: 8px; padding: 16px; margin: 16px 0;\">"
+                + codeHtml + CLOSE_PARAGRAPH
+                + credentialsSection
+                + linkSection
+                + paragraph(HTML_STRONG_OPEN + text(l, "email.patient.welcome.body.inactive") + HTML_STRONG_CLOSE)
+                + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:16px 0;\">"
+                + "<p style=\"margin:0;font-size:13px;color:#991b1b;\"><strong>" + text(l, "email.patient.welcome.body.unexpected.title")
+                + HTML_STRONG_CLOSE_SP + text(l, "email.patient.welcome.body.unexpected") + CLOSE_PARAGRAPH
+                + CLOSE_DIV
+                + "<p style=\"color:#666;font-size:13px;\">" + text(l, "email.patient.welcome.body.expiry") + CLOSE_PARAGRAPH;
+        } else {
+            subject = text(l, KEY_ROLE_ASSIGNMENT_SUBJECT);
+            body = heading(text(l, "email.role.assignment.heading"))
+                + paragraph(greeting)
+                + paragraph(text(l, "email.role.assignment.body.assigned", roleHtml, hospitalHtml))
+                + paragraph(text(l, "email.role.assignment.body.instructions"))
+                + "<p style=\"font-size: 24px; font-weight: bold; letter-spacing: 4px;\">" + codeHtml + CLOSE_PARAGRAPH
+                + paragraph(text(l, "email.role.assignment.body.reference", escapeHtml(assignmentCode)))
+                + linkSection
+                + credentialsSection
+                + paragraph(HTML_STRONG_OPEN + text(l, "email.role.assignment.body.inactive") + HTML_STRONG_CLOSE)
+                + paragraph(text(l, "email.role.assignment.body.unexpected"))
+                + "<p style=\"color:#666\">" + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH;
+        }
+
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
+        log.info("✅ Role assignment confirmation email sent to {}", to);
+    }
+
+    // -------------------------------------------------------------------------
+    // Account mails (recipient: the account holder)
+    // -------------------------------------------------------------------------
+
     @Override
     public void sendActivationEmail(String to, String activationLink) {
         sendActivationEmail(to, activationLink, null, null, null);
@@ -276,15 +418,17 @@ public class EmailServiceImpl implements EmailService {
     public void sendActivationEmail(String to, String activationLink,
                                      String patientName, String username,
                                      String hospitalName) {
-        var body = buildActivationEmailBody(activationLink, patientName, username, hospitalName);
-        sendHtml(List.of(to), List.of(), List.of(), "Activate Your Hospital Management Account", body);
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        var body = buildActivationEmailBody(l, activationLink, patientName, username, hospitalName);
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.activation.subject"), body);
         log.info("✅ Activation email sent to {}", to);
     }
 
     @Override
     public void sendPasswordResetEmail(String to, String resetLink) {
-        var body = buildResetEmailBody(resetLink);
-        sendHtml(List.of(to), List.of(), List.of(), "Reset Your Hospital Management Account Password", body);
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        var body = buildResetEmailBody(l, resetLink);
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.reset.subject"), body);
         log.info("✅ Password reset email sent to {}", to);
     }
 
@@ -292,51 +436,34 @@ public class EmailServiceImpl implements EmailService {
     public void sendPasswordResetConfirmationEmail(String to, String displayName) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
-        String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
-        String escapedName = escapeHtml(safeName);
-        String changedAt = java.time.LocalDateTime.now()
-            .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        LocalDateTime changedAt = LocalDateTime.now(ZoneOffset.UTC);
 
-        String header = "<div style=\"background:linear-gradient(135deg,#065f46,#059669);"
-            + "padding:32px 40px;text-align:center;\">"
-            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
-            + "&#9989; Password Changed Successfully"
-            + "</h1>"
-            + "<p style=\"color:#a7f3d0;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
-            + "</div>";
+        String header = brandHeader(l, GRADIENT_GREEN, "#a7f3d0",
+            "&#9989; " + text(l, "email.password.changed.heading"));
+
+        String signInNow = "<strong><a href=\"" + escapeHtml(loginUrl()) + "\" style=\"color:#991b1b;\">"
+            + text(l, "email.password.changed.body.unexpected.link") + "</a></strong>";
 
         String bodyContent = BODY_OPEN
-            + HI_PARAGRAPH + escapedName + ",</p>"
-            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
-            + "Your account password was successfully reset on <strong>" + changedAt + "</strong>."
-            + " You can now sign in with your new password."
-            + "</p>"
-            + "<div style=\"text-align:center;margin:32px 0;\">"
-            + "<a href=\"" + loginUrl() + "\" style=\"display:inline-block;"
-            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
-            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
-            + "font-weight:600;letter-spacing:0.3px;\">Sign In to Your Account</a>"
-            + "</div>"
-            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
-            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
-            + "padding:16px 20px;margin-bottom:24px;\">"
-            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
-            + "&#128680; Didn't make this change?</p>"
-            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
-            + "If you did <strong>not</strong> reset your password, your account may have been compromised. "
-            + "<strong><a href=\"" + loginUrl() + "\" style=\"color:#991b1b;\">Sign in immediately</a></strong>"
-            + " and contact your hospital administrator to secure your account."
-            + "</p></div>"
+            + GREETING_PARAGRAPH_OPEN + greetingHi(l, displayName) + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN
+            + text(l, "email.password.changed.body.intro", humanDate(changedAt.toLocalDate(), l), CLOCK_TIME.format(changedAt))
+            + CLOSE_PARAGRAPH
+            + signInButton(l)
+            + HR
+            + alertBox(text(l, "email.password.changed.body.unexpected.title"),
+                text(l, "email.password.changed.body.unexpected", signInNow))
             + "<ul style=\"padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;\">"
-            + "<li>Never share your password with anyone, including hospital staff.</li>"
-            + "<li>Use a unique password that you don't use on other sites.</li>"
-            + "<li>Enable any available two-factor authentication for extra security.</li>"
+            + "<li>" + text(l, "email.password.changed.tip.share") + "</li>"
+            + "<li>" + text(l, "email.password.changed.tip.unique") + "</li>"
+            + "<li>" + text(l, "email.password.changed.tip.mfa") + "</li>"
             + "</ul>"
-            + "</div>";
+            + CLOSE_DIV;
 
-        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
-        sendHtml(List.of(to), List.of(), List.of(), "Your HMS Password Has Been Changed", body);
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.changed.subject"), body);
         log.info("✅ Password reset confirmation email sent to {}", to);
     }
 
@@ -344,45 +471,25 @@ public class EmailServiceImpl implements EmailService {
     public void sendAccountRestoredEmail(String to, String displayName) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
-        String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
-        String escapedName = escapeHtml(safeName);
-        String restoredAt = java.time.LocalDateTime.now()
-            .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        LocalDateTime restoredAt = LocalDateTime.now(ZoneOffset.UTC);
 
-        String header = "<div style=\"background:linear-gradient(135deg,#1e40af,#2563eb);"
-            + "padding:32px 40px;text-align:center;\">"
-            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
-            + "&#9989; Your Account Has Been Restored"
-            + "</h1>"
-            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
-            + "</div>";
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#9989; " + text(l, "email.account.restored.heading"));
 
         String bodyContent = BODY_OPEN
-            + HI_PARAGRAPH + escapedName + ",</p>"
-            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
-            + "Your account was <strong>restored</strong> on <strong>" + restoredAt + "</strong> "
-            + "by a system administrator. You can now sign in as normal."
-            + "</p>"
-            + "<div style=\"text-align:center;margin:32px 0;\">"
-            + "<a href=\"" + loginUrl() + "\" style=\"display:inline-block;"
-            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
-            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
-            + "font-weight:600;letter-spacing:0.3px;\">Sign In to Your Account</a>"
-            + "</div>"
-            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
-            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
-            + "padding:16px 20px;margin-bottom:24px;\">"
-            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
-            + "&#128680; Didn't expect this?</p>"
-            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
-            + "If you did <strong>not</strong> request your account to be restored, "
-            + "please contact your system administrator immediately and do <strong>not</strong> sign in."
-            + "</p>"
-            + "</div>"
-            + "</div>";
+            + GREETING_PARAGRAPH_OPEN + greetingHi(l, displayName) + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN
+            + text(l, "email.account.restored.body.intro", humanDate(restoredAt.toLocalDate(), l), CLOCK_TIME.format(restoredAt))
+            + CLOSE_PARAGRAPH
+            + signInButton(l)
+            + HR
+            + alertBox(text(l, "email.account.restored.body.unexpected.title"),
+                text(l, "email.account.restored.body.unexpected"))
+            + CLOSE_DIV;
 
-        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
-        sendHtml(List.of(to), List.of(), List.of(), "Your HMS Account Has Been Restored", body);
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.account.restored.subject"), body);
         log.info("✅ Account restored notification email sent to {}", to);
     }
 
@@ -390,52 +497,43 @@ public class EmailServiceImpl implements EmailService {
     public void sendRecoveryContactVerificationEmail(String to, String verificationCode) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
         String escapedCode = escapeHtml(verificationCode);
 
-        String header = "<div style=\"background:linear-gradient(135deg,#1e40af,#2563eb);"
-            + "padding:32px 40px;text-align:center;\">"
-            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
-            + "&#128274; Verify Your Recovery Contact"
-            + "</h1>"
-            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
-            + "</div>";
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.recovery.contact.heading"));
 
         String bodyContent = BODY_OPEN
-            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
-            + "You requested to add this email address as a recovery contact for your HMS account. "
-            + "Please enter the verification code below to confirm ownership:"
-            + "</p>"
-            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + BODY_PARAGRAPH_OPEN + text(l, "email.recovery.contact.body.intro") + CLOSE_PARAGRAPH
+            + HTML_CENTER_BLOCK
             + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
             + "border-radius:12px;padding:20px 40px;\">"
             + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
             + escapedCode
             + "</span>"
-            + "</div>"
-            + "</div>"
+            + CLOSE_DIV
+            + CLOSE_DIV
             + "<p style=\"font-size:14px;color:#64748b;text-align:center;margin:0 0 24px;\">"
-            + "This code expires in <strong>15 minutes</strong>."
-            + "</p>"
-            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
-            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
-            + "padding:16px 20px;margin-bottom:24px;\">"
-            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
-            + "&#128680; Didn't request this?</p>"
-            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
-            + "If you did <strong>not</strong> add this recovery contact, you can safely ignore this email. "
-            + "No changes will be made to your account."
-            + "</p></div>"
-            + "</div>";
+            + text(l, "email.recovery.contact.body.expiry")
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.recovery.contact.body.unexpected"))
+            + CLOSE_DIV;
 
-        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
-        sendHtml(List.of(to), List.of(), List.of(), "HMS Recovery Contact Verification Code", body);
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.recovery.contact.subject"), body);
         log.info("✅ Recovery contact verification email sent to {}", to);
     }
 
     @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
-        var subject = subjectUsername(locale);
-        var body = buildUsernameReminderEmailBody(username, locale);
+        Locale l = recipientLocale(locale);
+        var subject = text(l, "email.username.reminder.subject");
+        var body = heading(text(l, "email.username.reminder.heading"))
+            + paragraph(text(l, "email.username.reminder.body.intro"))
+            + paragraph(HTML_STRONG_OPEN + text(l, "email.username.reminder.body.username") + HTML_STRONG_CLOSE_SP + escapeHtml(username))
+            + paragraph(text(l, "email.username.reminder.body.signin", anchor(loginUrl())))
+            + "<p style=\"color:#666\">" + text(l, "email.username.reminder.body.unexpected") + CLOSE_PARAGRAPH;
         sendHtml(List.of(toEmail), List.of(), List.of(), subject, body);
         log.info("✅ Username reminder email sent to {}", toEmail);
     }
@@ -443,23 +541,20 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendPasswordRotationReminderEmail(String to, String displayName, long daysRemaining, LocalDate dueOn) {
         validateAddresses(List.of(to));
-    var safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
-        var subject = "Password rotation reminder";
-        var body = """
-            <h2>Password Rotation Reminder</h2>
-            <p>Hi %s,</p>
-            <p>This is a reminder that your account password must be updated by <strong>%s</strong>.</p>
-            <p><strong>%d day%s</strong> remain before your password expires.</p>
-            <p>Please sign in at <a href="%s">%s</a> and update your password.</p>
-            <p>If you recently changed your password, you can ignore this message.</p>
-            """.formatted(
-            safeName,
-            HUMAN_DATE.format(dueOn),
-            daysRemaining,
-            daysRemaining == 1 ? "" : "s",
-            loginUrl(),
-            loginUrl()
-        );
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        var subject = text(l, "email.password.rotation.reminder.subject");
+        // Two sentences rather than a ChoiceFormat: the bundle rule is bare
+        // {n} placeholders only. The count goes in as text so MessageFormat
+        // does not group digits ("1 234").
+        String remaining = daysRemaining == 1
+            ? text(l, "email.password.rotation.reminder.body.remaining.one")
+            : text(l, "email.password.rotation.reminder.body.remaining.many", String.valueOf(daysRemaining));
+        var body = heading(text(l, "email.password.rotation.reminder.heading"))
+            + paragraph(greetingHi(l, displayName))
+            + paragraph(text(l, "email.password.rotation.reminder.body.due", humanDate(dueOn, l)))
+            + paragraph(remaining)
+            + paragraph(text(l, "email.password.rotation.reminder.body.action", anchor(loginUrl())))
+            + paragraph(text(l, "email.password.rotation.reminder.body.ignore"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("📧 Password rotation reminder sent to {} ({} day(s) remaining)", to, daysRemaining);
     }
@@ -467,167 +562,141 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendPasswordRotationForceChangeEmail(String to, String displayName, LocalDate dueOn, long daysOverdue) {
         validateAddresses(List.of(to));
-    var safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
-        var subject = "Password rotation enforcement";
-        var body = """
-            <h2>Password Change Required</h2>
-            <p>Hi %s,</p>
-            <p>Your password rotation deadline on <strong>%s</strong> has passed. It has now been <strong>%d day%s</strong> overdue.</p>
-            <p>For security reasons, you must change your password immediately. Sign in at <a href="%s">%s</a> to update it.</p>
-            <p>Access to certain areas will remain restricted until your password is updated.</p>
-            """.formatted(
-            safeName,
-            HUMAN_DATE.format(dueOn),
-            daysOverdue,
-            daysOverdue == 1 ? "" : "s",
-            loginUrl(),
-            loginUrl()
-        );
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        var subject = text(l, "email.password.rotation.force.subject");
+        String due = humanDate(dueOn, l);
+        String overdue = daysOverdue == 1
+            ? text(l, "email.password.rotation.force.body.overdue.one", due)
+            : text(l, "email.password.rotation.force.body.overdue.many", due, String.valueOf(daysOverdue));
+        var body = heading(text(l, "email.password.rotation.force.heading"))
+            + paragraph(greetingHi(l, displayName))
+            + paragraph(overdue)
+            + paragraph(text(l, "email.password.rotation.force.body.action", anchor(loginUrl())))
+            + paragraph(text(l, "email.password.rotation.force.body.restricted"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("📧 Password rotation enforcement notice sent to {} ({} day(s) overdue)", to, daysOverdue);
     }
 
-    private String subjectUsername(Locale locale) {
-        var lang = locale != null ? locale.getLanguage() : "en";
-        return switch (lang) {
-            case "fr" -> "Rappel d’identifiant";
-            case "es" -> "Recordatorio de nombre de usuario";
-            default -> "Your Username Reminder";
-        };
-    }
+    private String buildActivationEmailBody(Locale l, String link, String patientName,
+                                            String username, String hospitalName) {
+        String safeHosp = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
+        String safeLink = escapeHtml(link);
 
-    private String buildUsernameReminderEmailBody(String username, Locale locale) {
-        var loginUrl = loginUrl();
-        var lang = locale != null ? locale.getLanguage() : "en";
-        return switch (lang) {
-            case "fr" -> """
-            <h2>Rappel d’identifiant</h2>
-            <p>Vous (ou quelqu’un d’autre) avez demandé votre identifiant pour le Système de Gestion Hospitalière.</p>
-            <p><strong>Identifiant&nbsp;:</strong> %s</p>
-            <p>Vous pouvez vous connecter ici : <a href="%s">%s</a></p>
-            <p style="color:#666">Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.</p>
-            """.formatted(username, loginUrl, loginUrl);
-            case "es" -> """
-            <h2>Recordatorio de nombre de usuario</h2>
-            <p>Usted (o alguien) solicitó su nombre de usuario del Sistema de Gestión Hospitalaria.</p>
-            <p><strong>Usuario:</strong> %s</p>
-            <p>Puede iniciar sesión aquí: <a href="%s">%s</a></p>
-            <p style="color:#666">Si no solicitó esto, puede ignorar este correo.</p>
-            """.formatted(username, loginUrl, loginUrl);
-            default -> """
-            <h2>Username Reminder</h2>
-            <p>You (or someone) requested your username for the Hospital Management System.</p>
-            <p><strong>Username:</strong> %s</p>
-            <p>You can sign in here: <a href="%s">%s</a></p>
-            <p style="color:#666">If you didn’t request this, you can safely ignore this email.</p>
-            """.formatted(username, loginUrl, loginUrl);
-        };
-    }
-
-
-    private String buildActivationEmailBody(String link, String patientName,
-                                              String username, String hospitalName) {
-        String safeName = (patientName != null && !patientName.isBlank()) ? escapeHtml(patientName) : null;
-        String safeUser = (username != null && !username.isBlank()) ? escapeHtml(username) : null;
-        String safeHosp = (hospitalName != null && !hospitalName.isBlank()) ? escapeHtml(hospitalName) : null;
-
-        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
             + "padding:32px 40px;text-align:center;\">"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;\">"
-            + "Welcome to the Hospital Management System</h1>"
+            + text(l, "email.activation.heading") + "</h1>"
             + (safeHosp != null
-                ? "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">" + safeHosp + "</p>"
+                ? "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">" + safeHosp + CLOSE_PARAGRAPH
                 : "")
-            + "</div>";
+            + CLOSE_DIV;
 
         StringBuilder body = new StringBuilder();
         body.append(BODY_OPEN);
-        if (safeName != null) {
-            body.append(HI_PARAGRAPH).append(safeName).append(",</p>");
+        if (hasText(patientName)) {
+            body.append(GREETING_PARAGRAPH_OPEN).append(text(l, KEY_GREETING_HI, escapeHtml(patientName))).append(CLOSE_PARAGRAPH);
         }
-        body.append("<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">")
-            .append("Your patient account has been created. Please activate it by clicking the button below.")
-            .append("</p>");
+        body.append(BODY_PARAGRAPH_OPEN)
+            .append(text(l, "email.activation.body.created"))
+            .append(CLOSE_PARAGRAPH);
 
-        if (safeUser != null) {
+        if (hasText(username)) {
             body.append("<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;")
                 .append("padding:16px 20px;margin:0 0 24px;\">")
-                .append("<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#0c4a6e;\">Your login credentials</p>")
+                .append("<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#0c4a6e;\">")
+                .append(text(l, "email.activation.credentials.title")).append(CLOSE_PARAGRAPH)
                 .append("<p style=\"margin:0;font-size:14px;color:#075985;\">")
-                .append("<strong>Username:</strong> ").append(safeUser).append("<br/>")
-                .append("<strong>Password:</strong> You will be prompted to set a password after activation.")
-                .append("</p></div>");
+                .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.username")).append(HTML_STRONG_CLOSE_SP)
+                .append(escapeHtml(username)).append(HTML_BR)
+                .append(HTML_STRONG_OPEN).append(text(l, "email.activation.credentials.password")).append(HTML_STRONG_CLOSE_SP)
+                .append(text(l, "email.activation.credentials.password.hint"))
+                .append(HTML_P_DIV_CLOSE);
         }
 
-        body.append("<div style=\"text-align:center;margin:32px 0;\">")
-            .append("<a href=\"").append(link).append("\" style=\"display:inline-block;")
-            .append("background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;")
-            .append("text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;")
-            .append("font-weight:600;\">Activate My Account</a>")
-            .append("</div>")
+        body.append(HTML_CENTER_BLOCK)
+            .append(HTML_A_OPEN).append(safeLink).append(HTML_STYLE_ATTR).append(PRIMARY_BUTTON_STYLE).append("\">")
+            .append(text(l, KEY_ACTIVATION_BUTTON)).append("</a>")
+            .append(CLOSE_DIV)
             .append("<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">")
-            .append("Button not working? Copy and paste this link into your browser:<br/>")
-            .append("<a href=\"").append(link).append("\" style=\"color:#2563eb;word-break:break-all;\">").append(link).append("</a>")
-            .append("</p>")
+            .append(text(l, KEY_LINK_FALLBACK)).append(HTML_BR)
+            .append(HTML_A_OPEN).append(safeLink).append("\" style=\"color:#2563eb;word-break:break-all;\">")
+            .append(safeLink).append("</a>")
+            .append(CLOSE_PARAGRAPH)
             .append("<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;\"/>")
             .append("<p style=\"font-size:13px;color:#94a3b8;text-align:center;\">")
-            .append("This link expires in <strong>24 hours</strong>. ")
-            .append("If you did not expect this email, please contact the hospital administrator.")
-            .append("</p></div>");
+            .append(text(l, "email.activation.body.expiry")).append(' ')
+            .append(text(l, "email.activation.body.unexpected"))
+            .append(HTML_P_DIV_CLOSE);
 
-        return htmlEmailWrapper(header + body.toString() + htmlEmailFooter());
+        return htmlEmailWrapper(header + body + htmlEmailFooter(l));
     }
 
-    private String buildResetEmailBody(String link) {
-        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
-            + "padding:32px 40px;text-align:center;\">"
-            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
-            + "&#128274; Password Reset Request"
-            + "</h1>"
-            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
-            + "</div>";
+    private String buildResetEmailBody(Locale l, String link) {
+        String safeLink = escapeHtml(link);
+        String header = brandHeader(l, GRADIENT_NAVY, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.password.reset.heading"));
+
+        String signIn = HTML_A_OPEN + escapeHtml(loginUrl()) + "\" style=\"color:#b45309;font-weight:600;\">"
+            + text(l, "email.password.reset.body.unexpected.link") + "</a>";
 
         String bodyContent = BODY_OPEN
-            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hello,</p>"
-            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
-            + "We received a request to reset the password for your account. "
-            + "Click the button below to choose a new password."
-            + "</p>"
-            + "<div style=\"text-align:center;margin:32px 0;\">"
-            + "<a href=\"" + link + "\" style=\"display:inline-block;"
-            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
-            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
-            + "font-weight:600;letter-spacing:0.3px;\">Reset My Password</a>"
-            + "</div>"
+            + GREETING_PARAGRAPH_OPEN + text(l, "email.common.greeting.hello") + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN + text(l, "email.password.reset.body.intro") + CLOSE_PARAGRAPH
+            + HTML_CENTER_BLOCK
+            + HTML_A_OPEN + safeLink + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
+            + text(l, "email.password.reset.button") + "</a>"
+            + CLOSE_DIV
             + "<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">"
-            + "Button not working? Copy and paste this link into your browser:<br/>"
-            + "<a href=\"" + link + "\" style=\"color:#2563eb;word-break:break-all;\">" + link + "</a>"
-            + "</p>"
-            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
+            + text(l, KEY_LINK_FALLBACK) + HTML_BR
+            + HTML_A_OPEN + safeLink + "\" style=\"color:#2563eb;word-break:break-all;\">" + safeLink + "</a>"
+            + CLOSE_PARAGRAPH
+            + HR
             + "<div style=\"background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;"
             + "padding:16px 20px;margin-bottom:24px;\">"
             + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;\">"
-            + "&#9888;&#65039; Didn't request this?</p>"
+            + "&#9888;&#65039; " + text(l, KEY_UNEXPECTED_TITLE) + CLOSE_PARAGRAPH
             + "<p style=\"margin:0;font-size:14px;color:#78350f;line-height:1.6;\">"
-            + "If you did <strong>not</strong> request a password reset, your account may be at risk. "
-            + "Please <strong>do not click the link above</strong> and immediately "
-            + "<a href=\"" + loginUrl() + "\" style=\"color:#b45309;font-weight:600;\">"
-            + "sign in to your account</a> to verify your security settings, "
-            + "or contact your hospital administrator."
-            + "</p></div>"
+            + text(l, "email.password.reset.body.unexpected.risk") + ' '
+            + text(l, "email.password.reset.body.unexpected.action", signIn)
+            + HTML_P_DIV_CLOSE
             + "<ul style=\"padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;\">"
-            + "<li>This link expires in <strong>2 hours</strong>.</li>"
-            + "<li>The link can only be used <strong>once</strong>.</li>"
-            + "<li>Never share this link with anyone.</li>"
+            + "<li>" + text(l, "email.password.reset.body.expiry") + "</li>"
+            + "<li>" + text(l, "email.password.reset.body.once") + "</li>"
+            + "<li>" + text(l, "email.password.reset.body.share") + "</li>"
             + "</ul>"
-            + "</div>";
+            + CLOSE_DIV;
 
-        return htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+        return htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
     }
 
     // -------------------------------------------------------------------------
     // Shared HTML building blocks
     // -------------------------------------------------------------------------
+
+    /** Coloured header band with the brand line under the title. */
+    private String brandHeader(Locale l, String gradient, String subtitleColor, String titleHtml) {
+        return HTML_DIV_BACKGROUND + gradient + ";padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
+            + titleHtml
+            + "</h1>"
+            + "<p style=\"color:" + subtitleColor + ";margin:8px 0 0;font-size:14px;\">" + text(l, KEY_BRAND) + CLOSE_PARAGRAPH
+            + CLOSE_DIV;
+    }
+
+    private String signInButton(Locale l) {
+        return HTML_CENTER_BLOCK
+            + HTML_A_OPEN + escapeHtml(loginUrl()) + HTML_STYLE_ATTR + PRIMARY_BUTTON_STYLE + "\">"
+            + text(l, KEY_SIGNIN_BUTTON) + "</a>"
+            + CLOSE_DIV;
+    }
+
+    /** Red "did you expect this?" box. Both arguments are already-resolved HTML. */
+    private static String alertBox(String titleHtml, String bodyHtml) {
+        return ALERT_BOX_OPEN
+            + ALERT_TITLE_OPEN + "&#128680; " + titleHtml + CLOSE_PARAGRAPH
+            + ALERT_TEXT_OPEN + bodyHtml + CLOSE_PARAGRAPH
+            + CLOSE_DIV;
+    }
 
     /**
      * Escapes user-supplied values before embedding them in HTML email bodies
@@ -656,13 +725,14 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /** Returns the standard email footer HTML (year is resolved at call-time). */
-    private static String htmlEmailFooter() {
+    private String htmlEmailFooter(Locale l) {
+        // The year goes in as text: MessageFormat would render 2026 as "2,026".
         return "<div style=\"background:#f1f5f9;padding:20px 40px;text-align:center;"
              + "border-top:1px solid #e2e8f0;\">"
              + "<p style=\"margin:0;font-size:12px;color:#94a3b8;\">"
-             + "\u00a9 " + java.time.Year.now().getValue() + " Hospital Management System"
-             + " &nbsp;|&nbsp; This is an automated message \u2014 please do not reply."
-             + "</p></div>";
+             + text(l, "email.common.footer.copyright", String.valueOf(Year.now(ZoneOffset.UTC).getValue()))
+             + " &nbsp;|&nbsp; " + text(l, "email.common.footer.automated")
+             + HTML_P_DIV_CLOSE;
     }
 
     private static void validateAddresses(List<String> addresses) {
@@ -695,76 +765,71 @@ public class EmailServiceImpl implements EmailService {
                                       String activationUrl) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
         log.info("📧 Sending admin welcome email to: {}", to);
 
-        String safeName     = (displayName  != null && !displayName.isBlank())  ? displayName  : GENERIC_GREETING;
-        String safeRole     = (roleName     != null && !roleName.isBlank())     ? roleName     : "your assigned role";
-        String safeHospital = (hospitalName != null && !hospitalName.isBlank()) ? hospitalName : null;
-        String safeUsername = (username     != null && !username.isBlank())     ? username     : "\u2014";
-        String safePassword = (tempPassword != null && !tempPassword.isBlank()) ? tempPassword : "\u2014";
-        String loginUrl     = loginUrl();
+        String escapedRole     = hasText(roleName)     ? escapeHtml(roleName)     : text(l, "email.admin.welcome.fallback.role");
+        String escapedHospital = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
+        String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
+        String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
+        String loginUrl        = loginUrl();
 
-        String escapedName     = escapeHtml(safeName);
-        String escapedRole     = escapeHtml(safeRole);
-        String escapedHospital = safeHospital != null ? escapeHtml(safeHospital) : null;
-        String escapedUsername = escapeHtml(safeUsername);
-        String escapedPassword = escapeHtml(safePassword);
+        String greeting = hasText(displayName)
+            ? text(l, KEY_GREETING_HI, HTML_STRONG_OPEN + escapeHtml(displayName) + HTML_STRONG_CLOSE)
+            : text(l, KEY_GREETING_ANONYMOUS);
 
         String hospitalLine = escapedHospital != null
-            ? "<tr><td style='padding:6px 0;color:#64748b;font-weight:600;'>Hospital</td>"
+            ? "<tr><td style='padding:6px 0;color:#64748b;font-weight:600;'>" + text(l, "email.admin.welcome.credentials.hospital") + "</td>"
               + "<td style='padding:6px 0 6px 16px;'>" + escapedHospital + "</td></tr>"
             : "";
-        String atHospital = escapedHospital != null
-            ? "at <strong>" + escapedHospital + "</strong>. "
-            : ". ";
+        String created = escapedHospital != null
+            ? text(l, "email.admin.welcome.body.created.hospital", escapedRole, escapedHospital)
+            : text(l, "email.admin.welcome.body.created", escapedRole);
 
-        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
             + "padding:32px 40px;text-align:center;\">"
             + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
             + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
-            + "Welcome to HMS</h1>"
-            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">One step left to activate it</p>"
-            + "</div>";
+            + text(l, "email.admin.welcome.heading") + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">" + text(l, "email.admin.welcome.tagline") + CLOSE_PARAGRAPH
+            + CLOSE_DIV;
 
+        // The step names the assignment mail by its subject, resolved through
+        // the same key so the two mails agree in every language.
         String bodyContent = "<div style=\"padding:32px 40px;\">"
-            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">Hi <strong>" + escapedName + "</strong>,</p>"
+            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
             + "<p style=\"color:#475569;line-height:1.6;\">"
-            + "A <strong>" + escapedRole + "</strong> account has been created for you " + atHospital
-            + "<strong>One step is left before you can sign in:</strong> confirm this role "
-            + "with the confirmation code we sent you in a separate message "
-            + "(subject: &ldquo;Action Required: Confirm Your Hospital Role Assignment&rdquo;). "
-            + "Keep the credentials below — you will need them right after you confirm, "
-            + "and you will be prompted to change the password on first login."
-            + "</p>"
+            + created + ' '
+            + text(l, "email.admin.welcome.body.step", text(l, KEY_ROLE_ASSIGNMENT_SUBJECT)) + ' '
+            + text(l, "email.admin.welcome.body.keep")
+            + CLOSE_PARAGRAPH
             + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
             + "padding:20px 24px;margin:24px 0;\">"
             + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
-            + "text-transform:uppercase;letter-spacing:0.5px;\">Your Login Credentials</p>"
+            + "text-transform:uppercase;letter-spacing:0.5px;\">" + text(l, "email.admin.welcome.credentials.title") + CLOSE_PARAGRAPH
             + "<table style=\"border-collapse:collapse;width:100%;\">"
-            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Username</td>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.username") + "</td>"
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
             + escapedUsername + "</td></tr>"
-            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Temp Password</td>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.password") + "</td>"
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
             + escapedPassword + "</td></tr>"
-            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Role</td>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.role") + "</td>"
             + "<td style=\"padding:6px 0 6px 16px;\">" + escapedRole + "</td></tr>"
             + hospitalLine
             + "</table></div>"
-            + ctaBlock(activationUrl, loginUrl)
+            + ctaBlock(l, activationUrl, loginUrl)
             + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
             + "border-radius:0 8px 8px 0;margin-top:24px;\">"
             + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
-            + "<strong>&#9888; Security notice:</strong> This email contains a temporary password. "
-            + "Change it as soon as you have activated your account. Do not share this email with anyone. "
-            + "If you did not expect this account, contact your system administrator right away."
-            + "</p></div>"
-            + "</div>";
+            + "<strong>&#9888; " + text(l, "email.admin.welcome.security.title") + HTML_STRONG_CLOSE_SP
+            + text(l, "email.admin.welcome.security.body")
+            + HTML_P_DIV_CLOSE
+            + CLOSE_DIV;
 
-        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
-        sendHtml(List.of(to), List.of(), List.of(),
-            "Welcome to HMS \u2014 Activate Your Account", body);
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.admin.welcome.subject"), body);
         log.info("✅ Admin welcome email sent to {}", to);
     }
 
@@ -785,29 +850,27 @@ public class EmailServiceImpl implements EmailService {
      * either — so a link is the one thing the reader might not have. The code
      * is always in the assignment mail.
      */
-    private static String ctaBlock(String rawActivationUrl, String rawLoginUrl) {
+    private String ctaBlock(Locale l, String rawActivationUrl, String rawLoginUrl) {
         String loginUrl = escapeHtml(rawLoginUrl);
-        boolean hasActivation = rawActivationUrl != null && !rawActivationUrl.isBlank();
+        String loginAnchor = HTML_A_OPEN + loginUrl + "\" " + LINK_STYLE + ">" + loginUrl + "</a>";
+        boolean hasActivation = hasText(rawActivationUrl);
 
         if (!hasActivation) {
             return "<p style=\"text-align:center;font-size:14px;color:#475569;margin:28px 0 8px;\">"
-                + "Use the confirmation code in that message to finish activating your account."
-                + "</p>"
+                + text(l, "email.admin.welcome.cta.code")
+                + CLOSE_PARAGRAPH
                 + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;margin-top:0;\">"
-                + "Once it is confirmed, sign in at "
-                + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>";
+                + text(l, "email.admin.welcome.cta.signin.after", loginAnchor) + CLOSE_PARAGRAPH;
         }
 
         String activationUrl = escapeHtml(rawActivationUrl);
         return "<p style=\"text-align:center;margin:28px 0;\">"
-            + "<a href=\"" + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
+            + HTML_A_OPEN + activationUrl + "\" style=\"background:#2563eb;color:#ffffff;"
             + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
-            + "font-weight:600;display:inline-block;\">Activate My Account</a></p>"
-            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">Or copy this link:<br/>"
-            + "<a href=\"" + activationUrl + "\" style=\"color:#2563eb;\">" + activationUrl
-            + "</a><br/><br/>After activating, sign in at "
-            + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>";
+            + "font-weight:600;display:inline-block;\">" + text(l, KEY_ACTIVATION_BUTTON) + "</a></p>"
+            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">" + text(l, "email.admin.welcome.cta.copy") + HTML_BR
+            + HTML_A_OPEN + activationUrl + "\" " + LINK_STYLE + ">" + activationUrl
+            + "</a><br/><br/>" + text(l, "email.admin.welcome.cta.signin.activated", loginAnchor) + CLOSE_PARAGRAPH;
     }
 
 }
-

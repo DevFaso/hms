@@ -116,6 +116,7 @@
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: #fff;
   border-radius: 12px;

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, throwError } from 'rxjs';
 import { PatientTrackerComponent } from './patient-tracker.component';
@@ -86,7 +86,7 @@ describe('PatientTrackerComponent', () => {
     await TestBed.configureTestingModule({
       imports: [PatientTrackerComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PatientTrackerService, useValue: trackerSpy },
         { provide: PatientTrackerWsService, useValue: trackerWsSpy },

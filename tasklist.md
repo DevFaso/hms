@@ -1691,7 +1691,7 @@ all exist and are reachable.
   own answer (schedule/admission-bounded, with a tail after discharge) is the
   place to start. This is the item to build first and alone: #49 through #53
   are all consumers of it.
-- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, behind `app.record-access.cross-hospital-reads-enabled` (OFF); 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
+- [~] 49. **Replace the hospital-scoped read filter.** _(pass 1: `RecordAccessPolicy.readableHospitalIds` + the doctor timeline widened for encounters, prescriptions and lab results, LIVE since #600 removed `app.record-access.cross-hospital-reads-enabled` (E9 #58, 2026-09-12) — there is no flag; `readableHospitalIds` widens unconditionally once `decide` permits; 26 of 29 single-hospital finders still unwidened, ratcheted by `CrossHospitalReadFilterCoverageTest`)_ Today ~148 call sites
   gate patient reads on `isRegisteredInHospital` / `findByPatient_IdAndHospital_Id`.
   ⚠ Raw grep says 148, but ~42 of those are the repository declarations
   themselves and 3 are definitions: the real **call-site** surface is ~103, of
@@ -2202,6 +2202,339 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **The enum gate cannot see an `enumLabel:` inside a component's inline
+  `template:`.** `check-i18n-enum-coverage.mjs` walks `.html` only. Widening
+  it to `.ts` was tried twice in #660 and withdrawn twice: raw, it recorded
+  the pipe's own TSDoc examples as call sites, so any future doc example
+  would break the build; blanking comments first also blanked the
+  single-quoted domain argument the regex needs, so it matched nothing at
+  all while shipping a comment claiming coverage. The honest fix is a real
+  TS-aware scan (template literals, regex literals and `//` inside a
+  backtick string all matter — one apostrophe in `Aujourd'hui` defeats the
+  naive blanker), which is a parser, not a one-line glob. No component in
+  `src/app` carries such a call today, so the blind spot is real and empty;
+  it becomes urgent the first time someone writes one.
+- **One label, three keys: the bundle has no shared vocabulary block.** The
+  house convention is per-feature blocks (`angular-portal-component` SKILL.md:
+  "find the nearest feature block, extend it"), so the same words are keyed
+  once per screen that shows them — "Active Staff" exists under DASHBOARD,
+  DEPARTMENTS and now ADMIN.STAT; "Today's Appointments" under DASHBOARD,
+  RECEPTION and ADMIN.STAT; "Lab Orders" under DASHBOARD, PATIENTS and
+  ANALYTICS.CARD. Of the 22 keys #661 added, 12 have an exact-text twin
+  somewhere else, and none of those twins is in the same block — reusing one
+  would mean a copy change on the dashboard silently rewording the admin
+  screen, which is why the convention exists. The EN spellings have already
+  drifted apart under it ("On Shift Today" vs "On-Shift Today", "Lab Orders"
+  vs "Lab orders", "Today's Appointments" vs "Today's appointments"), each
+  needing its own FR and ES entry. The fix is a COMMON.LABEL block plus a
+  dedup pass across all three locales, which is a cross-cutting i18n refactor
+  and a copy decision, not something to bury in a translation PR.
+- **`analytics.ts` and `admin.ts` had no spec before #661**, and neither did
+  the MFA pair, the maternity tabs, or most of `patient-portal/`. The two
+  specs #661 adds assert through the DOM because the fix has two halves (a key
+  on the model, a pipe in the template) and a class-level assertion covers
+  only the first — an earlier draft of the analytics spec stayed green with
+  `| translate` deleted. Worth copying that shape to the screens still
+  untested rather than writing class-level card assertions for them.
+- **The portal lint and format gates stop at `src/`, so the scripts that
+  enforce every other gate are themselves unchecked.** `lint` globs
+  `src/**/*.{ts,html}` and `format:check` globs `src/**/*.{ts,html,scss,md,json}`,
+  which leaves all of `hospital-portal/scripts/` — five gate scripts now run
+  by CI — outside both. The correct fix is `{src,scripts}/**` on both globs,
+  but Prettier then rewrites four sibling gates this PR does not otherwise
+  touch (~330 lines, `check-i18n-coverage.mjs` and `check-i18n-untranslated.mjs`
+  among them, both shipped within the last week), so it belongs in its own
+  mechanical commit rather than buried in a translation PR. #659's own new
+  scripts were run through Prettier by hand; `i18n-enum-domains.json` was
+  deliberately left in its compact one-entry-per-line table form, which
+  Prettier would triple in length.
+- **Six round-3 findings on the raw-enum gate and the new enum groups, deferred
+  from #663 by the user.** None is reachable by a user today; all are hardening
+  of the gate or of a fallback path, and each was confirmed against the tree.
+  1. `rawEnumRenders` reports the line of the attribute NAME for a hit inside
+     an attribute value, so a `[title]`/`[matTooltip]` expression Prettier
+     wrapped points the build error at the wrong line. The line-number test
+     covers only the element-text path.
+  2. `TEXT_IF_INTERPOLATED` makes `<option value="{{ o.status }}">` a finding
+     even when the option's own label is piped — the same class-vs-label
+     confusion the gate exists to remove, in the other direction. No site has
+     the interpolated form today.
+  3. Five of the ten entries in `TEXT_ATTRS`/`TEXT_IF_INTERPOLATED`
+     (`mattooltip`, `matbadge`, `aria-valuetext`, `label`, `value`) match
+     nothing in the repo — there is no Angular Material here. The list reads
+     as general HTML semantics but is really four live entries plus config a
+     future reader has to re-verify.
+  4. `PORTAL.ENUM.STATUS.RESULTED` was reworded in FRENCH ONLY
+     ("Résultats rendus") to break a collision with the newly-pooled
+     `RESULTS_AVAILABLE`, so one wire value now has two French renderings —
+     `LAB_ORDER_STATUS.RESULTED` still reads "Résultats disponibles".
+     `scripts/i18n-enum-collisions.json` is the tool for that and already pins
+     two such pairs; decide whether these two are genuine synonyms and pin
+     them, or give RESULTED a distinct wording in BOTH groups.
+  5. None of the five domains #663 added (`immunizationStatus`, `marTaskStatus`,
+     `platformServiceStatus`, `platformReleaseStatus`, `procedureOrderStatus`)
+     has a group in `EnumLabelPipe.LABELS`, so they lack the tier-2 net every
+     pre-existing domain carries: with a key unported the pipe falls to the
+     tier-3 prettifier and renders "Pre Op Clearance Pending" rather than the
+     curated "Pre-Op Clearance Pending".
+  6. One negative assertion in the chart-review timeline spec excludes a string
+     the pipe cannot produce, and its comment mis-states the fallback order —
+     tier 2's cross-group LABELS scan runs before the prettifier, so an unkeyed
+     `READY_FOR_DISCHARGE` returns "Ready for Discharge", not "Ready For
+     Discharge". The positive assertion still catches the regression; the
+     exclusion is dead weight.
+- **Six of the nine round-3 findings on #664 are still open.** 1, 2 and 7
+  shipped with the `.role` tranche and are struck below; the rest are still
+  one edit each and none is reachable by a user today.
+  1. ~~`EnumLabelPipe` is injected as a component PROVIDER in
+     `organization-list.ts` so the filter can call `transform()` from
+     TypeScript. It is the only such construction in the portal, and it gives
+     that instance its own `ChangeDetectorRef`, its own `onLangChange`
+     subscription and a `memo` separate from the template's. Extract the
+     three-tier lookup into an injectable `EnumLabelService` the pipe
+     delegates to.~~ Done with the `.role` tranche: `core/enum-label.service.ts`
+     holds the vocabulary and the lookup, the pipe is 68 lines of delegation,
+     and the component injects the service.
+  2. ~~The organization filter matches a locale-dependent label but only
+     re-runs on keystroke, so the list goes stale when the language
+     changes.~~ Done: it re-runs on `onLangChange`, with a spec that switches
+     both ways and fails without the subscription.
+  3. `snapshotItemType` {VITALS, LAB} and `orderTaskType` {LAB, IMAGING,
+     PROCEDURE} both key LAB for a lab-order badge — 5 tokens over 2 groups ×
+     3 locales with the shared one duplicated. One `orderSourceType` covering
+     all four would carry the same information with one rationale.
+  4. `PatientSnapshotServiceImpl` still stamps the literal `"Lab Test"` in the
+     `latestLabs` builder — the direct sibling of the `"Lab Order"` this
+     tranche replaced with null, one collapsible section above it in the same
+     drawer. No gate can see it: the field is not enum-named, so it is not
+     even pinned.
+  5. `NurseTaskServiceImpl.TYPE_ROUTINE` and `PRIORITY_ROUTINE` now both hold
+     `"ROUTINE"` — a vitals-round type and an order priority, indistinguishable
+     at the call site. They differed before the tranche tokenized the first.
+  6. The two null branches the tranche introduced —
+     `o.description || ('SNAPSHOT.ORDER' | translate)` and `n.author || '—'` —
+     have no spec, though both are reachable (a lab order whose test
+     definition was deleted; a note whose staff row is gone).
+  7. ~~`organization-list.spec.ts`'s `RoleContextService` stub omits
+     `isSuperAdmin`, which the component reads at construction.~~ Done: it
+     uses the shared `roleContextStub`, and the spec renders now, which is
+     what would have hit it.
+  8. `SNAPSHOT.ORDER` is a new root namespace holding one key, while the other
+     16 keys in that template are `DASHBOARD.*`. Its French, « Prescription »,
+     also reads as a medication order under a badge that already says
+     « Laboratoire » — `DASHBOARD.LAB_ORDER` / « Demande de laboratoire » fixes
+     both.
+  9. `my-notifications.component.ts` imports both `CommonModule` and
+     `DatePipe`; the former re-exports the latter.
+- **237 enum-shaped fields are still rendered without `| enumLabel`.** A value
+  written as `{{ order.status }}` rather than
+  `{{ order.status | enumLabel: 'labOrderStatus' }}` puts the wire token on
+  screen in every language while every other gate stays green: the key exists,
+  it is translated, it is simply never asked for. The count here has been wrong
+  three times — 71 when the scanner matched only a field NAMED `.status`/`.type`
+  (so it never saw `enc.encounterType`), then 187 when it matched only
+  `{{ x.status }}` and `{{ x.status || 'y' }}` (so a `??`, a ternary, a
+  `[title]` binding and a two-step optional chain were all invisible), then 278
+  when it counted interpolations inside an ATTRIBUTE — `class="badge {{
+  getStatusClass(o.status) }}"` is a CSS class name nobody reads, and 38 of
+  those pins sat on templates whose label beside them was already piped. The
+  scan in `scripts/lib/raw-enum-scan.mjs` now counts an interpolation only in
+  element text or a text-bearing attribute, and has its own tests, because a
+  scan that silently stops matching reports zero findings and reads as a win.
+  It still cannot see two shapes: an expression whose variable is not
+  enum-named (`{{ formatStatus(s) }}` over a status list, `{{ st }}` over a
+  status array — two live English renders in `billing.html` were found by hand,
+  the identical shape in `platform.html`, its status filter and its
+  status-change buttons, was missed on that pass and caught only by review,
+  and `organization-list.html` had it a third time in the type dropdown; its
+  CELL was gate-visible and pinned, so of the three cited instances two were
+  invisible and one was not),
+  and a method
+  call whose return value it cannot know (`{{ statusLabel(culture.status) }}`
+  translates, `{{ taskActionIcon(task.status) }}` is a Material icon name).
+  A THIRD thing the gate cannot see, found by the `.type` tranche: a field
+  rendered raw because the BACKEND sent a word rather than a token.
+  `PatientSnapshotServiceImpl` stamped the literals "Vitals", "Lab" and
+  "Encounter", and `NurseTaskServiceImpl` "Full Set" / "Routine", so four of
+  the seven sites in that tranche were not a missing pipe at all — no portal
+  change could have fixed them, and the gate reports them identically to a
+  missing pipe. When a traced field turns out to be a display string, the fix
+  is a token on the server plus a key, not a pipe.
+  `role` joined ENUM_WORDS in the `.type` tranche and surfaced five sites the
+  gate had never seen. The `.role` tranche took them and found that the five
+  render THREE different things, not one vocabulary: the snapshot drawer's care
+  team carries `JobTitle.name()` (31 constants); my-appointments and my-sharing
+  carry `security.roles.name`, which is a DB registry and not a Java enum at
+  all; and two of the five are unreachable (next bullet). Two consequences
+  worth keeping:
+  - Roles are rows, so the enum gate learned a fourth declaration kind,
+    `roles`, which derives the vocabulary from the migrations the way
+    `RoleRegistryTest` does — 33 names today, and a migration that adds one
+    fails the i18n gate until it is keyed. `lib/role-registry.mjs` deliberately
+    does NOT subtract the V159 DELETEs: they are conditional on nobody holding
+    the role, and `audit_event_logs.role_name` keeps the string forever
+    regardless, so a patient's access log can show a retired role for years.
+  - One column holds two spellings of one role. `WriteAuditInterceptor` strips
+    the `ROLE_` prefix on purpose and `AuditEventLogServiceImpl` does not, so
+    both forms are in `role_name` on every environment and old rows keep
+    theirs. Normalising at the portal boundary (`bareRole`) is not a
+    workaround — there is no single backend write to fix — and it is also
+    where the `Unknown Role` sentence becomes null. Fixing the two writers to
+    agree would still leave every row written before the fix.
+  `scripts/i18n-raw-enums-baseline.json` pins every site as it stands; a site
+  that is not pinned fails the build and is named, and a pin whose site is
+  gone is reported stale. Work it down in tranches: trace each field to the
+  DTO the API fills — `taskPriority` covers two vocabularies, `alertSeverity`
+  is a String the service composes, `.type` is either encounterType or
+  vitalType depending on the screen — and leave the free text a clinician
+  typed (`appt.reason`, `med.frequency`, `lab.result`) pinned where it is.
+  The status tranche is done: 47 status/state sites went to 9, and those 9 were
+  each traced and are NOT debt — `getApptStatusLabel` (dashboard, x2) and
+  `statusLabel` (micro, x2) already resolve through translate.instant;
+  `taskActionLabel`/`taskActionIcon` (platform), `countFor` (integration-health)
+  and the super-admin ternary return an icon name or a number, not a label; and
+  `h.state`/`p.state` are postal address lines, not enums. The baseline has no
+  field to record that, and `--write-baseline` rewrites its `$comment`, so it is
+  written here instead — do not re-trace them.
+  A FOURTH thing the gate cannot see, found by the `.role` tranche: a site that
+  renders raw because it never renders at all. Two of that tranche's five sites
+  are fed by a field the API does not send, so no pipe could have been verified
+  on them; they stay pinned, with the trace in the next bullet. A pin is a
+  claim that someone looked — it is not a claim that the site is live.
+  The count went UP in that tranche, 218 → 237, and that is the gate getting
+  less blind rather than the tree getting worse. ENUM_WORDS matches a field
+  that ENDS with one of its entries, so `role` never saw `roleName` and nothing
+  saw `jobTitle` at all. A "not a lowercase letter" boundary would have covered
+  every camelCase suffix at once, but the FIELD regex carries the `i` flag,
+  which case-folds a lookahead's character class too — `(?![a-z])` rejects `N`
+  as well — so each suffix needs its own entry. `jobTitle`, `roleName` and
+  `roleCode` surfaced 22 sites nothing had ever scanned, and **they are the
+  next tranche**, in that order:
+  - 14 `.roleName` / `.roleCode` renders across 12 templates — /users,
+    audit-logs, profile, staff-detail, admin-assignments (×2), the super-admin
+    emergency picker and audit search, chat, lab-staff-list, scheduling (×2),
+    consultations, and the five onboarding role-welcome screens — all showing
+    `ROLE_DOCTOR` verbatim. **The vocabulary for these already shipped**: it is
+    the same `PORTAL.ENUM.ROLE` the sharing page and the booking picker now
+    use, so each is a `bareRole` + one pipe.
+  - 8 `.jobTitle` renders, whose 31-value bundle also already ships. Not only
+    missing pipes: `staff-detail` and `staff-list` call a hand-rolled
+    `formatJobTitle()` that is tier 3 of EnumLabelService reimplemented
+    (`replaceAll('_', ' ')` + Title Case), the dashboard uses `| titlecase`,
+    and `staff-list` has a filter chip doing `.replaceAll('_', ' ')` — four
+    ways of spelling "render it in English", none of which any gate could see.
+  `title` was tried as the ENUM_WORDS entry first and withdrawn: it pinned 16
+  free-text headings (notification, in-basket, education, questionnaire) as
+  enum debt and would have taxed every future one for no signal. A `.title` is
+  prose someone typed; a `.jobTitle` is `JobTitle.name()`, every time.
+  Next clusters after that: `.reason` (14),
+  `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
+  text that should stay pinned.
+- **`bareRole` normalises the role token per portal call site, not at the one
+  place the server could.** The portal maps it in two `.map()`s
+  (`getMyDisclosures` and `getSchedulingProviders`) because both
+  spellings and the `Unknown Role` sentence are already in
+  `audit_event_logs.role_name` and no backend WRITE can fix rows written years
+  ago. The READ path, though, does have single choke points:
+  `DisclosureAccountingServiceImpl.toEntry()` line 118 feeds both audit
+  surfaces, and `PatientPortalServiceImpl.getProvidersForDepartment` line 595
+  feeds the picker — stripping there would cover legacy rows too AND every
+  future client, and would let the portal drop all three maps. Deferred from
+  #665 because it changes two backend services and their tests for no
+  user-visible difference in this client; worth doing with the
+  `AuditEventLogMapper` twin above, in one pass.
+- **`OrganizationListComponent` unsubscribes its language subscription and
+  nothing else.** #665 gave it an `ngOnDestroy` for `langSub`; the two HTTP
+  subscriptions `ngOnInit` opens (`orgService.list`, `orgService.getTypes`) are
+  still unmanaged, so a response landing after the user navigates away runs
+  `applyFilter()` and `loading.set(false)` on a destroyed component, and an
+  error toasts for a page nobody is on. Routing all three through
+  `takeUntilDestroyed` would remove the field and the hook together. Pre-dates
+  #665; that PR is just the first to give the class a destroy hook.
+- **The patient's care team is permanently empty, in two places.**
+  `GET /me/patient/care-team` returns `CareTeamDTO { primaryCare,
+  primaryCareHistory }`; the portal's interface for the same endpoint declares
+  `{ members: CareTeamMember[] }`. Nothing reconciles them, so
+  `my-care-team.component` sets `team.members ?? []` and always renders its
+  empty state, and the dashboard's "My care team" card is behind
+  `@if (myCareTeam()?.members?.length)` and never appears. The backend has the
+  data — a current PCP and the full history, with hospital and dates — and the
+  page that would show it has been dead since it was written. Found while
+  tracing the `.role` tranche: those two components hold two of its five sites,
+  and their `.role` renders stay pinned because a pipe on a template nobody
+  reaches cannot be verified. The fix is a product decision first: "care team"
+  as the PCP history the endpoint returns, or as the treating staff the
+  snapshot drawer already derives from encounters. It is not an i18n change.
+- **`AuditEventLogMapper` stamps "Unknown Role" too.** The write path is the
+  one the patient's sharing page reads, and the portal now maps that sentence
+  to null; the READ mapper has its own copy of the same literal, feeding the
+  admin audit surface, and `DashboardConfigurationServiceImpl` has a third.
+  Three constants, one string, no shared definition. #665 fixed the twin
+  literal (`"Staff"`) at its root one file over and then patched this one only
+  on the patient path, so `audit-logs.html:107` and
+  `super-admin/audit-search:233` still render the English sentence to a French
+  clinician. Returning null at the mapper fixes every client at once, which is
+  what the `"Staff"` fix did.
+- **Six one-edit follow-ups from #665's round 3, for the `.roleName` tranche.**
+  Each was verified against the tree and deferred because it widens a PR that
+  had already grown a gate change; all six land naturally in the tranche that
+  translates the 14 `roleName` sites.
+  1. `bareRole` lives in `patient-portal.service.ts`, but the tranche's sites
+     are staff screens served by other services. It belongs in `src/app/core/`,
+     beside the `EnumLabelService` #665 extracted for the same reason —
+     otherwise each of those components imports from a patient-portal module
+     or re-implements the strip, and the `Unknown Role` sentinel drifts.
+  2. `UNKNOWN_ROLE = 'Unknown Role'` couples the portal to an exact Java
+     literal that three backend files stamp independently. Reword any of them
+     and the sentinel silently stops matching; a guard asserting the Java
+     literal equals the TS constant (the shape `MigrationRegistrationTest`
+     uses) holds it.
+  3. The `roles` declaration validates a path's extension but nothing counts
+     what each path CONTRIBUTES, so a declared folder holding no `.sql`/`.java`
+     yields zero in silence — `UNPARSEABLE ROLE REGISTRY` only fires on a grand
+     total of zero, which 160 migrations prevent. Per-source accounting (each
+     declared path must yield ≥ 1) closes it; `role-registry.test.mjs` already
+     does this for `.java`, the gate does not.
+  4. `role-registry.test.mjs`'s `declaredSources()` re-implements the gate's
+     existsSync / statSync / walk gathering rather than sharing it, and its own
+     comment records that the two had already drifted once. Both use the
+     exported `READABLE` now, so the extension list is no longer duplicated,
+     but the eight lines around it still are: `roleSourcesFrom(paths)` in the
+     lib, called by both, is the fix.
+  5. `sqlViews` builds both character-array views for every source — including
+     `.java`, which never reads `scanned`, and all ~165 migrations, of which 5
+     contain a role INSERT. An `INSERT INTO` pre-filter and skipping the second
+     view for Java removes nearly all of it. It is also exported and imported
+     nowhere: test it directly or make it module-private.
+  6. `OrganizationListComponent.filtered` is manual derivable state recomputed
+     at three call sites, and #665's `onLangChange` subscription is the third
+     patch on that shape. A `computed()` over `organizations()`, a `searchTerm`
+     signal and a `lang` signal derives it once and makes the subscription and
+     the manual calls unnecessary — the next writer of `organizations` that
+     forgets `applyFilter()` leaves the list stale exactly as the language
+     switch did.
+- **A staff revoke of a sharing opt-out is not written to the audit row with the
+  actor's role or hospital.** `RecordSharingOptOutServiceImpl.revoke` records
+  userId + patientId under a description that reads as the patient's own act
+  ("opt-out revoked") whichever admin did it. Since #656 the service is
+  tenant-scoped, so the actor is at least a hospital the patient is registered
+  at — but a patient disputing a re-opened record still has to join users and
+  assignments by hand to learn who. The `details` map is already there; add
+  the authorities and the active hospital, and make the description say
+  self-revoke vs staff-revoke. No schema change.
+- **Nothing pairs a controller's `@PreAuthorize` with the SecurityConfig
+  matcher that covers its path.** The record-sharing opt-out shipped admitting
+  ROLE_PATIENT at the annotation, with `requireSelfIfPatient` written and
+  tested, while the `/patients/**` matchers refused a patient on GET and
+  DELETE and let POST fall through — so the feature was half-reachable for
+  months and every test agreed it worked. Neither layer is wrong on its own;
+  nobody compares them. `@WebMvcTest` slices never run the chain, and the
+  full-context patient ITs all set `addFilters = false`. A guard could read the
+  annotation's role set per handler, resolve the first matching
+  `requestMatchers` entry for that path and verb, and fail when the matcher is
+  the narrower of the two. `SecurityConfigChartMatcherTest` and its two
+  siblings are the shape of what exists today: source scans that assert
+  ordering, not reachability.
 - **Lab results are fetched cross-tenant and filtered in memory.**
   `collectLabResultEntries` calls `findByLabOrder_Patient_Id(patientId)` with no
   hospital predicate, then discards unreadable rows in the stream — so every row
@@ -2401,30 +2734,41 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   report as "nothing reached them"), not in the shared helper, whose other
   callers legitimately have nothing to send. Found by the #570 review.
 
-- The email-activation **link** has no landing page. `sendActivationEmail`
-  builds `${app.frontend.base-url}/verify?email=&token=` (public
-  self-registration, and `POST /auth/resend-verification`), but `verify` is not
-  a route in `app.routes.ts` — the `**` fallback redirects it to `/login`, so
-  the link silently does nothing. There is also no "resend activation" control
-  anywhere in the portal, so `/auth/resend-verification` is reachable only by
-  hand. Self-registration itself is 410 Gone, which is why this went unnoticed:
-  the only live producer of that link is the resend endpoint. Either add the
-  `/verify` route (calling `GET /auth/verify-email`) plus a resend affordance
-  on the login screen, or retire the link and move those accounts onto the
-  confirmation-code path everyone else uses. Found by the #569 review while
-  making the disabled-login message name a route that actually exists.
+- ~~The email-activation **link** has no landing page.~~ Closed 2026-09-13:
+  `/verify` is a public route (`VerifyEmailComponent`) that calls
+  `GET /auth/verify-email` with the link's `email` and `token`, shows the
+  outcome, and on a refused or incomplete link offers a resend from the same
+  address; the login screen gained a third link, "Resend activation e-mail",
+  driving `POST /auth/resend-verification` behind a dialog that answers the
+  same way whether or not the address exists; the auth interceptor treats
+  both endpoints as public so a stale token cannot kill the request. No
+  backend change. Self-registration stays 410, so the resend endpoint is
+  still the only live producer of the link.
 
-- Hospital scope is applied page by page: after #566, 18 of ~115 staff routes
-  carry the scope chip and gate on `RoleContextService.hasHospitalScope`, while
-  every other route whose backend calls `requireActiveHospitalId()` (imaging,
-  discharge, nurse station, procedure orders, registrations, bed management,
-  pharmacy inventory/dispensing/claims, lab QC, reports, billing, departments,
-  scheduling…) still fires in global view and shows a load-error toast. The
-  right depth is one route-level mechanism — `data: { requiresHospitalScope }`
-  on the route consumed by a shell-level gate (chip + hint + outlet) — plus
-  `AuthService.getHospitalId()` delegating to
-  `roleContext.effectiveHospitalIdForRequest()` so the 22 remaining callers
-  follow the chip. From the #566 self-review.
+- ~~Hospital scope is applied page by page.~~ Closed by the route-level gate
+  (`HospitalScopeGateService`, 2026-09-13): a route carrying
+  `data: { requiresHospitalScope: true }` renders only once a hospital is in
+  scope; a super-admin in global view sees the chip and the hint in place of
+  the page, staff are never gated, a `?hospitalId=` in the URL pins the scope
+  on navigation and a pick is kept across gated pages; the shell keys the
+  router outlet on the effective hospital so a scope change rebuilds the page.
+  `AuthService.getHospitalId()` now delegates to
+  `roleContext.effectiveHospitalIdForRequest()`, so the 26 callers (params,
+  path variables, bodies, STOMP topics) follow the chip and can no longer name
+  the primary hospital while the header is omitted. Flagged: the eleven pages
+  that used to error or go blank in global view (appointments calendar, lab
+  staff / instruments / inventory, discharge, maternity, patient tracker,
+  registrations, procedure orders, order sets, DHIS2) plus the five whose
+  backend silently fell back to the raw context hospital (lab ops, reports,
+  reception, nurse station, eMAR); `shell.spec.ts` pins the list. Still owed:
+  the eleven pages that gate themselves (`scopeReady` + own chip + hint) keep
+  their per-page block until they move to the flag, which means deleting the
+  block and the chip, not adding the flag beside them (two chips); the pages
+  that are global on open but scoped on one tab (imaging results, medication
+  history, stock routing by prescription, pharmacy checkout, bed-management
+  writes) now follow the chip through `getHospitalId()` but have no gate on
+  the tab; and the chart still has no scope chip (the "no deterministic
+  primary hospital" entry below).
 - Hospital search index: V90 indexes `LOWER(name)` with the default opclass, so
   on a non-C collation `LIKE 'x%'` is not a range scan and a one-letter prefix
   late in the alphabet walks most of the index; a `text_pattern_ops` (or partial
@@ -2433,8 +2777,10 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - Scope-gate boilerplate: six pages carry the same `scopeReady` alias +
   `scopeChanged$` + `takeUntil` + `applyUrlScopeSync` block (registries and
   webhooks use `load$` + `switchMap` instead); one injectable
-  (`ready`, `untilScopeChange()`, `sync(route)`) or the route-level gate above
-  would make it a one-liner per page. From the #566 self-review.
+  (`ready`, `untilScopeChange()`, `sync(route)`) would make it a one-liner per
+  page; the route-level gate above now exists, so the shorter route is to
+  move each of those pages onto the flag and delete the block. From the
+  #566 self-review.
 - `@DataJpaTest` slices repeat the same `@ActiveProfiles("test")` +
   `@Import({TenantContextAccessor, EncryptionKeyHolder})` preamble in six
   classes; a `@TenantScopedDataJpaTest` meta-annotation and a
@@ -2475,6 +2821,31 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   with wide graphs and runs a guaranteed-miss `patientRepository.findById` on
   sub-resource ids for every audited write; four `BaseIT` controller classes
   each hand-roll the same FK-ordered `deleteAll()` list.
+- **Angular 22 left three things pinned rather than fixed (2026-09-13).**
+  (a) Angular 22 makes OnPush the default; the migration pinned all 141
+  existing components to `ChangeDetectionStrategy.Eager` and angular-eslint 22
+  flags every pin, so `prefer-on-push-component-change-detection` is off in
+  `eslint.config.js`. Moving components to OnPush is a per-component audit of
+  what mutates state outside signals, not a lint fix. (b) 15 template
+  expressions are wrapped in `$safeNavigationMigration(...)`, the compiler's
+  marker for `?.` now yielding `undefined` where it yielded `null`; each is a
+  translate-param or display site to check and unwrap. (c) The migration
+  suppressed the `nullishCoalescingNotNullable` and `optionalChainNotNullable`
+  extended diagnostics in both tsconfigs; the warnings they hid are dead `??`
+  and `?.` on non-nullable types. Also: local development now needs Node
+  24.15+ (Angular 22's engines range); CI and the frontend image are on 24.
+- **Spring Boot 4.1 left three follow-ups (2026-09-13).** (a) Testcontainers
+  stays pinned at 1.21.4 (`ext['testcontainers.version']` + the BOM) because
+  Boot 4's managed 2.0.5 renames modules; moving is its own change, and the
+  pin must not drop below 1.21 (docker-java 3.4.0 is refused by Docker Engine
+  29). (b) Tests use `spring-boot-starter-test-classic`, the pre-4.0 bundle;
+  Boot 4's per-technology test starters (`webmvc-test`, `data-jpa-test`,
+  `security-test`, …) are the supported shape. (c) HAPI FHIR 7.4.5 and iText
+  8.0.2 were not bumped with the platform; HAPI 8.x is out. Also worth
+  knowing: Boot 4 runs Liquibase only via `spring-boot-starter-liquibase` and
+  `RestTemplateBuilder` only via `spring-boot-restclient`, both added; the
+  `java:S8700` decision above (Instant vs LocalDateTime) is unchanged by the
+  move to Hibernate 7.
 - WHO LMS growth-reference import — needs a verified source + clinical
   sign-off. Never from model memory (V120 precedent).
 - Drug-interaction KB seed still needs a pharmacist's sign-off.
@@ -2488,6 +2859,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   get default privileges for future tables.
 - Two-factor transport for controlled substances; `app.empi.probabilistic.enabled`
   still defaults false.
+
+- **Encounters outlive their attending's assignment, and nothing says so.**
+  `clinical.encounters.assignment_id` (and `hospital.staff.assignment_id`)
+  have no foreign key on Postgres — no migration ever created the
+  `fk_encounter_assignment` / `fk_staff_assignment` the entities declare, and
+  H2 tests build them from the entities so nothing notices — while user
+  removal and `DELETE /assignments/..` hard-delete the assignment row. Dev
+  2026-09-13: four Hospital B encounters pointed at a deleted assignment and
+  could not be edited by anyone (fixed on the update path: an unchanged
+  attending is no longer re-credentialed and `Encounter.validate()` no longer
+  loads an uninitialized assignment proxy). The decision still owed: soft-delete
+  assignments (as #564 argued for audit rows), or add the two keys as
+  `NOT VALID` after a backfill that decides what a dangling row should point
+  at. Either way the schema and the model should stop disagreeing.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -2524,11 +2909,15 @@ they stay visible instead of living in a javadoc.
   (`license_alert_stage` starts NULL and any grade beats nothing). One-off
   backlog, not recurring. Disable with
   `hms.credentialing.expiry.enabled=false` to defer it.
-- `api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare: Universal SSL
-  covers `*.e-keneya.com` but not second-level `*.dev.e-keneya.com`.
-- Keycloak `hms-portal` partial-import on the dev + prod realms before any SSO flip.
-- Remove the old `*.bitnesttechs.com` custom domains from all Railway services.
-- Revoke the chat-exposed SonarCloud token.
+- ~~`api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare~~ ✅ done
+  2026-09-13. Universal SSL covers `*.e-keneya.com` but not second-level
+  `*.dev.e-keneya.com`, which is why it could not stay proxied.
+- ~~Keycloak `hms-portal` partial-import on the dev + prod realms~~ ✅ done
+  2026-09-13, ahead of any SSO flip. The flip itself is still not scheduled.
+- ~~Remove the old `*.bitnesttechs.com` custom domains from all Railway
+  services.~~ ✅ done 2026-09-13.
+- ~~Revoke the chat-exposed SonarCloud token.~~ ✅ done 2026-09-13. The CI
+  secret is the only copy that should exist now.
 - Play Store privacy-policy URL.
 
 ## Deliberate non-goals — recorded so they stop resurfacing

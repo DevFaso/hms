@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AnnouncementService, AnnouncementResponse } from '../services/announcement.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
@@ -11,12 +11,14 @@ import { AuthService } from '../auth/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './announcement-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './announcement-list.scss',
 })
 export class AnnouncementListComponent implements OnInit {
   private readonly announcementService = inject(AnnouncementService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   /** True when the logged-in user has an admin-level role */
   get canManage(): boolean {
@@ -53,7 +55,7 @@ export class AnnouncementListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load announcements');
+        this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -89,7 +91,7 @@ export class AnnouncementListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.formText.trim()) {
-      this.toast.error('Announcement text is required');
+      this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.TEXT_REQUIRED'));
       return;
     }
     this.saving.set(true);
@@ -100,14 +102,20 @@ export class AnnouncementListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Announcement updated' : 'Announcement created');
+        this.toast.success(
+          this.translate.instant(
+            existing ? 'ANNOUNCEMENTS.TOAST.UPDATED' : 'ANNOUNCEMENTS.TOAST.CREATED',
+          ),
+        );
         this.showModal.set(false);
         this.saving.set(false);
         this.editing.set(null);
         this.loadAnnouncements();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ANNOUNCEMENTS.TOAST.SAVE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -130,14 +138,14 @@ export class AnnouncementListComponent implements OnInit {
     this.deleting.set(true);
     this.announcementService.delete(a.id).subscribe({
       next: () => {
-        this.toast.success('Announcement deleted');
+        this.toast.success(this.translate.instant('ANNOUNCEMENTS.TOAST.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingAnnouncement.set(null);
         this.loadAnnouncements();
       },
       error: () => {
-        this.toast.error('Failed to delete announcement');
+        this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });

@@ -12,24 +12,34 @@
   >
     <header class="triage-dialog__header">
       <h3>{{ 'TRIAGE.TITLE' | translate }}</h3>
-      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+      <button
+        class="btn-close"
+        (click)="dismissed.emit()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        &times;
+      </button>
     </header>
 
     <!-- Patient summary -->
-    <div class="triage-dialog__patient-info" *ngIf="encounter">
-      <div class="info-row">
-        <span class="label">{{ 'TRIAGE.PATIENT' | translate }}:</span>
-        <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
+    @if (encounter) {
+      <div class="triage-dialog__patient-info">
+        <div class="info-row">
+          <span class="label">{{ 'TRIAGE.PATIENT' | translate }}:</span>
+          <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">{{ 'TRIAGE.ENCOUNTER' | translate }}:</span>
+          <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
+        </div>
+        @if (encounter.chiefComplaint) {
+          <div class="info-row">
+            <span class="label">{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate }}:</span>
+            <span class="value">{{ encounter.chiefComplaint }}</span>
+          </div>
+        }
       </div>
-      <div class="info-row">
-        <span class="label">{{ 'TRIAGE.ENCOUNTER' | translate }}:</span>
-        <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
-      </div>
-      <div class="info-row" *ngIf="encounter.chiefComplaint">
-        <span class="label">{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate }}:</span>
-        <span class="value">{{ encounter.chiefComplaint }}</span>
-      </div>
-    </div>
+    }
 
     <!-- Triage form -->
     <form class="triage-dialog__form" (ngSubmit)="submit()">
@@ -45,9 +55,11 @@
             name="esiScore"
             required
           >
-            <option *ngFor="let opt of esiOptions" [ngValue]="opt.value">
-              {{ opt.label }}
-            </option>
+            @for (opt of esiOptions; track opt) {
+              <option [ngValue]="opt.value">
+                {{ opt.label }}
+              </option>
+            }
           </select>
         </div>
       </fieldset>
@@ -63,7 +75,7 @@
             [ngModel]="chiefComplaint()"
             (ngModelChange)="chiefComplaint.set($event)"
             name="chiefComplaint"
-            placeholder="Reason for visit..."
+            [placeholder]="'APPOINTMENTS.REASON_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </fieldset>
@@ -237,18 +249,20 @@
             {{ 'TRIAGE.FALL_RISK_FLAG' | translate }}
           </label>
         </div>
-        <div class="form-group" *ngIf="fallRisk()">
-          <label for="fallRiskScore">{{ 'TRIAGE.FALL_RISK_SCORE' | translate }}</label>
-          <input
-            id="fallRiskScore"
-            type="number"
-            min="0"
-            max="100"
-            [ngModel]="fallRiskScore()"
-            (ngModelChange)="fallRiskScore.set($event)"
-            name="fallRiskScore"
-          />
-        </div>
+        @if (fallRisk()) {
+          <div class="form-group">
+            <label for="fallRiskScore">{{ 'TRIAGE.FALL_RISK_SCORE' | translate }}</label>
+            <input
+              id="fallRiskScore"
+              type="number"
+              min="0"
+              max="100"
+              [ngModel]="fallRiskScore()"
+              (ngModelChange)="fallRiskScore.set($event)"
+              name="fallRiskScore"
+            />
+          </div>
+        }
       </fieldset>
 
       <!-- Room assignment -->
@@ -263,7 +277,7 @@
             [ngModel]="roomAssignment()"
             (ngModelChange)="roomAssignment.set($event)"
             name="roomAssignment"
-            placeholder="e.g., ER-Bay-3"
+            [placeholder]="'TRIAGE.ROOM_ASSIGNMENT_PLACEHOLDER' | translate"
           />
         </div>
       </fieldset>
@@ -274,8 +288,12 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
-          <span *ngIf="saving()">{{ 'COMMON.SAVING' | translate }}...</span>
-          <span *ngIf="!saving()">{{ 'TRIAGE.SUBMIT' | translate }}</span>
+          @if (saving()) {
+            <span>{{ 'COMMON.SAVING' | translate }}...</span>
+          }
+          @if (!saving()) {
+            <span>{{ 'TRIAGE.SUBMIT' | translate }}</span>
+          }
         </button>
       </div>
     </form>

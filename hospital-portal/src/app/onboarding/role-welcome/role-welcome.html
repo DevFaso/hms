@@ -2,7 +2,7 @@
   <!-- ───────────── LOADING ───────────── -->
   @if (pageState === 'loading') {
     <div class="rw-card rw-card--centered">
-      <div class="rw-spinner" aria-label="Loading"></div>
+      <div class="rw-spinner" [attr.aria-label]="'ONBOARDING.LOADING' | translate"></div>
       <p class="rw-muted">{{ 'ONBOARDING.LOADING' | translate }}</p>
     </div>
   }
@@ -37,11 +37,14 @@
       <div class="rw-icon rw-icon--success">✓</div>
       <h1 class="rw-title">{{ 'ONBOARDING.ALREADY_CONFIRMED' | translate }}</h1>
       <p class="rw-body">
-        Your assignment as <strong>{{ assignment.roleName }}</strong>
         @if (assignment.hospitalName) {
-          at <strong>{{ assignment.hospitalName }}</strong>
+          {{
+            'ONBOARDING.ALREADY_CONFIRMED_BODY_ORG'
+              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+          }}
+        } @else {
+          {{ 'ONBOARDING.ALREADY_CONFIRMED_BODY' | translate: { role: assignment.roleName } }}
         }
-        was already confirmed. Your access is active.
       </p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
@@ -159,11 +162,14 @@
       <div class="rw-icon rw-icon--success">✓</div>
       <h1 class="rw-title">{{ 'ONBOARDING.ACCESS_ACTIVATED' | translate }}</h1>
       <p class="rw-body">
-        Your role as <strong>{{ assignment.roleName }}</strong>
         @if (assignment.hospitalName) {
-          at <strong>{{ assignment.hospitalName }}</strong>
+          {{
+            'ONBOARDING.ROLE_ACTIVE_BODY_ORG'
+              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+          }}
+        } @else {
+          {{ 'ONBOARDING.ROLE_ACTIVE_BODY' | translate: { role: assignment.roleName } }}
         }
-        is now active.
       </p>
 
       <!-- Temporary credentials block — only shown for brand-new users -->

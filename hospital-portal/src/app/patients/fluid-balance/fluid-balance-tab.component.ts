@@ -1,4 +1,12 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -26,6 +34,7 @@ const WINDOW_HOURS: Record<WindowPreset, number> = { '24h': 24, '48h': 48, '7d':
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './fluid-balance-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './fluid-balance-tab.component.scss',
 })
 export class FluidBalanceTabComponent implements OnInit {

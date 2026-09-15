@@ -7,6 +7,7 @@ import {
   inject,
   output,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -41,6 +42,7 @@ type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
 })
 export class PatientChartComponent implements OnInit, OnChanges {

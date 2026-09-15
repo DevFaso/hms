@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { BillingComponent } from './billing';
@@ -65,7 +65,7 @@ describe('BillingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [BillingComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: BillingService, useValue: billingSpy },
         { provide: ToastService, useValue: toastSpy },
@@ -249,17 +249,59 @@ describe('BillingComponent', () => {
     expect(stats.balance).toBe(300);
   });
 
-  it('maps statuses to badge classes and display labels', () => {
+  it('maps statuses to badge classes', () => {
     expect(component.getStatusClass('PAID')).toContain('status-paid');
     expect(component.getStatusClass('PARTIALLY_PAID')).toContain('status-partial');
     expect(component.getStatusClass('CANCELLED')).toContain('status-cancelled');
-    expect(component.formatStatus('PARTIALLY_PAID')).toBe('PARTIALLY PAID');
-    expect(component.formatStatus('')).toBe('—');
+    // formatStatus is gone: it rendered 'PARTIALLY PAID' in every language.
+    // The template pipes InvoiceStatus through enumLabel now, so the assertion
+    // that matters is the one in the DOM test below.
   });
 
   it('shows a toast when the PDF download fails', () => {
     billingSpy.getInvoicePdf.and.returnValue(throwError(() => new Error('nope')));
     component.downloadPdf('inv-1');
     expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('renders the invoice status in French, not the wire token', () => {
+    // formatStatus() used to produce this badge by swapping underscores for
+    // spaces, so a French biller read "PARTIALLY PAID" and no i18n gate could
+    // see it: the key existed and was translated, it was simply never asked
+    // for. The label is now piped through the invoiceStatus domain.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { INVOICE_STATUS: { PARTIALLY_PAID: 'Partiellement payée' } } },
+    });
+    billingSpy.searchInvoices.and.returnValue(
+      of(mockPage([mockInvoice({ status: 'PARTIALLY_PAID' })])),
+    );
+
+    fixture.detectChanges();
+
+    const badges = Array.from(
+      fixture.nativeElement.querySelectorAll('.status-badge') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(badges).toContain('Partiellement payée');
+    expect(badges).not.toContain('PARTIALLY PAID');
+    expect(badges).not.toContain('PARTIALLY_PAID');
+  });
+
+  it('falls back to — when an invoice has no status', () => {
+    // formatStatus() returned '—' for a null status and EnumLabelPipe returns
+    // '', so converting the badge to the pipe dropped the placeholder and left
+    // an empty chip. This is the assertion that used to cover it, moved to the
+    // DOM because that is where the fallback now lives.
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice({ status: undefined })])));
+
+    fixture.detectChanges();
+
+    const badges = Array.from(
+      fixture.nativeElement.querySelectorAll('.status-badge') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(badges).toContain('—');
+    expect(badges).not.toContain('');
   });
 });

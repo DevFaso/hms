@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -40,7 +40,7 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-appointment-calendar',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, FullCalendarModule],
+  imports: [FormsModule, RouterLink, TranslateModule, FullCalendarModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cal-page" data-testid="appointment-calendar">
@@ -67,33 +67,29 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
           data-testid="appointment-calendar-provider"
         >
           <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
-          <option *ngFor="let s of providers()" [ngValue]="s.id">
-            {{ s.name }}
-          </option>
+          @for (s of providers(); track s) {
+            <option [ngValue]="s.id">
+              {{ s.name }}
+            </option>
+          }
         </select>
       </div>
 
-      <p
-        *ngIf="state() === 'loading'"
-        class="cal-page__loading"
-        data-testid="appointment-calendar-loading"
-      >
-        {{ 'APPOINTMENT_CALENDAR.LOADING' | translate }}
-      </p>
+      @if (state() === 'loading') {
+        <p class="cal-page__loading" data-testid="appointment-calendar-loading">
+          {{ 'APPOINTMENT_CALENDAR.LOADING' | translate }}
+        </p>
+      }
 
-      <p
-        *ngIf="state() === 'error'"
-        class="cal-page__error"
-        data-testid="appointment-calendar-error"
-      >
-        {{ 'APPOINTMENT_CALENDAR.ERROR' | translate }}
-      </p>
+      @if (state() === 'error') {
+        <p class="cal-page__error" data-testid="appointment-calendar-error">
+          {{ 'APPOINTMENT_CALENDAR.ERROR' | translate }}
+        </p>
+      }
 
-      <full-calendar
-        *ngIf="hospitalId() as hid"
-        [options]="calendarOptions"
-        data-testid="appointment-calendar-grid"
-      />
+      @if (hospitalId(); as hid) {
+        <full-calendar [options]="calendarOptions" data-testid="appointment-calendar-grid" />
+      }
     </section>
   `,
   styles: [
@@ -165,7 +161,7 @@ export class AppointmentCalendarComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    const hid = this.roleContext.activeHospitalId;
+    const hid = this.roleContext.effectiveHospitalIdForRequest();
     this.hospitalId.set(hid ?? null);
     if (!hid) {
       this.state.set('error');

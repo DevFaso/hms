@@ -23,26 +23,26 @@ import java.io.Serializable;
 @Builder
 public class LabTestReferenceRangeDTO implements Serializable {
 
-    @DecimalMin(value = "0.0", inclusive = true, message = "lab.referenceRange.minValue.nonNegative")
+    @DecimalMin(value = "0.0", inclusive = true, message = "{lab.referenceRange.minValue.nonNegative}")
     private Double minValue;
 
-    @DecimalMin(value = "0.0", inclusive = true, message = "lab.referenceRange.maxValue.nonNegative")
+    @DecimalMin(value = "0.0", inclusive = true, message = "{lab.referenceRange.maxValue.nonNegative}")
     private Double maxValue;
 
-    @Size(max = 50, message = "lab.referenceRange.unit.maxLength")
+    @Size(max = 50, message = "{lab.referenceRange.unit.maxLength}")
     private String unit;
 
-    @Min(value = 0, message = "lab.referenceRange.ageMin.nonNegative")
-    @Max(value = 150, message = "lab.referenceRange.ageMin.max")
+    @Min(value = 0, message = "{lab.referenceRange.ageMin.nonNegative}")
+    @Max(value = 150, message = "{lab.referenceRange.ageMin.max}")
     private Integer ageMin;
 
-    @Min(value = 0, message = "lab.referenceRange.ageMax.nonNegative")
-    @Max(value = 150, message = "lab.referenceRange.ageMax.max")
+    @Min(value = 0, message = "{lab.referenceRange.ageMax.nonNegative}")
+    @Max(value = 150, message = "{lab.referenceRange.ageMax.max}")
     private Integer ageMax;
 
-    @Pattern(regexp = "ALL|MALE|FEMALE", message = "lab.referenceRange.gender.invalid")
+    @Pattern(regexp = "ALL|MALE|FEMALE", message = "{lab.referenceRange.gender.invalid}")
     private String gender;
 
-    @Size(max = 500, message = "lab.referenceRange.notes.maxLength")
+    @Size(max = 500, message = "{lab.referenceRange.notes.maxLength}")
     private String notes;
 }

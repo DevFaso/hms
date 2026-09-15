@@ -32,29 +32,29 @@ public class DrugInteractionDTO {
     // Drugs. Codes must be RxNorm RxCUIs — the CDS-Hooks layer joins on
     // rxnormCode with exact equality, so a free-text "code" produces a KB row
     // that never fires there.
-    @NotBlank(message = "Drug 1 code is required.")
+    @NotBlank(message = "{drugInteraction.drug1Code.required}")
     @Size(max = 100)
     private String drug1Code;
 
-    @NotBlank(message = "Drug 1 name is required.")
+    @NotBlank(message = "{drugInteraction.drug1Name.required}")
     @Size(max = 255)
     private String drug1Name;
 
-    @NotBlank(message = "Drug 2 code is required.")
+    @NotBlank(message = "{drugInteraction.drug2Code.required}")
     @Size(max = 100)
     private String drug2Code;
 
-    @NotBlank(message = "Drug 2 name is required.")
+    @NotBlank(message = "{drugInteraction.drug2Name.required}")
     @Size(max = 255)
     private String drug2Name;
 
     // Interaction details
-    @NotNull(message = "Severity is required.")
+    @NotNull(message = "{drugInteraction.severity.required}")
     private InteractionSeverity severity;
 
     private String description;
 
-    @NotBlank(message = "A recommendation is required — an alert with no action is an alert that gets ignored.")
+    @NotBlank(message = "{drugInteraction.recommendation.required}")
     private String recommendation;
 
     @Size(max = 500)

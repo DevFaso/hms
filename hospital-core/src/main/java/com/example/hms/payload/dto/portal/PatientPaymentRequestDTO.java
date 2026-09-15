@@ -20,8 +20,8 @@ import java.math.BigDecimal;
 public class PatientPaymentRequestDTO {
 
     @NotNull
-    @DecimalMin(value = "0.01", message = "Payment amount must be greater than zero")
-    @Digits(integer = 10, fraction = 2, message = "Payment amount must have at most 2 decimal places")
+    @DecimalMin(value = "0.01", message = "{patientPayment.amount.min}")
+    @Digits(integer = 10, fraction = 2, message = "{patientPayment.amount.invalid}")
     @Schema(description = "Amount to pay", example = "150.00", requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal amount;
 

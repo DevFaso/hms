@@ -208,7 +208,7 @@
                 </td>
                 <td>{{ e.source || '—' }}</td>
                 <td class="hospital-cell">{{ e.hospitalName || '—' }}</td>
-                <td>{{ e.status || '—' }}</td>
+                <td>{{ (e.status | enumLabel: 'prescriptionStatus') || '—' }}</td>
                 <td class="flags-cell">
                   @if (e.hasOverlap) {
                     <span

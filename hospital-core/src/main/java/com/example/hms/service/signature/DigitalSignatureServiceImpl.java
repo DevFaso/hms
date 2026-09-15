@@ -31,6 +31,9 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import java.util.Locale;
 
 /**
  * Implementation of digital signature service.
@@ -53,6 +56,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final DigitalSignatureMapper signatureMapper;
     private final AuthService authService;
     private final RoleValidator roleValidator;
+    private final MessageSource messageSource;
 
     @Override
     public SignatureResponseDTO signReport(SignatureRequestDTO request) {
@@ -130,11 +134,13 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
                 request.getReportId(), request.getReportType());
         }
 
+        // The verdict is read by whoever asked for the verification.
+        Locale locale = LocaleContextHolder.getLocale();
         if (signatures.isEmpty()) {
             return SignatureVerificationResponseDTO.builder()
                 .isValid(false)
-                .message("No signatures found for this report")
-                .invalidReason("No signatures exist")
+                .message(text("signature.verify.none", locale))
+                .invalidReason(text("signature.verify.none.reason", locale))
                 .verifiedAt(LocalDateTime.now())
                 .build();
         }
@@ -152,8 +158,9 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
                     request.getIpAddress(), request.getDeviceInfo());
                 signatureRepository.save(signature);
 
-                String message = isValid ? "Signature verified successfully" : "Signature is not valid";
-                String invalidReason = isValid ? null : determineInvalidReason(signature);
+                String message = text(
+                    isValid ? "signature.verify.success" : "signature.verify.invalid", locale);
+                String invalidReason = isValid ? null : determineInvalidReason(signature, locale);
 
                 return SignatureVerificationResponseDTO.builder()
                     .isValid(isValid)
@@ -173,8 +180,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         // No matching signature found
         return SignatureVerificationResponseDTO.builder()
             .isValid(false)
-            .message("Signature verification failed")
-            .invalidReason("Signature value does not match any stored signature")
+            .message(text("signature.verify.failed", locale))
+            .invalidReason(text("signature.verify.failed.reason", locale))
             .verifiedAt(LocalDateTime.now())
             .build();
     }
@@ -324,20 +331,24 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     /**
      * Determine why signature is invalid
      */
-    private String determineInvalidReason(DigitalSignature signature) {
+    private String text(String key, Locale locale) {
+        return messageSource.getMessage(key, null, locale);
+    }
+
+    private String determineInvalidReason(DigitalSignature signature, Locale locale) {
         if (signature.getStatus() == SignatureStatus.REVOKED) {
-            return "Signature has been revoked";
+            return text("signature.invalid.revoked", locale);
         }
         if (signature.getStatus() == SignatureStatus.EXPIRED) {
-            return "Signature has expired";
+            return text("signature.invalid.expired", locale);
         }
         if (signature.getStatus() == SignatureStatus.INVALID) {
-            return "Signature is marked as invalid";
+            return text("signature.invalid.marked", locale);
         }
         if (signature.getExpiresAt() != null && LocalDateTime.now().isAfter(signature.getExpiresAt())) {
-            return "Signature expiration date has passed";
+            return text("signature.invalid.expiryPassed", locale);
         }
-        return "Signature status is not SIGNED";
+        return text("signature.invalid.notSigned", locale);
     }
 
     /**

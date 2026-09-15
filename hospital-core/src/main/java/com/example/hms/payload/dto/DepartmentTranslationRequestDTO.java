@@ -18,10 +18,10 @@ public class DepartmentTranslationRequestDTO {
 
     private UUID departmentId;
 
-    @NotBlank(message = "Language code is required")
+    @NotBlank(message = "{departmentTranslation.languageCode.required}")
     private String languageCode;
 
-    @NotBlank(message = "Translated name cannot be blank")
+    @NotBlank(message = "{departmentTranslation.name.required}")
     private String name;
 
     private String description;

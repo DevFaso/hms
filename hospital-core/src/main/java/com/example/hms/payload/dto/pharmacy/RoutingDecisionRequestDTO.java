@@ -21,15 +21,15 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RoutingDecisionRequestDTO {
 
-    @NotNull(message = "Prescription ID is required")
+    @NotNull(message = "{routingDecision.prescriptionId.required}")
     private UUID prescriptionId;
 
-    @NotNull(message = "Routing type is required")
+    @NotNull(message = "{routingDecision.routingType.required}")
     private RoutingType routingType;
 
     private UUID targetPharmacyId;
 
-    @Size(max = 1024, message = "Reason must not exceed 1024 characters")
+    @Size(max = 1024, message = "{routingDecision.reason.size}")
     private String reason;
 
     private LocalDate estimatedRestockDate;

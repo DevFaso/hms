@@ -84,6 +84,8 @@ import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 
 
 @Slf4j
@@ -269,11 +271,12 @@ public class EncounterServiceImpl implements EncounterService {
     private final LabOrderRepository labOrderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final ObgynReferralRepository obgynReferralRepository;
+    private final PatientLocaleResolver patientLocaleResolver;
     private final UserRepository userRepository;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
     private final EmailService emailService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
@@ -301,7 +304,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeMap(java.util.Map<String, Object> map) {
             try {
                 return objectMapper.writeValueAsString(map);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 return null;
             }
         }
@@ -309,7 +312,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeEncounter(Encounter encounter) {
             try {
                 return objectMapper.writeValueAsString(encounter);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 return null;
             }
         }
@@ -368,7 +371,7 @@ public class EncounterServiceImpl implements EncounterService {
         // guards below would accept it.
         Encounter existing = requireEncounterInScope(id, isSuperAdmin, callerHospitalId);
 
-        EncounterResolution ctx = resolveEncounterResolution(request, locale);
+        EncounterResolution ctx = resolveEncounterResolution(request, locale, existing);
         // Keep a snapshot before merge for audit
         String previousValues = serializeEncounter(existing);
         // Snapshot the pre-merge status so we can detect a transition into COMPLETED below.
@@ -734,6 +737,22 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
+        return resolveEncounterResolution(request, locale, null);
+    }
+
+    /**
+     * Resolves the graph an encounter write needs. {@code existing} is the encounter being
+     * updated, null on create. An update that names the attending already recorded is not
+     * choosing them, so it neither re-checks their role nor looks their assignment up again:
+     * the encounter keeps the assignment it carries. Assignments are hard-deleted and
+     * {@code clinical.encounters.assignment_id} has no foreign key, so a clinician whose
+     * role was later revoked stays the attending of record on the encounters they own, and
+     * those encounters stay editable. Dev, 2026-09-13: a nurse's edit on a doctor's encounter
+     * was refused with "not authorized to be attending" because that doctor's assignment was
+     * gone, and no one could edit the four encounters that doctor had attended.
+     */
+    private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale,
+                                                           Encounter existing) {
         UUID patientId = resolvePatientId(request, locale);
         // Use unscoped query: multi-hospital patients have Patient.hospitalId set to
         // their FIRST hospital, so the tenant-scoped findById misses them when accessed
@@ -764,14 +783,31 @@ public class EncounterServiceImpl implements EncounterService {
             .map(User::getId)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale)));
 
-        validateStaffRole(userId, hospitalId, locale);
         validateAppointment(appointment, patient, hospitalId, locale);
 
-        UserRoleHospitalAssignment assignment = assignmentRepository
-            .findByUserIdAndHospitalId(userId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND, null, locale)));
+        UserRoleHospitalAssignment assignment;
+        if (keepsRecordedAttending(existing, staffId)) {
+            assignment = existing.getAssignment();
+        } else {
+            validateStaffRole(userId, hospitalId, locale);
+            assignment = assignmentRepository
+                .findByUserIdAndHospitalId(userId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND, null, locale)));
+        }
 
         return new EncounterResolution(patient, staff, hospital, appointment, department, assignment, hospitalId, userId);
+    }
+
+    /**
+     * True when an update names the attending the encounter already records. The id is read
+     * off the lazy proxy without a query; the hospital cannot differ, since
+     * {@link #ensureStaffHospitalAlignment} has already pinned the staff to the request's hospital.
+     */
+    private static boolean keepsRecordedAttending(Encounter existing, UUID staffId) {
+        return existing != null
+            && existing.getStaff() != null
+            && staffId.equals(existing.getStaff().getId())
+            && existing.getAssignment() != null;
     }
 
     private Appointment findAppointment(UUID appointmentId, Locale locale) {
@@ -1212,7 +1248,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             return null;
         }
     }
@@ -1931,8 +1967,14 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         String recipientUsername = patient.getUser().getUsername();
-        String hospitalName = encounter.getHospital() != null ? encounter.getHospital().getName() : "your hospital";
-        String message = "Your visit summary is now available from " + hospitalName + ".";
+        // Read by the patient, so rendered in the patient's stated language —
+        // never in the discharging clinician's request locale.
+        Locale locale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+        String hospitalName = encounter.getHospital() != null && encounter.getHospital().getName() != null
+            ? encounter.getHospital().getName()
+            : messageSource.getMessage("encounter.visitSummary.hospitalFallback", null, locale);
+        String message = messageSource.getMessage(
+            "encounter.visitSummary.notification", new Object[]{hospitalName}, locale);
         try {
             notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
         } catch (Exception ignored) {

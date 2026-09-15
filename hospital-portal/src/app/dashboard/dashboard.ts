@@ -10,6 +10,7 @@ import {
 import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
+import { HospitalService } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
 import { BillingService, BillingInvoiceResponse } from '../services/billing.service';
@@ -76,6 +77,7 @@ import {
   CredentialRenewalTarget,
 } from './credential-renewal/credential-renewal.component';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -145,6 +147,7 @@ interface NavTile {
 export class DashboardComponent implements OnInit, OnDestroy {
   // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
+  private readonly hospitalService = inject(HospitalService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
   private readonly billingService = inject(BillingService);
@@ -249,6 +252,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   snapshotDrawerOpen = signal(false);
   specialization = signal<string | null>(null);
   departmentName = signal<string | null>(null);
+  /** Name of the caller's active hospital, shown as a chip in the clinician hero. */
+  hospitalName = signal<string | null>(null);
+  tasksToComplete = computed(() => this.inboxCounts()?.tasksToComplete ?? 0);
 
   // ── Inbox accordion collapse state ──────────────────────────
   inboxCollapsedSections = signal<Set<string>>(new Set());
@@ -428,6 +434,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isRadiologist()) return 'radiologist';
     return 'fallback';
   });
+
+  /**
+   * Views that render the Quick Actions strip, which already carries New
+   * Appointment / Start Encounter / Register Patient. The hero shows those
+   * shortcuts only where no strip does, so nothing is on the page twice.
+   */
+  hasQuickActionsStrip = computed(
+    () =>
+      (['hospitaladmin', 'doctor', 'nurse', 'receptionist'] as string[]).includes(
+        this.activeView(),
+      ) && this.quickActions().length > 0,
+  );
 
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
@@ -1019,7 +1037,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         key: 'open_balance',
         label: this.t('DASHBOARD.OPEN_BALANCE'),
-        value: '$' + (s.billing.openBalanceTotal ?? 0).toLocaleString(),
+        // XOF through the same formatter as every other amount on this page — the
+        // tile used to hard-code a dollar sign on a CFA franc balance.
+        value: this.formatInvoiceAmount(s.billing.openBalanceTotal ?? 0),
         icon: 'account_balance',
         color: '#d97706',
         bgColor: '#fef3c7',
@@ -2064,16 +2084,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Mirrors the billing page's XOF formatting so amounts read identically. */
   formatInvoiceAmount(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(currentLocale(), {
       style: 'currency',
       currency: 'XOF',
       maximumFractionDigits: 0,
     }).format(amount ?? 0);
-  }
-
-  /** Mirrors the billing page's status rendering (underscores → spaces). */
-  formatInvoiceStatus(status: string): string {
-    return status ? status.replace(/_/g, ' ') : '—';
   }
 
   private initProfile(): void {
@@ -2226,6 +2241,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
           done();
         },
         error: () => done(),
+      });
+    }
+
+    // Hero hospital chip (clinicians). Not counted in `pending`: the hero
+    // renders without it and fills in when the name arrives.
+    const heroHospitalId = this.isClinician() ? this.auth.getHospitalId() : null;
+    if (heroHospitalId) {
+      this.hospitalService.getById(heroHospitalId).subscribe({
+        next: (h) => this.hospitalName.set(h.name ?? null),
+        error: () => this.hospitalName.set(null),
       });
     }
 

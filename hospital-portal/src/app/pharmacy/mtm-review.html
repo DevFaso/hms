@@ -36,9 +36,13 @@
           <div class="field">
             <label for="mtmStatus">{{ 'PHARMACY.STATUS' | translate }}</label>
             <select id="mtmStatus" [(ngModel)]="form.status" name="status">
-              <option value="DRAFT">DRAFT</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="REFERRED">REFERRED</option>
+              <option value="DRAFT">{{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.DRAFT' | translate }}</option>
+              <option value="COMPLETED">
+                {{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.COMPLETED' | translate }}
+              </option>
+              <option value="REFERRED">
+                {{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.REFERRED' | translate }}
+              </option>
             </select>
           </div>
         </div>

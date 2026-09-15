@@ -1,7 +1,15 @@
-import { Component, Output, EventEmitter, Input, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  Output,
+  EventEmitter,
+  Input,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   ReceptionService,
   ReceptionQueueItem,
@@ -13,8 +21,9 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './checkin-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
 })
 export class CheckinDialogComponent {
@@ -24,6 +33,7 @@ export class CheckinDialogComponent {
 
   private readonly receptionService = inject(ReceptionService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Form fields ────────────────────────── */
   chiefComplaint = signal('');
@@ -43,12 +53,12 @@ export class CheckinDialogComponent {
 
   submit(): void {
     if (!this.queueItem?.appointmentId) {
-      this.toast.error('No appointment selected for check-in');
+      this.toast.error(this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED'));
       return;
     }
 
     if (!this.identityConfirmed()) {
-      this.toast.error('Please confirm patient identity before check-in');
+      this.toast.error(this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST'));
       return;
     }
 
@@ -71,12 +81,14 @@ export class CheckinDialogComponent {
     this.receptionService.checkInPatient(request).subscribe({
       next: (response) => {
         this.saving.set(false);
-        this.toast.success(response.message || 'Patient checked in successfully');
+        this.toast.success(
+          response.message || this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'),
+        );
         this.checkedIn.emit(response);
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? 'Failed to check in patient. Please try again.';
+        const msg = err?.error?.message ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED');
         this.toast.error(msg);
       },
     });

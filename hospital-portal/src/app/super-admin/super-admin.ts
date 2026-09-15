@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -12,6 +20,7 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface ControlTowerStat {
   key: string;
@@ -58,8 +67,9 @@ interface ActivityRow {
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, DatePipe],
+  imports: [CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
   templateUrl: './super-admin.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',
 })
 export class SuperAdminComponent implements OnInit {

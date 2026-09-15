@@ -14,10 +14,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ReassignConsultationRequestDTO {
 
-    @NotNull(message = "New consultant ID is required")
+    @NotNull(message = "{reassignConsultation.consultantId.required}")
     private UUID consultantId;
 
-    @NotBlank(message = "Reassignment reason is required")
-    @Size(max = 500, message = "Reassignment reason must not exceed 500 characters")
+    @NotBlank(message = "{reassignConsultation.reassignmentReason.required}")
+    @Size(max = 500, message = "{reassignConsultation.reassignmentReason.size}")
     private String reassignmentReason;
 }

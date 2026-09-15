@@ -1,5 +1,12 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -7,13 +14,14 @@ import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './staff-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
 })
 export class StaffListComponent implements OnInit {
@@ -23,6 +31,7 @@ export class StaffListComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly permissions = inject(PermissionService);
+  private readonly translate = inject(TranslateService);
 
   /** True when the user can create/edit/delete staff (admin roles only). */
   readonly canManageStaff = this.permissions.hasPermission('Manage Staff');
@@ -186,7 +195,7 @@ export class StaffListComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -202,7 +211,7 @@ export class StaffListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load staff');
+        this.toast.error(this.translate.instant('STAFF.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -295,7 +304,7 @@ export class StaffListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.userEmail || !this.form.hospitalName) {
-      this.toast.error('User and hospital are required');
+      this.toast.error(this.translate.instant('STAFF.USER_AND_HOSPITAL_REQUIRED'));
       return;
     }
     this.saving.set(true);
@@ -320,14 +329,16 @@ export class StaffListComponent implements OnInit {
 
     request$.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Staff updated' : 'Staff created');
+        this.toast.success(this.translate.instant(existing ? 'STAFF.UPDATED' : 'STAFF.CREATED'));
         this.closeModal();
         this.saving.set(false);
         this.loadStaff();
       },
       error: (err) => {
         const body = err?.error;
-        let msg = `Failed to ${existing ? 'update' : 'create'} staff`;
+        let msg: string = this.translate.instant(
+          existing ? 'STAFF.UPDATE_FAILED' : 'STAFF.CREATE_FAILED',
+        );
         if (body?.fieldErrors) {
           msg = Object.values(body.fieldErrors).join('. ');
         } else if (body?.message) {
@@ -356,13 +367,13 @@ export class StaffListComponent implements OnInit {
     this.deleting.set(true);
     this.staffService.deactivate(member.id).subscribe({
       next: () => {
-        this.toast.success('Staff deactivated');
+        this.toast.success(this.translate.instant('STAFF.DEACTIVATED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadStaff();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to deactivate staff');
+        this.toast.error(err?.error?.message ?? this.translate.instant('STAFF.DEACTIVATE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -377,7 +388,7 @@ export class StaffListComponent implements OnInit {
   }
 
   formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return 'Staff';
+    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
     return jobTitle
       .replaceAll('_', ' ')
       .toLowerCase()

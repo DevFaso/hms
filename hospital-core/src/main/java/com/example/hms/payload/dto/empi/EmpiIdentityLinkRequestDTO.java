@@ -10,7 +10,7 @@ import java.util.UUID;
 @Data
 public class EmpiIdentityLinkRequestDTO {
 
-    @NotNull(message = "Patient identifier is required")
+    @NotNull(message = "{empiIdentityLink.patientId.required}")
     private UUID patientId;
 
     private UUID organizationId;

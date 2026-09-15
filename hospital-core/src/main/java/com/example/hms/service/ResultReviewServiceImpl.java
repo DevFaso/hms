@@ -35,6 +35,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -59,6 +62,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final EncounterRepository encounterRepository;
     private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final MessageSource messageSource;
 
     @Override
     public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId) {
@@ -70,6 +74,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         }
         Staff staff = staffOpt.get();
         UUID staffId = staff.getId();
+        // The queue is built for the physician making the request.
+        Locale locale = LocaleContextHolder.getLocale();
 
         // Get completed lab orders (results available) ordered by this physician
         List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
@@ -94,7 +100,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .forEach(order -> {
                     List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
                     for (LabResult result : results) {
-                        queue.add(toQueueItem(order, result));
+                        queue.add(toQueueItem(order, result, locale));
                     }
                 });
 
@@ -117,6 +123,9 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         Staff staff = staffOpt.get();
         UUID staffId = staff.getId();
         List<ClinicalInboxItemDTO> items = new ArrayList<>();
+        // The inbox is rendered for the clinician making the request, so
+        // every label below follows the request locale.
+        Locale locale = LocaleContextHolder.getLocale();
 
         // 1. Unread messages — count only (no list query available)
         try {
@@ -125,8 +134,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 items.add(ClinicalInboxItemDTO.builder()
                         .id(UUID.randomUUID())
                         .category("MESSAGE")
-                        .source("Chat")
-                        .subject(unreadCount + " unread message" + (unreadCount > 1 ? "s" : ""))
+                        .source(text("inbox.source.chat", locale))
+                        .subject(text("inbox.messages.unread", locale, unreadCount))
                         .urgency(URGENCY_NORMAL)
                         .timestamp(LocalDateTime.now())
                         .actionType("REPLY")
@@ -143,10 +152,14 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         items.add(ClinicalInboxItemDTO.builder()
                                 .id(consult.getId())
                                 .category("CONSULT_REQUEST")
-                                .source(consult.getRequestingProvider() != null ? consult.getRequestingProvider().getFullName() : "Unknown")
+                                .source(consult.getRequestingProvider() != null
+                                        ? consult.getRequestingProvider().getFullName()
+                                        : text("inbox.source.unknown", locale))
                                 .patientName(consult.getPatient() != null ? consult.getPatient().getFirstName() + " " + consult.getPatient().getLastName() : null)
                                 .patientId(consult.getPatient() != null ? consult.getPatient().getId() : null)
-                                .subject(consult.getReasonForConsult() != null ? truncate(consult.getReasonForConsult(), 80) : "Consultation Request")
+                                .subject(consult.getReasonForConsult() != null
+                                        ? truncate(consult.getReasonForConsult(), 80)
+                                        : text("inbox.consult.defaultSubject", locale))
                                 .urgency(consult.getUrgency() != null ? mapConsultUrgency(consult.getUrgency().name()) : URGENCY_NORMAL)
                                 .timestamp(consult.getRequestedAt())
                                 .actionType("ACCEPT")
@@ -160,12 +173,12 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         try {
             digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING)
                     .forEach(sig -> {
-                        String docLabel = formatSignatureType(sig.getReportType());
+                        String docLabel = formatSignatureType(sig.getReportType(), locale);
                         items.add(ClinicalInboxItemDTO.builder()
                                 .id(sig.getId())
                                 .category("DOCUMENT_TO_SIGN")
-                                .source("System")
-                                .subject(docLabel + " – awaiting your signature")
+                                .source(text("inbox.source.system", locale))
+                                .subject(text("inbox.signature.awaiting", locale, docLabel))
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(sig.getCreatedAt())
                                 .actionType("SIGN")
@@ -189,12 +202,14 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .forEach(note -> items.add(ClinicalInboxItemDTO.builder()
                                 .id(note.getId())
                                 .category("DOCUMENT_TO_SIGN")
-                                .source(note.getAuthorName() != null ? note.getAuthorName() : "Encounter note")
+                                .source(note.getAuthorName() != null
+                                        ? note.getAuthorName()
+                                        : text("inbox.source.encounterNote", locale))
                                 .patientName(note.getPatient() != null
                                         ? note.getPatient().getFirstName() + " " + note.getPatient().getLastName()
                                         : null)
                                 .patientId(note.getPatient() != null ? note.getPatient().getId() : null)
-                                .subject("Encounter note awaiting co-signature")
+                                .subject(text("inbox.note.awaitingCosign", locale))
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(note.getSignedAt())
                                 .actionType("SIGN")
@@ -209,10 +224,10 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             items.add(ClinicalInboxItemDTO.builder()
                     .id(enc.getId())
                     .category("TASK")
-                    .source("Encounter")
+                    .source(text("inbox.source.encounter", locale))
                     .patientName(enc.getPatient() != null ? enc.getPatient().getFirstName() + " " + enc.getPatient().getLastName() : null)
                     .patientId(enc.getPatient() != null ? enc.getPatient().getId() : null)
-                    .subject("Active encounter in progress")
+                    .subject(text("inbox.encounter.active", locale))
                     .urgency(URGENCY_NORMAL)
                     .timestamp(enc.getEncounterDate())
                     .actionType("OPEN_CHART")
@@ -226,8 +241,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 items.add(ClinicalInboxItemDTO.builder()
                         .id(UUID.randomUUID())
                         .category("PHARMACY_CLARIFICATION")
-                        .source("Pharmacy")
-                        .subject(clarificationCount + " prescription" + (clarificationCount > 1 ? "s" : "") + (clarificationCount == 1 ? " needs clarification" : " need clarification"))
+                        .source(text("inbox.source.pharmacy", locale))
+                        .subject(text("inbox.pharmacy.clarification", locale, clarificationCount))
                         .urgency("HIGH")
                         .timestamp(LocalDateTime.now())
                         .actionType("REVIEW")
@@ -247,16 +262,16 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         String medication = refill.getPrescription() != null
                                 && refill.getPrescription().getMedicationName() != null
                                 ? refill.getPrescription().getMedicationName()
-                                : "Medication";
+                                : text("inbox.refill.medicationFallback", locale);
                         Patient patient = refill.getPatient();
                         items.add(ClinicalInboxItemDTO.builder()
                                 .id(refill.getId())
                                 .category("REFILL_REQUEST")
-                                .source("Patient Portal")
+                                .source(text("inbox.source.patientPortal", locale))
                                 .patientName(patient != null
                                         ? patient.getFirstName() + " " + patient.getLastName() : null)
                                 .patientId(patient != null ? patient.getId() : null)
-                                .subject("Refill requested – " + truncate(medication, 80))
+                                .subject(text("inbox.refill.requested", locale, truncate(medication, 80)))
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(refill.getCreatedAt())
                                 .actionType("REVIEW")
@@ -274,10 +289,14 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return items;
     }
 
-    private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result) {
+    private String text(String key, Locale locale, Object... args) {
+        return messageSource.getMessage(key, args, locale);
+    }
+
+    private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result, Locale locale) {
         String testName = order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName()
-                : "Lab Test";
+                : text("lab.test.fallback", locale);
         String abnormalFlag = result.getAbnormalFlag() != null
                 ? result.getAbnormalFlag().name()
                 : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
@@ -327,20 +346,15 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return text.length() <= maxLen ? text : text.substring(0, maxLen) + "...";
     }
 
-    private String formatSignatureType(com.example.hms.enums.SignatureType type) {
-        if (type == null) return "Document";
-        return switch (type) {
-            case DISCHARGE_SUMMARY  -> "Discharge Summary";
-            case LAB_RESULT         -> "Lab Result";
-            case IMAGING_REPORT     -> "Imaging Report";
-            case OPERATIVE_NOTE     -> "Operative Note";
-            case CONSULTATION_NOTE  -> "Consultation Note";
-            case PROGRESS_NOTE      -> "Progress Note";
-            case PROCEDURE_REPORT   -> "Procedure Report";
-            case PATHOLOGY_REPORT   -> "Pathology Report";
-            case ED_NOTE            -> "ED Note";
-            case MEDICATION_ORDER   -> "Medication Order";
-            default -> type.name().replace('_', ' ');
-        };
+    /**
+     * Label for a document type. Types without a {@code signature.type.*}
+     * entry fall back to the enum name, as before.
+     */
+    private String formatSignatureType(com.example.hms.enums.SignatureType type, Locale locale) {
+        if (type == null) {
+            return text("signature.type.document", locale);
+        }
+        return messageSource.getMessage(
+                "signature.type." + type.name(), null, type.name().replace('_', ' '), locale);
     }
 }

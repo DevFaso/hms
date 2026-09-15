@@ -73,6 +73,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -116,7 +117,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_INVALID_DATE_MESSAGE = "Invalid date value: ";
     private static final String DEFAULT_ROW_MISSING_USER = "Row missing user identifier";
     private static final String DEFAULT_ROW_MISSING_ROLE = "Row missing role identifier";
-    private static final String DEFAULT_CREATED_MESSAGE = "Created";
     private static final String DEFAULT_PROCESSING_ERROR = "Unable to process CSV content";
     private static final String MSG_ASSIGNMENT_INVALID_CODE = "assignment.confirmation.invalid";
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
@@ -1119,7 +1119,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .rowNumber(rowNumber)
                 .identifier(resolveRowIdentifier(request))
                 .success(true)
-                .message(DEFAULT_CREATED_MESSAGE)
+                .message(messageSource.getMessage("assignment.import.created", null, LocaleContextHolder.getLocale()))
                 .assignmentId(assignment.getId())
                 .assignmentCode(assignment.getAssignmentCode())
                 .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
@@ -1939,7 +1939,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 );
                 String description = (hospital != null && StringUtils.hasText(hospital.getName()))
                     ? hospital.getName()
-                    : "Global";
+                    : messageSource.getMessage("assignment.scope.global", null, LocaleContextHolder.getLocale());
                 
                 return AssignmentMinimalDTO.builder()
                     .id(assignment.getId())

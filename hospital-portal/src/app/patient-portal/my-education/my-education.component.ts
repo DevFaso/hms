@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -17,6 +24,7 @@ type EducationTab = 'assigned' | 'completed' | 'questions';
   standalone: true,
   imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
   templateUrl: './my-education.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-education.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyEducationComponent implements OnInit {

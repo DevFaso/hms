@@ -20,13 +20,13 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UltrasoundOrderRequestDTO {
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{ultrasoundOrder.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotNull(message = "Scan type is required")
+    @NotNull(message = "{ultrasoundOrder.scanType.required}")
     private UltrasoundScanType scanType;
 
     private Integer gestationalAgeAtOrder; // weeks

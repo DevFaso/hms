@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CancelConsultationRequestDTO {
 
-    @NotBlank(message = "Cancellation reason is required")
-    @Size(max = 500, message = "Cancellation reason must not exceed 500 characters")
+    @NotBlank(message = "{consultation.cancellationReason.required}")
+    @Size(max = 500, message = "{consultation.cancellationReason.size}")
     private String cancellationReason;
 }

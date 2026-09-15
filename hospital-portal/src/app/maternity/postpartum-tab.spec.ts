@@ -1,9 +1,14 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
 import { PostpartumTabComponent } from './postpartum-tab';
-import { PostpartumSchedule, PostpartumService } from '../services/postpartum.service';
+import {
+  NewbornAssessmentResponse,
+  PostpartumObservationResponse,
+  PostpartumSchedule,
+  PostpartumService,
+} from '../services/postpartum.service';
 import { LaborService } from '../services/labor.service';
 import {
   ProInstrumentView,
@@ -327,5 +332,53 @@ describe('PostpartumTabComponent — screening', () => {
     component.onPatientPicked({ id: 'p2' } as PatientResponse);
     inFlight.next([response('stale')]);
     expect(component.screenings()).toEqual([]);
+  });
+
+  it('resolves maternal and newborn alerts through their own vocabularies', () => {
+    // Two `alert.type` renders, two enums, two tabs. The maternal observations
+    // carry PostpartumAlertType (HEMORRHAGE, INFECTION, …); the newborn
+    // assessments carry NewbornAlertType (APGAR, THERMOREGULATION, …), which
+    // shares not one constant with it. Piping both through the maternal domain
+    // — as the first cut of this tranche did — left every newborn alert in
+    // Title-Cased English while the enum gate called the domain fully covered.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          POSTPARTUM_ALERT_TYPE: { HEMORRHAGE: 'maternel-hemorragie' },
+          NEWBORN_ALERT_TYPE: { APGAR: 'nouveau-ne-apgar' },
+        },
+      },
+    });
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const component = fixture.componentInstance;
+    component.patient.set({ id: 'p-1', firstName: 'Awa' } as PatientResponse);
+    component.observations.set([
+      {
+        id: 'obs-1',
+        alerts: [{ type: 'HEMORRHAGE', severity: 'URGENT', message: 'saignement' }],
+      } as unknown as PostpartumObservationResponse,
+    ]);
+    component.assessments.set([
+      {
+        id: 'asm-1',
+        alerts: [{ type: 'APGAR', severity: 'URGENT', message: 'apgar bas' }],
+      } as unknown as NewbornAssessmentResponse,
+    ]);
+
+    const textNow = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    component.section.set('mother');
+    fixture.detectChanges();
+    expect(textNow()).toContain('maternel-hemorragie');
+
+    component.section.set('newborn');
+    fixture.detectChanges();
+    expect(textNow()).toContain('nouveau-ne-apgar');
+    // Title-Cased English is what an unkeyed value falls through to, and is
+    // what the maternal domain would have produced for APGAR.
+    expect(textNow()).not.toContain('Apgar ');
   });
 });

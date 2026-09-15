@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -47,6 +54,7 @@ interface OnCallFormModel {
     HospitalScopeHintComponent,
   ],
   templateUrl: './on-call.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './on-call.scss',
 })
 export class OnCallComponent implements OnInit {

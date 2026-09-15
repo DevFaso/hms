@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
@@ -102,7 +102,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -111,77 +111,79 @@ const EMPTY_FORM: IntakeFormState = {
         <p class="adt-intake__subtitle">{{ 'ADT_INTAKE.SUBTITLE' | translate }}</p>
       </header>
 
-      <p *ngIf="loading()" class="adt-intake__loading" data-testid="adt-intake-loading">
-        {{ 'ADT_INTAKE.LOADING' | translate }}
-      </p>
+      @if (loading()) {
+        <p class="adt-intake__loading" data-testid="adt-intake-loading">
+          {{ 'ADT_INTAKE.LOADING' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="adt-intake__error" data-testid="adt-intake-error">
-        {{ 'ADT_INTAKE.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="adt-intake__error" data-testid="adt-intake-error">
+          {{ 'ADT_INTAKE.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        *ngIf="!loading() && !error() && configs().length > 0"
-        class="data-table"
-        data-testid="adt-intake-table"
-      >
-        <thead>
-          <tr>
-            <th scope="col">{{ 'ADT_INTAKE.COL_HOSPITAL' | translate }}</th>
-            <th scope="col">{{ 'ADT_INTAKE.COL_ADMISSION_TYPE' | translate }}</th>
-            <th scope="col">{{ 'ADT_INTAKE.COL_ACUITY' | translate }}</th>
-            <th scope="col">{{ 'ADT_INTAKE.COL_ENCOUNTER_TYPE' | translate }}</th>
-            <th scope="col">{{ 'ADT_INTAKE.COL_ENABLED' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let cfg of configs(); trackBy: trackById" [attr.data-config-id]="cfg.id">
-            <td>{{ cfg.hospitalName || cfg.hospitalId }}</td>
-            <td>{{ cfg.defaultAdmissionType }}</td>
-            <td>{{ cfg.defaultAcuityLevel }}</td>
-            <td>{{ cfg.defaultEncounterType }}</td>
-            <td>
-              <span
-                class="adt-intake__pill"
-                [class.adt-intake__pill--on]="cfg.enabled"
-                [class.adt-intake__pill--off]="!cfg.enabled"
-              >
-                {{
-                  cfg.enabled
-                    ? ('ADT_INTAKE.STATE_ENABLED' | translate)
-                    : ('ADT_INTAKE.STATE_DISABLED' | translate)
-                }}
-              </span>
-            </td>
-            <td class="actions">
-              <button
-                type="button"
-                class="action-link"
-                (click)="edit(cfg)"
-                [attr.data-testid]="'adt-intake-edit-' + cfg.id"
-              >
-                {{ 'COMMON.EDIT' | translate }}
-              </button>
-              <button
-                type="button"
-                class="action-link delete-link"
-                (click)="remove(cfg)"
-                [attr.data-testid]="'adt-intake-delete-' + cfg.id"
-              >
-                {{ 'COMMON.DELETE' | translate }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!loading() && !error() && configs().length > 0) {
+        <table class="data-table" data-testid="adt-intake-table">
+          <thead>
+            <tr>
+              <th scope="col">{{ 'ADT_INTAKE.COL_HOSPITAL' | translate }}</th>
+              <th scope="col">{{ 'ADT_INTAKE.COL_ADMISSION_TYPE' | translate }}</th>
+              <th scope="col">{{ 'ADT_INTAKE.COL_ACUITY' | translate }}</th>
+              <th scope="col">{{ 'ADT_INTAKE.COL_ENCOUNTER_TYPE' | translate }}</th>
+              <th scope="col">{{ 'ADT_INTAKE.COL_ENABLED' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cfg of configs(); track trackById($index, cfg)) {
+              <tr [attr.data-config-id]="cfg.id">
+                <td>{{ cfg.hospitalName || cfg.hospitalId }}</td>
+                <td>{{ cfg.defaultAdmissionType }}</td>
+                <td>{{ cfg.defaultAcuityLevel }}</td>
+                <td>{{ cfg.defaultEncounterType }}</td>
+                <td>
+                  <span
+                    class="adt-intake__pill"
+                    [class.adt-intake__pill--on]="cfg.enabled"
+                    [class.adt-intake__pill--off]="!cfg.enabled"
+                  >
+                    {{
+                      cfg.enabled
+                        ? ('ADT_INTAKE.STATE_ENABLED' | translate)
+                        : ('ADT_INTAKE.STATE_DISABLED' | translate)
+                    }}
+                  </span>
+                </td>
+                <td class="actions">
+                  <button
+                    type="button"
+                    class="action-link"
+                    (click)="edit(cfg)"
+                    [attr.data-testid]="'adt-intake-edit-' + cfg.id"
+                  >
+                    {{ 'COMMON.EDIT' | translate }}
+                  </button>
+                  <button
+                    type="button"
+                    class="action-link delete-link"
+                    (click)="remove(cfg)"
+                    [attr.data-testid]="'adt-intake-delete-' + cfg.id"
+                  >
+                    {{ 'COMMON.DELETE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!loading() && !error() && configs().length === 0"
-        class="adt-intake__empty"
-        data-testid="adt-intake-empty"
-      >
-        {{ 'ADT_INTAKE.EMPTY' | translate }}
-      </p>
+      @if (!loading() && !error() && configs().length === 0) {
+        <p class="adt-intake__empty" data-testid="adt-intake-empty">
+          {{ 'ADT_INTAKE.EMPTY' | translate }}
+        </p>
+      }
 
       <form
         class="adt-intake__form"
@@ -213,44 +215,49 @@ const EMPTY_FORM: IntakeFormState = {
             [disabled]="!!editingId()"
             data-testid="adt-intake-hospital-search"
           />
-          <small *ngIf="form.hospitalId" data-testid="adt-intake-hospital-selected">
-            {{ 'ADT_INTAKE.SELECTED_HOSPITAL' | translate }}
-            <code>{{ selectedHospitalLabel() || form.hospitalId }}</code>
-          </small>
-          <small *ngIf="hospitalSearchLoading()" data-testid="adt-intake-hospital-loading">
-            {{ 'ADT_INTAKE.HOSPITAL_SEARCHING' | translate }}
-          </small>
-          <ul
-            *ngIf="hospitalOptions().length > 0"
-            class="adt-intake__suggestions"
-            role="listbox"
-            data-testid="adt-intake-hospital-options"
-          >
-            <li
-              *ngFor="let opt of hospitalOptions(); trackBy: trackHospitalOption"
-              role="option"
-              [attr.aria-selected]="form.hospitalId === opt.id"
-              [attr.data-hospital-id]="opt.id"
+          @if (form.hospitalId) {
+            <small data-testid="adt-intake-hospital-selected">
+              {{ 'ADT_INTAKE.SELECTED_HOSPITAL' | translate }}
+              <code>{{ selectedHospitalLabel() || form.hospitalId }}</code>
+            </small>
+          }
+          @if (hospitalSearchLoading()) {
+            <small data-testid="adt-intake-hospital-loading">
+              {{ 'ADT_INTAKE.HOSPITAL_SEARCHING' | translate }}
+            </small>
+          }
+          @if (hospitalOptions().length > 0) {
+            <ul
+              class="adt-intake__suggestions"
+              role="listbox"
+              data-testid="adt-intake-hospital-options"
             >
-              <button
-                type="button"
-                class="adt-intake__suggestion-btn"
-                (click)="selectHospital(opt)"
-              >
-                {{ opt.label }}
-              </button>
-            </li>
-          </ul>
-          <small
-            *ngIf="
-              hospitalSearchTerm().trim().length >= 2 &&
-              !hospitalSearchLoading() &&
-              hospitalOptions().length === 0
-            "
-            data-testid="adt-intake-hospital-empty"
-          >
-            {{ 'ADT_INTAKE.HOSPITAL_NO_MATCH' | translate }}
-          </small>
+              @for (opt of hospitalOptions(); track trackHospitalOption($index, opt)) {
+                <li
+                  role="option"
+                  [attr.aria-selected]="form.hospitalId === opt.id"
+                  [attr.data-hospital-id]="opt.id"
+                >
+                  <button
+                    type="button"
+                    class="adt-intake__suggestion-btn"
+                    (click)="selectHospital(opt)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+          @if (
+            hospitalSearchTerm().trim().length >= 2 &&
+            !hospitalSearchLoading() &&
+            hospitalOptions().length === 0
+          ) {
+            <small data-testid="adt-intake-hospital-empty">
+              {{ 'ADT_INTAKE.HOSPITAL_NO_MATCH' | translate }}
+            </small>
+          }
         </div>
 
         <div class="form-row">
@@ -266,16 +273,17 @@ const EMPTY_FORM: IntakeFormState = {
             <option value="">
               {{ 'ADT_INTAKE.FIELD.PROVIDER_PLACEHOLDER' | translate }}
             </option>
-            <option *ngFor="let s of staffOptions(); trackBy: trackStaffOption" [value]="s.id">
-              {{ s.label }}
-            </option>
+            @for (s of staffOptions(); track trackStaffOption($index, s)) {
+              <option [value]="s.id">
+                {{ s.label }}
+              </option>
+            }
           </select>
-          <small
-            *ngIf="form.hospitalId && !dependentsLoading() && staffOptions().length === 0"
-            data-testid="adt-intake-provider-empty"
-          >
-            {{ 'ADT_INTAKE.PROVIDER_NO_OPTIONS' | translate }}
-          </small>
+          @if (form.hospitalId && !dependentsLoading() && staffOptions().length === 0) {
+            <small data-testid="adt-intake-provider-empty">
+              {{ 'ADT_INTAKE.PROVIDER_NO_OPTIONS' | translate }}
+            </small>
+          }
         </div>
 
         <div class="form-row">
@@ -290,19 +298,17 @@ const EMPTY_FORM: IntakeFormState = {
             <option value="">
               {{ 'ADT_INTAKE.FIELD.DEPARTMENT_PLACEHOLDER' | translate }}
             </option>
-            <option
-              *ngFor="let d of departmentOptions(); trackBy: trackDepartmentOption"
-              [value]="d.id"
-            >
-              {{ d.name }}
-            </option>
+            @for (d of departmentOptions(); track trackDepartmentOption($index, d)) {
+              <option [value]="d.id">
+                {{ d.name }}
+              </option>
+            }
           </select>
-          <small
-            *ngIf="form.hospitalId && !dependentsLoading() && departmentOptions().length === 0"
-            data-testid="adt-intake-department-empty"
-          >
-            {{ 'ADT_INTAKE.DEPARTMENT_NO_OPTIONS' | translate }}
-          </small>
+          @if (form.hospitalId && !dependentsLoading() && departmentOptions().length === 0) {
+            <small data-testid="adt-intake-department-empty">
+              {{ 'ADT_INTAKE.DEPARTMENT_NO_OPTIONS' | translate }}
+            </small>
+          }
         </div>
 
         <div class="form-row">
@@ -327,7 +333,9 @@ const EMPTY_FORM: IntakeFormState = {
             [(ngModel)]="form.defaultAdmissionType"
             data-testid="adt-intake-admission-type"
           >
-            <option *ngFor="let opt of admissionTypes" [value]="opt">{{ opt }}</option>
+            @for (opt of admissionTypes; track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
           </select>
         </div>
 
@@ -339,7 +347,9 @@ const EMPTY_FORM: IntakeFormState = {
             [(ngModel)]="form.defaultAcuityLevel"
             data-testid="adt-intake-acuity"
           >
-            <option *ngFor="let opt of acuityLevels" [value]="opt">{{ opt }}</option>
+            @for (opt of acuityLevels; track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
           </select>
         </div>
 
@@ -353,7 +363,9 @@ const EMPTY_FORM: IntakeFormState = {
             [(ngModel)]="form.defaultEncounterType"
             data-testid="adt-intake-encounter-type"
           >
-            <option *ngFor="let opt of encounterTypes" [value]="opt">{{ opt }}</option>
+            @for (opt of encounterTypes; track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
           </select>
         </div>
 

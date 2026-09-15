@@ -30,8 +30,8 @@ public interface IntegrationMessageEventRepository
         + "(:integrationId IS NULL OR m.integrationId = :integrationId) AND "
         + "(:organizationId IS NULL OR m.organizationId = :organizationId) AND "
         + "(:status IS NULL OR m.status = :status) AND "
-        + "(:fromDate IS NULL OR m.receivedAt >= :fromDate) AND "
-        + "(:toDate IS NULL OR m.receivedAt <= :toDate) "
+        + "(CAST(:fromDate AS LocalDateTime) IS NULL OR m.receivedAt >= :fromDate) AND "
+        + "(CAST(:toDate AS LocalDateTime) IS NULL OR m.receivedAt <= :toDate) "
         + "ORDER BY m.receivedAt DESC")
     Page<IntegrationMessageEvent> search(
         @Param("integrationId") String integrationId,

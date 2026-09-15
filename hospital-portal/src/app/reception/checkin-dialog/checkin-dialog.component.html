@@ -12,32 +12,48 @@
   >
     <header class="checkin-dialog__header">
       <h3>{{ 'RECEPTION.CHECKIN_TITLE' | translate }}</h3>
-      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+      <button
+        class="btn-close"
+        (click)="dismissed.emit()"
+        [attr.aria-label]="'RECEPTION.CLOSE' | translate"
+      >
+        &times;
+      </button>
     </header>
 
     <!-- Patient summary strip -->
-    <div class="checkin-dialog__patient-info" *ngIf="queueItem">
-      <div class="info-row">
-        <span class="label">{{ 'RECEPTION.PATIENT_NAME' | translate }}:</span>
-        <span class="value">{{ queueItem.patientName }}</span>
+    @if (queueItem) {
+      <div class="checkin-dialog__patient-info">
+        <div class="info-row">
+          <span class="label">{{ 'RECEPTION.PATIENT_NAME' | translate }}:</span>
+          <span class="value">{{ queueItem.patientName }}</span>
+        </div>
+        @if (queueItem.mrn) {
+          <div class="info-row">
+            <span class="label">{{ 'RECEPTION.MRN' | translate }}:</span>
+            <span class="value">{{ queueItem.mrn }}</span>
+          </div>
+        }
+        @if (queueItem.appointmentTime) {
+          <div class="info-row">
+            <span class="label">{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}:</span>
+            <span class="value">{{ queueItem.appointmentTime }}</span>
+          </div>
+        }
+        @if (queueItem.providerName) {
+          <div class="info-row">
+            <span class="label">{{ 'RECEPTION.PROVIDER' | translate }}:</span>
+            <span class="value">{{ queueItem.providerName }}</span>
+          </div>
+        }
+        @if (queueItem.departmentName) {
+          <div class="info-row">
+            <span class="label">{{ 'RECEPTION.DEPARTMENT' | translate }}:</span>
+            <span class="value">{{ queueItem.departmentName }}</span>
+          </div>
+        }
       </div>
-      <div class="info-row" *ngIf="queueItem.mrn">
-        <span class="label">{{ 'RECEPTION.MRN' | translate }}:</span>
-        <span class="value">{{ queueItem.mrn }}</span>
-      </div>
-      <div class="info-row" *ngIf="queueItem.appointmentTime">
-        <span class="label">{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}:</span>
-        <span class="value">{{ queueItem.appointmentTime }}</span>
-      </div>
-      <div class="info-row" *ngIf="queueItem.providerName">
-        <span class="label">{{ 'RECEPTION.PROVIDER' | translate }}:</span>
-        <span class="value">{{ queueItem.providerName }}</span>
-      </div>
-      <div class="info-row" *ngIf="queueItem.departmentName">
-        <span class="label">{{ 'RECEPTION.DEPARTMENT' | translate }}:</span>
-        <span class="value">{{ queueItem.departmentName }}</span>
-      </div>
-    </div>
+    }
 
     <!-- Check-in form -->
     <form class="checkin-dialog__form" (ngSubmit)="submit()">
@@ -77,19 +93,21 @@
           {{ 'RECEPTION.CONSENT_OBTAINED' | translate }}
         </label>
       </div>
-      <div class="form-group" *ngIf="consentObtained()">
-        <label for="consentSignedName">{{ 'RECEPTION.CONSENT_SIGNED_NAME' | translate }}</label>
-        <input
-          id="consentSignedName"
-          type="text"
-          maxlength="200"
-          data-testid="checkin-consent-name"
-          [ngModel]="consentSignedName()"
-          (ngModelChange)="consentSignedName.set($event)"
-          name="consentSignedName"
-          [placeholder]="'RECEPTION.CONSENT_SIGNED_NAME_HINT' | translate"
-        />
-      </div>
+      @if (consentObtained()) {
+        <div class="form-group">
+          <label for="consentSignedName">{{ 'RECEPTION.CONSENT_SIGNED_NAME' | translate }}</label>
+          <input
+            id="consentSignedName"
+            type="text"
+            maxlength="200"
+            data-testid="checkin-consent-name"
+            [ngModel]="consentSignedName()"
+            (ngModelChange)="consentSignedName.set($event)"
+            name="consentSignedName"
+            [placeholder]="'RECEPTION.CONSENT_SIGNED_NAME_HINT' | translate"
+          />
+        </div>
+      }
 
       <!-- Chief complaint -->
       <div class="form-group">
@@ -100,7 +118,7 @@
           [ngModel]="chiefComplaint()"
           (ngModelChange)="chiefComplaint.set($event)"
           name="chiefComplaint"
-          placeholder="Reason for visit..."
+          [placeholder]="'RECEPTION.REASON_PLACEHOLDER' | translate"
         ></textarea>
       </div>
 
@@ -128,7 +146,7 @@
           [ngModel]="notes()"
           (ngModelChange)="notes.set($event)"
           name="notes"
-          placeholder="Optional notes..."
+          [placeholder]="'RECEPTION.NOTES_PLACEHOLDER' | translate"
         ></textarea>
       </div>
 
@@ -138,8 +156,12 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
-          <span *ngIf="saving()">{{ 'COMMON.SAVING' | translate }}...</span>
-          <span *ngIf="!saving()">{{ 'RECEPTION.CHECK_IN' | translate }}</span>
+          @if (saving()) {
+            <span>{{ 'COMMON.SAVING' | translate }}...</span>
+          }
+          @if (!saving()) {
+            <span>{{ 'RECEPTION.CHECK_IN' | translate }}</span>
+          }
         </button>
       </div>
     </form>

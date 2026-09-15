@@ -14,15 +14,15 @@ import java.util.UUID;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 public class VisitEducationDocumentationRequestDTO extends VisitEducationDocumentationBaseDTO {
-    @NotNull(message = "Encounter ID is required")
+    @NotNull(message = "{visitEducationDocumentation.encounterId.required}")
     private UUID encounterId;
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{visitEducationDocumentation.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Category is required")
+    @NotNull(message = "{visitEducationDocumentation.category.required}")
     private EducationCategory category;
 
-    @NotNull(message = "Topic discussed is required")
+    @NotNull(message = "{visitEducationDocumentation.topicDiscussed.required}")
     private String topicDiscussed;
 }

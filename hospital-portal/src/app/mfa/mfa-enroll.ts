@@ -1,6 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
@@ -13,11 +14,13 @@ import { MfaService } from '../auth/mfa.service';
 @Component({
   selector: 'app-mfa-enroll',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './mfa-enroll.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./mfa-enroll.scss'],
 })
 export class MfaEnrollComponent {
+  private readonly translate = inject(TranslateService);
   private readonly mfaService = inject(MfaService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -62,7 +65,7 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? 'Failed to start enrollment.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_START_FAILED'));
         this.loading.set(false);
       },
     });
@@ -74,7 +77,7 @@ export class MfaEnrollComponent {
 
   submitVerification(): void {
     if (!this.totpCode || this.totpCode.length < 6) {
-      this.error.set('Please enter a valid 6-digit code.');
+      this.error.set(this.translate.instant('MFA.ENROLL_INVALID_CODE'));
       return;
     }
     this.loading.set(true);
@@ -85,7 +88,7 @@ export class MfaEnrollComponent {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.error.set(err?.error?.message ?? this.translate.instant('MFA.ENROLL_WRONG_CODE'));
         this.loading.set(false);
       },
     });

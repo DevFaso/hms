@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -9,9 +16,11 @@ import {
   HospitalMetric,
 } from '../services/dashboard.service';
 import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface StatCard {
-  label: string;
+  /** i18n key, not text: the cards are rendered with | translate. */
+  labelKey: string;
   value: number;
   icon: string;
   color: string;
@@ -21,8 +30,9 @@ interface StatCard {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, TranslateModule, KpiCardsComponent],
+  imports: [CommonModule, TranslateModule, KpiCardsComponent, EnumLabelPipe],
   templateUrl: './analytics.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analytics.scss',
 })
 export class AnalyticsComponent implements OnInit {
@@ -36,56 +46,56 @@ export class AnalyticsComponent implements OnInit {
     if (!a) return [];
     return [
       {
-        label: 'Total Patients',
+        labelKey: 'ANALYTICS.CARD.TOTAL_PATIENTS',
         value: a.totalPatients,
         icon: 'people',
         color: '#23b79c',
         bg: '#e6f4f1',
       },
       {
-        label: 'Appointments',
+        labelKey: 'ANALYTICS.APPOINTMENTS',
         value: a.totalAppointments,
         icon: 'calendar_month',
         color: '#8b5cf6',
         bg: '#f5f3ff',
       },
       {
-        label: 'Encounters',
+        labelKey: 'ANALYTICS.ENCOUNTERS',
         value: a.totalEncounters,
         icon: 'medical_services',
         color: '#10b981',
         bg: '#ecfdf5',
       },
       {
-        label: 'Invoices',
+        labelKey: 'ANALYTICS.CARD.INVOICES',
         value: a.totalInvoices,
         icon: 'receipt_long',
         color: '#f59e0b',
         bg: '#fffbeb',
       },
       {
-        label: 'Lab Orders',
+        labelKey: 'ANALYTICS.CARD.LAB_ORDERS',
         value: a.totalLabOrders,
         icon: 'science',
         color: '#ef4444',
         bg: '#fef2f2',
       },
       {
-        label: 'Prescriptions',
+        labelKey: 'ANALYTICS.CARD.PRESCRIPTIONS',
         value: a.totalPrescriptions,
         icon: 'medication',
         color: '#06b6d4',
         bg: '#ecfeff',
       },
       {
-        label: 'Users',
+        labelKey: 'ANALYTICS.CARD.USERS',
         value: a.totalUsers,
         icon: 'group',
         color: '#6366f1',
         bg: '#eef2ff',
       },
       {
-        label: 'Active Hospitals',
+        labelKey: 'ANALYTICS.CARD.ACTIVE_HOSPITALS',
         value: a.activeHospitals,
         icon: 'local_hospital',
         color: '#ec4899',

@@ -22,9 +22,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OrganizationRegionUpdateRequestDTO {
 
-    @NotNull(message = "Region is required")
+    @NotNull(message = "{organizationRegion.region.required}")
     private OrganizationRegion region;
 
-    @Size(max = 1000, message = "Reason must not exceed 1000 characters")
+    @Size(max = 1000, message = "{organizationRegion.reason.size}")
     private String reason;
 }

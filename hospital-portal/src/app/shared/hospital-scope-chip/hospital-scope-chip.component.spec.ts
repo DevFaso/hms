@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -33,7 +33,7 @@ describe('HospitalScopeChipComponent', () => {
       imports: [HospitalScopeChipComponent, TranslateModule.forRoot()],
       // The chip injects ActivatedRoute + Router via HospitalScopeUrlService
       // for `?hospitalId=` URL round-trip, so provide a stub router.
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(HospitalScopeChipComponent);
     component = fixture.componentInstance;
@@ -130,6 +130,24 @@ describe('HospitalScopeChipComponent', () => {
     expect(roleContext.globalView()).toBeTrue();
     expect(roleContext.selectedHospitalId()).toBeNull();
     expect(emissions).toEqual([null]);
+  });
+
+  it('preserveScope keeps the pinned hospital on init instead of re-reading the URL', () => {
+    asSuperAdmin();
+    roleContext.scopeToHospital('hosp-9');
+    component.preserveScope = true;
+    fixture.detectChanges();
+
+    expect(roleContext.globalView()).toBeFalse();
+    expect(roleContext.selectedHospitalId()).toBe('hosp-9');
+  });
+
+  it('without preserveScope a URL with no hospital resets a pinned super-admin to global view', () => {
+    asSuperAdmin();
+    roleContext.scopeToHospital('hosp-9');
+    fixture.detectChanges();
+
+    expect(roleContext.globalView()).toBeTrue();
   });
 
   it('onSelectAll switches to global view and closes the overlay', () => {

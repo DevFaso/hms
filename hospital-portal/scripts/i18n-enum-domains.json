@@ -1,0 +1,109 @@
+{
+  "$comment": [
+    "Every domain a template pipes through `| enumLabel: '<domain>'`, and where",
+    "its values come from. check-i18n-enum-coverage.mjs reads the named Java enum",
+    "and fails when one of its constants has no PORTAL.ENUM.<GROUP>.<VALUE> key —",
+    "the pipe would Title-Case it into English and no other gate would notice.",
+    "",
+    "Declare exactly one of:",
+    "  enum    one Java enum file",
+    "  enums   several, checked as a union — one badge, several emitters",
+    "  reason  why no enum backs it: a String column, a portal-side vocabulary,",
+    "          or a status a service DERIVES rather than reads. Name the method",
+    "          when it is derived, so the next reader can check it by hand.",
+    "",
+    "An UNDECLARED domain fails on purpose: adding an `enumLabel:` call should",
+    "make someone say what the API can actually send. So does a hollow entry",
+    "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
+    "out."
+  ],
+  "admissionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java" },
+  "alertSeverity": {
+    "reason": "the dashboard alert badge is its only call site, and ClinicalAlertDTO.severity is a String the service composes — CRITICAL / URGENT / WARNING / INFO, per its own comment and the portal ClinicalAlert union, all four keyed. The four *AlertSeverity enums do not reach this badge; if one ever does, declare them here as `enums` and key CAUTION and NONE."
+  },
+  "appointmentStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AppointmentStatus.java" },
+  "auditEventType": {
+    "enums": [
+      "hospital-core/src/main/java/com/example/hms/enums/AuditEventType.java",
+      "hospital-core/src/main/java/com/example/hms/enums/PermissionMatrixAuditAction.java"
+    ]
+  },
+  "auditStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java" },
+  "bedStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java" },
+  "bloodProductType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BloodProductType.java" },
+  "consultationStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationStatus.java" },
+  "consultationType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationType.java" },
+  "consultationUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ConsultationUrgency.java" },
+  "dischargeDisposition": { "enum": "hospital-core/src/main/java/com/example/hms/enums/DischargeDisposition.java" },
+  "dispenseStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/DispenseStatus.java" },
+  "educationCategory": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EducationCategory.java" },
+  "encounterStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterStatus.java" },
+  "encounterType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/EncounterType.java" },
+  "gender": {
+    "reason": "two String sources, neither an enum: Patient.gender, whose vocabulary is the portal's own filter list (MALE / FEMALE / OTHER / PREFER_NOT_TO_SAY), and the lab reference range, whose LabTestReferenceRangeDTO.gender is @Pattern(\"ALL|MALE|FEMALE\") — ALL is keyed for that one and belongs to no patient"
+  },
+  "imagingModality": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java" },
+  "imagingOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderStatus.java" },
+  "imagingReportStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingReportStatus.java" },
+  "immunizationStatus": {
+    "reason": "PatientImmunization.status is a free String column (length 50), not an enum, so nothing can verify it. Its vocabulary is the comment on the field and the portal form that writes it: COMPLETED / NOT_DONE / REFUSED / DEFERRED / ENTERED_IN_ERROR."
+  },
+  "invoiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java" },
+  "isolationPrecautionType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java" },
+  "jobTitle": { "enum": "hospital-core/src/main/java/com/example/hms/enums/JobTitle.java" },
+  "labOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java" },
+  "leaveStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java" },
+  "marTaskStatus": {
+    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription and the clock — COMPLETED when a GIVEN MAR row exists, else OVERDUE or DUE against a naive created-at-plus-four-hours window. nurse-station.html also guards on GIVEN, which resolveMarStatus never returns, so GIVEN is deliberately not keyed — keying a value nothing emits is how the phantom DISCHARGE_DISPOSITION vocabulary got here."
+  },
+  "mtmReviewStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java" },
+  "newbornAlertType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/NewbornAlertType.java" },
+  "notificationType": {
+    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across 13 call sites: APPOINTMENT_REMINDER, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
+  },
+  "orderTaskType": {
+    "reason": "no enum holds it: NurseTaskServiceImpl stamps a fixed token per order source on the nurse station board — LAB, IMAGING, PROCEDURE. All three were the English words Lab, Imaging and Procedure until the tranche that keyed them."
+  },
+  "organizationType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/OrganizationType.java" },
+  "permissions": {
+    "reason": "ProxyResponseDTO.permissions is a free-form String, not an enum"
+  },
+  "platformReleaseStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformReleaseStatus.java" },
+  "platformServiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformServiceStatus.java" },
+  "postpartumAlertType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PostpartumAlertType.java" },
+  "prescriptionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PrescriptionStatus.java" },
+  "procedureOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureOrderStatus.java" },
+  "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
+  "referralUrgency": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralUrgency.java" },
+  "relationship": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java" },
+  "role": {
+    "roles": [
+      "hospital-core/src/main/resources/db/migration",
+      "hospital-core/src/main/java/com/example/hms/seed/RoleSeeder.java",
+      "hospital-core/src/main/java/com/example/hms/bootstrap/DevSyntheticDataSeeder.java"
+    ]
+  },
+  "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
+  "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
+  "snapshotItemType": {
+    "reason": "no enum holds it: PatientSnapshotServiceImpl stamps a fixed token per section of the drawer — VITALS on every recent-vital row and LAB on every pending-order row, because only lab orders are collected. Both were the English words Vitals and Lab until the tranche that keyed them; a wire value the portal must render has to be a token, not a word the server already chose the language for."
+  },
+  "status": {
+    "reason": "a deliberate shared pool across 13 call sites whose DTOs disagree, plus two vocabularies a service INVENTS and no enum holds: PatientMedicationServiceImpl.resolveStatus (ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD) and PatientLabResultServiceImpl.resolveStatus (PENDING / NORMAL / CRITICAL / ABNORMAL_HIGH / ABNORMAL_LOW). A 14th caller was added deliberately: the chart-review TIMELINE pill, whose one badge carries all six ChartReviewServiceImpl sections — Encounter status, a note's SIGNED/DRAFT, AbnormalFlag, Prescription status, imaging report-status-or-order-status, and ProcedureOrder status — so the pool now holds every value those six can emit, each copied from the group that owns it. Every OTHER site whose field really carries one enum has been pointed at that enum's own domain instead — if you are about to add another `status` call, check first whether yours is one of those."
+  },
+  "taskPriority": {
+    "reason": "shared by nurse tasks and in-basket items, which have separate priority vocabularies"
+  },
+  "treatmentPlanStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanStatus.java" },
+  "treatmentPlanTaskStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/TreatmentPlanTaskStatus.java" },
+  "vitalSource": {
+    "reason": "PatientVitalSign.source is a String; the portal owns the vocabulary"
+  },
+  "vitalTaskType": {
+    "reason": "no enum holds it: NurseTaskServiceImpl derives it from whether the vitals round is overdue — FULL_SET when it is, else ROUTINE. Both were the English words Full Set and Routine until the tranche that keyed them."
+  },
+  "vitalType": {
+    "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"
+  },
+  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" }
+}

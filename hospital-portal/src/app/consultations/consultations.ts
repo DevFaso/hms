@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -19,7 +26,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -31,6 +38,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './consultations.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './consultations.scss',
 })
 export class ConsultationsComponent implements OnInit {
@@ -42,6 +50,7 @@ export class ConsultationsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
 
   /**
    * Cross-tenant: expose super-admin global-view state to the template
@@ -148,14 +157,11 @@ export class ConsultationsComponent implements OnInit {
   ];
   urgencies: ConsultationUrgency[] = ['ROUTINE', 'URGENT', 'EMERGENCY', 'STAT'];
 
-  readonly typeLabel: Record<string, string> = {
-    OUTPATIENT_CONSULT: 'Outpatient',
-    INPATIENT_CONSULT: 'Inpatient',
-    FOLLOW_UP_CONSULT: 'Follow-up',
-    CURBSIDE_CONSULT: 'Curbside',
-    EMERGENCY_CONSULT: 'Emergency',
-  };
-
+  /**
+   * Short type labels for the badge and the type <select>. A getter, not a
+   * field, so the labels follow a runtime language switch — the template
+   * still indexes it as `typeLabel[value]`.
+   */
   ngOnInit(): void {
     // Cross-tenant: apply the URL scope BEFORE the first list fetch so
     // the auth interceptor reads the right X-Hospital-Id on initial
@@ -208,7 +214,7 @@ export class ConsultationsComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -294,13 +300,13 @@ export class ConsultationsComponent implements OnInit {
     this.saving.set(true);
     this.consultService.create(this.form).subscribe({
       next: () => {
-        this.toast.success('Consultation created');
+        this.toast.success(this.translate.instant('CONSULTATIONS.CREATE_SUCCESS'));
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('CONSULTATIONS.CREATE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -318,19 +324,19 @@ export class ConsultationsComponent implements OnInit {
   executeCancel(): void {
     const reason = this.cancelReason().trim();
     if (!reason) {
-      this.toast.error('Please enter a cancellation reason');
+      this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_REASON_REQUIRED'));
       return;
     }
     this.deleting.set(true);
     this.consultService.cancel(this.deletingItem()!.id, reason).subscribe({
       next: () => {
-        this.toast.success('Consultation cancelled');
+        this.toast.success(this.translate.instant('CONSULTATIONS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
         this.deleting.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Cancel failed');
+        this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -355,7 +361,7 @@ export class ConsultationsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load consultations');
+        this.toast.error(this.translate.instant('CONSULTATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -499,7 +505,7 @@ export class ConsultationsComponent implements OnInit {
   submitAssign(): void {
     const consultantId = this.assignConsultantId();
     if (!consultantId) {
-      this.toast.error('Please select a consultant');
+      this.toast.error(this.translate.instant('CONSULTATIONS.CONSULTANT_REQUIRED'));
       return;
     }
     const item = this.assigningItem()!;
@@ -507,32 +513,32 @@ export class ConsultationsComponent implements OnInit {
     if (this.isReassign()) {
       const reason = this.assignNote().trim();
       if (!reason) {
-        this.toast.error('Please enter a reassignment reason');
+        this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_REASON_REQUIRED'));
         this.assigning.set(false);
         return;
       }
       this.consultService.reassign(item.id, consultantId, reason).subscribe({
         next: () => {
-          this.toast.success('Consultation reassigned');
+          this.toast.success(this.translate.instant('CONSULTATIONS.REASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Reassignment failed');
+          this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'));
           this.assigning.set(false);
         },
       });
     } else {
       this.consultService.assign(item.id, consultantId, this.assignNote() || undefined).subscribe({
         next: () => {
-          this.toast.success('Consultation assigned');
+          this.toast.success(this.translate.instant('CONSULTATIONS.ASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Assignment failed');
+          this.toast.error(this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'));
           this.assigning.set(false);
         },
       });
@@ -575,14 +581,20 @@ export class ConsultationsComponent implements OnInit {
 
   getTimelineEvents(c: ConsultationResponse): { label: string; date: string }[] {
     const events: { label: string; date: string }[] = [];
-    if (c.requestedAt) events.push({ label: 'Requested', date: c.requestedAt });
-    if (c.assignedAt) events.push({ label: 'Assigned', date: c.assignedAt });
-    if (c.acknowledgedAt) events.push({ label: 'Acknowledged', date: c.acknowledgedAt });
-    if (c.scheduledAt) events.push({ label: 'Scheduled For', date: c.scheduledAt });
-    if (c.startedAt) events.push({ label: 'Started', date: c.startedAt });
-    if (c.completedAt) events.push({ label: 'Completed', date: c.completedAt });
-    if (c.cancelledAt) events.push({ label: 'Cancelled', date: c.cancelledAt });
-    if (c.declinedAt) events.push({ label: 'Declined', date: c.declinedAt });
+    const label = (key: string): string => this.translate.instant(key);
+    if (c.requestedAt)
+      events.push({ label: label('CONSULTATIONS.REQUESTED'), date: c.requestedAt });
+    if (c.assignedAt) events.push({ label: label('CONSULTATIONS.ASSIGNED'), date: c.assignedAt });
+    if (c.acknowledgedAt)
+      events.push({ label: label('CONSULTATIONS.ACKNOWLEDGED'), date: c.acknowledgedAt });
+    if (c.scheduledAt)
+      events.push({ label: label('CONSULTATIONS.SCHEDULED_FOR'), date: c.scheduledAt });
+    if (c.startedAt) events.push({ label: label('CONSULTATIONS.STARTED'), date: c.startedAt });
+    if (c.completedAt)
+      events.push({ label: label('CONSULTATIONS.COMPLETED'), date: c.completedAt });
+    if (c.cancelledAt)
+      events.push({ label: label('CONSULTATIONS.CANCELLED'), date: c.cancelledAt });
+    if (c.declinedAt) events.push({ label: label('CONSULTATIONS.DECLINED'), date: c.declinedAt });
     return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }
 
@@ -600,7 +612,7 @@ export class ConsultationsComponent implements OnInit {
 
   submitSchedule(): void {
     if (!this.scheduleForm.scheduledAt) {
-      this.toast.error('Please select a scheduled date/time');
+      this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULED_AT_REQUIRED'));
       return;
     }
     this.scheduling.set(true);
@@ -612,13 +624,13 @@ export class ConsultationsComponent implements OnInit {
       )
       .subscribe({
         next: () => {
-          this.toast.success('Consultation scheduled');
+          this.toast.success(this.translate.instant('CONSULTATIONS.SCHEDULE_SUCCESS'));
           this.closeScheduleModal();
           this.scheduling.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Schedule failed');
+          this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'));
           this.scheduling.set(false);
         },
       });
@@ -628,10 +640,10 @@ export class ConsultationsComponent implements OnInit {
   acknowledgeConsultation(c: ConsultationResponse): void {
     this.consultService.acknowledge(c.id).subscribe({
       next: () => {
-        this.toast.success('Consultation acknowledged');
+        this.toast.success(this.translate.instant('CONSULTATIONS.ACK_SUCCESS'));
         this.load();
       },
-      error: () => this.toast.error('Acknowledge failed'),
+      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.ACK_FAILED')),
     });
   }
 
@@ -639,10 +651,10 @@ export class ConsultationsComponent implements OnInit {
   startConsultation(c: ConsultationResponse): void {
     this.consultService.start(c.id).subscribe({
       next: () => {
-        this.toast.success('Consultation started');
+        this.toast.success(this.translate.instant('CONSULTATIONS.START_SUCCESS'));
         this.load();
       },
-      error: () => this.toast.error('Start failed'),
+      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.START_FAILED')),
     });
   }
 
@@ -665,7 +677,7 @@ export class ConsultationsComponent implements OnInit {
 
   submitComplete(): void {
     if (!this.completeForm.recommendations.trim()) {
-      this.toast.error('Recommendations are required');
+      this.toast.error(this.translate.instant('CONSULTATIONS.RECOMMENDATIONS_REQUIRED'));
       return;
     }
     this.completing.set(true);
@@ -678,13 +690,13 @@ export class ConsultationsComponent implements OnInit {
       })
       .subscribe({
         next: () => {
-          this.toast.success('Consultation completed');
+          this.toast.success(this.translate.instant('CONSULTATIONS.COMPLETE_SUCCESS'));
           this.closeCompleteModal();
           this.completing.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Complete failed');
+          this.toast.error(this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'));
           this.completing.set(false);
         },
       });
@@ -705,19 +717,19 @@ export class ConsultationsComponent implements OnInit {
   submitDecline(): void {
     const reason = this.declineReasonValue().trim();
     if (!reason) {
-      this.toast.error('Please enter a decline reason');
+      this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_REASON_REQUIRED'));
       return;
     }
     this.declining.set(true);
     this.consultService.decline(this.decliningItem()!.id, reason).subscribe({
       next: () => {
-        this.toast.success('Consultation declined');
+        this.toast.success(this.translate.instant('CONSULTATIONS.DECLINE_SUCCESS'));
         this.closeDeclineModal();
         this.declining.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Decline failed');
+        this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_FAILED'));
         this.declining.set(false);
       },
     });

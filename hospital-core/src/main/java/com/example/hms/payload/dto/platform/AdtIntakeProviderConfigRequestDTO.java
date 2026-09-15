@@ -16,26 +16,26 @@ import java.util.UUID;
  * the schema constraint from V103.
  */
 public record AdtIntakeProviderConfigRequestDTO(
-    @NotNull(message = "Hospital id is required")
+    @NotNull(message = "{adtIntakeProviderConfig.hospitalId.required}")
     UUID hospitalId,
 
-    @NotNull(message = "Admitting provider id is required")
+    @NotNull(message = "{adtIntakeProviderConfig.admittingProviderId.required}")
     UUID admittingProviderId,
 
     UUID departmentId,
 
     UUID defaultAssignmentId,
 
-    @NotNull(message = "Default admission type is required")
+    @NotNull(message = "{adtIntakeProviderConfig.defaultAdmissionType.required}")
     AdmissionType defaultAdmissionType,
 
-    @NotNull(message = "Default acuity level is required")
+    @NotNull(message = "{adtIntakeProviderConfig.defaultAcuityLevel.required}")
     AcuityLevel defaultAcuityLevel,
 
-    @NotNull(message = "Default encounter type is required")
+    @NotNull(message = "{adtIntakeProviderConfig.defaultEncounterType.required}")
     EncounterType defaultEncounterType,
 
-    @Size(max = 500, message = "Default chief complaint must be 500 characters or less")
+    @Size(max = 500, message = "{adtIntakeProviderConfig.defaultChiefComplaint.size}")
     String defaultChiefComplaint,
 
     Boolean enabled

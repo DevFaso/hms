@@ -163,7 +163,7 @@
                   [(ngModel)]="form.nameFr"
                   name="nameFr"
                   required
-                  placeholder="e.g., Amoxicilline"
+                  [placeholder]="'PHARMACY.NAME_FR_PLACEHOLDER' | translate"
                 />
               </div>
               <div class="field">
@@ -174,7 +174,7 @@
                   [(ngModel)]="form.genericName"
                   name="genericName"
                   required
-                  placeholder="e.g., Amoxicillin"
+                  [placeholder]="'PHARMACY.GENERIC_NAME_PLACEHOLDER' | translate"
                 />
               </div>
             </div>
@@ -273,7 +273,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="rxnormCode">Code RxNorm</label>
+                <label for="rxnormCode">{{ 'PHARMACY.RXNORM_CODE' | translate }}</label>
                 <input
                   id="rxnormCode"
                   type="text"

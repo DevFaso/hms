@@ -18,22 +18,22 @@ import java.time.LocalDateTime;
 public class MarVerificationRequestDTO {
 
     /** Wristband barcode value (typically the patient UUID). */
-    @NotBlank(message = "Patient wristband scan is required.")
+    @NotBlank(message = "{marVerification.patientScanValue.required}")
     @Size(max = 255)
     private String patientScanValue;
 
     /** Medication label barcode (formulary code, RxNorm, or medication name). */
-    @NotBlank(message = "Medication barcode scan is required.")
+    @NotBlank(message = "{marVerification.medicationScanValue.required}")
     @Size(max = 255)
     private String medicationScanValue;
 
     /** Dose entered or scanned at the bedside (e.g. "500 mg"). */
-    @NotBlank(message = "Dose is required.")
+    @NotBlank(message = "{marVerification.doseScanValue.required}")
     @Size(max = 100)
     private String doseScanValue;
 
     /** Route entered or scanned at the bedside (e.g. "PO", "IV"). */
-    @NotBlank(message = "Route is required.")
+    @NotBlank(message = "{marVerification.routeScanValue.required}")
     @Size(max = 80)
     private String routeScanValue;
 

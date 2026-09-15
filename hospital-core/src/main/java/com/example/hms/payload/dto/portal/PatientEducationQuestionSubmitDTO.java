@@ -25,8 +25,8 @@ public class PatientEducationQuestionSubmitDTO {
     /** Optional — a question may be about a specific assigned resource. */
     private UUID resourceId;
 
-    @NotBlank(message = "Question text is required")
-    @Size(min = 5, max = 2000, message = "Question must be between 5 and 2000 characters")
+    @NotBlank(message = "{patientEducationQuestionSubmit.questionText.required}")
+    @Size(min = 5, max = 2000, message = "{patientEducationQuestionSubmit.questionText.size}")
     private String questionText;
 
     private Boolean isUrgent;

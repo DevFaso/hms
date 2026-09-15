@@ -31,15 +31,15 @@ import java.util.UUID;
 @Schema(name = "UpdateUserRequestDTO", description = "Partial update payload — only provide fields you want to change")
 public class UpdateUserRequestDTO {
 
-    @Size(min = 3, max = 20, message = "Username must be 3–20 characters")
+    @Size(min = 3, max = 20, message = "{user.update.username.size}")
     @Schema(description = "New username; omit to keep current")
     private String username;
 
-    @Email(message = "Email should be valid")
+    @Email(message = "{user.update.email.invalid}")
     @Schema(description = "New email; omit to keep current")
     private String email;
 
-    @Size(min = 8, max = 64, message = "Password length must be 8–64 characters")
+    @Size(min = 8, max = 64, message = "{user.update.password.size}")
     @Schema(description = "New password; omit or send blank to keep current")
     private String password;
 

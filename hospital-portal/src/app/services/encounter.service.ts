@@ -12,8 +12,22 @@ export type EncounterStatus =
   | 'READY_FOR_DISCHARGE'
   | 'COMPLETED'
   | 'CANCELLED';
+/**
+ * The eight constants EncounterType.java declares. TELEHEALTH was missing
+ * here, so the API could send a value this type said was impossible and the
+ * encounters form could not offer it. (adt-intake-config.service.ts declares
+ * its own copy with all eight; walkin-dialog a third with five. Three unions
+ * for one backend enum is its own debt.)
+ */
 export type EncounterType =
-  'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'SURGERY' | 'LAB' | 'OUTPATIENT' | 'INPATIENT';
+  | 'CONSULTATION'
+  | 'FOLLOW_UP'
+  | 'EMERGENCY'
+  | 'SURGERY'
+  | 'LAB'
+  | 'OUTPATIENT'
+  | 'INPATIENT'
+  | 'TELEHEALTH';
 
 export interface EncounterNoteResponse {
   id: string;

@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -7,7 +14,7 @@ import {
   AuditEventTypeStatus,
 } from '../services/audit-log.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
@@ -15,11 +22,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './audit-logs.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',
 })
 export class AuditLogsComponent implements OnInit {
   private readonly auditService = inject(AuditLogService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly pageSize = 20;
 
@@ -74,7 +83,7 @@ export class AuditLogsComponent implements OnInit {
           this.loading.set(false);
         },
         error: () => {
-          this.toast.error('Failed to load audit logs');
+          this.toast.error(this.translate.instant('AUDIT.LOAD_FAILED'));
           this.loading.set(false);
         },
       });

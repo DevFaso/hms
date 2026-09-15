@@ -632,10 +632,12 @@
                 [(ngModel)]="t.testType"
                 [attr.aria-label]="'DISCHARGE.TEST_TYPE' | translate"
               >
-                <option value="LAB">LAB</option>
-                <option value="IMAGING">IMAGING</option>
-                <option value="PATHOLOGY">PATHOLOGY</option>
-                <option value="CULTURE">CULTURE</option>
+                <option value="LAB">{{ 'DISCHARGE.TEST_TYPE_LAB' | translate }}</option>
+                <option value="IMAGING">{{ 'DISCHARGE.TEST_TYPE_IMAGING' | translate }}</option>
+                <option value="PATHOLOGY">
+                  {{ 'DISCHARGE.TEST_TYPE_PATHOLOGY' | translate }}
+                </option>
+                <option value="CULTURE">{{ 'DISCHARGE.TEST_TYPE_CULTURE' | translate }}</option>
               </select>
               <input
                 type="text"

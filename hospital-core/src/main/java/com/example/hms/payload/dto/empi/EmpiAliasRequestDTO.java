@@ -9,10 +9,10 @@ import lombok.Data;
 @Data
 public class EmpiAliasRequestDTO {
 
-    @NotNull(message = "Alias type is required")
+    @NotNull(message = "{empiAlias.aliasType.required}")
     private EmpiAliasType aliasType;
 
-    @NotBlank(message = "Alias value is required")
+    @NotBlank(message = "{empiAlias.aliasValue.required}")
     @Size(max = 255)
     private String aliasValue;
 

@@ -10,7 +10,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
@@ -36,7 +36,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-break-glass-banner',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './break-glass-banner.component.html',
   styleUrl: './break-glass-banner.component.scss',
@@ -161,11 +161,11 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     const reason = this.reason().trim();
 
     if (!patientId || !hospitalId) {
-      this.toast.error('Cannot declare: patient or hospital is missing.');
+      this.toast.error(this.translate.instant('BREAK_GLASS.MISSING_CONTEXT'));
       return;
     }
     if (reason.length < 10) {
-      this.toast.error('Reason must be at least 10 characters.');
+      this.toast.error(this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT'));
       return;
     }
 
@@ -183,14 +183,16 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       next: (session) => {
         this.mySession.set(session);
         this.sessionChanged.emit(session);
-        this.toast.success('Break-the-glass session active.');
+        this.toast.success(this.translate.instant('BREAK_GLASS.SESSION_ACTIVE'));
         this.submitting.set(false);
         this.modalOpen.set(false);
         this.startClock();
       },
       error: (err) => {
         this.submitting.set(false);
-        this.toast.error(err?.error?.message ?? 'Could not declare break-the-glass.');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('BREAK_GLASS.DECLARE_FAILED'),
+        );
       },
     });
   }
@@ -205,11 +207,13 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       next: (updated) => {
         this.mySession.set(updated.live ? updated : null);
         this.sessionChanged.emit(null);
-        this.toast.success('Break-the-glass session revoked.');
+        this.toast.success(this.translate.instant('BREAK_GLASS.SESSION_REVOKED'));
         this.stopClock();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Could not revoke session.');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('BREAK_GLASS.REVOKE_FAILED'),
+        );
       },
     });
   }
@@ -273,7 +277,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     }
     const ms = new Date(session.expiresAt).getTime() - Date.now();
     if (ms <= 0) {
-      this.remainingLabel.set('expired');
+      this.remainingLabel.set(this.translate.instant('BREAK_GLASS.EXPIRED'));
       this.mySession.set({ ...session, live: false });
       this.sessionChanged.emit(null);
       // Stop the timer but keep the 'expired' label so the template shows it.

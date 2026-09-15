@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Read-back of a critical lab value by the receiving clinician")
 public class CriticalValueReadBackRequestDTO {
 
-    @NotBlank(message = "The repeated value is required.")
+    @NotBlank(message = "{criticalValueReadBack.repeatedValue.required}")
     @Size(max = 255)
     @Schema(description = "The result value as repeated back by the clinician", example = "6.8")
     private String repeatedValue;

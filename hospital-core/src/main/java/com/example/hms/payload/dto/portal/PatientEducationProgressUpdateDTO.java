@@ -22,15 +22,15 @@ import lombok.NoArgsConstructor;
 @Builder
 public class PatientEducationProgressUpdateDTO {
 
-    @Min(value = 0, message = "Progress percentage must be between 0 and 100")
-    @Max(value = 100, message = "Progress percentage must be between 0 and 100")
+    @Min(value = 0, message = "{patientEducationProgress.progressPercentage.range}")
+    @Max(value = 100, message = "{patientEducationProgress.progressPercentage.range}")
     private Integer progressPercentage;
 
-    @Min(value = 1, message = "Rating must be between 1 and 5")
-    @Max(value = 5, message = "Rating must be between 1 and 5")
+    @Min(value = 1, message = "{patientEducationProgress.rating.range}")
+    @Max(value = 5, message = "{patientEducationProgress.rating.range}")
     private Integer rating;
 
-    @Size(max = 2000, message = "Feedback cannot exceed 2000 characters")
+    @Size(max = 2000, message = "{patientEducationProgress.feedback.size}")
     private String feedback;
 
     /** Patient confirms they understood the material. */
@@ -39,6 +39,6 @@ public class PatientEducationProgressUpdateDTO {
     /** Patient flags that they need this explained. */
     private Boolean needsClarification;
 
-    @Size(max = 1000, message = "Clarification request cannot exceed 1000 characters")
+    @Size(max = 1000, message = "{patientEducationProgress.clarificationRequest.size}")
     private String clarificationRequest;
 }

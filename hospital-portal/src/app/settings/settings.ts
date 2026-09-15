@@ -1,7 +1,8 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 
 interface SettingsCard {
   icon: string;
@@ -29,8 +30,9 @@ const SUPPORTED_LANGS = [
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule],
   templateUrl: './settings.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './settings.scss',
 })
 export class SettingsComponent {
@@ -38,7 +40,7 @@ export class SettingsComponent {
   private readonly router = inject(Router);
 
   readonly languages = SUPPORTED_LANGS;
-  currentLang = signal<string>(this.translate.currentLang || this.translate.defaultLang || 'fr');
+  currentLang = signal<string>(storedLang());
 
   cards = computed<SettingsCard[]>(() => [
     {
@@ -82,12 +84,6 @@ export class SettingsComponent {
   ]);
 
   switchLang(lang: string): void {
-    this.translate.use(lang);
-    this.currentLang.set(lang);
-    try {
-      localStorage.setItem('lang', lang);
-    } catch {
-      // localStorage can throw in privacy modes — preference is still applied for the session.
-    }
+    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
   }
 }

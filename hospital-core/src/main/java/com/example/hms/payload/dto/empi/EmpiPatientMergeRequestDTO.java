@@ -10,10 +10,10 @@ import java.util.UUID;
 @Data
 public class EmpiPatientMergeRequestDTO {
 
-    @NotNull(message = "Primary (surviving) patient identifier is required")
+    @NotNull(message = "{empiMerge.primaryPatientId.required}")
     private UUID primaryPatientId;
 
-    @NotNull(message = "Secondary (duplicate) patient identifier is required")
+    @NotNull(message = "{empiMerge.secondaryPatientId.required}")
     private UUID secondaryPatientId;
 
     @Size(max = 2000)

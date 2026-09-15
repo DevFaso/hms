@@ -1,7 +1,14 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -36,11 +43,13 @@ const ADJUSTMENT_REASON_CODES = [
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './stock-adjustment.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-adjustment.scss',
 })
 export class StockAdjustmentComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
   selectedPharmacyId = '';
@@ -124,7 +133,7 @@ export class StockAdjustmentComponent implements OnInit {
         this.txLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load transactions');
+        this.toast.error(this.translate.instant('PHARMACY.TX_LOAD_FAILED'));
         this.txLoading.set(false);
       },
     });
@@ -175,13 +184,13 @@ export class StockAdjustmentComponent implements OnInit {
    */
   submitForm(): void {
     if (!this.form.inventoryItemId || !this.txType() || this.form.quantity <= 0) {
-      this.toast.error('Item, type, and quantity are required');
+      this.toast.error(this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS'));
       return;
     }
 
-    const validationError = this.validateTyped();
-    if (validationError) {
-      this.toast.error(validationError);
+    const validationErrorKey = this.validateTyped();
+    if (validationErrorKey) {
+      this.toast.error(this.translate.instant(validationErrorKey));
       return;
     }
 
@@ -190,33 +199,35 @@ export class StockAdjustmentComponent implements OnInit {
     this.saving.set(true);
     this.svc.recordTransaction(this.form).subscribe({
       next: () => {
-        this.toast.success('Transaction recorded');
+        this.toast.success(this.translate.instant('PHARMACY.TX_RECORDED'));
         this.closeForm();
         this.saving.set(false);
         this.loadTransactions();
         this.loadInventoryItems();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to record transaction');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.TX_RECORD_FAILED'),
+        );
         this.saving.set(false);
       },
     });
   }
 
-  /** Returns an error message if a required type-specific field is missing. */
+  /** Returns the i18n key of an error if a required type-specific field is missing. */
   private validateTyped(): string | null {
     if (this.isAdjustment()) {
-      if (!this.adjustmentReasonCode) return 'Adjustment reason code is required';
-      if (!this.adjustmentNotes?.trim()) return 'Adjustment notes are required';
+      if (!this.adjustmentReasonCode) return 'PHARMACY.ADJUSTMENT_REASON_REQUIRED';
+      if (!this.adjustmentNotes?.trim()) return 'PHARMACY.ADJUSTMENT_NOTES_REQUIRED';
     }
     if (this.isTransfer() && !this.transferDestinationPharmacyId) {
-      return 'Destination pharmacy is required for transfers';
+      return 'PHARMACY.TRANSFER_DESTINATION_REQUIRED';
     }
     if (this.isReturn() && !this.returnReference?.trim()) {
-      return 'Return reference number is required';
+      return 'PHARMACY.RETURN_REFERENCE_REQUIRED';
     }
     if (this.isReceipt() && !this.receiptLotNumber?.trim()) {
-      return 'Lot number is required for receipts';
+      return 'PHARMACY.RECEIPT_LOT_REQUIRED';
     }
     return null;
   }
@@ -263,7 +274,9 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   getItemName(item: InventoryItemResponse): string {
-    return item.medicationName ?? item.medicationCode ?? 'Unknown item';
+    return (
+      item.medicationName ?? item.medicationCode ?? this.translate.instant('PHARMACY.UNKNOWN_ITEM')
+    );
   }
 
   getTypeClass(type: string): string {

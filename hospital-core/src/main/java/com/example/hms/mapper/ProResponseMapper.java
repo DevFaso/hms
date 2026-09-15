@@ -4,9 +4,9 @@ import com.example.hms.model.pro.ProInstrument;
 import com.example.hms.model.pro.ProResponse;
 import com.example.hms.payload.dto.pro.ProResponseDTO;
 import com.example.hms.payload.dto.pro.ProSelfReportDTO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +30,7 @@ public class ProResponseMapper {
     public String answersToJson(Map<Integer, Integer> answers) {
         try {
             return objectMapper.writeValueAsString(new TreeMap<>(answers));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalArgumentException("Answers could not be serialised", ex);
         }
     }
@@ -41,7 +41,7 @@ public class ProResponseMapper {
         }
         try {
             return objectMapper.readValue(json, ANSWERS_TYPE);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException("Stored answers could not be read", ex);
         }
     }

@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -19,6 +19,7 @@ import {
   standalone: true,
   imports: [CommonModule, TranslateModule],
   templateUrl: './micro-tab.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './micro-tab.component.scss',
 })
 export class MicroTabComponent implements OnInit {

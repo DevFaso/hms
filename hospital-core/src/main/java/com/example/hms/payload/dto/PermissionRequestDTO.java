@@ -11,9 +11,9 @@ public class PermissionRequestDTO {
 
     private UUID id;
 
-    @NotBlank(message = "Permission name cannot be blank")
+    @NotBlank(message = "{permission.name.required}")
     private String name;
 
-    @NotNull(message = "Assignment ID is required")
+    @NotNull(message = "{permission.assignmentId.required}")
     private UUID assignmentId;
 }

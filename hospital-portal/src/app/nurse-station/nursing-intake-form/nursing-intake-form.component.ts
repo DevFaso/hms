@@ -1,7 +1,15 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EncounterService,
   EncounterResponse,
@@ -17,6 +25,7 @@ import { ToastService } from '../../core/toast.service';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './nursing-intake-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nursing-intake-form.component.scss',
 })
 export class NursingIntakeFormComponent {
@@ -26,6 +35,7 @@ export class NursingIntakeFormComponent {
 
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Allergy reconciliation ─────────────── */
   allergies = signal<AllergyEntry[]>([]);
@@ -74,7 +84,7 @@ export class NursingIntakeFormComponent {
 
   submit(): void {
     if (!this.encounter?.id) {
-      this.toast.error('No encounter selected for nursing intake');
+      this.toast.error(this.translate.instant('INTAKE.NO_ENCOUNTER'));
       return;
     }
 
@@ -98,12 +108,12 @@ export class NursingIntakeFormComponent {
     this.encounterService.submitNursingIntake(this.encounter.id, request).subscribe({
       next: (response) => {
         this.saving.set(false);
-        this.toast.success('Nursing intake completed successfully');
+        this.toast.success(this.translate.instant('INTAKE.COMPLETED'));
         this.intakeCompleted.emit(response);
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? 'Failed to submit nursing intake. Please try again.';
+        const msg = err?.error?.message ?? this.translate.instant('INTAKE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

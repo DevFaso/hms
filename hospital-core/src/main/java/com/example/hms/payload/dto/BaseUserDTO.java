@@ -12,21 +12,21 @@ import java.time.Period;
 @Getter
 @Setter
 public abstract class BaseUserDTO {
-    @NotBlank(message = "Username is required.")
+    @NotBlank(message = "{user.username.required}")
     @Size(min = 3, max = 20)
     private String username;
 
-    @NotBlank(message = "Email is required.")
+    @NotBlank(message = "{user.email.required}")
     @Email
     private String email;
 
-    @NotBlank(message = "First name is required.")
+    @NotBlank(message = "{user.firstName.required}")
     private String firstName;
 
-    @NotBlank(message = "Last name is required.")
+    @NotBlank(message = "{user.lastName.required}")
     private String lastName;
 
-    @NotBlank(message = "Phone number is required.")
+    @NotBlank(message = "{user.phoneNumber.required}")
     private String phoneNumber;
 
     private LocalDate dateOfBirth;

@@ -1,7 +1,17 @@
-import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+  DestroyRef,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EncounterService,
   EncounterResponse,
@@ -18,6 +28,7 @@ type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRES
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
   templateUrl: './triage-form.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',
 })
 export class TriageFormComponent {
@@ -27,6 +38,7 @@ export class TriageFormComponent {
 
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Vital signs ────────────────────────── */
   temperatureCelsius = signal<number | null>(null);
@@ -62,13 +74,37 @@ export class TriageFormComponent {
   /* ── UI state ───────────────────────────── */
   saving = signal(false);
 
-  readonly esiOptions = [
-    { value: 1, label: 'ESI 1 – Resuscitation' },
-    { value: 2, label: 'ESI 2 – Emergent' },
-    { value: 3, label: 'ESI 3 – Urgent' },
-    { value: 4, label: 'ESI 4 – Less Urgent' },
-    { value: 5, label: 'ESI 5 – Non-Urgent' },
-  ];
+  /**
+   * Localised once at construction. Kept as a stable array (not a getter) because
+   * the template tracks each option by identity; the form is re-created per
+   * encounter, so a language switch is picked up on the next open.
+   */
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Built once, then rebuilt only when ngx-translate reports a language (or a
+   * late-arriving translation file) — never inside change detection, so the
+   * array keeps its identity for the template's tracking and a first paint
+   * ahead of the language file does not freeze raw keys for the form's life.
+   */
+  private esiOptionsCache = this.buildEsiOptions();
+
+  get esiOptions(): { value: number; label: string }[] {
+    return this.esiOptionsCache;
+  }
+
+  private buildEsiOptions(): { value: number; label: string }[] {
+    return [1, 2, 3, 4, 5].map((value) => ({
+      value,
+      label: this.translate.instant(`TRIAGE.ESI_OPTION_${value}`) as string,
+    }));
+  }
+
+  constructor() {
+    this.translate.onLangChange
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
+  }
 
   get canSubmit(): boolean {
     return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();
@@ -76,7 +112,7 @@ export class TriageFormComponent {
 
   submit(): void {
     if (!this.encounter?.id) {
-      this.toast.error('No encounter selected for triage');
+      this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
       return;
     }
 
@@ -104,12 +140,12 @@ export class TriageFormComponent {
     this.encounterService.submitTriage(this.encounter.id, request).subscribe({
       next: (response) => {
         this.saving.set(false);
-        this.toast.success('Triage completed successfully');
+        this.toast.success(this.translate.instant('TRIAGE.COMPLETED'));
         this.triageCompleted.emit(response);
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? 'Failed to submit triage. Please try again.';
+        const msg = err?.error?.message ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

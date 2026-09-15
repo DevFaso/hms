@@ -87,6 +87,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
+import org.mockito.Spy;
+import org.springframework.context.MessageSource;
+import com.example.hms.i18n.TestMessageSources;
 
 /**
  * Unit tests for Phase 2 patient portal service methods.
@@ -129,9 +132,12 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.service.EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
+    @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private com.example.hms.repository.QuestionnaireRepository questionnaireRepository;
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
+
+    @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -826,8 +832,8 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isNotNull();
             verify(notificationService).createNotification(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
             verify(notificationService).createNotification(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
-            verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Medication Refill Request Pending Review"), any());
-            verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Medication Refill Request Pending Review"), any());
+            verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
+            verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
         }
 
         @Test
@@ -864,7 +870,7 @@ class PatientPortalServiceImplPhase2Test {
             doThrow(new RuntimeException("notification down"))
                     .when(notificationService).createNotification(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))
-                    .when(emailService).sendHtml(any(), any(), any(), eq("Medication Refill Request Pending Review"), any());
+                    .when(emailService).sendHtml(any(), any(), any(), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
                 RefillRequest saved = inv.getArgument(0);
                 saved.setId(UUID.randomUUID());

@@ -13,7 +13,8 @@ import java.util.UUID;
  */
 public interface RecordSharingOptOutService {
 
-    RecordSharingOptOutDTO status(UUID patientId, Locale locale);
+    /** {@code actorUserId} decides the reach: the patient reaches their own row, staff reach their tenant. */
+    RecordSharingOptOutDTO status(UUID patientId, UUID actorUserId, Locale locale);
 
     /** Idempotent by refusal: opting out twice is a 409, not a second row. */
     RecordSharingOptOutDTO optOut(UUID patientId, String reason, UUID actorUserId, Locale locale);

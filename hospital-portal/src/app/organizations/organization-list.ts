@@ -1,5 +1,13 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { Subscription, merge } from 'rxjs';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -11,19 +19,24 @@ import {
 import { stateColor as lifecycleStateColor } from './organization-detail';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './organization-list.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
 })
-export class OrganizationListComponent implements OnInit {
+export class OrganizationListComponent implements OnInit, OnDestroy {
+  private readonly enumLabel = inject(EnumLabelService);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   /**
    * Only super admins can open /organizations/:id (gated by RoleGuard).
@@ -95,6 +108,8 @@ export class OrganizationListComponent implements OnInit {
     'UTC',
   ];
 
+  private langSub?: Subscription;
+
   currentPage = signal(0);
   totalPages = signal(0);
   totalElements = signal(0);
@@ -104,6 +119,22 @@ export class OrganizationListComponent implements OnInit {
     this.orgService.getTypes().subscribe({
       next: (types) => this.orgTypes.set(types),
     });
+    // The filter matches the Type column's TRANSLATED label, so the rows that
+    // match change with the language. Without this, a row matched under French
+    // labels stays listed once the cell reads English, and one that would now
+    // match stays hidden until the next keystroke.
+    //
+    // Both events, for the same reason EnumLabelService clears its memo on
+    // both: a bundle merged after first paint changes the labels without
+    // changing the language, and the cells re-render while the filter would
+    // not have.
+    this.langSub = merge(this.translate.onLangChange, this.translate.onTranslationChange).subscribe(
+      () => this.applyFilter(),
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.langSub?.unsubscribe();
   }
 
   loadOrganizations(page = 0): void {
@@ -118,7 +149,7 @@ export class OrganizationListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load organizations');
+        this.toast.error(this.translate.instant('ORGANIZATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -135,7 +166,10 @@ export class OrganizationListComponent implements OnInit {
         (o) =>
           o.name.toLowerCase().includes(term) ||
           o.code.toLowerCase().includes(term) ||
-          (o.type?.toLowerCase().includes(term) ?? false),
+          (o.type?.toLowerCase().includes(term) ?? false) ||
+          // The Type column renders a translated label; searching has to
+          // match what is on screen, not only the wire token behind it.
+          this.typeLabel(o.type).toLowerCase().includes(term),
       ),
     );
   }
@@ -172,7 +206,7 @@ export class OrganizationListComponent implements OnInit {
       !this.createForm.contactEmail ||
       !this.createForm.timezone
     ) {
-      this.toast.error('Name, code, contact email, and timezone are required');
+      this.toast.error(this.translate.instant('ORGANIZATIONS.REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
@@ -183,14 +217,18 @@ export class OrganizationListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Organization updated' : 'Organization created');
+        this.toast.success(
+          this.translate.instant(existing ? 'ORGANIZATIONS.UPDATED' : 'ORGANIZATIONS.CREATED'),
+        );
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ORGANIZATIONS.OPERATION_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -212,14 +250,16 @@ export class OrganizationListComponent implements OnInit {
     this.deleting.set(true);
     this.orgService.delete(org.id).subscribe({
       next: () => {
-        this.toast.success('Organization deleted');
+        this.toast.success(this.translate.instant('ORGANIZATIONS.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingOrg.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete organization');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ORGANIZATIONS.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -231,12 +271,9 @@ export class OrganizationListComponent implements OnInit {
     }
   }
 
-  /** Convert SCREAMING_SNAKE enum value to Title Case display label */
-  formatType(value: string): string {
-    return value
-      .split('_')
-      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
-      .join(' ');
+  /** The label the Type column shows, so the filter can match it. */
+  private typeLabel(value: string | undefined): string {
+    return value ? this.enumLabel.transform(value, 'organizationType') : '';
   }
 
   lifecycleColor(state: OrganizationLifecycleState | undefined): string {

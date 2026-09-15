@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { DispensingComponent } from './dispensing';
@@ -162,7 +162,7 @@ describe('DispensingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DispensingComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: AuthService, useValue: authSvc },
@@ -224,7 +224,7 @@ describe('DispensingComponent', () => {
     component.submitDispense();
 
     expect(pharmacySvc.createDispense).toHaveBeenCalledWith(component.form);
-    expect(toastSvc.success).toHaveBeenCalledWith('Medication dispensed successfully');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_SUCCESS');
     expect(component.showForm()).toBeFalse();
   });
 
@@ -255,7 +255,7 @@ describe('DispensingComponent', () => {
     component.cancelDispense('d-1');
 
     expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1');
-    expect(toastSvc.success).toHaveBeenCalledWith('Dispense cancelled');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
   });
 
   // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────
@@ -425,7 +425,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     await TestBed.configureTestingModule({
       imports: [DispensingComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         {

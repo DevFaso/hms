@@ -20,10 +20,10 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class InventoryItemRequestDTO {
 
-    @NotNull(message = "Pharmacy ID is required")
+    @NotNull(message = "{inventoryItem.pharmacyId.required}")
     private UUID pharmacyId;
 
-    @NotNull(message = "Medication catalog item ID is required")
+    @NotNull(message = "{inventoryItem.medicationCatalogItemId.required}")
     private UUID medicationCatalogItemId;
 
     private BigDecimal quantityOnHand;

@@ -53,6 +53,9 @@ import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import java.util.Locale;
 
 /**
  * Labor & Delivery (P1 #6, roadmap row 41). Follows the OB house pattern of
@@ -100,6 +103,7 @@ public class LaborServiceImpl implements LaborService {
     private final LaborMapper laborMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final MessageSource messageSource;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -526,12 +530,16 @@ public class LaborServiceImpl implements LaborService {
         if (alerts == null || alerts.isEmpty() || documentedBy == null || documentedBy.getUsername() == null) {
             return;
         }
-        String patientName = episode.getPatient() != null ? episode.getPatient().getFullName() : "patient";
+        // Read by the documenting clinician: staff locale, not the request locale.
+        Locale locale = NotificationLocales.STAFF;
+        String patientName = episode.getPatient() != null
+            ? episode.getPatient().getFullName()
+            : messageSource.getMessage("patient.fallback.generic", null, locale);
         alerts.stream()
             .filter(alert -> alert.getSeverity() == LaborAlertSeverity.URGENT)
             .forEach(alert -> {
-                String message = String.format("%s labor alert for %s: %s",
-                    alert.getType(), patientName, alert.getMessage());
+                String message = messageSource.getMessage("labor.alert.notification",
+                    new Object[]{alert.getType(), patientName, alert.getMessage()}, locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
                 } catch (RuntimeException ex) {

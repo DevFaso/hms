@@ -204,7 +204,12 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('ENTERED_IN_ERROR', 'allergyVerificationStatus')).toBe(
       'Entered in Error',
     );
-    expect(pipe.transform('SNF', 'dischargeDisposition')).toBe('Skilled Nursing Facility');
+    expect(pipe.transform('SKILLED_NURSING_FACILITY', 'dischargeDisposition')).toBe(
+      'Skilled Nursing Facility',
+    );
+    // The short aliases (SNF / AMA / REHAB) were never emitted by
+    // DischargeDisposition; they now fall through to the prettifier.
+    expect(pipe.transform('SNF', 'dischargeDisposition')).toBe('Snf');
   });
 
   /* ── Phase 3 groups (audit + internal) ───────────────────── */
@@ -239,6 +244,26 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('DRAFT', 'prescriptionStatus')).toBe('Draft');
     expect(pipe.transform('SIGNED', 'prescriptionStatus')).toBe('Signed');
     expect(pipe.transform('DISCONTINUED', 'prescriptionStatus')).toBe('Discontinued');
+  });
+
+  // Tier 2 is a first-match scan over every LABELS group, so a group trimmed
+  // to match its backend enum must still cover that enum on its own — with no
+  // i18n loaded, each of the 8 values EncounterType sends has to resolve to a
+  // curated label rather than fall to the Title-Case prettifier.
+  it('the encounterType fallback covers every value EncounterType sends', () => {
+    const sent = [
+      ['CONSULTATION', 'Consultation'],
+      ['FOLLOW_UP', 'Follow-Up'],
+      ['EMERGENCY', 'Emergency'],
+      ['SURGERY', 'Surgery'],
+      ['LAB', 'Laboratory'],
+      ['OUTPATIENT', 'Outpatient'],
+      ['INPATIENT', 'Inpatient'],
+      ['TELEHEALTH', 'Telehealth'],
+    ];
+    for (const [value, label] of sent) {
+      expect(pipe.transform(value, 'encounterType')).toBe(label);
+    }
   });
 
   it('reads migrated LEAVE_STATUS keys via i18n (PR #256 SCHEDULING.* migration)', () => {

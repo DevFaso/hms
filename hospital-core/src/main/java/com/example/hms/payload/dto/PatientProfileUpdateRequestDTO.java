@@ -46,7 +46,7 @@ public class PatientProfileUpdateRequestDTO {
     private String country;
 
     /** Self-reported free text — optional (Tier 2 item 38). */
-    @Size(max = 100, message = "Ethnicity cannot exceed 100 characters.")
+    @Size(max = 100, message = "{patientProfile.ethnicity.size}")
     private String ethnicity;
 
     @Size(max = 100)

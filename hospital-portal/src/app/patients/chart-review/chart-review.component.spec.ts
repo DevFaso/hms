@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { ChartReviewComponent } from './chart-review.component';
@@ -114,6 +114,115 @@ describe('ChartReviewComponent', () => {
     // Timeline rendered against the second (current) patient's payload
     const timelineTitles = fixture.nativeElement.querySelectorAll('.chart-review__timeline-title');
     expect(timelineTitles.length).toBeGreaterThan(0);
+  });
+
+  it('resolves each tab status through its own domain, not one shared pool', () => {
+    // ChartReviewServiceImpl fills these four from four different entities —
+    // Encounter, Prescription, ImagingOrder, ProcedureOrder — so they are four
+    // vocabularies that happen to share a field name. Piping them all through
+    // one domain would Title-Case whichever values that domain does not hold,
+    // and the enum-coverage gate would still read green because the domain it
+    // was given IS fully keyed. Each sentinel below is reachable only from its
+    // own PORTAL.ENUM group.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          ENCOUNTER_STATUS: { IN_PROGRESS: 'consultation-en-cours' },
+          PRESCRIPTION_STATUS: { SIGNED: 'ordonnance-signee' },
+          IMAGING_ORDER_STATUS: { ORDERED: 'imagerie-demandee' },
+          PROCEDURE_ORDER_STATUS: { SCHEDULED: 'intervention-planifiee' },
+        },
+      },
+    });
+    chartSpy.getChartReview.and.returnValue(of(populatedChart()));
+    setPatient('p-9');
+
+    const cases: [string, string, string][] = [
+      ['encounters', 'consultation-en-cours', 'IN_PROGRESS'],
+      ['medications', 'ordonnance-signee', 'SIGNED'],
+      ['imaging', 'imagerie-demandee', 'ORDERED'],
+      ['procedures', 'intervention-planifiee', 'SCHEDULED'],
+    ];
+    for (const [tab, expected, wire] of cases) {
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="chart-review-tab-${tab}"]`,
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      const pills = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          `[data-testid="chart-review-panel-${tab}"] .chart-review__pill`,
+        ) as NodeListOf<HTMLElement>,
+      ).map((el) => (el.textContent ?? '').trim());
+      expect(pills).withContext(`${tab} pill`).toContain(expected);
+      expect(pills).withContext(`${tab} still raw`).not.toContain(wire);
+    }
+  });
+
+  it('translates the timeline pill for every section, not just the tabs', () => {
+    // One badge, six emitters: the timeline pill carries Encounter status, a
+    // note's SIGNED/DRAFT, AbnormalFlag, Prescription status, an imaging
+    // report-or-order status and ProcedureOrder status. It resolves through the
+    // shared `status` pool, which was missing 27 of those values — so the same
+    // record read French in the tab and English in the timeline above it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          STATUS: {
+            READY_FOR_DISCHARGE: 'pret-pour-la-sortie',
+            RESULTS_AVAILABLE: 'resultats-disponibles',
+            POSTPONED: 'reporte',
+          },
+        },
+      },
+    });
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'e-9',
+        section: 'ENCOUNTER',
+        occurredAt: '2026-04-29T10:00:00',
+        title: 'A',
+        status: 'READY_FOR_DISCHARGE',
+      },
+      {
+        id: 'i-9',
+        section: 'IMAGING',
+        occurredAt: '2026-04-28T10:00:00',
+        title: 'B',
+        status: 'RESULTS_AVAILABLE',
+      },
+      {
+        id: 'p-9',
+        section: 'PROCEDURE',
+        occurredAt: '2026-04-27T10:00:00',
+        title: 'C',
+        status: 'POSTPONED',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+
+    setPatient('p-10');
+
+    const pills = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid="chart-review-panel-timeline"] .chart-review__pill',
+      ) as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    for (const expected of ['pret-pour-la-sortie', 'resultats-disponibles', 'reporte']) {
+      expect(pills).withContext(`timeline pill ${expected}`).toContain(expected);
+    }
+    // Title-Cased English is what an unkeyed value falls through to.
+    for (const english of ['Ready For Discharge', 'Results Available', 'Postponed']) {
+      expect(pills).withContext(`still English: ${english}`).not.toContain(english);
+    }
   });
 });
 

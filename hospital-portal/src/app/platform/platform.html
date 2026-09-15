@@ -225,7 +225,7 @@
         >
           <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (st of statusOptions; track st) {
-            <option [value]="st">{{ st }}</option>
+            <option [value]="st">{{ st | enumLabel: 'platformServiceStatus' }}</option>
           }
         </select>
       </div>
@@ -286,7 +286,7 @@
                 <td>{{ svc.provider || '—' }}</td>
                 <td>
                   <span class="status-pill" [ngClass]="serviceStatusClass(svc.status)">{{
-                    svc.status
+                    svc.status | enumLabel: 'platformServiceStatus'
                   }}</span>
                 </td>
                 <td>
@@ -496,7 +496,7 @@
             <div class="release-header">
               <h3>{{ rel.name }}</h3>
               <span class="status-pill" [ngClass]="releaseStatusClass(rel.status)">{{
-                rel.status
+                rel.status | enumLabel: 'platformReleaseStatus'
               }}</span>
             </div>
             @if (rel.description) {
@@ -652,7 +652,7 @@
                   [disabled]="st === selectedService()!.status || saving()"
                   (click)="changeServiceStatus(selectedService()!, st)"
                 >
-                  {{ st }}
+                  {{ st | enumLabel: 'platformServiceStatus' }}
                 </button>
               }
             </div>

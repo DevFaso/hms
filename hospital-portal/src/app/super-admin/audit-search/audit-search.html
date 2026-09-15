@@ -224,7 +224,9 @@
                 <tr [class.row-impersonated]="row.impersonatorUserId">
                   <td class="cell-time">{{ row.eventTimestamp | date: 'short' }}</td>
                   <td>
-                    <span class="event-type-badge">{{ row.eventType }}</span>
+                    <span class="event-type-badge">{{
+                      row.eventType | enumLabel: 'auditEventType'
+                    }}</span>
                   </td>
                   <td>
                     <div class="cell-primary">{{ row.userName || '—' }}</div>
@@ -237,7 +239,7 @@
                   </td>
                   <td>
                     <span [class]="statusPillClass(row.status)">
-                      {{ row.status || '—' }}
+                      {{ row.status ? (row.status | enumLabel: 'auditStatus') : '—' }}
                     </span>
                   </td>
                   <td class="cell-impersonator">
@@ -374,12 +376,21 @@
                     {{ row.timestamp ? (row.timestamp | date: 'short') : '—' }}
                   </td>
                   <td>
-                    <span class="event-type-badge">{{ row.eventType || '—' }}</span>
+                    <!--
+                      This column merges three sources (SuperAdminAuditAggregation
+                      ServiceImpl.toDto x3): AuditEventType, PermissionMatrixAuditAction
+                      — both declared under the auditEventType domain — and
+                      FrontendAuditEvent.eventType, a free String the portal posts.
+                      The third cannot be keyed and falls through to the prettifier.
+                    -->
+                    <span class="event-type-badge">{{
+                      row.eventType ? (row.eventType | enumLabel: 'auditEventType') : '—'
+                    }}</span>
                   </td>
                   <td>{{ row.actor || '—' }}</td>
                   <td>
                     <span [class]="statusPillClass(row.status)">
-                      {{ row.status || '—' }}
+                      {{ row.status ? (row.status | enumLabel: 'auditStatus') : '—' }}
                     </span>
                   </td>
                   <td class="cell-summary">{{ row.summary || '' }}</td>

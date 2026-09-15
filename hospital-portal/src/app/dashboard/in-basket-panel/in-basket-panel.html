@@ -4,7 +4,9 @@
     <h3 class="panel-title">
       <span>{{ 'inBasket.title' | translate }}</span>
       @if (badgeCount() > 0) {
-        <span class="badge" aria-label="Unread count">{{ badgeCount() }}</span>
+        <span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
+          badgeCount()
+        }}</span>
       }
     </h3>
     <button
@@ -19,7 +21,7 @@
   <!-- Arrow-key roving on filter tabs (row 11). docs/ui/accessibility.md §6.10 -->
   <nav
     class="filter-tabs"
-    aria-label="In-basket filters"
+    [attr.aria-label]="'inBasket.filtersLabel' | translate"
     appRovingFocus=".filter-tab"
     orientation="horizontal"
   >

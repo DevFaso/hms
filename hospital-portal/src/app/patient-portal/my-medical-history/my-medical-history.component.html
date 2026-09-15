@@ -241,7 +241,7 @@
                   'PORTAL.MEDICAL_HISTORY.QUIT_DATE' | translate
                 }}</span>
                 <span class="social-value">{{
-                  socialHistory()?.tobaccoQuitDate | date: 'MM/dd/yyyy'
+                  $safeNavigationMigration(socialHistory()?.tobaccoQuitDate) | date: 'MM/dd/yyyy'
                 }}</span>
               </div>
             }

@@ -1,5 +1,13 @@
-import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import {
   ChatService,
@@ -13,6 +21,7 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -101,8 +110,9 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './chat.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',
 })
 export class ChatComponent implements OnInit, OnDestroy {
@@ -200,7 +210,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.loadConversations();
     } else {
       this.loading.set(false);
-      this.error.set('Unable to identify current user. Please log out and log back in.');
+      this.error.set(this.translate.instant('CHAT.NO_USER_IDENTITY'));
     }
   }
 
@@ -216,9 +226,9 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         const status = err?.status;
         if (status === 403) {
-          this.error.set('You do not have permission to access chat.');
+          this.error.set(this.translate.instant('CHAT.ACCESS_DENIED'));
         } else {
-          this.error.set('Failed to load conversations. Please try again.');
+          this.error.set(this.translate.instant('CHAT.CONVERSATIONS_LOAD_FAILED'));
         }
       },
     });
@@ -279,7 +289,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         );
       },
       error: () => {
-        this.toast.error('Failed to send message');
+        this.toast.error(this.translate.instant('CHAT.SEND_FAILED'));
         this.sendingMessage.set(false);
       },
     });
@@ -478,7 +488,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.loadingUsers.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load users');
+        this.toast.error(this.translate.instant('CHAT.USERS_LOAD_FAILED'));
         this.loadingUsers.set(false);
       },
     });
@@ -523,7 +533,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: (msgs) => {
         this.messages.set(msgs ?? []);
         this.hydrateAttachments(msgs ?? []);
-        this.toast.success('Messages refreshed');
+        this.toast.success(this.translate.instant('CHAT.MESSAGES_REFRESHED'));
       },
     });
   }
@@ -546,6 +556,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   formatTime(timestamp: string): string {
     if (!timestamp) return '';
     const d = new Date(timestamp);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' });
   }
 }

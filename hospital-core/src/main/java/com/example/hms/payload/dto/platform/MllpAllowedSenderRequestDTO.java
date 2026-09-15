@@ -8,18 +8,18 @@ import jakarta.validation.constraints.Size;
 import java.util.UUID;
 
 public record MllpAllowedSenderRequestDTO(
-    @NotNull(message = "Hospital id is required")
+    @NotNull(message = "{mllpAllowedSender.hospitalId.required}")
     UUID hospitalId,
 
-    @NotBlank(message = "Sending application is required")
-    @Size(max = 180, message = "Sending application must be 180 characters or less")
+    @NotBlank(message = "{mllpAllowedSender.sendingApplication.required}")
+    @Size(max = 180, message = "{mllpAllowedSender.sendingApplication.size}")
     String sendingApplication,
 
-    @NotBlank(message = "Sending facility is required")
-    @Size(max = 180, message = "Sending facility must be 180 characters or less")
+    @NotBlank(message = "{mllpAllowedSender.sendingFacility.required}")
+    @Size(max = 180, message = "{mllpAllowedSender.sendingFacility.size}")
     String sendingFacility,
 
-    @Size(max = 255, message = "Description must be 255 characters or less")
+    @Size(max = 255, message = "{mllpAllowedSender.description.size}")
     String description,
 
     Boolean active

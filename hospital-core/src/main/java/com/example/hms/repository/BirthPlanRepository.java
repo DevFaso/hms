@@ -67,8 +67,8 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
         WHERE (:hospitalId IS NULL OR bp.hospital.id = :hospitalId)
           AND (:patientId IS NULL OR bp.patient.id = :patientId)
           AND (:providerReviewed IS NULL OR bp.providerReviewed = :providerReviewed)
-          AND (:dueDateFrom IS NULL OR bp.expectedDueDate >= :dueDateFrom)
-          AND (:dueDateTo IS NULL OR bp.expectedDueDate <= :dueDateTo)
+          AND (CAST(:dueDateFrom AS LocalDate) IS NULL OR bp.expectedDueDate >= :dueDateFrom)
+          AND (CAST(:dueDateTo AS LocalDate) IS NULL OR bp.expectedDueDate <= :dueDateTo)
         ORDER BY bp.createdAt DESC
         """)
     Page<BirthPlan> searchBirthPlans(

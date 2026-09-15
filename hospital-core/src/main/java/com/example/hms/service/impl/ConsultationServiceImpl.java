@@ -54,6 +54,9 @@ import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -87,6 +90,7 @@ public class ConsultationServiceImpl implements ConsultationService {
      */
     private final Clock clock;
     private final NotificationService notificationService;
+    private final MessageSource messageSource;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -416,12 +420,17 @@ public class ConsultationServiceImpl implements ConsultationService {
         try {
             if (consultation.getRequestingProvider() != null) {
                 String requesterUsername = consultation.getRequestingProvider().getUser().getUsername();
-                String consultantName = consultation.getConsultant() != null ? consultation.getConsultant().getFullName() : "The consultant";
-                String patientName = consultation.getPatient() != null ? consultation.getPatient().getFullName() : "your patient";
+                // Stored for the requesting provider, not the caller: staff locale.
+                Locale locale = NotificationLocales.STAFF;
+                String consultantName = consultation.getConsultant() != null
+                    ? consultation.getConsultant().getFullName()
+                    : messageSource.getMessage("consultation.completed.consultantFallback", null, locale);
+                String patientName = consultation.getPatient() != null
+                    ? consultation.getPatient().getFullName()
+                    : messageSource.getMessage("patient.fallback.yours", null, locale);
                 notificationService.createNotification(
-                    "Consultation completed for " + patientName +
-                    " (" + consultation.getSpecialtyRequested() + ") by " + consultantName +
-                    ". Recommendations are now available.",
+                    messageSource.getMessage("consultation.completed.notification",
+                        new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName}, locale),
                     requesterUsername);
             }
         } catch (Exception e) {
@@ -543,11 +552,14 @@ public class ConsultationServiceImpl implements ConsultationService {
         // Notify the assigned consultant
         try {
             String consultantUsername = consultant.getUser().getUsername();
-            String patientName = consultation.getPatient() != null ? consultation.getPatient().getFullName() : "a patient";
+            // Stored for the consultant, not the caller: staff locale.
+            Locale locale = NotificationLocales.STAFF;
+            String patientName = consultation.getPatient() != null
+                ? consultation.getPatient().getFullName()
+                : messageSource.getMessage("patient.fallback.indefinite", null, locale);
             notificationService.createNotification(
-                "You have been assigned a consultation request for " + patientName +
-                " — Specialty: " + consultation.getSpecialtyRequested() +
-                " (Urgency: " + consultation.getUrgency() + ")",
+                messageSource.getMessage("consultation.assigned.notification",
+                    new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()}, locale),
                 consultantUsername);
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());

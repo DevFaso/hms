@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { TranslateModule } from '@ngx-translate/core';
 
 import { CdsCard, CdsIndicator } from './cds-card.model';
@@ -21,26 +21,35 @@ import { CdsCard, CdsIndicator } from './cds-card.model';
 @Component({
   selector: 'app-cds-card-list',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <ul *ngIf="hasCards()" class="cds-card-list" data-testid="cds-card-list">
-      <li
-        *ngFor="let card of cards(); trackBy: trackByCard"
-        class="cds-card"
-        [class.cds-card--critical]="card.indicator === 'critical'"
-        [class.cds-card--warning]="card.indicator === 'warning'"
-        [class.cds-card--info]="card.indicator === 'info'"
-        [attr.data-indicator]="card.indicator"
-      >
-        <div class="cds-card__header">
-          <span class="cds-card__indicator">{{ indicatorLabel(card.indicator) | translate }}</span>
-          <span class="cds-card__source" *ngIf="card.source?.label">{{ card.source.label }}</span>
-        </div>
-        <p class="cds-card__summary">{{ card.summary }}</p>
-        <p *ngIf="card.detail" class="cds-card__detail">{{ card.detail }}</p>
-      </li>
-    </ul>
+    @if (hasCards()) {
+      <ul class="cds-card-list" data-testid="cds-card-list">
+        @for (card of cards(); track trackByCard($index, card)) {
+          <li
+            class="cds-card"
+            [class.cds-card--critical]="card.indicator === 'critical'"
+            [class.cds-card--warning]="card.indicator === 'warning'"
+            [class.cds-card--info]="card.indicator === 'info'"
+            [attr.data-indicator]="card.indicator"
+          >
+            <div class="cds-card__header">
+              <span class="cds-card__indicator">{{
+                indicatorLabel(card.indicator) | translate
+              }}</span>
+              @if (card.source?.label) {
+                <span class="cds-card__source">{{ card.source.label }}</span>
+              }
+            </div>
+            <p class="cds-card__summary">{{ card.summary }}</p>
+            @if (card.detail) {
+              <p class="cds-card__detail">{{ card.detail }}</p>
+            }
+          </li>
+        }
+      </ul>
+    }
   `,
   styleUrl: './cds-card.component.scss',
 })

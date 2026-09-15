@@ -34,7 +34,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -100,6 +100,24 @@ public class SecurityConfig {
         "/patients/*/growth-chart", "/patients/*/growth-chart/**",
         "/patients/*/intake-output", "/patients/*/intake-output/**"
     };
+
+    /**
+     * E8 #52 — the patient's own sharing opt-out: the one /patients/* surface a
+     * PATIENT reaches. Matched per verb ahead of the chart patterns and the
+     * /patients/** blanket, which lists no patient role (see the block below and
+     * RecordAccessController.OPT_OUT_ROLES / OPT_OUT_REVOKE_ROLES).
+     */
+    static final String API_PATIENT_OPT_OUT = "/patients/*/record-sharing/opt-out";
+    /**
+     * E8 #52 — a hospital's record-access posture. Its controller admits
+     * HOSPITAL_ADMIN on PUT (the admin's own legal escape hatch to
+     * EXPLICIT_CONSENT) and QUALITY_MANAGER on GET, but the /hospitals/**
+     * matchers below say SUPER_ADMIN-only on PUT and no quality manager on GET,
+     * so both were 403 at the edge while every slice test passed — the #654
+     * class on the endpoint next door. The controller still pins a hospital
+     * admin to the hospital they are acting in.
+     */
+    static final String API_HOSPITAL_POSTURE = "/hospitals/*/record-access-posture";
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -212,8 +230,8 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        var provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
+        // Spring Security 7: the UserDetailsService is a constructor argument.
+        var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         provider.setAuthoritiesMapper(authoritiesMapper());
         return provider;
@@ -233,7 +251,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) {
         return cfg.getAuthenticationManager();
     }
 
@@ -289,7 +307,7 @@ public class SecurityConfig {
     @SuppressWarnings({"java:S3330", "java:S4502"})
     // S3330: XSRF-TOKEN cookie intentionally lacks HttpOnly so Angular can read it when CSRF is enabled.
     // S4502: CSRF is enabled by default, but selectively ignored for preflight and specific public bootstrap endpoint.
-    public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+    public SecurityFilterChain apiSecurity(HttpSecurity http) {
 
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepo.setCookiePath("/");
@@ -305,39 +323,39 @@ public class SecurityConfig {
                 // Keep CSRF enabled for browser-cookie flows; ignore only what is necessary.
                 .ignoringRequestMatchers(
                     // CORS preflight (no cookies should mutate state anyway)
-                    new AntPathRequestMatcher("/**", "OPTIONS"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.OPTIONS, "/**"),
                     // Public auth endpoints return JWTs — no cookie session to protect.
                     // The patient-mobile-app (React/fetch) does not use the XSRF-TOKEN
                     // dance, so these must be CSRF-exempt.
-                    new AntPathRequestMatcher("/auth/login", "POST"),
-                    new AntPathRequestMatcher("/auth/register", "POST"),
-                    new AntPathRequestMatcher("/auth/bootstrap-signup", "POST"),
-                    new AntPathRequestMatcher("/auth/token/refresh", "POST"),
-                    new AntPathRequestMatcher("/auth/password/**"),
-                    new AntPathRequestMatcher("/auth/resend-verification", "POST"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/login"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
-                    new AntPathRequestMatcher("/ws-chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/ws-chat/**"),
                     // REST chat endpoints
-                    new AntPathRequestMatcher("/chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/chat/**"),
                     // Patient portal self-service (native mobile apps use Bearer JWT,
                     // not browser cookies, so CSRF protection is unnecessary)
-                    new AntPathRequestMatcher(API_ME_PATIENT_PATTERN),
-                    new AntPathRequestMatcher("/me/notifications/**"),
-                    new AntPathRequestMatcher("/notifications/**"),
-                    new AntPathRequestMatcher("/me/chat/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher(API_ME_PATIENT_PATTERN),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/notifications/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/notifications/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/chat/**"),
                     // File uploads from mobile apps (multipart — no XSRF token)
-                    new AntPathRequestMatcher("/files/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/files/**"),
                     // Appointment booking from mobile apps (Bearer JWT, no cookies)
-                    new AntPathRequestMatcher("/appointments/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/appointments/**"),
                     // Partner pharmacy SMS webhook (T-55) — shared-secret header auth, no cookies
-                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/webhooks/partner-sms"),
                     // FHIR R4 endpoints — server-to-server clients (OpenMRS/DHIS2/HIE)
                     // authenticate via Bearer JWT, not browser cookies.
-                    new AntPathRequestMatcher("/fhir/**"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/fhir/**"),
                     // CDS Hooks invocations — server-to-server callers post JSON
                     // with Bearer JWT.
-                    new AntPathRequestMatcher("/cds-services/**")
+                    PathPatternRequestMatcher.withDefaults().matcher("/cds-services/**")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -404,6 +422,22 @@ public class SecurityConfig {
                 // registration role set (see PhoneVerificationController).
                 .requestMatchers("/patients/phone-verification", "/patients/phone-verification/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
+                // ---------------- Patient sharing opt-out (E8 #52) ----------------
+                // One verb per line, so nothing depends on which line comes first.
+                // GET and POST carry RecordAccessController.OPT_OUT_ROLES; DELETE
+                // carries OPT_OUT_REVOKE_ROLES — revoking re-opens the record to
+                // other hospitals, so it stays with the patient and the two admin
+                // roles the blanket DELETE /patients/** already names. Verbs with no
+                // handler fall to the blanket like every other /patients route. A
+                // single path, not a prefix: a patient is still refused every other
+                // chart route. The service's tenant reach is tasklist debt (E8 #49).
+                .requestMatchers(HttpMethod.GET, API_PATIENT_OPT_OUT)
+                .hasAnyAuthority(ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.POST, API_PATIENT_OPT_OUT)
+                .hasAnyAuthority(ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_OPT_OUT)
+                .hasAnyAuthority(ROLE_PATIENT, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // -------------------- Patient chart (E9 #67, D5) --------------------
                 // First match wins: the chart sub-resources sit ahead of the
@@ -489,6 +523,13 @@ public class SecurityConfig {
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.
                 // The controller's @PreAuthorize further narrows allowed roles.
+                // Record-access posture (E8 #52): ahead of the /hospitals matchers so
+                // the controller's own role sets are the ones that decide.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_POSTURE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_POSTURE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
@@ -813,7 +854,7 @@ public class SecurityConfig {
      * custom {@code JwtAuthenticationFilter} continues to handle internal
      * HMAC/RSA tokens unchanged.
      */
-    private void configureOidcResourceServer(HttpSecurity http) throws Exception {
+    private void configureOidcResourceServer(HttpSecurity http) {
         JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
         BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
         if (oidcDecoder == null || oidcResolver == null) {

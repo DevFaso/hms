@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -77,6 +84,7 @@ type TabKey =
     EnumLabelPipe,
   ],
   templateUrl: './patient-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-detail.scss',
 })
 export class PatientDetailComponent implements OnInit {
@@ -176,7 +184,7 @@ export class PatientDetailComponent implements OnInit {
           this.restricted.set(true);
           return;
         }
-        this.toast.error('Patient not found');
+        this.toast.error(this.translate.instant('PATIENTS.NOT_FOUND'));
         this.router.navigate(['/patients']);
       },
     });
@@ -305,13 +313,13 @@ export class PatientDetailComponent implements OnInit {
   downloadRecord(): void {
     if (this.recordDownloadLoading()) return;
     this.recordDownloadLoading.set(true);
-    this.patientService.downloadFhirRecord(this.patientId).subscribe({
+    this.patientService.downloadRecordPdf(this.patientId).subscribe({
       next: (blob) => {
         this.recordDownloadLoading.set(false);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `patient-record-${this.patientId}.json`;
+        a.download = `patient-record-${this.patientId}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       },
@@ -381,7 +389,7 @@ export class PatientDetailComponent implements OnInit {
       },
       error: () => {
         this.wristbandLoading.set(false);
-        this.toast.error('Failed to generate the wristband');
+        this.toast.error(this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
       },
     });
   }
@@ -500,7 +508,7 @@ export class PatientDetailComponent implements OnInit {
         this.vitalsLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load vitals');
+        this.toast.error(this.translate.instant('PATIENTS.VITALS_LOAD_FAILED'));
         this.vitalsLoading.set(false);
       },
     });
@@ -514,7 +522,7 @@ export class PatientDetailComponent implements OnInit {
         this.encountersLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load encounters');
+        this.toast.error(this.translate.instant('PATIENTS.ENCOUNTERS_LOAD_FAILED'));
         this.encountersLoading.set(false);
       },
     });
@@ -528,7 +536,7 @@ export class PatientDetailComponent implements OnInit {
         this.appointmentsLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load appointments');
+        this.toast.error(this.translate.instant('PATIENTS.APPOINTMENTS_LOAD_FAILED'));
         this.appointmentsLoading.set(false);
       },
     });

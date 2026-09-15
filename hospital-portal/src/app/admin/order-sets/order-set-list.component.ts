@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
@@ -38,64 +38,66 @@ import { AuthService } from '../../auth/auth.service';
         (ngModelChange)="onSearch($event)"
       />
 
-      <p *ngIf="loading()" data-testid="order-set-admin-loading">
-        {{ 'ORDER_SETS.SEARCHING' | translate }}
-      </p>
+      @if (loading()) {
+        <p data-testid="order-set-admin-loading">
+          {{ 'ORDER_SETS.SEARCHING' | translate }}
+        </p>
+      }
 
-      <p *ngIf="error()" class="order-set-admin__error" data-testid="order-set-admin-error">
-        {{ 'ORDER_SETS.ERROR' | translate }}
-      </p>
+      @if (error()) {
+        <p class="order-set-admin__error" data-testid="order-set-admin-error">
+          {{ 'ORDER_SETS.ERROR' | translate }}
+        </p>
+      }
 
-      <table
-        class="data-table"
-        *ngIf="!loading() && !error() && rows().length > 0"
-        data-testid="order-set-admin-table"
-      >
-        <thead>
-          <tr>
-            <th>{{ 'ORDER_SETS.COL_NAME' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_VERSION' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_ITEM_COUNT' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_TYPE' | translate }}</th>
-            <th>{{ 'ORDER_SETS.COL_LAST_MODIFIED' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let os of rows(); trackBy: trackById" [attr.data-os-id]="os.id">
-            <td>{{ os.name }}</td>
-            <td>v{{ os.version }}</td>
-            <td>{{ os.orderCount }}</td>
-            <td>{{ os.admissionType }}</td>
-            <td>{{ os.updatedAt | date: 'short' }}</td>
-            <td class="actions">
-              <a
-                class="action-link"
-                [routerLink]="['/admin/order-sets', os.id]"
-                data-testid="order-set-admin-edit"
-              >
-                {{ 'COMMON.EDIT' | translate }}
-              </a>
-              <button
-                type="button"
-                class="action-link delete-link"
-                (click)="deactivate(os)"
-                data-testid="order-set-admin-deactivate"
-              >
-                {{ 'ORDER_SETS.DEACTIVATE' | translate }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      @if (!loading() && !error() && rows().length > 0) {
+        <table class="data-table" data-testid="order-set-admin-table">
+          <thead>
+            <tr>
+              <th>{{ 'ORDER_SETS.COL_NAME' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_VERSION' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_ITEM_COUNT' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_TYPE' | translate }}</th>
+              <th>{{ 'ORDER_SETS.COL_LAST_MODIFIED' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (os of rows(); track trackById($index, os)) {
+              <tr [attr.data-os-id]="os.id">
+                <td>{{ os.name }}</td>
+                <td>v{{ os.version }}</td>
+                <td>{{ os.orderCount }}</td>
+                <td>{{ os.admissionType }}</td>
+                <td>{{ os.updatedAt | date: 'short' }}</td>
+                <td class="actions">
+                  <a
+                    class="action-link"
+                    [routerLink]="['/admin/order-sets', os.id]"
+                    data-testid="order-set-admin-edit"
+                  >
+                    {{ 'COMMON.EDIT' | translate }}
+                  </a>
+                  <button
+                    type="button"
+                    class="action-link delete-link"
+                    (click)="deactivate(os)"
+                    data-testid="order-set-admin-deactivate"
+                  >
+                    {{ 'ORDER_SETS.DEACTIVATE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
 
-      <p
-        *ngIf="!loading() && !error() && rows().length === 0"
-        class="order-set-admin__empty"
-        data-testid="order-set-admin-empty"
-      >
-        {{ 'ORDER_SETS.NO_RESULTS' | translate }}
-      </p>
+      @if (!loading() && !error() && rows().length === 0) {
+        <p class="order-set-admin__empty" data-testid="order-set-admin-empty">
+          {{ 'ORDER_SETS.NO_RESULTS' | translate }}
+        </p>
+      }
     </section>
   `,
   styles: [
@@ -134,6 +136,7 @@ export class OrderSetListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
   private readonly searchSubject = new Subject<string>();
   private searchSub?: Subscription;
 
@@ -145,7 +148,7 @@ export class OrderSetListComponent implements OnInit {
         switchMap((term) => {
           this.loading.set(true);
           this.error.set(false);
-          const hid = this.roleContext.activeHospitalId ?? '';
+          const hid = this.roleContext.effectiveHospitalIdForRequest() ?? '';
           return this.orderSetService.list(hid, term);
         }),
       )
@@ -173,20 +176,20 @@ export class OrderSetListComponent implements OnInit {
   }
 
   protected deactivate(os: OrderSetSummary): void {
-    const reason = globalThis.prompt('Deactivation reason:');
+    const reason = globalThis.prompt(this.translate.instant('ORDER_SETS.DEACTIVATE_REASON_PROMPT'));
     if (!reason?.trim()) return;
     const actor = this.auth.getUserProfile()?.staffId ?? '';
     if (!actor) {
-      this.toast.error('No active staff context');
+      this.toast.error(this.translate.instant('ORDER_SETS.NO_STAFF_CONTEXT'));
       return;
     }
     this.orderSetService.deactivate(os.id, reason.trim(), actor).subscribe({
       next: () => {
-        this.toast.success('Order set deactivated');
+        this.toast.success(this.translate.instant('ORDER_SETS.DEACTIVATED'));
         // Refresh list.
         this.searchSubject.next(this.searchTerm());
       },
-      error: () => this.toast.error('Could not deactivate order set'),
+      error: () => this.toast.error(this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED')),
     });
   }
 }

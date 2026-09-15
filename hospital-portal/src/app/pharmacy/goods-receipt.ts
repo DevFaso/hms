@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -15,11 +15,13 @@ import {
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './goods-receipt.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',
 })
 export class GoodsReceiptComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
   selectedPharmacyId = '';
@@ -127,11 +129,11 @@ export class GoodsReceiptComponent implements OnInit {
 
   submitForm(): void {
     if (!this.selectedInventoryItemId) {
-      this.toast.error('Select an inventory item');
+      this.toast.error(this.translate.instant('PHARMACY.SELECT_ITEM_REQUIRED'));
       return;
     }
     if (!this.form.lotNumber || !this.form.expiryDate || this.form.initialQuantity <= 0) {
-      this.toast.error('Lot number, expiry date, and quantity are required');
+      this.toast.error(this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED'));
       return;
     }
 
@@ -139,21 +141,23 @@ export class GoodsReceiptComponent implements OnInit {
     const req = { ...this.form, inventoryItemId: this.selectedInventoryItemId };
     this.svc.receiveStock(req).subscribe({
       next: () => {
-        this.toast.success('Stock lot received successfully');
+        this.toast.success(this.translate.instant('PHARMACY.LOT_RECEIVED'));
         this.closeForm();
         this.saving.set(false);
         this.loadRecentLots();
         this.loadInventoryItems();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to receive stock');
+        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.RECEIVE_FAILED'));
         this.saving.set(false);
       },
     });
   }
 
   getItemName(item: InventoryItemResponse): string {
-    return item.medicationName ?? item.medicationCode ?? 'Unknown item';
+    return (
+      item.medicationName ?? item.medicationCode ?? this.translate.instant('PHARMACY.UNKNOWN_ITEM')
+    );
   }
 
   private emptyForm() {

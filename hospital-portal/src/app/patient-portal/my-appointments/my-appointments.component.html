@@ -105,7 +105,10 @@
                 </option>
                 @for (p of providers(); track p.id) {
                   <option [value]="p.id">
-                    {{ p.fullName || p.name }}{{ p.role ? ' — ' + p.role : '' }}
+                    {{ p.fullName || p.name }}
+                    @if (p.role) {
+                      — {{ p.role | enumLabel: 'role' }}
+                    }
                   </option>
                 }
               </select>
@@ -215,7 +218,7 @@
               </span>
             </div>
             <span class="pac-status" [attr.data-status]="appt.status">{{
-              appt.status | enumLabel: 'status'
+              appt.status | enumLabel: 'appointmentStatus'
             }}</span>
           </div>
 
@@ -259,7 +262,7 @@
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
                   <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
-                    appt.status | enumLabel: 'status'
+                    appt.status | enumLabel: 'appointmentStatus'
                   }}</span>
                 </div>
               </div>
@@ -336,7 +339,7 @@
               <span class="pac-time">{{ appt.date | date: 'MMM d, yyyy' }}</span>
             </div>
             <span class="pac-status" [attr.data-status]="appt.status">{{
-              appt.status | enumLabel: 'status'
+              appt.status | enumLabel: 'appointmentStatus'
             }}</span>
           </div>
 
@@ -380,7 +383,7 @@
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
                   <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
-                    appt.status | enumLabel: 'status'
+                    appt.status | enumLabel: 'appointmentStatus'
                   }}</span>
                 </div>
               </div>

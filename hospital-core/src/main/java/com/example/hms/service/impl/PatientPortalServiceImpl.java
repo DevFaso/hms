@@ -109,6 +109,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationLocales;
 
 /**
  * Patient-portal service — resolves the authenticated user's Patient record
@@ -173,6 +175,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
+    /** The patient's stated language for the mails the portal sends them. */
+    private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     // MVP 4 additions
     private final QuestionnaireRepository questionnaireRepository;
@@ -195,6 +199,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.PatientEducationQuestionRepository educationQuestionRepository;
     private final com.example.hms.repository.EducationResourceRepository educationResourceRepository;
     private final com.example.hms.mapper.PatientEducationQuestionMapper educationQuestionMapper;
+    private final MessageSource messageSource;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -1017,27 +1022,35 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (prescription == null || patient == null) {
             return;
         }
-        String medicationName = medicationDisplayName(prescription);
-        String patientName = formatPatientName(patient);
+        // Every recipient is a clinician reading it later, so the body is
+        // rendered in the staff locale — never in the patient's request locale.
+        Locale locale = NotificationLocales.STAFF;
+        String medicationName = medicationDisplayName(prescription, locale);
+        String patientName = formatPatientName(patient, locale);
 
         Recipients recipients = collectRefillRecipients(prescription);
-        String message = "Medication refill request from " + patientName + " for " + medicationName + ".";
+        String message = messageSource.getMessage(
+            "refill.request.notification", new Object[]{patientName, medicationName}, locale);
         dispatchRefillInAppNotifications(recipients.usernames(), message, refill);
-        dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill);
+        dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill, locale);
     }
 
     private record Recipients(Set<String> usernames, Set<String> emails) {}
 
-    private String medicationDisplayName(Prescription prescription) {
+    private String medicationDisplayName(Prescription prescription, Locale locale) {
         String name = prescription.getMedicationName();
-        return (name != null && !name.isBlank()) ? name : "prescription";
+        return (name != null && !name.isBlank())
+            ? name
+            : messageSource.getMessage("refill.request.medicationFallback", null, locale);
     }
 
-    private String formatPatientName(Patient patient) {
+    private String formatPatientName(Patient patient, Locale locale) {
         String first = patient.getFirstName() != null ? patient.getFirstName() : "";
         String last = patient.getLastName() != null ? patient.getLastName() : "";
         String combined = (first + " " + last).trim();
-        return combined.isBlank() ? "a patient" : combined;
+        return combined.isBlank()
+            ? messageSource.getMessage("patient.fallback.indefinite", null, locale)
+            : combined;
     }
 
     private Recipients collectRefillRecipients(Prescription prescription) {
@@ -1090,16 +1103,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private void dispatchRefillEmailNotifications(Set<String> emails, String patientName,
-                                                  String medicationName, RefillRequest refill) {
+                                                  String medicationName, RefillRequest refill, Locale locale) {
         if (emails.isEmpty()) {
             return;
         }
-        String subject = "Medication Refill Request Pending Review";
-        String body = """
-            <h2>Medication Refill Request</h2>
-            <p><strong>%s</strong> requested a refill for <strong>%s</strong>.</p>
-            <p>Please review and respond in your HMS dashboard.</p>
-            """.formatted(patientName, medicationName);
+        String subject = messageSource.getMessage("refill.request.email.subject", null, locale);
+        String body = messageSource.getMessage(
+            "refill.request.email.body", new Object[]{patientName, medicationName}, locale);
         for (String email : emails) {
             try {
                 emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
@@ -1594,10 +1604,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String appointmentDate = appointment.getAppointmentDate().toString();
             String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
 
+            Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
             emailService.sendAppointmentCancelledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
                     appointmentDate, appointmentTime,
-                    hospital.getEmail(), hospital.getPhoneNumber());
+                    hospital.getEmail(), hospital.getPhoneNumber(), mailLocale);
 
             log.info("Cancellation email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
         } catch (Exception e) {
@@ -1617,11 +1628,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
             String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
+            Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
                     newAppointmentDate, newAppointmentTime,
                     hospital.getEmail(), hospital.getPhoneNumber(),
-                    rescheduleLink, cancelLink);
+                    rescheduleLink, cancelLink, mailLocale);
 
             log.info("Reschedule email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
         } catch (Exception e) {

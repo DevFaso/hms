@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -59,6 +66,7 @@ interface ReportForm {
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './imaging.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './imaging.scss',
 })
 export class ImagingComponent implements OnInit {
@@ -184,13 +192,23 @@ export class ImagingComponent implements OnInit {
     'OTHER',
   ];
   priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT'];
-  lateralities: { value: ImagingLaterality; label: string }[] = [
-    { value: 'LEFT', label: 'Left' },
-    { value: 'RIGHT', label: 'Right' },
-    { value: 'BILATERAL', label: 'Bilateral' },
-    { value: 'MIDLINE', label: 'Midline' },
-    { value: 'NOT_APPLICABLE', label: 'N/A' },
-  ];
+  /**
+   * Laterality options for the order form. A getter, not a field, so the
+   * labels follow a runtime language switch; the template still reads
+   * `lat.value` / `lat.label`.
+   */
+  get lateralities(): { value: ImagingLaterality; label: string }[] {
+    return [
+      { value: 'LEFT', label: this.translate.instant('IMAGING.LATERALITY_LEFT') },
+      { value: 'RIGHT', label: this.translate.instant('IMAGING.LATERALITY_RIGHT') },
+      { value: 'BILATERAL', label: this.translate.instant('IMAGING.LATERALITY_BILATERAL') },
+      { value: 'MIDLINE', label: this.translate.instant('IMAGING.LATERALITY_MIDLINE') },
+      {
+        value: 'NOT_APPLICABLE',
+        label: this.translate.instant('IMAGING.LATERALITY_NOT_APPLICABLE'),
+      },
+    ];
+  }
 
   ngOnInit(): void {
     this.load();
@@ -224,7 +242,7 @@ export class ImagingComponent implements OnInit {
 
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED');
   }
 
   get hospitalLocked(): boolean {
@@ -287,13 +305,17 @@ export class ImagingComponent implements OnInit {
       : this.imagingService.createOrder(payload);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Order updated' : 'Order created');
+        this.toast.success(
+          this.translate.instant(
+            this.editing() ? 'IMAGING.ORDER_UPDATED' : 'IMAGING.ORDER_CREATED',
+          ),
+        );
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -312,17 +334,20 @@ export class ImagingComponent implements OnInit {
     this.imagingService
       .updateOrderStatus(this.deletingItem()!.id, {
         status: 'CANCELLED',
+        // Stored on the order and read back by everyone, so it stays canonical
+        // English: translating it would bake the cancelling user's locale
+        // into the record and give the same note three spellings.
         notes: 'Cancelled by admin',
       })
       .subscribe({
         next: () => {
-          this.toast.success('Order cancelled');
+          this.toast.success(this.translate.instant('IMAGING.ORDER_CANCELLED'));
           this.cancelDeleteAction();
           this.deleting.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Cancel failed');
+          this.toast.error(this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
           this.deleting.set(false);
         },
       });
@@ -337,7 +362,7 @@ export class ImagingComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load imaging orders');
+        this.toast.error(this.translate.instant('IMAGING.ORDERS_LOAD_ERROR'));
         this.loading.set(false);
       },
     });

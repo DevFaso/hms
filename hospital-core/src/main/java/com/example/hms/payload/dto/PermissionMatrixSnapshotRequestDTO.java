@@ -21,15 +21,15 @@ public class PermissionMatrixSnapshotRequestDTO {
 
     private UUID sourceSnapshotId;
 
-    @NotNull(message = "permission.matrix.environment.required")
+    @NotNull(message = "{permission.matrix.environment.required}")
     private PermissionMatrixEnvironment environment;
 
-    @Size(max = 255, message = "permission.matrix.label.size")
+    @Size(max = 255, message = "{permission.matrix.label.size}")
     private String label;
 
-    @Size(max = 2000, message = "permission.matrix.notes.size")
+    @Size(max = 2000, message = "{permission.matrix.notes.size}")
     private String notes;
 
-    @NotEmpty(message = "permission.matrix.rows.required")
+    @NotEmpty(message = "{permission.matrix.rows.required}")
     private List<@Valid PermissionMatrixRowDTO> rows;
 }

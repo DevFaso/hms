@@ -2,8 +2,8 @@ package com.example.hms.fhir.bulk;
 
 import com.example.hms.model.platform.FhirBulkExportFile;
 import com.example.hms.model.platform.FhirBulkExportJob;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -224,7 +224,7 @@ public class FhirBulkExportStatusController {
     private static String write(Map<String, Object> body) {
         try {
             return JSON.writeValueAsString(body);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // A map of strings, numbers and booleans cannot fail to serialise.
             // If it somehow does, emit a valid minimal outcome rather than a
             // truncated body the client would fail to parse.

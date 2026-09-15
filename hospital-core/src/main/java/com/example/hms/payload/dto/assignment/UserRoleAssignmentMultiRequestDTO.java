@@ -62,12 +62,12 @@ public class UserRoleAssignmentMultiRequestDTO {
     @Schema(description = "Skip conflicting assignments instead of failing the entire batch")
     private boolean skipConflicts = true;
 
-    @AssertTrue(message = "Provide either userId or userIdentifier")
+    @AssertTrue(message = "{userRoleAssignment.userReference.required}")
     public boolean isUserProvided() {
         return userId != null || (userIdentifier != null && !userIdentifier.isBlank());
     }
 
-    @AssertTrue(message = "Provide exactly one of roleId or roleName")
+    @AssertTrue(message = "{userRoleAssignment.roleReference.invalid}")
     public boolean isValidRoleIdentifier() {
         boolean hasId = roleId != null;
         boolean hasName = roleName != null && !roleName.isBlank();

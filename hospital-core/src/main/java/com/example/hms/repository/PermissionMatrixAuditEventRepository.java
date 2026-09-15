@@ -24,8 +24,8 @@ public interface PermissionMatrixAuditEventRepository extends JpaRepository<Perm
      * Instants before calling.
      */
     @Query("SELECT p FROM PermissionMatrixAuditEvent p WHERE "
-        + "(:fromInstant IS NULL OR p.createdAt >= :fromInstant) AND "
-        + "(:toInstant   IS NULL OR p.createdAt <= :toInstant) "
+        + "(CAST(:fromInstant AS Instant) IS NULL OR p.createdAt >= :fromInstant) AND "
+        + "(CAST(:toInstant AS Instant) IS NULL OR p.createdAt <= :toInstant) "
         + "ORDER BY p.createdAt DESC")
     List<PermissionMatrixAuditEvent> findInDateRangeOrdered(
         @Param("fromInstant") Instant fromInstant,
@@ -33,8 +33,8 @@ public interface PermissionMatrixAuditEventRepository extends JpaRepository<Perm
         Pageable pageable);
 
     @Query("SELECT COUNT(p) FROM PermissionMatrixAuditEvent p WHERE "
-        + "(:fromInstant IS NULL OR p.createdAt >= :fromInstant) AND "
-        + "(:toInstant   IS NULL OR p.createdAt <= :toInstant)")
+        + "(CAST(:fromInstant AS Instant) IS NULL OR p.createdAt >= :fromInstant) AND "
+        + "(CAST(:toInstant AS Instant) IS NULL OR p.createdAt <= :toInstant)")
     long countInDateRange(
         @Param("fromInstant") Instant fromInstant,
         @Param("toInstant") Instant toInstant);

@@ -1,12 +1,19 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   ProfileService,
   UserProfile,
@@ -18,13 +25,15 @@ import {
 } from '../services/profile.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
+import { currentLocale } from '../shared/i18n/app-locale';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './profile.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile.scss',
 })
 export class ProfileComponent implements OnInit {
@@ -34,6 +43,7 @@ export class ProfileComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly translate = inject(TranslateService);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -114,25 +124,25 @@ export class ProfileComponent implements OnInit {
    * A Super Admin who also happens to have a patient record should see
    * "Super Admin" here, not "PATIENT".
    */
-  sessionProfileType = computed((): string => {
+  sessionProfileType(): string {
     const roles = this.auth.getRoles();
     const priority: [string, string][] = [
-      ['ROLE_SUPER_ADMIN', 'Super Admin'],
-      ['ROLE_HOSPITAL_ADMIN', 'Hospital Admin'],
-      ['ROLE_ADMIN', 'Administrator'],
-      ['ROLE_DOCTOR', 'Doctor'],
-      ['ROLE_NURSE', 'Nurse'],
-      ['ROLE_MIDWIFE', 'Midwife'],
-      ['ROLE_RECEPTIONIST', 'Receptionist'],
-      ['ROLE_LAB_SCIENTIST', 'Lab Scientist'],
-      ['ROLE_STAFF', 'Staff Member'],
-      ['ROLE_PATIENT', 'Patient'],
+      ['ROLE_SUPER_ADMIN', 'DASHBOARD.ROLE.SUPER_ADMIN'],
+      ['ROLE_HOSPITAL_ADMIN', 'DASHBOARD.ROLE.HOSPITAL_ADMIN'],
+      ['ROLE_ADMIN', 'PROFILE.TYPE_ADMINISTRATOR'],
+      ['ROLE_DOCTOR', 'DASHBOARD.ROLE.DOCTOR'],
+      ['ROLE_NURSE', 'DASHBOARD.ROLE.NURSE'],
+      ['ROLE_MIDWIFE', 'DASHBOARD.ROLE.MIDWIFE'],
+      ['ROLE_RECEPTIONIST', 'DASHBOARD.ROLE.RECEPTIONIST'],
+      ['ROLE_LAB_SCIENTIST', 'DASHBOARD.ROLE.LAB_SCIENTIST'],
+      ['ROLE_STAFF', 'DASHBOARD.ROLE.STAFF'],
+      ['ROLE_PATIENT', 'DASHBOARD.ROLE.PATIENT'],
     ];
-    for (const [role, label] of priority) {
-      if (roles.includes(role)) return label;
+    for (const [role, labelKey] of priority) {
+      if (roles.includes(role)) return this.translate.instant(labelKey);
     }
-    return 'User';
-  });
+    return this.translate.instant('PROFILE.TYPE_USER');
+  }
 
   /** Show license number only for clinical staff roles in this session. */
   showLicenseNumber = computed(() => {
@@ -140,27 +150,27 @@ export class ProfileComponent implements OnInit {
     return this.auth.hasAnyRole(clinicalRoles) && !!this.user()?.licenseNumber;
   });
 
-  memberSince = computed(() => {
+  memberSince(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
-    return new Date(u.createdAt).toLocaleDateString('en-US', {
+    return new Date(u.createdAt).toLocaleDateString(this.dateLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-  });
+  }
 
-  lastLogin = computed(() => {
+  lastLogin(): string {
     const u = this.user();
-    if (!u?.lastLoginAt) return 'Never';
-    return new Date(u.lastLoginAt).toLocaleString('en-US', {
+    if (!u?.lastLoginAt) return this.translate.instant('PROFILE.NEVER');
+    return new Date(u.lastLoginAt).toLocaleString(this.dateLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
-  });
+  }
 
   securityScore = computed(() => {
     const c = this.credentials();
@@ -180,27 +190,37 @@ export class ProfileComponent implements OnInit {
     return '#dc2626';
   });
 
-  securityScoreLabel = computed(() => {
+  securityScoreLabel(): string {
     const s = this.securityScore();
-    if (s >= 80) return 'Excellent';
-    if (s >= 50) return 'Good';
-    return 'Needs Attention';
-  });
+    if (s >= 80) return this.translate.instant('PROFILE.SCORE_EXCELLENT');
+    if (s >= 50) return this.translate.instant('PROFILE.SCORE_GOOD');
+    return this.translate.instant('PROFILE.SCORE_NEEDS_ATTENTION');
+  }
 
-  accountAge = computed(() => {
+  accountAge(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
     const created = new Date(u.createdAt);
     const now = new Date();
     const diffMs = now.getTime() - created.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (days < 1) return 'Today';
-    if (days < 30) return `${days} day${days > 1 ? 's' : ''}`;
+    if (days < 1) return this.translate.instant('PROFILE.AGE_TODAY');
+    if (days < 30) {
+      return this.translate.instant(days > 1 ? 'PROFILE.AGE_DAYS' : 'PROFILE.AGE_DAY', {
+        count: days,
+      });
+    }
     const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months > 1 ? 's' : ''}`;
+    if (months < 12) {
+      return this.translate.instant(months > 1 ? 'PROFILE.AGE_MONTHS' : 'PROFILE.AGE_MONTH', {
+        count: months,
+      });
+    }
     const years = Math.floor(months / 12);
-    return `${years} year${years > 1 ? 's' : ''}`;
-  });
+    return this.translate.instant(years > 1 ? 'PROFILE.AGE_YEARS' : 'PROFILE.AGE_YEAR', {
+      count: years,
+    });
+  }
 
   /* ── Inline MFA Enrollment ── */
   mfaStep = signal<'idle' | 'qr' | 'verify' | 'backup'>('idle');
@@ -219,7 +239,9 @@ export class ProfileComponent implements OnInit {
         this.mfaLoading.set(false);
       },
       error: (err) => {
-        this.mfaError.set(err?.error?.message ?? 'Failed to start MFA enrollment.');
+        this.mfaError.set(
+          err?.error?.message ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED'),
+        );
         this.mfaLoading.set(false);
       },
     });
@@ -227,7 +249,7 @@ export class ProfileComponent implements OnInit {
 
   verifyMfaCode(): void {
     if (!this.mfaTotpCode || this.mfaTotpCode.length < 6) {
-      this.mfaError.set('Please enter a valid 6-digit code.');
+      this.mfaError.set(this.translate.instant('PROFILE.MFA_CODE_LENGTH'));
       return;
     }
     this.mfaLoading.set(true);
@@ -236,14 +258,16 @@ export class ProfileComponent implements OnInit {
       next: () => {
         this.mfaStep.set('backup');
         this.mfaLoading.set(false);
-        this.toast.success('MFA enrolled successfully!');
+        this.toast.success(this.translate.instant('PROFILE.MFA_ENROLLED'));
         // Refresh credential health to update the MFA status display
         this.profileService.getCredentialHealth().subscribe({
           next: (creds) => this.credentials.set(creds),
         });
       },
       error: (err) => {
-        this.mfaError.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.mfaError.set(
+          err?.error?.message ?? this.translate.instant('PROFILE.MFA_CODE_REJECTED'),
+        );
         this.mfaLoading.set(false);
       },
     });
@@ -261,7 +285,7 @@ export class ProfileComponent implements OnInit {
     navigator.clipboard.writeText(codes.join('\n')).catch(() => {
       /* ignore */
     });
-    this.toast.success('Backup codes copied to clipboard.');
+    this.toast.success(this.translate.instant('PROFILE.BACKUP_CODES_COPIED'));
   }
 
   /* ── Recovery Contacts ── */
@@ -295,7 +319,7 @@ export class ProfileComponent implements OnInit {
   saveRecoveryContact(): void {
     const value = this.newRecoveryValue().trim();
     if (!value) {
-      this.recoveryError.set('Please enter a contact value.');
+      this.recoveryError.set(this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED'));
       return;
     }
     this.recoverySaving.set(true);
@@ -320,14 +344,16 @@ export class ProfileComponent implements OnInit {
       next: () => {
         this.recoverySaving.set(false);
         this.showAddRecovery.set(false);
-        this.toast.success('Recovery contact added.');
+        this.toast.success(this.translate.instant('PROFILE.RECOVERY_ADDED'));
         this.profileService.getCredentialHealth().subscribe({
           next: (creds) => this.credentials.set(creds),
         });
       },
       error: (err) => {
         this.recoverySaving.set(false);
-        this.recoveryError.set(err?.error?.message ?? 'Failed to save recovery contact.');
+        this.recoveryError.set(
+          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_SAVE_FAILED'),
+        );
       },
     });
   }
@@ -345,14 +371,16 @@ export class ProfileComponent implements OnInit {
     this.profileService.updateRecoveryContacts(remaining).subscribe({
       next: () => {
         this.recoverySaving.set(false);
-        this.toast.success('Recovery contact removed.');
+        this.toast.success(this.translate.instant('PROFILE.RECOVERY_REMOVED'));
         this.profileService.getCredentialHealth().subscribe({
           next: (creds) => this.credentials.set(creds),
         });
       },
       error: (err) => {
         this.recoverySaving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to remove contact.');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_REMOVE_FAILED'),
+        );
       },
     });
   }
@@ -369,11 +397,17 @@ export class ProfileComponent implements OnInit {
       next: () => {
         this.verificationSending.set(false);
         this.verificationCodeSent.set(true);
-        this.toast.success('Verification code sent to ' + contact.contactValue);
+        this.toast.success(
+          this.translate.instant('PROFILE.VERIFICATION_CODE_SENT', {
+            contact: contact.contactValue,
+          }),
+        );
       },
       error: (err) => {
         this.verificationSending.set(false);
-        this.verificationError.set(err?.error?.message ?? 'Failed to send verification code.');
+        this.verificationError.set(
+          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'),
+        );
       },
     });
   }
@@ -391,14 +425,16 @@ export class ProfileComponent implements OnInit {
         this.verificationSending.set(false);
         this.verifyingContactId.set(null);
         this.verificationCodeSent.set(false);
-        this.toast.success('Recovery contact verified!');
+        this.toast.success(this.translate.instant('PROFILE.RECOVERY_VERIFIED'));
         this.profileService.getCredentialHealth().subscribe({
           next: (creds) => this.credentials.set(creds),
         });
       },
       error: (err) => {
         this.verificationSending.set(false);
-        this.verificationError.set(err?.error?.message ?? 'Verification failed.');
+        this.verificationError.set(
+          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+        );
       },
     });
   }
@@ -434,7 +470,7 @@ export class ProfileComponent implements OnInit {
     const userId = jwtUserId ?? storedProfile?.id;
 
     if (!userId) {
-      this.toast.error('Unable to load profile. Please log in again.');
+      this.toast.error(this.translate.instant('PROFILE.LOAD_FAILED'));
       this.router.navigateByUrl('/login');
       return;
     }
@@ -549,7 +585,7 @@ export class ProfileComponent implements OnInit {
         this.user.set(updated);
         this.resetEditForm(updated);
         this.saving.set(false);
-        this.toast.success('Profile updated successfully!');
+        this.toast.success(this.translate.instant('PROFILE.UPDATED'));
 
         // Update stored login profile
         const stored = this.auth.getUserProfile();
@@ -564,7 +600,7 @@ export class ProfileComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to update profile.');
+        this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
       },
     });
   }
@@ -578,11 +614,11 @@ export class ProfileComponent implements OnInit {
     // Validate file
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      this.toast.error('Image must be less than 5MB.');
+      this.toast.error(this.translate.instant('PROFILE.PHOTO_TOO_LARGE'));
       return;
     }
     if (!file.type.startsWith('image/')) {
-      this.toast.error('Please select an image file.');
+      this.toast.error(this.translate.instant('PROFILE.PHOTO_NOT_IMAGE'));
       return;
     }
 
@@ -600,11 +636,13 @@ export class ProfileComponent implements OnInit {
           stored.profileImageUrl = res.imageUrl;
           this.auth.setUserProfile(stored);
         }
-        this.toast.success('Profile photo updated!');
+        this.toast.success(this.translate.instant('PROFILE.PHOTO_UPDATED'));
       },
       error: (err) => {
         this.uploadingAvatar.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to upload photo.');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PROFILE.PHOTO_UPLOAD_FAILED'),
+        );
       },
     });
     // Reset input so same file can be selected again
@@ -626,11 +664,11 @@ export class ProfileComponent implements OnInit {
           stored.profileImageUrl = undefined;
           this.auth.setUserProfile(stored);
         }
-        this.toast.success('Profile photo removed.');
+        this.toast.success(this.translate.instant('PROFILE.PHOTO_REMOVED'));
       },
       error: () => {
         this.uploadingAvatar.set(false);
-        this.toast.error('Failed to remove photo.');
+        this.toast.error(this.translate.instant('PROFILE.PHOTO_REMOVE_FAILED'));
       },
     });
   }
@@ -639,12 +677,12 @@ export class ProfileComponent implements OnInit {
   requestPasswordReset(): void {
     const u = this.user();
     if (!u?.email) {
-      this.toast.error('No email address on file.');
+      this.toast.error(this.translate.instant('PROFILE.NO_EMAIL_ON_FILE'));
       return;
     }
     this.profileService.requestPasswordReset(u.email).subscribe({
-      next: () => this.toast.success('Password reset link sent to your email.'),
-      error: () => this.toast.error('Failed to request password reset.'),
+      next: () => this.toast.success(this.translate.instant('PROFILE.RESET_LINK_SENT')),
+      error: () => this.toast.error(this.translate.instant('PROFILE.RESET_REQUEST_FAILED')),
     });
   }
 
@@ -697,25 +735,42 @@ export class ProfileComponent implements OnInit {
     return '#64748b';
   }
 
-  formatEventType(eventType: string): string {
-    return (eventType ?? '')
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
+  /**
+   * Locale-aware audit-event label. Same three-tier lookup as
+   * {@link EnumLabelPipe}: `PORTAL.ENUM.AUDIT_EVENT_TYPE.*` first, then a
+   * prettified fallback so an unmapped event never renders as a raw key.
+   */
   formatTimestamp(ts: string): string {
     if (!ts) return '';
     const date = new Date(ts);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffMin < 1) return this.translate.instant('PROFILE.TIME_JUST_NOW');
+    if (diffMin < 60) {
+      return this.translate.instant('PROFILE.TIME_MINUTES_AGO', { count: diffMin });
+    }
     const diffHrs = Math.floor(diffMin / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
+    if (diffHrs < 24) {
+      return this.translate.instant('PROFILE.TIME_HOURS_AGO', { count: diffHrs });
+    }
     const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (diffDays < 7) {
+      return this.translate.instant('PROFILE.TIME_DAYS_AGO', { count: diffDays });
+    }
+    return date.toLocaleDateString(this.dateLocale(), {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  /**
+   * BCP-47 tag for `Intl` date formatting - the active UI language, never a
+   * hard-coded 'en-US'. Falls back the same way {@link EnumLabelPipe} does so
+   * the first paint (before a language is set) still formats.
+   */
+  private dateLocale(): string {
+    return currentLocale();
   }
 }

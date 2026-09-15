@@ -36,6 +36,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 /**
  * MVP-7 implementation. Force-logout-all bumps the global min-iat via
@@ -65,6 +67,7 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
     private final SimpMessagingTemplate messagingTemplate;
     private final MfaService mfaService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final MessageSource messageSource;
 
     /** Reuses the same strict-mode flag MVP-4 uses for impersonation start. */
     @Value("${hms.support-impersonation.require-mfa-strict:false}")
@@ -83,7 +86,7 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             .takenAt(takenAt)
             .actorUsername(actorUsername)
             .affectedRows(0)
-            .message("All sessions revoked — every JWT issued before " + takenAt + " is now invalid.")
+            .message(text("emergency.forceLogout.message", String.valueOf(takenAt)))
             .build();
     }
 
@@ -107,7 +110,7 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             .takenAt(Instant.now())
             .actorUsername(actorUsername)
             .affectedRows(1)
-            .message("Feature flag '" + request.getFlagKey() + "' is now disabled platform-wide.")
+            .message(text("emergency.killFeature.message", request.getFlagKey()))
             .build();
     }
 
@@ -173,8 +176,11 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             .takenAt(Instant.now())
             .actorUsername(actorUsername)
             .affectedRows(affected)
-            .message("Cleared " + affected + " MFA enrolment row(s) for "
-                + resolvedTargets.size() + " user(s)" + scopeSuffix + ".")
+            .message(hospitalScope != null
+                ? text("emergency.forceMfa.message.scoped",
+                    String.valueOf(affected), String.valueOf(resolvedTargets.size()), String.valueOf(hospitalScope))
+                : text("emergency.forceMfa.message",
+                    String.valueOf(affected), String.valueOf(resolvedTargets.size())))
             .build();
     }
 
@@ -193,7 +199,9 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         payload.put("issuedAt", Instant.now().toString());
 
         try {
-            messagingTemplate.convertAndSend(BROADCAST_TOPIC, payload);
+            // Spring Framework 7: a Map payload also matches the (payload, headers)
+            // overload, so name the intent.
+            messagingTemplate.convertAndSend(BROADCAST_TOPIC, (Object) payload);
         } catch (RuntimeException ex) {
             // Don't let a transient broker failure swallow the audit trail —
             // the action is still recorded as an attempt.
@@ -207,8 +215,17 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             .takenAt(Instant.now())
             .actorUsername(actorUsername)
             .affectedRows(1)
-            .message("Broadcast queued on " + BROADCAST_TOPIC + ".")
+            .message(text("emergency.broadcast.message", BROADCAST_TOPIC))
             .build();
+    }
+
+    /**
+     * Response text goes back to the super-admin who pressed the button, so
+     * the request locale is the right one. Audit descriptions above stay
+     * as written: they are records, not messages.
+     */
+    private String text(String key, Object... args) {
+        return messageSource.getMessage(key, args, LocaleContextHolder.getLocale());
     }
 
     private UUID currentUserId() {

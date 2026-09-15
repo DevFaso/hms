@@ -1,7 +1,7 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
@@ -10,8 +10,9 @@ import { ProfileService } from '../services/profile.service';
 @Component({
   selector: 'app-account-setup',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './account-setup.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./account-setup.scss'],
 })
 export class AccountSetupComponent implements OnInit {

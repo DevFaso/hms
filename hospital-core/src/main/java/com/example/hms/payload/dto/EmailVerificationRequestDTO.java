@@ -9,10 +9,10 @@ import lombok.Setter;
 @Setter
 public class EmailVerificationRequestDTO {
 
-    @NotBlank(message = "Email cannot be blank")
-    @Email(message = "Email should be valid")
+    @NotBlank(message = "{emailVerification.email.required}")
+    @Email(message = "{emailVerification.email.invalid}")
     private String email;
 
-    @NotBlank(message = "Verification token cannot be blank")
+    @NotBlank(message = "{emailVerification.token.required}")
     private String token;
 }

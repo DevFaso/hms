@@ -278,7 +278,11 @@
             {{ 'STAFF.WEEKLY_SHIFTS' | translate }}
           </h3>
           <div class="week-nav">
-            <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
+            <button
+              class="week-btn"
+              (click)="changeWeek(-1)"
+              [attr.aria-label]="'SCHEDULING.ARIA.PREV_WEEK' | translate"
+            >
               <span class="material-symbols-outlined">chevron_left</span>
             </button>
             <button
@@ -288,7 +292,11 @@
             >
               {{ getWeekLabel() }}
             </button>
-            <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
+            <button
+              class="week-btn"
+              (click)="changeWeek(1)"
+              [attr.aria-label]="'SCHEDULING.ARIA.NEXT_WEEK' | translate"
+            >
               <span class="material-symbols-outlined">chevron_right</span>
             </button>
           </div>
@@ -326,14 +334,16 @@
                       <div class="shift-info">
                         <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                         @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                          <span class="cross-midnight-badge">← cont'd</span>
+                          <span class="cross-midnight-badge">{{
+                            'STAFF.SHIFT_CONTINUED_BADGE' | translate
+                          }}</span>
                         }
                         <span class="shift-meta">{{ formatShiftType(shift.shiftType) }}</span>
                       </div>
                       <span
                         class="shift-status-dot"
                         [attr.data-status]="shift.status"
-                        [title]="shift.status"
+                        [title]="shift.status | enumLabel: 'shiftStatus'"
                       ></span>
                     </div>
                   } @empty {

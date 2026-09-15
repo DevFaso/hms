@@ -22,10 +22,10 @@ public class AppointmentRequestDTO {
 
     private UUID id;
 
-    @FutureOrPresent(message = "Appointment date must be today or in the future")
+    @FutureOrPresent(message = "{appointment.appointmentDate.future}")
     private LocalDate appointmentDate;
 
-    @NotNull(message = "Start time is required.")
+    @NotNull(message = "{appointment.startTime.required}")
     private LocalTime startTime;
 
     private LocalTime endTime;

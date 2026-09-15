@@ -170,7 +170,7 @@
                 </span>
               </div>
               <span class="portal-status-chip" [attr.data-status]="rx.status">{{
-                rx.status | enumLabel: 'status'
+                rx.status | enumLabel: 'prescriptionStatus'
               }}</span>
             </div>
 
@@ -202,7 +202,7 @@
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
                     <span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
-                      rx.status | enumLabel: 'status'
+                      rx.status | enumLabel: 'prescriptionStatus'
                     }}</span>
                   </div>
                 </div>

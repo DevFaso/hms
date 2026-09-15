@@ -65,7 +65,9 @@
                 <span class="occupant-mrn">{{ t.mrn }}</span>
               }
               @for (p of t.isolationPrecautions; track p) {
-                <span [class]="precautionClass(p)">{{ p | enumLabel }}</span>
+                <span [class]="precautionClass(p)">{{
+                  p | enumLabel: 'isolationPrecautionType'
+                }}</span>
               }
               @if (t.isolationOverride) {
                 <span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
@@ -168,7 +170,7 @@
             <h2>
               {{ ward.wardName }}
               <span class="ward-code">{{ ward.wardCode }}</span>
-              <span class="ward-type">{{ ward.wardType | enumLabel }}</span>
+              <span class="ward-type">{{ ward.wardType | enumLabel: 'wardType' }}</span>
               @if (ward.isolationCapable) {
                 <span class="chip chip-capable">{{
                   'BED_BOARD.ISOLATION_CAPABLE' | translate
@@ -202,7 +204,7 @@
                   <article [class]="bedStatusClass(bed)">
                     <header class="bed-head">
                       <span class="bed-number">{{ bed.bedNumber }}</span>
-                      <span class="bed-status">{{ bed.status | enumLabel }}</span>
+                      <span class="bed-status">{{ bed.status | enumLabel: 'bedStatus' }}</span>
                     </header>
 
                     @if (bed.occupant; as o) {
@@ -235,7 +237,9 @@
                         @if (o.isolationPrecautions.length > 0) {
                           <div class="precautions">
                             @for (p of o.isolationPrecautions; track p) {
-                              <span [class]="precautionClass(p)">{{ p | enumLabel }}</span>
+                              <span [class]="precautionClass(p)">{{
+                                p | enumLabel: 'isolationPrecautionType'
+                              }}</span>
                             }
                             @if (o.isolationMismatch) {
                               <span class="chip chip-mismatch">{{
@@ -290,7 +294,10 @@
   >
     <header class="modal-header">
       <h2>
-        {{ 'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precautionTarget()?.patientName } }}
+        {{
+          'BED_BOARD.PRECAUTIONS_FOR'
+            | translate: { name: $safeNavigationMigration(precautionTarget()?.patientName) }
+        }}
       </h2>
       <button class="btn-close" (click)="closePrecautions()" [title]="'COMMON.CLOSE' | translate">
         <span class="material-symbols-outlined">close</span>
@@ -303,7 +310,7 @@
           @for (p of precautionHistory(); track p.id) {
             <li>
               <span [class]="precautionClass(p.precautionType)">{{
-                p.precautionType | enumLabel
+                p.precautionType | enumLabel: 'isolationPrecautionType'
               }}</span>
               <span class="precaution-reason">{{ p.reason }}</span>
               @if (p.requiresIsolationWard) {
@@ -328,7 +335,7 @@
         <label for="precaution-type">{{ 'BED_BOARD.TYPE' | translate }}</label>
         <select id="precaution-type" [(ngModel)]="precautionForm.precautionType" name="type">
           @for (t of precautionTypes; track t) {
-            <option [value]="t">{{ t | enumLabel }}</option>
+            <option [value]="t">{{ t | enumLabel: 'isolationPrecautionType' }}</option>
           }
         </select>
       </div>
@@ -395,7 +402,12 @@
     [attr.aria-label]="'BED_BOARD.TRANSFER' | translate"
   >
     <header class="modal-header">
-      <h2>{{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName } }}</h2>
+      <h2>
+        {{
+          'BED_BOARD.TRANSFER_FOR'
+            | translate: { name: $safeNavigationMigration(transferTarget()?.patientName) }
+        }}
+      </h2>
       <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
         <span class="material-symbols-outlined">close</span>
       </button>

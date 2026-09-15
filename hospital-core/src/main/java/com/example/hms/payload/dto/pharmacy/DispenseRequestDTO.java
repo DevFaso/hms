@@ -22,32 +22,32 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DispenseRequestDTO {
 
-    @NotNull(message = "Prescription ID is required")
+    @NotNull(message = "{dispense.prescriptionId.required}")
     private UUID prescriptionId;
 
-    @NotNull(message = "Patient ID is required")
+    @NotNull(message = "{dispense.patientId.required}")
     private UUID patientId;
 
-    @NotNull(message = "Pharmacy ID is required")
+    @NotNull(message = "{dispense.pharmacyId.required}")
     private UUID pharmacyId;
 
     private UUID stockLotId;
 
-    @NotNull(message = "Dispensed-by user ID is required")
+    @NotNull(message = "{dispense.dispensedBy.required}")
     private UUID dispensedBy;
 
     private UUID verifiedBy;
 
     private UUID medicationCatalogItemId;
 
-    @NotBlank(message = "Medication name is required")
+    @NotBlank(message = "{dispense.medicationName.required}")
     @Size(max = 255)
     private String medicationName;
 
-    @NotNull(message = "Quantity requested is required")
+    @NotNull(message = "{dispense.quantityRequested.required}")
     private BigDecimal quantityRequested;
 
-    @NotNull(message = "Quantity dispensed is required")
+    @NotNull(message = "{dispense.quantityDispensed.required}")
     private BigDecimal quantityDispensed;
 
     @Size(max = 60)

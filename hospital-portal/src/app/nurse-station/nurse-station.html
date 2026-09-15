@@ -183,7 +183,7 @@
                         <div class="cell-primary">{{ v.patientName }}</div>
                       }
                     </td>
-                    <td>{{ v.type }}</td>
+                    <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
                     <td>
                       @if (v.overdue) {
@@ -254,7 +254,7 @@
                     <td>{{ m.dueTime | date: 'shortTime' }}</td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
-                        m.status
+                        m.status | enumLabel: 'marTaskStatus'
                       }}</span>
                     </td>
                     <td class="action-cell">
@@ -334,7 +334,7 @@
                         <div class="cell-primary">{{ o.patientName }}</div>
                       }
                     </td>
-                    <td>{{ o.orderType }}</td>
+                    <td>{{ o.orderType | enumLabel: 'orderTaskType' }}</td>
                     <td>
                       <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
                         o.priority
@@ -778,7 +778,7 @@
                     <td>{{ a.mrn || '—' }}</td>
                     <td>
                       <span class="status-badge status-{{ a.status | lowercase }}">{{
-                        a.status
+                        a.status | enumLabel: 'admissionStatus'
                       }}</span>
                     </td>
                     <td>

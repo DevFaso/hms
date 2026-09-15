@@ -1,4 +1,11 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  computed,
+  OnInit,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -51,6 +58,7 @@ function todayIso(): string {
     CheckinDialogComponent,
   ],
   templateUrl: './reception-cockpit.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reception-cockpit.component.scss',
 })
 export class ReceptionCockpitComponent implements OnInit {

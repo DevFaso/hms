@@ -22,10 +22,10 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PharmacyRequestDTO {
 
-    @NotNull(message = "Hospital ID is required")
+    @NotNull(message = "{department.hospital.required}")
     private UUID hospitalId;
 
-    @NotBlank(message = "Pharmacy name is required")
+    @NotBlank(message = "{pharmacy.name.required}")
     @Size(max = 255)
     private String name;
 

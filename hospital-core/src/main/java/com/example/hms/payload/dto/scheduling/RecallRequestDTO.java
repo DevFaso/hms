@@ -17,7 +17,7 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class RecallRequestDTO {
 
-    @NotNull(message = "A patient is required.")
+    @NotNull(message = "{recall.patientId.required}")
     private UUID patientId;
 
     private UUID departmentId;
@@ -27,10 +27,10 @@ public class RecallRequestDTO {
     /** Defaults to FOLLOW_UP. */
     private RecallType recallType;
 
-    @NotNull(message = "A due date is required.")
+    @NotNull(message = "{recall.dueDate.required}")
     private LocalDate dueDate;
 
-    @NotBlank(message = "A reason is required.")
+    @NotBlank(message = "{recall.reason.required}")
     @Size(max = 500)
     private String reason;
 

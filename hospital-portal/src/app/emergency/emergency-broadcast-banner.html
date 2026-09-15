@@ -11,7 +11,7 @@
       <div class="banner-meta">
         <span>{{ 'EMERGENCY_BANNER.ISSUED_BY' | translate }} {{ frame()?.issuedBy || '—' }}</span>
         @if (frame()?.issuedAt) {
-          <span>· {{ frame()?.issuedAt | date: 'short' }}</span>
+          <span>· {{ $safeNavigationMigration(frame()?.issuedAt) | date: 'short' }}</span>
         }
         @if (frame()?.severity) {
           <span class="severity-tag">{{ frame()?.severity }}</span>

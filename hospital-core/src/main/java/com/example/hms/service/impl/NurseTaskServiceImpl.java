@@ -75,8 +75,8 @@ import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import com.example.hms.service.emar.FiveRightsVerificationResult;
 import com.example.hms.service.emar.FiveRightsVerificationService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -97,6 +97,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import jakarta.persistence.EntityNotFoundException;
 
 /**
  * Implementation of NurseTaskService.
@@ -118,7 +119,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
 
-    private static final String TYPE_ROUTINE = "Routine";
+    private static final String TYPE_ROUTINE = "ROUTINE";
+    private static final String TYPE_FULL_SET = "FULL_SET";
+    private static final String ORDER_TYPE_LAB = "LAB";
+    private static final String ORDER_TYPE_IMAGING = "IMAGING";
+    private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -226,7 +231,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
-                    .type(overdue ? "Full Set" : TYPE_ROUTINE)
+                    .type(overdue ? TYPE_FULL_SET : TYPE_ROUTINE)
                     .dueTime(dueTime)
                     .overdue(overdue)
                     .build());
@@ -493,7 +498,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private String serializeOverrides(Set<FiveRightsCheck> failed) {
         try {
             return objectMapper.writeValueAsString(failed.stream().map(Enum::name).toList());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.warn("Failed to serialize five-rights overrides; falling back to toString. {}", e.getMessage());
             return failed.stream().map(Enum::name).toList().toString();
         }
@@ -545,23 +550,26 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<NurseOrderTaskResponseDTO> tasks = new ArrayList<>();
         for (LabOrder order : labOrderRepository.findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_LAB_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            tasks.add(orderTask(order.getId(), patient, "Lab",
+            String labPatientName = listedNameOf(patient, scope, "lab order", order.getId());
+            if (labPatientName == null) continue;
+            tasks.add(orderTask(order.getId(), patient.getId(), labPatientName, ORDER_TYPE_LAB,
                 normalizePriority(order.getPriority()), order.getOrderDatetime()));
         }
         for (ImagingOrder order : imagingOrderRepository
                 .findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, NURSE_ACTION_IMAGING_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            tasks.add(orderTask(order.getId(), patient, "Imaging",
+            String imagingPatientName = listedNameOf(patient, scope, "imaging order", order.getId());
+            if (imagingPatientName == null) continue;
+            tasks.add(orderTask(order.getId(), patient.getId(), imagingPatientName, ORDER_TYPE_IMAGING,
                 order.getPriority() != null ? order.getPriority().name() : PRIORITY_ROUTINE,
                 order.getOrderedAt()));
         }
         for (ProcedureOrder order : procedureOrderRepository
                 .findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_PROCEDURE_STATUSES)) {
             Patient patient = order.getPatient();
-            if (!inScope(patient, scope)) continue;
-            tasks.add(orderTask(order.getId(), patient, "Procedure",
+            String procedurePatientName = listedNameOf(patient, scope, "procedure order", order.getId());
+            if (procedurePatientName == null) continue;
+            tasks.add(orderTask(order.getId(), patient.getId(), procedurePatientName, ORDER_TYPE_PROCEDURE,
                 order.getUrgency() != null ? order.getUrgency().name() : PRIORITY_ROUTINE,
                 order.getScheduledDatetime() != null ? order.getScheduledDatetime() : order.getOrderedAt()));
         }
@@ -571,13 +579,34 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return tasks;
     }
 
+    /**
+     * The patient's display name when the order belongs on this nurse's board, else null:
+     * null when the patient is outside the nurse's assigned scope, and null when the row
+     * behind the lazy proxy is gone. A hard-deleted patient leaves its orders behind (the
+     * V156 keys are NOT VALID, and procedure orders carry no key at all); one such order
+     * used to fail the whole nurse board and dashboard summary with a 500 (dev,
+     * 2026-09-13). It is skipped with a warning instead. The id itself is read from the
+     * proxy without a query; only the name touches the row.
+     */
+    private String listedNameOf(Patient patient, Set<UUID> scope, String orderType, UUID orderId) {
+        if (!inScope(patient, scope)) {
+            return null;
+        }
+        try {
+            return patient.getFullName();
+        } catch (EntityNotFoundException e) {
+            log.warn("Skipping {} {}: its patient {} no longer exists", orderType, orderId, patient.getId());
+            return null;
+        }
+    }
+
     private NurseOrderTaskResponseDTO orderTask(
-        UUID id, Patient patient, String orderType, String priority, LocalDateTime dueTime
+        UUID id, UUID patientId, String patientName, String orderType, String priority, LocalDateTime dueTime
     ) {
         return NurseOrderTaskResponseDTO.builder()
             .id(id)
-            .patientId(patient.getId())
-            .patientName(patient.getFullName())
+            .patientId(patientId)
+            .patientName(patientName)
             .orderType(orderType)
             .priority(priority)
             .dueTime(dueTime)

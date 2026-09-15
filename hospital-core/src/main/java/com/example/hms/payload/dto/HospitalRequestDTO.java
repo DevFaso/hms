@@ -20,21 +20,21 @@ public class HospitalRequestDTO {
 
     private UUID id;
 
-    @NotBlank(message = "Hospital name cannot be blank")
-    @Size(min = 2, max = 100, message = "Hospital name must be between 2 and 100 characters")
+    @NotBlank(message = "{hospital.name.required}")
+    @Size(min = 2, max = 100, message = "{hospital.name.size}")
     private String name;
 
     private String address; // Optional for foreign countries if poBox is provided
 
-    @NotBlank(message = "City cannot be blank")
+    @NotBlank(message = "{hospital.city.required}")
     private String city;
 
-    @Size(max = 100, message = "State name must be less than 100 characters")
+    @Size(max = 100, message = "{hospital.state.size}")
     private String state; // Required only for US addresses
 
     private String zipCode; // Required only for US addresses
 
-    @NotBlank(message = "Country cannot be blank")
+    @NotBlank(message = "{hospital.country.required}")
     private String country;
 
     private String province;
@@ -42,11 +42,11 @@ public class HospitalRequestDTO {
     private String sector;
     private String poBox; // For B.P. style addresses
 
-    @NotBlank(message = "Phone number cannot be blank")
-    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 characters")
+    @NotBlank(message = "{hospital.phoneNumber.required}")
+    @Size(min = 10, max = 15, message = "{hospital.phoneNumber.size}")
     private String phoneNumber;
 
-    @Email(message = "Email should be valid")
+    @Email(message = "{hospital.email.invalid}")
     private String email;
 
     private String website;

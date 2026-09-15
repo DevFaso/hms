@@ -395,7 +395,7 @@
               id="defLoincDisplay"
               type="text"
               [(ngModel)]="defForm.loincDisplay"
-              placeholder="e.g. Hemoglobin [Mass/volume] in Blood"
+              [placeholder]="'LAB_TEST_CONFIG.LOINC_DISPLAY_PLACEHOLDER' | translate"
             />
           </div>
           <div class="form-group form-group-full">
@@ -468,7 +468,8 @@
         <div class="modal-body">
           <p>
             {{
-              'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG' | translate: { name: deletingDef()?.testName }
+              'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG'
+                | translate: { name: $safeNavigationMigration(deletingDef()?.testName) }
             }}
           </p>
         </div>
@@ -620,8 +621,12 @@
               <div class="form-group">
                 <label for="reflexSeverity">{{ 'LAB_RESULTS.SEVERITY' | translate }}</label>
                 <select id="reflexSeverity" [(ngModel)]="reflexForm.severityFlag">
-                  <option value="ABNORMAL">ABNORMAL</option>
-                  <option value="CRITICAL">CRITICAL</option>
+                  <option value="ABNORMAL">
+                    {{ 'PORTAL.ENUM.ABNORMAL_FLAG.ABNORMAL' | translate }}
+                  </option>
+                  <option value="CRITICAL">
+                    {{ 'PORTAL.ENUM.ABNORMAL_FLAG.CRITICAL' | translate }}
+                  </option>
                 </select>
               </div>
             } @else {

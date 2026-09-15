@@ -1,4 +1,11 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -20,6 +27,7 @@ import {
   AuditSavedSearchService,
   SavedAuditSearch,
 } from '../../services/audit-saved-search.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 // MVP-c3 added PLATFORM_CONFIG so platform-administration writes
@@ -32,8 +40,9 @@ type ActiveTab = 'support' | 'aggregated';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
   templateUrl: './audit-search.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-search.scss',
 })
 export class SuperAdminAuditSearchComponent implements OnInit {

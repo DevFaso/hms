@@ -44,6 +44,8 @@ import java.util.TreeMap;
 import java.util.UUID;
 import java.security.SecureRandom;
 import java.util.stream.Collectors;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 
 @Service
 @Slf4j
@@ -56,6 +58,7 @@ public class UserGovernanceService {
     private final UserService userService;
     private final PasswordResetService passwordResetService;
     private final UserRepository userRepository;
+    private final MessageSource messageSource;
 
     @Transactional
     public UserResponseDTO createUser(AdminSignupRequest request) {
@@ -224,7 +227,7 @@ public class UserGovernanceService {
                 .rowNumber(rowNumber)
                 .identifier(signupRequest.getEmail())
                 .success(true)
-                .message("Imported successfully")
+                .message(text("user.import.success"))
                 .userId(response.getId())
                 .build();
             return new RowOutcome(true, successResult);
@@ -283,7 +286,7 @@ public class UserGovernanceService {
             resultBuilders.computeIfAbsent(id, missingId -> SuperAdminUserResetResultDTO.builder()
                 .userId(missingId)
                 .success(false)
-                .message("User not found"));
+                .message(text("user.reset.notFound")));
         }
 
     for (String email : targets.emails()) {
@@ -293,7 +296,7 @@ public class UserGovernanceService {
                 resultBuilders.put(syntheticId, SuperAdminUserResetResultDTO.builder()
                     .email(email)
                     .success(false)
-                    .message("User not found"));
+                    .message(text("user.reset.notFound")));
             }
         }
 
@@ -303,7 +306,7 @@ public class UserGovernanceService {
                 UUID syntheticId = UUID.nameUUIDFromBytes(("username:" + username).getBytes(StandardCharsets.UTF_8));
                 resultBuilders.put(syntheticId, SuperAdminUserResetResultDTO.builder()
                     .success(false)
-                    .message("User not found (username: " + username + ")"));
+                    .message(text("user.reset.notFound.username", username)));
             }
         }
 
@@ -327,7 +330,7 @@ public class UserGovernanceService {
                 }
                 succeeded++;
                 if (builder != null) {
-                    builder.success(true).message("Reset queued");
+                    builder.success(true).message(text("user.reset.queued"));
                 }
             } catch (RuntimeException ex) {
                 log.warn("[USER RESET] Failed to queue reset for {}: {}", user.getId(), ex.getMessage());
@@ -512,6 +515,11 @@ public class UserGovernanceService {
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid UUID: " + value, ex);
         }
+    }
+
+    /** Row outcomes are read by the super-admin who submitted the batch. */
+    private String text(String key, Object... args) {
+        return messageSource.getMessage(key, args, LocaleContextHolder.getLocale());
     }
 
     private String safeMessage(Exception ex) {

@@ -1,7 +1,7 @@
 package com.example.hms.utility;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class JsonMapConverter implements AttributeConverter<Map<String, Object>,
         }
         try {
             return objectMapper.writeValueAsString(attribute);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.error("Failed to convert Map to JSON", ex);
             return null;
         }
@@ -37,7 +37,7 @@ public class JsonMapConverter implements AttributeConverter<Map<String, Object>,
         }
         try {
             return objectMapper.readValue(dbData, Map.class);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             log.error("Failed to convert JSON to Map", ex);
             return Collections.emptyMap();
         }

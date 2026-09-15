@@ -21,11 +21,11 @@ import java.util.UUID;
 @Builder
 public class PendingTestResultDTO {
 
-    @NotBlank(message = "Test type is required")
+    @NotBlank(message = "{pendingTestResult.testType.required}")
     @Size(max = 50)
     private String testType; // LAB, IMAGING, PATHOLOGY, CULTURE
 
-    @NotBlank(message = "Test name is required")
+    @NotBlank(message = "{pendingTestResult.testName.required}")
     @Size(max = 255)
     private String testName;
 

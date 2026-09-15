@@ -35,7 +35,9 @@
               </div>
               <div class="avs-header-info">
                 <span class="avs-provider">{{ s.providerName }}</span>
-                <span class="avs-dept">{{ s.hospitalName }} · {{ s.encounterType }}</span>
+                <span class="avs-dept"
+                  >{{ s.hospitalName }} · {{ s.encounterType | enumLabel: 'encounterType' }}</span
+                >
               </div>
             </div>
             <span class="material-symbols-outlined avs-expand-icon">

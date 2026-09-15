@@ -112,8 +112,9 @@
             "tsConfig": "tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "polyfills": [
-              "src/polyfills.ts",
-              "src/test-setup.ts"
+              "zone.js",
+              "zone.js/testing",
+              "src/polyfills.ts"
             ],
             "assets": [
               {
