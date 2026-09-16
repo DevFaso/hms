@@ -18,6 +18,7 @@ import { UserService, UserSummary } from '../../services/user.service';
 import { HospitalResponse, HospitalService } from '../../services/hospital.service';
 import { Subject, debounceTime, switchMap, of, catchError, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
 interface PanelState {
   busy: boolean;
@@ -47,7 +48,7 @@ export const RESET_ALL_PHRASE = 'RESET ALL MFA';
 @Component({
   selector: 'app-super-admin-emergency',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe, RoleLabelPipe],
   templateUrl: './emergency.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './emergency.scss',

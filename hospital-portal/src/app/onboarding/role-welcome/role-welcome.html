@@ -70,7 +70,7 @@
       <div class="rw-info-grid">
         <div class="rw-info-item">
           <span class="rw-info-label">{{ 'ONBOARDING.ROLE' | translate }}</span>
-          <span class="rw-info-value">{{ assignment.roleName }}</span>
+          <span class="rw-info-value">{{ assignment.roleName | roleLabel }}</span>
         </div>
         @if (assignment.hospitalName) {
           <div class="rw-info-item">

@@ -854,7 +854,8 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
  */
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
   function build(roles: string[], activeRole: string) {
-    // Same shape as the harness above: ngOnInit calls getUserProfile and
+    // Same shape as the harness above: ngOnInit calls getUserProfile, so a
+    // partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
       'hasAnyRole',

@@ -81,13 +81,6 @@ export class ProfileComponent implements OnInit {
     return u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
   });
 
-  /** The raw token; every template that shows it pipes it. */
-  primaryRole = computed(() => {
-    const u = this.user();
-    if (!u?.roles?.length) return '';
-    return u.roleName ?? u.roles[0]?.name ?? u.roles[0]?.code ?? '';
-  });
-
   allRoles = computed(() => {
     const u = this.user();
     if (!u?.roles) return [];

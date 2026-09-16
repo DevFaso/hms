@@ -28,6 +28,7 @@ import {
   SavedAuditSearch,
 } from '../../services/audit-saved-search.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 // MVP-c3 added PLATFORM_CONFIG so platform-administration writes
@@ -40,7 +41,15 @@ type ActiveTab = 'support' | 'aggregated';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './audit-search.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-search.scss',

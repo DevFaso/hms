@@ -257,7 +257,9 @@
                     <div class="assignment-row">
                       <div class="assignment-role">
                         <span class="material-symbols-outlined">shield</span>
-                        <span class="assignment-role-name">{{ a.roleName ?? a.roleCode }}</span>
+                        <span class="assignment-role-name">{{
+                          a.roleName ?? a.roleCode | roleLabel
+                        }}</span>
                       </div>
                       @if (a.hospitalName) {
                         <div class="assignment-hospital">

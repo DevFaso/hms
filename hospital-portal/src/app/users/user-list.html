@@ -148,7 +148,7 @@
               </td>
               <td>{{ user.username }}</td>
               <td>
-                <span class="role-chip">{{ user.roleName || '—' }}</span>
+                <span class="role-chip">{{ (user.roleName | roleLabel) || '—' }}</span>
               </td>
               <td>{{ user.profileType || '—' }}</td>
               <td>

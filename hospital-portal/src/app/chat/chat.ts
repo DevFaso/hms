@@ -22,6 +22,7 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -110,7 +111,7 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './chat.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',

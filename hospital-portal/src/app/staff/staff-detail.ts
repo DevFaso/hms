@@ -23,13 +23,14 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent],
+  imports: [RouterLink, TranslateModule, EnumLabelPipe, CredentialRenewalComponent, RoleLabelPipe],
   templateUrl: './staff-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-detail.scss',

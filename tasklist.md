@@ -2396,16 +2396,6 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `h.state`/`p.state` are postal address lines, not enums. The baseline has no
   field to record that, and `--write-baseline` rewrites its `$comment`, so it is
   written here instead — do not re-trace them.
-  A FIFTH thing it cannot see, and this one has no fix: a role rendered through
-  a field called `name`. ENUM_WORDS matches enum-SHAPED field names, and the
-  role pickers bind `role.name`, `role.code` and `r.name` — `name` can never be
-  an entry, because half the DTOs in the portal have one. A French admin
-  registering a user saw the raw registry, twenty-six `ROLE_*` rows, while the
-  gate reported every pinned site accounted for (#666, reported from prod). The
-  previous four blind spots each earned a new ENUM_WORDS entry; this one is
-  structural, so the only defence is tracing a screen by hand. The role
-  pickers, the shell, the login cards, the lock screen and the profile badges
-  are done; assume other `.name` renders of enum-ish data exist.
   A FOURTH thing the gate cannot see, found by the `.role` tranche: a site that
   renders raw because it never renders at all. Two of that tranche's five sites
   are fed by a field the API does not send, so no pipe could have been verified
@@ -2437,6 +2427,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   free-text headings (notification, in-basket, education, questionnaire) as
   enum debt and would have taxed every future one for no signal. A `.title` is
   prose someone typed; a `.jobTitle` is `JobTitle.name()`, every time.
+  A FIFTH thing it cannot see, and this one has no fix: a role rendered through
+  a field called `name`. ENUM_WORDS matches enum-SHAPED field names, and the
+  role pickers bind `role.name`, `role.code` and `r.name` — `name` can never be
+  an entry, because half the DTOs in the portal have one. A French admin
+  registering a user saw the raw registry, twenty-six `ROLE_*` rows, while the
+  gate reported every pinned site accounted for (#678, reported from prod). The
+  previous four blind spots each earned a new ENUM_WORDS entry; this one is
+  structural, so the only defence is tracing a screen by hand. The role
+  pickers, the shell, the login cards, the lock screen and the profile badges
+  are done; assume other `.name` renders of enum-ish data exist.
   Next clusters after that: `.reason` (14),
   `.frequency` (12), `.type` (11), `.category` (10); most of `.reason` is free
   text that should stay pinned.
@@ -2490,7 +2490,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   had already grown a gate change; all six land naturally in the tranche that
   translates the 14 `roleName` sites.
   1. ~~`bareRole` lives in `patient-portal.service.ts`, but the tranche's sites
-     are staff screens served by other services.~~ Done in #666: it is
+     are staff screens served by other services.~~ Done in #678: it is
      `core/role-token.ts`, and the new `RoleLabelPipe` wraps it so a template
      never has to know about the `ROLE_` prefix.
   2. `UNKNOWN_ROLE = 'Unknown Role'` couples the portal to an exact Java

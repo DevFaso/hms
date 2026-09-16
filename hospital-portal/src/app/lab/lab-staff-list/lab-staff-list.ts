@@ -13,6 +13,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
 /** Lab roles that can be assigned via the role-update endpoint. */
 const ASSIGNABLE_LAB_ROLES = [
@@ -24,7 +25,7 @@ const ASSIGNABLE_LAB_ROLES = [
 @Component({
   selector: 'app-lab-staff-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, TranslateModule],
+  imports: [CommonModule, RouterModule, FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './lab-staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-staff-list.scss',
