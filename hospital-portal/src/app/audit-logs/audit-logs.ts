@@ -16,11 +16,12 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './audit-logs.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',

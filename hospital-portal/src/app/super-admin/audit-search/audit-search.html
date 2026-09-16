@@ -230,7 +230,7 @@
                   </td>
                   <td>
                     <div class="cell-primary">{{ row.userName || '—' }}</div>
-                    <div class="cell-secondary">{{ row.roleName || '' }}</div>
+                    <div class="cell-secondary">{{ row.roleName | roleLabel }}</div>
                   </td>
                   <td>{{ row.hospitalName || '—' }}</td>
                   <td>

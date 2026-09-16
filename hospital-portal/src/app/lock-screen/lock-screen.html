@@ -15,7 +15,7 @@
         }
       </div>
       <h2 class="user-name">{{ userName }}</h2>
-      <p class="user-role">{{ userRole }}</p>
+      <p class="user-role">{{ userRole | roleLabel }}</p>
     </div>
 
     <p class="lock-message">{{ 'LOCK.SESSION_LOCKED' | translate }}</p>

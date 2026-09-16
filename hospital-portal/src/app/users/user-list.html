@@ -98,7 +98,8 @@
         >
           <option value="">{{ 'USERS.ALL_ROLES' | translate }}</option>
           @for (role of availableRoles(); track role.id) {
-            <option [value]="role.name">{{ role.name }}</option>
+            <!-- The VALUE stays the wire token; only the text is translated. -->
+            <option [value]="role.name">{{ role.name | roleLabel }}</option>
           }
         </select>
       </div>
@@ -147,7 +148,7 @@
               </td>
               <td>{{ user.username }}</td>
               <td>
-                <span class="role-chip">{{ user.roleName || '—' }}</span>
+                <span class="role-chip">{{ (user.roleName | roleLabel) || '—' }}</span>
               </td>
               <td>{{ user.profileType || '—' }}</td>
               <td>
@@ -396,7 +397,7 @@
                       [checked]="selectedRoles.includes(role.code)"
                       (change)="onRoleToggle(role.code, $any($event.target).checked)"
                     />
-                    <span class="role-label">{{ role.name || role.code }}</span>
+                    <span class="role-label">{{ role.name || role.code | roleLabel }}</span>
                   </label>
                 }
                 @if (availableRoles().length === 0) {

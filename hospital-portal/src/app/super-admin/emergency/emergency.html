@@ -124,7 +124,7 @@
             <li>
               <button type="button" (click)="addMfaTarget(u)">
                 <strong>{{ u.firstName }} {{ u.lastName }}</strong>
-                <span class="picker-meta">{{ u.username }} · {{ u.roleName }}</span>
+                <span class="picker-meta">{{ u.username }} · {{ u.roleName | roleLabel }}</span>
               </button>
             </li>
           }

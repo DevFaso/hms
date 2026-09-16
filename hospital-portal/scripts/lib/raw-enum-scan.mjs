@@ -125,7 +125,7 @@ const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
  * An expression already handed to a pipe that resolves it — enumLabel does the
  * job, and translate/date/number/currency mean the value is not a bare enum.
  */
-const RESOLVED = /\|\s*(enumLabel|translate|date|number|currency|percent)\b/;
+const RESOLVED = /\|\s*(enumLabel|roleLabel|translate|date|number|currency|percent)\b/;
 
 /** `[attr.aria-label]` and `[title]` and `matTooltip` all reduce to a name. */
 function attrName(raw) {

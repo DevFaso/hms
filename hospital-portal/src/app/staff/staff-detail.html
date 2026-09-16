@@ -101,7 +101,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.ROLE' | translate }}</span>
-              <span class="value">{{ s.roleName ?? '—' }}</span>
+              <span class="value">{{ (s.roleName | roleLabel) || '—' }}</span>
             </div>
           </div>
         </div>

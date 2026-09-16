@@ -104,7 +104,7 @@
               </td>
               <td>
                 <div class="cell-primary">{{ l.userName || '--' }}</div>
-                <div class="cell-secondary">{{ l.roleName || '' }}</div>
+                <div class="cell-secondary">{{ l.roleName | roleLabel }}</div>
               </td>
               <td>
                 <span class="event-type-badge">{{
