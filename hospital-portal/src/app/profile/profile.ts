@@ -26,12 +26,13 @@ import {
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './profile.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile.scss',
@@ -80,19 +81,12 @@ export class ProfileComponent implements OnInit {
     return u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '';
   });
 
-  primaryRole = computed(() => {
-    const u = this.user();
-    if (!u?.roles?.length) return '';
-    const role = u.roleName ?? u.roles[0]?.name ?? u.roles[0]?.code ?? '';
-    return this.auth.formatRole(role.startsWith('ROLE_') ? role : `ROLE_${role}`);
-  });
-
   allRoles = computed(() => {
     const u = this.user();
     if (!u?.roles) return [];
     return u.roles.map((r) => ({
       ...r,
-      displayName: this.auth.formatRole(r.code ?? r.name ?? ''),
+      token: r.code ?? r.name ?? '',
     }));
   });
 

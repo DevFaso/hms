@@ -717,7 +717,12 @@
               <option value="">{{ 'CONSULTATIONS.SELECT_CONSULTANT' | translate }}</option>
               @for (s of filteredAssignStaff(); track s.id) {
                 <option [value]="s.id">
-                  {{ s.name }} \u2014 {{ s.specialization || s.roleName || s.jobTitle || '' }}
+                  {{ s.name }} \u2014
+                  {{
+                    s.specialization ||
+                      (s.roleName | roleLabel) ||
+                      (s.jobTitle | enumLabel: 'jobTitle')
+                  }}
                 </option>
               }
             </select>

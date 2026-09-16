@@ -7,11 +7,12 @@ import { Observable, of, tap } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../core/idle.service';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 @Component({
   selector: 'app-lock-screen',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './lock-screen.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',
@@ -44,10 +45,11 @@ export class LockScreenComponent {
     return `${p.firstName?.charAt(0) ?? ''}${p.lastName?.charAt(0) ?? ''}`.toUpperCase();
   }
 
+  /** The raw token; the template pipes it. */
   get userRole(): string {
     const p = this.auth.getUserProfile();
     if (!p?.roles?.length) return '';
-    return this.auth.formatRole(p.roles[0]);
+    return p.roles[0];
   }
 
   get userAvatarUrl(): string | null {

@@ -18,12 +18,14 @@ import {
   AssignmentPublicView,
 } from '../../services/assignment-public.service';
 
+import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
+
 type PageState = 'loading' | 'loaded' | 'already-verified' | 'success' | 'not-found' | 'error';
 
 @Component({
   selector: 'app-role-welcome',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule],
+  imports: [FormsModule, RouterModule, TranslateModule, RoleLabelPipe],
   templateUrl: './role-welcome.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./role-welcome.scss'],

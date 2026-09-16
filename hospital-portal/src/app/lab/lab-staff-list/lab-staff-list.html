@@ -85,7 +85,7 @@
                   </select>
                 } @else {
                   <span class="role-badge" [ngClass]="roleBadgeClass(member.roleCode)">
-                    {{ member.roleName ?? member.roleCode }}
+                    {{ member.roleName ?? member.roleCode | roleLabel }}
                   </span>
                 }
               </td>

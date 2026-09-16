@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
+import { bareRole } from '../core/role-token';
+
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
@@ -880,35 +882,6 @@ interface PageWrapper<T> {
   totalElements: number;
   totalPages: number;
   number: number;
-}
-
-/**
- * The literal AuditEventLogServiceImpl stamps when it cannot resolve a role.
- * It is a sentence, not a token, so no key can cover it.
- */
-const UNKNOWN_ROLE = 'Unknown Role';
-const ROLE_PREFIX = 'ROLE_';
-
-/**
- * One role token in the bare form `PORTAL.ENUM.ROLE` keys.
- *
- * `security.roles.name` carries the prefix (`ROLE_DOCTOR`), and the two
- * writers of `audit_event_logs.role_name` disagree about it:
- * `WriteAuditInterceptor` strips it deliberately — its own javadoc says it
- * does so "so one actor's rows group under one role name" — while
- * `AuditEventLogServiceImpl.resolveRoleName` stores whatever the caller
- * passed, which is `assignment.getRole().getName()` with the prefix on. Both
- * spellings are in the column on every environment, and rows written years
- * ago keep theirs, so normalising HERE rather than in the backend is not a
- * workaround — there is no single backend write to fix.
- *
- * Returns null for a blank value and for the `Unknown Role` sentence, so the
- * template hides the chip instead of rendering an English placeholder.
- */
-export function bareRole(raw: string | null | undefined): string | null {
-  const value = raw?.trim();
-  if (!value || value === UNKNOWN_ROLE) return null;
-  return value.startsWith(ROLE_PREFIX) ? value.slice(ROLE_PREFIX.length) : value;
 }
 
 @Injectable({ providedIn: 'root' })

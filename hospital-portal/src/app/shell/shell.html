@@ -145,7 +145,7 @@
           </div>
           <div class="user-info-mini">
             <span class="user-name-mini">{{ userName() }}</span>
-            <span class="user-role-mini">{{ userRole() }}</span>
+            <span class="user-role-mini">{{ userRole() | roleLabel }}</span>
           </div>
         </div>
       }
@@ -338,7 +338,7 @@
           </div>
           <div>
             <p class="pm-name">{{ userName() }}</p>
-            <p class="pm-role">{{ userRole() }}</p>
+            <p class="pm-role">{{ userRole() | roleLabel }}</p>
           </div>
         </div>
         <hr />

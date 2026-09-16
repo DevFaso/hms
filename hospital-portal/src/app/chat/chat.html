@@ -127,7 +127,13 @@
                     </div>
                     <div class="user-item-info">
                       <span class="user-item-name">{{ user.firstName }} {{ user.lastName }}</span>
-                      <span class="user-item-role">{{ user.roleName || user.profileType }}</span>
+                      <span class="user-item-role">
+                        @if (user.roleName) {
+                          {{ user.roleName | roleLabel }}
+                        } @else {
+                          {{ user.profileType }}
+                        }
+                      </span>
                     </div>
                     <span class="material-symbols-outlined user-item-action">chat</span>
                   </button>

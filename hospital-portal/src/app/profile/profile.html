@@ -79,7 +79,7 @@
           <p class="user-username">&#64;{{ user()!.username }}</p>
           <div class="role-badges">
             @for (role of allRoles(); track role.id || role.code) {
-              <span class="role-badge">{{ role.displayName }}</span>
+              <span class="role-badge">{{ role.token | roleLabel }}</span>
             }
           </div>
           <div class="user-meta">
@@ -257,7 +257,9 @@
                     <div class="assignment-row">
                       <div class="assignment-role">
                         <span class="material-symbols-outlined">shield</span>
-                        <span class="assignment-role-name">{{ a.roleName ?? a.roleCode }}</span>
+                        <span class="assignment-role-name">{{
+                          a.roleName ?? a.roleCode | roleLabel
+                        }}</span>
                       </div>
                       @if (a.hospitalName) {
                         <div class="assignment-hospital">
