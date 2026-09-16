@@ -34,6 +34,8 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,6 +85,82 @@ class AuthControllerTest {
     @MockitoBean private WsTicketService wsTicketService;
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
     @MockitoBean private AuthBootstrapService authBootstrapService;
+
+    /**
+     * Spring Security 7's DaoAuthenticationProvider adds a
+     * FactorGrantedAuthority — FACTOR_PASSWORD — recording WHICH factor
+     * authenticated the user. It arrived with the Spring Boot 4.1 upgrade and
+     * it is not a role: nobody holds it, nobody can be authorised by it, and
+     * no guard names it.
+     *
+     * Unfiltered it broke three things at once, all of them live:
+     *   - every SINGLE-role user gained a second authority, so the
+     *     `allRoles.size() > 1` gate forced them through a role picker they
+     *     had never seen;
+     *   - the picker rendered it as a card reading "FACTOR PASSWORD";
+     *   - selecting it passed the holds-this-role check and minted a token
+     *     whose only role no guard admits.
+     */
+    @Test
+    void login_singleRoleUserWithFactorAuthority_doesNotAskThemToPickARole() throws Exception {
+        givenAuthenticatedWith("ROLE_NURSE", "FACTOR_PASSWORD");
+
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("nurse1")
+                .email("nurse1@example.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        when(userRepository.findByUsername("nurse1")).thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.refresh.token");
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("nurse1");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                // One ROLE_ authority means one role: straight in, no picker.
+                .andExpect(jsonPath("$.roleSelectionRequired").value(false))
+                .andExpect(jsonPath("$.accessToken").value("mock.access.token"));
+    }
+
+    @Test
+    void login_multiRoleUser_isNeverOfferedAFactorAuthorityAsARole() throws Exception {
+        givenAuthenticatedWith("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "FACTOR_PASSWORD");
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("admin1");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roleSelectionRequired").value(true))
+                .andExpect(jsonPath("$.availableRoles", hasSize(2)))
+                .andExpect(jsonPath("$.availableRoles",
+                        containsInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN")));
+    }
+
+    /** Authenticate as a user carrying exactly these authorities. */
+    private void givenAuthenticatedWith(String... authorities) {
+        var granted = java.util.Arrays.stream(authorities)
+                .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                .toList();
+        var authentication =
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "user", "password", granted);
+        org.mockito.Mockito.when(authenticationManager.authenticate(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(authentication);
+    }
 
     @Test
     void register_returns410Gone() throws Exception {
