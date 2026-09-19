@@ -88,7 +88,7 @@ dependencies {
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
     // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
     // splitStatements config) surface pre-merge instead of on dev deploy.
-    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
