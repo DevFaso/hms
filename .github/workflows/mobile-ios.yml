@@ -16,10 +16,20 @@ on:
       - '.github/workflows/mobile-ios.yml'
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Archive and upload the build to TestFlight'
-        type: boolean
-        default: false
+      release_action:
+        # A choice, not a boolean, for the reason the Android sibling spells
+        # out: a boolean dispatch input is a real boolean from the
+        # Run-workflow dialog but a STRING over the API, and GitHub casts
+        # every non-empty string to true — so `if: inputs.publish` was TRUE
+        # for a dispatch that passed publish=false. On this side that means
+        # uploading to TestFlight against the operator's instruction, which
+        # burns a build number and notifies testers, and cannot be undone.
+        description: 'What this dispatch does with the archive'
+        type: choice
+        options:
+          - build_only
+          - upload_to_testflight
+        default: build_only
       configuration:
         description: 'Archive configuration'
         type: choice
@@ -97,7 +107,7 @@ jobs:
 
   testflight:
     name: Archive and upload
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_to_testflight'
     needs: build
     runs-on: macos-15
     timeout-minutes: 60
