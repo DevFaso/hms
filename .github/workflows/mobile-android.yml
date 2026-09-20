@@ -78,11 +78,20 @@ jobs:
           # The Run-workflow dialog constrains a choice input; an API
           # dispatch does not. Fail an unrecognised value rather than let a
           # gate decide what to make of it.
-          VALID="build_only stage_on_internal stage_and_submit"
-          case " $VALID " in
-            *" $RELEASE_ACTION "*) ;;
+          #
+          # An exact alternation, NOT a substring test against a joined
+          # list: `case " $VALID " in *" $RELEASE_ACTION "*)` accepts
+          # "stage_on_internal stage_and_submit", which then matches no gate
+          # and produces a green run that ships nothing — the exact outcome
+          # this step exists to prevent. Verified by running it.
+          #
+          # The value is also not echoed back before it is validated: the
+          # runner parses each output line for ::workflow commands, so a
+          # newline in a dispatched value would inject one.
+          case "$RELEASE_ACTION" in
+            build_only|stage_on_internal|stage_and_submit) ;;
             *)
-              echo "::error::unknown release_action '$RELEASE_ACTION' — expected one of: $VALID"
+              echo "::error::unknown release_action — expected build_only, stage_on_internal or stage_and_submit"
               exit 1
               ;;
           esac
@@ -181,22 +190,10 @@ jobs:
             echo "::error::PLAY_SERVICE_ACCOUNT_JSON is unset in the mobile-release environment"
             exit 1
           fi
-          # Non-empty is not enough. The sibling secret in this same
-          # environment is base64, so pasting this one base64 — or truncated
-          # — is an easy mistake that would otherwise surface as an opaque
-          # Google auth failure twenty minutes later.
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "::error::jq is not on this runner, so the Play key cannot be checked"
-            exit 1
-          fi
-          # jq reads stdin and its output is discarded, so the key is never
-          # echoed; its stderr is dropped because a parse error can quote
-          # the malformed input. The two failure modes are told apart above,
-          # so this message is only ever about the secret's shape.
-          if ! printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" | jq -e 'has("client_email") and has("private_key")' >/dev/null 2>&1; then
-            echo "::error::PLAY_SERVICE_ACCOUNT_JSON is not service-account JSON (expected client_email and private_key) — paste the file contents, not base64"
-            exit 1
-          fi
+          # Deliberately only an emptiness check. Validating the JSON's
+          # shape needs jq, and making a release depend on a tool being on
+          # the runner image trades a late, clear credential error for an
+          # early failure about the instrument.
 
       - name: Build the signed bundle
         env:
@@ -256,33 +253,16 @@ jobs:
             exit 1
           fi
           echo "signed bundle: $(du -h "$AAB" | cut -f1)"
-          # The publish step hands this mapping to Play. In the pinned action
-          # a missing one is NOT merely a warning: edits.ts readFileSyncs it
-          # after edits.bundles.upload and before edits.commit, so a wrong
-          # path burns a version code and leaves the track untouched — the
-          # #693 failure exactly. Assert it here, beside the bundle.
-          #
-          # ONE spelling, workspace-relative, exported for the publish step:
-          # that step is a JS action whose cwd is the workspace root while
-          # this one runs in patient-android-app, and an assertion written in
-          # the other spelling proves nothing the day the layout moves.
-          MAPPING_FILE=patient-android-app/app/build/outputs/mapping/release/mapping.txt
-          test -f "$GITHUB_WORKSPACE/$MAPPING_FILE" \
-            || { echo "::error::no R8 mapping at $MAPPING_FILE"; exit 1; }
-          echo "MAPPING_FILE=$MAPPING_FILE" >> "$GITHUB_ENV"
-          echo "mapping: $(du -h "$GITHUB_WORKSPACE/$MAPPING_FILE" | cut -f1)"
 
       - name: Upload the bundle as an artifact
         uses: actions/upload-artifact@v4
         with:
           name: patient-android-aab
-          # The mapping travels with the bundle: on a build_only dispatch, or
-          # when the Play upload fails, the runner is torn down and this is
-          # the only copy. An AAB someone sideloads without it produces
-          # a.b.c.d(Unknown Source:0) for every crash.
-          path: |
-            patient-android-app/app/build/outputs/bundle/release/app-release.aab
-            patient-android-app/app/build/outputs/mapping/release/mapping.txt
+          # One path on purpose. upload-artifact@v4 re-roots the artifact at
+          # the least common ancestor of all its search paths, so adding a
+          # second one moves app-release.aab out of the artifact root and
+          # breaks anyone who unzips it expecting to find it there.
+          path: patient-android-app/app/build/outputs/bundle/release/app-release.aab
           retention-days: 14
 
       - name: Publish to Play internal testing
@@ -315,10 +295,6 @@ jobs:
           # leaving the console naming a version the bundle does not carry.
           # The commit is what a tester's bug report actually needs.
           releaseName: '${{ env.VERSION_CODE }} (${{ inputs.api_environment }}, ${{ env.SHORT_SHA }})'
-          # The release build runs R8 with isMinifyEnabled, so without the
-          # mapping every crash a tester produces reaches the console as
-          # a.b.c.d(Unknown Source:0), unrecoverable after the fact.
-          mappingFile: ${{ env.MAPPING_FILE }}
           # NOTE: this pinned version deprecates "track" in favour of
           # "tracks". Migrate when the pin moves, not before: the SHA is
           # fixed, so nothing can remove "track" under us.

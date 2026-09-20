@@ -2951,8 +2951,9 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   at. Either way the schema and the model should stop disagreeing.
 
 - **A green mobile release run still does not prove the build was delivered.**
-  `mobile-android.yml` commits the Play edit without sending it for review,
-  so the job can succeed while the release sits in the console unreleased —
+  On `release_action=stage_on_internal`, `mobile-android.yml` commits the Play
+  edit without sending it for review, so the job can succeed while the release
+  sits in the console unreleased —
   which is exactly how the first dispatch failed (the bundle uploaded, the
   edit never committed, and only a hand-written Play API call showed the
   track still held version code 13). The step now writes a `::notice::`
@@ -2975,14 +2976,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - **No mobile release runbook, and the mobile release now has a manual step.**
   `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
   other operational paths; nothing there mentions the two mobile workflows.
-  A `workflow_dispatch` with `release_action=stage_on_internal` stages a
-  Play release that a
-  human has to send for review in the console, and the Play service account
-  is deliberately scoped to *Release to testing tracks* so it cannot do it
-  itself. That procedure, the TestFlight dispatch, the eight `mobile-release`
-  secrets and the move to `release_action=stage_and_submit` after the app's
-  first publish exist
-  only in PR #693's description today.
+  A `workflow_dispatch` with `release_action=stage_on_internal` stages a Play
+  release that a human has to send for review in the console, and the Play
+  service account is deliberately scoped to *Release to testing tracks* so it
+  cannot do it itself. That procedure, the TestFlight dispatch, the eight
+  `mobile-release` secrets and the move to `release_action=stage_and_submit`
+  after the app's first publish exist only in PR descriptions today.
 
 - **The Play upload action still passes the deprecated `track` input.**
   `r0adkll/upload-google-play` warns on every release run that `track` is
