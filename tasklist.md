@@ -2975,6 +2975,58 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   reasoned about twice. A composite action for "check these secrets are set"
   and one for "validate this dispatch" would leave one place to change.
 
+- **The iOS plist gates check presence, not values, and are written
+  twice.** #695 added two: one after `xcodegen generate` on every PR, one
+  on the archive before upload. What they do not do, left as debt rather
+  than designed further in that PR: assert the VALUES, which is the
+  documented `CFBundleVersion` failure — a literal outranks
+  `CURRENT_PROJECT_VERSION`, so every upload after the first is rejected as
+  a duplicate, and a key that is merely present passes; check more than one
+  key in the archive, so `MEDIHUB_API_BASE_URL` (resolved from
+  `Config/*.xcconfig` only at archive time) and `CFBundleURLTypes` are never
+  verified in the bundle Apple receives; derive the key list from
+  `project.yml` instead of restating it in the workflow, where
+  `project.yml`'s own comment already claims every key in the block is
+  asserted; and stop interpolating unvalidated values into `::error::`
+  lines, which the same file argues against for the dispatch guard fifty
+  lines earlier. The two gates are also near-duplicates in one file — a
+  `scripts/check-info-plist.sh` called from both would be one place to fix,
+  and the round that rewrote one of them and not the other is what this
+  bullet is for.
+
+- **The iOS app's system prompts are French while the app defaults to
+  English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
+  English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
+  French sentence and there is no `InfoPlist.strings` in either `en.lproj`
+  or `fr.lproj`. iOS localises a purpose string only through that file, so
+  an English-locale user tapping "Log in with Face ID" gets the French
+  modal — and App Review has rejected purpose strings that are not in the
+  app's primary language. Either ship `InfoPlist.strings` for both, or
+  settle whether the app's primary language is French and set
+  `CFBundleDevelopmentRegion` to match.
+
+- **The committed `Info.plist` is a fossil that `xcodegen` overwrites.**
+  `patient-ios-app/MediHubPatient/Resources/Info.plist` is tracked, and of
+  the things `xcodegen` generates only the `.xcodeproj` is ignored (the
+  40-line `.gitignore` covers plenty else), so every `xcodegen generate`
+  rewrites it and leaves a dirty tree; meanwhile the tracked copy is missing
+  `NSFaceIDUsageDescription`, `ITSAppUsesNonExemptEncryption` and —
+  the interesting one — `MEDIHUB_API_BASE_URL`, so an app built down that
+  path has no API base URL key at all. The four `MEDIHUB_KEYCLOAK_*` keys
+  are present, which is what makes the gap easy to miss. `patient-ios-app/README.md` still
+  documents a hand-built Xcode project that never runs `xcodegen`, and a
+  build down that path reaches Face ID with no purpose string — which iOS
+  terminates the app for. Either ignore the generated plist and delete the
+  hand-build instructions, or stop generating it.
+
+- **A regulatory declaration rests on a floating dependency.** `project.yml`
+  pins AppAuth `from: "1.7.5"` and no `Package.resolved` is committed, so
+  every CI checkout re-resolves to whatever 1.x is newest. The
+  `ITSAppUsesNonExemptEncryption: false` declaration was audited against
+  what AppAuth contains today; a future release that adds its own cipher
+  would make that statement untrue with no commit, no diff and no review.
+  Pin exactly or commit `Package.resolved` so the audited premise is
+  versioned alongside the claim.
 - **The mobile release workflows validate one dispatch input and trust the
   rest.** #694's guard covers `release_action` only. `api_environment`
   (Android) falls through to dev on anything that is not exactly `prod`,
