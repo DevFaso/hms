@@ -96,7 +96,7 @@
     "@types/sockjs-client": "^1.5.4",
     "angular-eslint": "^22.5.0",
     "eslint": "^9.35.0",
-    "eslint-config-prettier": "9.1.2",
+    "eslint-config-prettier": "10.1.8",
     "istanbul-lib-instrument": "^6.0.3",
     "jasmine-core": "5.9.0",
     "jspdf": "^4.2.1",
