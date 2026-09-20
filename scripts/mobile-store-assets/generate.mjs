@@ -167,11 +167,19 @@ const APP_CSS = `
 const NAV_LABELS = ['Tableau de bord', 'Rendez-vous', 'Messages', 'Profil'];
 const nav = (on) => `<div class="nav">${NAV_LABELS.map((l) => `<div class="${l === on ? 'on' : ''}"><i></i>${l}</div>`).join('')}</div>`;
 
-function loginScreen() {
+// The two login forms differ: Android's username field also takes an
+// e-mail and its biometric button is generic; iOS names Face ID. Each
+// listing shows the controls its own build has (App Review 2.3.3).
+const LOGIN = {
+  ios: { user: 'Nom d’utilisateur', bio: 'Connexion avec Face ID' },
+  android: { user: 'Nom d’utilisateur ou e-mail', bio: 'Connexion biométrique' },
+};
+function loginScreen(platform) {
+  const s = LOGIN[platform];
   return `<div class="app"><div class="login">${markSvg(72, TEAL_DEEP, OCHRE)}
     <h1>Bienvenue sur e-Keneya</h1><p>Votre santé, entre vos mains</p>
-    <div class="field">Nom d’utilisateur ou e-mail</div><div class="field">Mot de passe</div>
-    <div class="btn">Se connecter</div><div class="btn ghost">Connexion biométrique</div>
+    <div class="field">${s.user}</div><div class="field">Mot de passe</div>
+    <div class="btn">Se connecter</div><div class="btn ghost">${s.bio}</div>
     <p class="link">Mot de passe oublié ?</p></div></div>`;
 }
 function dashboardScreen() {
@@ -252,7 +260,7 @@ function billingScreen() {
 }
 
 /** Marketing frame around the app mock. Portrait stacks; landscape splits. */
-function shotHtml(screen, vw, vh) {
+function shotHtml(screen, vw, vh, platform) {
   const landscape = vw > vh;
   const hl = Math.round(Math.min(vw, vh) * (landscape ? 0.075 : 0.085));
   // Portrait: the device is sized from the height left under the copy block
@@ -266,9 +274,11 @@ function shotHtml(screen, vw, vh) {
   const tablet = vw >= 700;
   const ratio = tablet ? 3 / 4 : 9 / 17.5;
   const devW = Math.min(Math.round(vw * 0.78), Math.round((vh - copyBudget) * ratio));
-  const zoom = landscape ? 1 : Math.min(1, devW / 380);
+  // Landscape: the tallest mock (dashboard) is about 820 CSS px, so the
+  // mock zooms to the frame's height and the tab bar stays in shot.
+  const zoom = landscape ? Math.min(1, (vh * 0.92) / 820) : Math.min(1, devW / 380);
   const deviceCss = landscape
-    ? 'width: 46%; height: 86%; margin-left: 4%; margin-top: 10%; align-self: flex-end;'
+    ? 'width: 46%; height: 92%; margin-left: 4%; align-self: center;' // no top margin: a % margin resolves against WIDTH and pushed the tab bar out of the 600px frame
     : `width: ${devW}px; aspect-ratio: ${tablet ? '3 / 4' : '9 / 17.5'}; margin-top: ${gap}px; align-self: center;`;
   return `<!doctype html><html><head>${FONT}<style>${BASE_CSS}${APP_CSS}
     body { background: radial-gradient(ellipse at 50% 0%, #14302A 0%, ${INK} 60%); }
@@ -281,7 +291,7 @@ function shotHtml(screen, vw, vh) {
     .device .app { zoom: ${zoom}; }
   </style></head><body><div class="page">
     <div class="copy"><div class="eyebrow">${markSvg(Math.round(hl * 0.7))} e-Keneya</div><h1>${screen.headline}</h1><div class="sub">${screen.sub}</div></div>
-    <div class="device">${screen.body()}</div>
+    <div class="device">${screen.body(platform)}</div>
   </div></body></html>`;
 }
 
@@ -308,6 +318,10 @@ async function main() {
     const page = await ctx.newPage();
     await page.setContent(html, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
+    // Inter comes from Google Fonts at run time. Without this check a
+    // failed fetch would regenerate every asset in Segoe UI and exit 0.
+    const inter = await page.evaluate(() => document.fonts.load('700 16px Inter').then((faces) => faces.length > 0));
+    if (!inter) throw new Error(`Inter did not load for ${path}; check network access to fonts.googleapis.com`);
     mkdirSync(dirname(path), { recursive: true });
     await page.screenshot({ path, omitBackground, type: 'png' });
     await ctx.close();
@@ -337,7 +351,7 @@ async function main() {
     if (existsSync(t.dir)) rmSync(t.dir, { recursive: true });
     for (const s of SCREENS) {
       const name = t.dash ? s.file.replace(/_/g, '-') : s.file;
-      await shoot(shotHtml(s, t.vw, t.vh), t.vw, t.vh, t.dpr, join(t.dir, `${name}.png`));
+      await shoot(shotHtml(s, t.vw, t.vh, t.dash ? 'android' : 'ios'), t.vw, t.vh, t.dpr, join(t.dir, `${name}.png`));
     }
   }
   await browser.close();
