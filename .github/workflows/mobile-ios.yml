@@ -54,7 +54,15 @@ defaults:
 jobs:
   build:
     name: Generate, build, test
-    runs-on: macos-15
+    # macos-26, not macos-15. Apple rejects any upload built with an SDK
+    # older than iOS 26, and macos-15 ships Xcode 16.4 / iOS 18.5:
+    #   error: exportArchive Validation failed. SDK version issue. This app
+    #   was built with the iOS 18.5 SDK. All iOS and iPadOS apps must be
+    #   built with the iOS 26 SDK or later, included in Xcode 26 or later.
+    # Seen on run 35531289830. macos-26 has been generally available since
+    # 2026-02-26 and carries Xcode 26. Both jobs move together so the tests
+    # and the archive are built by the same toolchain.
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -145,7 +153,7 @@ jobs:
     # make the two mean the same thing, and it is not this PR.
     if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_to_testflight'
     needs: build
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     environment: mobile-release
     steps:
