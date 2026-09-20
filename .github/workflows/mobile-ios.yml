@@ -150,12 +150,36 @@ jobs:
               # Security.framework is already imported for the Keychain, so
               # key-wrapping added in KeychainHelper would not trip it.
               # metadata.md states that limit rather than overclaiming.
-              if grep -rnE '(^|[[:space:]])import +(CryptoKit|CommonCrypto|Crypto)([[:space:]]|$)' \
-                   MediHubPatient MediHubPatientTests --include='*.swift'; then
-                echo "::error::ITSAppUsesNonExemptEncryption is false but first-party code imports a crypto framework — re-check the export classification before shipping"
+              #
+              # The app target's sources only: MediHubPatientTests is not
+              # distributed, so a crypto import in a test says nothing about
+              # the app's export classification and must not fail the PR.
+              test -d MediHubPatient || {
+                echo "::error::MediHubPatient/ is not here, so this scan would have checked nothing"
                 exit 1
-              fi
-              echo "export declaration false, and no first-party crypto import"
+              }
+              # grep's status is captured rather than used as a condition:
+              # inside `if`, bash -e is suspended and exit 2 (unreadable
+              # path, bad regex) is indistinguishable from exit 1 (no
+              # match), so the gate would go green having scanned nothing.
+              set +e
+              grep -rnE '(^|[[:space:]])import +(CryptoKit|CommonCrypto|Crypto)([[:space:]]|$)' \
+                MediHubPatient --include='*.swift'
+              found=$?
+              set -e
+              case "$found" in
+                0)
+                  echo "::error::ITSAppUsesNonExemptEncryption is false but the app target imports a crypto framework — re-check the export classification before shipping"
+                  exit 1
+                  ;;
+                1)
+                  echo "export declaration false, and no crypto import in the app target"
+                  ;;
+                *)
+                  echo "::error::the crypto scan could not run (grep exited $found) — not treating that as a pass"
+                  exit 1
+                  ;;
+              esac
               ;;
             *"<true/>"*)
               echo "::warning::ITSAppUsesNonExemptEncryption is true — this app now claims non-exempt encryption, and the first-party crypto scan no longer applies"
@@ -289,11 +313,30 @@ jobs:
           # never exercises. Failing here costs nothing; failing at Apple
           # costs a build number and a processing cycle.
           APP=build/MediHubPatient.xcarchive/Products/Applications/MediHubPatient.app
-          if ! out=$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$APP/Info.plist" 2>&1); then
-            echo "::error::the archived app has no usable ITSAppUsesNonExemptEncryption ($out) — this upload would land in Missing Compliance"
+          if ! out=$(plutil -extract ITSAppUsesNonExemptEncryption xml1 -o - "$APP/Info.plist" 2>&1); then
+            echo "::error::the archived app has no usable ITSAppUsesNonExemptEncryption — this upload would land in Missing Compliance"
+            echo "plutil said: $out" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "archived app declares ITSAppUsesNonExemptEncryption=$out"
+          # xml1 and a TAG match, exactly as the PR-time check does. The
+          # first version of this step used `raw`, which prints `false` for
+          # both <false/> and <string>false</string> — so it passed the one
+          # case its sibling had just been rewritten to catch, while being
+          # the last thing standing between a quoted value and an upload.
+          case "$(printf '%s' "$out" | tr -d '[:space:]')" in
+            *"<false/>"*)
+              echo "archived app declares ITSAppUsesNonExemptEncryption=false"
+              ;;
+            *"<true/>"*)
+              echo "::error::the archived app claims NON-exempt encryption, which App Store Connect will not accept without an ITSEncryptionExportComplianceCode this workflow does not set"
+              exit 1
+              ;;
+            *)
+              echo "::error::the archived app's ITSAppUsesNonExemptEncryption is not a boolean — a quoted value becomes a <string> that Apple ignores"
+              echo "archived value was: $out" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac
 
       - name: Export and upload to TestFlight
         env:

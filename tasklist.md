@@ -2975,6 +2975,25 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   reasoned about twice. A composite action for "check these secrets are set"
   and one for "validate this dispatch" would leave one place to change.
 
+- **The iOS plist gates check presence, not values, and are written
+  twice.** #695 added two: one after `xcodegen generate` on every PR, one
+  on the archive before upload. What they do not do, left as debt rather
+  than designed further in that PR: assert the VALUES, which is the
+  documented `CFBundleVersion` failure — a literal outranks
+  `CURRENT_PROJECT_VERSION`, so every upload after the first is rejected as
+  a duplicate, and a key that is merely present passes; check more than one
+  key in the archive, so `MEDIHUB_API_BASE_URL` (resolved from
+  `Config/*.xcconfig` only at archive time) and `CFBundleURLTypes` are never
+  verified in the bundle Apple receives; derive the key list from
+  `project.yml` instead of restating it in the workflow, where
+  `project.yml`'s own comment already claims every key in the block is
+  asserted; and stop interpolating unvalidated values into `::error::`
+  lines, which the same file argues against for the dispatch guard fifty
+  lines earlier. The two gates are also near-duplicates in one file — a
+  `scripts/check-info-plist.sh` called from both would be one place to fix,
+  and the round that rewrote one of them and not the other is what this
+  bullet is for.
+
 - **The iOS app's system prompts are French while the app defaults to
   English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
   English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
