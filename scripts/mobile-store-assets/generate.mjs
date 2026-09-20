@@ -123,7 +123,12 @@ const APP_CSS = `
   .bar { background: ${TEAL_DEEP}; color: #fff; padding: 52px 20px 18px; }
   .bar h2 { font-size: 22px; font-weight: 700; }
   .bar small { display: block; opacity: .85; font-size: 13px; margin-top: 2px; }
-  .content { padding: 16px 16px 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-content: start; }
+  /* min(300px, 100%): a track can never be wider than the device, so a
+     narrow Play phone wraps instead of clipping. align-items: start keeps
+     a button or tile row from stretching to its neighbour's height when
+     a tablet is wide enough for two columns. */
+  .content { padding: 16px 16px 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); align-content: start; align-items: start; }
+  .content > .btn, .content > .tiles { grid-column: 1 / -1; }
   .card { background: #fff; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px #0A161414; }
   .card h3 { font-size: 13px; font-weight: 600; color: #4B5F5A; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #E6EEEC; }
@@ -250,9 +255,21 @@ function billingScreen() {
 function shotHtml(screen, vw, vh) {
   const landscape = vw > vh;
   const hl = Math.round(Math.min(vw, vh) * (landscape ? 0.075 : 0.085));
+  // Portrait: the device is sized from the height left under the copy block
+  // (top padding, eyebrow, a two-line headline, the subline), so its bottom
+  // edge — tab bar, sign-in buttons — is always inside the frame. A tablet
+  // gets a 3:4 frame, a phone 9:17.5. The mock then zooms to the frame's
+  // width rather than overflowing it: on Play's 360-pt phone that is about
+  // half size, and still 25 px type in the 1080-px file.
+  const gap = Math.round(vh * 0.05);
+  const copyBudget = Math.round(vh * 0.09 + hl * 4.3) + gap;
+  const tablet = vw >= 700;
+  const ratio = tablet ? 3 / 4 : 9 / 17.5;
+  const devW = Math.min(Math.round(vw * 0.78), Math.round((vh - copyBudget) * ratio));
+  const zoom = landscape ? 1 : Math.min(1, devW / 380);
   const deviceCss = landscape
     ? 'width: 46%; height: 86%; margin-left: 4%; margin-top: 10%; align-self: flex-end;'
-    : `width: 78%; aspect-ratio: 9 / 17.5; margin-top: ${Math.round(vh * 0.05)}px; align-self: center;`;
+    : `width: ${devW}px; aspect-ratio: ${tablet ? '3 / 4' : '9 / 17.5'}; margin-top: ${gap}px; align-self: center;`;
   return `<!doctype html><html><head>${FONT}<style>${BASE_CSS}${APP_CSS}
     body { background: radial-gradient(ellipse at 50% 0%, #14302A 0%, ${INK} 60%); }
     .page { position: absolute; inset: 0; display: flex; flex-direction: ${landscape ? 'row' : 'column'}; align-items: center; }
@@ -261,6 +278,7 @@ function shotHtml(screen, vw, vh) {
     h1 { font-size: ${hl}px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; text-wrap: balance; }
     .sub { margin-top: ${Math.round(hl * 0.35)}px; font-size: ${Math.round(hl * 0.5)}px; color: ${TINT}; font-weight: 500; }
     .device { ${deviceCss} background: #fff; border-radius: 40px; border: 10px solid #1B2B27; overflow: hidden; box-shadow: 0 30px 80px #00000080; }
+    .device .app { zoom: ${zoom}; }
   </style></head><body><div class="page">
     <div class="copy"><div class="eyebrow">${markSvg(Math.round(hl * 0.7))} e-Keneya</div><h1>${screen.headline}</h1><div class="sub">${screen.sub}</div></div>
     <div class="device">${screen.body()}</div>
