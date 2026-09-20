@@ -2994,6 +2994,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   and the round that rewrote one of them and not the other is what this
   bullet is for.
 
+- **The mobile apps' in-app theme is still the pre-brand blue.** The store icons, launcher icons and screenshots now carry the e-Keneya mark and teal (scripts/mobile-store-assets/generate.mjs), but `patient-android-app` still paints `brand_blue` #1E40AF (theme, status bar, Compose colours) and the iOS app the matching blue. A tester sees a teal listing and installs a blue app. The retheme is one palette swap per app plus a re-check of contrast on the tinted surfaces; the screenshots then also want a pass to match what the apps really draw, since today they are mocks in the target identity, not captures.
+
 - **The iOS app's system prompts are French while the app defaults to
   English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
   English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
