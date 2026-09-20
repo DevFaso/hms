@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.bitnesttechs.hms.patient.BuildConfig
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
@@ -142,8 +143,13 @@ fun ProfileScreen(
                         ) {
                             val imageUrl = profileImageUrl
                             if (!imageUrl.isNullOrBlank()) {
+                                // Derived from the build's own API base URL. This
+                                // was hard-coded to api.dev.e-keneya.com, which has
+                                // no DNS record, so the avatar failed to load in
+                                // every build type including release.
+                                val origin = BuildConfig.API_BASE_URL.removeSuffix("/api")
                                 val fullUrl = if (imageUrl.startsWith("http")) imageUrl
-                                    else "https://api.dev.e-keneya.com$imageUrl"
+                                    else "$origin$imageUrl"
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(fullUrl)

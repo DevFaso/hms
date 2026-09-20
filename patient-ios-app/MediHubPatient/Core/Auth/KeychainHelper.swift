@@ -77,6 +77,20 @@ final class KeychainHelper {
         set { newValue == nil ? delete(key: Keys.oidcIdToken) : save(newValue!, key: Keys.oidcIdToken) }
     }
 
+    /// Everything that identifies the SESSION, leaving the biometric
+    /// credentials alone.
+    ///
+    /// `clearAll()` is for "forget this device entirely". Sign-out must not
+    /// use it: it drops `savedUsername`, and `LoginViewModel` gates the Face
+    /// ID button on that being present, so one sign-out disabled biometric
+    /// login for the rest of the install.
+    func clearSession() {
+        delete(key: Keys.accessToken)
+        delete(key: Keys.refreshToken)
+        delete(key: Keys.userId)
+        clearOidc()
+    }
+
     func clearAll() {
         delete(key: Keys.accessToken)
         delete(key: Keys.refreshToken)

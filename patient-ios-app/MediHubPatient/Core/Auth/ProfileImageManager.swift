@@ -19,7 +19,7 @@ final class ProfileImageManager: ObservableObject {
     var resolvedURL: URL? {
         guard let url = profileImageUrl, !url.isEmpty else { return nil }
         if url.hasPrefix("http") { return URL(string: url) }
-        let base = AppEnvironment.baseURL.replacingOccurrences(of: "/api", with: "")
+        let base = AppEnvironment.assetOrigin
         return URL(string: base + url)
     }
 }
