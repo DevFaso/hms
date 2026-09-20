@@ -11,7 +11,13 @@ options:
 # Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/Prod
 # layer xcconfig files (Config/{Dev,Prod}.xcconfig) on top of the
 # Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
-configurations:
+# XcodeGen reads this mapping from `configs`. It was spelled
+# `configurations`, which XcodeGen ignores entirely — the project fell
+# back to the default Debug/Release pair, so the `configFiles` entries
+# below referenced configurations that did not exist and
+# `xcodegen generate` failed outright. Never caught because the repo had
+# no iOS CI and the original setup used a hand-made .xcodeproj.
+configs:
   Debug: debug
   Release: release
   Release-Dev: release
