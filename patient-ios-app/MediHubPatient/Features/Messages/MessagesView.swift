@@ -244,7 +244,11 @@ final class MessageThreadViewModel: ObservableObject {
 // MARK: - Compose
 
 /// A clinician the patient can start a conversation with.
-private struct ChatRecipient: Identifiable, Hashable {
+// Internal, not private: `ComposeMessageViewModel.recipients` is an
+// `@Published` property and `send(to:body:)` takes one, both internal,
+// so a private type here is rejected with "property must be declared
+// fileprivate because its type uses a private type".
+struct ChatRecipient: Identifiable, Hashable {
     let id: String          // user id — the recipient /chat/send expects
     let name: String
     let subtitle: String?
