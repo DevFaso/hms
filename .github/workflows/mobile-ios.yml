@@ -56,6 +56,34 @@ jobs:
       - name: Generate the Xcode project
         run: xcodegen generate
 
+      - name: Check the generated Info.plist carries the keys the app needs
+        run: |
+          # Three keys have been added to project.yml's info.properties
+          # AFTER an upload failed for want of them: CFBundleDisplayName,
+          # then NSFaceIDUsageDescription (#692), then
+          # ITSAppUsesNonExemptEncryption (#695). xcodegen rewrites
+          # Info.plist from that block, so a dropped or renamed key is free
+          # to catch here and costs an archive, an upload and Apple's
+          # processing queue to catch anywhere else.
+          PLIST=MediHubPatient/Resources/Info.plist
+          for key in CFBundleDisplayName NSFaceIDUsageDescription ITSAppUsesNonExemptEncryption; do
+            plutil -extract "$key" raw -o - "$PLIST" >/dev/null 2>&1 \
+              || { echo "::error::$key is missing from the generated $PLIST"; exit 1; }
+          done
+          # The export declaration turns on the app shipping no cryptography
+          # of its OWN. Keep that checked rather than remembered: while the
+          # flag is false, no first-party source may import a crypto API.
+          # Linked packages are out of scope here on purpose — AppAuth's
+          # PKCE digest is a standards-track primitive, not this app's
+          # algorithm; see the reasoning in project.yml.
+          if [ "$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$PLIST")" = "false" ]; then
+            if grep -rnE '^ *import +(CryptoKit|CommonCrypto)' MediHubPatient --include='*.swift'; then
+              echo "::error::ITSAppUsesNonExemptEncryption is false but first-party code imports a crypto framework — re-check the export classification before shipping"
+              exit 1
+            fi
+          fi
+          echo "Info.plist keys present, export declaration consistent with the sources"
+
       - name: Build for the simulator
         # Ad-hoc signing ("-"), not CODE_SIGNING_ALLOWED=NO. The gate still
         # needs no certificates, but an unsigned test host has no keychain

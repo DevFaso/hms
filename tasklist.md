@@ -2950,6 +2950,37 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `NOT VALID` after a backfill that decides what a dangling row should point
   at. Either way the schema and the model should stop disagreeing.
 
+- **The iOS app's system prompts are French while the app defaults to
+  English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
+  English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
+  French sentence and there is no `InfoPlist.strings` in either `en.lproj`
+  or `fr.lproj`. iOS localises a purpose string only through that file, so
+  an English-locale user tapping "Log in with Face ID" gets the French
+  modal — and App Review has rejected purpose strings that are not in the
+  app's primary language. Either ship `InfoPlist.strings` for both, or
+  settle whether the app's primary language is French and set
+  `CFBundleDevelopmentRegion` to match.
+
+- **The committed `Info.plist` is a fossil that `xcodegen` overwrites.**
+  `patient-ios-app/MediHubPatient/Resources/Info.plist` is tracked but
+  `.gitignore` covers only `*.xcodeproj`, so every `xcodegen generate`
+  rewrites it and leaves a dirty tree; meanwhile the tracked copy is three
+  keys stale (no `NSFaceIDUsageDescription`, no `MEDIHUB_*`, no
+  `ITSAppUsesNonExemptEncryption`). `patient-ios-app/README.md` still
+  documents a hand-built Xcode project that never runs `xcodegen`, and a
+  build down that path reaches Face ID with no purpose string — which iOS
+  terminates the app for. Either ignore the generated plist and delete the
+  hand-build instructions, or stop generating it.
+
+- **A regulatory declaration rests on a floating dependency.** `project.yml`
+  pins AppAuth `from: "1.7.5"` and no `Package.resolved` is committed, so
+  every CI checkout re-resolves to whatever 1.x is newest. The
+  `ITSAppUsesNonExemptEncryption: false` declaration was audited against
+  what AppAuth contains today; a future release that adds its own cipher
+  would make that statement untrue with no commit, no diff and no review.
+  Pin exactly or commit `Package.resolved` so the audited premise is
+  versioned alongside the claim.
+
 - **No mobile release runbook, and the mobile release now has a manual step.**
   `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
   other operational paths; nothing there mentions the two mobile workflows.

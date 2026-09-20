@@ -187,7 +187,8 @@ iPad 13" Display — Not required (iPhone-only app).
 
 > Upload via **Xcode → Product → Archive → Distribute App → App Store Connect**.
 > Or use `xcodebuild archive` + `altool` / Transporter.
-> The app does **not** use encryption beyond standard HTTPS (exempt from export compliance).
+> Export compliance is declared in the binary (`ITSAppUsesNonExemptEncryption`),
+> so App Store Connect does not ask. See **App Encryption** below.
 
 ---
 
@@ -322,8 +323,33 @@ Initial release of MediHub Patient for iOS.
 
 | Question | Answer |
 | -------- | ------ |
-| Does your app use encryption? | Yes (HTTPS/TLS only) |
-| Is it exempt? | **Yes** — standard HTTPS networking is exempt |
+| Does your app use encryption? | Yes (HTTPS/TLS, Keychain, PKCE digest) |
+| Is it exempt? | **Yes** — none of it is the app's own cryptography |
 | Export compliance documentation required? | **No** |
+| Where is it answered? | In the binary, not in the console |
 
-> Select **"Yes"** → **"Only uses standard encryption (HTTPS, TLS)"** → exempt.
+**Answered by the build, not by a human.** `patient-ios-app/project.yml`
+declares `ITSAppUsesNonExemptEncryption: false` under `info.properties`, so
+App Store Connect no longer prompts on upload. If you are looking for that
+prompt and cannot find it, this is why — nothing is broken.
+
+**The basis for `false`**, recorded here because a YAML comment is not where
+an auditor looks. The exemption turns on the app implementing no
+cryptography of its own, not on the binary containing no crypto symbols —
+it does contain some. Specifically:
+
+| What the app uses | Why it is exempt |
+| ----------------- | ---------------- |
+| HTTPS via `URLSession` | Platform TLS |
+| Keychain (`Security.framework`) | Platform key storage |
+| `LocalAuthentication` (Face ID) | Platform biometrics |
+| AppAuth PKCE — `CC_SHA256`, `SecRandomCopyBytes` | A digest used for authentication, from a standards-track library |
+
+The app ships no algorithm of its own and bundles no crypto library. The
+iOS build job fails the PR if any first-party source imports `CryptoKit` or
+`CommonCrypto` while the flag is `false`, so this table stays true by
+enforcement rather than by memory.
+
+⚠ **Build 202609201928 predates the declaration** and still needs the export
+question answered once by hand in App Store Connect. Builds uploaded after
+#695 merged do not.
