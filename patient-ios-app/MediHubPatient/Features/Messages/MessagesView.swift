@@ -194,7 +194,7 @@ final class MessageThreadViewModel: ObservableObject {
             )
             // The endpoint returns newest first; the transcript reads oldest
             // first and scrolls to the bottom.
-            messages = page.reversed()
+            messages = Array(page.reversed())
         } catch {
             errorMessage = error.localizedDescription
         }
