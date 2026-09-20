@@ -89,6 +89,20 @@ targets:
         # rejects for its absence. Declared here because xcodegen rewrites
         # Info.plist from this block on every CI run.
         NSFaceIDUsageDescription: Utiliser Face ID pour vous connecter a e-Keneya sans saisir votre mot de passe.
+        # Without this, every upload lands in TestFlight as "Missing
+        # Compliance" and reaches nobody until a human answers the export
+        # question by hand — verified on build 202609201928, whose
+        # usesNonExemptEncryption came back null from the App Store Connect
+        # API. Declared here for the same reason as the keys above:
+        # `xcodegen generate` rewrites Info.plist from this block.
+        #
+        # false is the accurate answer, not a convenience. The exemption
+        # covers apps whose only cryptography is the platform's own: this
+        # app uses HTTPS through URLSession, the Keychain, and
+        # LocalAuthentication, and ships no algorithm of its own — there is
+        # no CryptoKit, CommonCrypto, SecKeyCreate or bundled crypto library
+        # anywhere in MediHubPatient. Revisit this line if that changes.
+        ITSAppUsesNonExemptEncryption: false
 
         # Derived from the build settings, not literals. XcodeGen writes
         # this plist from here, and a literal CFBundleVersion outranks
