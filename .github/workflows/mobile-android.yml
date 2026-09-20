@@ -16,7 +16,11 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Upload the signed AAB to Play internal testing'
+        description: 'Stage the signed AAB on the Play internal track'
+        type: boolean
+        default: false
+      send_for_review:
+        description: 'Also submit it for review (off until the app is published once)'
         type: boolean
         default: false
       api_environment:
@@ -108,13 +112,22 @@ jobs:
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PUBLISH: ${{ inputs.publish }}
         run: |
           # Check every signing secret up front. Missing ones otherwise fail
           # deep inside a full R8 release build with "Keystore was tampered
           # with, or password was incorrect" — an error that points at the
           # keystore rather than at the unset secret.
+          required="ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD"
+          # The Play key deserves the same treatment for the same reason: it
+          # is read by the very last step, so an unset one is otherwise found
+          # only after the whole signed build has run.
+          if [ "$PUBLISH" = "true" ]; then
+            required="$required PLAY_SERVICE_ACCOUNT_JSON"
+          fi
           missing=
-          for v in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+          for v in $required; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
@@ -141,14 +154,21 @@ jobs:
             API_BASE_URL=https://dev.e-keneya.com/api
           fi
           echo "building against $API_BASE_URL"
-          # versionCode comes from the run number: Play rejects a bundle whose
-          # version code it has already accepted, so a hard-coded one makes
-          # every publish after the first fail.
-          # run_number restarts at 1 for a brand-new workflow file, but
-          # Play has already accepted version code 13 (the old hard-coded
-          # value), so a bare run number is rejected until it passes 13.
-          VERSION_CODE=$(( 13 + ${{ github.run_number }} ))
+          # Play rejects a bundle whose version code it has already accepted,
+          # so the code has to rise on every publish. github.run_number does
+          # not rise reliably: it is unchanged by a re-run (only run_attempt
+          # moves) and it restarts at 1 if the workflow file is renamed. Now
+          # that the edit actually commits, a re-run of a successful publish
+          # would rebuild a burnt code and be rejected after a 20-minute R8
+          # build.
+          # Minutes since 2026-01-01 UTC instead: always rising, unique per
+          # minute, and — unlike the iOS sibling's yyyymmddHHMM — inside the
+          # 2100000000 ceiling Play puts on an Android version code.
+          VERSION_CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
           echo "version code $VERSION_CODE"
+          # Read back by the publish step, which names the Play release after
+          # it so two internal builds can be told apart in the console.
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           ./gradlew :app:bundleRelease --no-daemon \
             -PversionCode="$VERSION_CODE" \
             -PapiBaseUrl="$API_BASE_URL"
@@ -179,15 +199,38 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.bitnesttechs.hms.patient
           releaseFiles: patient-android-app/app/build/outputs/bundle/release/app-release.aab
-          # Play refuses to auto-submit an app that has never been
-          # published: the edit uploads fine and then dies on commit with
-          # "Changes cannot be sent for review automatically". Committing
-          # without sending for review puts the build on the track and
-          # leaves the submission to the console, which is where the first
-          # release has to be confirmed anyway.
-          changesNotSentForReview: true
+          # Play refuses to auto-submit an edit for an app it has never
+          # published: the bundle uploads fine and the commit then dies with
+          # "Changes cannot be sent for review automatically", leaving
+          # nothing on the track. Committing without sending for review gets
+          # the build there and leaves the submission to the console.
+          #
+          # This is NOT a permanent setting. Once the app has been published
+          # once, a release that is committed and never sent for review sits
+          # in the console unreleased while this job reports success — the
+          # same silent non-delivery wearing a later disguise. Turn
+          # send_for_review on at that point.
+          changesNotSentForReview: ${{ !inputs.send_for_review }}
+          # Without this the action names the release after the bundle's
+          # versionName, which is "1.0.12" on every CI build, so successive
+          # internal releases are indistinguishable in the console.
+          releaseName: '1.0.12 (${{ env.VERSION_CODE }}) ${{ inputs.api_environment }}'
           # NOTE: this pinned version deprecates "track" in favour of
           # "tracks". Migrate when the pin moves, not before: the SHA is
           # fixed, so nothing can remove "track" under us.
           track: internal
           status: completed
+
+      - name: Say what is still owed in the console
+        if: inputs.publish && !inputs.send_for_review
+        run: |
+          MSG="Version code $VERSION_CODE is on the internal track but NOT submitted. Open Play Console > Testing > Internal testing and send the changes for review — testers do not receive it until you do."
+          echo "::notice::$MSG"
+          echo "$MSG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the signing material from the runner
+        if: always()
+        # The iOS sibling deletes its App Store Connect key the same way.
+        # Nothing uploads the workspace wholesale today, but the decoded
+        # upload keystore should not outlive the steps that need it.
+        run: rm -f upload-keystore.jks local.properties

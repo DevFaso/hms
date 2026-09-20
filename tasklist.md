@@ -2950,6 +2950,23 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `NOT VALID` after a backfill that decides what a dangling row should point
   at. Either way the schema and the model should stop disagreeing.
 
+- **No mobile release runbook, and the mobile release now has a manual step.**
+  `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
+  other operational paths; nothing there mentions the two mobile workflows.
+  A `workflow_dispatch` with `publish=true` now stages a Play release that a
+  human has to send for review in the console, and the Play service account
+  is deliberately scoped to *Release to testing tracks* so it cannot do it
+  itself. That procedure, the TestFlight dispatch, the eight `mobile-release`
+  secrets and the `send_for_review` flip after the app's first publish exist
+  only in PR #693's description today.
+
+- **The Play upload action still passes the deprecated `track` input.**
+  `r0adkll/upload-google-play` warns on every release run that `track` is
+  deprecated in favour of `tracks`. The action is SHA-pinned, so nothing can
+  remove `track` under us and there is no urgency; the migration belongs to
+  whichever PR moves the pin, where the new version's parsing of `tracks`
+  can actually be checked instead of guessed.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
