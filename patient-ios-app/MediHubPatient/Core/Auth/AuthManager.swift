@@ -58,7 +58,7 @@ final class AuthManager: ObservableObject {
         KeychainHelper.shared.savedUsername = username
         KeychainHelper.shared.savedPassword = password
         currentUser = response.user
-        KeychainHelper.shared.savedUserId = response.user?.id
+        KeychainHelper.shared.savedUserId = response.user.id
         isAuthenticated = true
     }
 

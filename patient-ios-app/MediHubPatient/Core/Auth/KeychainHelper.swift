@@ -13,6 +13,7 @@ final class KeychainHelper {
         static let accessToken = "com.bitnesttechs.hms.patient.accessToken"
         static let refreshToken = "com.bitnesttechs.hms.patient.refreshToken"
         static let username = "com.bitnesttechs.hms.patient.username"
+        static let userId = "com.bitnesttechs.hms.patient.userId"
         static let password = "com.bitnesttechs.hms.patient.password"
         // KC-3 — Keycloak OIDC
         static let oidcAuthState = "com.bitnesttechs.hms.patient.oidcAuthState"
@@ -37,11 +38,8 @@ final class KeychainHelper {
     /// is only populated by `login(...)`, so anything deriving an id from it
     /// broke as soon as the app was reopened on a restored session.
     var savedUserId: String? {
-        get { read(key: "savedUserId") }
-        set {
-            if let newValue { _ = save(newValue, key: "savedUserId") }
-            else { _ = delete(key: "savedUserId") }
-        }
+        get { read(key: Keys.userId) }
+        set { newValue == nil ? delete(key: Keys.userId) : save(newValue!, key: Keys.userId) }
     }
 
     var savedUsername: String? {
@@ -84,6 +82,9 @@ final class KeychainHelper {
         delete(key: Keys.refreshToken)
         delete(key: Keys.username)
         delete(key: Keys.password)
+        // Without this the id outlives the session and the next person to
+        // sign in on the device inherits the previous patient's chat threads.
+        delete(key: Keys.userId)
         clearOidc()
     }
 
