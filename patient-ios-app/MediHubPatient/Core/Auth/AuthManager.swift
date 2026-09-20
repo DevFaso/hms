@@ -81,8 +81,14 @@ final class AuthManager: ObservableObject {
         Task {
             try? await APIClient.shared.post(APIEndpoints.logout, body: EmptyBody()) as EmptyResponse
         }
-        KeychainHelper.shared.accessToken = nil
-        KeychainHelper.shared.refreshToken = nil
+        // Was clearing the two tokens by hand while `clearAll()` — which also
+        // drops the saved username, password and user id — had no caller at
+        // all. The user id therefore outlived sign-out, and because an SSO
+        // session never sets `currentUser`, the next patient to sign in on the
+        // same device resolved `currentUserId` to the PREVIOUS patient's id and
+        // loaded their conversations: /chat/** is gated on isAuthenticated()
+        // only, with no participant check.
+        KeychainHelper.shared.clearAll()
         // `KeycloakAuthService.clear()` also clears the OIDC keychain entries;
         // keep logout delegating through the service so the two paths cannot drift.
         KeycloakAuthService.shared.clear()

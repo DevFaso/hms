@@ -14,7 +14,17 @@ enum AppEnvironment {
     }
 
     /// Fallback when neither the scheme nor Info.plist supplies a base URL.
+    ///
+    /// Only `Release-Dev` and `Release-Prod` carry an xcconfig, so the plain
+    /// `Release` configuration — what Product > Archive uses from Xcode — has
+    /// no base URL at all. Defaulting that to dev would ship a
+    /// distribution-signed build talking to the dev server, so the fallback
+    /// follows the build type instead of being pinned to one environment.
+    #if DEBUG
     static let current: Environment = .dev
+    #else
+    static let current: Environment = .prod
+    #endif
 
     static var baseURL: String {
         // Scheme environment variable — local development only. It is empty

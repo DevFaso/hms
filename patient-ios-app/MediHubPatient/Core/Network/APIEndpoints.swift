@@ -63,7 +63,10 @@ enum APIEndpoints {
         "/chat/conversations/\(userId)"
     }
     static func chatHistory(userId: String, otherUserId: String) -> String {
-        "/chat/history/\(userId)/\(otherUserId)"
+        // The endpoint defaults to size=20; Android asks for 100 on the same
+        // path. Without it a thread is silently truncated to its 20 newest
+        // messages with no way to scroll further back.
+        "/chat/history/\(userId)/\(otherUserId)?page=0&size=100"
     }
     static let chatSend = "/chat/send"
 

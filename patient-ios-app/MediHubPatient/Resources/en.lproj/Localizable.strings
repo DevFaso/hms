@@ -235,6 +235,10 @@
 "no_messages_desc" = "No messages yet.";
 "no_conversations" = "No conversations yet";
 "new_message" = "New Message";
+"biometric_reason" = "Sign in to e-Keneya";
+"to" = "To";
+"message" = "Message";
+"no_message_recipients" = "No clinician to message yet. A conversation opens once you have had an appointment.";
 "type_message" = "Type a message…";
 "send" = "Send";
 "conversations" = "Conversations";

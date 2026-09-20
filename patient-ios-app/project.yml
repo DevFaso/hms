@@ -28,10 +28,6 @@ packages:
     url: https://github.com/openid/AppAuth-iOS.git
     from: "1.7.5"
 
-configFiles:
-  Release-Dev: Config/Dev.xcconfig
-  Release-Prod: Config/Prod.xcconfig
-
 settings:
   base:
     MARKETING_VERSION: "1.0.3"
@@ -58,6 +54,14 @@ targets:
       - path: MediHubPatient
         excludes:
           - "**/.DS_Store"
+    # Layered on the TARGET, not the project. Xcode resolves target settings
+    # over target xcconfig over project settings over project xcconfig, so a
+    # project-level xcconfig loses to the `settings.base` defaults below and
+    # every per-env value silently resolved to the empty default — which is
+    # how Release-Prod would have shipped pointing at the dev server.
+    configFiles:
+      Release-Dev: Config/Dev.xcconfig
+      Release-Prod: Config/Prod.xcconfig
     dependencies:
       - package: AppAuth
         product: AppAuth

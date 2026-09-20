@@ -32,8 +32,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-android-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # The event name is part of the group so a push to develop cannot land
+  # in the same group as a dispatched release and cancel it mid-upload;
+  # dispatches are never cancelled, since an interrupted Play upload
+  # burns a version code with nothing to show for it.
+  group: mobile-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 defaults:
   run:
@@ -140,8 +144,13 @@ jobs:
           # versionCode comes from the run number: Play rejects a bundle whose
           # version code it has already accepted, so a hard-coded one makes
           # every publish after the first fail.
+          # run_number restarts at 1 for a brand-new workflow file, but
+          # Play has already accepted version code 13 (the old hard-coded
+          # value), so a bare run number is rejected until it passes 13.
+          VERSION_CODE=$(( 13 + ${{ github.run_number }} ))
+          echo "version code $VERSION_CODE"
           ./gradlew :app:bundleRelease --no-daemon \
-            -PversionCode=${{ github.run_number }} \
+            -PversionCode="$VERSION_CODE" \
             -PapiBaseUrl="$API_BASE_URL"
 
       - name: Check the bundle is actually signed

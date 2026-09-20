@@ -29,11 +29,17 @@ struct MessagesView: View {
                 }
             }
             .navigationTitle("tab_messages".localized)
-            // The compose button used to open a form whose Send action only
-            // called dismiss() — it never reached the API. Removed rather than
-            // left as a lie; the Android app has no new-message composer either,
-            // so the two surfaces now match. Patients reply within a thread a
-            // clinician started.
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    // Restored. I removed this on the false premise that
+                    // Android had no composer; it does — a FAB backed by an
+                    // appointment-history fallback. Without it a patient with
+                    // no existing thread cannot contact anyone.
+                    NavigationLink(destination: ComposeMessageView()) {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
             .refreshable { await vm.load() }
         }
         .task { await vm.load() }
@@ -217,6 +223,10 @@ final class MessageThreadViewModel: ObservableObject {
         let text = draft.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
         draft = ""
+        // Cleared on every attempt: otherwise one failed send pinned the red
+        // banner above the composer for the rest of the session, including
+        // over messages that then sent fine.
+        errorMessage = nil
         do {
             let sent: ChatMessageDTO = try await APIClient.shared.post(
                 APIEndpoints.chatSend,
@@ -227,6 +237,131 @@ final class MessageThreadViewModel: ObservableObject {
             // Put the text back so a failed send does not lose what was typed.
             draft = text
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Compose
+
+/// A clinician the patient can start a conversation with.
+private struct ChatRecipient: Identifiable, Hashable {
+    let id: String          // user id — the recipient /chat/send expects
+    let name: String
+    let subtitle: String?
+}
+
+/// Starting a NEW conversation.
+///
+/// There is no endpoint that lists "people this patient may message", so the
+/// recipients are derived from recent appointments — the same fallback the
+/// Android app uses. `/me/patient/care-team` is deliberately not used: it
+/// returns primaryCare/primaryCareHistory entries that carry no user id, so
+/// nothing in that payload can address a message.
+struct ComposeMessageView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var vm = ComposeMessageViewModel()
+    @State private var selected: ChatRecipient?
+    @State private var messageBody = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("to".localized) {
+                    if vm.isLoading {
+                        HStack { ProgressView(); Text("loading".localized) }
+                    } else if vm.recipients.isEmpty {
+                        Text("no_message_recipients".localized)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("to".localized, selection: $selected) {
+                            Text("—").tag(ChatRecipient?.none)
+                            ForEach(vm.recipients) { person in
+                                Text(person.name).tag(ChatRecipient?.some(person))
+                            }
+                        }
+                    }
+                }
+                Section("message".localized) {
+                    TextEditor(text: $messageBody).frame(minHeight: 120)
+                }
+                if let error = vm.errorMessage {
+                    Section { Text(error).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("new_message".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("cancel".localized) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("send".localized) {
+                        Task {
+                            // Only dismiss once the message is actually
+                            // accepted. The previous version dismissed
+                            // unconditionally and never called the API.
+                            if await vm.send(to: selected, body: messageBody) {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(selected == nil
+                              || messageBody.trimmingCharacters(in: .whitespaces).isEmpty
+                              || vm.isSending)
+                }
+            }
+            .task { await vm.loadRecipients() }
+        }
+    }
+}
+
+@MainActor
+final class ComposeMessageViewModel: ObservableObject {
+    @Published var recipients: [ChatRecipient] = []
+    @Published var isLoading = false
+    @Published var isSending = false
+    @Published var errorMessage: String?
+
+    func loadRecipients() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let appointments: [AppointmentDTO] = try await APIClient.shared.get(
+                APIEndpoints.appointments,
+                queryItems: [URLQueryItem(name: "page", value: "0"),
+                             URLQueryItem(name: "size", value: "50")]
+            )
+            var seen = Set<String>()
+            recipients = appointments.compactMap { (appointment: AppointmentDTO) -> ChatRecipient? in
+                guard let userId = appointment.staffUserId, !userId.isEmpty,
+                      let name = appointment.staffName, !name.isEmpty,
+                      !seen.contains(userId) else { return nil }
+                seen.insert(userId)
+                return ChatRecipient(id: userId, name: name,
+                                     subtitle: appointment.hospitalName)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Returns true when the message was accepted by the server.
+    func send(to recipient: ChatRecipient?, body: String) async -> Bool {
+        let text = body.trimmingCharacters(in: .whitespaces)
+        guard let recipient, !text.isEmpty else { return false }
+        isSending = true
+        errorMessage = nil
+        defer { isSending = false }
+        do {
+            let _: ChatMessageDTO = try await APIClient.shared.post(
+                APIEndpoints.chatSend,
+                body: SendChatMessageRequest(recipientId: recipient.id, content: text)
+            )
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 }

@@ -9,6 +9,11 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
     let patientEmail: String?
     let patientPhone: String?
     let staffId: String?
+    /// The clinician's USER id — what /chat/send needs as a recipient.
+    /// `staffId` is a Staff row id and is not interchangeable with it.
+    /// Android has always decoded this; iOS did not, which is why the
+    /// composer had no way to address anyone.
+    let staffUserId: String?
     let staffName: String?
     let staffEmail: String?
     let hospitalId: String?

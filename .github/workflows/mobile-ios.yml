@@ -30,8 +30,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-ios-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # See the Android workflow: a dispatched TestFlight upload must not be
+  # cancelled by an unrelated push to the same ref.
+  group: mobile-ios-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 defaults:
   run:
@@ -133,13 +135,19 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -o pipefail
+          # Date-based rather than the run number: run_number restarts at
+          # 1 for a new workflow file, and App Store Connect rejects any
+          # build number it has already seen for this marketing version.
+          # A UTC timestamp is always higher than the previous one.
+          BUILD_NUMBER=$(date -u +%Y%m%d%H%M)
+          echo "build number $BUILD_NUMBER"
           xcodebuild archive \
             -project MediHubPatient.xcodeproj \
             -scheme MediHubPatient \
             -configuration '${{ inputs.configuration }}' \
             -destination 'generic/platform=iOS' \
             -archivePath build/MediHubPatient.xcarchive \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
             -authenticationKeyID "$ASC_KEY_ID" \

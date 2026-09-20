@@ -11,6 +11,11 @@
 // a comment.
 MEDIHUB_API_BASE_URL = https:/$()/dev.e-keneya.com/api
 MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-dev.up.railway.app/realms/hms
-MEDIHUB_KEYCLOAK_SSO_ENABLED = 1
+// Was 1. Nothing populates the user id on an SSO session
+// (`completeSsoSession()` only flips `isAuthenticated`), so a tester signing
+// in with SSO gets a Messages tab that cannot resolve who they are. Shipping
+// the button in that state is worse than not shipping it; re-enable with the
+// Phase 3 cutover, once the id is resolved for SSO too.
+MEDIHUB_KEYCLOAK_SSO_ENABLED = 0
 MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
 MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect

@@ -2202,6 +2202,26 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **An SSO session cannot resolve the patient's user id on mobile, so chat
+  is unusable under SSO.** `AuthManager.completeSsoSession()` only flips
+  `isAuthenticated`; nothing sets `currentUser` or the persisted user id,
+  which `/chat/conversations/{userId}` and `/chat/history/{u1}/{u2}` both
+  require. Android has the same gap (`tokenStorage.userId` is only written in
+  `AuthRepository` on a password login). #690 responded by setting
+  `MEDIHUB_KEYCLOAK_SSO_ENABLED = 0` in `Config/Dev.xcconfig` rather than ship
+  a TestFlight build whose Messages tab reports "not signed in" to a
+  signed-in tester. **This blocks the Phase 3 Keycloak cutover for chat**: it
+  needs the HMS `users.id` resolved from the OIDC session (a `/me`-style
+  lookup, since the token `sub` is the Keycloak id, not the HMS one).
+
+- **The mobile inbox shows a raw backend timestamp.**
+  `ChatConversationSummaryDTO.lastMessageTimestamp` is a Jackson
+  `LocalDateTime` ("2026-09-19T10:30:00") and `ThreadRowView` prints it
+  verbatim, so every row shows a machine string instead of a localized or
+  relative time. Harmless until #690 because the endpoint 404'd and the list
+  was always empty. `APIClient` already carries a date decoder that could
+  parse it.
+
 - **Patient chat attachments are invisible on both mobile apps.**
   `ChatMessageResponseDTO` carries `attachments: List<ChatAttachmentDTO>` and
   `ChatMessageServiceImpl.sendMessage` explicitly allows an attachment-only
