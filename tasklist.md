@@ -2950,6 +2950,28 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `NOT VALID` after a backfill that decides what a dangling row should point
   at. Either way the schema and the model should stop disagreeing.
 
+- **A green mobile release run still does not prove the build was delivered.**
+  `mobile-android.yml` commits the Play edit without sending it for review,
+  so the job can succeed while the release sits in the console unreleased —
+  which is exactly how the first dispatch failed (the bundle uploaded, the
+  edit never committed, and only a hand-written Play API call showed the
+  track still held version code 13). The step now writes a `::notice::`
+  saying what is owed, but an annotation on a green run is not a gate. The
+  fix is a post-publish readback: call `edits.tracks.get` for `internal` with
+  the same service account and fail the job unless the new version code is
+  there. Deferred because it needs a decision about how CI authenticates for
+  a read — the action deletes the credentials file it writes, and adding
+  PyJWT to a release job is its own risk.
+
+- **The two mobile workflows implement the same three things three ways.**
+  Build number (`mobile-ios.yml` uses `yyyymmddHHMM`, Android uses seconds
+  since 2026-01-01 because Play caps a version code at 2100000000), required-
+  secret preflight (iOS fails on the first missing one, Android accumulates
+  and reports them together — the better message, which iOS does not get) and
+  credential teardown (`if: always()`, now in two files). Every fix has to be
+  made twice and reasoned about twice. A composite action for "check these
+  secrets are set" would leave one place to change.
+
 - **No mobile release runbook, and the mobile release now has a manual step.**
   `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
   other operational paths; nothing there mentions the two mobile workflows.

@@ -20,7 +20,7 @@ on:
         type: boolean
         default: false
       send_for_review:
-        description: 'Also submit it for review (off until the app is published once)'
+        description: 'Also submit it for review (needs publish; off until the app is published once)'
         type: boolean
         default: false
       api_environment:
@@ -105,36 +105,78 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
 
+      - name: Decide what this dispatch does
+        id: mode
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          SEND_FOR_REVIEW: ${{ inputs.send_for_review }}
+        run: |
+          # Both flags are decided HERE, in shell, and every later step reads
+          # the outputs rather than the inputs. GitHub's expression engine
+          # casts a non-empty string to true, and a boolean dispatch input is
+          # a real boolean from the Run-workflow dialog but a string over the
+          # API (`gh workflow run -f publish=false`). So `if: inputs.publish`
+          # is TRUE for a dispatch that asked not to publish, and
+          # `!inputs.send_for_review` is FALSE for one that passed
+          # send_for_review=false — which would auto-submit the edit and fail
+          # the commit exactly the way this workflow used to. Interpolating
+          # into env stringifies both shapes to "true"/"false", so one
+          # comparison covers the UI and the API.
+          publish=false
+          if [ "$PUBLISH" = "true" ]; then publish=true; fi
+          send=false
+          if [ "$SEND_FOR_REVIEW" = "true" ]; then send=true; fi
+          if [ "$send" = "true" ] && [ "$publish" != "true" ]; then
+            echo "::error::send_for_review does nothing on its own — it only"               "chooses whether the release this dispatch uploads is also sent"               "for review. Re-run with publish enabled."
+            exit 1
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          # Read as a string by the action. Anything but "true" leaves the
+          # edit committed but unsubmitted, which is the safe direction: a
+          # staged release is visible and recoverable, an auto-submit on an
+          # app that has never been published fails after the whole build.
+          if [ "$send" = "true" ]; then
+            echo "changes_not_sent=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes_not_sent=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "publish=$publish send_for_review=$send"
+
+      - name: Check the Play credentials before the long build
+        if: steps.mode.outputs.publish == 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          # Same reasoning as the signing preflight below: this key is read
+          # by the very last step, so an unset one is otherwise discovered
+          # after the whole signed build has run. Gated by the same output
+          # as the publish step, so the two can never disagree, and kept out
+          # of the environment of runs that do not publish.
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::PLAY_SERVICE_ACCOUNT_JSON is unset in the mobile-release environment"
+            exit 1
+          fi
+
       - name: Restore the upload keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          PUBLISH: ${{ inputs.publish }}
         run: |
           # Check every signing secret up front. Missing ones otherwise fail
           # deep inside a full R8 release build with "Keystore was tampered
           # with, or password was incorrect" — an error that points at the
           # keystore rather than at the unset secret.
-          required="ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD"
-          # The Play key deserves the same treatment for the same reason: it
-          # is read by the very last step, so an unset one is otherwise found
-          # only after the whole signed build has run.
-          if [ "$PUBLISH" = "true" ]; then
-            required="$required PLAY_SERVICE_ACCOUNT_JSON"
-          fi
           missing=
-          for v in $required; do
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
             echo "::error::unset in the mobile-release environment:$missing"
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Build the signed bundle
@@ -161,14 +203,20 @@ jobs:
           # that the edit actually commits, a re-run of a successful publish
           # would rebuild a burnt code and be rejected after a 20-minute R8
           # build.
-          # Minutes since 2026-01-01 UTC instead: always rising, unique per
-          # minute, and — unlike the iOS sibling's yyyymmddHHMM — inside the
-          # 2100000000 ceiling Play puts on an Android version code.
-          VERSION_CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          # Seconds since 2026-01-01 UTC instead: always rising, and — unlike
+          # the iOS sibling's yyyymmddHHMM — inside the 2100000000 ceiling
+          # Play puts on an Android version code, with about 66 years of head
+          # room. Seconds rather than minutes because the concurrency group is
+          # keyed on the ref, so two dispatches on different refs run in
+          # parallel and can reach this line in the same minute; the second
+          # bundle would then be refused as an already-used code after its own
+          # 20-minute build.
+          VERSION_CODE=$(( $(date -u +%s) - 1767225600 ))
           echo "version code $VERSION_CODE"
           # Read back by the publish step, which names the Play release after
-          # it so two internal builds can be told apart in the console.
+          # these so two internal builds can be told apart in the console.
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
           ./gradlew :app:bundleRelease --no-daemon \
             -PversionCode="$VERSION_CODE" \
             -PapiBaseUrl="$API_BASE_URL"
@@ -193,7 +241,7 @@ jobs:
           retention-days: 14
 
       - name: Publish to Play internal testing
-        if: inputs.publish
+        if: steps.mode.outputs.publish == 'true'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5  # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -210,11 +258,19 @@ jobs:
           # in the console unreleased while this job reports success — the
           # same silent non-delivery wearing a later disguise. Turn
           # send_for_review on at that point.
-          changesNotSentForReview: ${{ !inputs.send_for_review }}
+          changesNotSentForReview: ${{ steps.mode.outputs.changes_not_sent }}
           # Without this the action names the release after the bundle's
           # versionName, which is "1.0.12" on every CI build, so successive
-          # internal releases are indistinguishable in the console.
-          releaseName: '1.0.12 (${{ env.VERSION_CODE }}) ${{ inputs.api_environment }}'
+          # internal releases are indistinguishable in the console. The
+          # marketing version is deliberately NOT repeated here: it lives in
+          # build.gradle.kts and a copy would go stale at the next bump,
+          # leaving the console naming a version the bundle does not carry.
+          # The commit is what a tester's bug report actually needs.
+          releaseName: '${{ env.VERSION_CODE }} (${{ inputs.api_environment }}, ${{ env.SHORT_SHA }})'
+          # The release build runs R8 with isMinifyEnabled, so without the
+          # mapping every crash a tester produces reaches the console as
+          # a.b.c.d(Unknown Source:0), unrecoverable after the fact.
+          mappingFile: patient-android-app/app/build/outputs/mapping/release/mapping.txt
           # NOTE: this pinned version deprecates "track" in favour of
           # "tracks". Migrate when the pin moves, not before: the SHA is
           # fixed, so nothing can remove "track" under us.
@@ -222,7 +278,7 @@ jobs:
           status: completed
 
       - name: Say what is still owed in the console
-        if: inputs.publish && !inputs.send_for_review
+        if: steps.mode.outputs.publish == 'true' && steps.mode.outputs.changes_not_sent == 'true'
         run: |
           MSG="Version code $VERSION_CODE is on the internal track but NOT submitted. Open Play Console > Testing > Internal testing and send the changes for review — testers do not receive it until you do."
           echo "::notice::$MSG"
@@ -233,4 +289,12 @@ jobs:
         # The iOS sibling deletes its App Store Connect key the same way.
         # Nothing uploads the workspace wholesale today, but the decoded
         # upload keystore should not outlive the steps that need it.
-        run: rm -f upload-keystore.jks local.properties
+        #
+        # serviceAccountJson.json is the Play key: the action writes it from
+        # serviceAccountJsonPlainText and removes it in a finally, which a
+        # cancel or a timeout-minutes kill skips. A JS action's cwd is the
+        # workspace root, not this job's working-directory, so it has to be
+        # named by absolute path here.
+        run: |
+          rm -f upload-keystore.jks local.properties
+          rm -f "$GITHUB_WORKSPACE/serviceAccountJson.json"
