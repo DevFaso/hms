@@ -179,5 +179,15 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.bitnesttechs.hms.patient
           releaseFiles: patient-android-app/app/build/outputs/bundle/release/app-release.aab
+          # Play refuses to auto-submit an app that has never been
+          # published: the edit uploads fine and then dies on commit with
+          # "Changes cannot be sent for review automatically". Committing
+          # without sending for review puts the build on the track and
+          # leaves the submission to the console, which is where the first
+          # release has to be confirmed anyway.
+          changesNotSentForReview: true
+          # NOTE: this pinned version deprecates "track" in favour of
+          # "tracks". Migrate when the pin moves, not before: the SHA is
+          # fixed, so nothing can remove "track" under us.
           track: internal
           status: completed
