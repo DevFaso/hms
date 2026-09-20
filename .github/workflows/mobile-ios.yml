@@ -57,6 +57,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check the dispatch asks for something this workflow knows
+        # The Android sibling's reasoning, and the same placement: in build,
+        # so a bad value costs a checkout rather than a macOS archive.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_ACTION: ${{ inputs.release_action }}
+        run: |
+          # Without this an unrecognised value — a typo, or the Android
+          # vocabulary "stage_on_internal" — would skip the upload step and
+          # report a green run having shipped nothing.
+          VALID="build_only upload_to_testflight"
+          case " $VALID " in
+            *" $RELEASE_ACTION "*) ;;
+            *)
+              echo "::error::unknown release_action '$RELEASE_ACTION' — expected one of: $VALID"
+              exit 1
+              ;;
+          esac
+          echo "This dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Show the selected Xcode
         run: xcodebuild -version
 
@@ -107,7 +127,12 @@ jobs:
 
   testflight:
     name: Archive and upload
-    if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_to_testflight'
+    # The JOB runs on any dispatch; only the upload step is gated. That
+    # keeps build_only meaning the same thing on both workflows — produce a
+    # signed build, ship nothing — where gating the job made it mean
+    # "produce nothing at all" here and "produce a signed AAB" on Android.
+    # It also makes an archive a usable signing smoke test on its own.
+    if: github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: macos-15
     timeout-minutes: 60
@@ -143,6 +168,12 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Through env, never interpolated into the script. A ${{ }} in a
+          # run: block is substituted as TEXT before bash sees it, so a
+          # dispatch input lands inside the command — in the one job that
+          # holds the App Store Connect signing key. The Android sibling
+          # already passes api_environment this way.
+          CONFIGURATION: ${{ inputs.configuration }}
         run: |
           set -o pipefail
           # Date-based rather than the run number: run_number restarts at
@@ -154,7 +185,7 @@ jobs:
           xcodebuild archive \
             -project MediHubPatient.xcodeproj \
             -scheme MediHubPatient \
-            -configuration '${{ inputs.configuration }}' \
+            -configuration "$CONFIGURATION" \
             -destination 'generic/platform=iOS' \
             -archivePath build/MediHubPatient.xcarchive \
             CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
@@ -165,6 +196,7 @@ jobs:
             | xcbeautify
 
       - name: Export and upload to TestFlight
+        if: inputs.release_action == 'upload_to_testflight'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}

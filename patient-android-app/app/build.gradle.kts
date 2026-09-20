@@ -28,10 +28,14 @@ android {
         // Overridable from CI: every AAB uploaded to Play burns a version
         // code, so a second publish of a hard-coded one is rejected outright.
         // mobile-android.yml passes -PversionCode as seconds since
-        // 2026-01-01 UTC, so the lowest code Play has accepted is now in the
-        // tens of millions and can never come back down. 13 survives only as
-        // a local default: a release bundle built WITHOUT the property is
-        // refused at upload as an already-used code, which is loud but late.
+        // 2026-01-01 UTC. Once a bundle built that way is accepted, the
+        // lowest code Play will take jumps to the tens of millions and can
+        // never come back down, and a release built WITHOUT the property is
+        // refused at upload as an already-used code — loud, but only at the
+        // upload. That has NOT happened yet: as of 2026-09-20 the internal
+        // track still holds 13, because every attempt so far died before the
+        // edit was committed. So 13 is still a working local default today
+        // and stops being one the moment the first CI publish lands.
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 13
         versionName = (project.findProperty("versionName") as String?) ?: "1.0.12"
 

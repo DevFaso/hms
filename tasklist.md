@@ -2975,11 +2975,13 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - **No mobile release runbook, and the mobile release now has a manual step.**
   `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
   other operational paths; nothing there mentions the two mobile workflows.
-  A `workflow_dispatch` with `publish=true` now stages a Play release that a
+  A `workflow_dispatch` with `release_action=stage_on_internal` stages a
+  Play release that a
   human has to send for review in the console, and the Play service account
   is deliberately scoped to *Release to testing tracks* so it cannot do it
   itself. That procedure, the TestFlight dispatch, the eight `mobile-release`
-  secrets and the `send_for_review` flip after the app's first publish exist
+  secrets and the move to `release_action=stage_and_submit` after the app's
+  first publish exist
   only in PR #693's description today.
 
 - **The Play upload action still passes the deprecated `track` input.**
