@@ -74,6 +74,11 @@ jobs:
           case "$RELEASE_ACTION" in
             build_only|upload_to_testflight) ;;
             *)
+              # Named where it is safe to name it: $GITHUB_STEP_SUMMARY is a
+              # file, not a stream the runner scans for ::workflow commands,
+              # so the rejected value can go there even though it must not
+              # go into the ::error:: line above.
+              echo "Rejected dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
               echo "::error::unknown release_action — expected build_only or upload_to_testflight"
               exit 1
               ;;
