@@ -2202,6 +2202,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Mobile sign-out does not revoke the session server side.** `/auth/logout`
+  is `.authenticated()`, but the iOS app sends it with `requiresAuth: false`
+  so that a 401 on the way out cannot re-enter `refreshTokens()` and loop.
+  The request therefore carries no bearer and the server session lives until
+  it expires. It was equally unrevoked before (the keychain was cleared
+  before the request ran); the loop is fixed, the revocation is not. The fix
+  is a way to send one request with an explicit token —
+  `APIClient.post(..., bearer:)` — rather than reading the keychain at
+  request time. Android has the same shape.
+
 - **An SSO session cannot resolve the patient's user id on mobile, so chat
   is unusable under SSO.** `AuthManager.completeSsoSession()` only flips
   `isAuthenticated`; nothing sets `currentUser` or the persisted user id,

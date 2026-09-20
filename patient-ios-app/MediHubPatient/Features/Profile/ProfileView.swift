@@ -35,7 +35,7 @@ struct ProfileView: View {
                                             .clipShape(Circle())
                                             .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
                                     } else if let url = profile.profileImageUrl, !url.isEmpty {
-                                        AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.baseURL.replacingOccurrences(of: "/api", with: "") + url)) { phase in
+                                        AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.assetOrigin + url)) { phase in
                                             if let img = phase.image {
                                                 img.resizable().scaledToFill()
                                             } else {

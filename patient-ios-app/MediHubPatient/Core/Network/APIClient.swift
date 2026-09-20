@@ -44,6 +44,18 @@ enum AppEnvironment {
     }
 }
 
+/// The origin behind the API base URL, for assets served outside `/api`.
+///
+/// Must strip only a TRAILING `/api`: `replacingOccurrences(of: "/api")`
+/// also matched the `/api` inside `https://api.e-keneya.com`, turning the
+/// production base URL into `https:/.e-keneya.com` and breaking every avatar.
+extension AppEnvironment {
+    static var assetOrigin: String {
+        let base = baseURL
+        return base.hasSuffix("/api") ? String(base.dropLast(4)) : base
+    }
+}
+
 // MARK: - API Errors
 
 enum APIError: LocalizedError {
