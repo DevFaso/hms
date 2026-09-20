@@ -2964,9 +2964,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 - **The committed `Info.plist` is a fossil that `xcodegen` overwrites.**
   `patient-ios-app/MediHubPatient/Resources/Info.plist` is tracked but
   `.gitignore` covers only `*.xcodeproj`, so every `xcodegen generate`
-  rewrites it and leaves a dirty tree; meanwhile the tracked copy is three
-  keys stale (no `NSFaceIDUsageDescription`, no `MEDIHUB_*`, no
-  `ITSAppUsesNonExemptEncryption`). `patient-ios-app/README.md` still
+  rewrites it and leaves a dirty tree; meanwhile the tracked copy is missing
+  `NSFaceIDUsageDescription`, `ITSAppUsesNonExemptEncryption` and —
+  the interesting one — `MEDIHUB_API_BASE_URL`, so an app built down that
+  path has no API base URL key at all. The four `MEDIHUB_KEYCLOAK_*` keys
+  are present, which is what makes the gap easy to miss. `patient-ios-app/README.md` still
   documents a hand-built Xcode project that never runs `xcodegen`, and a
   build down that path reaches Face ID with no purpose string — which iOS
   terminates the app for. Either ignore the generated plist and delete the

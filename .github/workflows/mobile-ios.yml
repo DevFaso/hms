@@ -58,31 +58,68 @@ jobs:
 
       - name: Check the generated Info.plist carries the keys the app needs
         run: |
-          # Three keys have been added to project.yml's info.properties
-          # AFTER an upload failed for want of them: CFBundleDisplayName,
-          # then NSFaceIDUsageDescription (#692), then
-          # ITSAppUsesNonExemptEncryption (#695). xcodegen rewrites
-          # Info.plist from that block, so a dropped or renamed key is free
-          # to catch here and costs an archive, an upload and Apple's
-          # processing queue to catch anywhere else.
+          # xcodegen rewrites Info.plist from project.yml's info.properties,
+          # so a key dropped or renamed there is free to catch here and
+          # costs an archive, an upload and Apple's processing queue to
+          # catch anywhere else. That is how ITSAppUsesNonExemptEncryption
+          # was found: build 202609201928 landed in Missing Compliance.
           PLIST=MediHubPatient/Resources/Info.plist
-          for key in CFBundleDisplayName NSFaceIDUsageDescription ITSAppUsesNonExemptEncryption; do
-            plutil -extract "$key" raw -o - "$PLIST" >/dev/null 2>&1 \
-              || { echo "::error::$key is missing from the generated $PLIST"; exit 1; }
-          done
-          # The export declaration turns on the app shipping no cryptography
-          # of its OWN. Keep that checked rather than remembered: while the
-          # flag is false, no first-party source may import a crypto API.
-          # Linked packages are out of scope here on purpose — AppAuth's
-          # PKCE digest is a standards-track primitive, not this app's
-          # algorithm; see the reasoning in project.yml.
-          if [ "$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$PLIST")" = "false" ]; then
-            if grep -rnE '^ *import +(CryptoKit|CommonCrypto)' MediHubPatient --include='*.swift'; then
-              echo "::error::ITSAppUsesNonExemptEncryption is false but first-party code imports a crypto framework — re-check the export classification before shipping"
+          # xml1, not raw: raw cannot render an array, and CFBundleURLTypes
+          # is one — it carries the OAuth redirect scheme every Keycloak
+          # sign-in depends on, and losing it breaks login silently.
+          # plutil's own diagnostic is kept and shown: swallowing it reports
+          # a malformed plist as a missing key and sends the reader hunting
+          # in project.yml for something that is right there.
+          for key in CFBundleDisplayName NSFaceIDUsageDescription \
+                     ITSAppUsesNonExemptEncryption CFBundleURLTypes \
+                     CFBundleShortVersionString CFBundleVersion \
+                     MEDIHUB_API_BASE_URL MEDIHUB_KEYCLOAK_ISSUER \
+                     MEDIHUB_KEYCLOAK_CLIENT_ID MEDIHUB_KEYCLOAK_REDIRECT_URI \
+                     MEDIHUB_KEYCLOAK_SSO_ENABLED; do
+            if ! out=$(plutil -extract "$key" xml1 -o - "$PLIST" 2>&1); then
+              echo "::error::$key not readable from the generated $PLIST: $out"
               exit 1
             fi
-          fi
-          echo "Info.plist keys present, export declaration consistent with the sources"
+          done
+          # The declaration has to be a real Boolean. Quote it in
+          # project.yml and XcodeGen writes <string>false</string>, which
+          # Apple ignores — the build goes back to Missing Compliance with
+          # this gate green.
+          #
+          # So this matches the TAG, not the rendered value: `plutil
+          # -extract ... raw` prints `false` for BOTH <false/> and
+          # <string>false</string>, which is how the first version of this
+          # check passed the quoted case. Verified against both plists.
+          # tr -d '[:space:]' rather than an escape list: a backslash
+          # escape written through a shell heredoc has landed in this
+          # file as a literal newline more than once.
+          enc=$(plutil -extract ITSAppUsesNonExemptEncryption xml1 -o - "$PLIST" | tr -d '[:space:]')
+          case "$enc" in
+            *"<false/>"*)
+              # Scans FIRST-PARTY sources for a crypto import. Linked
+              # packages are out of scope on purpose: AppAuth's PKCE digest
+              # is a standards-track primitive, not this app's algorithm.
+              #
+              # This catches an import, not every route to cryptography.
+              # Security.framework is already imported for the Keychain, so
+              # key-wrapping added in KeychainHelper would not trip it.
+              # metadata.md states that limit rather than overclaiming.
+              if grep -rnE '(^|[[:space:]])import +(CryptoKit|CommonCrypto|Crypto)([[:space:]]|$)' \
+                   MediHubPatient MediHubPatientTests --include='*.swift'; then
+                echo "::error::ITSAppUsesNonExemptEncryption is false but first-party code imports a crypto framework — re-check the export classification before shipping"
+                exit 1
+              fi
+              echo "export declaration false, and no first-party crypto import"
+              ;;
+            *"<true/>"*)
+              echo "::warning::ITSAppUsesNonExemptEncryption is true — this app now claims non-exempt encryption, and the first-party crypto scan no longer applies"
+              ;;
+            *)
+              echo "::error::ITSAppUsesNonExemptEncryption is not a boolean but $enc — a quoted value in project.yml becomes a <string> that Apple ignores"
+              exit 1
+              ;;
+          esac
+          echo "Info.plist: every declared key present"
 
       - name: Build for the simulator
         # Ad-hoc signing ("-"), not CODE_SIGNING_ALLOWED=NO. The gate still
@@ -181,6 +218,22 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             | xcbeautify
+
+      - name: Check the ARCHIVED app carries the export declaration
+        run: |
+          # The PR-time check reads the SOURCE plist. This reads the one
+          # inside the archive Apple actually receives: the target sets
+          # GENERATE_INFOPLIST_FILE, so Xcode merges and processes the plist
+          # into the bundle, and the archive runs a Release configuration
+          # with Config/*.xcconfig layered on — a path the Debug-only PR job
+          # never exercises. Failing here costs nothing; failing at Apple
+          # costs a build number and a processing cycle.
+          APP=build/MediHubPatient.xcarchive/Products/Applications/MediHubPatient.app
+          if ! out=$(plutil -extract ITSAppUsesNonExemptEncryption raw -o - "$APP/Info.plist" 2>&1); then
+            echo "::error::the archived app has no usable ITSAppUsesNonExemptEncryption ($out) — this upload would land in Missing Compliance"
+            exit 1
+          fi
+          echo "archived app declares ITSAppUsesNonExemptEncryption=$out"
 
       - name: Export and upload to TestFlight
         env:

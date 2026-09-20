@@ -345,11 +345,20 @@ it does contain some. Specifically:
 | `LocalAuthentication` (Face ID) | Platform biometrics |
 | AppAuth PKCE — `CC_SHA256`, `SecRandomCopyBytes` | A digest used for authentication, from a standards-track library |
 
-The app ships no algorithm of its own and bundles no crypto library. The
-iOS build job fails the PR if any first-party source imports `CryptoKit` or
-`CommonCrypto` while the flag is `false`, so this table stays true by
-enforcement rather than by memory.
+The app ships no algorithm of its own and bundles no crypto library.
+
+**What CI actually checks**, stated narrowly so this is not read as more than
+it is: the iOS build job fails the PR if a first-party source *imports*
+`CryptoKit`, `CommonCrypto` or `Crypto` while the flag is `false`, and the
+archive job re-reads the declaration out of the built `.app` before uploading.
+It does **not** detect cryptography reached without a new import —
+`Security.framework` is already imported for the Keychain, so key-wrapping
+added there would pass. Re-read this table when touching anything that
+handles keys.
 
 ⚠ **Build 202609201928 predates the declaration** and still needs the export
-question answered once by hand in App Store Connect. Builds uploaded after
-#695 merged do not.
+question answered once by hand: App Store Connect → the build → **Provide
+Export Compliance Information** → **"Yes"** → **"Only uses standard
+encryption (HTTPS, TLS)"** → exempt. Builds uploaded after both #695 and #694
+have merged do not — #694 carries the `macos-26` runner, without which Apple
+rejects the upload on the SDK version before compliance is ever reached.

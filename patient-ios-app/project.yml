@@ -82,8 +82,10 @@ targets:
         # Every key here is declared in THIS block and not by hand in
         # Info.plist, because `xcodegen generate` rewrites that file from
         # here on every CI run and would silently drop a hand-added one.
-        # Three keys have already been found missing only after an upload
-        # failed; the build job now asserts their presence on every PR.
+        # ITSAppUsesNonExemptEncryption below was found the expensive way —
+        # build 202609201928 uploaded, processed, and landed in Missing
+        # Compliance — so the build job now asserts every key in this block
+        # is present in the generated plist, on every PR.
 
         # User-facing name under the icon.
         CFBundleDisplayName: e-Keneya
