@@ -16,10 +16,22 @@ on:
       - '.github/workflows/mobile-ios.yml'
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Archive and upload the build to TestFlight'
-        type: boolean
-        default: false
+      release_action:
+        # A choice, not a boolean, for the reason the Android sibling spells
+        # out: a boolean dispatch input is a real boolean from the
+        # Run-workflow dialog but a STRING over the API, and GitHub casts
+        # every non-empty string to true — so `if: inputs.publish` was TRUE
+        # for a dispatch that passed publish=false. On this side that means
+        # uploading to TestFlight against the operator's instruction, which
+        # burns a build number and notifies testers, and cannot be undone.
+        # build_only is the PR build and nothing further: the archive job
+        # is skipped, so no signing credential reaches the runner.
+        description: 'What this dispatch does with the archive'
+        type: choice
+        options:
+          - build_only
+          - upload_to_testflight
+        default: build_only
       configuration:
         description: 'Archive configuration'
         type: choice
@@ -42,10 +54,44 @@ defaults:
 jobs:
   build:
     name: Generate, build, test
-    runs-on: macos-15
+    # macos-26, not macos-15. Apple rejects any upload built with an SDK
+    # older than iOS 26, and macos-15 ships Xcode 16.4 / iOS 18.5:
+    #   error: exportArchive Validation failed. SDK version issue. This app
+    #   was built with the iOS 18.5 SDK. All iOS and iPadOS apps must be
+    #   built with the iOS 26 SDK or later, included in Xcode 26 or later.
+    # Seen on run 35531289830. macos-26 has been generally available since
+    # 2026-02-26 and carries Xcode 26. Both jobs move together so the tests
+    # and the archive are built by the same toolchain.
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check the dispatch asks for something this workflow knows
+        # The Android sibling's reasoning, and the same placement: in build,
+        # so a bad value costs a checkout rather than a macOS archive.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_ACTION: ${{ inputs.release_action }}
+        run: |
+          # Without this an unrecognised value — a typo, or the Android
+          # vocabulary "stage_on_internal" — would skip the upload and report
+          # a green run having shipped nothing. An exact alternation, not a
+          # substring test against a joined list, and the value is not echoed
+          # back before it has been validated; see the Android sibling.
+          case "$RELEASE_ACTION" in
+            build_only|upload_to_testflight) ;;
+            *)
+              # Named where it is safe to name it: $GITHUB_STEP_SUMMARY is a
+              # file, not a stream the runner scans for ::workflow commands,
+              # so the rejected value can go there even though it must not
+              # go into the ::error:: line above.
+              echo "Rejected dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::unknown release_action — expected build_only or upload_to_testflight"
+              exit 1
+              ;;
+          esac
+          echo "This dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Show the selected Xcode
         run: xcodebuild -version
@@ -125,9 +171,17 @@ jobs:
 
   testflight:
     name: Archive and upload
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    # Gated at the JOB, not at the upload step. Letting the job run for a
+    # build_only dispatch would write the App Store Connect key to the
+    # runner and point -allowProvisioningUpdates at Apple — which can create
+    # or renew a distribution certificate, and those are capped — for a run
+    # that ships nothing. build_only therefore does less here than on
+    # Android: there it still produces a signed AAB, here it is the PR build
+    # and nothing more. Retaining an .xcarchive is the change that would
+    # make the two mean the same thing, and it is not this PR.
+    if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_to_testflight'
     needs: build
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     environment: mobile-release
     steps:
@@ -161,6 +215,12 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Through env, never interpolated into the script. A ${{ }} in a
+          # run: block is substituted as TEXT before bash sees it, so a
+          # dispatch input lands inside the command — in the one job that
+          # holds the App Store Connect signing key. The Android sibling
+          # already passes api_environment this way.
+          CONFIGURATION: ${{ inputs.configuration }}
         run: |
           set -o pipefail
           # Date-based rather than the run number: run_number restarts at
@@ -172,7 +232,7 @@ jobs:
           xcodebuild archive \
             -project MediHubPatient.xcodeproj \
             -scheme MediHubPatient \
-            -configuration '${{ inputs.configuration }}' \
+            -configuration "$CONFIGURATION" \
             -destination 'generic/platform=iOS' \
             -archivePath build/MediHubPatient.xcarchive \
             CURRENT_PROJECT_VERSION=$BUILD_NUMBER \

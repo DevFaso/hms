@@ -2950,46 +2950,59 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `NOT VALID` after a backfill that decides what a dangling row should point
   at. Either way the schema and the model should stop disagreeing.
 
-- **The iOS app's system prompts are French while the app defaults to
-  English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
-  English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
-  French sentence and there is no `InfoPlist.strings` in either `en.lproj`
-  or `fr.lproj`. iOS localises a purpose string only through that file, so
-  an English-locale user tapping "Log in with Face ID" gets the French
-  modal — and App Review has rejected purpose strings that are not in the
-  app's primary language. Either ship `InfoPlist.strings` for both, or
-  settle whether the app's primary language is French and set
-  `CFBundleDevelopmentRegion` to match.
+- **A green mobile release run still does not prove the build was delivered.**
+  On `release_action=stage_on_internal`, `mobile-android.yml` commits the Play
+  edit without sending it for review, so the job can succeed while the release
+  sits in the console unreleased — which is exactly how the first dispatch
+  failed (the bundle uploaded, the edit never committed, and only a
+  hand-written Play API call showed the track still held version code 13).
+  The step now writes a `::notice::` saying what is owed, but an annotation
+  on a green run is not a gate. The
+  fix is a post-publish readback: call `edits.tracks.get` for `internal` with
+  the same service account and fail the job unless the new version code is
+  there. Deferred because it needs a decision about how CI authenticates for
+  a read — the action deletes the credentials file it writes, and adding
+  PyJWT to a release job is its own risk.
 
-- **The committed `Info.plist` is a fossil that `xcodegen` overwrites.**
-  `patient-ios-app/MediHubPatient/Resources/Info.plist` is tracked but
-  `.gitignore` covers only `*.xcodeproj`, so every `xcodegen generate`
-  rewrites it and leaves a dirty tree; meanwhile the tracked copy is three
-  keys stale (no `NSFaceIDUsageDescription`, no `MEDIHUB_*`, no
-  `ITSAppUsesNonExemptEncryption`). `patient-ios-app/README.md` still
-  documents a hand-built Xcode project that never runs `xcodegen`, and a
-  build down that path reaches Face ID with no purpose string — which iOS
-  terminates the app for. Either ignore the generated plist and delete the
-  hand-build instructions, or stop generating it.
+- **The two mobile workflows implement the same concerns twice each.**
+  Build number (`mobile-ios.yml` uses `yyyymmddHHMM`, Android uses seconds
+  since 2026-01-01 because Play caps a version code at 2100000000), required-
+  secret preflight (iOS fails on the first missing one, Android accumulates
+  and reports them together — the better message, which iOS does not get) and
+  credential teardown (`if: always()`, now in two files), and since #694 a
+  fourth: the `release_action` guard step, copy-pasted between the two files
+  with a different vocabulary in each. Every fix has to be made twice and
+  reasoned about twice. A composite action for "check these secrets are set"
+  and one for "validate this dispatch" would leave one place to change.
 
-- **A regulatory declaration rests on a floating dependency.** `project.yml`
-  pins AppAuth `from: "1.7.5"` and no `Package.resolved` is committed, so
-  every CI checkout re-resolves to whatever 1.x is newest. The
-  `ITSAppUsesNonExemptEncryption: false` declaration was audited against
-  what AppAuth contains today; a future release that adds its own cipher
-  would make that statement untrue with no commit, no diff and no review.
-  Pin exactly or commit `Package.resolved` so the audited premise is
-  versioned alongside the claim.
+- **The mobile release workflows validate one dispatch input and trust the
+  rest.** #694's guard covers `release_action` only. `api_environment`
+  (Android) falls through to dev on anything that is not exactly `prod`,
+  while `releaseName` interpolates the raw value — so `-f
+  api_environment=production` ships a dev-pointing bundle the Play console
+  labels "production". `configuration` (iOS) is unchecked until xcodebuild
+  rejects it, after a macOS job holding the App Store Connect key has
+  started. Four smaller items from the same review, none of them urgent:
+  the signing preflight only proves the four secrets are non-empty, where a
+  `keytool -list` after the decode would prove they actually open the
+  keystore; `stage_and_submit` is offered in the dropdown although Play
+  refuses it until the app's first publish, and is warned about rather than
+  gated, so choosing it today burns a version code; the two-branch release
+  gate is written out twice and can drift; and `VERSION_CODE`/`SHORT_SHA`
+  go through `$GITHUB_ENV`, which scopes them to the whole job including
+  the third-party upload action, where step outputs would scope them to
+  their two consumers. iOS also still splices an unquoted `${ASC_KEY_ID}`
+  into three path arguments.
 
 - **No mobile release runbook, and the mobile release now has a manual step.**
   `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
   other operational paths; nothing there mentions the two mobile workflows.
-  A `workflow_dispatch` with `publish=true` now stages a Play release that a
-  human has to send for review in the console, and the Play service account
-  is deliberately scoped to *Release to testing tracks* so it cannot do it
-  itself. That procedure, the TestFlight dispatch, the eight `mobile-release`
-  secrets and the `send_for_review` flip after the app's first publish exist
-  only in PR #693's description today.
+  A `workflow_dispatch` with `release_action=stage_on_internal` stages a Play
+  release that a human has to send for review in the console, and the Play
+  service account is deliberately scoped to *Release to testing tracks* so it
+  cannot do it itself. That procedure, the TestFlight dispatch, the eight
+  `mobile-release` secrets and the move to `release_action=stage_and_submit`
+  after the app's first publish exist only in PR descriptions today.
 
 - **The Play upload action still passes the deprecated `track` input.**
   `r0adkll/upload-google-play` warns on every release run that `track` is

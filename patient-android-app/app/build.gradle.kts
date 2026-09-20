@@ -27,6 +27,13 @@ android {
         targetSdk = 35
         // Overridable from CI: every AAB uploaded to Play burns a version
         // code, so a second publish of a hard-coded one is rejected outright.
+        // 13 is ALREADY consumed: Play's internal track holds version code
+        // 13 and its bundle list is 5, 6, 10, 11, 12, 13 (checked against
+        // the Play API on 2026-09-20). So a release bundle built without
+        // -PversionCode is refused at upload today, and the fallback is a
+        // debug convenience only. mobile-android.yml passes the property as
+        // seconds since 2026-01-01 UTC, which puts the floor in the tens of
+        // millions the moment the first CI publish is accepted.
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 13
         versionName = (project.findProperty("versionName") as String?) ?: "1.0.12"
 
