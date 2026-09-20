@@ -82,7 +82,8 @@ targets:
         # User-facing name under the icon. Declared HERE and not only in
         # Info.plist because `xcodegen generate` rewrites that file from this
         # block on every CI run, which would silently drop a hand-added key.
-        CFBundleDisplayName: e-Keneya
+        CFBundleDisplayName: e-Keneya
+
         # Derived from the build settings, not literals. XcodeGen writes
         # this plist from here, and a literal CFBundleVersion outranks
         # CURRENT_PROJECT_VERSION — so the CI build number was inert and
