@@ -83,6 +83,12 @@ targets:
         # Info.plist because `xcodegen generate` rewrites that file from this
         # block on every CI run, which would silently drop a hand-added key.
         CFBundleDisplayName: e-Keneya
+        # Required before LocalAuthentication may evaluate
+        # .deviceOwnerAuthenticationWithBiometrics: iOS TERMINATES an app
+        # that reaches Face ID without a purpose string, and App Review
+        # rejects for its absence. Declared here because xcodegen rewrites
+        # Info.plist from this block on every CI run.
+        NSFaceIDUsageDescription: Utiliser Face ID pour vous connecter a e-Keneya sans saisir votre mot de passe.
 
         # Derived from the build settings, not literals. XcodeGen writes
         # this plist from here, and a literal CFBundleVersion outranks
