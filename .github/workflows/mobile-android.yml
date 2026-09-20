@@ -15,14 +15,25 @@ on:
       - '.github/workflows/mobile-android.yml'
   workflow_dispatch:
     inputs:
-      publish:
-        description: 'Stage the signed AAB on the Play internal track'
-        type: boolean
-        default: false
-      send_for_review:
-        description: 'Also submit it for review (off until the app is published once)'
-        type: boolean
-        default: false
+      release_action:
+        # One choice rather than two booleans. It makes the invalid
+        # combination — submit for review without uploading anything —
+        # unrepresentable instead of rejected at run time, and a choice is a
+        # string, so every gate below is an exact comparison rather than
+        # GitHub's truthiness, where a non-empty string such as "false"
+        # casts to TRUE. That is not theoretical: a `type: boolean` input is
+        # a real boolean from the Run-workflow dialog but a string over the
+        # API, which is how this repo dispatches.
+        #
+        # stage_and_submit stays unused until the app has been published
+        # once: before that Play refuses to auto-submit and the commit fails.
+        description: 'What this dispatch does with the signed bundle'
+        type: choice
+        options:
+          - build_only
+          - stage_on_internal
+          - stage_and_submit
+        default: build_only
       api_environment:
         description: 'API the signed build points at'
         type: choice
@@ -54,6 +65,48 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check the dispatch asks for something this workflow knows
+        # In the BUILD job, not the release job: release declares
+        # `needs: build`, so a guard there only runs after the whole lint /
+        # unit-test / assembleDebug job and the mobile-release environment
+        # gate. Here a bad value costs a checkout.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_ACTION: ${{ inputs.release_action }}
+        run: |
+          # The Run-workflow dialog constrains a choice input; an API
+          # dispatch does not. Fail an unrecognised value rather than let a
+          # gate decide what to make of it.
+          #
+          # An exact alternation, NOT a substring test against a joined
+          # list: `case " $VALID " in *" $RELEASE_ACTION "*)` accepts
+          # "stage_on_internal stage_and_submit", which then matches no gate
+          # and produces a green run that ships nothing — the exact outcome
+          # this step exists to prevent. Verified by running it.
+          #
+          # The value is also not echoed back before it is validated: the
+          # runner parses each output line for ::workflow commands, so a
+          # newline in a dispatched value would inject one.
+          case "$RELEASE_ACTION" in
+            build_only|stage_on_internal|stage_and_submit) ;;
+            *)
+              # Named where it is safe to name it: $GITHUB_STEP_SUMMARY is a
+              # file, not a stream the runner scans for ::workflow commands,
+              # so the rejected value can go there even though it must not
+              # go into the ::error:: line above.
+              echo "Rejected dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::unknown release_action — expected build_only, stage_on_internal or stage_and_submit"
+              exit 1
+              ;;
+          esac
+          if [ "$RELEASE_ACTION" = "stage_and_submit" ]; then
+            # Worth a warning at second zero rather than a red job twenty
+            # minutes later: Play refuses to auto-submit an app it has never
+            # published, and the commit dies after the bundle has uploaded.
+            echo "::warning::stage_and_submit only works once the app has been published in the Play Console at least once; before that the commit fails after the build"
+          fi
+          echo "This dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
@@ -107,35 +160,45 @@ jobs:
 
       - name: Restore the upload keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          PUBLISH: ${{ inputs.publish }}
         run: |
-          # Check every signing secret up front. Missing ones otherwise fail
-          # deep inside a full R8 release build with "Keystore was tampered
-          # with, or password was incorrect" — an error that points at the
-          # keystore rather than at the unset secret.
-          required="ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD"
-          # The Play key deserves the same treatment for the same reason: it
-          # is read by the very last step, so an unset one is otherwise found
-          # only after the whole signed build has run.
-          if [ "$PUBLISH" = "true" ]; then
-            required="$required PLAY_SERVICE_ACCOUNT_JSON"
-          fi
+          # Check the signing secrets up front and report them TOGETHER: a
+          # first-time mobile-release setup otherwise costs a whole build job
+          # per missing secret. Missing ones otherwise fail deep inside a
+          # full R8 release build with "Keystore was tampered with, or
+          # password was incorrect" — an error that points at the keystore
+          # rather than at the unset secret.
           missing=
-          for v in $required; do
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
             echo "::error::unset in the mobile-release environment:$missing"
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Check the Play credentials before the long build
+        # Its own step so the key stays out of the environment of a
+        # build_only dispatch, which touches nothing at Play. Placed after
+        # the signing preflight, not before, because those four secrets are
+        # needed by every dispatch and should be the first thing reported.
+        if: inputs.release_action == 'stage_on_internal' || inputs.release_action == 'stage_and_submit'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::error::PLAY_SERVICE_ACCOUNT_JSON is unset in the mobile-release environment"
+            exit 1
+          fi
+          # Deliberately only an emptiness check. Validating the JSON's
+          # shape needs jq, and making a release depend on a tool being on
+          # the runner image trades a late, clear credential error for an
+          # early failure about the instrument.
 
       - name: Build the signed bundle
         env:
@@ -161,14 +224,25 @@ jobs:
           # that the edit actually commits, a re-run of a successful publish
           # would rebuild a burnt code and be rejected after a 20-minute R8
           # build.
-          # Minutes since 2026-01-01 UTC instead: always rising, unique per
-          # minute, and — unlike the iOS sibling's yyyymmddHHMM — inside the
-          # 2100000000 ceiling Play puts on an Android version code.
-          VERSION_CODE=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          # Seconds since 2026-01-01 UTC instead: always rising, and — unlike
+          # the iOS sibling's yyyymmddHHMM — inside the 2100000000 ceiling
+          # Play puts on an Android version code, with about 66 years of head
+          # room. Seconds rather than minutes because the concurrency group is
+          # keyed on the ref, so two dispatches on different refs run in
+          # parallel and can reach this line in the same minute; the second
+          # bundle would then be refused as an already-used code after its own
+          # 20-minute build.
+          #
+          # This narrows the collision window rather than closing it: the
+          # code is still read off the runner clock, not off Play's state.
+          # Choosing it from the highest already-published code needs the
+          # readback recorded under Standing platform debt in tasklist.md.
+          VERSION_CODE=$(( $(date -u +%s) - 1767225600 ))
           echo "version code $VERSION_CODE"
           # Read back by the publish step, which names the Play release after
-          # it so two internal builds can be told apart in the console.
+          # these so two internal builds can be told apart in the console.
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
           ./gradlew :app:bundleRelease --no-daemon \
             -PversionCode="$VERSION_CODE" \
             -PapiBaseUrl="$API_BASE_URL"
@@ -189,11 +263,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: patient-android-aab
+          # One path on purpose. upload-artifact@v4 re-roots the artifact at
+          # the least common ancestor of all its search paths, so adding a
+          # second one moves app-release.aab out of the artifact root and
+          # breaks anyone who unzips it expecting to find it there.
           path: patient-android-app/app/build/outputs/bundle/release/app-release.aab
           retention-days: 14
 
       - name: Publish to Play internal testing
-        if: inputs.publish
+        # Positive, not `!= 'build_only'`: a negative gate fails OPEN toward
+        # publishing, and on a non-dispatch event `inputs` is null, so only
+        # the job-level event check would stand between a push and Play.
+        if: inputs.release_action == 'stage_on_internal' || inputs.release_action == 'stage_and_submit'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5  # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -208,13 +289,17 @@ jobs:
           # This is NOT a permanent setting. Once the app has been published
           # once, a release that is committed and never sent for review sits
           # in the console unreleased while this job reports success — the
-          # same silent non-delivery wearing a later disguise. Turn
-          # send_for_review on at that point.
-          changesNotSentForReview: ${{ !inputs.send_for_review }}
+          # same silent non-delivery wearing a later disguise. Switch the
+          # dispatch to stage_and_submit at that point.
+          changesNotSentForReview: ${{ inputs.release_action != 'stage_and_submit' }}
           # Without this the action names the release after the bundle's
           # versionName, which is "1.0.12" on every CI build, so successive
-          # internal releases are indistinguishable in the console.
-          releaseName: '1.0.12 (${{ env.VERSION_CODE }}) ${{ inputs.api_environment }}'
+          # internal releases are indistinguishable in the console. The
+          # marketing version is deliberately NOT repeated here: it lives in
+          # build.gradle.kts and a copy would go stale at the next bump,
+          # leaving the console naming a version the bundle does not carry.
+          # The commit is what a tester's bug report actually needs.
+          releaseName: '${{ env.VERSION_CODE }} (${{ inputs.api_environment }}, ${{ env.SHORT_SHA }})'
           # NOTE: this pinned version deprecates "track" in favour of
           # "tracks". Migrate when the pin moves, not before: the SHA is
           # fixed, so nothing can remove "track" under us.
@@ -222,7 +307,7 @@ jobs:
           status: completed
 
       - name: Say what is still owed in the console
-        if: inputs.publish && !inputs.send_for_review
+        if: inputs.release_action == 'stage_on_internal'
         run: |
           MSG="Version code $VERSION_CODE is on the internal track but NOT submitted. Open Play Console > Testing > Internal testing and send the changes for review — testers do not receive it until you do."
           echo "::notice::$MSG"
@@ -233,4 +318,12 @@ jobs:
         # The iOS sibling deletes its App Store Connect key the same way.
         # Nothing uploads the workspace wholesale today, but the decoded
         # upload keystore should not outlive the steps that need it.
-        run: rm -f upload-keystore.jks local.properties
+        #
+        # serviceAccountJson.json is the Play key: the action writes it from
+        # serviceAccountJsonPlainText and removes it in a finally, which a
+        # cancel or a timeout-minutes kill skips. A JS action's cwd is the
+        # workspace root, not this job's working-directory, so it has to be
+        # named by absolute path here.
+        run: |
+          rm -f upload-keystore.jks local.properties
+          rm -f "$GITHUB_WORKSPACE/serviceAccountJson.json"
