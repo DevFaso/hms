@@ -56,8 +56,8 @@ dependencies {
     implementation 'org.apache.pdfbox:pdfbox:2.0.34'
 
     // QR / Barcode
-    implementation 'com.google.zxing:core:3.5.3'
-    implementation 'com.google.zxing:javase:3.5.3'
+    implementation 'com.google.zxing:core:3.5.4'
+    implementation 'com.google.zxing:javase:3.5.4'
 
     // Twilio SMS
     implementation 'com.twilio.sdk:twilio:13.0.1'
