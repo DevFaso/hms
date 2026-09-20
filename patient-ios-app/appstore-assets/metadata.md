@@ -359,6 +359,7 @@ handles keys.
 ⚠ **Build 202609201928 predates the declaration** and still needs the export
 question answered once by hand: App Store Connect → the build → **Provide
 Export Compliance Information** → **"Yes"** → **"Only uses standard
-encryption (HTTPS, TLS)"** → exempt. Builds uploaded after both #695 and #694
-have merged do not — #694 carries the `macos-26` runner, without which Apple
-rejects the upload on the SDK version before compliance is ever reached.
+encryption (HTTPS, TLS)"** → exempt. Builds uploaded after #695 merged do
+not. (#694, already merged, carries the `macos-26` runner — without it Apple
+rejects an upload on the SDK version long before compliance is reached, which
+is what happened to the dispatch before 202609201928.)
