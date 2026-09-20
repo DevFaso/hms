@@ -19,12 +19,12 @@ if (localPropsFile.exists()) {
 
 android {
     namespace = "com.bitnesttechs.hms.patient"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bitnesttechs.hms.patient"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 36
         // Overridable from CI: every AAB uploaded to Play burns a version
         // code, so a second publish of a hard-coded one is rejected outright.
         // 13 is ALREADY consumed: Play's internal track holds version code
