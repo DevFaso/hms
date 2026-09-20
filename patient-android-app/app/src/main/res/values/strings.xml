@@ -3,11 +3,11 @@
     <!-- App -->
     <string name="app_name">e-Keneya</string>
     <string name="patient_portal">Patient Portal</string>
-    <string name="medihub">MediHub</string>
-    <string name="copyright">MediHub HMS © 2026</string>
+    <string name="medihub">e-Keneya</string>
+    <string name="copyright">e-Keneya © 2026</string>
 
     <!-- Login -->
-    <string name="login_title">Welcome to MediHub</string>
+    <string name="login_title">Welcome to e-Keneya</string>
     <string name="login_subtitle">Your health, in your hands</string>
     <string name="username_label">Username or Email</string>
     <string name="password_label">Password</string>

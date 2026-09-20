@@ -55,9 +55,10 @@ jobs:
         run: xcodegen generate
 
       - name: Build for the simulator
-        # CODE_SIGNING_ALLOWED=NO keeps the compile gate free of certificates,
-        # so a pull request from anyone validates the Swift without needing the
-        # signing secrets.
+        # Ad-hoc signing ("-"), not CODE_SIGNING_ALLOWED=NO. The gate still
+        # needs no certificates, but an unsigned test host has no keychain
+        # entitlement, so SecItemAdd fails and every KeychainHelper-backed
+        # test reads its token back as nil.
         run: |
           set -o pipefail
           xcodebuild build-for-testing \
@@ -65,7 +66,7 @@ jobs:
             -scheme MediHubPatient \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
             | xcbeautify
 
       - name: Pick an available iPhone simulator
@@ -89,7 +90,7 @@ jobs:
             -scheme MediHubPatient \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
             | xcbeautify
 
   testflight:
@@ -126,18 +127,6 @@ jobs:
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
 
-      - name: Set the build number from the run number
-        # CURRENT_PROJECT_VERSION is "1" in project.yml; App Store Connect
-        # rejects a build whose number it has already seen, so derive a
-        # monotonic one instead of bumping the file by hand every time.
-        run: |
-          BUILD_NUMBER=${{ github.run_number }}
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" \
-            MediHubPatient/Resources/Info.plist 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" \
-               MediHubPatient/Resources/Info.plist
-          echo "build number: $BUILD_NUMBER"
-
       - name: Archive
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -150,6 +139,7 @@ jobs:
             -configuration '${{ inputs.configuration }}' \
             -destination 'generic/platform=iOS' \
             -archivePath build/MediHubPatient.xcarchive \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
             -authenticationKeyID "$ASC_KEY_ID" \

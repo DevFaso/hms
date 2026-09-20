@@ -19,6 +19,14 @@ on:
         description: 'Upload the signed AAB to Play internal testing'
         type: boolean
         default: false
+      api_environment:
+        description: 'API the signed build points at'
+        type: choice
+        options: [dev, prod]
+        # Defaults to dev on purpose. The release bundle is what reaches
+        # internal testers, and a tester exercising the appointment-cancel
+        # flow against production cancels a real patient's appointment.
+        default: dev
 
 permissions:
   contents: read
@@ -92,9 +100,21 @@ jobs:
       - name: Restore the upload keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 is not set. Add the base64 of upload-keystore.jks to the mobile-release environment."
+          # Check every signing secret up front. Missing ones otherwise fail
+          # deep inside a full R8 release build with "Keystore was tampered
+          # with, or password was incorrect" — an error that points at the
+          # keystore rather than at the unset secret.
+          missing=
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::unset in the mobile-release environment:$missing"
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
@@ -109,7 +129,20 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleRelease --no-daemon
+          API_ENVIRONMENT: ${{ inputs.api_environment }}
+        run: |
+          if [ "$API_ENVIRONMENT" = "prod" ]; then
+            API_BASE_URL=https://api.e-keneya.com/api
+          else
+            API_BASE_URL=https://dev.e-keneya.com/api
+          fi
+          echo "building against $API_BASE_URL"
+          # versionCode comes from the run number: Play rejects a bundle whose
+          # version code it has already accepted, so a hard-coded one makes
+          # every publish after the first fail.
+          ./gradlew :app:bundleRelease --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PapiBaseUrl="$API_BASE_URL"
 
       - name: Check the bundle is actually signed
         run: |

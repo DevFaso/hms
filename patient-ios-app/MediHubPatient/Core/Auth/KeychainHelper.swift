@@ -33,6 +33,17 @@ final class KeychainHelper {
     }
 
     /// Stored for biometric re-auth (username only, password separately)
+    /// Persisted so the user id survives a relaunch. `AuthManager.currentUser`
+    /// is only populated by `login(...)`, so anything deriving an id from it
+    /// broke as soon as the app was reopened on a restored session.
+    var savedUserId: String? {
+        get { read(key: "savedUserId") }
+        set {
+            if let newValue { _ = save(newValue, key: "savedUserId") }
+            else { _ = delete(key: "savedUserId") }
+        }
+    }
+
     var savedUsername: String? {
         get { read(key: Keys.username) }
         set { newValue == nil ? delete(key: Keys.username) : save(newValue!, key: Keys.username) }

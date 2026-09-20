@@ -6,6 +6,10 @@
 // `KeycloakConfig` / `FeatureFlags`. See `Config/README.md` for the full
 // matrix.
 
+// The dev API is same-origin on the portal host; `api.dev.e-keneya.com`
+// does not resolve. Slashes are escaped because xcconfig treats `//` as
+// a comment.
+MEDIHUB_API_BASE_URL = https:/$()/dev.e-keneya.com/api
 MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-dev.up.railway.app/realms/hms
 MEDIHUB_KEYCLOAK_SSO_ENABLED = 1
 MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios

@@ -43,6 +43,7 @@ settings:
     # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
     # Debug/Release builds. Per-env xcconfigs override these for
     # Release-{Dev,Prod}. See Config/README.md.
+    MEDIHUB_API_BASE_URL: ""
     MEDIHUB_KEYCLOAK_ISSUER: ""
     MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
     MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
@@ -93,6 +94,7 @@ targets:
         # fallback when ProcessInfo doesn't have a value (i.e. archive
         # builds, where scheme env vars don't apply). Default values
         # come from `settings.base`; per-env xcconfigs override.
+        MEDIHUB_API_BASE_URL: $(MEDIHUB_API_BASE_URL)
         MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
         MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
         MEDIHUB_KEYCLOAK_CLIENT_ID: $(MEDIHUB_KEYCLOAK_CLIENT_ID)

@@ -25,6 +25,16 @@ final class AuthManager: ObservableObject {
             || KeychainHelper.shared.oidcAccessToken != nil
     }
 
+    /// The signed-in user's id, surviving a relaunch.
+    ///
+    /// `currentUser` is only ever assigned by `login(...)`, so on a restored
+    /// session it is nil while `isAuthenticated` is true. Anything that keyed
+    /// off `currentUser?.id` — the chat screens especially — therefore behaved
+    /// as if the patient were signed out every time the app was reopened.
+    var currentUserId: String? {
+        currentUser?.id ?? KeychainHelper.shared.savedUserId
+    }
+
     // MARK: - Login
 
     func login(username: String, password: String) async throws {
@@ -48,6 +58,7 @@ final class AuthManager: ObservableObject {
         KeychainHelper.shared.savedUsername = username
         KeychainHelper.shared.savedPassword = password
         currentUser = response.user
+        KeychainHelper.shared.savedUserId = response.user?.id
         isAuthenticated = true
     }
 

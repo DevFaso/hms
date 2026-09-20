@@ -66,6 +66,11 @@ struct MainTabView: View {
     private func tabButton(icon: String, titleKey: String, tab: Tab) -> some View {
         let isSelected = selectedTab == tab
         return Button {
+            // Tapping the Dashboard tab returns to the dashboard. The stack's
+            // path now lives here rather than inside DashboardView, so it
+            // outlives the view and would otherwise strand the user on
+            // whatever sub-screen the drawer last opened.
+            if tab == .dashboard { dashboardPath = [] }
             withAnimation(.spring(response: 0.25)) { selectedTab = tab }
         } label: {
             VStack(spacing: 5) {
@@ -144,6 +149,14 @@ struct SideMenuView: View {
     private func open(_ destination: DashboardView.DashboardDestination) {
         selectedTab = .dashboard
         dashboardPath = [destination]
+        isShowing = false
+    }
+
+    /// Menu rows that belong to the Profile tab rather than the Dashboard
+    /// stack. Kept separate so they also clear a stale Dashboard path.
+    private func openProfile() {
+        selectedTab = .profile
+        dashboardPath = []
         isShowing = false
     }
 
@@ -278,7 +291,7 @@ struct SideMenuView: View {
                         .padding(.horizontal, 16)
 
                     MenuLink(icon: "gearshape.fill", title: "settings".localized) {
-                        selectedTab = .profile; isShowing = false
+                        openProfile()
                     }
                 }
                 .padding(.vertical, 12)

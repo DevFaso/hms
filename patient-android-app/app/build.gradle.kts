@@ -25,18 +25,26 @@ android {
         applicationId = "com.bitnesttechs.hms.patient"
         minSdk = 23
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.0.12"
+        // Overridable from CI: every AAB uploaded to Play burns a version
+        // code, so a second publish of a hard-coded one is rejected outright.
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 13
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Build config fields — override with local.properties or CI env vars.
-        // defaultConfig is what a RELEASE build inherits, so it must point at
-        // production. `api.dev.e-keneya.com` has no DNS record: a release built
-        // against it reaches no server at all. Verified 2026-09-19:
+        // defaultConfig is what a RELEASE build inherits, so it defaults to
+        // production. `api.dev.e-keneya.com` has no DNS record: a release
+        // built against it reaches no server at all. Verified 2026-09-19:
         //   api.e-keneya.com/api  -> 200   dev.e-keneya.com/api -> 200
         //   api.dev.e-keneya.com  -> no response
-        buildConfigField("String", "API_BASE_URL", "\"https://api.e-keneya.com/api\"")
+        //
+        // -PapiBaseUrl overrides it so a SIGNED build can be pointed at dev.
+        // Internal-testing builds must use that: the release bundle is the one
+        // handed to testers, and a tester exercising the appointment-cancel
+        // flow against production cancels a real patient's real appointment.
+        val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
+            ?: "https://api.e-keneya.com/api"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
 
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.

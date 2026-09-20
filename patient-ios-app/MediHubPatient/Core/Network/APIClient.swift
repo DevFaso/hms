@@ -5,17 +5,29 @@ import Foundation
 enum AppEnvironment {
     /// Available environments
     enum Environment: String, CaseIterable {
-        case dev = "https://api.dev.e-keneya.com/api"
+        // `api.dev.e-keneya.com` has no DNS record. The dev API is served
+        // same-origin by the portal host, which is what the Angular dev
+        // environment already targets.
+        case dev = "https://dev.e-keneya.com/api"
         case prod = "https://api.e-keneya.com/api"
         case local = "http://localhost:8081/api"
     }
 
-    /// Current active environment — change here for quick switching
+    /// Fallback when neither the scheme nor Info.plist supplies a base URL.
     static let current: Environment = .dev
 
     static var baseURL: String {
-        // Override via Xcode scheme environment variable
-        if let url = ProcessInfo.processInfo.environment["MEDIHUB_API_BASE_URL"] {
+        // Scheme environment variable — local development only. It is empty
+        // in an archive, which is why the Info.plist fallback below exists:
+        // without it every TestFlight build silently used `current`.
+        if let url = ProcessInfo.processInfo.environment["MEDIHUB_API_BASE_URL"],
+           !url.isEmpty {
+            return url
+        }
+        // Baked in per configuration by Config/{Dev,Prod}.xcconfig, the same
+        // mechanism the MEDIHUB_KEYCLOAK_* settings already use.
+        if let url = Bundle.main.object(forInfoDictionaryKey: "MEDIHUB_API_BASE_URL") as? String,
+           !url.isEmpty {
             return url
         }
         return current.rawValue

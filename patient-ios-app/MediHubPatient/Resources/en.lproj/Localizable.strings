@@ -1,11 +1,11 @@
 /* App */
-"app_name" = "MediHub Patient";
+"app_name" = "e-Keneya";
 "patient_portal" = "Patient Portal";
-"medihub" = "MediHub";
-"copyright" = "MediHub HMS © 2026";
+"medihub" = "e-Keneya";
+"copyright" = "e-Keneya © 2026";
 
 /* Login */
-"login_title" = "MediHub Patient";
+"login_title" = "Welcome to e-Keneya";
 "login_subtitle" = "Your health, in your hands";
 "username_label" = "Username";
 "username_placeholder" = "Enter username";

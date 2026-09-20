@@ -2202,6 +2202,43 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Patient chat attachments are invisible on both mobile apps.**
+  `ChatMessageResponseDTO` carries `attachments: List<ChatAttachmentDTO>` and
+  `ChatMessageServiceImpl.sendMessage` explicitly allows an attachment-only
+  message (content may be null), but neither app's `ChatMessageDTO` decodes
+  the field. A clinician's wound photo or voice note renders as an empty
+  bubble with no way to reach `GET /chat/attachments/{id}/download`. Found in
+  the #690 self-review; out of scope there because it is a new capability,
+  not a repair. Needs the DTO field, a bubble treatment, and a download path
+  on both platforms.
+
+- **Opening a chat thread never marks it read on mobile.** The backend has
+  `PUT /chat/mark-read/{senderId}/{recipientId}` and computes
+  `ChatConversationSummaryDTO.unreadCount` from it, but neither app calls it,
+  so the unread badge never clears and `chat/unread-count` — which also feeds
+  the portal topbar badge — stays permanently inflated for that patient. The
+  Messages tab was dead on iOS until #690, so this surfaces for the first
+  time in the next release. Note `APIClient` has no request helper for a 204
+  No Content response, which is why #690 did not simply add the call.
+
+- **Mobile error text is English inside a French UI.** The new error states
+  in the patient apps render `error.localizedDescription`, which resolves to
+  `APIError`'s hard-coded English literals ("Server error (404)", "Session
+  expired. Please log in again."). A francophone patient sees a French
+  heading over an English body. Same layered-French problem the portal
+  tracks; the apps need the equivalent of the locale bundles.
+
+- **`api.dev.e-keneya.com` is still documented as the dev API host.** The
+  name has no DNS record (verified 2026-09-19); the dev API is served
+  same-origin at `https://dev.e-keneya.com/api`, which is what
+  `environment.dev.ts` already uses via `apiUrl: '/api'`. #690 corrected the
+  two mobile apps but left the docs: `docs/hms-stakeholder-overview.md` and
+  its French twin, `docs/observability/performance-baseline.md` (the k6
+  BASE_URL), and the two Keycloak runbooks
+  (`keycloak-realm-sync.md`, `keycloak-env-sync-remediation.md`) all still
+  hand out the dead name, so anyone following them gets a DNS failure with no
+  hint at the right origin.
+
 - **The enum gate cannot see an `enumLabel:` inside a component's inline
   `template:`.** `check-i18n-enum-coverage.mjs` walks `.html` only. Widening
   it to `.ts` was tried twice in #660 and withdrawn twice: raw, it recorded

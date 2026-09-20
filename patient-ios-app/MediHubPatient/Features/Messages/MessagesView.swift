@@ -77,7 +77,7 @@ final class MessagesViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
 
-        guard let userId = AuthManager.shared.currentUser?.id else {
+        guard let userId = AuthManager.shared.currentUserId else {
             errorMessage = "error_not_signed_in".localized
             return
         }
@@ -122,6 +122,19 @@ struct MessageThreadView: View {
                 .onChange(of: vm.messages.count) { _, _ in
                     if let last = vm.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
+            }
+
+            if let error = vm.errorMessage {
+                // Published but never rendered before: a failed send cleared
+                // the draft, restored it, and said nothing — the same silent
+                // failure this PR set out to remove from the inbox.
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.red.opacity(0.85))
             }
 
             Divider()
@@ -173,7 +186,7 @@ final class MessageThreadViewModel: ObservableObject {
 
     /// Was hard-coded to nil, so `isOwn` was false for every bubble and the
     /// patient could not tell their own messages from the clinician's.
-    var currentUserId: String? { AuthManager.shared.currentUser?.id }
+    var currentUserId: String? { AuthManager.shared.currentUserId }
 
     init(otherUserId: String) {
         self.otherUserId = otherUserId
