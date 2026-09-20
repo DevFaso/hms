@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Ground of the e-Keneya mark; the adaptive launcher background. -->
+    <color name="brand_ink">#0A1614</color>
     <color name="brand_blue">#1E40AF</color>
     <color name="brand_dark_blue">#1E3A8A</color>
     <color name="brand_light_blue">#DBEAFE</color>
