@@ -1,0 +1,179 @@
+name: Mobile — iOS (patient)
+
+# The Xcode project is NOT committed: patient-ios-app/project.yml is the
+# source of truth and XcodeGen regenerates MediHubPatient.xcodeproj here.
+# That keeps the project file out of merge conflicts and means CI is the
+# only place a build is reproducible from a clean checkout.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'patient-ios-app/**'
+      - '.github/workflows/mobile-ios.yml'
+  pull_request:
+    paths:
+      - 'patient-ios-app/**'
+      - '.github/workflows/mobile-ios.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Archive and upload the build to TestFlight'
+        type: boolean
+        default: false
+      configuration:
+        description: 'Archive configuration'
+        type: choice
+        options: [Release-Dev, Release-Prod]
+        default: Release-Dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: patient-ios-app
+
+jobs:
+  build:
+    name: Generate, build, test
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the selected Xcode
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Build for the simulator
+        # CODE_SIGNING_ALLOWED=NO keeps the compile gate free of certificates,
+        # so a pull request from anyone validates the Swift without needing the
+        # signing secrets.
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          # Model names drift between Xcode releases, so resolve one at run
+          # time instead of pinning "iPhone 16" and breaking on the next image.
+          UDID=$(xcrun simctl list devices available | grep -E '^ +iPhone' | head -1 | grep -oE '[0-9A-F-]{36}')
+          if [ -z "$UDID" ]; then
+            echo "::error::no iPhone simulator available on this runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+  testflight:
+    name: Archive and upload
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: mobile-release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Install the App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in the mobile-release environment."
+              exit 1
+            fi
+          done
+          # xcodebuild -allowProvisioningUpdates reads the key from this
+          # well-known location, which is what lets automatic signing create
+          # and download the distribution profile without a Mac in the loop.
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Set the build number from the run number
+        # CURRENT_PROJECT_VERSION is "1" in project.yml; App Store Connect
+        # rejects a build whose number it has already seen, so derive a
+        # monotonic one instead of bumping the file by hand every time.
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" \
+            MediHubPatient/Resources/Info.plist 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" \
+               MediHubPatient/Resources/Info.plist
+          echo "build number: $BUILD_NUMBER"
+
+      - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -configuration '${{ inputs.configuration }}' \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MediHubPatient.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify
+
+      - name: Export and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          # ExportOptions.plist already carries method=app-store-connect and
+          # destination=upload, so this step both exports and ships the build.
+          xcodebuild -exportArchive \
+            -archivePath build/MediHubPatient.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify
+
+      - name: Remove the API key from the runner
+        if: always()
+        run: rm -rf ~/.appstoreconnect/private_keys

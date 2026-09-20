@@ -242,28 +242,39 @@ struct NotificationDTO: Codable, Identifiable {
 
 // MARK: - Chat / Message Models
 
-struct ChatThreadDTO: Codable, Identifiable, Hashable {
-    let id: String?
-    let recipientName: String?
-    let recipientRole: String?
-    let lastMessage: String?
-    let lastMessageAt: String?
+/// Mirrors the backend `ChatConversationSummaryDTO` field for field, and the
+/// Android `ChatConversationDto`. A conversation is identified by the OTHER
+/// participant's user id — there is no separate thread entity.
+struct ChatConversationDTO: Codable, Identifiable, Hashable {
+    let conversationUserId: String
+    let conversationUserName: String?
+    let lastMessageContent: String?
+    let lastMessageTimestamp: String?
+    let hospitalId: String?
+    let lastMessageRead: Bool?
     let unreadCount: Int?
+
+    var id: String { conversationUserId }
 }
 
-struct ChatMessageDTO: Codable, Identifiable {
+/// Mirrors the backend `ChatMessageResponseDTO`. Note `timestamp`, not
+/// `sentAt`: the old name decoded to nil on every message.
+struct ChatMessageDTO: Codable, Identifiable, Hashable {
     let id: String?
+    let timestamp: String?
     let senderId: String?
     let senderName: String?
+    let senderRole: String?
+    let recipientId: String?
+    let recipientName: String?
     let content: String?
-    let sentAt: String?
     let read: Bool?
-    let attachmentUrl: String?
 }
 
-struct SendMessageRequest: Encodable {
+/// Mirrors the backend `ChatMessageRequestDTO` / Android `SendChatMessageRequest`.
+struct SendChatMessageRequest: Encodable {
+    let recipientId: String
     let content: String
-    let attachmentUrl: String?
 }
 
 // MARK: - Referral Models

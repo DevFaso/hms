@@ -6,32 +6,34 @@ struct MessagesView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if vm.isLoading, vm.threads.isEmpty {
+                if vm.isLoading, vm.conversations.isEmpty {
                     ProgressView("loading".localized)
-                } else if vm.threads.isEmpty {
+                } else if let error = vm.errorMessage, vm.conversations.isEmpty {
+                    ContentUnavailableView("error".localized,
+                                           systemImage: "exclamationmark.triangle",
+                                           description: Text(error))
+                } else if vm.conversations.isEmpty {
                     ContentUnavailableView("no_messages".localized,
                                            systemImage: "message",
                                            description: Text("no_messages_desc".localized))
                 } else {
-                    List(vm.threads) { thread in
-                        NavigationLink(value: thread) {
-                            ThreadRowView(thread: thread)
+                    List(vm.conversations) { conversation in
+                        NavigationLink(value: conversation) {
+                            ThreadRowView(conversation: conversation)
                         }
                     }
                     .listStyle(.insetGrouped)
-                    .navigationDestination(for: ChatThreadDTO.self) { thread in
-                        MessageThreadView(thread: thread)
+                    .navigationDestination(for: ChatConversationDTO.self) { conversation in
+                        MessageThreadView(conversation: conversation)
                     }
                 }
             }
             .navigationTitle("tab_messages".localized)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: ComposeMessageView()) {
-                        Image(systemName: "square.and.pencil")
-                    }
-                }
-            }
+            // The compose button used to open a form whose Send action only
+            // called dismiss() — it never reached the API. Removed rather than
+            // left as a lie; the Android app has no new-message composer either,
+            // so the two surfaces now match. Patients reply within a thread a
+            // clinician started.
             .refreshable { await vm.load() }
         }
         .task { await vm.load() }
@@ -39,24 +41,25 @@ struct MessagesView: View {
 }
 
 struct ThreadRowView: View {
-    let thread: ChatThreadDTO
+    let conversation: ChatConversationDTO
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "person.crop.circle.fill")
                 .font(.largeTitle).foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(thread.recipientName ?? "Unknown").font(.headline)
+                    Text(conversation.conversationUserName ?? "Unknown").font(.headline)
                     Spacer()
-                    if let unread = thread.unreadCount, unread > 0 {
+                    if let unread = conversation.unreadCount, unread > 0 {
                         Text("\(unread)")
                             .font(.caption2).bold().foregroundColor(.white)
                             .padding(6).background(Color.accentColor).clipShape(Circle())
                     }
                 }
-                Text(thread.lastMessage ?? "").font(.subheadline)
+                Text(conversation.lastMessageContent ?? "").font(.subheadline)
                     .foregroundColor(.secondary).lineLimit(1)
-                Text(thread.lastMessageAt ?? "").font(.caption2).foregroundColor(.secondary)
+                Text(conversation.lastMessageTimestamp ?? "").font(.caption2)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -65,26 +68,43 @@ struct ThreadRowView: View {
 
 @MainActor
 final class MessagesViewModel: ObservableObject {
-    @Published var threads: [ChatThreadDTO] = []
+    @Published var conversations: [ChatConversationDTO] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
     func load() async {
         isLoading = true
-        threads = await (try? APIClient.shared.get(APIEndpoints.chatThreads)) ?? []
-        isLoading = false
+        errorMessage = nil
+        defer { isLoading = false }
+
+        guard let userId = AuthManager.shared.currentUser?.id else {
+            errorMessage = "error_not_signed_in".localized
+            return
+        }
+        do {
+            conversations = try await APIClient.shared.get(
+                APIEndpoints.chatConversations(userId: userId)
+            )
+        } catch {
+            // Surfaced rather than swallowed: the previous `try?` turned a
+            // 404 into an empty inbox, which is how the broken endpoint went
+            // unnoticed.
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
 // MARK: - Message Thread
 
 struct MessageThreadView: View {
-    let thread: ChatThreadDTO
+    let conversation: ChatConversationDTO
     @StateObject private var vm: MessageThreadViewModel
 
-    init(thread: ChatThreadDTO) {
-        self.thread = thread
-        _vm = StateObject(wrappedValue: MessageThreadViewModel(threadId: thread.id ?? ""))
+    init(conversation: ChatConversationDTO) {
+        self.conversation = conversation
+        _vm = StateObject(wrappedValue: MessageThreadViewModel(
+            otherUserId: conversation.conversationUserId
+        ))
     }
 
     var body: some View {
@@ -118,7 +138,7 @@ struct MessageThreadView: View {
             }
             .padding()
         }
-        .navigationTitle(thread.recipientName ?? "Message")
+        .navigationTitle(conversation.conversationUserName ?? "Message")
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.load() }
     }
@@ -145,61 +165,55 @@ final class MessageThreadViewModel: ObservableObject {
     @Published var messages: [ChatMessageDTO] = []
     @Published var draft: String = ""
     @Published var isLoading = false
-    let threadId: String
-    let currentUserId: String? = nil // set from AuthManager if needed
+    @Published var errorMessage: String?
 
-    init(threadId: String) {
-        self.threadId = threadId
+    /// The other participant. The backend keys chat history by the two user
+    /// ids, so this is what identifies the conversation.
+    let otherUserId: String
+
+    /// Was hard-coded to nil, so `isOwn` was false for every bubble and the
+    /// patient could not tell their own messages from the clinician's.
+    var currentUserId: String? { AuthManager.shared.currentUser?.id }
+
+    init(otherUserId: String) {
+        self.otherUserId = otherUserId
     }
 
     func load() async {
         isLoading = true
-        messages = await (try? APIClient.shared.get(
-            APIEndpoints.chatMessages(threadId: threadId)
-        )) ?? []
-        isLoading = false
+        errorMessage = nil
+        defer { isLoading = false }
+
+        guard let userId = currentUserId else {
+            errorMessage = "error_not_signed_in".localized
+            return
+        }
+        do {
+            let page: [ChatMessageDTO] = try await APIClient.shared.get(
+                APIEndpoints.chatHistory(userId: userId, otherUserId: otherUserId)
+            )
+            // The endpoint returns newest first; the transcript reads oldest
+            // first and scrolls to the bottom.
+            messages = page.reversed()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func send() async {
         let text = draft.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
         draft = ""
-        let body = SendMessageRequest(content: text, attachmentUrl: nil)
-        if let msg: ChatMessageDTO = try? await APIClient.shared.post(
-            APIEndpoints.chatMessages(threadId: threadId), body: body
-        ) {
-            messages.append(msg)
-        }
-    }
-}
-
-// MARK: - Compose
-
-struct ComposeMessageView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var recipient = ""
-    @State private var subject = ""
-    @State private var messageBody = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("To") { TextField("Recipient", text: $recipient) }
-                Section("Subject") { TextField("Subject", text: $subject) }
-                Section("Message") {
-                    TextEditor(text: $messageBody).frame(minHeight: 120)
-                }
-            }
-            .navigationTitle("New Message")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Send") { dismiss() } // TODO: wire to API
-                }
-            }
+        do {
+            let sent: ChatMessageDTO = try await APIClient.shared.post(
+                APIEndpoints.chatSend,
+                body: SendChatMessageRequest(recipientId: otherUserId, content: text)
+            )
+            messages.append(sent)
+        } catch {
+            // Put the text back so a failed send does not lose what was typed.
+            draft = text
+            errorMessage = error.localizedDescription
         }
     }
 }

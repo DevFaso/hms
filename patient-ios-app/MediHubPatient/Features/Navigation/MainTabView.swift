@@ -6,6 +6,8 @@ struct MainTabView: View {
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @State private var selectedTab: Tab = .dashboard
     @State private var showMenu = false
+    /// Destination pushed on the Dashboard stack by the side menu.
+    @State private var dashboardPath: [DashboardView.DashboardDestination] = []
 
     enum Tab: Hashable {
         case dashboard, appointments, messages, profile
@@ -17,7 +19,7 @@ struct MainTabView: View {
                 Group {
                     switch selectedTab {
                     case .dashboard:
-                        DashboardView(showMenu: $showMenu)
+                        DashboardView(showMenu: $showMenu, path: $dashboardPath)
                     case .appointments:
                         AppointmentsView()
                     case .messages:
@@ -52,7 +54,9 @@ struct MainTabView: View {
                     .ignoresSafeArea()
                     .onTapGesture { withAnimation(.spring(response: 0.3)) { showMenu = false } }
 
-                SideMenuView(selectedTab: $selectedTab, isShowing: $showMenu)
+                SideMenuView(selectedTab: $selectedTab,
+                             isShowing: $showMenu,
+                             dashboardPath: $dashboardPath)
                     .transition(.move(edge: .leading))
             }
         }
@@ -132,6 +136,16 @@ struct SideMenuView: View {
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @Binding var selectedTab: MainTabView.Tab
     @Binding var isShowing: Bool
+    @Binding var dashboardPath: [DashboardView.DashboardDestination]
+
+    /// Show a Dashboard sub-screen from the drawer. Previously every one of
+    /// these rows just ran `selectedTab = .dashboard`, so the drawer named
+    /// eight screens and opened none of them.
+    private func open(_ destination: DashboardView.DashboardDestination) {
+        selectedTab = .dashboard
+        dashboardPath = [destination]
+        isShowing = false
+    }
 
     private var menuItems: [(titleKey: String, icon: String, tab: MainTabView.Tab)] {
         [
@@ -228,28 +242,33 @@ struct SideMenuView: View {
                         .padding(.horizontal, 16)
 
                     MenuLink(icon: "pill.fill", title: "medications_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.medications)
                     }
                     MenuLink(icon: "creditcard.fill", title: "billing_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.billing)
                     }
                     MenuLink(icon: "cross.case.fill", title: "pharmacy_invoices".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.pharmacyInvoices)
                     }
                     MenuLink(icon: "heart.fill", title: "vitals_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.vitals)
                     }
                     MenuLink(icon: "testtube.2", title: "lab_results_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.labResults)
                     }
                     MenuLink(icon: "person.2.fill", title: "care_team_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.careTeam)
                     }
                     MenuLink(icon: "doc.text.fill", title: "visit_summaries_title".localized) {
-                        selectedTab = .dashboard; isShowing = false
+                        open(.visitSummaries)
+                    }
+                    // NotificationsView existed but was reachable from nowhere:
+                    // the Dashboard grid never listed it and no link emitted it.
+                    MenuLink(icon: "bell.fill", title: "notifications".localized) {
+                        open(.notifications)
                     }
                     MenuLink(icon: "doc.fill", title: "documents".localized) {
-                        selectedTab = .profile; isShowing = false
+                        open(.documents)
                     }
 
                     Rectangle()

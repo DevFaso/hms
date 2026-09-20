@@ -30,10 +30,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Build config fields — override with local.properties or CI env vars
-        // TODO: revert to production before Play Store release
-        // buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
+        // Build config fields — override with local.properties or CI env vars.
+        // defaultConfig is what a RELEASE build inherits, so it must point at
+        // production. `api.dev.e-keneya.com` has no DNS record: a release built
+        // against it reaches no server at all. Verified 2026-09-19:
+        //   api.e-keneya.com/api  -> 200   dev.e-keneya.com/api -> 200
+        //   api.dev.e-keneya.com  -> no response
+        buildConfigField("String", "API_BASE_URL", "\"https://api.e-keneya.com/api\"")
 
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
@@ -64,19 +67,27 @@ android {
         manifestPlaceholders["appAuthRedirectScheme"] = keycloakRedirectScheme
     }
 
+    // Signing values come from local.properties on a developer machine and
+    // from the environment in CI, where writing local.properties would mean
+    // spilling the keystore password onto disk in the runner.
+    fun signingValue(key: String, fallback: String) =
+        localProps.getProperty(key) ?: System.getenv(key) ?: fallback
+
     signingConfigs {
         create("release") {
-            storeFile = file(localProps.getProperty("STORE_FILE", "../upload-keystore.jks"))
-            storePassword = localProps.getProperty("STORE_PASSWORD", "")
-            keyAlias = localProps.getProperty("KEY_ALIAS", "upload")
-            keyPassword = localProps.getProperty("KEY_PASSWORD", "")
+            storeFile = file(signingValue("STORE_FILE", "../upload-keystore.jks"))
+            storePassword = signingValue("STORE_PASSWORD", "")
+            keyAlias = signingValue("KEY_ALIAS", "upload")
+            keyPassword = signingValue("KEY_PASSWORD", "")
         }
     }
 
     buildTypes {
         debug {
             isDebuggable = true
-            buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
+            // The dev API is served same-origin by the portal host; the
+            // `api.dev.` subdomain was never provisioned.
+            buildConfigField("String", "API_BASE_URL", "\"https://dev.e-keneya.com/api\"")
         }
         release {
             isMinifyEnabled = true

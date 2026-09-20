@@ -2,10 +2,12 @@ import SwiftUI
 
 struct DashboardView: View {
     @Binding var showMenu: Bool
+    /// Driven by the side menu in `MainTabView`. Appending a destination here
+    /// pushes that screen, which is how the drawer entries navigate.
+    @Binding var path: [DashboardDestination]
     @StateObject private var vm = DashboardViewModel()
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var localization: LocalizationManager
-    @State private var navigateTo: DashboardDestination?
     @State private var selectedLabResult: LabResultDTO?
 
     enum DashboardDestination: Hashable {
@@ -33,7 +35,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     // MARK: Quick links grid
@@ -296,7 +298,7 @@ struct StatusBadge: View {
 }
 
 #Preview {
-    DashboardView(showMenu: .constant(false))
+    DashboardView(showMenu: .constant(false), path: .constant([]))
         .environmentObject(AuthManager.shared)
         .environmentObject(LocalizationManager.shared)
 }

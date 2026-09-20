@@ -300,5 +300,6 @@
 "yes" = "Yes";
 "no" = "No";
 "error" = "Error";
+"error_not_signed_in" = "You are not signed in.";
 "retry" = "Retry";
 "refresh" = "Refresh";
