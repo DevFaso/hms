@@ -3,6 +3,8 @@ package com.bitnesttechs.hms.patient.features.appointments
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.core.di.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +27,8 @@ data class DoctorOption(
 @HiltViewModel
 class AppointmentsViewModel @Inject constructor(
     private val api: ApiService,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
     private val _appointments = MutableStateFlow<List<AppointmentDto>>(emptyList())
     val appointments: StateFlow<List<AppointmentDto>> = _appointments.asStateFlow()
@@ -96,8 +99,15 @@ class AppointmentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Runs in [applicationScope], not [viewModelScope]: the same tap that
+     * confirms the cancellation also pops the back stack, and a later tab
+     * change clears the owning entry's ViewModelStore. On a slow link that
+     * cancelled the POST in flight, leaving the appointment booked with
+     * nothing shown to the patient.
+     */
     fun cancelAppointment(appointmentId: String, reason: String?) {
-        viewModelScope.launch {
+        applicationScope.launch {
             try {
                 val resp = api.cancelAppointment(
                     CancelAppointmentRequest(appointmentId = appointmentId, reason = reason)

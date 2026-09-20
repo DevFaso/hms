@@ -1,0 +1,183 @@
+name: Mobile — Android (patient)
+
+# The patient Android app is a self-contained Gradle build under
+# patient-android-app/, independent of the root hospital-core build, so it
+# gets its own workflow rather than a job in the backend pipeline.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'patient-android-app/**'
+      - '.github/workflows/mobile-android.yml'
+  pull_request:
+    paths:
+      - 'patient-android-app/**'
+      - '.github/workflows/mobile-android.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Upload the signed AAB to Play internal testing'
+        type: boolean
+        default: false
+      api_environment:
+        description: 'API the signed build points at'
+        type: choice
+        options: [dev, prod]
+        # Defaults to dev on purpose. The release bundle is what reaches
+        # internal testers, and a tester exercising the appointment-cancel
+        # flow against production cancels a real patient's appointment.
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  # The event name is part of the group so a push to develop cannot land
+  # in the same group as a dispatched release and cancel it mid-upload;
+  # dispatches are never cancelled, since an interrupted Play upload
+  # burns a version code with nothing to show for it.
+  group: mobile-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+defaults:
+  run:
+    working-directory: patient-android-app
+
+jobs:
+  build:
+    name: Lint, test, assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
+
+      - name: Point the SDK at the runner's install
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Assemble debug
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload lint report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: patient-android-app/app/build/reports/
+          retention-days: 7
+
+  release:
+    name: Signed bundle
+    # Only on an explicit dispatch: a release build consumes the upload key,
+    # and every AAB uploaded to Play burns a version code.
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: mobile-release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
+
+      - name: Restore the upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Check every signing secret up front. Missing ones otherwise fail
+          # deep inside a full R8 release build with "Keystore was tampered
+          # with, or password was incorrect" — an error that points at the
+          # keystore rather than at the unset secret.
+          missing=
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_STORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::unset in the mobile-release environment:$missing"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Build the signed bundle
+        env:
+          # Read by signingValue() in app/build.gradle.kts. Deliberately NOT
+          # written to local.properties: that file would persist the password
+          # on the runner's disk and in any uploaded artifact.
+          STORE_FILE: ${{ github.workspace }}/patient-android-app/upload-keystore.jks
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          API_ENVIRONMENT: ${{ inputs.api_environment }}
+        run: |
+          if [ "$API_ENVIRONMENT" = "prod" ]; then
+            API_BASE_URL=https://api.e-keneya.com/api
+          else
+            API_BASE_URL=https://dev.e-keneya.com/api
+          fi
+          echo "building against $API_BASE_URL"
+          # versionCode comes from the run number: Play rejects a bundle whose
+          # version code it has already accepted, so a hard-coded one makes
+          # every publish after the first fail.
+          # run_number restarts at 1 for a brand-new workflow file, but
+          # Play has already accepted version code 13 (the old hard-coded
+          # value), so a bare run number is rejected until it passes 13.
+          VERSION_CODE=$(( 13 + ${{ github.run_number }} ))
+          echo "version code $VERSION_CODE"
+          ./gradlew :app:bundleRelease --no-daemon \
+            -PversionCode="$VERSION_CODE" \
+            -PapiBaseUrl="$API_BASE_URL"
+
+      - name: Check the bundle is actually signed
+        run: |
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          test -f "$AAB" || { echo "::error::no bundle produced"; exit 1; }
+          # An unsigned bundle has no META-INF/*.RSA|EC entry. Catch it here
+          # rather than at the Play upload, which rejects with a vaguer error.
+          if ! unzip -l "$AAB" | grep -qE 'META-INF/.*\.(RSA|EC|DSA)'; then
+            echo "::error::$AAB is not signed"
+            exit 1
+          fi
+          echo "signed bundle: $(du -h "$AAB" | cut -f1)"
+
+      - name: Upload the bundle as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patient-android-aab
+          path: patient-android-app/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
+
+      - name: Publish to Play internal testing
+        if: inputs.publish
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5  # v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.bitnesttechs.hms.patient
+          releaseFiles: patient-android-app/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed

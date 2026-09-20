@@ -1,11 +1,11 @@
 /* App */
-"app_name" = "MediHub Patient";
+"app_name" = "e-Keneya";
 "patient_portal" = "Patient Portal";
-"medihub" = "MediHub";
-"copyright" = "MediHub HMS © 2026";
+"medihub" = "e-Keneya";
+"copyright" = "e-Keneya © 2026";
 
 /* Login */
-"login_title" = "MediHub Patient";
+"login_title" = "Welcome to e-Keneya";
 "login_subtitle" = "Your health, in your hands";
 "username_label" = "Username";
 "username_placeholder" = "Enter username";
@@ -235,6 +235,10 @@
 "no_messages_desc" = "No messages yet.";
 "no_conversations" = "No conversations yet";
 "new_message" = "New Message";
+"biometric_reason" = "Sign in to e-Keneya";
+"to" = "To";
+"message" = "Message";
+"no_message_recipients" = "No clinician to message yet. A conversation opens once you have had an appointment.";
 "type_message" = "Type a message…";
 "send" = "Send";
 "conversations" = "Conversations";
@@ -300,5 +304,6 @@
 "yes" = "Yes";
 "no" = "No";
 "error" = "Error";
+"error_not_signed_in" = "You are not signed in.";
 "retry" = "Retry";
 "refresh" = "Refresh";

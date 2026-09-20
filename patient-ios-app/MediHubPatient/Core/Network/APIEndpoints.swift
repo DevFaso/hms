@@ -54,10 +54,21 @@ enum APIEndpoints {
 
     // MARK: Chat / Messages
 
-    static let chatThreads = "/me/chat/threads"
-    static func chatMessages(threadId: String) -> String {
-        "/me/chat/threads/\(threadId)/messages"
+    // ChatController is @RequestMapping("/chat") and is keyed by USER ids,
+    // not by a thread id. The previous "/me/chat/threads" paths matched no
+    // controller at all, so the Messages tab always 404'd — and the call
+    // sites swallowed the error with `try?`, which is why it looked empty
+    // rather than broken.
+    static func chatConversations(userId: String) -> String {
+        "/chat/conversations/\(userId)"
     }
+    static func chatHistory(userId: String, otherUserId: String) -> String {
+        // The endpoint defaults to size=20; Android asks for 100 on the same
+        // path. Without it a thread is silently truncated to its 20 newest
+        // messages with no way to scroll further back.
+        "/chat/history/\(userId)/\(otherUserId)?page=0&size=100"
+    }
+    static let chatSend = "/chat/send"
 
     // MARK: Billing actions
 

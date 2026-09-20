@@ -11,7 +11,13 @@ options:
 # Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/Prod
 # layer xcconfig files (Config/{Dev,Prod}.xcconfig) on top of the
 # Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
-configurations:
+# XcodeGen reads this mapping from `configs`. It was spelled
+# `configurations`, which XcodeGen ignores entirely — the project fell
+# back to the default Debug/Release pair, so the `configFiles` entries
+# below referenced configurations that did not exist and
+# `xcodegen generate` failed outright. Never caught because the repo had
+# no iOS CI and the original setup used a hand-made .xcodeproj.
+configs:
   Debug: debug
   Release: release
   Release-Dev: release
@@ -21,10 +27,6 @@ packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
     from: "1.7.5"
-
-configFiles:
-  Release-Dev: Config/Dev.xcconfig
-  Release-Prod: Config/Prod.xcconfig
 
 settings:
   base:
@@ -37,6 +39,7 @@ settings:
     # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
     # Debug/Release builds. Per-env xcconfigs override these for
     # Release-{Dev,Prod}. See Config/README.md.
+    MEDIHUB_API_BASE_URL: ""
     MEDIHUB_KEYCLOAK_ISSUER: ""
     MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
     MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
@@ -51,6 +54,14 @@ targets:
       - path: MediHubPatient
         excludes:
           - "**/.DS_Store"
+    # Layered on the TARGET, not the project. Xcode resolves target settings
+    # over target xcconfig over project settings over project xcconfig, so a
+    # project-level xcconfig loses to the `settings.base` defaults below and
+    # every per-env value silently resolved to the empty default — which is
+    # how Release-Prod would have shipped pointing at the dev server.
+    configFiles:
+      Release-Dev: Config/Dev.xcconfig
+      Release-Prod: Config/Prod.xcconfig
     dependencies:
       - package: AppAuth
         product: AppAuth
@@ -68,6 +79,10 @@ targets:
     info:
       path: MediHubPatient/Resources/Info.plist
       properties:
+        # User-facing name under the icon. Declared HERE and not only in
+        # Info.plist because `xcodegen generate` rewrites that file from this
+        # block on every CI run, which would silently drop a hand-added key.
+        CFBundleDisplayName: e-Keneya
         # KC-3: AppAuth callback scheme. Must match the redirect URI on
         # the Keycloak `hms-patient-ios` client and `MEDIHUB_KEYCLOAK_REDIRECT_URI`.
         # Declared here (not just in Info.plist) so `xcodegen generate`
@@ -83,6 +98,7 @@ targets:
         # fallback when ProcessInfo doesn't have a value (i.e. archive
         # builds, where scheme env vars don't apply). Default values
         # come from `settings.base`; per-env xcconfigs override.
+        MEDIHUB_API_BASE_URL: $(MEDIHUB_API_BASE_URL)
         MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
         MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
         MEDIHUB_KEYCLOAK_CLIENT_ID: $(MEDIHUB_KEYCLOAK_CLIENT_ID)

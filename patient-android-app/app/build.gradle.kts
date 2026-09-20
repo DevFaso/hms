@@ -25,15 +25,26 @@ android {
         applicationId = "com.bitnesttechs.hms.patient"
         minSdk = 23
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.0.12"
+        // Overridable from CI: every AAB uploaded to Play burns a version
+        // code, so a second publish of a hard-coded one is rejected outright.
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 13
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Build config fields — override with local.properties or CI env vars
-        // TODO: revert to production before Play Store release
-        // buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
+        // defaultConfig is what a RELEASE build inherits, so it defaults to
+        // production. `api.dev.e-keneya.com` has no DNS record: a release
+        // built against it reaches no server at all. Verified 2026-09-19:
+        //   api.e-keneya.com/api  -> 200   dev.e-keneya.com/api -> 200
+        //   api.dev.e-keneya.com  -> no response
+        //
+        // -PapiBaseUrl overrides it so a SIGNED build can be pointed at dev.
+        // Internal-testing builds must use that: the release bundle is the one
+        // handed to testers, and a tester exercising the appointment-cancel
+        // flow against production cancels a real patient's real appointment.
+        val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
+            ?: "https://api.e-keneya.com/api"
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
 
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
@@ -64,19 +75,27 @@ android {
         manifestPlaceholders["appAuthRedirectScheme"] = keycloakRedirectScheme
     }
 
+    // Signing values come from local.properties on a developer machine and
+    // from the environment in CI, where writing local.properties would mean
+    // spilling the keystore password onto disk in the runner.
+    fun signingValue(key: String, fallback: String) =
+        localProps.getProperty(key) ?: System.getenv(key) ?: fallback
+
     signingConfigs {
         create("release") {
-            storeFile = file(localProps.getProperty("STORE_FILE", "../upload-keystore.jks"))
-            storePassword = localProps.getProperty("STORE_PASSWORD", "")
-            keyAlias = localProps.getProperty("KEY_ALIAS", "upload")
-            keyPassword = localProps.getProperty("KEY_PASSWORD", "")
+            storeFile = file(signingValue("STORE_FILE", "../upload-keystore.jks"))
+            storePassword = signingValue("STORE_PASSWORD", "")
+            keyAlias = signingValue("KEY_ALIAS", "upload")
+            keyPassword = signingValue("KEY_PASSWORD", "")
         }
     }
 
     buildTypes {
         debug {
             isDebuggable = true
-            buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
+            // The dev API is served same-origin by the portal host; the
+            // `api.dev.` subdomain was never provisioned.
+            buildConfigField("String", "API_BASE_URL", "\"https://dev.e-keneya.com/api\"")
         }
         release {
             isMinifyEnabled = true

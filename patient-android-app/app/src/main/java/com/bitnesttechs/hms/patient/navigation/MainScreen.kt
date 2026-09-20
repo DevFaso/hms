@@ -22,6 +22,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.features.appointments.AppointmentsViewModel
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
@@ -234,15 +236,36 @@ fun MainScreen(onLogout: () -> Unit) {
                 }
 
                 // ── Appointment detail ────────────────────────────────────────────
-                composable("appointment_detail") {
+                composable("appointment_detail") { backStackEntry ->
                     val appointment = navController.previousBackStackEntry
                         ?.savedStateHandle
                         ?.get<com.bitnesttechs.hms.patient.core.models.AppointmentDto>("appointment")
                     if (appointment != null) {
+                        // Scope the view model to the Appointments tab entry so the
+                        // cancel below refreshes the list the user pops back to.
+                        // Without the shared scope a fresh instance would call the
+                        // API and reload ITS OWN state, leaving the visible list
+                        // still showing the appointment as scheduled.
+                        val listEntry = remember(backStackEntry) {
+                            runCatching {
+                                navController.getBackStackEntry(Tab.Appointments.route)
+                            }.getOrNull()
+                        }
+                        val appointmentsViewModel: AppointmentsViewModel =
+                            if (listEntry != null) hiltViewModel(listEntry) else hiltViewModel()
                         AppointmentDetailScreen(
                             appointment = appointment,
                             onBack = { navController.popBackStack() },
                             onCancel = { reason ->
+                                // Previously this only popped the back stack: the
+                                // patient confirmed the dialog, the screen closed,
+                                // and the appointment was never cancelled server
+                                // side — so they stopped attending an appointment
+                                // the hospital still expected them at.
+                                appointmentsViewModel.cancelAppointment(
+                                    appointmentId = appointment.id,
+                                    reason = reason.ifBlank { null }
+                                )
                                 navController.popBackStack()
                             }
                         )

@@ -50,7 +50,7 @@ final class LoginViewModel: ObservableObject {
 
         context.evaluatePolicy(
             .deviceOwnerAuthenticationWithBiometrics,
-            localizedReason: "Log in to MediHub Patient"
+            localizedReason: "biometric_reason".localized
         ) { [weak self] success, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }

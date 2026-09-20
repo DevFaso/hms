@@ -447,7 +447,10 @@ private struct SourceLine: View {
     let parts: [String?]
 
     var body: some View {
-        let text = parts.compactMap { part in
+        // The closure needs an explicit signature: it is multi-statement and
+        // its only other `return` is a bare `nil`, so the compiler has nothing
+        // to infer ElementOfResult from and the build fails outright.
+        let text = parts.compactMap { (part: String?) -> String? in
             guard let value = part?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty, value != "—" else {
                 return nil
             }

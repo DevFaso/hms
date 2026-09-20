@@ -13,6 +13,7 @@ final class KeychainHelper {
         static let accessToken = "com.bitnesttechs.hms.patient.accessToken"
         static let refreshToken = "com.bitnesttechs.hms.patient.refreshToken"
         static let username = "com.bitnesttechs.hms.patient.username"
+        static let userId = "com.bitnesttechs.hms.patient.userId"
         static let password = "com.bitnesttechs.hms.patient.password"
         // KC-3 — Keycloak OIDC
         static let oidcAuthState = "com.bitnesttechs.hms.patient.oidcAuthState"
@@ -30,6 +31,14 @@ final class KeychainHelper {
     var refreshToken: String? {
         get { read(key: Keys.refreshToken) }
         set { newValue == nil ? delete(key: Keys.refreshToken) : save(newValue!, key: Keys.refreshToken) }
+    }
+
+    /// Persisted so the user id survives a relaunch. `AuthManager.currentUser`
+    /// is only populated by `login(...)`, so anything deriving an id from it
+    /// broke as soon as the app was reopened on a restored session.
+    var savedUserId: String? {
+        get { read(key: Keys.userId) }
+        set { newValue == nil ? delete(key: Keys.userId) : save(newValue!, key: Keys.userId) }
     }
 
     /// Stored for biometric re-auth (username only, password separately)
@@ -73,6 +82,9 @@ final class KeychainHelper {
         delete(key: Keys.refreshToken)
         delete(key: Keys.username)
         delete(key: Keys.password)
+        // Without this the id outlives the session and the next person to
+        // sign in on the device inherits the previous patient's chat threads.
+        delete(key: Keys.userId)
         clearOidc()
     }
 

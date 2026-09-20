@@ -112,7 +112,7 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "MediHub",
+                stringResource(R.string.medihub),
                 color = Color.White,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold
@@ -270,7 +270,7 @@ fun LoginScreen(
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "MediHub HMS © 2026",
+                stringResource(R.string.copyright),
                 color = Color.White.copy(alpha = 0.5f),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
