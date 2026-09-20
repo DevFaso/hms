@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- App -->
-    <string name="app_name">MediHub Patient</string>
+    <string name="app_name">e-Keneya</string>
     <string name="patient_portal">Patient Portal</string>
     <string name="medihub">MediHub</string>
     <string name="copyright">MediHub HMS © 2026</string>
