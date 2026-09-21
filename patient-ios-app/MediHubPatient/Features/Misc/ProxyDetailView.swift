@@ -81,7 +81,10 @@ struct ProxyDetailView: View {
                 }
 
                 // ── What this grant lets me open (proxy perspective) ──
-                if !isGrantor, proxy.status?.uppercased() == "ACTIVE", let patientId = proxy.grantorPatientId {
+                // The backend also refuses a grant past its expiry, so an
+                // ACTIVE-but-expired one gets no links that can only 403.
+                if !isGrantor, proxy.status?.uppercased() == "ACTIVE", !isExpired(proxy.expiresAt),
+                   let patientId = proxy.grantorPatientId {
                     detailCard(title: "proxy_data_open".localized, icon: "folder.fill") {
                         let kinds = ProxyDataKind.allowed(by: proxy.permissionsList)
                         if kinds.isEmpty {
@@ -275,6 +278,16 @@ struct ProxyDetailView: View {
             return formatter.string(from: date)
         }
         return prefix
+    }
+
+    /// True once the expiry day has passed; a missing expiry never expires.
+    private func isExpired(_ isoString: String?) -> Bool {
+        guard let isoString else { return false }
+        let prefix = String(isoString.prefix(10))
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let expiryDate = formatter.date(from: prefix) else { return false }
+        return Calendar.current.startOfDay(for: expiryDate) < Calendar.current.startOfDay(for: Date())
     }
 
     private func isExpiringSoon(_ isoString: String) -> Bool {
