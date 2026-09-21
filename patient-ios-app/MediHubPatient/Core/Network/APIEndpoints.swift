@@ -42,6 +42,8 @@ enum APIEndpoints {
     static let referrals = "/me/patient/referrals"
     static let treatmentPlans = "/me/patient/treatment-plans"
     static let documents = "/me/patient/documents"
+    /// Authenticated, owner-checked stream; document bytes have no public URL.
+    static func documentDownload(id: String) -> String { "/me/patient/documents/\(id)/download" }
 
     // MARK: Notifications
 
@@ -83,6 +85,15 @@ enum APIEndpoints {
     static func revokeProxy(id: String) -> String {
         "/me/patient/proxies/\(id)"
     }
+
+    // What a proxy may read on the grantor's behalf, one endpoint per
+    // permission. Android and the web have called these since the feature
+    // shipped; iOS listed the grant and could open none of it.
+    static func proxyAppointments(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/appointments" }
+    static func proxyMedications(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/medications" }
+    static func proxyLabResults(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/lab-results" }
+    static func proxyBilling(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/billing" }
+    static func proxyRecords(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/records" }
 
     // MARK: Consent actions
 

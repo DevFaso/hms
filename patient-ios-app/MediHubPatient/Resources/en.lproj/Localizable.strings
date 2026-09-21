@@ -307,3 +307,21 @@
 "error_not_signed_in" = "You are not signed in.";
 "retry" = "Retry";
 "refresh" = "Refresh";
+
+// Patient parity phase 1 (2026-09-21): proxy data, notifications, documents
+"mark_all_read" = "Mark all read";
+"notifications_load_failed" = "Notifications could not be loaded";
+"documents_load_failed" = "Documents could not be loaded";
+"document_open_failed" = "The document could not be opened";
+"none" = "None";
+"proxy_data_open" = "Open their records";
+"proxy_data_no_viewable" = "This grant carries no viewable permission.";
+"proxy_data_records" = "Health records";
+"proxy_data_appointments" = "Appointments";
+"proxy_data_medications" = "Medications";
+"proxy_data_lab_results" = "Lab results";
+"proxy_data_billing" = "Billing";
+"proxy_data_patient" = "Patient";
+"proxy_data_viewing_for" = "Viewing on behalf of %@";
+"proxy_data_none" = "Nothing to show";
+"proxy_data_error" = "Could not load this section";

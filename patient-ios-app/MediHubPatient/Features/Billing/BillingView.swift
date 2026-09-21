@@ -26,7 +26,7 @@ struct BillingView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("outstanding_balance".localized).font(.caption).foregroundColor(.white.opacity(0.85))
-                                Text(vm.totalDue, format: .currency(code: "USD"))
+                                Text(vm.totalDue, format: .currency(code: BillingView.currencyCode))
                                     .font(.title2).bold().foregroundColor(.white)
                             }
                             Spacer()
@@ -62,6 +62,13 @@ struct BillingView: View {
     }
 }
 
+extension BillingView {
+    /// Invoices carry no currency field; every hospital on the platform bills
+    /// in CFA francs, which the pharmacy screen already assumed. "USD" here
+    /// was the scaffold's default, never a real currency for this app.
+    static let currencyCode = "XOF"
+}
+
 struct InvoiceRowView: View {
     let invoice: InvoiceDTO
     var body: some View {
@@ -80,7 +87,7 @@ struct InvoiceRowView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(invoice.displayBalance, format: .currency(code: "USD"))
+                Text(invoice.displayBalance, format: .currency(code: BillingView.currencyCode))
                     .font(.headline)
                     .foregroundColor(invoice.isPaid ? .secondary : .primary)
                 StatusBadge(text: invoice.status?.capitalized ?? "Pending",
@@ -113,7 +120,7 @@ struct PaymentSheet: View {
                     HStack {
                         Text(invoice.invoiceNumber ?? "Invoice")
                         Spacer()
-                        Text(invoice.displayBalance, format: .currency(code: "USD")).bold()
+                        Text(invoice.displayBalance, format: .currency(code: BillingView.currencyCode)).bold()
                     }
                 }
 

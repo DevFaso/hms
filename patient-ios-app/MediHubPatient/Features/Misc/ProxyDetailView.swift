@@ -80,6 +80,36 @@ struct ProxyDetailView: View {
                     }
                 }
 
+                // ── What this grant lets me open (proxy perspective) ──
+                if !isGrantor, proxy.status?.uppercased() == "ACTIVE", let patientId = proxy.grantorPatientId {
+                    detailCard(title: "proxy_data_open".localized, icon: "folder.fill") {
+                        let kinds = ProxyDataKind.allCases.filter { proxy.permissionsList.contains($0.rawValue) }
+                        if kinds.isEmpty {
+                            Text("proxy_data_no_viewable".localized)
+                                .font(.subheadline).foregroundColor(.secondary)
+                        }
+                        ForEach(kinds) { kind in
+                            NavigationLink {
+                                ProxyDataView(patientId: patientId,
+                                              patientName: proxy.grantorName ?? "",
+                                              kind: kind)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: kind.icon)
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 24)
+                                    Text(kind.titleKey.localized).font(.subheadline)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption).foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
                 // ── Notes ──
                 if let notes = proxy.notes, !notes.isEmpty {
                     detailCard(title: "Notes", icon: "note.text") {

@@ -14,9 +14,10 @@ final class DashboardViewModel: ObservableObject {
         notifications.filter { !$0.isRead }.count
     }
 
+    /// The health summary carries the outstanding balance; this used to be
+    /// a hard-coded 0 with a comment promising another view model would fill it.
     var totalDue: Double {
-        // populated by BillingViewModel — exposed here for dashboard badge
-        0
+        healthSummary?.outstandingBalance ?? 0
     }
 
     var upcomingAppointments: [AppointmentDTO] {
