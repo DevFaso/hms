@@ -49,6 +49,14 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSnackbar() }
     }
+    val outcome by viewModel.outcome.collectAsState()
+    val outcomeText = outcome?.let { o ->
+        val base = stringResource(o.resId)
+        o.detail?.let { "$base ($it)" } ?: base
+    }
+    LaunchedEffect(outcome) {
+        outcomeText?.let { snackbarHostState.showSnackbar(it); viewModel.clearOutcome() }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -239,6 +247,10 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Text("Sent to the prescribing provider for review",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                // REQUESTED and PAUSED are the two states the backend
+                                // (cancelMyRefill) and the web let the patient withdraw.
+                                if (refill.status.uppercase() in listOf("REQUESTED", "PAUSED")) {
                                     TextButton(
                                         onClick = { cancelRefillTarget = refill },
                                         colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)

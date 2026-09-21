@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.features.medications
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val isLoading = MutableStateFlow(true)
     private val _snackbar = MutableStateFlow<String?>(null)
     val snackbar: StateFlow<String?> = _snackbar
+
+    /** A localized outcome: a string resource plus an optional detail argument. */
+    data class Outcome(val resId: Int, val detail: String? = null)
+    private val _outcome = MutableStateFlow<Outcome?>(null)
+    val outcome: StateFlow<Outcome?> = _outcome
+    fun clearOutcome() { _outcome.value = null }
 
     init { load() }
 
@@ -42,13 +49,13 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             try {
                 val resp = api.cancelRefill(refillId)
                 if (resp.isSuccessful) {
-                    _snackbar.value = "Refill request cancelled"
+                    _outcome.value = Outcome(R.string.refill_cancelled)
                     load()
                 } else {
-                    _snackbar.value = "Could not cancel the refill request (HTTP ${resp.code()})"
+                    _outcome.value = Outcome(R.string.refill_cancel_failed, "HTTP ${resp.code()}")
                 }
             } catch (e: Exception) {
-                _snackbar.value = "Could not cancel the refill request (${e.message})"
+                _outcome.value = Outcome(R.string.refill_cancel_failed, e.message)
             }
         }
     }

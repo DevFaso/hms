@@ -343,5 +343,7 @@
     <string name="location">Location</string>
     <string name="reason_optional_label">Reason (optional)</string>
     <string name="reschedule_crosses_midnight">The slot would end after midnight. Pick an earlier time.</string>
+    <string name="refill_cancelled">Refill request cancelled</string>
+    <string name="refill_cancel_failed">The refill request could not be cancelled</string>
     <string name="appointment_ref">Appointment %1$s</string>
 </resources>

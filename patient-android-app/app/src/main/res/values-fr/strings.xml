@@ -343,5 +343,7 @@
     <string name="location">Lieu</string>
     <string name="reason_optional_label">Motif (facultatif)</string>
     <string name="reschedule_crosses_midnight">Le créneau se terminerait après minuit. Choisissez une heure plus tôt.</string>
+    <string name="refill_cancelled">Demande de renouvellement annulée</string>
+    <string name="refill_cancel_failed">La demande de renouvellement n\'a pas pu être annulée</string>
     <string name="appointment_ref">Rendez-vous %1$s</string>
 </resources>
