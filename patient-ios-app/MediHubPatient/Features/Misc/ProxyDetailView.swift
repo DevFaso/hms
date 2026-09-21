@@ -280,14 +280,33 @@ struct ProxyDetailView: View {
         return prefix
     }
 
-    /// True once the expiry day has passed; a missing expiry never expires.
+    /// True once the expiry instant has passed, which is when the backend
+    /// starts refusing the grant; a missing or unparseable expiry never
+    /// expires here (the server still decides). Parsed as ISO 8601 with a
+    /// fixed Gregorian calendar, so a Buddhist or Japanese device calendar
+    /// cannot misread the year.
     private func isExpired(_ isoString: String?) -> Bool {
         guard let isoString else { return false }
-        let prefix = String(isoString.prefix(10))
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let expiryDate = formatter.date(from: prefix) else { return false }
-        return Calendar.current.startOfDay(for: expiryDate) < Calendar.current.startOfDay(for: Date())
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let instant = withFraction.date(from: isoString) ?? plain.date(from: isoString) {
+            return instant < Date()
+        }
+        // A bare local date-time (no zone) or a bare date: fixed calendar and locale.
+        let local = DateFormatter()
+        local.calendar = Calendar(identifier: .iso8601)
+        local.locale = Locale(identifier: "en_US_POSIX")
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
+            local.dateFormat = format
+            if let date = local.date(from: isoString) {
+                // A bare date means the whole day is still valid.
+                let end = format == "yyyy-MM-dd" ? date.addingTimeInterval(86_400) : date
+                return end < Date()
+            }
+        }
+        return false
     }
 
     private func isExpiringSoon(_ isoString: String) -> Bool {
