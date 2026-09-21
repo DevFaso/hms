@@ -105,6 +105,11 @@ class AppointmentsViewModel @Inject constructor(
         loadHospitals()
     }
 
+    /** A changed provider, date or time makes the last refusal stale (a conflict is for one slot). */
+    fun clearBookingError() {
+        _bookingOptions.update { if (it.bookingError == null) it else it.copy(bookingError = null) }
+    }
+
     /** A sheet waiting on its request stays; the answer closes it or shows inline. */
     fun hideBooking() {
         if (!_bookingOptions.value.isBooking) _bookingSheetOpen.value = false

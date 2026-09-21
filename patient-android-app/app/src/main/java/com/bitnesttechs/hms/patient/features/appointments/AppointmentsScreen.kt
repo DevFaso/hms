@@ -264,6 +264,9 @@ fun BookAppointmentSheet(
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     val date = dateIso?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    // Bumped by a Book tap so the "already passed" guard is re-read at tap time,
+    // not at the last recomposition (a field left alone for minutes never recomposes).
+    var tapClock by remember { mutableIntStateOf(0) }
 
     val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
     val startTime = LocalTime.of(selectedHour, selectedMinute)
@@ -278,7 +281,7 @@ fun BookAppointmentSheet(
     val crossesMidnight = startTime.plusMinutes(DEFAULT_SLOT_MINUTES) <= startTime
     // The server only requires the date to be today or later, so today with a
     // start already gone by would book a visit in the past.
-    val timeHasPassed = date == LocalDate.now() && !startTime.isAfter(LocalTime.now())
+    val timeHasPassed = remember(date, startTime, tapClock) { hasPassed(date, startTime) }
     val timeError = when {
         crossesMidnight -> stringResource(R.string.reschedule_crosses_midnight)
         timeHasPassed -> stringResource(R.string.time_already_passed)
@@ -395,7 +398,7 @@ fun BookAppointmentSheet(
                         options.providers.map { it.id to it.displayName },
                     supporting = if (options.providersLoaded && options.providers.isEmpty())
                         stringResource(R.string.no_providers_for_booking) else null,
-                    onSelect = { id -> staffId = id }
+                    onSelect = { id -> staffId = id; viewModel.clearBookingError() }
                 )
 
                 // 4. Date and start time
@@ -463,6 +466,7 @@ fun BookAppointmentSheet(
                         val h = hospitalId ?: return@Button
                         val d = departmentId ?: return@Button
                         val day = date ?: return@Button
+                        if (hasPassed(day, startTime)) { tapClock++; return@Button }
                         viewModel.book(
                             BookAppointmentRequest(
                                 hospitalId = h,
@@ -505,6 +509,7 @@ fun BookAppointmentSheet(
                         val instant = java.time.Instant.ofEpochMilli(millis)
                         dateIso = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
                             .format(DateTimeFormatter.ISO_LOCAL_DATE)
+                        viewModel.clearBookingError()
                     }
                     showDatePicker = false
                 }) { Text(stringResource(R.string.ok)) }
@@ -532,6 +537,7 @@ fun BookAppointmentSheet(
                 TextButton(onClick = {
                     selectedHour = timePickerState.hour
                     selectedMinute = timePickerState.minute
+                    viewModel.clearBookingError()
                     showTimePicker = false
                 }) { Text(stringResource(R.string.ok)) }
             },
@@ -541,6 +547,10 @@ fun BookAppointmentSheet(
         )
     }
 }
+
+/** Today with a start not after now: the server only checks the date, so this is the only guard. */
+private fun hasPassed(date: LocalDate?, startTime: LocalTime): Boolean =
+    date == LocalDate.now() && !startTime.isAfter(LocalTime.now())
 
 /** One level of the wizard: a read-only field opening a menu of (id, label) rows, with an optional subtitle per id. */
 @OptIn(ExperimentalMaterial3Api::class)
