@@ -1,5 +1,6 @@
 import QuickLook
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NotificationsView: View {
     var embeddedInNav: Bool = true
@@ -157,9 +158,9 @@ struct DocumentsView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(doc.fileName ?? "Document").font(.headline)
-                                if let cat = doc.category { Text(cat).font(.caption).foregroundColor(.secondary) }
-                                if let date = doc.uploadedAt { Text(date).font(.caption2).foregroundColor(.secondary) }
+                                Text(doc.title).font(.headline)
+                                if let kind = doc.kind { Text(kind).font(.caption).foregroundColor(.secondary) }
+                                if let date = doc.date { Text(date).font(.caption2).foregroundColor(.secondary) }
                             }
                             Spacer()
                             if vm.openingId == doc.id {
@@ -258,11 +259,13 @@ final class DocumentsViewModel: ObservableObject {
         openingId = id
         defer { openingId = nil }
         do {
-            let (data, _) = try await APIClient.shared.downloadFile(APIEndpoints.documentDownload(id: id))
-            // The display name is trusted for its extension only; the id keeps
-            // two documents with the same name apart, and the file lives in
-            // tmp for the preview's lifetime (see discardPreview).
-            let ext = (doc.fileName as NSString?)?.pathExtension.lowercased() ?? ""
+            let (data, mime) = try await APIClient.shared.downloadFile(APIEndpoints.documentDownload(id: id))
+            // QuickLook picks its renderer from the extension, so one is
+            // derived from the server's media type first (the stored mimeType
+            // is what the uploader declared), then from the display name. The
+            // id keeps two documents with the same name apart, and the file
+            // lives in tmp for the preview's lifetime (see discardPreview).
+            let ext = Self.fileExtension(mimeType: mime ?? doc.mimeType, name: doc.title)
             let name = ext.isEmpty ? id : "\(id).\(ext)"
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("documents", isDirectory: true)
@@ -274,6 +277,14 @@ final class DocumentsViewModel: ObservableObject {
         } catch {
             openError = error.localizedDescription
         }
+    }
+
+    static func fileExtension(mimeType: String?, name: String) -> String {
+        if let mime = mimeType, mime != "application/octet-stream",
+           let ext = UTType(mimeType: mime)?.preferredFilenameExtension {
+            return ext
+        }
+        return (name as NSString).pathExtension.lowercased()
     }
 
     /// PHI does not outlive the preview.

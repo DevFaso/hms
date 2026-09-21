@@ -214,6 +214,16 @@ struct CareTeamMemberDTO: Codable, Identifiable {
 
 struct DocumentDTO: Codable, Identifiable {
     let id: String?
+    // What PatientDocumentResponseDTO actually serialises.
+    let displayName: String?
+    let mimeType: String?
+    let documentType: String?
+    let fileSizeBytes: Int?
+    let collectionDate: String?
+    let createdAt: String?
+    let notes: String?
+    let uploadedByDisplayName: String?
+    // Scaffold-era names, kept optional so an older payload still decodes.
     let fileName: String?
     let fileType: String?
     let fileSize: Int?
@@ -222,6 +232,10 @@ struct DocumentDTO: Codable, Identifiable {
     let category: String?
     let uploadedBy: String?
     let downloadUrl: String?
+
+    var title: String { displayName ?? fileName ?? "Document" }
+    var kind: String? { documentType ?? category }
+    var date: String? { (createdAt ?? uploadedAt).map { String($0.prefix(10)) } }
 }
 
 // MARK: - Notification Models

@@ -83,7 +83,7 @@ struct ProxyDetailView: View {
                 // ── What this grant lets me open (proxy perspective) ──
                 if !isGrantor, proxy.status?.uppercased() == "ACTIVE", let patientId = proxy.grantorPatientId {
                     detailCard(title: "proxy_data_open".localized, icon: "folder.fill") {
-                        let kinds = ProxyDataKind.allCases.filter { proxy.permissionsList.contains($0.rawValue) }
+                        let kinds = ProxyDataKind.allowed(by: proxy.permissionsList)
                         if kinds.isEmpty {
                             Text("proxy_data_no_viewable".localized)
                                 .font(.subheadline).foregroundColor(.secondary)

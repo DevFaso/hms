@@ -33,6 +33,17 @@ enum ProxyDataKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The backend treats ALL as every permission, and older grants carry
+    /// un-prefixed tokens (APPOINTMENTS, RECORDS, …) that the web maps back;
+    /// an exact VIEW_* match showed "nothing viewable" for both.
+    static func allowed(by permissions: [String]) -> [ProxyDataKind] {
+        let tokens = Set(permissions.map { $0.trimmingCharacters(in: .whitespaces).uppercased() })
+        if tokens.contains("ALL") { return allCases }
+        return allCases.filter { kind in
+            tokens.contains(kind.rawValue) || tokens.contains(kind.rawValue.replacingOccurrences(of: "VIEW_", with: ""))
+        }
+    }
+
     func path(patientId: String) -> String {
         switch self {
         case .records: APIEndpoints.proxyRecords(patientId: patientId)
