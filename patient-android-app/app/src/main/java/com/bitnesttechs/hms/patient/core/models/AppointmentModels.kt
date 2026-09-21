@@ -42,10 +42,6 @@ data class AppointmentDto(
 }
 
 /**
- * POST /appointments to book a new appointment.
- * Requires at least one staff identifier: staffId, staffEmail, or staffUsername.
- */
-/**
  * POST /me/patient/appointments (PortalBookAppointmentRequestDTO). The backend
  * checks the registration, that the department belongs to the hospital, and
  * assigns the first available provider when staffId is null; endTime defaults
