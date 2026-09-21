@@ -138,7 +138,10 @@ class AppointmentsViewModel @Inject constructor(
                     _actionResult.value = "Appointment rescheduled"
                     load()
                 } else {
-                    _actionResult.value = "Reschedule failed: ${resp.code()}"
+                    val message = resp.errorBody()?.string()
+                        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
+                        ?.takeIf { it.isNotBlank() }
+                    _actionResult.value = "Reschedule failed: ${message ?: resp.code()}"
                 }
             } catch (e: Exception) { _actionResult.value = "Error: ${e.message}" }
         }

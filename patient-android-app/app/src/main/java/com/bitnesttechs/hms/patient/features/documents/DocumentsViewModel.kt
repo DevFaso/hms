@@ -70,6 +70,25 @@ class DocumentsViewModel @Inject constructor(
     }
 
     /**
+     * type/subtype only: setDataAndType does not normalise, and a
+     * "text/plain; charset=UTF-8" would match no viewer's filter. The backend
+     * stores whatever the uploader declared, so a PDF uploaded as
+     * application/octet-stream falls back to the extension's type.
+     */
+    private fun viewerMimeType(declared: okhttp3.MediaType?, name: String): String {
+        val fromServer = declared?.let { "${it.type}/${it.subtype}" }
+        if (fromServer != null && fromServer != "application/octet-stream") return fromServer
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: fromServer ?: "application/octet-stream"
+    }
+
+    /** Where downloads land; wiped on logout by [TokenStorage.clearAll]. */
+    companion object {
+        const val CACHE_DIR = "documents"
+    }
+
+    /**
      * Downloads through the authenticated client into the app's cache and
      * exposes the file via FileProvider. The old code fired ACTION_VIEW at
      * the raw URL, which sent an external viewer to an endpoint that
@@ -83,14 +102,13 @@ class DocumentsViewModel @Inject constructor(
                 val resp = api.downloadDocument(doc.id)
                 val body = resp.body()
                 if (!resp.isSuccessful || body == null) {
+                    resp.errorBody()?.close() // a @Streaming error body still holds the connection
                     _events.tryEmit(DocumentEvent.Failed("HTTP ${resp.code()}"))
                     return@launch
                 }
-                // type/subtype only: setDataAndType does not normalise, and a
-                // "text/plain; charset=UTF-8" would match no viewer's filter.
-                val mime = body.contentType()?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
+                val mime = viewerMimeType(body.contentType(), doc.name)
                 val file = withContext(Dispatchers.IO) {
-                    val dir = File(appContext.cacheDir, "documents").apply { mkdirs() }
+                    val dir = File(appContext.cacheDir, CACHE_DIR).apply { mkdirs() }
                     // The server's display name is trusted for the extension only;
                     // the id keeps two documents with the same name apart.
                     val ext = doc.name.substringAfterLast('.', "").take(8).filter { it.isLetterOrDigit() }
