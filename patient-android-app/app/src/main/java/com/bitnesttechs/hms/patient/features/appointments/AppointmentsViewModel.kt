@@ -10,11 +10,8 @@ import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -60,9 +57,13 @@ class AppointmentsViewModel @Inject constructor(
 
     private val _bookingOptions = MutableStateFlow(BookingOptions())
     val bookingOptions: StateFlow<BookingOptions> = _bookingOptions.asStateFlow()
-    /** Fired once per successful booking so the sheet closes; the snackbar comes through [actionResult]. */
-    private val _booked = MutableSharedFlow<Unit>()
-    val booked: SharedFlow<Unit> = _booked.asSharedFlow()
+    /**
+     * Owned here rather than in the composable: a rotation while a request is
+     * out would otherwise drop the sheet, and the failure that came back
+     * would never be shown.
+     */
+    private val _bookingSheetOpen = MutableStateFlow(false)
+    val bookingSheetOpen: StateFlow<Boolean> = _bookingSheetOpen.asStateFlow()
 
     private var hospitalsJob: Job? = null
     private var departmentsJob: Job? = null
@@ -91,16 +92,22 @@ class AppointmentsViewModel @Inject constructor(
     // ── Booking wizard ────────────────────────────────────────────────────────
 
     /**
-     * Called when the sheet opens: a fresh wizard, hospitals loading. A
-     * booking still in flight keeps its flag, so a second submit is refused
-     * until the first one has answered (the sheet also refuses to close
-     * while it waits).
+     * Opens the sheet on a fresh wizard with the hospitals loading. The
+     * in-flight flag is carried over inside the same atomic update the
+     * request clears it through, so whichever of the two runs first the
+     * flag ends up true only while a request is really out.
      */
-    fun openBooking() {
+    fun showBooking() {
         departmentsJob?.cancel()
         providersJob?.cancel()
-        _bookingOptions.value = BookingOptions(isBooking = bookingJob?.isActive == true)
+        _bookingOptions.update { BookingOptions(isBooking = it.isBooking) }
+        _bookingSheetOpen.value = true
         loadHospitals()
+    }
+
+    /** A sheet waiting on its request stays; the answer closes it or shows inline. */
+    fun hideBooking() {
+        if (!_bookingOptions.value.isBooking) _bookingSheetOpen.value = false
     }
 
     fun loadHospitals() {
@@ -162,8 +169,8 @@ class AppointmentsViewModel @Inject constructor(
     /**
      * Runs in [applicationScope] for the same reason [cancelAppointment] does:
      * a tab change mid-flight must not abandon a request the server may have
-     * already honoured. The sheet stays open until [booked] fires or an error
-     * is shown inline.
+     * already honoured. The sheet stays open until the answer closes it or
+     * shows the error inline.
      */
     fun book(request: BookAppointmentRequest) {
         if (bookingJob?.isActive == true) return
@@ -173,8 +180,8 @@ class AppointmentsViewModel @Inject constructor(
                 val resp = api.bookAppointment(request)
                 if (resp.isSuccessful) {
                     _bookingOptions.update { it.copy(isBooking = false) }
+                    _bookingSheetOpen.value = false
                     _actionResult.value = AppointmentOutcome(R.string.appointment_booked)
-                    _booked.emit(Unit)
                     load()
                 } else {
                     val detail = serverMessage(resp.errorBody()?.string())

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,7 +51,7 @@ fun AppointmentsScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadError by viewModel.loadError.collectAsState()
     val actionResult by viewModel.actionResult.collectAsState()
-    var showBookingSheet by remember { mutableStateOf(false) }
+    val bookingSheetOpen by viewModel.bookingSheetOpen.collectAsState()
     var cancelDialogId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -64,9 +65,6 @@ fun AppointmentsScreen(
             viewModel.clearActionResult()
             scope.launch { snackbarHostState.showSnackbar(text) }
         }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.booked.collect { showBookingSheet = false }
     }
 
     Scaffold(
@@ -90,7 +88,7 @@ fun AppointmentsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showBookingSheet = true },
+                onClick = { viewModel.showBooking() },
                 containerColor = BrandBlue
             ) {
                 Icon(Icons.Default.Add, stringResource(R.string.book_appointment), tint = Color.White)
@@ -124,7 +122,7 @@ fun AppointmentsScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.no_appointments_found), style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(16.dp))
-                    FilledTonalButton(onClick = { showBookingSheet = true }) {
+                    FilledTonalButton(onClick = { viewModel.showBooking() }) {
                         Icon(Icons.Default.Add, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.book_appointment))
@@ -231,10 +229,10 @@ fun AppointmentsScreen(
     }
 
     // Booking bottom sheet
-    if (showBookingSheet) {
+    if (bookingSheetOpen) {
         BookAppointmentSheet(
             viewModel = viewModel,
-            onDismiss = { showBookingSheet = false }
+            onDismiss = { viewModel.hideBooking() }
         )
     }
 }
@@ -254,18 +252,19 @@ fun BookAppointmentSheet(
 ) {
     val options by viewModel.bookingOptions.collectAsState()
     val context = LocalContext.current
-    var hospitalId by remember { mutableStateOf<String?>(null) }
-    var departmentId by remember { mutableStateOf<String?>(null) }
-    var staffId by remember { mutableStateOf<String?>(null) }   // null = any available provider
-    var date by remember { mutableStateOf<LocalDate?>(null) }
-    var selectedHour by remember { mutableIntStateOf(9) }
-    var selectedMinute by remember { mutableIntStateOf(0) }
-    var reason by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) { viewModel.openBooking() }
+    // Saveable, like the sheet's open flag in the view model: a rotation keeps
+    // the wizard where the patient left it, request in flight included.
+    var hospitalId by rememberSaveable { mutableStateOf<String?>(null) }
+    var departmentId by rememberSaveable { mutableStateOf<String?>(null) }
+    var staffId by rememberSaveable { mutableStateOf<String?>(null) }   // null = any available provider
+    var dateIso by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedHour by rememberSaveable { mutableIntStateOf(9) }
+    var selectedMinute by rememberSaveable { mutableIntStateOf(0) }
+    var reason by rememberSaveable { mutableStateOf("") }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    val date = dateIso?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
     val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
     val startTime = LocalTime.of(selectedHour, selectedMinute)
@@ -498,7 +497,8 @@ fun BookAppointmentSheet(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val instant = java.time.Instant.ofEpochMilli(millis)
-                        date = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+                        dateIso = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE)
                     }
                     showDatePicker = false
                 }) { Text(stringResource(R.string.ok)) }
