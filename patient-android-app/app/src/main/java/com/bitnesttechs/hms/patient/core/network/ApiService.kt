@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.core.network
 
 import com.bitnesttechs.hms.patient.core.models.*
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -87,6 +88,9 @@ interface ApiService {
         @Query("size") size: Int = 50
     ): Response<ApiResponse<PageDto<RefillDto>>>
 
+    @PUT("me/patient/refills/{refillId}/cancel")
+    suspend fun cancelRefill(@Path("refillId") refillId: String): Response<ApiResponse<RefillDto>>
+
     // ── Billing ───────────────────────────────────────────────────────────────
     @GET("me/patient/billing/invoices")
     suspend fun getInvoices(
@@ -96,6 +100,12 @@ interface ApiService {
 
     @GET("me/patient/billing/invoices/{id}")
     suspend fun getInvoice(@Path("id") id: String): Response<ApiResponse<InvoiceDto>>
+
+    @POST("me/patient/billing/invoices/{invoiceId}/pay")
+    suspend fun payInvoice(
+        @Path("invoiceId") invoiceId: String,
+        @Body request: PatientPaymentRequest
+    ): Response<ApiResponse<InvoiceDto>>
 
     @GET("me/patient/pharmacy/payments")
     suspend fun getPharmacyPayments(
@@ -139,6 +149,15 @@ interface ApiService {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
     ): Response<ApiResponse<List<DocumentDto>>>
+
+    /**
+     * Document bytes have no public URL: the backend streams them only to
+     * their owner, so the download goes through the authenticated client
+     * and is handed to a viewer from the app's cache.
+     */
+    @Streaming
+    @GET("me/patient/documents/{documentId}/download")
+    suspend fun downloadDocument(@Path("documentId") documentId: String): Response<ResponseBody>
 
     // ── Health Records ────────────────────────────────────────────────────────
     @GET("me/patient/immunizations")

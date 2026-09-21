@@ -25,6 +25,15 @@ data class AppointmentDto(
     val statusDisplay: String get() = status.replace("_", " ").lowercase()
         .replaceFirstChar { it.uppercase() }
     /** Display time range like "10:00 - 10:30" */
+    /** Length of the booked slot; 30 minutes when the record carries no times. */
+    val durationMinutes: Long get() {
+        val s = startTime?.take(5)?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+        val e = endTime?.take(5)?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+        if (s == null || e == null) return 30
+        val d = java.time.Duration.between(s, e).toMinutes()
+        return if (d in 5..480) d else 30
+    }
+
     val timeDisplay: String? get() {
         val s = startTime?.take(5)
         val e = endTime?.take(5)

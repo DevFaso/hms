@@ -28,6 +28,19 @@
         android:theme="@style/Theme.MediHubPatient"
         android:usesCleartextTraffic="false">
 
+        <!-- Serves downloaded patient documents (cache/documents) to an
+             external viewer. Documents are fetched through the authenticated
+             client because their bytes have no public URL. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Allow cleartext only for local dev emulator (10.0.2.2) -->
         <activity
             android:name=".MainActivity"

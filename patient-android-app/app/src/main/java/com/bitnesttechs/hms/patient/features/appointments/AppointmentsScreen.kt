@@ -357,15 +357,8 @@ fun BookAppointmentSheet(
 
     // Date picker dialog
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                    // Only allow today and future dates
-                    val today = System.currentTimeMillis() - 86_400_000 // allow today
-                    return utcTimeMillis >= today
-                }
-            }
-        )
+        // Same guard as the reschedule sheet: today or later, by calendar day.
+        val datePickerState = rememberDatePickerState(selectableDates = TodayOrLater)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
