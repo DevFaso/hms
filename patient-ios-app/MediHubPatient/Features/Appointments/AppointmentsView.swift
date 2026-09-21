@@ -505,6 +505,9 @@ struct BookAppointmentSheet: View {
                             HStack { ProgressView(); Text("loading".localized).foregroundColor(.secondary) }
                         } else if options.departmentsLoaded, options.departments.isEmpty {
                             Text("no_departments_for_booking".localized).foregroundColor(.secondary).font(.callout)
+                        } else if options.loadError == .departments {
+                            // The banner above carries the error and its retry.
+                            Text("booking_options_failed".localized).foregroundColor(.secondary).font(.callout)
                         } else if options.departmentsLoaded {
                             Picker("department".localized, selection: $departmentId) {
                                 Text("select_department".localized).tag("")
@@ -527,6 +530,8 @@ struct BookAppointmentSheet: View {
                             HStack { ProgressView(); Text("loading".localized).foregroundColor(.secondary) }
                         } else if options.providersLoaded, options.providers.isEmpty {
                             Text("no_providers_for_booking".localized).foregroundColor(.secondary).font(.callout)
+                        } else if options.loadError == .providers {
+                            Text("booking_options_failed".localized).foregroundColor(.secondary).font(.callout)
                         } else if options.providersLoaded {
                             Picker("provider".localized, selection: $staffId) {
                                 Text("any_provider".localized).tag("")
@@ -609,6 +614,8 @@ struct BookAppointmentSheet: View {
         }
     }
 
+    /// On the main actor: the view's state is read and written after the await.
+    @MainActor
     private func submit() async {
         // Re-read the time guard at tap time: a form left alone for minutes never re-renders.
         tapClock += 1
