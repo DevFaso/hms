@@ -14,11 +14,6 @@ final class DashboardViewModel: ObservableObject {
         notifications.filter { !$0.isRead }.count
     }
 
-    var totalDue: Double {
-        // populated by BillingViewModel — exposed here for dashboard badge
-        0
-    }
-
     var upcomingAppointments: [AppointmentDTO] {
         appointments.filter {
             let s = $0.status?.uppercased() ?? ""

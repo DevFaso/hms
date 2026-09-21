@@ -287,7 +287,10 @@ final class APIClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if let token = KeychainHelper.shared.accessToken {
+        // Same preference as request(): the OIDC token when a Keycloak
+        // session is active, else the legacy one. Sending only the legacy
+        // token made every avatar upload 401 under SSO.
+        if let token = KeychainHelper.shared.oidcAccessToken ?? KeychainHelper.shared.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -302,6 +305,59 @@ final class APIClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
         return try decodeResponse(data, statusCode: http.statusCode)
+    }
+}
+
+// MARK: - File download
+
+extension APIClient {
+    /// Fetches raw bytes with the same bearer selection and one refresh on
+    /// 401 as `request()`. Returns the bytes and the server's media type,
+    /// which is what a previewer needs and what `request<Data>` discards.
+    func downloadFile(_ path: String) async throws -> (data: Data, mimeType: String?) {
+        guard let url = URL(string: AppEnvironment.baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let usingOidc = KeychainHelper.shared.oidcAccessToken != nil
+        if let token = KeychainHelper.shared.oidcAccessToken ?? KeychainHelper.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var (data, response) = try await session.data(for: request)
+        guard var http = response as? HTTPURLResponse else { throw APIError.unknown }
+
+        if http.statusCode == 401 {
+            if usingOidc {
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                guard let fresh = refreshed else {
+                    await AuthManager.shared.logout()
+                    throw APIError.unauthorized
+                }
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            } else {
+                try await AuthManager.shared.refreshTokens()
+                if let token = KeychainHelper.shared.accessToken {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+            }
+            (data, response) = try await session.data(for: request)
+            guard let retry = response as? HTTPURLResponse else { throw APIError.unknown }
+            http = retry
+            if http.statusCode == 401 {
+                await AuthManager.shared.logout()
+                throw APIError.unauthorized
+            }
+        }
+
+        guard (200 ..< 300).contains(http.statusCode) else {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
+            throw APIError.httpError(statusCode: http.statusCode, message: msg)
+        }
+        // type/subtype only; parameters such as charset are not a media type.
+        let mime = http.value(forHTTPHeaderField: "Content-Type")?
+            .split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces) }
+        return (data, mime)
     }
 }
 

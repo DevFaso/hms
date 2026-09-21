@@ -1,4 +1,6 @@
+import QuickLook
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NotificationsView: View {
     var embeddedInNav: Bool = true
@@ -17,18 +19,45 @@ struct NotificationsView: View {
     private var content: some View {
         Group {
             if vm.isLoading, vm.notifications.isEmpty { ProgressView("loading".localized) }
-            else if vm.notifications.isEmpty {
+            else if let error = vm.errorMessage, vm.notifications.isEmpty {
+                ContentUnavailableView {
+                    Label("notifications_load_failed".localized, systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("retry".localized) { Task { await vm.load() } }
+                }
+            } else if vm.notifications.isEmpty {
                 ContentUnavailableView("no_notifications".localized, systemImage: "bell.slash.fill",
                                        description: Text("no_notifications_desc".localized))
             } else {
                 List(vm.notifications) { notif in
-                    NotificationRow(notification: notif)
+                    Button {
+                        Task { await vm.markRead(notif) }
+                    } label: {
+                        NotificationRow(notification: notif)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .listStyle(.insetGrouped)
             }
         }
         .navigationTitle("notifications".localized)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("mark_all_read".localized) { Task { await vm.markAllRead() } }
+                    .disabled(vm.unreadCount == 0)
+            }
+        }
         .refreshable { await vm.load() }
+        .alert("notification_action_failed".localized, isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {
+            Button("ok".localized, role: .cancel) {}
+        } message: {
+            Text(vm.actionError ?? "")
+        }
     }
 }
 
@@ -57,15 +86,48 @@ struct NotificationRow: View {
 final class NotificationsViewModel: ObservableObject {
     @Published var notifications: [NotificationDTO] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
+    /// A failed mark-read is a one-shot alert; `errorMessage` is the list's own state.
+    @Published var actionError: String?
+
+    var unreadCount: Int { notifications.filter { !$0.isRead }.count }
 
     func load() async {
         isLoading = true
-        let page: PageDTO<NotificationDTO>? = try? await APIClient.shared.get(
-            APIEndpoints.notifications,
-            queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-        )
-        notifications = page?.content ?? []
+        errorMessage = nil
+        do {
+            let page: PageDTO<NotificationDTO> = try await APIClient.shared.get(
+                APIEndpoints.notifications,
+                queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
+            )
+            notifications = page.content
+        } catch {
+            // A failed load is an error, not an inbox with nothing in it.
+            errorMessage = error.localizedDescription
+        }
         isLoading = false
+    }
+
+    /// Marks one notification read. The endpoints have been declared in
+    /// APIEndpoints since the scaffold; nothing called them, so an iOS
+    /// notification could never be marked read.
+    func markRead(_ notification: NotificationDTO) async {
+        guard let id = notification.id, !notification.isRead else { return }
+        do {
+            let _: NotificationDTO? = try await APIClient.shared.put(APIEndpoints.markNotificationRead(id: id))
+            await load()
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    func markAllRead() async {
+        do {
+            let _: [String: Int]? = try await APIClient.shared.put(APIEndpoints.markAllNotificationsRead)
+            await load()
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 }
 
@@ -88,23 +150,87 @@ struct DocumentsView: View {
     private var content: some View {
         Group {
             if vm.isLoading, vm.documents.isEmpty { ProgressView("loading".localized) }
-            else if vm.documents.isEmpty {
+            else if let error = vm.errorMessage, vm.documents.isEmpty {
+                ContentUnavailableView {
+                    Label("documents_load_failed".localized, systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("retry".localized) { Task { await vm.load() } }
+                }
+            } else if vm.documents.isEmpty {
                 ContentUnavailableView("no_documents".localized, systemImage: "doc.fill",
                                        description: Text("no_documents_desc".localized))
             } else {
                 List(vm.documents) { doc in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(doc.fileName ?? "Document").font(.headline)
-                        if let cat = doc.category { Text(cat).font(.caption).foregroundColor(.secondary) }
-                        if let date = doc.uploadedAt { Text(date).font(.caption2).foregroundColor(.secondary) }
+                    Button {
+                        Task { await vm.open(doc) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(doc.title).font(.headline)
+                                if let kind = doc.kind { Text(kind).font(.caption).foregroundColor(.secondary) }
+                                if let date = doc.date { Text(date).font(.caption2).foregroundColor(.secondary) }
+                            }
+                            Spacer()
+                            if vm.openingId == doc.id {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "arrow.up.right.square").foregroundColor(.accentColor)
+                            }
+                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.plain)
+                    .disabled(vm.openingId != nil)
                 }
                 .listStyle(.insetGrouped)
             }
         }
         .navigationTitle("documents".localized)
         .refreshable { await vm.load() }
+        .sheet(item: $vm.preview, onDismiss: { vm.discardPreview() }) { item in
+            DocumentPreview(url: item.url)
+                .ignoresSafeArea()
+        }
+        .alert("document_open_failed".localized, isPresented: Binding(
+            get: { vm.openError != nil },
+            set: { if !$0 { vm.openError = nil } }
+        )) {
+            Button("ok".localized, role: .cancel) {}
+        } message: {
+            Text(vm.openError ?? "")
+        }
+    }
+}
+
+/// A downloaded document, kept only for the lifetime of the preview.
+struct DocumentPreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// QuickLook renders PDFs, images and office files without an extra viewer.
+struct DocumentPreview: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+            url as NSURL
+        }
     }
 }
 
@@ -112,20 +238,81 @@ struct DocumentsView: View {
 final class DocumentsViewModel: ObservableObject {
     @Published var documents: [DocumentDTO] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var openingId: String?
+    @Published var preview: DocumentPreviewItem?
+    @Published var openError: String?
+    /// Kept apart from `preview`: SwiftUI nils the sheet's item before the
+    /// onDismiss callback runs, so the URL must survive that for the delete.
+    private var previewFileURL: URL?
+
+    private static var previewDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("documents", isDirectory: true)
+    }
 
     func load() async {
+        // Anything left from an earlier preview (a crash, a kill mid-preview)
+        // is PHI in tmp; sweep it before showing the list.
+        try? FileManager.default.removeItem(at: Self.previewDirectory)
         isLoading = true
-        let page: PageDTO<DocumentDTO>? = try? await APIClient.shared.get(
-            APIEndpoints.documents,
-            queryItems: [URLQueryItem(name: "page", value: "0"),
-                         URLQueryItem(name: "size", value: "50")]
-        )
-        if let content = page?.content {
-            documents = content
-        } else {
-            documents = await (try? APIClient.shared.get(APIEndpoints.documents)) ?? []
+        errorMessage = nil
+        do {
+            let page: PageDTO<DocumentDTO> = try await APIClient.shared.get(
+                APIEndpoints.documents,
+                queryItems: [URLQueryItem(name: "page", value: "0"),
+                             URLQueryItem(name: "size", value: "50")]
+            )
+            documents = page.content
+        } catch {
+            // The list endpoint pages; a bare array is not a shape it returns.
+            // Any failure is shown as one, not as "no documents".
+            errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Downloads through the authenticated client into a temp file for
+    /// QuickLook. `downloadUrl` was decoded and never used: the bytes are
+    /// only served to their owner, so an external viewer cannot fetch them.
+    func open(_ doc: DocumentDTO) async {
+        guard let id = doc.id, openingId == nil else { return }
+        openingId = id
+        defer { openingId = nil }
+        do {
+            let (data, mime) = try await APIClient.shared.downloadFile(APIEndpoints.documentDownload(id: id))
+            // QuickLook picks its renderer from the extension, so one is
+            // derived from the server's media type first (the stored mimeType
+            // is what the uploader declared), then from the display name. The
+            // id keeps two documents with the same name apart, and the file
+            // lives in tmp for the preview's lifetime (see discardPreview).
+            let ext = Self.fileExtension(mimeType: mime ?? doc.mimeType, name: doc.title)
+            let name = ext.isEmpty ? id : "\(id).\(ext)"
+            let url = Self.previewDirectory.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            previewFileURL = url
+            preview = DocumentPreviewItem(url: url)
+        } catch {
+            openError = error.localizedDescription
+        }
+    }
+
+    static func fileExtension(mimeType: String?, name: String) -> String {
+        if let mime = mimeType, mime != "application/octet-stream",
+           let ext = UTType(mimeType: mime)?.preferredFilenameExtension {
+            return ext
+        }
+        return (name as NSString).pathExtension.lowercased()
+    }
+
+    /// PHI does not outlive the preview.
+    func discardPreview() {
+        if let url = previewFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        previewFileURL = nil
+        preview = nil
     }
 }
 

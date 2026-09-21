@@ -307,3 +307,22 @@
 "error_not_signed_in" = "Vous n’êtes pas connecté(e).";
 "retry" = "Réessayer";
 "refresh" = "Actualiser";
+
+// Patient parity phase 1 (2026-09-21): proxy data, notifications, documents
+"mark_all_read" = "Tout marquer comme lu";
+"notifications_load_failed" = "Impossible de charger les notifications";
+"documents_load_failed" = "Impossible de charger les documents";
+"document_open_failed" = "Impossible d’ouvrir le document";
+"none" = "Aucun";
+"proxy_data_open" = "Consulter son dossier";
+"proxy_data_no_viewable" = "Cet accès ne comporte aucune permission de consultation.";
+"proxy_data_records" = "Dossier médical";
+"proxy_data_appointments" = "Rendez-vous";
+"proxy_data_medications" = "Médicaments";
+"proxy_data_lab_results" = "Résultats d’analyse";
+"proxy_data_billing" = "Facturation";
+"proxy_data_patient" = "Patient";
+"proxy_data_viewing_for" = "Consultation au nom de %@";
+"proxy_data_none" = "Rien à afficher";
+"proxy_data_error" = "Impossible de charger cette section";
+"notification_action_failed" = "La notification n’a pas pu être mise à jour";
