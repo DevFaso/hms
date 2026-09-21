@@ -364,4 +364,5 @@
     <string name="appointment_rescheduled">Rendez-vous reprogrammé</string>
     <string name="cancel_failed">Le rendez-vous n\'a pas pu être annulé</string>
     <string name="reschedule_failed">Le rendez-vous n\'a pas pu être reprogrammé</string>
+    <string name="time_already_passed">L\'heure de début est déjà passée aujourd\'hui. Choisissez une heure ultérieure ou un autre jour.</string>
 </resources>

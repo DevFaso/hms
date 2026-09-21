@@ -276,6 +276,14 @@ fun BookAppointmentSheet(
     // The server ends the slot 30 minutes after the start on the SAME date; a
     // start after 23:30 would end before it began and be refused.
     val crossesMidnight = startTime.plusMinutes(DEFAULT_SLOT_MINUTES) <= startTime
+    // The server only requires the date to be today or later, so today with a
+    // start already gone by would book a visit in the past.
+    val timeHasPassed = date == LocalDate.now() && !startTime.isAfter(LocalTime.now())
+    val timeError = when {
+        crossesMidnight -> stringResource(R.string.reschedule_crosses_midnight)
+        timeHasPassed -> stringResource(R.string.time_already_passed)
+        else -> null
+    }
 
     // While the request is out, the sheet stays: a swipe, a scrim tap or back
     // would otherwise let the patient reopen and submit the same visit twice.
@@ -288,7 +296,7 @@ fun BookAppointmentSheet(
     val provider = options.providers.find { it.id == staffId }
     val canSubmit = hospitalId != null && departmentId != null && date != null &&
         options.providersLoaded && options.providers.isNotEmpty() &&
-        !crossesMidnight && !options.isBooking &&
+        timeError == null && !options.isBooking &&
         reason.length <= REASON_MAX && notes.length <= NOTES_MAX
 
     ModalBottomSheet(
@@ -378,14 +386,13 @@ fun BookAppointmentSheet(
                 // 3. Provider, optional: the server assigns one when none is chosen.
                 BookingDropdown(
                     label = stringResource(R.string.provider_optional),
-                    value = provider?.let { listOfNotNull(it.displayName, it.roleDisplay).joinToString(" · ") }
+                    value = provider?.displayName
                         ?: if (options.providersLoaded && options.providers.isNotEmpty()) stringResource(R.string.any_provider) else "",
                     placeholder = stringResource(R.string.any_provider),
                     enabled = options.providersLoaded && options.providers.isNotEmpty(),
                     loading = options.loading == BookingStep.PROVIDERS,
                     items = listOf<Pair<String?, String>>(null to stringResource(R.string.any_provider)) +
                         options.providers.map { it.id to it.displayName },
-                    subtitles = options.providers.associate { it.id to it.roleDisplay },
                     supporting = if (options.providersLoaded && options.providers.isEmpty())
                         stringResource(R.string.no_providers_for_booking) else null,
                     onSelect = { id -> staffId = id }
@@ -409,10 +416,8 @@ fun BookAppointmentSheet(
                     value = displayTime,
                     onValueChange = {},
                     readOnly = true,
-                    isError = crossesMidnight,
-                    supportingText = if (crossesMidnight) {
-                        { Text(stringResource(R.string.reschedule_crosses_midnight)) }
-                    } else null,
+                    isError = timeError != null,
+                    supportingText = timeError?.let { { Text(it) } },
                     label = { Text(stringResource(R.string.start_time)) },
                     trailingIcon = {
                         IconButton(onClick = { showTimePicker = true }) {

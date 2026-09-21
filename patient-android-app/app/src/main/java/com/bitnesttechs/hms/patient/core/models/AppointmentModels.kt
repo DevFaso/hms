@@ -82,10 +82,8 @@ data class BookingProviderDto(
     @Json(name = "fullName") val fullName: String? = null,
     @Json(name = "role") val role: String? = null
 ) {
+    /** The role is a raw ROLE_* constant with no translation, so the sheet shows the name only, as the web does. */
     val displayName: String get() = fullName?.takeIf { it.isNotBlank() } ?: name.orEmpty()
-    /** ROLE_NURSE_PRACTITIONER -> "Nurse practitioner". */
-    val roleDisplay: String? get() = role?.removePrefix("ROLE_")?.replace('_', ' ')
-        ?.lowercase()?.replaceFirstChar { it.uppercase() }?.takeIf { it.isNotBlank() }
 }
 
 @JsonClass(generateAdapter = true)

@@ -364,4 +364,5 @@
     <string name="appointment_rescheduled">Appointment rescheduled</string>
     <string name="cancel_failed">The appointment could not be cancelled</string>
     <string name="reschedule_failed">The appointment could not be rescheduled</string>
+    <string name="time_already_passed">The start time has already passed today. Pick a later time or another day.</string>
 </resources>
