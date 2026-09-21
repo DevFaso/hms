@@ -50,6 +50,14 @@ struct NotificationsView: View {
             }
         }
         .refreshable { await vm.load() }
+        .alert("notification_action_failed".localized, isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {
+            Button("ok".localized, role: .cancel) {}
+        } message: {
+            Text(vm.actionError ?? "")
+        }
     }
 }
 
@@ -79,6 +87,8 @@ final class NotificationsViewModel: ObservableObject {
     @Published var notifications: [NotificationDTO] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// A failed mark-read is a one-shot alert; `errorMessage` is the list's own state.
+    @Published var actionError: String?
 
     var unreadCount: Int { notifications.filter { !$0.isRead }.count }
 
@@ -107,7 +117,7 @@ final class NotificationsViewModel: ObservableObject {
             let _: NotificationDTO? = try await APIClient.shared.put(APIEndpoints.markNotificationRead(id: id))
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            actionError = error.localizedDescription
         }
     }
 
@@ -116,7 +126,7 @@ final class NotificationsViewModel: ObservableObject {
             let _: [String: Int]? = try await APIClient.shared.put(APIEndpoints.markAllNotificationsRead)
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            actionError = error.localizedDescription
         }
     }
 }
@@ -232,8 +242,18 @@ final class DocumentsViewModel: ObservableObject {
     @Published var openingId: String?
     @Published var preview: DocumentPreviewItem?
     @Published var openError: String?
+    /// Kept apart from `preview`: SwiftUI nils the sheet's item before the
+    /// onDismiss callback runs, so the URL must survive that for the delete.
+    private var previewFileURL: URL?
+
+    private static var previewDirectory: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("documents", isDirectory: true)
+    }
 
     func load() async {
+        // Anything left from an earlier preview (a crash, a kill mid-preview)
+        // is PHI in tmp; sweep it before showing the list.
+        try? FileManager.default.removeItem(at: Self.previewDirectory)
         isLoading = true
         errorMessage = nil
         do {
@@ -267,12 +287,11 @@ final class DocumentsViewModel: ObservableObject {
             // lives in tmp for the preview's lifetime (see discardPreview).
             let ext = Self.fileExtension(mimeType: mime ?? doc.mimeType, name: doc.title)
             let name = ext.isEmpty ? id : "\(id).\(ext)"
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("documents", isDirectory: true)
-                .appendingPathComponent(name)
+            let url = Self.previewDirectory.appendingPathComponent(name)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try data.write(to: url, options: [.atomic, .completeFileProtection])
+            previewFileURL = url
             preview = DocumentPreviewItem(url: url)
         } catch {
             openError = error.localizedDescription
@@ -289,9 +308,10 @@ final class DocumentsViewModel: ObservableObject {
 
     /// PHI does not outlive the preview.
     func discardPreview() {
-        if let url = preview?.url {
+        if let url = previewFileURL {
             try? FileManager.default.removeItem(at: url)
         }
+        previewFileURL = nil
         preview = nil
     }
 }

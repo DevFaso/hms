@@ -325,3 +325,4 @@
 "proxy_data_viewing_for" = "Consultation au nom de %@";
 "proxy_data_none" = "Rien à afficher";
 "proxy_data_error" = "Impossible de charger cette section";
+"notification_action_failed" = "La notification n’a pas pu être mise à jour";

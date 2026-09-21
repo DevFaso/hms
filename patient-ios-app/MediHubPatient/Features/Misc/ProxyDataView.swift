@@ -63,9 +63,12 @@ struct ProxyDataView: View {
 
     var body: some View {
         Group {
-            if vm.isLoading {
+            // Spinner and error only when there is nothing on screen yet: a
+            // pull-to-refresh keeps the list, and a failed refresh keeps the
+            // data rather than swapping it for an error page.
+            if vm.isLoading, !vm.hasData(for: kind) {
                 ProgressView("loading".localized)
-            } else if let error = vm.errorMessage {
+            } else if let error = vm.errorMessage, !vm.hasData(for: kind) {
                 // A 403 (permission withdrawn since the list loaded) or an
                 // outage must read as an error, never as "nothing here".
                 ContentUnavailableView {
@@ -214,6 +217,16 @@ final class ProxyDataViewModel: ObservableObject {
     @Published var records: HealthSummaryDTO?
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    func hasData(for kind: ProxyDataKind) -> Bool {
+        switch kind {
+        case .appointments: !appointments.isEmpty
+        case .medications: !medications.isEmpty
+        case .labResults: !labResults.isEmpty
+        case .billing: !invoices.isEmpty
+        case .records: records != nil
+        }
+    }
 
     func load(patientId: String, kind: ProxyDataKind) async {
         isLoading = true

@@ -325,3 +325,4 @@
 "proxy_data_viewing_for" = "Viewing on behalf of %@";
 "proxy_data_none" = "Nothing to show";
 "proxy_data_error" = "Could not load this section";
+"notification_action_failed" = "The notification could not be updated";
