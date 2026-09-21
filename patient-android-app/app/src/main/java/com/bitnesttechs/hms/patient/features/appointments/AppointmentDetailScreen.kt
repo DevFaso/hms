@@ -332,8 +332,11 @@ private fun RescheduleSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 object TodayOrLater : SelectableDates {
     override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-        val todayUtc = java.time.LocalDate.now(ZoneId.of("UTC")).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
-        return utcTimeMillis >= todayUtc
+        // The picker's days are calendar days at UTC midnight; the floor is the
+        // patient's LOCAL today expressed the same way, so that east of UTC just
+        // after midnight yesterday is not still on offer.
+        val todayLocalAsUtc = java.time.LocalDate.now().atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+        return utcTimeMillis >= todayLocalAsUtc
     }
 }
 
