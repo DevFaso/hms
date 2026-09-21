@@ -36,6 +36,10 @@ private fun methodLabel(method: String): String = when (method) {
     else -> method
 }
 
+/** PatientPaymentRequestDTO: @Size(max = 500) reference, @Size(max = 1000) notes. */
+private const val REFERENCE_MAX = 500
+private const val NOTES_MAX = 1000
+
 private fun money(amount: Double): String = String.format(Locale.getDefault(), "%,.0f FCFA", amount)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,7 +59,14 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
         // Snackbars run in their own coroutine so this collector never stalls.
         viewModel.events.collect { event ->
             when (event) {
-                BillingEvent.PaymentRecorded -> scope.launch { snackbarHostState.showSnackbar(recorded) }
+                BillingEvent.PaymentRecorded -> {
+                    // The sheet closes here, not on tap: closing early re-enabled
+                    // the card's Pay button while the POST was in flight, and the
+                    // backend has no lock, so a second tap recorded the same
+                    // payment twice.
+                    payTarget = null
+                    scope.launch { snackbarHostState.showSnackbar(recorded) }
+                }
                 is BillingEvent.PaymentFailed ->
                     scope.launch { snackbarHostState.showSnackbar(event.detail?.let { "$failed ($it)" } ?: failed) }
             }
@@ -128,7 +139,7 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
             }
 
             items(invoices) { invoice ->
-                InvoiceCard(invoice = invoice, onPay = { payTarget = invoice })
+                InvoiceCard(invoice = invoice, payEnabled = !isPaying, onPay = { payTarget = invoice })
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
@@ -141,14 +152,13 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
             onDismiss = { payTarget = null },
             onPay = { amount, method, reference, notes ->
                 viewModel.pay(invoice.id, amount, method, reference, notes)
-                payTarget = null
             }
         )
     }
 }
 
 @Composable
-private fun InvoiceCard(invoice: InvoiceDto, onPay: () -> Unit) {
+private fun InvoiceCard(invoice: InvoiceDto, payEnabled: Boolean, onPay: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -188,6 +198,7 @@ private fun InvoiceCard(invoice: InvoiceDto, onPay: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = onPay,
+                    enabled = payEnabled,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
                 ) {
@@ -278,14 +289,14 @@ private fun PaymentSheet(
 
             OutlinedTextField(
                 value = reference,
-                onValueChange = { reference = it },
+                onValueChange = { reference = it.take(REFERENCE_MAX) },
                 label = { Text(stringResource(R.string.payment_reference)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = notes,
-                onValueChange = { notes = it },
+                onValueChange = { notes = it.take(NOTES_MAX) },
                 label = { Text(stringResource(R.string.payment_notes)) },
                 modifier = Modifier.fillMaxWidth()
             )
