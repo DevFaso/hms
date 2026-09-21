@@ -107,7 +107,6 @@
     <string name="time_label">Time</string>
     <string name="reason">Reason</string>
     <string name="notes">Notes</string>
-    <string name="select_doctor">Select a doctor</string>
     <string name="select_date">Select date</string>
     <string name="select_time">Select time</string>
     <string name="cancellation_reason">Cancellation Reason</string>
@@ -123,7 +122,6 @@
     <string name="pick_date">Pick date</string>
     <string name="pick_time">Pick time</string>
     <string name="reason_optional">Reason (optional)</string>
-    <string name="no_doctors_for_booking">No doctors found from previous appointments. Please visit a hospital first.</string>
 
     <!-- Lab Results -->
     <string name="no_lab_results">No lab results</string>
@@ -346,4 +344,24 @@
     <string name="refill_cancelled">Refill request cancelled</string>
     <string name="refill_cancel_failed">The refill request could not be cancelled</string>
     <string name="appointment_ref">Appointment %1$s</string>
+    <string name="appointments_load_failed">Your appointments could not be loaded</string>
+    <string name="select_hospital">Select a hospital</string>
+    <string name="select_department">Select a department</string>
+    <string name="provider_optional">Provider (optional)</string>
+    <string name="any_provider">Any available provider</string>
+    <string name="reason_for_visit">Reason for visit</string>
+    <string name="reason_hint">e.g. annual check-up</string>
+    <string name="additional_notes">Additional notes</string>
+    <string name="notes_hint">Any additional information for the provider</string>
+    <string name="no_hospitals_for_booking">You are not registered at any hospital yet. Ask the front desk to register you, then book from here.</string>
+    <string name="no_departments_for_booking">This hospital has no departments open for booking.</string>
+    <string name="no_providers_for_booking">No provider is available in this department right now.</string>
+    <string name="booking_options_failed">The booking options could not be loaded</string>
+    <string name="appointment_booked">Appointment scheduled</string>
+    <string name="booking_failed">The appointment could not be scheduled</string>
+    <string name="scheduling">Scheduling…</string>
+    <string name="appointment_cancelled">Appointment cancelled</string>
+    <string name="appointment_rescheduled">Appointment rescheduled</string>
+    <string name="cancel_failed">The appointment could not be cancelled</string>
+    <string name="reschedule_failed">The appointment could not be rescheduled</string>
 </resources>

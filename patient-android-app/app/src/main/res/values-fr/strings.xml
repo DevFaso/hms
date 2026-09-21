@@ -107,7 +107,6 @@
     <string name="time_label">Heure</string>
     <string name="reason">Motif</string>
     <string name="notes">Notes</string>
-    <string name="select_doctor">Sélectionner un médecin</string>
     <string name="select_date">Sélectionner une date</string>
     <string name="select_time">Sélectionner une heure</string>
     <string name="cancellation_reason">Motif d\'annulation</string>
@@ -123,7 +122,6 @@
     <string name="pick_date">Choisir une date</string>
     <string name="pick_time">Choisir une heure</string>
     <string name="reason_optional">Motif (facultatif)</string>
-    <string name="no_doctors_for_booking">Aucun médecin trouvé dans les rendez-vous précédents. Veuillez d\'abord consulter un hôpital.</string>
 
     <!-- Lab Results -->
     <string name="no_lab_results">Aucun résultat de laboratoire</string>
@@ -346,4 +344,24 @@
     <string name="refill_cancelled">Demande de renouvellement annulée</string>
     <string name="refill_cancel_failed">La demande de renouvellement n\'a pas pu être annulée</string>
     <string name="appointment_ref">Rendez-vous %1$s</string>
+    <string name="appointments_load_failed">Vos rendez-vous n\'ont pas pu être chargés</string>
+    <string name="select_hospital">Sélectionner un hôpital</string>
+    <string name="select_department">Sélectionner un service</string>
+    <string name="provider_optional">Praticien (facultatif)</string>
+    <string name="any_provider">Tout praticien disponible</string>
+    <string name="reason_for_visit">Motif de la visite</string>
+    <string name="reason_hint">ex. : bilan de santé annuel</string>
+    <string name="additional_notes">Notes supplémentaires</string>
+    <string name="notes_hint">Toute information supplémentaire pour le praticien</string>
+    <string name="no_hospitals_for_booking">Vous n\'êtes inscrit(e) dans aucun hôpital pour l\'instant. Demandez à l\'accueil de vous inscrire, puis réservez ici.</string>
+    <string name="no_departments_for_booking">Cet hôpital n\'a aucun service ouvert à la prise de rendez-vous.</string>
+    <string name="no_providers_for_booking">Aucun praticien n\'est disponible dans ce service pour le moment.</string>
+    <string name="booking_options_failed">Les options de réservation n\'ont pas pu être chargées</string>
+    <string name="appointment_booked">Rendez-vous planifié</string>
+    <string name="booking_failed">Le rendez-vous n\'a pas pu être planifié</string>
+    <string name="scheduling">Planification…</string>
+    <string name="appointment_cancelled">Rendez-vous annulé</string>
+    <string name="appointment_rescheduled">Rendez-vous reprogrammé</string>
+    <string name="cancel_failed">Le rendez-vous n\'a pas pu être annulé</string>
+    <string name="reschedule_failed">Le rendez-vous n\'a pas pu être reprogrammé</string>
 </resources>

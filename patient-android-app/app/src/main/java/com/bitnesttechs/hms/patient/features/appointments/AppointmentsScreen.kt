@@ -4,7 +4,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,10 +26,17 @@ import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
+
+/** The backend defaults the slot to 30 minutes; the wizard mirrors that so the same-day rule can be checked here. */
+private const val DEFAULT_SLOT_MINUTES = 30L
+private const val REASON_MAX = 500
+private const val NOTES_MAX = 1000
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,18 +47,25 @@ fun AppointmentsScreen(
 ) {
     val appointments by viewModel.appointments.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val bookingResult by viewModel.bookingResult.collectAsState()
+    val loadError by viewModel.loadError.collectAsState()
     val actionResult by viewModel.actionResult.collectAsState()
     var showBookingSheet by remember { mutableStateOf(false) }
     var cancelDialogId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    // Snackbar
+    // Snackbar: shown from a child coroutine so a second outcome is never
+    // waiting on the first one's dismissal.
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(bookingResult) {
-        bookingResult?.let { snackbarHostState.showSnackbar(it); viewModel.clearBookingResult() }
-    }
     LaunchedEffect(actionResult) {
-        actionResult?.let { snackbarHostState.showSnackbar(it); viewModel.clearActionResult() }
+        actionResult?.let { outcome ->
+            val text = listOfNotNull(context.getString(outcome.resId), outcome.detail).joinToString(": ")
+            viewModel.clearActionResult()
+            scope.launch { snackbarHostState.showSnackbar(text) }
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.booked.collect { showBookingSheet = false }
     }
 
     Scaffold(
@@ -82,6 +99,19 @@ fun AppointmentsScreen(
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandBlue)
+            }
+            return@Scaffold
+        }
+        if (loadError) {
+            // A failed load is not an empty diary.
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                    Icon(Icons.Default.CloudOff, null, Modifier.size(64.dp), tint = ErrorRed)
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.appointments_load_failed), style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(16.dp))
+                    FilledTonalButton(onClick = { viewModel.load() }) { Text(stringResource(R.string.retry)) }
+                }
             }
             return@Scaffold
         }
@@ -208,147 +238,241 @@ fun AppointmentsScreen(
     }
 }
 
+/**
+ * The web's booking wizard: hospital (where the patient is registered) ->
+ * department -> provider (optional, "any available" by default) -> date and
+ * start time -> reason and notes. A first-time patient with no visit history
+ * can book from here; the old sheet only listed doctors from past
+ * appointments.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookAppointmentSheet(
     viewModel: AppointmentsViewModel,
     onDismiss: () -> Unit
 ) {
-    val doctors = viewModel.doctorOptions
-    var selectedDoctorKey by remember { mutableStateOf(doctors.firstOrNull()?.key ?: "") }
-    var date by remember { mutableStateOf("") }
+    val options by viewModel.bookingOptions.collectAsState()
+    val context = LocalContext.current
+    var hospitalId by remember { mutableStateOf<String?>(null) }
+    var departmentId by remember { mutableStateOf<String?>(null) }
+    var staffId by remember { mutableStateOf<String?>(null) }   // null = any available provider
+    var date by remember { mutableStateOf<LocalDate?>(null) }
     var selectedHour by remember { mutableIntStateOf(9) }
     var selectedMinute by remember { mutableIntStateOf(0) }
     var reason by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
+    var notes by remember { mutableStateOf("") }
     var showTimePicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val selectedDoctor = doctors.find { it.key == selectedDoctorKey }
+    LaunchedEffect(Unit) { viewModel.openBooking() }
 
-    // Format the selected time for display (12-hour AM/PM)
-    val displayTime = remember(selectedHour, selectedMinute) {
-        LocalTime.of(selectedHour, selectedMinute)
-            .format(DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()))
+    val is24Hour = android.text.format.DateFormat.is24HourFormat(context)
+    val startTime = LocalTime.of(selectedHour, selectedMinute)
+    val displayTime = remember(startTime) {
+        startTime.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.getDefault()))
     }
-    // Format as HH:mm for the API (24-hour)
-    val apiTime = remember(selectedHour, selectedMinute) {
-        String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
+    val displayDate = remember(date) {
+        date?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())) ?: ""
     }
+    // The server ends the slot 30 minutes after the start on the SAME date; a
+    // start after 23:30 would end before it began and be refused.
+    val crossesMidnight = startTime.plusMinutes(DEFAULT_SLOT_MINUTES) <= startTime
+
+    val hospital = options.hospitals.find { it.id == hospitalId }
+    val department = options.departments.find { it.id == departmentId }
+    val provider = options.providers.find { it.id == staffId }
+    val canSubmit = hospitalId != null && departmentId != null && date != null &&
+        options.providersLoaded && options.providers.isNotEmpty() &&
+        !crossesMidnight && !options.isBooking &&
+        reason.length <= REASON_MAX && notes.length <= NOTES_MAX
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(stringResource(R.string.book_appointment), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
-            if (doctors.isEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        stringResource(R.string.no_doctors_for_booking),
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            } else {
-                // Doctor picker
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedDoctor?.let { "${it.staffName} — ${it.hospitalName ?: ""}" } ?: stringResource(R.string.select_doctor),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.doctor)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        doctors.forEach { doc ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(doc.staffName, fontWeight = FontWeight.Medium)
-                                        doc.hospitalName?.let {
-                                            Text(it, style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
+            when {
+                options.loadError != null -> {
+                    // A failed list is an error with a retry for that step, never a "no hospitals".
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.booking_options_failed), color = MaterialTheme.colorScheme.onErrorContainer)
+                            TextButton(onClick = {
+                                when (options.loadError) {
+                                    BookingStep.HOSPITALS -> viewModel.loadHospitals()
+                                    BookingStep.DEPARTMENTS -> hospitalId?.let { viewModel.selectHospital(it) }
+                                    BookingStep.PROVIDERS -> if (hospitalId != null && departmentId != null) {
+                                        viewModel.selectDepartment(hospitalId!!, departmentId!!)
                                     }
-                                },
-                                onClick = {
-                                    selectedDoctorKey = doc.key
-                                    expanded = false
+                                    null -> Unit
                                 }
-                            )
+                            }) { Text(stringResource(R.string.retry)) }
                         }
+                    }
+                }
+                options.loading == BookingStep.HOSPITALS -> {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+                options.hospitalsLoaded && options.hospitals.isEmpty() -> {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                        Text(
+                            stringResource(R.string.no_hospitals_for_booking),
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
             }
 
-            // Date picker field
-            OutlinedTextField(
-                value = date,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.appointment_date)) },
-                placeholder = { Text(stringResource(R.string.select_date)) },
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.CalendarMonth, stringResource(R.string.pick_date))
+            if (options.hospitalsLoaded && options.hospitals.isNotEmpty()) {
+                // 1. Hospital
+                BookingDropdown(
+                    label = stringResource(R.string.hospital),
+                    value = hospital?.name ?: "",
+                    placeholder = stringResource(R.string.select_hospital),
+                    enabled = true,
+                    items = options.hospitals.map { it.id to (it.name ?: it.id) },
+                    subtitles = options.hospitals.associate { it.id to it.address },
+                    onSelect = { id ->
+                        if (id != hospitalId) {
+                            hospitalId = id
+                            departmentId = null
+                            staffId = null
+                            id?.let { viewModel.selectHospital(it) }
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
-            )
+                )
 
-            // Time picker field (shows AM/PM display)
-            OutlinedTextField(
-                value = displayTime,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(stringResource(R.string.start_time)) },
-                trailingIcon = {
-                    IconButton(onClick = { showTimePicker = true }) {
-                        Icon(Icons.Default.Schedule, stringResource(R.string.pick_time))
+                // 2. Department
+                BookingDropdown(
+                    label = stringResource(R.string.department),
+                    value = department?.name ?: "",
+                    placeholder = stringResource(R.string.select_department),
+                    enabled = options.departmentsLoaded && options.departments.isNotEmpty(),
+                    loading = options.loading == BookingStep.DEPARTMENTS,
+                    items = options.departments.map { it.id to (it.name ?: it.id) },
+                    supporting = if (options.departmentsLoaded && options.departments.isEmpty())
+                        stringResource(R.string.no_departments_for_booking) else null,
+                    onSelect = { id ->
+                        if (id != departmentId) {
+                            departmentId = id
+                            staffId = null
+                            if (id != null && hospitalId != null) viewModel.selectDepartment(hospitalId!!, id)
+                        }
                     }
-                },
-                modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true }
-            )
+                )
 
-            OutlinedTextField(
-                value = reason,
-                onValueChange = { reason = it },
-                label = { Text(stringResource(R.string.reason_optional)) },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // 3. Provider, optional: the server assigns one when none is chosen.
+                BookingDropdown(
+                    label = stringResource(R.string.provider_optional),
+                    value = provider?.let { listOfNotNull(it.displayName, it.roleDisplay).joinToString(" · ") }
+                        ?: if (options.providersLoaded && options.providers.isNotEmpty()) stringResource(R.string.any_provider) else "",
+                    placeholder = stringResource(R.string.any_provider),
+                    enabled = options.providersLoaded && options.providers.isNotEmpty(),
+                    loading = options.loading == BookingStep.PROVIDERS,
+                    items = listOf<Pair<String?, String>>(null to stringResource(R.string.any_provider)) +
+                        options.providers.map { it.id to it.displayName },
+                    subtitles = options.providers.associate { it.id to it.roleDisplay },
+                    supporting = if (options.providersLoaded && options.providers.isEmpty())
+                        stringResource(R.string.no_providers_for_booking) else null,
+                    onSelect = { id -> staffId = id }
+                )
 
-            Button(
-                onClick = {
-                    selectedDoctor?.let { doc ->
-                        viewModel.bookAppointment(
+                // 4. Date and start time
+                OutlinedTextField(
+                    value = displayDate,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(stringResource(R.string.appointment_date)) },
+                    placeholder = { Text(stringResource(R.string.select_date)) },
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(Icons.Default.CalendarMonth, stringResource(R.string.pick_date))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
+                )
+                OutlinedTextField(
+                    value = displayTime,
+                    onValueChange = {},
+                    readOnly = true,
+                    isError = crossesMidnight,
+                    supportingText = if (crossesMidnight) {
+                        { Text(stringResource(R.string.reschedule_crosses_midnight)) }
+                    } else null,
+                    label = { Text(stringResource(R.string.start_time)) },
+                    trailingIcon = {
+                        IconButton(onClick = { showTimePicker = true }) {
+                            Icon(Icons.Default.Schedule, stringResource(R.string.pick_time))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true }
+                )
+
+                // 5. Reason and notes, with the server's caps
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text(stringResource(R.string.reason_for_visit)) },
+                    placeholder = { Text(stringResource(R.string.reason_hint)) },
+                    isError = reason.length > REASON_MAX,
+                    supportingText = { Text("${reason.length}/$REASON_MAX") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text(stringResource(R.string.additional_notes)) },
+                    placeholder = { Text(stringResource(R.string.notes_hint)) },
+                    isError = notes.length > NOTES_MAX,
+                    supportingText = { Text("${notes.length}/$NOTES_MAX") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                options.bookingError?.let { err ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                        Text(
+                            listOfNotNull(stringResource(err.resId), err.detail).joinToString(": "),
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        val h = hospitalId ?: return@Button
+                        val d = departmentId ?: return@Button
+                        val day = date ?: return@Button
+                        viewModel.book(
                             BookAppointmentRequest(
-                                appointmentDate = date,
-                                startTime = apiTime,
-                                staffId = doc.staffId,
-                                staffEmail = doc.staffEmail,
-                                hospitalId = doc.hospitalId,
-                                departmentId = doc.departmentId,
-                                reason = reason.ifBlank { null }
+                                hospitalId = h,
+                                departmentId = d,
+                                staffId = staffId,
+                                date = day.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                                startTime = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute),
+                                reason = reason.trim().ifBlank { null },
+                                notes = notes.trim().ifBlank { null }
                             )
                         )
-                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    enabled = canSubmit,
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                ) {
+                    if (options.isBooking) {
+                        CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.scheduling), fontWeight = FontWeight.SemiBold)
+                    } else {
+                        Text(stringResource(R.string.book_appointment), fontWeight = FontWeight.SemiBold)
                     }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = selectedDoctor != null && date.length >= 10,
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
-            ) {
-                Text(stringResource(R.string.book_appointment), fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(Modifier.height(32.dp))
@@ -365,8 +489,7 @@ fun BookAppointmentSheet(
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val instant = java.time.Instant.ofEpochMilli(millis)
-                        val ld = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
-                        date = ld.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                        date = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
                     }
                     showDatePicker = false
                 }) { Text(stringResource(R.string.ok)) }
@@ -384,7 +507,7 @@ fun BookAppointmentSheet(
         val timePickerState = rememberTimePickerState(
             initialHour = selectedHour,
             initialMinute = selectedMinute,
-            is24Hour = false
+            is24Hour = is24Hour
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -401,5 +524,60 @@ fun BookAppointmentSheet(
                 TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
+    }
+}
+
+/** One level of the wizard: a read-only field opening a menu of (id, label) rows, with an optional subtitle per id. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookingDropdown(
+    label: String,
+    value: String,
+    placeholder: String,
+    enabled: Boolean,
+    items: List<Pair<String?, String>>,
+    onSelect: (String?) -> Unit,
+    loading: Boolean = false,
+    subtitles: Map<String, String?> = emptyMap(),
+    supporting: String? = null
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded && enabled,
+        onExpandedChange = { if (enabled) expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled || loading,
+            label = { Text(label) },
+            placeholder = { Text(placeholder) },
+            supportingText = supporting?.let { { Text(it) } },
+            trailingIcon = {
+                if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else ExposedDropdownMenuDefaults.TrailingIcon(expanded && enabled)
+            },
+            modifier = Modifier.fillMaxWidth().menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
+            items.forEach { (id, text) ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(text, fontWeight = FontWeight.Medium)
+                            id?.let { subtitles[it] }?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSelect(id)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }

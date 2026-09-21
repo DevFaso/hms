@@ -1,103 +1,190 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.di.ApplicationScope
-import kotlinx.coroutines.CoroutineScope
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class DoctorOption(
-    val key: String,
-    val staffId: String,
-    val staffName: String,
-    val staffEmail: String?,
-    val hospitalId: String?,
-    val hospitalName: String?,
-    val departmentId: String?
+/** A snackbar message: a resource, plus the server's own detail when it gave one. */
+data class AppointmentOutcome(@StringRes val resId: Int, val detail: String? = null)
+
+/** Which of the wizard's three lists failed to load, so the sheet can retry just that one. */
+enum class BookingStep { HOSPITALS, DEPARTMENTS, PROVIDERS }
+
+/**
+ * The booking wizard's data, hospital -> department -> provider, each list
+ * loaded when the level above it is chosen (the web's flow). The selection
+ * itself lives in the sheet; this holds what the server returned for it.
+ */
+data class BookingOptions(
+    val hospitals: List<BookingHospitalDto> = emptyList(),
+    val departments: List<BookingDepartmentDto> = emptyList(),
+    val providers: List<BookingProviderDto> = emptyList(),
+    val hospitalsLoaded: Boolean = false,
+    val departmentsLoaded: Boolean = false,
+    val providersLoaded: Boolean = false,
+    val loading: BookingStep? = null,
+    val loadError: BookingStep? = null,
+    val isBooking: Boolean = false,
+    val bookingError: AppointmentOutcome? = null
 )
 
 @HiltViewModel
 class AppointmentsViewModel @Inject constructor(
     private val api: ApiService,
-    private val tokenStorage: TokenStorage,
     @ApplicationScope private val applicationScope: CoroutineScope
 ) : ViewModel() {
     private val _appointments = MutableStateFlow<List<AppointmentDto>>(emptyList())
     val appointments: StateFlow<List<AppointmentDto>> = _appointments.asStateFlow()
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-    private val _bookingResult = MutableStateFlow<String?>(null)
-    val bookingResult: StateFlow<String?> = _bookingResult.asStateFlow()
-    private val _actionResult = MutableStateFlow<String?>(null)
-    val actionResult: StateFlow<String?> = _actionResult.asStateFlow()
+    private val _loadError = MutableStateFlow(false)
+    val loadError: StateFlow<Boolean> = _loadError.asStateFlow()
+    private val _actionResult = MutableStateFlow<AppointmentOutcome?>(null)
+    val actionResult: StateFlow<AppointmentOutcome?> = _actionResult.asStateFlow()
+
+    private val _bookingOptions = MutableStateFlow(BookingOptions())
+    val bookingOptions: StateFlow<BookingOptions> = _bookingOptions.asStateFlow()
+    /** Fired once per successful booking so the sheet closes; the snackbar comes through [actionResult]. */
+    private val _booked = MutableSharedFlow<Unit>()
+    val booked: SharedFlow<Unit> = _booked.asSharedFlow()
+
+    private var hospitalsJob: Job? = null
+    private var departmentsJob: Job? = null
+    private var providersJob: Job? = null
 
     init { load() }
 
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
-            _error.value = null
+            _loadError.value = false
             try {
                 val resp = api.getAppointments(size = 50)
-                _appointments.value = resp.body()?.data ?: emptyList()
-            } catch (e: Exception) { _error.value = e.message }
-            finally { _isLoading.value = false }
-        }
-    }
-
-    /** Extract unique doctors from past appointments for the booking picker. */
-    val doctorOptions: List<DoctorOption> get() {
-        val seen = mutableSetOf<String>()
-        return _appointments.value.mapNotNull { appt ->
-            val staffId = appt.staffId ?: return@mapNotNull null
-            if (seen.add(staffId)) {
-                DoctorOption(
-                    key = staffId,
-                    staffId = staffId,
-                    staffName = appt.staffName ?: "Unknown",
-                    staffEmail = appt.staffEmail,
-                    hospitalId = appt.hospitalId,
-                    hospitalName = appt.hospitalName,
-                    departmentId = appt.departmentId
-                )
-            } else null
-        }
-    }
-
-    fun bookAppointment(request: BookAppointmentRequest) {
-        // Enrich request with patient identity; endTime and status are derived server-side
-        val enriched = request.copy(
-            patientUsername = request.patientUsername ?: tokenStorage.savedUsername
-        )
-        viewModelScope.launch {
-            try {
-                val resp = api.bookAppointment(enriched)
                 if (resp.isSuccessful) {
-                    _bookingResult.value = "Appointment booked successfully!"
-                    load() // refresh list
+                    _appointments.value = resp.body()?.data ?: emptyList()
                 } else {
-                    val errorBody = resp.errorBody()?.string()
-                    val detail = errorBody
-                        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
-                        ?.takeIf { it.isNotBlank() }
-                        ?: "status ${resp.code()}"
-                    _bookingResult.value = "Booking failed: $detail"
+                    _loadError.value = true
                 }
             } catch (e: Exception) {
-                _bookingResult.value = "Error: ${e.message}"
+                _loadError.value = true
+            } finally { _isLoading.value = false }
+        }
+    }
+
+    // ── Booking wizard ────────────────────────────────────────────────────────
+
+    /** Called when the sheet opens: a fresh wizard, hospitals loading. */
+    fun openBooking() {
+        departmentsJob?.cancel()
+        providersJob?.cancel()
+        _bookingOptions.value = BookingOptions()
+        loadHospitals()
+    }
+
+    fun loadHospitals() {
+        hospitalsJob?.cancel()
+        _bookingOptions.update { it.copy(loading = BookingStep.HOSPITALS, loadError = null) }
+        hospitalsJob = viewModelScope.launch {
+            val list = fetch { api.getBookingHospitals().body()?.data }
+            _bookingOptions.update {
+                if (list == null) it.copy(loading = null, loadError = BookingStep.HOSPITALS)
+                else it.copy(hospitals = list, hospitalsLoaded = true, loading = null)
             }
         }
     }
+
+    /**
+     * A new hospital empties the two levels below it and cancels any load still
+     * in flight for the old one, so a slow answer cannot land on the new choice.
+     */
+    fun selectHospital(hospitalId: String) {
+        departmentsJob?.cancel()
+        providersJob?.cancel()
+        _bookingOptions.update {
+            it.copy(
+                departments = emptyList(), providers = emptyList(),
+                departmentsLoaded = false, providersLoaded = false,
+                loading = BookingStep.DEPARTMENTS, loadError = null, bookingError = null
+            )
+        }
+        departmentsJob = viewModelScope.launch {
+            val list = fetch { api.getBookingDepartments(hospitalId).body()?.data }
+            _bookingOptions.update {
+                if (list == null) it.copy(loading = null, loadError = BookingStep.DEPARTMENTS)
+                else it.copy(departments = list, departmentsLoaded = true, loading = null)
+            }
+        }
+    }
+
+    fun selectDepartment(hospitalId: String, departmentId: String) {
+        providersJob?.cancel()
+        _bookingOptions.update {
+            it.copy(
+                providers = emptyList(), providersLoaded = false,
+                loading = BookingStep.PROVIDERS, loadError = null, bookingError = null
+            )
+        }
+        providersJob = viewModelScope.launch {
+            val list = fetch { api.getBookingProviders(hospitalId, departmentId).body()?.data }
+            _bookingOptions.update {
+                if (list == null) it.copy(loading = null, loadError = BookingStep.PROVIDERS)
+                else it.copy(providers = list, providersLoaded = true, loading = null)
+            }
+        }
+    }
+
+    /** Null on any failure; a cancelled job never reaches the update (CancellationException propagates). */
+    private suspend fun <T> fetch(call: suspend () -> List<T>?): List<T>? =
+        try { call() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+
+    /**
+     * Runs in [applicationScope] for the same reason [cancelAppointment] does:
+     * a tab change mid-flight must not abandon a request the server may have
+     * already honoured. The sheet stays open until [booked] fires or an error
+     * is shown inline.
+     */
+    fun book(request: BookAppointmentRequest) {
+        if (_bookingOptions.value.isBooking) return
+        _bookingOptions.update { it.copy(isBooking = true, bookingError = null) }
+        applicationScope.launch {
+            try {
+                val resp = api.bookAppointment(request)
+                if (resp.isSuccessful) {
+                    _bookingOptions.update { it.copy(isBooking = false) }
+                    _actionResult.value = AppointmentOutcome(R.string.appointment_booked)
+                    _booked.emit(Unit)
+                    load()
+                } else {
+                    val detail = serverMessage(resp.errorBody()?.string())
+                    _bookingOptions.update {
+                        it.copy(isBooking = false, bookingError = AppointmentOutcome(R.string.booking_failed, detail))
+                    }
+                }
+            } catch (e: Exception) {
+                _bookingOptions.update {
+                    it.copy(isBooking = false, bookingError = AppointmentOutcome(R.string.booking_failed, e.message))
+                }
+            }
+        }
+    }
+
+    // ── Cancel / reschedule ───────────────────────────────────────────────────
 
     /**
      * Runs in [applicationScope], not [viewModelScope]: the same tap that
@@ -113,12 +200,16 @@ class AppointmentsViewModel @Inject constructor(
                     CancelAppointmentRequest(appointmentId = appointmentId, reason = reason)
                 )
                 if (resp.isSuccessful) {
-                    _actionResult.value = "Appointment cancelled"
+                    _actionResult.value = AppointmentOutcome(R.string.appointment_cancelled)
                     load()
                 } else {
-                    _actionResult.value = "Cancel failed: ${resp.code()}"
+                    _actionResult.value = AppointmentOutcome(
+                        R.string.cancel_failed, serverMessage(resp.errorBody()?.string())
+                    )
                 }
-            } catch (e: Exception) { _actionResult.value = "Error: ${e.message}" }
+            } catch (e: Exception) {
+                _actionResult.value = AppointmentOutcome(R.string.cancel_failed, e.message)
+            }
         }
     }
 
@@ -135,18 +226,23 @@ class AppointmentsViewModel @Inject constructor(
                     )
                 )
                 if (resp.isSuccessful) {
-                    _actionResult.value = "Appointment rescheduled"
+                    _actionResult.value = AppointmentOutcome(R.string.appointment_rescheduled)
                     load()
                 } else {
-                    val message = resp.errorBody()?.string()
-                        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
-                        ?.takeIf { it.isNotBlank() }
-                    _actionResult.value = "Reschedule failed: ${message ?: resp.code()}"
+                    _actionResult.value = AppointmentOutcome(
+                        R.string.reschedule_failed, serverMessage(resp.errorBody()?.string())
+                    )
                 }
-            } catch (e: Exception) { _actionResult.value = "Error: ${e.message}" }
+            } catch (e: Exception) {
+                _actionResult.value = AppointmentOutcome(R.string.reschedule_failed, e.message)
+            }
         }
     }
 
-    fun clearBookingResult() { _bookingResult.value = null }
     fun clearActionResult() { _actionResult.value = null }
+
+    /** The wrapper's message, when the body is the usual ApiResponseWrapper. */
+    private fun serverMessage(body: String?): String? = body
+        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
+        ?.takeIf { it.isNotBlank() }
 }
