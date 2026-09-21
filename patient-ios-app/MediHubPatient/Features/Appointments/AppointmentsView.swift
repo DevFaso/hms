@@ -294,6 +294,7 @@ final class AppointmentsViewModel: ObservableObject {
     /// A new hospital empties the two levels below it and cancels any load
     /// still in flight for the old one, so a slow answer cannot land on the
     /// new choice.
+    /// An empty id is the placeholder: the levels below are emptied and nothing loads.
     func selectBookingHospital(_ hospitalId: String) {
         departmentsTask?.cancel()
         providersTask?.cancel()
@@ -301,9 +302,11 @@ final class AppointmentsViewModel: ObservableObject {
         booking.providers = []
         booking.departmentsLoaded = false
         booking.providersLoaded = false
-        booking.loading = .departments
+        booking.loading = nil
         booking.loadError = nil
         booking.bookingError = nil
+        guard !hospitalId.isEmpty else { return }
+        booking.loading = .departments
         departmentsTask = Task {
             do {
                 let list: [BookingDepartmentDTO] = try await APIClient.shared.get(
@@ -324,9 +327,11 @@ final class AppointmentsViewModel: ObservableObject {
         providersTask?.cancel()
         booking.providers = []
         booking.providersLoaded = false
-        booking.loading = .providers
+        booking.loading = nil
         booking.loadError = nil
         booking.bookingError = nil
+        guard !hospitalId.isEmpty, !departmentId.isEmpty else { return }
+        booking.loading = .providers
         providersTask = Task {
             do {
                 let list: [BookingProviderDTO] = try await APIClient.shared.get(
@@ -365,8 +370,10 @@ final class AppointmentsViewModel: ObservableObject {
             }
         }
         let booked = await task.value
-        booking.isBooking = false
+        // The flag stays up through the refresh: Book (and swipe) coming back
+        // while the list refetches let the same visit be posted twice.
         if booked { await load() }
+        booking.isBooking = false
         return booked
     }
 }
@@ -403,7 +410,9 @@ struct BookAppointmentSheet: View {
     @State private var hospitalId = ""     // "" = none chosen
     @State private var departmentId = ""
     @State private var staffId = ""        // "" = any available provider
-    @State private var appointmentDate = Date()
+    /// Tomorrow at 09:00 by default: today with a fixed morning start would
+    /// open the sheet on "already passed" for most of the day.
+    @State private var appointmentDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
     @State private var startTime: Date = {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         comps.hour = 9; comps.minute = 0
@@ -433,7 +442,7 @@ struct BookAppointmentSheet: View {
         let time = Calendar.current.dateComponents([.hour, .minute], from: startTime)
         // The server ends the slot 30 minutes after the start on the SAME date;
         // a start after 23:30 would end before it began and be refused.
-        if (time.hour ?? 0) * 60 + (time.minute ?? 0) + Self.slotMinutes > 24 * 60 {
+        if (time.hour ?? 0) * 60 + (time.minute ?? 0) + Self.slotMinutes >= 24 * 60 {
             return "crosses_midnight".localized
         }
         // The server only requires the date to be today or later, so today
@@ -483,7 +492,7 @@ struct BookAppointmentSheet: View {
                         .onChange(of: hospitalId) { _, newValue in
                             departmentId = ""
                             staffId = ""
-                            if !newValue.isEmpty { vm.selectBookingHospital(newValue) }
+                            vm.selectBookingHospital(newValue)
                         }
                         if let address = hospital?.address, !address.isEmpty {
                             Text(address).font(.caption).foregroundColor(.secondary)
@@ -505,9 +514,7 @@ struct BookAppointmentSheet: View {
                             }
                             .onChange(of: departmentId) { _, newValue in
                                 staffId = ""
-                                if !newValue.isEmpty, !hospitalId.isEmpty {
-                                    vm.selectBookingDepartment(hospitalId: hospitalId, departmentId: newValue)
-                                }
+                                vm.selectBookingDepartment(hospitalId: hospitalId, departmentId: newValue)
                             }
                         } else {
                             Text("choose_hospital_first".localized).foregroundColor(.secondary).font(.callout)
