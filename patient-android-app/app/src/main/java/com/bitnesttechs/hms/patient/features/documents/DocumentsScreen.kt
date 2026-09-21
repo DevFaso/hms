@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.DocumentDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -37,7 +38,10 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
     val snackbarHostState = remember { SnackbarHostState() }
     val openFailed = stringResource(R.string.document_open_failed)
     val noViewer = stringResource(R.string.document_no_viewer)
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
+        // showSnackbar suspends for the snackbar's lifetime; called inline it
+        // would stall this collector and drop events beyond the flow's buffer.
         viewModel.events.collect { event ->
             when (event) {
                 is DocumentEvent.Ready -> {
@@ -50,11 +54,11 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
                     try {
                         context.startActivity(intent)
                     } catch (_: ActivityNotFoundException) {
-                        snackbarHostState.showSnackbar(noViewer)
+                        scope.launch { snackbarHostState.showSnackbar(noViewer) }
                     }
                 }
                 is DocumentEvent.Failed ->
-                    snackbarHostState.showSnackbar(event.detail?.let { "$openFailed ($it)" } ?: openFailed)
+                    scope.launch { snackbarHostState.showSnackbar(event.detail?.let { "$openFailed ($it)" } ?: openFailed) }
             }
         }
     }

@@ -86,7 +86,9 @@ class DocumentsViewModel @Inject constructor(
                     _events.tryEmit(DocumentEvent.Failed("HTTP ${resp.code()}"))
                     return@launch
                 }
-                val mime = body.contentType()?.toString() ?: "application/octet-stream"
+                // type/subtype only: setDataAndType does not normalise, and a
+                // "text/plain; charset=UTF-8" would match no viewer's filter.
+                val mime = body.contentType()?.let { "${it.type}/${it.subtype}" } ?: "application/octet-stream"
                 val file = withContext(Dispatchers.IO) {
                     val dir = File(appContext.cacheDir, "documents").apply { mkdirs() }
                     // The server's display name is trusted for the extension only;

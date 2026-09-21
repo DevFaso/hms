@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.InvoiceDto
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
@@ -49,12 +50,14 @@ fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltVie
     val snackbarHostState = remember { SnackbarHostState() }
     val recorded = stringResource(R.string.payment_recorded)
     val failed = stringResource(R.string.payment_failed)
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
+        // Snackbars run in their own coroutine so this collector never stalls.
         viewModel.events.collect { event ->
             when (event) {
-                BillingEvent.PaymentRecorded -> snackbarHostState.showSnackbar(recorded)
+                BillingEvent.PaymentRecorded -> scope.launch { snackbarHostState.showSnackbar(recorded) }
                 is BillingEvent.PaymentFailed ->
-                    snackbarHostState.showSnackbar(event.detail?.let { "$failed ($it)" } ?: failed)
+                    scope.launch { snackbarHostState.showSnackbar(event.detail?.let { "$failed ($it)" } ?: failed) }
             }
         }
     }

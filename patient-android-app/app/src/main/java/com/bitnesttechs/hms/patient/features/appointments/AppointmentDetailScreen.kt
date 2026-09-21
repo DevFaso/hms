@@ -285,12 +285,7 @@ private fun RescheduleSheet(
     }
 
     if (showDatePicker) {
-        val state = rememberDatePickerState(
-            selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
-                    utcTimeMillis >= System.currentTimeMillis() - 86_400_000
-            }
-        )
+        val state = rememberDatePickerState(selectableDates = TodayOrLater)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -325,6 +320,20 @@ private fun RescheduleSheet(
                 TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
+    }
+}
+
+/**
+ * The picker hands back UTC midnight of the chosen day; comparing it with
+ * today's UTC midnight admits today and nothing earlier. The previous
+ * "now minus 24 hours" window let yesterday through for most of the day,
+ * and the backend's @FutureOrPresent then answered 400.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+object TodayOrLater : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+        val todayUtc = java.time.LocalDate.now(ZoneId.of("UTC")).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+        return utcTimeMillis >= todayUtc
     }
 }
 
