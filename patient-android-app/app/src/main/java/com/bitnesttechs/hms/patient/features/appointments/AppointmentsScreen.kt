@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -278,6 +279,11 @@ fun BookAppointmentSheet(
     // start after 23:30 would end before it began and be refused.
     val crossesMidnight = startTime.plusMinutes(DEFAULT_SLOT_MINUTES) <= startTime
 
+    // While the request is out, the sheet stays: a swipe, a scrim tap or back
+    // would otherwise let the patient reopen and submit the same visit twice.
+    val sheetState = rememberModalBottomSheetState(confirmValueChange = { !options.isBooking })
+    BackHandler(enabled = options.isBooking) {}
+
     val hospital = options.hospitals.find { it.id == hospitalId }
     val department = options.departments.find { it.id == departmentId }
     val provider = options.providers.find { it.id == staffId }
@@ -286,7 +292,10 @@ fun BookAppointmentSheet(
         !crossesMidnight && !options.isBooking &&
         reason.length <= REASON_MAX && notes.length <= NOTES_MAX
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = { if (!options.isBooking) onDismiss() },
+        sheetState = sheetState
+    ) {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())

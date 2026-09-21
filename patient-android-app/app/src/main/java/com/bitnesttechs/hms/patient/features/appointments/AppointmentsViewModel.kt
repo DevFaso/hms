@@ -67,6 +67,7 @@ class AppointmentsViewModel @Inject constructor(
     private var hospitalsJob: Job? = null
     private var departmentsJob: Job? = null
     private var providersJob: Job? = null
+    private var bookingJob: Job? = null
 
     init { load() }
 
@@ -89,11 +90,16 @@ class AppointmentsViewModel @Inject constructor(
 
     // ── Booking wizard ────────────────────────────────────────────────────────
 
-    /** Called when the sheet opens: a fresh wizard, hospitals loading. */
+    /**
+     * Called when the sheet opens: a fresh wizard, hospitals loading. A
+     * booking still in flight keeps its flag, so a second submit is refused
+     * until the first one has answered (the sheet also refuses to close
+     * while it waits).
+     */
     fun openBooking() {
         departmentsJob?.cancel()
         providersJob?.cancel()
-        _bookingOptions.value = BookingOptions()
+        _bookingOptions.value = BookingOptions(isBooking = bookingJob?.isActive == true)
         loadHospitals()
     }
 
@@ -160,9 +166,9 @@ class AppointmentsViewModel @Inject constructor(
      * is shown inline.
      */
     fun book(request: BookAppointmentRequest) {
-        if (_bookingOptions.value.isBooking) return
+        if (bookingJob?.isActive == true) return
         _bookingOptions.update { it.copy(isBooking = true, bookingError = null) }
-        applicationScope.launch {
+        bookingJob = applicationScope.launch {
             try {
                 val resp = api.bookAppointment(request)
                 if (resp.isSuccessful) {
