@@ -291,8 +291,13 @@ fun BookAppointmentSheet(
     // While the request is out, the sheet stays: a swipe, a scrim tap or back
     // would otherwise let the patient reopen and submit the same visit twice.
     // Back is the sheet's own dialog window's, not the activity's, so it is
-    // refused through the sheet properties rather than a BackHandler.
-    val sheetState = rememberModalBottomSheetState(confirmValueChange = { !options.isBooking })
+    // refused through the sheet properties rather than a BackHandler. The
+    // lambda is one remembered instance reading the latest flag: Material3
+    // keys the sheet state on it, and a fresh lambda per recomposition would
+    // rebuild the state at Hidden and drop the sheet on every list load.
+    val isBooking by rememberUpdatedState(options.isBooking)
+    val keepWhileBooking = remember { { _: SheetValue -> !isBooking } }
+    val sheetState = rememberModalBottomSheetState(confirmValueChange = keepWhileBooking)
 
     val hospital = options.hospitals.find { it.id == hospitalId }
     val department = options.departments.find { it.id == departmentId }
@@ -548,9 +553,16 @@ fun BookAppointmentSheet(
     }
 }
 
-/** Today with a start not after now: the server only checks the date, so this is the only guard. */
-private fun hasPassed(date: LocalDate?, startTime: LocalTime): Boolean =
-    date == LocalDate.now() && !startTime.isAfter(LocalTime.now())
+/**
+ * A start already gone by: today with a time not after now, or a date that
+ * became yesterday while the sheet stayed open. The server only checks the
+ * date, so this is the only guard.
+ */
+private fun hasPassed(date: LocalDate?, startTime: LocalTime): Boolean {
+    if (date == null) return false
+    val today = LocalDate.now()
+    return date.isBefore(today) || (date == today && !startTime.isAfter(LocalTime.now()))
+}
 
 /** One level of the wizard: a read-only field opening a menu of (id, label) rows, with an optional subtitle per id. */
 @OptIn(ExperimentalMaterial3Api::class)
