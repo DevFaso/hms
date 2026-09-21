@@ -1,6 +1,5 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -280,8 +279,9 @@ fun BookAppointmentSheet(
 
     // While the request is out, the sheet stays: a swipe, a scrim tap or back
     // would otherwise let the patient reopen and submit the same visit twice.
+    // Back is the sheet's own dialog window's, not the activity's, so it is
+    // refused through the sheet properties rather than a BackHandler.
     val sheetState = rememberModalBottomSheetState(confirmValueChange = { !options.isBooking })
-    BackHandler(enabled = options.isBooking) {}
 
     val hospital = options.hospitals.find { it.id == hospitalId }
     val department = options.departments.find { it.id == departmentId }
@@ -293,7 +293,8 @@ fun BookAppointmentSheet(
 
     ModalBottomSheet(
         onDismissRequest = { if (!options.isBooking) onDismiss() },
-        sheetState = sheetState
+        sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !options.isBooking)
     ) {
         Column(
             Modifier
