@@ -31,6 +31,11 @@ class BillingViewModel @Inject constructor(private val api: ApiService) : ViewMo
     private val _events = MutableSharedFlow<BillingEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<BillingEvent> = _events
 
+    /** The wrapper's `message` field, which is what the web shows; never the raw JSON. */
+    private fun serverMessage(body: String?): String? = body?.let {
+        runCatching { org.json.JSONObject(it).optString("message").takeIf { m -> m.isNotBlank() } }.getOrNull()
+    }
+
     val totalOutstanding: Double get() = invoices.value
         .filter { !it.isPaid && !it.isCancelled }
         .sumOf { it.balanceDue }
@@ -79,7 +84,7 @@ class BillingViewModel @Inject constructor(private val api: ApiService) : ViewMo
                     _events.tryEmit(BillingEvent.PaymentRecorded)
                     load()
                 } else {
-                    _events.tryEmit(BillingEvent.PaymentFailed(resp.errorBody()?.string()?.take(200) ?: "HTTP ${resp.code()}"))
+                    _events.tryEmit(BillingEvent.PaymentFailed(serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"))
                 }
             } catch (e: Exception) {
                 _events.tryEmit(BillingEvent.PaymentFailed(e.message))

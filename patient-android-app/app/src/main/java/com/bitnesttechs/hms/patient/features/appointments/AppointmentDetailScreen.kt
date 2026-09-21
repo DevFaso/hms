@@ -31,8 +31,8 @@ fun AppointmentDetailScreen(
     appointment: AppointmentDto,
     onBack: () -> Unit,
     onCancel: ((String) -> Unit)? = null,
-    /** (appointmentId, newDate as yyyy-MM-dd, newStartTime as HH:mm) */
-    onReschedule: ((String, String, String) -> Unit)? = null
+    /** (appointmentId, newDate as yyyy-MM-dd, newStartTime as HH:mm, newEndTime as HH:mm) */
+    onReschedule: ((String, String, String, String) -> Unit)? = null
 ) {
     var showCancelDialog by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
@@ -195,24 +195,27 @@ fun AppointmentDetailScreen(
 
     if (showRescheduleSheet && onReschedule != null) {
         RescheduleSheet(
+            durationMinutes = appointment.durationMinutes,
             onDismiss = { showRescheduleSheet = false },
-            onConfirm = { newDate, newTime ->
+            onConfirm = { newDate, newStart, newEnd ->
                 showRescheduleSheet = false
-                onReschedule(appointment.id, newDate, newTime)
+                onReschedule(appointment.id, newDate, newStart, newEnd)
             }
         )
     }
 }
 
 /**
- * Same date and time pickers as the booking sheet. The backend takes the
- * new date and start time and derives the end from the slot length.
+ * Same date and time pickers as the booking sheet. The backend requires an
+ * end time as well as a start, so the appointment keeps its current length
+ * (30 minutes when the record carries no times, as on iOS).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RescheduleSheet(
+    durationMinutes: Long,
     onDismiss: () -> Unit,
-    onConfirm: (newDate: String, newStartTime: String) -> Unit
+    onConfirm: (newDate: String, newStartTime: String, newEndTime: String) -> Unit
 ) {
     var date by remember { mutableStateOf("") }
     var hour by remember { mutableIntStateOf(9) }
@@ -224,6 +227,9 @@ private fun RescheduleSheet(
         LocalTime.of(hour, minute).format(DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()))
     }
     val apiTime = remember(hour, minute) { String.format(Locale.US, "%02d:%02d", hour, minute) }
+    val apiEndTime = remember(hour, minute, durationMinutes) {
+        LocalTime.of(hour, minute).plusMinutes(durationMinutes).format(DateTimeFormatter.ofPattern("HH:mm"))
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -261,7 +267,7 @@ private fun RescheduleSheet(
             )
 
             Button(
-                onClick = { onConfirm(date, apiTime) },
+                onClick = { onConfirm(date, apiTime, apiEndTime) },
                 enabled = date.length >= 10,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)

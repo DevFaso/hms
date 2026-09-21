@@ -224,8 +224,12 @@ private fun PaymentSheet(
     var notes by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
 
-    val amount = amountText.replace(',', '.').toDoubleOrNull()
-    val amountValid = amount != null && amount > 0 && amount <= invoice.balanceDue + 0.005
+    val normalised = amountText.replace(',', '.')
+    val amount = normalised.toDoubleOrNull()
+    // The backend validates @Digits(integer = 10, fraction = 2); reject a third
+    // decimal here rather than round-trip for a 400.
+    val twoDecimals = normalised.substringAfter('.', "").length <= 2
+    val amountValid = amount != null && amount > 0 && amount <= invoice.balanceDue + 0.005 && twoDecimals
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(

@@ -122,14 +122,16 @@ class AppointmentsViewModel @Inject constructor(
         }
     }
 
-    fun rescheduleAppointment(appointmentId: String, newDate: String, newStartTime: String) {
+    /** newEndTime is required by the backend (@NotNull, must follow the start). */
+    fun rescheduleAppointment(appointmentId: String, newDate: String, newStartTime: String, newEndTime: String) {
         viewModelScope.launch {
             try {
                 val resp = api.rescheduleAppointment(
                     RescheduleAppointmentRequest(
                         appointmentId = appointmentId,
                         newDate = newDate,
-                        newStartTime = newStartTime
+                        newStartTime = newStartTime,
+                        newEndTime = newEndTime
                     )
                 )
                 if (resp.isSuccessful) {

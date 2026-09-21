@@ -44,8 +44,11 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
                     val intent = Intent(Intent.ACTION_VIEW)
                         .setDataAndType(event.uri, event.mimeType)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    // Not wrapped in createChooser: the chooser always resolves,
+                    // so a phone with no viewer for this type would get Android's
+                    // generic dialog instead of the message below.
                     try {
-                        context.startActivity(Intent.createChooser(intent, null))
+                        context.startActivity(intent)
                     } catch (_: ActivityNotFoundException) {
                         snackbarHostState.showSnackbar(noViewer)
                     }
