@@ -458,7 +458,7 @@ struct BookAppointmentSheet: View {
         !hospitalId.isEmpty && !departmentId.isEmpty &&
             options.providersLoaded && !options.providers.isEmpty &&
             timeError == nil && !options.isBooking &&
-            reason.count <= Self.reasonMax && notes.count <= Self.notesMax
+            reason.utf16.count <= Self.reasonMax && notes.utf16.count <= Self.notesMax
     }
 
     var body: some View {
@@ -556,14 +556,15 @@ struct BookAppointmentSheet: View {
                     Section("visit_details".localized) {
                         TextField("reason_for_visit".localized, text: $reason, axis: .vertical)
                             .lineLimit(2 ... 4)
-                        Text("\(reason.count)/\(Self.reasonMax)")
+                        // UTF-16 units, which is what the server's @Size counts.
+                        Text("\(reason.utf16.count)/\(Self.reasonMax)")
                             .font(.caption2)
-                            .foregroundColor(reason.count > Self.reasonMax ? .red : .secondary)
+                            .foregroundColor(reason.utf16.count > Self.reasonMax ? .red : .secondary)
                         TextField("additional_notes".localized, text: $notes, axis: .vertical)
                             .lineLimit(2 ... 4)
-                        Text("\(notes.count)/\(Self.notesMax)")
+                        Text("\(notes.utf16.count)/\(Self.notesMax)")
                             .font(.caption2)
-                            .foregroundColor(notes.count > Self.notesMax ? .red : .secondary)
+                            .foregroundColor(notes.utf16.count > Self.notesMax ? .red : .secondary)
                     }
 
                     if let err = options.bookingError {
