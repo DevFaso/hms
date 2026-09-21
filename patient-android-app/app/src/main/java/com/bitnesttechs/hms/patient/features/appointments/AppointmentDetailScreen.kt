@@ -131,7 +131,9 @@ fun AppointmentDetailScreen(
                 DetailRow(stringResource(R.string.location), appointment.hospitalName ?: "—")
             }
 
-            val isActive = appointment.status.uppercase() in listOf("SCHEDULED", "CONFIRMED")
+            // RESCHEDULED is what the backend sets after a move; the patient can
+            // still move or cancel it, so it must keep both actions.
+            val isActive = appointment.status.uppercase() in listOf("SCHEDULED", "CONFIRMED", "RESCHEDULED")
             if (isActive) {
                 Spacer(Modifier.height(8.dp))
 
@@ -227,9 +229,11 @@ private fun RescheduleSheet(
         LocalTime.of(hour, minute).format(DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()))
     }
     val apiTime = remember(hour, minute) { String.format(Locale.US, "%02d:%02d", hour, minute) }
-    val apiEndTime = remember(hour, minute, durationMinutes) {
-        LocalTime.of(hour, minute).plusMinutes(durationMinutes).format(DateTimeFormatter.ofPattern("HH:mm"))
-    }
+    val endTime = remember(hour, minute, durationMinutes) { LocalTime.of(hour, minute).plusMinutes(durationMinutes) }
+    val apiEndTime = remember(endTime) { endTime.format(DateTimeFormatter.ofPattern("HH:mm")) }
+    // LocalTime wraps past midnight, and the backend rejects an end that
+    // does not follow the start; a slot that would cross midnight is refused here.
+    val sameDay = remember(hour, minute, endTime) { endTime.isAfter(LocalTime.of(hour, minute)) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -268,10 +272,14 @@ private fun RescheduleSheet(
 
             Button(
                 onClick = { onConfirm(date, apiTime, apiEndTime) },
-                enabled = date.length >= 10,
+                enabled = date.length >= 10 && sameDay,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
             ) { Text(stringResource(R.string.reschedule), fontWeight = FontWeight.SemiBold) }
+            if (!sameDay) {
+                Text(stringResource(R.string.reschedule_crosses_midnight),
+                    style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+            }
             Spacer(Modifier.height(32.dp))
         }
     }

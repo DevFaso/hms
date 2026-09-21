@@ -177,7 +177,9 @@ private fun InvoiceCard(invoice: InvoiceDto, onPay: () -> Unit) {
             if (invoice.paidAmount > 0) {
                 AmountRow(stringResource(R.string.invoice_paid), money(invoice.paidAmount), SuccessGreen)
             }
-            val payable = !invoice.isPaid && !invoice.isCancelled && invoice.balanceDue > 0
+            // The endpoint accepts SENT and PARTIALLY_PAID only; a DRAFT would
+            // reach a 400 after the sheet, so it gets no Pay button.
+            val payable = invoice.status.uppercase() in listOf("SENT", "PARTIALLY_PAID") && invoice.balanceDue > 0
             if (payable) {
                 AmountRow(stringResource(R.string.balance_due), money(invoice.balanceDue), WarningAmber, bold = true)
                 Spacer(Modifier.height(12.dp))
@@ -207,8 +209,12 @@ private fun AmountRow(label: String, value: String, color: Color = Color.Unspeci
 
 /**
  * Records a payment made outside the app (mobile money, cash at the desk,
- * a card terminal, a transfer). There is no gateway here: what the patient
- * enters is what the hospital's billing sees, exactly as on the web.
+ * a card terminal, a transfer). There is no gateway here. The form matches
+ * the web's, but the backend persists only the amount today: method,
+ * reference and notes are accepted and dropped (PatientPortalController
+ * .payMyInvoice forwards dto.getAmount() alone). The hint says so rather
+ * than promising the cashier a reference they will never see; the backend
+ * gap is recorded in tasklist.md.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

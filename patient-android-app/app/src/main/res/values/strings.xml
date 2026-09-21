@@ -314,7 +314,7 @@
     <string name="invoice_paid">Paid</string>
     <string name="balance_due">Balance due</string>
     <string name="pay_invoice">Pay invoice</string>
-    <string name="payment_sheet_hint">Record a payment for invoice %1$s. Balance due: %2$s.</string>
+    <string name="payment_sheet_hint">Record a payment for invoice %1$s. Balance due: %2$s. Keep your receipt: only the amount is stored for now.</string>
     <string name="payment_amount">Amount (FCFA)</string>
     <string name="payment_amount_invalid">Enter an amount between 0 and the balance due</string>
     <string name="payment_method">Payment method</string>
@@ -342,5 +342,6 @@
     <string name="record_info">Record info</string>
     <string name="location">Location</string>
     <string name="reason_optional_label">Reason (optional)</string>
+    <string name="reschedule_crosses_midnight">The slot would end after midnight. Pick an earlier time.</string>
     <string name="appointment_ref">Appointment %1$s</string>
 </resources>
