@@ -22,6 +22,15 @@ data class InvoiceDto(
         .replaceFirstChar { it.uppercase() }
 }
 
+/** Mirrors PatientPaymentRequestDTO: the same body the web portal sends. */
+@JsonClass(generateAdapter = true)
+data class PatientPaymentRequest(
+    @Json(name = "amount") val amount: Double,
+    @Json(name = "paymentMethod") val paymentMethod: String,
+    @Json(name = "transactionReference") val transactionReference: String? = null,
+    @Json(name = "notes") val notes: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class InvoiceItemDto(
     @Json(name = "id") val id: String = "",

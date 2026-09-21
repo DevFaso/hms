@@ -36,6 +36,23 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
         }
     }
 
+    /** Withdraws a refill request the provider has not acted on yet. */
+    fun cancelRefill(refillId: String) {
+        viewModelScope.launch {
+            try {
+                val resp = api.cancelRefill(refillId)
+                if (resp.isSuccessful) {
+                    _snackbar.value = "Refill request cancelled"
+                    load()
+                } else {
+                    _snackbar.value = "Could not cancel the refill request (HTTP ${resp.code()})"
+                }
+            } catch (e: Exception) {
+                _snackbar.value = "Could not cancel the refill request (${e.message})"
+            }
+        }
+    }
+
     fun requestRefill(prescriptionId: String, pharmacy: String?, notes: String?) {
         viewModelScope.launch {
             try {

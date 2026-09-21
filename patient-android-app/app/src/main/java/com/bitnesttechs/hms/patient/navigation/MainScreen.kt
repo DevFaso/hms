@@ -267,6 +267,13 @@ fun MainScreen(onLogout: () -> Unit) {
                                     reason = reason.ifBlank { null }
                                 )
                                 navController.popBackStack()
+                            },
+                            onReschedule = { id, newDate, newStartTime ->
+                                // Was never passed, so the view model's reschedule
+                                // call was unreachable and the detail screen had
+                                // no way to move an appointment.
+                                appointmentsViewModel.rescheduleAppointment(id, newDate, newStartTime)
+                                navController.popBackStack()
                             }
                         )
                     }
