@@ -287,30 +287,27 @@ interface ApiService {
         @Body request: SendChatMessageRequest
     ): Response<ChatMessageDto>
 
-    // ── Consents / Privacy ────────────────────────────────────────────────────
-    @GET("me/patient/consents")
-    suspend fun getConsents(
+    // ── Sharing & privacy (web: my-sharing) ──────────────────────────────────
+    /** Accounting of disclosures: per-category counts over the whole window plus one page of events, newest first. */
+    @GET("me/patient/disclosures")
+    suspend fun getMyDisclosures(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
-    ): Response<ApiResponse<PageDto<ConsentDto>>>
+    ): Response<ApiResponse<DisclosureAccountingDto>>
 
-    @POST("me/patient/consents/{id}/grant")
-    suspend fun grantConsent(
-        @Path("id") id: String,
-        @Body request: GrantConsentRequest
-    ): Response<ApiResponse<ConsentDto>>
+    /** Bare DTO, not wrapped. A patient may only read their own (403 otherwise). */
+    @GET("patients/{patientId}/record-sharing/opt-out")
+    suspend fun getRecordSharingOptOut(@Path("patientId") patientId: String): Response<RecordSharingOptOutDto>
 
-    @DELETE("me/patient/consents")
-    suspend fun revokeConsent(
-        @Query("fromHospitalId") fromHospitalId: String,
-        @Query("toHospitalId") toHospitalId: String
-    ): Response<ApiResponse<Unit>>
+    /** Idempotent by refusal: a second opt-out is 409 with the server's message. */
+    @POST("patients/{patientId}/record-sharing/opt-out")
+    suspend fun optOutOfRecordSharing(
+        @Path("patientId") patientId: String,
+        @Body request: OptOutRequest
+    ): Response<RecordSharingOptOutDto>
 
-    @GET("me/patient/access-log")
-    suspend fun getAccessLog(
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<AccessLogDto>>>
+    @DELETE("patients/{patientId}/record-sharing/opt-out")
+    suspend fun revokeRecordSharingOptOut(@Path("patientId") patientId: String): Response<RecordSharingOptOutDto>
 
     // ── Proxy / Family Access ─────────────────────────────────────────────────
     @GET("me/patient/proxies")
