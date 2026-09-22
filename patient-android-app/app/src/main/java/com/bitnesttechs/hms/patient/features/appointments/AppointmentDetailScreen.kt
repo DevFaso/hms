@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bitnesttechs.hms.patient.R
+import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.core.models.AppointmentDto
 import com.bitnesttechs.hms.patient.ui.theme.*
 import java.time.Instant
@@ -32,7 +33,8 @@ fun AppointmentDetailScreen(
     onBack: () -> Unit,
     onCancel: ((String) -> Unit)? = null,
     /** (appointmentId, newDate as yyyy-MM-dd, newStartTime as HH:mm, newEndTime as HH:mm) */
-    onReschedule: ((String, String, String, String) -> Unit)? = null
+    onReschedule: ((String, String, String, String) -> Unit)? = null,
+    onPreCheckIn: (() -> Unit)? = null
 ) {
     var showCancelDialog by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
@@ -136,6 +138,43 @@ fun AppointmentDetailScreen(
             val isActive = appointment.status.uppercase() in listOf("SCHEDULED", "CONFIRMED", "RESCHEDULED")
             if (isActive) {
                 Spacer(Modifier.height(8.dp))
+
+                // Pre-check-in, as on the web: offered on SCHEDULED/CONFIRMED visits
+                // not yet checked in. The server accepts it from seven days before
+                // the visit up to the day itself, so outside that window the button
+                // waits rather than sending a request that can only be refused.
+                if (appointment.preCheckedIn == true) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.pre_checkin_done), color = SuccessGreen, fontWeight = FontWeight.Medium)
+                    }
+                } else if (onPreCheckIn != null && appointment.status.uppercase() in listOf("SCHEDULED", "CONFIRMED")) {
+                    val daysUntil = runCatching {
+                        java.time.temporal.ChronoUnit.DAYS.between(
+                            java.time.LocalDate.now(), java.time.LocalDate.parse(appointment.appointmentDate.take(10))
+                        )
+                    }.getOrNull()
+                    val inWindow = daysUntil != null && daysUntil in 0..PRE_CHECKIN_WINDOW_DAYS
+                    OutlinedButton(onClick = onPreCheckIn, enabled = inWindow, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.FactCheck, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.pre_checkin_online))
+                    }
+                    if (!inWindow) {
+                        // Before the window it has not opened; a visit already dated in the past has closed.
+                        val closed = daysUntil != null && daysUntil < 0
+                        Text(
+                            if (closed) stringResource(R.string.pre_checkin_closed)
+                            else stringResource(R.string.pre_checkin_window, PRE_CHECKIN_WINDOW_DAYS),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
                 if (onReschedule != null) {
                     OutlinedButton(
@@ -339,6 +378,9 @@ object TodayOrLater : SelectableDates {
         return utcTimeMillis >= todayLocalAsUtc
     }
 }
+
+/** The server's pre-check-in window: from this many days before the visit to the day itself. */
+private const val PRE_CHECKIN_WINDOW_DAYS = 7L
 
 @Composable
 fun DetailCard(
