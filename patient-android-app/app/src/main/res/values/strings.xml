@@ -396,4 +396,5 @@
     <string name="nothing_to_update">No changes to your details.</string>
     <string name="questionnaires_completed">Questionnaires completed: %1$d of %2$d</string>
     <string name="precheckin_failed">The pre-check-in could not be submitted</string>
+    <string name="answers_invalid">Fix the highlighted answers to continue.</string>
 </resources>

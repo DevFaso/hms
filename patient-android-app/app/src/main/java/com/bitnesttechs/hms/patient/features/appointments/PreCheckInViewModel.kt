@@ -152,7 +152,8 @@ class PreCheckInViewModel @Inject constructor(
         if (!isNumeric(question)) return null
         val text = (value as? String)?.trim().orEmpty()
         if (text.isEmpty()) return null
-        val number = text.replace(',', '.').toDoubleOrNull() ?: return AnswerProblem.NOT_A_NUMBER
+        // toDoubleOrNull accepts NaN, Infinity and 1e400, which org.json then refuses.
+        val number = text.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() } ?: return AnswerProblem.NOT_A_NUMBER
         val below = question.min != null && number < question.min
         val above = question.max != null && number > question.max
         return if (below || above) AnswerProblem.OUT_OF_RANGE else null
@@ -166,13 +167,18 @@ class PreCheckInViewModel @Inject constructor(
         else -> value != null
     }
 
-    /** Required questions answered and no numeric problems: the questionnaires step may advance. */
-    fun questionnairesComplete(s: UiState): Boolean = s.questionnaires.all { q ->
-        q.questions.all { question ->
-            val value = s.answers[q.id]?.get(question.id)
-            (!question.required || isAnswered(value)) && problem(question, value) == null
-        }
+    /** A required question without an answer. */
+    fun missingRequired(s: UiState): Boolean = s.questionnaires.any { q ->
+        q.questions.any { it.required && !isAnswered(s.answers[q.id]?.get(it.id)) }
     }
+
+    /** An answer that cannot be sent as typed (a number that is not one, or out of range). */
+    fun hasAnswerProblems(s: UiState): Boolean = s.questionnaires.any { q ->
+        q.questions.any { problem(it, s.answers[q.id]?.get(it.id)) != null }
+    }
+
+    /** Required questions answered and no numeric problems: the questionnaires step may advance. */
+    fun questionnairesComplete(s: UiState): Boolean = !missingRequired(s) && !hasAnswerProblems(s)
 
     /** Questionnaires with at least one answer: what the review step counts and what is sent. */
     fun answeredQuestionnaires(s: UiState): Int =
@@ -241,7 +247,7 @@ class PreCheckInViewModel @Inject constructor(
         if (value is Boolean) return value
         val text = value.toString().trim()
         if (question != null && question.type == "NUMBER") {
-            val number = text.replace(',', '.').toDoubleOrNull() ?: return text
+            val number = text.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() } ?: return text
             return if (number % 1.0 == 0.0) number.toLong() else number
         }
         return text

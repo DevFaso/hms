@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -47,13 +48,17 @@ fun PreCheckInScreen(
     val state by viewModel.state.collectAsState()
     LaunchedEffect(appointment.id) { viewModel.load(appointment.id) }
     LaunchedEffect(state.submitted) { if (state.submitted) onCompleted() }
+    // Leaving mid-submit would strand the answer: this view model is its only
+    // observer, so the list would never reload and the detail would still offer
+    // the button. Back waits for the answer.
+    BackHandler(enabled = state.isSubmitting) {}
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.pre_checkin)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, enabled = !state.isSubmitting) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
@@ -350,7 +355,9 @@ private fun StepBar(state: UiState, viewModel: PreCheckInViewModel, appointmentI
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (state.step == Step.QUESTIONNAIRES && state.questionnairesLoaded && !questionnairesOk) {
-                Text(stringResource(R.string.required_answers_missing), style = MaterialTheme.typography.bodySmall, color = ErrorRed)
+                // Say which: a starred question left blank, or an answer that cannot be sent as typed.
+                val hint = if (viewModel.missingRequired(state)) R.string.required_answers_missing else R.string.answers_invalid
+                Text(stringResource(hint), style = MaterialTheme.typography.bodySmall, color = ErrorRed)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 if (index > 0) {
