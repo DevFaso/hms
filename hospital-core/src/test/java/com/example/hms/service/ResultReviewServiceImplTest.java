@@ -116,6 +116,99 @@ class ResultReviewServiceImplTest {
     // ========== getResultReviewQueue() ==========
 
     @Test
+    void reopenedOrdersKeepTheirReleasedResultsInTheQueue() {
+        // A late or corrected result re-opens a COMPLETED order to RESULTED.
+        // Keying the queue on COMPLETED alone made every result of that order
+        // — including ones released days earlier — vanish from the doctor's
+        // queue until the new one was released.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Traore");
+
+        List<DoctorResultQueueItemDTO> seen = new java.util.ArrayList<>();
+        for (LabOrderStatus status : List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED)) {
+            UUID orderId = UUID.randomUUID();
+            LabOrder order = mock(LabOrder.class);
+            when(order.getId()).thenReturn(orderId);
+            when(order.getStatus()).thenReturn(status);
+            when(order.getPatient()).thenReturn(patient);
+
+            LabResult released = mock(LabResult.class);
+            lenient().when(released.getId()).thenReturn(UUID.randomUUID());
+            lenient().when(released.isReleased()).thenReturn(true);
+
+            when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+            when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
+
+            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+            assertEquals(1, queue.size(), "queue for order status " + status);
+            seen.addAll(queue);
+        }
+        assertEquals(2, seen.size());
+    }
+
+    @Test
+    void ordersStillWithTheLabStayOutOfTheQueue() {
+        // The other side of the same rule: nothing has come back yet, so the
+        // order is the laboratory's, not the doctor's.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        givenStaffFor(userId, staff);
+
+        LabOrder collected = mock(LabOrder.class);
+        when(collected.getStatus()).thenReturn(LabOrderStatus.COLLECTED);
+        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(collected));
+
+        assertEquals(0, service.getResultReviewQueue(userId).size());
+    }
+
+    @Test
+    void unreleasedResultsStayOutOfTheQueue() {
+        // A result entered on an order that had already completed (a
+        // correction, a late analyte) is not on the chart until the lab
+        // releases it; the queue must not hand the doctor an unreleased number.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Traore");
+        UUID orderId = UUID.randomUUID();
+        LabOrder order = mock(LabOrder.class);
+        when(order.getId()).thenReturn(orderId);
+        when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        when(order.getPatient()).thenReturn(patient);
+
+        LabResult released = mock(LabResult.class);
+        lenient().when(released.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(released.isReleased()).thenReturn(true);
+        LabResult pending = mock(LabResult.class);
+        lenient().when(pending.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(pending.isReleased()).thenReturn(false);
+
+        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released, pending));
+
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+
+        assertEquals(1, queue.size());
+        assertEquals(released.getId(), queue.get(0).getId());
+    }
+
+    @Test
     void getResultReviewQueue_noStaff_shouldReturnEmptyList() {
         UUID userId = UUID.randomUUID();
         givenNoStaffFor(userId);
@@ -151,6 +244,7 @@ class ResultReviewServiceImplTest {
 
         UUID resultId = UUID.randomUUID();
         LabResult labResult = mock(LabResult.class);
+        lenient().when(labResult.isReleased()).thenReturn(true);
         when(labResult.getId()).thenReturn(resultId);
         when(labResult.getResultValue()).thenReturn("12.5 g/dL");
         // B18: a directional row still lands in the portal's ABNORMAL bucket.
@@ -192,6 +286,8 @@ class ResultReviewServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(null);
 
         LabResult labResult = mock(LabResult.class);
+
+        lenient().when(labResult.isReleased()).thenReturn(true);
         when(labResult.getId()).thenReturn(UUID.randomUUID());
         when(labResult.getResultValue()).thenReturn("Normal");
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now());
@@ -259,12 +355,15 @@ class ResultReviewServiceImplTest {
 
         // Two results: one NORMAL, one ABNORMAL
         LabResult normalResult = mock(LabResult.class);
+        lenient().when(normalResult.isReleased()).thenReturn(true);
         when(normalResult.getId()).thenReturn(UUID.randomUUID());
         when(normalResult.getResultValue()).thenReturn("Normal");
         when(normalResult.getAbnormalFlag()).thenReturn(AbnormalFlag.NORMAL);
         when(normalResult.getResultDate()).thenReturn(LocalDateTime.now());
 
         LabResult abnormalResult = mock(LabResult.class);
+
+        lenient().when(abnormalResult.isReleased()).thenReturn(true);
         when(abnormalResult.getId()).thenReturn(UUID.randomUUID());
         when(abnormalResult.getResultValue()).thenReturn("Critical");
         when(abnormalResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL);
@@ -823,11 +922,15 @@ class ResultReviewServiceImplTest {
         when(order.getClinicalIndication()).thenReturn(null);
 
         LabResult result1 = mock(LabResult.class);
+
+        lenient().when(result1.isReleased()).thenReturn(true);
         when(result1.getId()).thenReturn(UUID.randomUUID());
         when(result1.getResultValue()).thenReturn("5");
         when(result1.getResultDate()).thenReturn(null);
 
         LabResult result2 = mock(LabResult.class);
+
+        lenient().when(result2.isReleased()).thenReturn(true);
         when(result2.getId()).thenReturn(UUID.randomUUID());
         when(result2.getResultValue()).thenReturn("10");
         when(result2.getResultDate()).thenReturn(LocalDateTime.now());
@@ -902,6 +1005,8 @@ class ResultReviewServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(def);
 
         LabResult result = mock(LabResult.class);
+
+        lenient().when(result.isReleased()).thenReturn(true);
         when(result.getId()).thenReturn(UUID.randomUUID());
         when(result.getAbnormalFlag()).thenReturn(null);
         when(result.isAcknowledged()).thenReturn(false);
@@ -1031,11 +1136,15 @@ class ResultReviewServiceImplTest {
         when(order.getId()).thenReturn(UUID.randomUUID());
 
         LabResult critical = mock(LabResult.class);
+
+        lenient().when(critical.isReleased()).thenReturn(true);
         when(critical.getId()).thenReturn(UUID.randomUUID());
         when(critical.getAbnormalFlag()).thenReturn(AbnormalFlag.CRITICAL);
         lenient().when(critical.getResultDate()).thenReturn(LocalDateTime.now().minusHours(1));
 
         LabResult normal = mock(LabResult.class);
+
+        lenient().when(normal.isReleased()).thenReturn(true);
         when(normal.getId()).thenReturn(UUID.randomUUID());
         when(normal.getAbnormalFlag()).thenReturn(AbnormalFlag.NORMAL);
         lenient().when(normal.getResultDate()).thenReturn(LocalDateTime.now());

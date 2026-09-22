@@ -713,10 +713,15 @@ public class SecurityConfig {
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
 
-                // Technicians can enter preliminary results; scientists/managers verify/release
+                // The UNION of LabResultAuthority.ENTRY_EXPRESSION, which is the
+                // annotation on POST /lab-results: LAB_DIRECTOR, QUALITY_MANAGER
+                // and SUPER_ADMIN were missing here and got 403 before the
+                // annotation that admits them ever ran
+                // (SecurityConfigLabMatcherTest pins the two lists together).
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 // Aligned to LabResultController's acknowledge @PreAuthorize
                 // exactly: the old list omitted HOSPITAL_ADMIN / LAB_DIRECTOR /
