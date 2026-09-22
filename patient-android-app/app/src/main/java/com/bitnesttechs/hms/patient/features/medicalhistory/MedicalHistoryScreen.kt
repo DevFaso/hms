@@ -93,8 +93,13 @@ fun MedicalHistoryScreen(
             snackbarHostState.showSnackbar(text)
         }
     }
-    // Back while a note is open saves it and closes the editor instead of leaving.
-    BackHandler(enabled = state.editing != null) { state.editing?.let { viewModel.toggleNoteEdit(it) } }
+    // One exit for the system back and the top-bar arrow: an open note is
+    // saved and closed first (the write outlives this screen), then we leave.
+    val leave = {
+        state.editing?.let { viewModel.toggleNoteEdit(it) }
+        onBack()
+    }
+    BackHandler(enabled = state.editing != null) { leave() }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -102,7 +107,7 @@ fun MedicalHistoryScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.medical_history_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = leave) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
@@ -139,7 +144,7 @@ fun MedicalHistoryScreen(
             socialSection(state.social, onRetry = { viewModel.loadSocial() })
             notes(Section.SOCIAL, R.string.mh_personal_notes_social, state, viewModel)
 
-            item { Spacer(Modifier.height(24.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(24.dp)) }
         }
     }
 }
@@ -157,13 +162,14 @@ private fun <T> LazyListScope.section(
     onRetry: () -> Unit,
     row: @Composable (T) -> Unit
 ) {
-    item { SectionHeader(stringResource(title), icon, tint) }
+    // Keys are stable across a section's states so an editor below keeps its identity (and focus) when the section resolves.
+    item(key = "$title-header") { SectionHeader(stringResource(title), icon, tint) }
     val data = state.data
     when {
-        state.loading -> item { LoadingRow() }
-        state.failed -> item { FailedRow(onRetry) }
-        data.isNullOrEmpty() -> item { EmptyRow(stringResource(emptyRes), plain = plainEmpty) }
-        else -> item {
+        state.loading -> item(key = "$title-loading") { LoadingRow() }
+        state.failed -> item(key = "$title-failed") { FailedRow(onRetry) }
+        data.isNullOrEmpty() -> item(key = "$title-empty") { EmptyRow(stringResource(emptyRes), plain = plainEmpty) }
+        else -> item(key = "$title-rows") {
             Card(shape = RoundedCornerShape(12.dp)) {
                 Column {
                     data.forEachIndexed { index, entry ->
@@ -177,16 +183,16 @@ private fun <T> LazyListScope.section(
 }
 
 private fun LazyListScope.socialSection(state: SectionState<SocialHistory>, onRetry: () -> Unit) {
-    item { SectionHeader(stringResource(R.string.mh_social), Icons.Default.Groups, SocialAmber) }
+    item(key = "social-header") { SectionHeader(stringResource(R.string.mh_social), Icons.Default.Groups, SocialAmber) }
     val sh = state.data
     when {
-        state.loading -> item { LoadingRow() }
-        state.failed -> item { FailedRow(onRetry) }
-        sh == null -> item { EmptyRow(stringResource(R.string.mh_no_social), plain = false) }
+        state.loading -> item(key = "social-loading") { LoadingRow() }
+        state.failed -> item(key = "social-failed") { FailedRow(onRetry) }
+        sh == null -> item(key = "social-empty") { EmptyRow(stringResource(R.string.mh_no_social), plain = false) }
         else -> {
-            item { SmokingCard(sh) }
-            item { SmokelessCard(sh) }
-            item { AlcoholCard(sh) }
+            item(key = "social-smoking") { SmokingCard(sh) }
+            item(key = "social-smokeless") { SmokelessCard(sh) }
+            item(key = "social-alcohol") { AlcoholCard(sh) }
         }
     }
 }
@@ -199,7 +205,7 @@ private fun LazyListScope.notes(
 ) {
     // No identity to file notes under (see HistoryNotesStore): no notes this session.
     if (!state.notesAvailable) return
-    item {
+    item(key = "notes-${section.name}") {
         val editing = state.editing == section
         val text = state.notes[section] ?: ""
         Card(
