@@ -596,6 +596,8 @@ final class EducationViewModel: ObservableObject {
     @Published var questionsFailed = false
     /// Set when a fetch is asked for while one is out; the running fetch re-runs once.
     private var questionsReloadPending = false
+    /// Same for the items list: a save that lands mid-fetch re-runs the fetch once.
+    private var itemsReloadPending = false
 
     /// The resource open in the reader; nil pops it.
     @Published var readingId: String?
@@ -632,21 +634,32 @@ final class EducationViewModel: ObservableObject {
         await load()
     }
 
+    /// One fetch at a time: a second call while one is out is folded into it
+    /// by re-running the fetch once it lands, so a progress save that
+    /// completes mid-load (see saveProgress) is never overwritten by a list
+    /// fetched before the server held it.
     func load() async {
-        isLoading = true
-        failed = false
-        do {
-            let list: [EducationItem] = try await APIClient.shared.get(APIEndpoints.myEducation)
-            // The progress table has no unique (patient, resource) row, so one
-            // resource can come back twice; the list keys on resourceId.
-            var seen = Set<String>()
-            items = list.filter { seen.insert($0.resourceId).inserted }
-            loaded = true
-        } catch {
-            failed = true
-            // The list stays on screen after a failed refresh; say it did not refresh.
-            if loaded { showOutcome("education_refresh_failed".localized) }
+        if isLoading {
+            itemsReloadPending = true
+            return
         }
+        isLoading = true
+        repeat {
+            itemsReloadPending = false
+            failed = false
+            do {
+                let list: [EducationItem] = try await APIClient.shared.get(APIEndpoints.myEducation)
+                // The progress table has no unique (patient, resource) row, so one
+                // resource can come back twice; the list keys on resourceId.
+                var seen = Set<String>()
+                items = list.filter { seen.insert($0.resourceId).inserted }
+                loaded = true
+            } catch {
+                failed = true
+                // The list stays on screen after a failed refresh; say it did not refresh.
+                if loaded { showOutcome("education_refresh_failed".localized) }
+            }
+        } while itemsReloadPending
         isLoading = false
     }
 
@@ -717,8 +730,12 @@ final class EducationViewModel: ObservableObject {
             do {
                 let updated: EducationItem = try await APIClient.shared.put(
                     APIEndpoints.educationProgress(resourceId: item.resourceId), body: update)
+                // A refresh GET sent before this PUT could land after it with the
+                // old row; the list is re-fetched once it does (load() folds it in).
+                let reloadAfter = self.isLoading
                 self.items = self.items.map { $0.resourceId == updated.resourceId ? updated : $0 }
                 if notify { self.showOutcome("education_saved".localized) }
+                if reloadAfter { await self.load() }
             } catch {
                 if notify { self.showOutcome("education_save_failed".localized + ": " + error.localizedDescription) }
             }
