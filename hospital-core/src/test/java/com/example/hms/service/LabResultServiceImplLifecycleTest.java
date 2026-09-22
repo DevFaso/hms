@@ -129,7 +129,9 @@ class LabResultServiceImplLifecycleTest {
 
     /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     private void stubEntryPath() {
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        // Entry loads the order under the write lock (round 2): the
+        // reopen/advance decision must see a concurrent release's COMPLETED.
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -154,6 +156,9 @@ class LabResultServiceImplLifecycleTest {
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         verify(labOrderRepository).save(order);
+        // the status decision was made on the locked row, never on a plain read
+        verify(labOrderRepository).findWithLockById(order.getId());
+        verify(labOrderRepository, never()).findById(any());
     }
 
     @Test
@@ -289,7 +294,8 @@ class LabResultServiceImplLifecycleTest {
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getAbnormalFlag()).isNull();
         verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
-        verify(labOrderRepository, never()).findWithLockById(any());
+        // not released, so no completion pass: the only locked load is the entry one
+        verify(labOrderRepository, org.mockito.Mockito.times(1)).findWithLockById(order.getId());
     }
 
     @Test
@@ -387,7 +393,7 @@ class LabResultServiceImplLifecycleTest {
     @Test
     @DisplayName("B11 — entering a result on another hospital's order reads as 404")
     void entryOnAnotherHospitalsOrderReadsAsNotFound() {
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         assertThatThrownBy(() -> service.createLabResult(entryRequest(), Locale.ENGLISH))

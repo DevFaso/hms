@@ -95,7 +95,15 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
-        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
+        // Loaded under the same write lock the release path takes: the
+        // reopen/advance decision below reads the status, and an unlocked
+        // read could see RESULTED while a concurrent release of the last
+        // result is committing COMPLETED — this insert would then neither
+        // reopen nor wait, leaving an unreleased result on a completed
+        // order. Locking first makes this transaction wait for that commit
+        // and see COMPLETED. (A foreign tenant holds the lock only for the
+        // instant before the 404 below.)
+        LabOrder labOrder = labOrderRepository.findWithLockById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
         // Same 404-not-403 tenancy comparison as every other single-row path
         // here (B11): a foreign tenant must not learn the order exists, let
