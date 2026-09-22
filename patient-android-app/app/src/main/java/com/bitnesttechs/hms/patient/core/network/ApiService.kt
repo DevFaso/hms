@@ -66,6 +66,18 @@ interface ApiService {
         @Path("departmentId") departmentId: String
     ): Response<ApiResponse<List<BookingProviderDto>>>
 
+    // Pre-check-in, same two calls as the web's form.
+    @GET("me/patient/appointments/{appointmentId}/questionnaires")
+    suspend fun getAppointmentQuestionnaires(
+        @Path("appointmentId") appointmentId: String
+    ): Response<ApiResponse<List<QuestionnaireDto>>>
+
+    @POST("me/patient/appointments/{appointmentId}/pre-checkin")
+    suspend fun submitPreCheckIn(
+        @Path("appointmentId") appointmentId: String,
+        @Body request: PreCheckInRequest
+    ): Response<ApiResponse<PreCheckInResponse>>
+
     @PUT("me/patient/appointments/cancel")
     suspend fun cancelAppointment(
         @Body request: CancelAppointmentRequest

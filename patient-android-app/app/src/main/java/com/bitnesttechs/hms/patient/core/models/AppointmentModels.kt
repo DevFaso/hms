@@ -20,7 +20,10 @@ data class AppointmentDto(
     @Json(name = "hospitalName") val hospitalName: String? = null,
     @Json(name = "patientId") val patientId: String? = null,
     @Json(name = "notes") val notes: String? = null,
-    @Json(name = "reason") val reason: String? = null
+    @Json(name = "reason") val reason: String? = null,
+    // Pre-check-in state, set by POST /me/patient/appointments/{id}/pre-checkin.
+    @Json(name = "preCheckedIn") val preCheckedIn: Boolean? = null,
+    @Json(name = "preCheckinTimestamp") val preCheckinTimestamp: String? = null
 ) : java.io.Serializable {
     val statusDisplay: String get() = status.replace("_", " ").lowercase()
         .replaceFirstChar { it.uppercase() }

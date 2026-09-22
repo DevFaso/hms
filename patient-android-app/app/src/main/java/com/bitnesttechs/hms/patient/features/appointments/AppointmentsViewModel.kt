@@ -259,6 +259,9 @@ class AppointmentsViewModel @Inject constructor(
 
     fun clearActionResult() { _actionResult.value = null }
 
+    /** A message from a screen that pops back here (the pre-check-in's success). */
+    fun announce(@StringRes resId: Int) { _actionResult.value = AppointmentOutcome(resId) }
+
     /** The wrapper's message, when the body is the usual ApiResponseWrapper. */
     private fun serverMessage(body: String?): String? = body
         ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
