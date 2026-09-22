@@ -54,12 +54,12 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
 
     /**
-     * B14 — same switch as the manual entry path
-     * ({@code LabResultServiceImpl.performAutoVerification}, PR #716 —
-     * same property, declared once in application.properties): when on,
-     * an observation the analyzer explicitly flagged normal is released
-     * at once; when off (the
-     * default) it waits on the lab worklist
+     * B14 — the switch PR #716 introduces for manual entry
+     * ({@code hms.lab.auto-verification.enabled}, declared once in its
+     * application.properties; read here by the same key so the merge is
+     * a no-op): when on, an observation the analyzer explicitly flagged
+     * normal is released at once; when off (the default) it waits on
+     * the lab worklist
      * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
      * like every other unreleased row. Field-injected so the positional
      * constructor the tests use stays as it is.
@@ -212,6 +212,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             IntegrationMessageStatus.RECEIVED, null);
         for (LabResult savedResult : saved) {
             emitAudit(savedResult, hospitalId, integrationId, controlId);
+            if (savedResult.isReleased()) {
+                emitAutoReleaseAudit(savedResult, hospitalId, integrationId, controlId);
+            }
             // P0 #5 — analyzer-reported criticals (HL7 abnormal flag) notify
             // the ordering provider; never rolls back the ingest. Per row:
             // a critical hemoglobin on OBX-2 of a CBC must fire even though
@@ -224,13 +227,15 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     /**
      * B14 — mirrors {@code LabResultServiceImpl.performAutoVerification}
      * for analyzer results: only an observation the analyzer itself
-     * flagged normal (OBX-8 {@code N} or empty) may be released without a
-     * person looking at it, and only when the hospital has switched
-     * auto-verification on. An OBX-8 code this mapper does not know
+     * flagged normal (an explicit OBX-8 {@code N}) may be released
+     * without a person looking at it, and only when the hospital has
+     * switched auto-verification on. A blank OBX-8 is an UNGRADED value
+     * (an analyzer with no on-instrument ranges sends K = 7.8 with no
+     * flag at all) and an OBX-8 code this mapper does not know
      * ({@code W}, {@code R}, {@code S}, {@code I}, {@code U}, ...) is
-     * stored as NORMAL, exactly as before, but is NOT released: "we could
-     * not read the flag" is not "the analyzer said normal". Everything
-     * else lands unreleased and waits on the worklist; the patient sees
+     * unreadable; both are stored as NORMAL, exactly as before, but NOT
+     * released: neither is "the analyzer said normal". Everything else
+     * lands unreleased and waits on the worklist; the patient sees
      * "pending", never the value.
      */
     private void autoReleaseIfExplicitlyNormal(LabResult result, String hl7Flag) {
@@ -243,7 +248,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     }
 
     private static boolean isExplicitlyNormal(String hl7Flag) {
-        return !StringUtils.hasText(hl7Flag) || "N".equals(hl7Flag.trim().toUpperCase(Locale.ROOT));
+        return StringUtils.hasText(hl7Flag) && "N".equals(hl7Flag.trim().toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -330,6 +335,31 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         } catch (RuntimeException ex) {
             log.warn("MLLP ORU^R01 audit emission failed for labResult={} hospital={} integration={}",
                 saved.getId(), hospitalId, integrationId, ex);
+        }
+    }
+
+    /**
+     * A release is a release whoever made it: the manual path's row is
+     * recorded by the write-audit convention on its endpoint, so a
+     * system auto-release must leave its own {@code LAB_RESULT_RELEASED}
+     * row — SYSTEM actor (the MLLP label), no value, no patient.
+     * Best-effort like {@link #emitAudit}.
+     */
+    private void emitAutoReleaseAudit(LabResult released, UUID hospitalId, String integrationId, String controlId) {
+        try {
+            AuditEventRequestDTO request = AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.LAB_RESULT_RELEASED)
+                .status(AuditStatus.SUCCESS)
+                .userName(released.getActorLabel())
+                .eventDescription(AUTO_RELEASE_DISPLAY + " on analyzer flag N via " + integrationId
+                    + (controlId != null ? " (msgCtrlId=" + controlId + ")" : ""))
+                .entityType("LabResult")
+                .resourceId(released.getId() != null ? released.getId().toString() : null)
+                .build();
+            auditEventLogService.logEvent(request);
+        } catch (RuntimeException ex) {
+            log.warn("MLLP ORU^R01 auto-release audit emission failed for labResult={} hospital={} integration={}",
+                released.getId(), hospitalId, integrationId, ex);
         }
     }
 

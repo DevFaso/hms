@@ -292,7 +292,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     /**
      * B14 — the release worklist: every row of the hospital nobody has
      * released yet, hand-entered or analyzer-ingested alike. With
-     * {@code hms.lab.auto-release.enabled=false} (the default) an ORU
+     * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
      * observation lands here and stays "pending" for the patient until a
      * lab user releases it, so a worklist MUST be able to find it.
      */

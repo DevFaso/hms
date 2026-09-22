@@ -205,6 +205,40 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
     }
 
+    /** B18 — both gradings present: the more severe wins, direction from the directional one. */
+    @Test void releasedRow_withRangeAndFlag_takesTheMoreSevereAndKeepsDirection() {
+        record Case(String rangeSeverity, boolean acknowledged, AbnormalFlag flag, String expected) {}
+        List<Case> cases = List.of(
+            // inside the range, but the analyzer flagged H → the flag's direction
+            new Case("NORMAL", false, AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_HIGH"),
+            // range says mildly high (acknowledged), analyzer said HH → CRITICAL, never merely ABNORMAL_HIGH
+            new Case("HIGH", true, AbnormalFlag.CRITICAL, "CRITICAL"),
+            // range says low, analyzer said nothing abnormal → the range's direction
+            new Case("LOW", false, AbnormalFlag.NORMAL, "ABNORMAL_LOW"),
+            // range says low, technologist recorded an undirected ABNORMAL → the directional source
+            new Case("LOW", false, AbnormalFlag.ABNORMAL, "ABNORMAL_LOW"),
+            // both directional and disagreeing → the hospital's own range
+            new Case("LOW", false, AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_LOW"),
+            // range critical, flag directional → CRITICAL
+            new Case("CRITICAL", false, AbnormalFlag.ABNORMAL_LOW, "CRITICAL"),
+            // both normal
+            new Case("NORMAL", false, AbnormalFlag.NORMAL, "NORMAL"));
+        for (Case c : cases) {
+            LabResult lr = buildLabResult("1", null, true, c.acknowledged());
+            lr.setAbnormalFlag(c.flag());
+            LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
+            lr.setLabOrder(order);
+            LabResultResponseDTO mapped = new LabResultResponseDTO();
+            mapped.setSeverityFlag(c.rangeSeverity());
+            when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+            givenTheOnlyRowIs(lr);
+
+            assertThat(service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0).getStatus())
+                .as("range %s (ack=%s) + flag %s", c.rangeSeverity(), c.acknowledged(), c.flag())
+                .isEqualTo(c.expected());
+        }
+    }
+
     /** B18 — no reference range to grade against: the recorded flag decides, direction kept. */
     @Test void releasedRow_withoutRanges_statusFollowsTheRecordedFlag() {
         for (Map.Entry<AbnormalFlag, String> expected : Map.of(

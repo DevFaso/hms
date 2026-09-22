@@ -250,10 +250,36 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.get(0).getReleasedByDisplay()).isEqualTo("Autoverification");
         assertThat(saved.get(1).isReleased()).isFalse();
         assertThat(saved.get(2).isReleased()).isFalse();
+
+        // The system release leaves its own audit row: 3 ingest events + 1 release, SYSTEM actor, no value.
+        ArgumentCaptor<AuditEventRequestDTO> auditCaptor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, times(4)).logEvent(auditCaptor.capture());
+        List<AuditEventRequestDTO> releases = auditCaptor.getAllValues().stream()
+            .filter(a -> a.getEventType() == AuditEventType.LAB_RESULT_RELEASED)
+            .toList();
+        assertThat(releases).hasSize(1);
+        AuditEventRequestDTO release = releases.get(0);
+        assertThat(release.getEntityType()).isEqualTo("LabResult");
+        assertThat(release.getUserName()).isEqualTo("MLLP:APP/FAC");
+        assertThat(release.getPatientId()).isNull();
+        assertThat(release.getEventDescription()).contains("Autoverification").doesNotContain("5.4");
     }
 
     @Test
-    @DisplayName("B14 — auto-release on: an OBX-8 code the mapper does not know stays NORMAL but is NOT released")
+    @DisplayName("B14 — no release, no release audit: an unreleased ingest emits the ingest event only")
+    void unreleasedIngestEmitsNoReleaseAudit() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<AuditEventRequestDTO> auditCaptor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getEventType()).isEqualTo(AuditEventType.LAB_RESULT_UPDATED);
+    }
+
+    @Test
+    @DisplayName("B14 — auto-release on: a blank or unknown OBX-8 stays NORMAL but is NOT released; only an explicit N is")
     void unknownObxFlagIsNeverAutoReleased() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -269,12 +295,13 @@ class MllpInboundLabServiceImplTest {
         ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
         verify(labResultRepository, times(4)).save(captor.capture());
         List<LabResult> saved = captor.getAllValues();
-        // What the patient sees is unchanged: the unknown codes still read NORMAL.
+        // What the patient sees is unchanged: blank and unknown codes still read NORMAL.
         assertThat(saved).extracting(LabResult::getAbnormalFlag).containsOnly(AbnormalFlag.NORMAL);
         assertThat(saved.get(0).isReleased()).isFalse();
         assertThat(saved.get(1).isReleased()).isFalse();
-        // Empty and an explicit N are the analyzer saying normal.
-        assertThat(saved.get(2).isReleased()).isTrue();
+        // Blank is an UNGRADED value (K = 7.8 from an analyzer with no ranges) — a person looks first.
+        assertThat(saved.get(2).isReleased()).isFalse();
+        // Only an explicit N (trimmed, any case) is the analyzer saying normal.
         assertThat(saved.get(3).isReleased()).isTrue();
     }
 

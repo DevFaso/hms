@@ -178,30 +178,56 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return "Lab Result";
     }
 
+    /**
+     * B18 — two gradings can exist for one row: what the configured
+     * reference range says about the value, and the flag the analyzer
+     * (OBX-8) or the technologist recorded. Neither is discarded: the
+     * patient sees the MORE SEVERE of the two, with the direction taken
+     * from whichever source is directional (the range wins when both
+     * are, since it is the hospital's own range). So a row inside its
+     * range that the analyzer still flagged H reads ABNORMAL_HIGH, and an
+     * HH row never reads merely ABNORMAL_HIGH because the range was mild.
+     */
     private String resolveStatus(LabResult result, LabResultResponseDTO mapped) {
         if (!result.isReleased()) {
             return STATUS_PENDING;
         }
-        String severity = mapped != null ? mapped.getSeverityFlag() : null;
+        String fromRange = statusFromRange(mapped != null ? mapped.getSeverityFlag() : null, result.isAcknowledged());
+        String fromFlag = statusOf(result.getAbnormalFlag());
+        if (fromRange == null) {
+            return fromFlag;
+        }
+        int rangeRank = rank(fromRange);
+        int flagRank = rank(fromFlag);
+        if (rangeRank != flagRank) {
+            return rangeRank > flagRank ? fromRange : fromFlag;
+        }
+        return isDirectional(fromRange) || !isDirectional(fromFlag) ? fromRange : fromFlag;
+    }
+
+    /** What the configured reference range says, or null when there is none to grade against. */
+    private static String statusFromRange(String severity, boolean acknowledged) {
         if (severity == null || severity.isBlank() || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
-            // No reference range to grade against (typical for an
-            // analyzer row whose test has none configured): the flag the
-            // analyzer or the technologist recorded is the only grading
-            // there is — B18 keeps its direction.
-            return statusOf(result.getAbnormalFlag());
+            return null;
         }
-        switch (severity.toUpperCase(Locale.ROOT)) {
-            case STATUS_CRITICAL:
-                return STATUS_CRITICAL;
-            case "HIGH":
-                return result.isAcknowledged() ? STATUS_ABNORMAL_HIGH : STATUS_CRITICAL;
-            case "LOW":
-                return STATUS_ABNORMAL_LOW;
-            case STATUS_NORMAL:
-                return STATUS_NORMAL;
-            default:
-                return STATUS_NORMAL;
-        }
+        return switch (severity.toUpperCase(Locale.ROOT)) {
+            case STATUS_CRITICAL -> STATUS_CRITICAL;
+            case "HIGH" -> acknowledged ? STATUS_ABNORMAL_HIGH : STATUS_CRITICAL;
+            case "LOW" -> STATUS_ABNORMAL_LOW;
+            default -> STATUS_NORMAL;
+        };
+    }
+
+    private static int rank(String status) {
+        return switch (status) {
+            case STATUS_CRITICAL -> 3;
+            case STATUS_ABNORMAL_HIGH, STATUS_ABNORMAL_LOW, STATUS_ABNORMAL -> 2;
+            default -> 1;
+        };
+    }
+
+    private static boolean isDirectional(String status) {
+        return STATUS_ABNORMAL_HIGH.equals(status) || STATUS_ABNORMAL_LOW.equals(status);
     }
 
     private static String statusOf(AbnormalFlag flag) {

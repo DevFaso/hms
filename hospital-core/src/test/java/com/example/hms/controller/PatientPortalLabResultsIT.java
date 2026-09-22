@@ -11,6 +11,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
@@ -94,6 +95,7 @@ class PatientPortalLabResultsIT extends BaseIT {
     private User patientUser;
     private User doctorUser;
     private Patient patient;
+    private LabTestDefinition hemoglobin;
     private LabResult result;
 
     @BeforeEach
@@ -178,7 +180,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .active(true)
             .build());
 
-        LabTestDefinition hemoglobin = labTestDefinitionRepository.save(LabTestDefinition.builder()
+        hemoglobin = labTestDefinitionRepository.save(LabTestDefinition.builder()
             .testCode("HGB")
             .name("Hemoglobin")
             .category("HEMATOLOGY")
@@ -252,6 +254,44 @@ class PatientPortalLabResultsIT extends BaseIT {
             .andExpect(jsonPath("$.data[0].notes").value(PRELIMINARY_NOTES))
             // B18 - no configured range to grade against, so the analyzer's H decides.
             .andExpect(jsonPath("$.data[0].status").value("ABNORMAL_HIGH"));
+    }
+
+    /** The hospital's own range for hemoglobin: 13.7 sits inside it. */
+    private void givenAConfiguredRange() {
+        hemoglobin.setReferenceRanges(List.of(LabTestReferenceRange.builder()
+            .minValue(12.0).maxValue(15.5).unit("g/dL").build()));
+        labTestDefinitionRepository.save(hemoglobin);
+    }
+
+    private void release(AbnormalFlag flag) {
+        result.setAbnormalFlag(flag);
+        result.setReleased(true);
+        result.setReleasedAt(LocalDateTime.now());
+        result.setReleasedByDisplay("Lab supervisor");
+        labResultRepository.save(result);
+    }
+
+    @Test
+    @DisplayName("B18 - a value inside the configured range that the analyzer still flagged H reads ABNORMAL_HIGH")
+    void rangeSaysNormalButAnalyzerFlaggedHigh() throws Exception {
+        givenAConfiguredRange();
+        release(AbnormalFlag.ABNORMAL_HIGH);
+
+        mockMvc.perform(get(MY_LAB_RESULTS).contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].referenceRange").value("12 - 15.5 g/dL"))
+            .andExpect(jsonPath("$.data[0].status").value("ABNORMAL_HIGH"));
+    }
+
+    @Test
+    @DisplayName("B18 - an HH row with a configured range reads CRITICAL, never merely ABNORMAL_HIGH")
+    void analyzerCriticalOutranksTheRange() throws Exception {
+        givenAConfiguredRange();
+        release(AbnormalFlag.CRITICAL);
+
+        mockMvc.perform(get(MY_LAB_RESULTS).contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].status").value("CRITICAL"));
     }
 
     @Test
