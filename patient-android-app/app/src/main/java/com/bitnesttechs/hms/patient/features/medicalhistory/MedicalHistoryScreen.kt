@@ -38,16 +38,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,10 +67,6 @@ import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewMo
 import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewModel.TobaccoStatus
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import java.util.Locale
 
 private val SurgicalPurple = Color(0xFF7C3AED)
 private val FamilyGreen = Color(0xFF059669)
@@ -83,10 +84,20 @@ fun MedicalHistoryScreen(
     viewModel: MedicalHistoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(state.outcome) {
+        state.outcome?.let { outcome ->
+            val text = listOfNotNull(context.getString(outcome.resId), outcome.detail).joinToString(": ")
+            viewModel.clearOutcome()
+            snackbarHostState.showSnackbar(text)
+        }
+    }
     // Back while a note is open saves it and closes the editor instead of leaving.
     BackHandler(enabled = state.editing != null) { state.editing?.let { viewModel.toggleNoteEdit(it) } }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.medical_history_title)) },
@@ -186,6 +197,8 @@ private fun LazyListScope.notes(
     state: MedicalHistoryViewModel.UiState,
     viewModel: MedicalHistoryViewModel
 ) {
+    // No identity to file notes under (see HistoryNotesStore): no notes this session.
+    if (!state.notesAvailable) return
     item {
         val editing = state.editing == section
         val text = state.notes[section] ?: ""
@@ -288,7 +301,7 @@ private fun LabelValue(label: String, value: String) {
 private fun DiagnosisRow(item: PatientDiagnosisSummary) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(item.description ?: "", fontWeight = FontWeight.Medium)
-        LabelValue(stringResource(R.string.date), formatDate(item.diagnosedAt))
+        LabelValue(stringResource(R.string.date), MedicalHistoryDates.formatDateTime(item.diagnosedAt))
     }
 }
 
@@ -296,7 +309,7 @@ private fun DiagnosisRow(item: PatientDiagnosisSummary) {
 private fun SurgeryRow(item: SurgicalHistoryEntry) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(item.procedureDisplay ?: "", fontWeight = FontWeight.Medium)
-        LabelValue(stringResource(R.string.date), formatDate(item.procedureDate))
+        LabelValue(stringResource(R.string.date), MedicalHistoryDates.formatDate(item.procedureDate))
         LabelValue(stringResource(R.string.mh_outcome), item.outcome ?: "-")
     }
 }
@@ -343,7 +356,7 @@ private fun SmokingCard(sh: SocialHistory) {
         }
         LabelValue(stringResource(R.string.mh_tobacco_use), stringResource(status))
         sh.tobaccoType?.takeIf { it.isNotBlank() }?.let { LabelValue(stringResource(R.string.mh_tobacco_types), it) }
-        sh.tobaccoQuitDate?.takeIf { it.isNotBlank() }?.let { LabelValue(stringResource(R.string.mh_quit_date), formatDate(it)) }
+        sh.tobaccoQuitDate?.takeIf { it.isNotBlank() }?.let { LabelValue(stringResource(R.string.mh_quit_date), MedicalHistoryDates.formatDate(it)) }
     }
 }
 
@@ -363,12 +376,4 @@ private fun AlcoholCard(sh: SocialHistory) {
         LabelValue(stringResource(R.string.mh_alcohol_use), value)
         sh.alcoholDrinksPerWeek?.takeIf { it != 0 }?.let { LabelValue(stringResource(R.string.mh_drinks_per_week), it.toString()) }
     }
-}
-
-/** "2026-09-21" or "2026-09-21T10:15:00+00:00" as a short device-locale date; "-" when absent, the raw text when it does not parse. */
-private fun formatDate(iso: String?): String {
-    if (iso.isNullOrBlank()) return "-"
-    return runCatching {
-        LocalDate.parse(iso.take(10)).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.getDefault()))
-    }.getOrDefault(iso)
 }

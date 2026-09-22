@@ -515,4 +515,5 @@
     <string name="education_all_read">Vous avez lu tout ce qui vous a été attribué.</string>
     <string name="education_all_read_desc">Les nouveaux documents de votre équipe soignante apparaîtront ici.</string>
     <string name="edu_cat_genetic_screening">Dépistage génétique</string>
+    <string name="mh_notes_save_failed">Votre note n\'a pas pu être enregistrée sur cet appareil</string>
 </resources>

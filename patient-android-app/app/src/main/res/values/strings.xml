@@ -515,4 +515,5 @@
     <string name="education_all_read">You have read everything assigned to you.</string>
     <string name="education_all_read_desc">New material from your care team will appear here.</string>
     <string name="edu_cat_genetic_screening">Genetic screening</string>
+    <string name="mh_notes_save_failed">Your note could not be saved on this device</string>
 </resources>

@@ -1,7 +1,9 @@
 package com.bitnesttechs.hms.patient.features.medicalhistory
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.di.ApplicationScope
 import com.bitnesttechs.hms.patient.core.models.FamilyHistoryEntry
 import com.bitnesttechs.hms.patient.core.models.PatientDiagnosisSummary
@@ -28,6 +30,8 @@ import javax.inject.Inject
  * the patient's own device-only notes under each section. The web loads the
  * four sections as one all-or-nothing request; here each section loads,
  * fails and retries on its own so one bad answer never blanks the rest.
+ * Notes are filed under the signed-in patient's identity; with no identity
+ * to file them under they are hidden for the session, never shared.
  */
 @HiltViewModel
 class MedicalHistoryViewModel @Inject constructor(
@@ -49,18 +53,26 @@ class MedicalHistoryViewModel @Inject constructor(
 
     enum class TobaccoStatus { CURRENT, FORMER, NEVER }
 
+    data class Outcome(@StringRes val resId: Int, val detail: String? = null)
+
     data class UiState(
         val medical: SectionState<List<PatientDiagnosisSummary>> = SectionState(),
         val surgical: SectionState<List<SurgicalHistoryEntry>> = SectionState(),
         val family: SectionState<List<FamilyHistoryEntry>> = SectionState(),
         /** `data` stays null after a successful load when nothing is on record. */
         val social: SectionState<SocialHistory> = SectionState(),
+        /** False when no stable identity exists to file notes under: the notes cards are hidden. */
+        val notesAvailable: Boolean = false,
         val notes: Map<Section, String> = emptyMap(),
-        val editing: Section? = null
+        val editing: Section? = null,
+        val outcome: Outcome? = null
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    /** Resolved once per screen: the identity the session had when it opened. */
+    private val bucket: String? = notes.bucket()
 
     init {
         loadNotes()
@@ -129,10 +141,13 @@ class MedicalHistoryViewModel @Inject constructor(
 
     // ── Personal notes (device only) ─────────────────────────────────────
 
+    /** A store that cannot be read yields empty notes (the store never throws); no identity yields no notes at all. */
     private fun loadNotes() {
+        val b = bucket ?: return
+        _state.update { it.copy(notesAvailable = true) }
         viewModelScope.launch {
             val loaded = withContext(Dispatchers.IO) {
-                Section.values().associateWith { notes.read(it.storageKey) }
+                Section.values().associateWith { notes.read(b, it.storageKey) }
             }
             // A note the patient started typing before the read finished wins.
             _state.update { s -> s.copy(notes = loaded + s.notes.filterValues { it.isNotEmpty() }) }
@@ -160,12 +175,23 @@ class MedicalHistoryViewModel @Inject constructor(
         _state.update { it.copy(notes = it.notes + (section to value)) }
     }
 
-    /** Written in [applicationScope]: a back press right after Save must not cancel the write. */
+    /**
+     * Written in [applicationScope]: a back press right after Save must not
+     * cancel the write. A write the store refuses (unusable keyset) is reported
+     * as a snackbar; the text stays on screen so nothing typed is lost.
+     */
     private fun persist(section: Section, value: String) {
+        val b = bucket ?: return
         val trimmed = value.trim()
         _state.update { it.copy(notes = it.notes + (section to trimmed)) }
-        applicationScope.launch(Dispatchers.IO) { notes.write(section.storageKey, trimmed) }
+        applicationScope.launch(Dispatchers.IO) {
+            if (!notes.write(b, section.storageKey, trimmed)) {
+                _state.update { it.copy(outcome = Outcome(R.string.mh_notes_save_failed)) }
+            }
+        }
     }
+
+    fun clearOutcome() { _state.update { it.copy(outcome = null) } }
 
     companion object {
         /** The web's getTobaccoStatus: a quit date means former, else current if using, else never. */
