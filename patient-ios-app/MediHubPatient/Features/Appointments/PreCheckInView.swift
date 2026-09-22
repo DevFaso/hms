@@ -141,8 +141,8 @@ struct PreCheckInView: View {
                     get: { value?.text ?? "" },
                     set: { vm.answer(questionnaireId, question.id, $0.isEmpty ? nil : .text($0)) }
                 ))
-                // The decimal pad has no minus key; a range below zero needs one.
-                .keyboardType((question.min ?? 0) < 0 ? .numbersAndPunctuation : .decimalPad)
+                // The decimal pad has no minus key: only a range that starts at or above zero gets it.
+                .keyboardType((question.min ?? -1) >= 0 ? .decimalPad : .numbersAndPunctuation)
                 if let problem = vm.problem(question, value) {
                     Text(problem == .notANumber
                          ? "answer_not_a_number".localized
@@ -207,8 +207,9 @@ struct PreCheckInView: View {
     private var stepBar: some View {
         VStack(spacing: 6) {
             if vm.step == .questionnaires, vm.questionnairesLoaded, !vm.questionnairesComplete {
+                // Grey until the patient has started answering, red once they have.
                 Text((vm.missingRequired ? "required_answers_missing" : "answers_invalid").localized)
-                    .font(.caption).foregroundColor(.red)
+                    .font(.caption).foregroundColor(vm.hasAnyAnswer ? .red : .secondary)
             }
             HStack {
                 if vm.stepIndex > 0 {
@@ -230,7 +231,7 @@ struct PreCheckInView: View {
                 } else {
                     Button("next".localized) { vm.goNext() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(vm.step == .questionnaires && !(vm.questionnairesLoaded && vm.questionnairesComplete))
+                        .disabled(vm.step == .questionnaires && !vm.canLeaveQuestionnaires)
                 }
             }
         }
@@ -353,6 +354,13 @@ final class PreCheckInViewModel: ObservableObject {
     }
 
     var questionnairesComplete: Bool { !missingRequired && !hasAnswerProblems }
+
+    /// Whether the patient has started answering; before that a hint is guidance, not an error.
+    var hasAnyAnswer: Bool { answers.values.contains { !$0.isEmpty } }
+
+    /// Loaded and complete, or failed to load: the web continues with no
+    /// questionnaires on that error, and consent must stay reachable.
+    var canLeaveQuestionnaires: Bool { loadFailed || (questionnairesLoaded && questionnairesComplete) }
 
     /// Questionnaires with at least one answer: what the review counts and what is sent.
     var answeredQuestionnaires: Int {

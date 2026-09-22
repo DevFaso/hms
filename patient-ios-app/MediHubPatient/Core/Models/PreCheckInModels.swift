@@ -31,7 +31,8 @@ struct QuestionnaireQuestion: Identifiable, Hashable {
         guard let data = json?.data(using: .utf8),
               let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return [] }
         return array.compactMap { o in
-            guard let id = o["id"] as? String, !id.isEmpty else { return nil }
+            let id = (o["id"] as? String) ?? (o["id"] as? NSNumber).map { $0.stringValue } ?? ""
+            guard !id.isEmpty else { return nil }
             let text = (o["text"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? id
             let type = ((o["type"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "TEXT").uppercased()
             return QuestionnaireQuestion(
