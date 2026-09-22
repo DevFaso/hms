@@ -64,7 +64,11 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
         List<Predicate> predicates = new ArrayList<>();
 
         if (hospitalId != null) {
-            predicates.add(cb.equal(root.get("hospital").get("id"), hospitalId));
+            // B1: the worklist of a hospital is what it orders plus what its
+            // laboratory performs for other hospitals (V161).
+            predicates.add(cb.or(
+                cb.equal(root.get("hospital").get("id"), hospitalId),
+                cb.equal(root.get("performingHospital").get("id"), hospitalId)));
         }
         if (patientId != null) {
             predicates.add(cb.equal(root.get("patient").get("id"), patientId));

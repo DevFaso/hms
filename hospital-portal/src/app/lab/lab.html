@@ -114,7 +114,21 @@
                 <div class="cell-primary">{{ order.labTestName || '—' }}</div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
-              <td>{{ order.hospitalName || '—' }}</td>
+              <td>
+                @if (isIncomingExternal(order)) {
+                  <div class="cell-primary">{{ order.hospitalName || '—' }}</div>
+                  <div class="cell-secondary routing-hint" data-testid="routing-incoming">
+                    {{ 'LAB.ORDERED_BY' | translate }}: {{ order.hospitalName || '—' }}
+                  </div>
+                } @else if (isSentOut(order)) {
+                  <div class="cell-primary">{{ order.hospitalName || '—' }}</div>
+                  <div class="cell-secondary routing-hint" data-testid="routing-outgoing">
+                    {{ 'LAB.SENT_TO' | translate }}: {{ order.performingHospitalName || '—' }}
+                  </div>
+                } @else {
+                  {{ order.hospitalName || '—' }}
+                }
+              </td>
               <td class="date-cell">
                 {{ order.orderDatetime ? (order.orderDatetime | date: 'medium') : '—' }}
               </td>
@@ -201,6 +215,16 @@
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ o.hospitalName || '—' }}</span>
             </div>
+            @if (o.performingHospitalId) {
+              <div class="detail-field" data-testid="detail-performing-lab">
+                <span class="field-label">{{
+                  (isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO') | translate
+                }}</span
+                ><span class="field-value">{{
+                  isIncomingExternal(o) ? o.hospitalName || '—' : o.performingHospitalName || '—'
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.TEST' | translate }}</span
               ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
@@ -337,6 +361,22 @@
                 }
               </select>
             }
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="lab-performingLab">{{ 'LAB.PERFORMING_LAB' | translate }}</label>
+            <select
+              id="lab-performingLab"
+              [(ngModel)]="form.performingHospitalId"
+              name="performingHospitalId"
+            >
+              <option value="">{{ 'LAB.PERFORMING_LAB_OWN' | translate }}</option>
+              @for (lab of performingLabs(); track lab.id) {
+                <option [value]="lab.id">{{ lab.name }}</option>
+              }
+            </select>
+            <small class="field-hint">{{ 'LAB.PERFORMING_LAB_HINT' | translate }}</small>
           </div>
         </div>
         <div class="form-row">

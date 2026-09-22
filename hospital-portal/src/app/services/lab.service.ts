@@ -8,7 +8,11 @@ export interface LabOrderResponse {
   patientId: string;
   patientFullName: string;
   patientEmail: string;
+  hospitalId?: string;
   hospitalName: string;
+  /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
+  performingHospitalId?: string | null;
+  performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
   orderDatetime: string;
@@ -214,6 +218,15 @@ export interface LabOrderRequest {
   orderChannel: string;
   providerSignature: string;
   documentationSharedWithLab?: boolean | null;
+  /** Optional: the laboratory (hospital) that performs the test when it is not this hospital's own. */
+  performingHospitalId?: string;
+}
+
+/** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */
+export interface PerformingLab {
+  id: string;
+  name: string;
+  code?: string;
 }
 
 export interface LabResultRequest {
@@ -369,6 +382,13 @@ export class LabService {
     return this.http
       .get<ApiWrapper<LabResultResponse>>(`/lab-results/${id}`)
       .pipe(map((res) => res.data));
+  }
+
+  /** Active hospitals other than the caller's own whose laboratory can perform an order. */
+  listPerformingLabs(): Observable<PerformingLab[]> {
+    return this.http
+      .get<ApiWrapper<PerformingLab[]>>('/lab-orders/performing-labs')
+      .pipe(map((res) => res?.data ?? []));
   }
 
   createOrder(req: LabOrderRequest): Observable<LabOrderResponse> {

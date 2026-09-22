@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -143,6 +145,26 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment.user"
     })
     List<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds);
+
+    /** B1: results of orders the hospitals order OR perform (V161 performing_hospital_id). */
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id IN :hospitalIds
+           OR r.labOrder.performingHospital.id IN :hospitalIds
+    """)
+    List<LabResult> findHandledByHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
+
+    /** B1: paged results of orders the hospital orders OR performs. */
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """)
+    Page<LabResult> findHandledByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",

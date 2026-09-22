@@ -2405,4 +2405,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V161 — lab order routed to a performing laboratory (audit gap B1).
+         lab.lab_orders.performing_hospital_id (nullable FK to
+         hospital.hospitals, indexed): NULL = the ordering hospital performs
+         the test itself, so nothing is backfilled. Additive DDL; the FK is
+         added inside a DO block, hence splitStatements="false".
+         ================================================================= -->
+    <changeSet id="V161-lab-order-performing-hospital" author="hms-team" runOnChange="false">
+        <sqlFile path="V161__lab_order_performing_hospital.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

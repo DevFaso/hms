@@ -43,10 +43,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
-        // Hospital scope check
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
+        // Hospital scope check: the ordering hospital or the performing laboratory (B1)
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
@@ -74,9 +72,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && specimen.getLabOrder().getHospital() != null
-                && !specimen.getLabOrder().getHospital().getId().equals(hospitalId)) {
+        if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("labspecimen.notfound");
         }
         return labSpecimenMapper.toResponseDTO(specimen);
@@ -88,9 +84,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabOrder labOrder = labOrderRepository.findById(labOrderId)
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
         return labSpecimenRepository.findByLabOrder_Id(labOrderId)
@@ -105,9 +99,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && specimen.getLabOrder().getHospital() != null
-                && !specimen.getLabOrder().getHospital().getId().equals(hospitalId)) {
+        if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("labspecimen.notfound");
         }
 

@@ -17,6 +17,7 @@ import {
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
+  PerformingLab,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -64,6 +65,8 @@ export class LabComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   labTestDefs = signal<LabTestDefinition[]>([]);
+  /** Laboratories an order can be sent to (B1); empty until a provider opens the page. */
+  performingLabs = signal<PerformingLab[]>([]);
   private activeAssignmentId = '';
 
   // Patient picker
@@ -126,6 +129,12 @@ export class LabComponent implements OnInit {
     this.loadAssignedHospitals();
     this.initPatientSearch();
     this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+    if (this.canCreateOrder()) {
+      this.labService.listPerformingLabs().subscribe({
+        next: (labs) => this.performingLabs.set(labs ?? []),
+        error: () => this.performingLabs.set([]),
+      });
+    }
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a) => a.active);
@@ -150,7 +159,22 @@ export class LabComponent implements OnInit {
       orderChannel: 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: '',
     };
+  }
+
+  /**
+   * B1: an order is "incoming" when another hospital sent it to this
+   * laboratory, and "outgoing" when this hospital sent it out. Both read the
+   * active hospital, so a scope switch relabels the worklist.
+   */
+  isIncomingExternal(o: LabOrderResponse): boolean {
+    const active = this.roleContext.activeHospitalId;
+    return !!o.performingHospitalId && !!active && o.performingHospitalId === active;
+  }
+
+  isSentOut(o: LabOrderResponse): boolean {
+    return !!o.performingHospitalId && !this.isIncomingExternal(o);
   }
 
   onTestDefChange(defId: string): void {
@@ -273,6 +297,7 @@ export class LabComponent implements OnInit {
       orderChannel: o.orderChannel ?? 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: o.performingHospitalId ?? '',
     };
     this.selectedPatient.set({
       id: '',
@@ -291,9 +316,14 @@ export class LabComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    // An empty select means "our own laboratory": the API takes an absent id, not "".
+    const payload: LabOrderRequest = {
+      ...this.form,
+      performingHospitalId: this.form.performingHospitalId || undefined,
+    };
     const op = this.editing()
-      ? this.labService.updateOrder(this.editingId()!, this.form)
-      : this.labService.createOrder(this.form);
+      ? this.labService.updateOrder(this.editingId()!, payload)
+      : this.labService.createOrder(payload);
     op.subscribe({
       next: () => {
         this.toast.success(

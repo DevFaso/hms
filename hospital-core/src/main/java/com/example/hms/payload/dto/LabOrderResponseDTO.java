@@ -22,7 +22,11 @@ public class LabOrderResponseDTO {
     private String patientId;
     private String patientFullName;
     private String patientEmail;
+    private String hospitalId;
     private String hospitalName;
+    /** Null when the ordering hospital performs the test itself. */
+    private String performingHospitalId;
+    private String performingHospitalName;
     private String labTestName;
     private String labTestCode;
     private LocalDateTime orderDatetime;

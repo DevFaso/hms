@@ -112,4 +112,8 @@ public class LabOrderRequestDTO {
 
     @NotNull(message = "{labOrder.assignmentId.required}")
     private UUID assignmentId;
+
+    @Schema(description = "Laboratory (hospital) that performs the test when it is not this hospital's own. "
+            + "Optional; omitted or equal to hospitalId means the ordering hospital performs it.")
+    private UUID performingHospitalId;
 }
