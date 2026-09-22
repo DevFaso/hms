@@ -78,7 +78,9 @@ struct DashboardView: View {
                     if !vm.upcomingAppointments.isEmpty {
                         SectionCard(title: "upcoming_appointments".localized, icon: "calendar") {
                             ForEach(vm.upcomingAppointments) { appt in
-                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt, onPreCheckedIn: {
+                                    Task { await vm.loadAll() }
+                                })) {
                                     AppointmentRowView(appointment: appt)
                                 }
                                 .buttonStyle(.plain)
