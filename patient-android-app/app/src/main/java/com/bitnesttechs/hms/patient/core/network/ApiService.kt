@@ -35,6 +35,20 @@ interface ApiService {
     @GET("me/patient/health-summary")
     suspend fun getHealthSummary(): Response<ApiResponse<HealthSummaryDto>>
 
+    // ── Medical & family history (read-only for the patient, like the web) ──
+    @GET("me/patient/medical-history")
+    suspend fun getMyMedicalHistory(): Response<ApiResponse<List<PatientDiagnosisSummary>>>
+
+    @GET("me/patient/surgical-history")
+    suspend fun getMySurgicalHistory(): Response<ApiResponse<List<SurgicalHistoryEntry>>>
+
+    @GET("me/patient/family-history")
+    suspend fun getMyFamilyHistory(): Response<ApiResponse<List<FamilyHistoryEntry>>>
+
+    /** `data` is null when no active social history is on record. */
+    @GET("me/patient/social-history")
+    suspend fun getMySocialHistory(): Response<ApiResponse<SocialHistory>>
+
     // ── Patient education, the web's My Education ────────────────────────────
     @GET("me/patient/education")
     suspend fun getMyEducation(): Response<ApiResponse<List<EducationItemDto>>>

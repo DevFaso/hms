@@ -2202,6 +2202,40 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Device-only history notes are filed under a different identity per login path
+  (#709 iOS, #710 Android).** The personal notes on My Medical History live only
+  on the phone and are keyed by the Keycloak `sub` for an SSO session and by the
+  HMS user id for a password login — two different UUIDs — so a patient who
+  signs in one day with each button sees the notes vanish and reappear. Chosen
+  over a shared bucket, which leaked notes between patients on one phone. The
+  fix is one identity for both paths (the HMS user id resolved from `/me` once
+  per session, or the `sub` mapped server side), applied to both apps at once.
+
+- **Duplicate education progress rows make the client and the server pick
+  different rows (#708).** The list keeps the most recently accessed progress
+  row per resource while `PUT /me/patient/education/{id}/progress` writes the
+  newest-created one (`findTopBy…OrderByCreatedAtDesc`), so with duplicates a
+  rating on a completed item can flip it back to "to read" on the web and both
+  apps. Dedupe on the server (unique constraint on patient + resource, merge the
+  survivors) rather than in three clients.
+
+- **The patient apps send no `Accept-Language`, so every server `message` they
+  surface is English (#711, #712 and every earlier screen).** The apps localise
+  their own headline and append the server sentence for HTTP refusals; on a
+  French phone that sentence is English. One interceptor per app that sends the
+  app language, then the backend's `parseLocale` does the rest.
+
+- **Three upload size limits disagree (#713, #714).** The controller's OpenAPI
+  text and `FileUploadService.MAX_PATIENT_DOCUMENT_SIZE` say 20 MB,
+  `spring.servlet.multipart.max-file-size` / `max-request-size` are 10MB and
+  reject first, and `GlobalExceptionHandler.handleMaxUploadSize` tells the
+  patient "5MB". Both apps enforce 10 MiB minus a 64 KiB envelope margin and
+  word the refusal as "under 10 MB"; the web enforces nothing client side. Pick
+  one number, raise `max-request-size` above `max-file-size`, and fix the
+  handler text. Also `PatientDocumentRequestDTO` is built without `@Valid` and
+  `notes` has no `@Size`, so only the 2048 column bounds it (a longer note is a
+  500, not a 400).
+
 - **Mobile sign-out does not revoke the session server side.** `/auth/logout`
   is `.authenticated()`, but the iOS app sends it with `requiresAuth: false`
   so that a 401 on the way out cannot re-enter `refreshTokens()` and loop.
@@ -2996,7 +3030,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 - **Patient invoice payments persist the amount only.** `PatientPortalController.payMyInvoice` forwards `dto.getAmount()` and drops `paymentMethod`, `transactionReference` and `notes`, while the web, iOS and (since #698) Android forms all collect them. A mobile-money reference a patient types is never stored, so the cashier cannot reconcile the payment against the provider's statement. Fix = pass the whole DTO into `recordMyPayment` and store method/reference/notes on the payment row; then drop the "only the amount is stored" hint from the three clients.
 
-- **Patient parity across web, Android and iOS (audit 2026-09-20).** The web portal is the reference. Missing on BOTH apps: the booking wizard (hospital → department → provider; both apps only offer doctors from past appointments, so a new patient cannot book), pre-check-in questionnaires, PRO self-screenings, patient education, medical/surgical/family/social history, the disclosures view + record-sharing opt-out (apps use the older access log), document upload/delete, forgot-password / activation / MFA challenge / change-password (both apps ship a dead Forgot-password button). Phase 1 (defects + app-to-app parity) = the `fix/*-patient-parity-phase1` PRs; phase 2 = the seven web features; phase 3 = the account flows; phase 4 = push notifications, chat attachments, Spanish. Phase 2 progress: the booking wizard on Android (`feat/android-patient-booking-wizard`, which also moves self-scheduling off the staff `POST /appointments` onto `/me/patient/appointments`); iOS booking = #701 (merged 2026-09-21); pre-check-in = #703 Android (merged 2026-09-22) + #704 iOS; PRO self-screenings = #705 Android (merged 2026-09-22) + #706 iOS; patient education on Android = `feat/android-patient-education`; the other three features (history, disclosures + opt-out, document upload/delete) follow one PR each per platform. Backend gap found by #703: `updatePatientDemographics` never reads the three insurance fields of `PreCheckInRequestDTO`, so the insurer, member ID and plan a patient enters at pre-check-in (web and Android) are accepted and dropped. Backend gap found on the way: `PatientPortalServiceImpl.scheduleMyAppointment` stores `notes` and drops `reason`, so the reason a patient types on the web or Android is lost (one-line fix, own PR off develop). Cross-cutting: most screens on both apps still swallow errors as empty states and carry hard-coded English.
+- **Patient parity across web, Android and iOS (audit 2026-09-20).** The web portal is the reference. Missing on BOTH apps: the booking wizard (hospital → department → provider; both apps only offer doctors from past appointments, so a new patient cannot book), pre-check-in questionnaires, PRO self-screenings, patient education, medical/surgical/family/social history, the disclosures view + record-sharing opt-out (apps use the older access log), document upload/delete, forgot-password / activation / MFA challenge / change-password (both apps ship a dead Forgot-password button). Phase 1 (defects + app-to-app parity) = the `fix/*-patient-parity-phase1` PRs; phase 2 = the seven web features; phase 3 = the account flows; phase 4 = push notifications, chat attachments, Spanish. Phase 2 progress (all seven features have a PR on both platforms, 2026-09-22): booking = #700 Android + #701 iOS (merged); pre-check-in = #703 Android + #704 iOS (merged); PRO self-screenings = #705 Android + #706 iOS (merged); patient education = #707 Android (merged) + #708 iOS; history = #710 Android + #709 iOS; disclosures + opt-out = #712 Android + #711 iOS; document upload/delete = #714 Android + #713 iOS. Residuals recorded under Standing platform debt: history notes keyed per login path, duplicate education progress rows, no `Accept-Language` from the apps, the three disagreeing upload size limits. Backend gap found by #703: `updatePatientDemographics` never reads the three insurance fields of `PreCheckInRequestDTO`, so the insurer, member ID and plan a patient enters at pre-check-in (web and Android) are accepted and dropped. Backend gap found on the way: `PatientPortalServiceImpl.scheduleMyAppointment` stores `notes` and drops `reason`, so the reason a patient types on the web or Android is lost (one-line fix, own PR off develop). Cross-cutting: most screens on both apps still swallow errors as empty states and carry hard-coded English.
 
 - **The mobile apps' in-app theme is still the pre-brand blue.** The store icons, launcher icons and screenshots now carry the e-Keneya mark and teal (scripts/mobile-store-assets/generate.mjs), but `patient-android-app` still paints `brand_blue` #1E40AF (theme, status bar, Compose colours) and the iOS app the matching blue. A tester sees a teal listing and installs a blue app. The retheme is one palette swap per app plus a re-check of contrast on the tinted surfaces; the screenshots then also want a pass to match what the apps really draw, since today they are mocks in the target identity, not captures.
 
