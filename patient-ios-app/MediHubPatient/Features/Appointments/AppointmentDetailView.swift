@@ -72,6 +72,14 @@ struct AppointmentDetailView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground))
+        // On the screen, not on the button branch: success swaps that branch
+        // for the "completed" row while the sheet is still dismissing.
+        .sheet(isPresented: $showPreCheckIn) {
+            PreCheckInView(appointment: appointment) {
+                checkedInHere = true
+                onPreCheckedIn?()
+            }
+        }
         .navigationTitle("Appointment Details")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -122,12 +130,6 @@ struct AppointmentDetailView: View {
                              ? "pre_checkin_closed".localized
                              : String(format: "pre_checkin_window".localized, Self.preCheckInWindowDays))
                             .font(.caption).foregroundColor(.secondary)
-                    }
-                }
-                .sheet(isPresented: $showPreCheckIn) {
-                    PreCheckInView(appointment: appointment) {
-                        checkedInHere = true
-                        onPreCheckedIn?()
                     }
                 }
             }

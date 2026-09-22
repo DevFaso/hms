@@ -374,3 +374,4 @@
 "nothing_to_update" = "No changes to your details.";
 "questionnaires_completed" = "Questionnaires completed: %d of %d";
 "precheckin_failed" = "The pre-check-in could not be submitted";
+"emergency_contact_phone" = "Emergency contact phone";

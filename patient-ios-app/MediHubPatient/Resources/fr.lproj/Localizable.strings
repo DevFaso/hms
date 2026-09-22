@@ -374,3 +374,4 @@
 "nothing_to_update" = "Aucun changement dans vos coordonnées.";
 "questionnaires_completed" = "Questionnaires complétés : %d sur %d";
 "precheckin_failed" = "Le pré-enregistrement n’a pas pu être soumis";
+"emergency_contact_phone" = "Téléphone du contact d’urgence";

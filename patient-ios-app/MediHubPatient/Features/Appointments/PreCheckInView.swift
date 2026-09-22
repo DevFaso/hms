@@ -165,7 +165,8 @@ struct PreCheckInView: View {
     /// "3" for 3.0, "2.5" for 2.5, "–" when the bound is absent.
     private func fmt(_ d: Double?) -> String {
         guard let d else { return "\u{2013}" }
-        return d.rounded() == d ? String(Int64(d)) : String(d)
+        // Int64(d) traps past 2^63; such a bound is shown as a Double.
+        return d.rounded() == d && abs(d) < 9.0e18 ? String(Int64(d)) : String(d)
     }
 
     // ── Step 3: review and consent ───────────────────────────────────────────
@@ -178,8 +179,8 @@ struct PreCheckInView: View {
                     Text("nothing_to_update".localized).foregroundColor(.secondary)
                 } else {
                     Text(String(format: "updated_fields".localized, updated.count)).font(.caption).foregroundColor(.secondary)
-                    ForEach(updated, id: \.0) { key, value in
-                        LabeledContent(key.localized, value: value)
+                    ForEach(Array(updated.enumerated()), id: \.offset) { _, field in
+                        LabeledContent(field.0.localized, value: field.1)
                     }
                 }
             }
@@ -363,7 +364,7 @@ final class PreCheckInViewModel: ObservableObject {
         return [
             ("phone", d.phoneNumber), ("email", d.email), ("address", d.addressLine1), ("city", d.city),
             ("state", d.state), ("zip_code", d.zipCode), ("emergency_contact", d.emergencyContactName),
-            ("phone", d.emergencyContactPhone), ("relationship", d.emergencyContactRelationship),
+            ("emergency_contact_phone", d.emergencyContactPhone), ("relationship", d.emergencyContactRelationship),
             ("insurance_provider", d.insuranceProvider), ("member_id", d.insuranceMemberId),
             ("insurance_plan", d.insurancePlan)
         ].filter { !$0.1.trimmingCharacters(in: .whitespaces).isEmpty }
