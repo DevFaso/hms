@@ -107,9 +107,18 @@ enum APIEndpoints {
         "/me/patient/refills/\(id)/cancel"
     }
 
-    // MARK: Appointment booking (general appointments API, accepts PATIENT role)
+    // MARK: Appointment booking — the patient portal's own endpoint, which
+    // verifies the registration and the hospital/department pairing (the
+    // staff POST /appointments skips both), plus the wizard's three lists.
 
-    static let bookAppointment = "/appointments"
+    static let bookAppointment = "/me/patient/appointments"
+    static let bookingHospitals = "/me/patient/booking/hospitals"
+    static func bookingDepartments(hospitalId: String) -> String {
+        "/me/patient/booking/hospitals/\(hospitalId)/departments"
+    }
+    static func bookingProviders(hospitalId: String, departmentId: String) -> String {
+        "/me/patient/booking/hospitals/\(hospitalId)/departments/\(departmentId)/providers"
+    }
 
     // MARK: File upload
 
