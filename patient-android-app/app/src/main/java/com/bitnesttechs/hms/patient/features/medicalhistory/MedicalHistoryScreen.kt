@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,6 +68,7 @@ import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewMo
 import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryViewModel.TobaccoStatus
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
+import kotlinx.coroutines.launch
 
 private val SurgicalPurple = Color(0xFF7C3AED)
 private val FamilyGreen = Color(0xFF059669)
@@ -85,12 +87,15 @@ fun MedicalHistoryScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    // The snackbar runs in the screen's scope, not the effect's: clearing the
+    // outcome restarts the effect, which would cancel a showSnackbar awaited inside it.
     LaunchedEffect(state.outcome) {
         state.outcome?.let { outcome ->
             val text = listOfNotNull(context.getString(outcome.resId), outcome.detail).joinToString(": ")
             viewModel.clearOutcome()
-            snackbarHostState.showSnackbar(text)
+            scope.launch { snackbarHostState.showSnackbar(text) }
         }
     }
     // One exit for the system back and the top-bar arrow: an open note is
