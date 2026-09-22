@@ -2,12 +2,22 @@ import SwiftUI
 
 struct AppointmentDetailView: View {
     let appointment: AppointmentDTO
+    /// Called once a pre-check-in succeeded, so the list that pushed this view can reload.
+    var onPreCheckedIn: (() -> Void)? = nil
+    @State private var showPreCheckIn = false
+    @State private var checkedInHere = false
+
+    /// The server's pre-check-in window: from this many days before the visit to the day itself.
+    private static let preCheckInWindowDays = 7
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 // ── Status Header ──
                 statusHeader
+
+                // ── Pre-check-in, as on the web ──
+                preCheckInCard
 
                 // ── Doctor & Hospital ──
                 detailCard(title: "Provider", icon: "stethoscope") {
@@ -62,8 +72,68 @@ struct AppointmentDetailView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground))
+        // On the screen, not on the button branch: success swaps that branch
+        // for the "completed" row while the sheet is still dismissing.
+        .sheet(isPresented: $showPreCheckIn) {
+            PreCheckInView(appointment: appointment) {
+                checkedInHere = true
+                onPreCheckedIn?()
+            }
+        }
         .navigationTitle("Appointment Details")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Pre-check-in
+
+    private var daysUntilVisit: Int? {
+        guard let text = appointment.appointmentDate, text.count >= 10 else { return nil }
+        let fmt = DateFormatter()
+        fmt.calendar = Calendar(identifier: .iso8601)
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy-MM-dd"
+        guard let day = fmt.date(from: String(text.prefix(10))) else { return nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        return Calendar.current.dateComponents([.day], from: today, to: Calendar.current.startOfDay(for: day)).day
+    }
+
+    @ViewBuilder
+    private var preCheckInCard: some View {
+        let status = appointment.status?.uppercased() ?? ""
+        if status == "SCHEDULED" || status == "CONFIRMED" {
+            if checkedInHere || appointment.preCheckedIn == true {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                    Text("pre_checkin_done".localized).fontWeight(.medium)
+                    Spacer()
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            } else {
+                // The server accepts it from seven days before the visit to the
+                // day itself; outside that the button waits rather than sending
+                // a request that can only be refused.
+                let days = daysUntilVisit
+                let inWindow = days.map { (0...Self.preCheckInWindowDays).contains($0) } ?? false
+                VStack(spacing: 6) {
+                    Button {
+                        showPreCheckIn = true
+                    } label: {
+                        Label("pre_checkin_online".localized, systemImage: "checklist")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!inWindow)
+                    if !inWindow {
+                        Text(days.map { $0 < 0 } == true
+                             ? "pre_checkin_closed".localized
+                             : String(format: "pre_checkin_window".localized, Self.preCheckInWindowDays))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Status Header
