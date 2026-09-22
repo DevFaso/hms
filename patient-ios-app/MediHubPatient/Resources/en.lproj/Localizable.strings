@@ -244,8 +244,8 @@
 "conversations" = "Conversations";
 
 /* Documents */
-"no_documents" = "No documents";
-"no_documents_desc" = "No documents on file.";
+"no_documents" = "No documents uploaded yet";
+"no_documents_desc" = "Upload your medical records, lab results, or other health documents";
 "category" = "Category";
 "search_documents" = "Search documents";
 
@@ -395,3 +395,36 @@
 "questionnaires_completed" = "Questionnaires completed: %d of %d";
 "precheckin_failed" = "The pre-check-in could not be submitted";
 "emergency_contact_phone" = "Emergency contact phone";
+
+// Patient parity phase 2 (2026-09-21): document upload and delete
+"upload_document" = "Upload Document";
+"choose_file" = "Choose a file";
+"choose_photo" = "Choose a photo";
+"selected_file" = "Selected file";
+"document_type" = "Document Type";
+"collection_date_optional" = "Collection Date (optional)";
+"notes_optional" = "Notes (optional)";
+"notes_placeholder" = "Add a note about this document…";
+"upload" = "Upload";
+"document_upload_success" = "Document uploaded successfully";
+"document_upload_failed" = "Failed to upload document";
+"delete_document" = "Delete document";
+"document_delete_confirm" = "Are you sure you want to delete this document?";
+"document_delete_success" = "Document deleted";
+"document_delete_failed" = "Failed to delete document";
+"document_too_large" = "The file is larger than %d MB.";
+"document_type_not_allowed" = "This file type is not accepted. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
+"document_read_failed" = "The file could not be read.";
+"document_empty" = "The file is empty.";
+"photo_process_failed" = "The photo could not be processed.";
+"notes_too_long" = "Notes must be %d characters or fewer.";
+"file_size_kb" = "%@ KB";
+"document_type_lab_result" = "Lab Result";
+"document_type_imaging_report" = "Imaging Report";
+"document_type_discharge_summary" = "Discharge Summary";
+"document_type_referral_letter" = "Referral Letter";
+"document_type_prescription" = "Prescription";
+"document_type_insurance_document" = "Insurance Document";
+"document_type_invoice" = "Invoice";
+"document_type_immunization_record" = "Immunization Record";
+"document_type_other" = "Other";
