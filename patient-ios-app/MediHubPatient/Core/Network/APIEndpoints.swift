@@ -23,6 +23,11 @@ enum APIEndpoints {
     static let healthSummary = "/me/patient/health-summary"
     static let appointments = "/me/patient/appointments"
     static let cancelAppointment = "/me/patient/appointments/cancel"
+    // PRO self-screenings: bare DTOs, not the usual wrapper (the client tries both).
+    static let myScreenings = "/me/patient/pro-screenings"
+    static func screeningInstrument(code: String) -> String {
+        "/me/patient/pro-instruments/" + (code.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? code)
+    }
     // Pre-check-in, the same two calls as the web's form.
     static func appointmentQuestionnaires(id: String) -> String { "/me/patient/appointments/\(id)/questionnaires" }
     static func preCheckIn(id: String) -> String { "/me/patient/appointments/\(id)/pre-checkin" }
