@@ -35,6 +35,19 @@ interface ApiService {
     @GET("me/patient/health-summary")
     suspend fun getHealthSummary(): Response<ApiResponse<HealthSummaryDto>>
 
+    // ── PRO self-screenings (unwrapped DTOs, like the web's ProScreeningService) ──
+    @GET("me/patient/pro-screenings")
+    suspend fun getMyScreenings(): Response<ProSelfReport>
+
+    @GET("me/patient/pro-instruments/{code}")
+    suspend fun getScreeningInstrument(
+        @Path("code") code: String,
+        @Query("language") language: String?
+    ): Response<ProInstrumentView>
+
+    @POST("me/patient/pro-screenings")
+    suspend fun submitScreening(@Body request: ProResponseCreate): Response<ProScreeningEntry>
+
     // ── Appointments ──────────────────────────────────────────────────────────
     /** Patient appointments — API returns list, not paginated */
     @GET("me/patient/appointments")

@@ -398,4 +398,24 @@
     <string name="precheckin_failed">Le pré-enregistrement n\'a pas pu être soumis</string>
     <string name="answers_invalid">Corrigez les réponses signalées pour continuer.</string>
     <string name="pre_checkin_closed">Le pré-enregistrement n\'est plus disponible pour cette visite.</string>
+    <string name="screenings">Dépistages</string>
+    <string name="screenings_load_failed">Vos dépistages n\'ont pas pu être chargés</string>
+    <string name="screenings_privacy_note">Vos réponses vont directement à votre équipe soignante. Rien n\'est noté sur cet écran.</string>
+    <string name="screenings_open_now">Ouvert pour vous maintenant</string>
+    <string name="screenings_open_hint">Quelques questions courtes sur la façon dont vous vous êtes sentie cette dernière semaine.</string>
+    <string name="start_screening">Commencer</string>
+    <string name="screenings_none_open_title">Aucun dépistage ouvert pour le moment</string>
+    <string name="screenings_none_open_desc">Votre équipe soignante ouvre un dépistage pour vous pendant le suivi post-partum.</string>
+    <string name="your_answers">Vos réponses</string>
+    <string name="care_team_alerted">Votre équipe soignante a été alertée et vous contactera.</string>
+    <string name="follow_up_planned">Votre équipe soignante assurera un suivi avec vous.</string>
+    <string name="screening_recorded">Reçu par votre équipe soignante.</string>
+    <string name="instrument_load_failed">Les questions n\'ont pas pu être chargées</string>
+    <string name="screening_progress">%1$d sur %2$d répondus</string>
+    <string name="screening_incomplete">Veuillez d\'abord répondre à tous les items. Manquants :</string>
+    <string name="send_my_answers">Envoyer mes réponses</string>
+    <string name="sending">Envoi…</string>
+    <string name="screening_submitted">Merci. Vos réponses ont été envoyées à votre équipe soignante.</string>
+    <string name="screening_submit_failed">Vos réponses n\'ont pas pu être envoyées</string>
+    <string name="emergency_contact_phone">Téléphone du contact d\'urgence</string>
 </resources>
