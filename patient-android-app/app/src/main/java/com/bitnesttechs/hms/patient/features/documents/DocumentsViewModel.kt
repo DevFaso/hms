@@ -163,14 +163,16 @@ class DocumentsViewModel @Inject constructor(
         _uploadError.value = null
         applicationScope.launch {
             try {
+                // Bounded read: a provider that reported no size (pick() lets it
+                // through) must not have a huge file buffered whole before the
+                // cap is checked, so at most one byte past the cap is read.
                 val bytes = withContext(Dispatchers.IO) {
-                    appContext.contentResolver.openInputStream(file.uri)?.use { it.readBytes() }
+                    appContext.contentResolver.openInputStream(file.uri)?.use { readAtMost(it, MAX_UPLOAD_BYTES + 1) }
                 }
                 if (bytes == null || bytes.isEmpty()) {
                     _uploadError.value = Outcome(R.string.document_file_unreadable)
                     return@launch
                 }
-                // A provider that reported no size is checked once the bytes are in hand.
                 if (bytes.size > MAX_UPLOAD_BYTES) {
                     _uploadError.value = Outcome(R.string.document_too_large, MAX_UPLOAD_MB.toString())
                     return@launch
@@ -201,6 +203,20 @@ class DocumentsViewModel @Inject constructor(
                 _uploading.value = false
             }
         }
+    }
+
+    /** Reads up to [limit] bytes; the caller treats a full buffer of [limit] as "over the cap". */
+    private fun readAtMost(input: java.io.InputStream, limit: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        var remaining = limit
+        while (remaining > 0) {
+            val n = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+            if (n < 0) break
+            out.write(buffer, 0, n)
+            remaining -= n
+        }
+        return out.toByteArray()
     }
 
     private fun describe(uri: Uri): PickedFile? {

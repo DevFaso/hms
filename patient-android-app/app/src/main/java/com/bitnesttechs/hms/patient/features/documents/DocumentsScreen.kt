@@ -81,13 +81,15 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
     }
 
     // Upload / delete / refresh results, one snackbar each; the detail is the
-    // server's own message or the size cap, never raw JSON.
-    outcome?.let { o ->
-        val text = outcomeText(o)
-        LaunchedEffect(o) {
-            viewModel.clearOutcome()
-            snackbarHostState.showSnackbar(text)
-        }
+    // server's own message or the size cap, never raw JSON. The text is
+    // resolved in composition, the snackbar runs in the screen's scope:
+    // clearing the outcome restarts this effect, and showSnackbar called
+    // from it would be cancelled (and its snackbar dismissed) one frame in.
+    val outcomeMessage = outcome?.let { outcomeText(it) }
+    LaunchedEffect(outcome) {
+        if (outcome == null || outcomeMessage == null) return@LaunchedEffect
+        viewModel.clearOutcome()
+        scope.launch { snackbarHostState.showSnackbar(outcomeMessage) }
     }
 
     // OpenDocument rather than GetContent: the grant covers a later read from
