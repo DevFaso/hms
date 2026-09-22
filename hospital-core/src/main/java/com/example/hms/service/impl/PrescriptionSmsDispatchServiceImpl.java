@@ -51,6 +51,7 @@ import java.util.UUID;
 public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispatchService {
 
     private static final String CHANNEL_SMS = "SMS";
+    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String STATUS_SENT = "SENT";
     private static final String STATUS_FAILED = "FAILED";
     private static final int MAX_BODY_CHARS = 480;
@@ -138,13 +139,23 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     /**
      * Tenant isolation, the same 404-not-403 idiom as every other prescription
      * read: a caller whose active hospital is not the prescription's must not
-     * be able to tell it from one that does not exist. A null active hospital
-     * (super-admin in global view) is not scoped.
+     * be able to tell it from one that does not exist.
+     *
+     * <p>Only a super-admin in global view is unscoped. A null active hospital
+     * otherwise means a caller with no active assignment, not a caller entitled
+     * to every tenant — treating the two alike let exactly those callers
+     * dispatch another hospital's prescription.
      */
     private void requireCallerHospital(Authentication auth, Prescription rx) {
         UUID callerHospitalId = authUtils.currentHospitalId(auth);
+        if (callerHospitalId == null) {
+            if (authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN)) {
+                return;
+            }
+            throw new ResourceNotFoundException("Prescription not found");
+        }
         UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
-        if (callerHospitalId != null && !callerHospitalId.equals(rxHospitalId)) {
+        if (!callerHospitalId.equals(rxHospitalId)) {
             throw new ResourceNotFoundException("Prescription not found");
         }
     }
@@ -175,14 +186,25 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     }
 
     /**
-     * Re-dispatch closes whatever the prescription still had open (a refused
-     * offer that timed out, a back order, a reply that never came): the old
-     * reference token must not act on the prescription once a new pharmacy
+     * Re-dispatch closes the offer the previous PHARMACY still held: the old
+     * reference token must not act on the prescription once another pharmacy
      * holds it, and the inbound finder only matches open decisions.
+     *
+     * <p>Only PARTNER decisions are superseded. A BACKORDER decision is not an
+     * offer to anybody — it is the record that the medication is awaited, with
+     * the estimated restock date on it. Cancelling it here threw that date away
+     * the moment a back-ordered prescription was sent to a pharmacy, so a
+     * refusal left nothing behind at all; left alone, the back order still
+     * stands when the pharmacy says no.
+     *
+     * <p>The superseded pharmacy is told, best-effort: it was asked to prepare
+     * a prescription and would otherwise keep waiting on a reply that can no
+     * longer be applied.
      */
     private void supersedeOpenDecisions(Prescription rx, Pharmacy newTarget) {
         List<PrescriptionRoutingDecision> open = routingDecisionRepository.findByPrescriptionId(rx.getId())
                 .stream()
+                .filter(d -> d.getRoutingType() == RoutingType.PARTNER)
                 .filter(d -> OPEN_DECISION_STATUSES.contains(d.getStatus()))
                 .toList();
         for (PrescriptionRoutingDecision d : open) {
@@ -191,6 +213,17 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                     "Superseded: re-dispatched by SMS to " + newTarget.getName()));
             routingDecisionRepository.save(d);
             log.info("Routing decision {} superseded by re-dispatch of prescription {}", d.getId(), rx.getId());
+            notifySuperseded(d);
+        }
+    }
+
+    /** Never let a notification failure roll back the dispatch that succeeded. */
+    private void notifySuperseded(PrescriptionRoutingDecision superseded) {
+        try {
+            partnerChannel.sendSuperseded(superseded, superseded.getTargetPharmacy());
+        } catch (Exception ex) {
+            log.warn("Could not tell the superseded pharmacy about decision {}: {}",
+                    superseded.getId(), ex.getMessage());
         }
     }
 

@@ -52,6 +52,17 @@ public final class PartnerSmsTemplates {
                 + " Merci.";
     }
 
+    /**
+     * Outbound: the offer has been handed to another pharmacy. Deliberately not
+     * {@link #autoRejected}: nothing timed out, and telling a pharmacy its
+     * deadline passed when the prescriber simply chose elsewhere is a lie the
+     * pharmacy would act on.
+     */
+    public static String superseded(String refToken) {
+        return RX_PREFIX + refToken + " : ordonnance confiée à une autre pharmacie."
+                + " Inutile de préparer. Merci.";
+    }
+
     /** Outbound to patient: partner accepted the prescription. */
     public static String patientAccepted(String pharmacyName) {
         return "Bonjour, votre ordonnance a été acceptée par " + pharmacyName

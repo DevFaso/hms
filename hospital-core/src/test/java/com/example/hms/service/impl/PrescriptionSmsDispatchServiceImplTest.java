@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -112,6 +113,10 @@ class PrescriptionSmsDispatchServiceImplTest {
 
         user = new User();
         user.setId(userId);
+
+        // requireCallerHospital runs before the pharmacy is even loaded, so
+        // every path through dispatch() needs an active hospital on the caller.
+        lenient().when(authUtils.currentHospitalId(auth)).thenReturn(hospitalId);
     }
 
     private PrescriptionSmsDispatchRequestDTO requestForCurrentPharmacy() {
@@ -201,7 +206,89 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
-    @DisplayName("round 2: a refused or back-ordered prescription can be dispatched again, superseding the open decision")
+    @DisplayName("round 4: a superseded pharmacy is told its offer is gone, best-effort")
+    void dispatch_tellsTheSupersededPharmacy() {
+        rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+        Pharmacy previous = new Pharmacy();
+        previous.setId(UUID.randomUUID());
+        previous.setName("Pharmacie du Nord");
+        PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .targetPharmacy(previous)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        stale.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        verify(partnerChannel).sendSuperseded(stale, previous);
+    }
+
+    @Test
+    @DisplayName("round 4: a failure telling the superseded pharmacy does not undo the dispatch")
+    void dispatch_supersededNotificationIsBestEffort() {
+        rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+        PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        stale.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new RuntimeException("gateway down"))
+                .when(partnerChannel).sendSuperseded(any(), any());
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(stale.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("round 4: a caller with no active hospital is refused unless they are a super-admin")
+    void dispatch_rejectsCallerWithNoActiveHospital() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(authUtils.currentHospitalId(auth)).thenReturn(null);
+        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(pharmacyRepository, never()).findById(any());
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("round 4: a super-admin in global view is still unscoped")
+    void dispatch_allowsSuperAdminInGlobalView() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(authUtils.currentHospitalId(auth)).thenReturn(null);
+        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(true);
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+    }
+
+    @Test
+    @DisplayName("round 2: a refused or back-ordered prescription can be dispatched again, superseding the open PARTNER decision only")
     void dispatch_redispatchSupersedesOpenDecision() {
         rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
         PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
@@ -217,7 +304,17 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .status(RoutingDecisionStatus.REJECTED)
                 .build();
         closed.setId(UUID.randomUUID());
-        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale, closed));
+        // Round 4: a back order is not an offer to anybody — it carries the
+        // restock date and must survive the hand-off to a pharmacy.
+        PrescriptionRoutingDecision backOrder = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.BACKORDER)
+                .status(RoutingDecisionStatus.PENDING)
+                .estimatedRestockDate(java.time.LocalDate.now().plusDays(10))
+                .build();
+        backOrder.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId))
+                .thenReturn(List.of(stale, closed, backOrder));
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
@@ -230,8 +327,13 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(stale.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
         assertThat(stale.getReason()).startsWith("first offer. Superseded").contains("Pharmacie Centrale");
         assertThat(closed.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
+        assertThat(backOrder.getStatus())
+                .as("the back order, and the restock date on it, must outlive the hand-off")
+                .isEqualTo(RoutingDecisionStatus.PENDING);
+        assertThat(backOrder.getEstimatedRestockDate()).isNotNull();
         verify(routingDecisionRepository).save(stale);
         verify(routingDecisionRepository, never()).save(closed);
+        verify(routingDecisionRepository, never()).save(backOrder);
     }
 
     @Test

@@ -27,16 +27,39 @@ class PartnerSmsTemplatesTest {
         PartnerSmsReplyParser parser = new PartnerSmsReplyParser();
         String msg = PartnerSmsTemplates.prescriptionOffer("ABC12", "Paracétamol 500mg", "JD");
 
-        // Lift the quoted replies straight out of the message the pharmacy reads.
-        assertThat(msg).contains("« 1 ABC12 »").contains("« 2 ABC12 »");
-        assertThat(parser.parse("1 ABC12")).hasValueSatisfying(r -> {
+        // Feed back the literal strings the pharmacy is told to send, lifted out
+        // of the message itself — guillemets included. Hand-stripping them here
+        // would test a reply nobody was asked to send.
+        String accept = quoted(msg, 0);
+        String reject = quoted(msg, 1);
+        assertThat(accept).isEqualTo("« 1 ABC12 »");
+        assertThat(reject).isEqualTo("« 2 ABC12 »");
+
+        assertThat(parser.parse(accept)).hasValueSatisfying(r -> {
             assertThat(r.action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
             assertThat(r.refToken()).isEqualTo("ABC12");
         });
-        assertThat(parser.parse("2 ABC12")).hasValueSatisfying(r -> {
+        assertThat(parser.parse(reject)).hasValueSatisfying(r -> {
             assertThat(r.action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
             assertThat(r.refToken()).isEqualTo("ABC12");
         });
+    }
+
+    /** The n-th « … » run of the message, as the pharmacy would copy it. */
+    private static String quoted(String message, int index) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("«[^»]*»").matcher(message);
+        for (int i = 0; i <= index; i++) {
+            assertThat(m.find()).as("quoted reply #%d present", index).isTrue();
+        }
+        return m.group();
+    }
+
+    @Test
+    void supersededTellsThePharmacyToStopPreparingWithoutClaimingATimeout() {
+        String msg = PartnerSmsTemplates.superseded("ABC12");
+        assertThat(msg).contains("ABC12").contains("autre pharmacie");
+        // autoRejected's "délai dépassé" would be a lie here: nothing timed out.
+        assertThat(msg).doesNotContain("délai");
     }
 
     @Test

@@ -168,14 +168,23 @@ public class PartnerExchangeService {
             return Optional.empty();
         }
         String prefix = refToken.toLowerCase(Locale.ROOT);
-        List<PrescriptionRoutingDecision> matches = routingDecisionRepository
-                .findOpenByIdPrefix(RoutingType.PARTNER, OPEN_STATUSES, prefix)
-                .stream()
+        List<PrescriptionRoutingDecision> byToken = routingDecisionRepository
+                .findOpenByIdPrefix(RoutingType.PARTNER, OPEN_STATUSES, prefix);
+        List<PrescriptionRoutingDecision> matches = byToken.stream()
                 .filter(d -> sender.equals(canonicalPhone(targetPhone(d))))
                 .toList();
         if (matches.isEmpty()) {
-            log.info("Partner SMS reply referenced unknown/closed token {} for sender {}; ignored",
-                    refToken, SmsPartnerNotificationChannel.maskPhone(senderPhone));
+            if (byToken.isEmpty()) {
+                log.info("Partner SMS reply referenced unknown/closed token {}; ignored", refToken);
+            } else {
+                // The token is live but the handset is not the one we offered
+                // it to. Staying fail-closed is right — one shared webhook
+                // secret is not authorisation to answer for a pharmacy — but
+                // an offer that auto-rejects four hours later because the
+                // pharmacist replied from a different phone must not do so in
+                // silence, so this is surfaced where staff review the exchange.
+                reportUnmatchedSender(byToken, refToken, senderPhone);
+            }
             return Optional.empty();
         }
         if (matches.size() > 1) {
@@ -184,6 +193,40 @@ public class PartnerExchangeService {
             return Optional.empty();
         }
         return Optional.of(matches.get(0));
+    }
+
+    /**
+     * WARN + an audit row naming the prescription(s) the reply could have been
+     * for and the (masked) handset it came from, so a dropped reply is visible
+     * without reading application logs. The number is masked because an
+     * unmatched sender is, by definition, not a number we know belongs to a
+     * pharmacy.
+     */
+    private void reportUnmatchedSender(List<PrescriptionRoutingDecision> byToken,
+                                       String refToken, String senderPhone) {
+        String masked = SmsPartnerNotificationChannel.maskPhone(senderPhone);
+        String prescriptions = byToken.stream()
+                .map(d -> d.getPrescription() != null ? String.valueOf(d.getPrescription().getId()) : "unknown")
+                .collect(java.util.stream.Collectors.joining(", "));
+        log.warn("Partner SMS reply for live token {} came from {}, which is not the pharmacy it was "
+                        + "offered to; ignored. Prescription(s): {}", refToken, masked, prescriptions);
+        auditUnmatched("Partner SMS reply for reference " + refToken + " from unrecognised sender "
+                + masked + " was ignored; offer still open for prescription(s) " + prescriptions,
+                byToken.get(0).getId().toString());
+    }
+
+    private void auditUnmatched(String description, String resourceId) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
+                    .eventDescription(description)
+                    .status(AuditStatus.FAILURE)
+                    .resourceId(resourceId)
+                    .entityType("PRESCRIPTION_ROUTING")
+                    .build());
+        } catch (Exception e) {
+            log.warn("Failed to log unmatched partner-SMS sender: {}", e.getMessage());
+        }
     }
 
     private static String targetPhone(PrescriptionRoutingDecision d) {

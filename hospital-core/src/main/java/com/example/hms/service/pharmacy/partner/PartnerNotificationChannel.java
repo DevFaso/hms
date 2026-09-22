@@ -35,6 +35,13 @@ public interface PartnerNotificationChannel {
     /** Outbound: notify partner that the prescription has been auto-rejected after timeout. */
     void sendAutoRejected(PrescriptionRoutingDecision decision, Pharmacy partner);
 
+    /**
+     * Tell a pharmacy that the offer it is holding has been handed to another
+     * one, so it stops preparing and knows its reply will not be applied.
+     * Distinct from {@link #sendAutoRejected} on purpose: nothing timed out.
+     */
+    void sendSuperseded(PrescriptionRoutingDecision decision, Pharmacy partner);
+
     /** Outbound to patient: partner accepted. */
     void notifyPatientAccepted(Patient patient, Pharmacy partner);
 

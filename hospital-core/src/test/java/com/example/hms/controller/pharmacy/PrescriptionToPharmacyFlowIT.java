@@ -403,9 +403,57 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
 
         assertThat(routingDecisionRepository.findById(decisionId).orElseThrow().getStatus())
                 .isEqualTo(RoutingDecisionStatus.CANCELLED);
+        // Round 4: the pharmacy that was preparing it is told to stop.
+        ArgumentCaptor<String> supersededBody = ArgumentCaptor.forClass(String.class);
+        verify(smsService, atLeastOnce()).send(eq(PARTNER_A_PHONE), supersededBody.capture());
+        assertThat(supersededBody.getAllValues())
+                .anyMatch(b -> b.contains("autre pharmacie"));
+
         mockMvc.perform(webhook(PARTNER_A_REPLY_FROM, "1 " + partnerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ignored"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+    }
+
+    @Test
+    @DisplayName("round 4: a back-ordered prescription sent to a pharmacy that refuses keeps its back order and can be sent again")
+    void backOrderSurvivesDispatchAndRefusal() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        LocalDate restockDate = LocalDate.now().plusDays(14);
+
+        mockMvc.perform(apiPost(API + "/pharmacy/routing/back-order/{id}", rxId)
+                        .param("estimatedRestockDate", restockDate.toString())
+                        .with(pharmacist(pharmacistA, hospitalA)))
+                .andExpect(status().isCreated());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PENDING_STOCK);
+        UUID backOrderId = routingDecisionRepository.findByPrescriptionId(rxId).stream()
+                .filter(d -> d.getRoutingType() == RoutingType.BACKORDER)
+                .findFirst().orElseThrow().getId();
+
+        // Sent to a community pharmacy while the back order stands.
+        dispatchSms(rxId, communityA);
+        String refToken = tokenFromOfferSentTo(COMMUNITY_A_PHONE);
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+
+        PrescriptionRoutingDecision backOrder = routingDecisionRepository.findById(backOrderId).orElseThrow();
+        assertThat(backOrder.getStatus())
+                .as("a back order is not an offer to anybody; superseding it would throw the restock date away")
+                .isEqualTo(RoutingDecisionStatus.PENDING);
+        assertThat(backOrder.getEstimatedRestockDate()).isEqualTo(restockDate);
+
+        // The pharmacy refuses.
+        mockMvc.perform(webhook(COMMUNITY_A_PHONE, "2 " + refToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("applied"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+
+        // Not a dead end: the back order (and its date) is still on file, and
+        // the prescription can be handed to another pharmacy.
+        backOrder = routingDecisionRepository.findById(backOrderId).orElseThrow();
+        assertThat(backOrder.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        assertThat(backOrder.getEstimatedRestockDate()).isEqualTo(restockDate);
+
+        dispatchSms(rxId, communityA);
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
     }
 

@@ -1,8 +1,11 @@
 package com.example.hms.service.pharmacy.partner;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
@@ -13,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -176,6 +180,39 @@ class PartnerExchangeServiceTest {
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
         verify(routingDecisionRepository, never()).save(any());
         verifyNoInteractions(channel);
+    }
+
+    @Test
+    @DisplayName("round 4: a live token answered from the wrong handset is surfaced to staff, not just dropped")
+    void unmatchedSenderIsAudited() {
+        stubPrefixLookup(decision);
+
+        service.handleInboundReply("+22699999999", "1 " + token);
+
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        AuditEventRequestDTO event = captor.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+        assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(event.getEventDescription())
+                .contains(token)
+                .contains(prescription.getId().toString())
+                // Masked: an unmatched sender is by definition not a number we
+                // know belongs to a pharmacy.
+                .contains("****9999")
+                .doesNotContain("+22699999999");
+    }
+
+    @Test
+    @DisplayName("round 4: a token nobody holds is not a staff alert, just a dropped message")
+    void unknownTokenIsNotAudited() {
+        when(routingDecisionRepository.findOpenByIdPrefix(
+                RoutingType.PARTNER, PartnerExchangeService.OPEN_STATUSES, "zzzzzzzz"))
+                .thenReturn(List.of());
+
+        service.handleInboundReply(PARTNER_PHONE, "1 ZZZZZZZZ");
+
+        verifyNoInteractions(auditEventLogService);
     }
 
     @Test

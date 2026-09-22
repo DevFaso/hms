@@ -155,4 +155,57 @@ class PartnerSmsReplyParserTest {
         assertThat(parser.parse("oui 3F2A9B1C livr\u00e9")).isEmpty();
         assertThat(parser.parse("ok 3F2A9B1C d\u00e9j\u00e0 dispens\u00e9")).isEmpty();
     }
+
+    /** The real message a pharmacy's handset quotes back, built by the templates. */
+    private static String offer() {
+        return PartnerSmsTemplates.prescriptionOffer("3F2A9B1C", "Amoxicilline 500mg", "AB");
+    }
+
+    @Test
+    @DisplayName("round 4: quoting the whole offer and answering 'oui' accepts — the quoted 'refuser' is not the pharmacy's word")
+    void quotedOfferThenOuiAccepts() {
+        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse(offer() + " oui");
+
+        assertThat(parsed)
+                .as("the offer ends in 'pour refuser', so a quoted copy used to read as a refusal")
+                .isPresent();
+        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 4: quoting the whole offer and answering 'non' still refuses")
+    void quotedOfferThenNonRefuses() {
+        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse(offer() + " non");
+
+        assertThat(parsed).isPresent();
+        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 4: a quoted offer with no answer of its own decides nothing")
+    void quotedOfferAloneIsNotAnAnswer() {
+        assertThat(parser.parse(offer())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("round 4: the instructed reply is parsed with its guillemets, exactly as the offer prints it")
+    void instructedReplyWithGuillemetsIsAccepted() {
+        assertThat(parser.parse("\u00ab 1 3F2A9B1C \u00bb").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("\u00ab 1 3F2A9B1C \u00bb").orElseThrow().refToken())
+                .isEqualTo("3F2A9B1C");
+        assertThat(parser.parse("\u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse("\"1 3F2A9B1C\"").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+    }
+
+    @Test
+    @DisplayName("round 4: a quoted offer whose leading code is 1 accepts, whatever follows")
+    void quotedReplyStartingWithTheCodeWins() {
+        assertThat(parser.parse("1 3F2A9B1C " + offer()).orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+    }
 }
