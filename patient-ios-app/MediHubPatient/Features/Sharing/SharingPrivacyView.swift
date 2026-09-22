@@ -244,16 +244,15 @@ private struct OptOutReasonSheet: View {
                         .lineLimit(3 ... 6)
                         .disabled(vm.optOutSaving)
                         .onChange(of: vm.optOutReason) { _, value in
-                            // The server refuses more than 1000 characters (@Size); stop at the same line.
-                            if value.count > SharingPrivacyViewModel.reasonMaxLength {
-                                vm.optOutReason = String(value.prefix(SharingPrivacyViewModel.reasonMaxLength))
-                            }
+                            // The server refuses more than 1000 UTF-16 units (@Size); stop at the same line.
+                            let clipped = SharingPrivacyViewModel.clipReason(value)
+                            if clipped != value { vm.optOutReason = clipped }
                         }
                 } header: {
                     Text("sharing_optout_reason_label".localized)
                 } footer: {
                     Text(String(format: "sharing_optout_reason_count".localized,
-                                vm.optOutReason.count, SharingPrivacyViewModel.reasonMaxLength))
+                                vm.optOutReason.utf16.count, SharingPrivacyViewModel.reasonMaxLength))
                 }
                 Section {
                     if let error = vm.optOutError {
@@ -357,8 +356,24 @@ enum DisclosureFormat {
 final class SharingPrivacyViewModel: ObservableObject {
     /// What the web asks for on its one page.
     static let pageSize = 50
-    /// `OptOutRequestDTO.reason` is `@Size(max = 1000)`.
+    /// `OptOutRequestDTO.reason` is `@Size(max = 1000)`; Bean Validation counts
+    /// `String.length()`, UTF-16 code units, not graphemes, so an emoji is two.
     static let reasonMaxLength = 1000
+
+    /// The longest prefix that fits the server's limit, cut between graphemes
+    /// so a surrogate pair or a composed character is never split.
+    static func clipReason(_ text: String) -> String {
+        guard text.utf16.count > reasonMaxLength else { return text }
+        var units = 0
+        var end = text.startIndex
+        for index in text.indices {
+            let next = units + text[index].utf16.count
+            if next > reasonMaxLength { break }
+            units = next
+            end = text.index(after: index)
+        }
+        return String(text[..<end])
+    }
 
     // ── Opt-out ──
     @Published var optOut: RecordSharingOptOutDTO?
@@ -514,7 +529,7 @@ final class SharingPrivacyViewModel: ObservableObject {
     func confirmOptOut() {
         guard !patientId.isEmpty, !optOutSaving else { return }
         let reason = optOutReason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard reason.count <= Self.reasonMaxLength else {
+        guard reason.utf16.count <= Self.reasonMaxLength else {
             optOutError = String(format: "sharing_optout_reason_too_long".localized, Self.reasonMaxLength)
             return
         }
