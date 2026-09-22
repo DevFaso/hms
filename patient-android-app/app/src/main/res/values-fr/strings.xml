@@ -430,7 +430,7 @@
     <string name="clear_date">Effacer la date</string>
     <string name="document_uploaded">Document téléversé avec succès</string>
     <string name="document_upload_failed">Échec du téléversement</string>
-    <string name="document_too_large">Ce fichier dépasse %1$s Mo</string>
+    <string name="document_too_large">Ce fichier doit faire moins de %1$s Mo</string>
     <string name="document_type_unsupported">Type de fichier non pris en charge. Autorisés : PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX</string>
     <string name="document_file_unreadable">Le fichier sélectionné n\'a pas pu être lu</string>
     <string name="documents_refresh_failed">La liste des documents n\'a pas pu être actualisée</string>

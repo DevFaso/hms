@@ -14,6 +14,8 @@ import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +40,8 @@ sealed class DocumentEvent {
 class DocumentsViewModel @Inject constructor(
     private val api: ApiService,
     @ApplicationContext private val appContext: Context,
-    @ApplicationScope private val applicationScope: CoroutineScope
+    @ApplicationScope private val applicationScope: CoroutineScope,
+    private val requestTracker: DocumentRequestTracker
 ) : ViewModel() {
 
     data class Outcome(@StringRes val resId: Int, val detail: String? = null)
@@ -87,6 +90,10 @@ class DocumentsViewModel @Inject constructor(
      * [quiet] keeps the current list on screen while it refreshes after an
      * upload or a delete: the full-screen spinner and the error page are
      * for the first load only, a refresh failure is a snackbar.
+     *
+     * A ViewModel created while an upload or delete started by an earlier
+     * one is still out waits for it first (spinner showing), so the list it
+     * reads is the server's state after that request, not before it.
      */
     fun load(quiet: Boolean = false) {
         viewModelScope.launch {
@@ -94,6 +101,7 @@ class DocumentsViewModel @Inject constructor(
                 _isLoading.value = true
                 _loadError.value = null
             }
+            requestTracker.inFlight.value?.join()
             try {
                 val resp = api.getDocuments()
                 if (resp.isSuccessful) {
@@ -151,17 +159,19 @@ class DocumentsViewModel @Inject constructor(
     /**
      * Runs in [applicationScope]: once the bytes are on their way the server
      * may store the document whether or not this screen is still open, and a
-     * back press must not leave the patient believing nothing was sent.
+     * back press must not leave the patient believing nothing was sent. The
+     * job is registered with [requestTracker] so a ViewModel created after
+     * this one is gone still reads the committed list.
      */
     fun upload(documentType: String, collectionDate: String?, notes: String?) {
         val file = _picked.value ?: return
-        if (_uploading.value) return
+        if (_uploading.value || requestTracker.inFlight.value != null) return
         if (documentType !in DOCUMENT_TYPES) return
         val trimmedNotes = notes?.trim()?.takeIf { it.isNotEmpty() }
         if (trimmedNotes != null && trimmedNotes.length > NOTES_MAX) return
         _uploading.value = true
         _uploadError.value = null
-        applicationScope.launch {
+        val job: Job = applicationScope.launch(start = CoroutineStart.LAZY) {
             try {
                 // Bounded read: a provider that reported no size (pick() lets it
                 // through) must not have a huge file buffered whole before the
@@ -186,13 +196,18 @@ class DocumentsViewModel @Inject constructor(
                     collectionDate = collectionDate?.takeIf { it.isNotBlank() }?.toRequestBody(text),
                     notes = trimmedNotes?.toRequestBody(text)
                 )
-                if (resp.isSuccessful) {
-                    resp.body()?.data?.let { saved -> _documents.value = listOf(saved) + _documents.value }
-                    _picked.value = null
-                    _outcome.value = Outcome(R.string.document_uploaded)
-                    load(quiet = true)
-                } else {
-                    _uploadError.value = Outcome(
+                when {
+                    resp.isSuccessful -> {
+                        resp.body()?.data?.let { saved -> _documents.value = listOf(saved) + _documents.value }
+                        _picked.value = null
+                        _outcome.value = Outcome(R.string.document_uploaded)
+                        load(quiet = true)
+                    }
+                    // The 413 handler's own text names a limit that is not the
+                    // real one, so the localized message is shown alone.
+                    resp.code() == 413 ->
+                        _uploadError.value = Outcome(R.string.document_too_large, MAX_UPLOAD_MB.toString())
+                    else -> _uploadError.value = Outcome(
                         R.string.document_upload_failed,
                         serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"
                     )
@@ -202,6 +217,11 @@ class DocumentsViewModel @Inject constructor(
             } finally {
                 _uploading.value = false
             }
+        }
+        if (requestTracker.start(job)) job.start()
+        else {
+            job.cancel()
+            _uploading.value = false
         }
     }
 
@@ -250,12 +270,13 @@ class DocumentsViewModel @Inject constructor(
 
     /**
      * Soft delete, one at a time, in [applicationScope]: the server may have
-     * already removed the document when the screen goes away.
+     * already removed the document when the screen goes away. Registered
+     * with [requestTracker] like the upload.
      */
     fun delete(doc: DocumentDto) {
-        if (_deleting.value != null) return
+        if (_deleting.value != null || requestTracker.inFlight.value != null) return
         _deleting.value = doc.id
-        applicationScope.launch {
+        val job: Job = applicationScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val resp = api.deleteDocument(doc.id)
                 if (resp.isSuccessful) {
@@ -273,6 +294,11 @@ class DocumentsViewModel @Inject constructor(
             } finally {
                 _deleting.value = null
             }
+        }
+        if (requestTracker.start(job)) job.start()
+        else {
+            job.cancel()
+            _deleting.value = null
         }
     }
 
@@ -302,13 +328,17 @@ class DocumentsViewModel @Inject constructor(
         const val CACHE_DIR = "documents"
 
         /**
-         * Spring's multipart cap (`spring.servlet.multipart.max-file-size=10MB`
-         * in application.properties) is the one that bites first: the
-         * document service's own limit is 20 MB, and the 413 handler's text
-         * says 5 MB. The client turns a larger file away with the real number.
+         * Spring's multipart caps (`spring.servlet.multipart.max-file-size`
+         * and `max-request-size`, both 10MB in application.properties) are
+         * the ones that bite first: the document service's own limit is
+         * 20 MB, and the 413 handler's text says 5 MB. `max-request-size`
+         * covers the whole body, so the file may be at most 10 MiB minus the
+         * multipart envelope (boundaries, part headers, the three text
+         * parts); 64 KiB is left for it. The message says "under 10 MB",
+         * which is true of every file this cap admits.
          */
         const val MAX_UPLOAD_MB = 10
-        const val MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024L * 1024L
+        const val MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024L * 1024L - 64L * 1024L
 
         /** patient_uploaded_documents.notes is varchar(2048). */
         const val NOTES_MAX = 2048
