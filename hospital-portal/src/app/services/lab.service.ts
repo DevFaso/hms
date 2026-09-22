@@ -218,8 +218,13 @@ export interface LabOrderRequest {
   orderChannel: string;
   providerSignature: string;
   documentationSharedWithLab?: boolean | null;
-  /** Optional: the laboratory (hospital) that performs the test when it is not this hospital's own. */
-  performingHospitalId?: string;
+  /**
+   * The laboratory (hospital) that performs the test. Three states on the
+   * wire and they are not the same on an update: absent leaves the routing
+   * alone, an explicit null brings the test back in-house, an id routes it
+   * there. The order form always sends it explicitly.
+   */
+  performingHospitalId?: string | null;
 }
 
 /** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */

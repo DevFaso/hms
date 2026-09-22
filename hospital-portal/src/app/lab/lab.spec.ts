@@ -81,6 +81,7 @@ describe('LabComponent — performing laboratory', () => {
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
+    labService.updateOrder.and.returnValue(of(orders[0] ?? order({})));
 
     const hospitalService = jasmine.createSpyObj<HospitalService>('HospitalService', [
       'list',
@@ -151,7 +152,7 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.performingLabs()).toEqual([]);
   });
 
-  it('sends the chosen laboratory, and omits it for an in-house order', async () => {
+  it('sends the chosen laboratory, and an explicit null for an in-house order', async () => {
     await setup(['ROLE_DOCTOR'], []);
 
     component.openCreate();
@@ -161,11 +162,31 @@ describe('LabComponent — performing laboratory', () => {
       jasmine.objectContaining({ performingHospitalId: LAB_B }),
     );
 
+    // Null, never absent: the API reads an absent field as "keep the current
+    // laboratory", so an omitted one would strand an outsourced order.
     component.openCreate();
     component.form.performingHospitalId = '';
     component.submitForm();
     const payload = labService.createOrder.calls.mostRecent().args[0];
-    expect(payload.performingHospitalId).toBeUndefined();
+    expect(payload.performingHospitalId).toBeNull();
+    expect('performingHospitalId' in payload).toBeTrue();
+  });
+
+  it('brings an outsourced order back in-house from the edit form', async () => {
+    const outgoing = order({
+      performingHospitalId: LAB_B,
+      performingHospitalName: 'Central Laboratory B',
+    });
+    await setup(['ROLE_DOCTOR'], [outgoing]);
+
+    component.openEdit(outgoing);
+    expect(component.form.performingHospitalId).toBe(LAB_B);
+
+    component.form.performingHospitalId = '';
+    component.submitForm();
+
+    const payload = labService.updateOrder.calls.mostRecent().args[1];
+    expect(payload.performingHospitalId).toBeNull();
   });
 
   it('tells the laboratory who ordered an incoming external order', async () => {

@@ -252,17 +252,92 @@ class LabOrderServiceImplPerformingHospitalTest {
 
     @Test
     void updateWithoutThePerformingFieldKeepsTheCurrentLaboratory() {
+        // The shape every client that knows nothing of B1 sends: the field is
+        // absent, and an absent field is not an instruction to re-route.
         mockOrderLookups();
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
 
-        service.updateLabOrder(order.getId(), request().performingHospitalId(null).build(), Locale.ENGLISH);
+        LabOrderRequestDTO absent = request().build();
+        assertThat(absent.hasPerformingHospitalId()).isFalse();
+        service.updateLabOrder(order.getId(), absent, Locale.ENGLISH);
 
         assertThat(order.getPerformingHospital()).isSameAs(performing);
         verify(hospitalRepository, never()).findById(performing.getId());
         verify(routingNotifier, never()).notifyPerformingLab(any());
+    }
+
+    @Test
+    void updateWithAnExplicitNullBringsTheOrderBackInHouse() {
+        // The portal's "this hospital's laboratory" option. Absent could not
+        // express this, so an outsourced order could never come home.
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        LabOrderRequestDTO explicitNull = request().performingHospitalId(null).build();
+        assertThat(explicitNull.hasPerformingHospitalId()).isTrue();
+        service.updateLabOrder(order.getId(), explicitNull, Locale.ENGLISH);
+
+        assertThat(order.getPerformingHospital()).isNull();
+        verify(routingNotifier, never()).notifyPerformingLab(any());
+    }
+
+    @Test
+    void updateWithAnExplicitNullIsStillRefusedOnceTheLaboratoryHasWorked() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        LabResult result = new LabResult();
+        result.setId(UUID.randomUUID());
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
+
+        UUID id = order.getId();
+        LabOrderRequestDTO explicitNull = request().performingHospitalId(null).build();
+        assertThatThrownBy(() -> service.updateLabOrder(id, explicitNull, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(order.getPerformingHospital()).isSameAs(performing);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateEchoingASuspendedCurrentLaboratoryDoesNotReCheckRoutability() {
+        // Editing the notes of an order whose laboratory was suspended after
+        // it was placed: the caller is not choosing that laboratory, so the
+        // routability gate must not turn the edit into a 400.
+        mockOrderLookups();
+        performing.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.updateLabOrder(order.getId(),
+            request().performingHospitalId(performing.getId()).build(), Locale.ENGLISH);
+
+        assertThat(order.getPerformingHospital()).isSameAs(performing);
+        verify(hospitalRepository, never()).findById(performing.getId());
+        verify(routingNotifier, never()).notifyPerformingLab(any());
+    }
+
+    @Test
+    void createIgnoresTheAbsentFieldAndOrdersInHouse() {
+        mockOrderLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.createLabOrder(request().build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getPerformingHospital()).isNull();
     }
 
     @Test
@@ -326,13 +401,13 @@ class LabOrderServiceImplPerformingHospitalTest {
         mockOrderLookups();
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
-        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
         when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
 
         service.updateLabOrder(order.getId(), request().performingHospitalId(performing.getId()).build(), Locale.ENGLISH);
 
         verify(routingNotifier, never()).notifyPerformingLab(any());
+        verify(hospitalRepository, never()).findById(performing.getId());
         verify(labSpecimenRepository, never()).findByLabOrder_Id(any());
     }
 

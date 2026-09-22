@@ -130,21 +130,34 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
-     * B1: the laboratory that performs the test. Absent, or naming the
-     * ordering hospital itself, means "our own laboratory" (stored as null).
-     * Any other target must be an active hospital: the platform has no notion
-     * of partner or affiliated hospitals to narrow it to.
+     * B1: the laboratory that performs the test.
+     *
+     * <p>Three request states, and they are not the same thing on an update:
+     * an <em>omitted</em> field leaves the routing untouched (what every
+     * client that knows nothing of B1 sends), an <em>explicit null</em> — or
+     * the ordering hospital's own id — brings the test back in-house, and any
+     * other id routes it there. Both changes are subject to the
+     * no-specimen/no-result guard below. On a create there is nothing to keep,
+     * so absent and null both mean "our own laboratory".
+     *
+     * <p>A target must be an active hospital: the platform has no notion of
+     * partner or affiliated hospitals to narrow it to. That check applies to a
+     * laboratory the caller is choosing — re-sending the one already on the
+     * order is not a choice, so editing the notes of an order whose laboratory
+     * has since been suspended must not fail.
      */
     private Hospital resolvePerformingHospital(LabOrderRequestDTO request, Hospital orderingHospital, LabOrder base) {
-        UUID requested = request.getPerformingHospitalId();
-        if (requested == null && base != null) {
-            // PUT without the field keeps the current laboratory: an omitted
-            // field is not an instruction to bring the test back in-house.
+        if (base != null && !request.hasPerformingHospitalId()) {
             return base.getPerformingHospital();
         }
+        UUID requested = request.getPerformingHospitalId();
+        Hospital current = base != null ? base.getPerformingHospital() : null;
         Hospital performing;
         if (requested == null || requested.equals(orderingHospital.getId())) {
             performing = null;
+        } else if (current != null && requested.equals(current.getId())) {
+            // Unchanged: keep the row as it is, routability unexamined.
+            performing = current;
         } else {
             performing = hospitalRepository.findById(requested)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));

@@ -316,10 +316,13 @@ export class LabComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
-    // An empty select means "our own laboratory": the API takes an absent id, not "".
+    // The select is always sent, and "" is an explicit null rather than an
+    // absent field: absent tells the API to leave the routing as it is, so
+    // omitting it would make "this hospital's laboratory" unreachable on an
+    // order that had been sent out.
     const payload: LabOrderRequest = {
       ...this.form,
-      performingHospitalId: this.form.performingHospitalId || undefined,
+      performingHospitalId: this.form.performingHospitalId || null,
     };
     const op = this.editing()
       ? this.labService.updateOrder(this.editingId()!, payload)

@@ -25,17 +25,21 @@ import java.util.UUID;
  * someone there opens the worklist. This mirrors
  * {@code CriticalValueNotificationService}: the recipients are the active lab
  * users at that hospital, the channel is the in-app notification (no e-mail,
- * no SMS), and nothing here can fail the order — the recipient list and the
- * message are resolved inside the ordering transaction while the session is
- * open, and the rows are written {@link TransactionCallbacks#afterCommit after
- * commit}, so a rolled-back order notifies nobody and a notification failure
- * rolls nothing back.
+ * no SMS), and nothing here can fail the order.
  *
- * <p>The after-commit callback still runs with the committed transaction's
- * resources bound to the thread, so data access there silently joins a
- * transaction that will never flush again (the item-45 lesson). Each
- * notification is therefore written in its own {@code REQUIRES_NEW}
- * transaction.
+ * <p>Two transaction rules earn that last clause, and both were learned the
+ * hard way. <strong>Nothing transactional runs in the caller's
+ * transaction</strong>: a repository call participates in it, so a failure
+ * there marks it rollback-only before the {@code catch} here swallows the
+ * exception, and {@code createLabOrder} then returns a DTO and dies at commit
+ * with {@code UnexpectedRollbackException} — a notification lookup failing
+ * the order it was meant to announce. Only plain values are read from the
+ * entity while the session is open; resolving the recipients waits.
+ * <strong>And the after-commit callback is not a transaction</strong>: it
+ * runs with the committed transaction's resources still bound, so data access
+ * there silently joins one that will never flush again (the item-45 lesson).
+ * Everything it does — the recipient lookup and each notification row — is
+ * therefore wrapped in its own {@code REQUIRES_NEW} transaction.
  */
 @Slf4j
 @Service
@@ -54,49 +58,79 @@ public class LabOrderRoutingNotifier {
 
     /**
      * Schedule the notification for an order that names a performing hospital.
-     * Must be called inside the transaction that saved the order: the ordering
-     * hospital and test names are read here, not after commit.
+     * Call it inside the transaction that saved the order: the hospital and
+     * test names are LAZY and are read here, as plain strings, while the
+     * session is open. Nothing else about this method touches the database.
      */
     public void notifyPerformingLab(LabOrder order) {
         if (order == null || !order.isPerformedExternally()) {
             return;
         }
+        UUID orderId = order.getId();
+        Routing routing;
         try {
-            UUID performingHospitalId = order.getPerformingHospital().getId();
-            Set<String> recipients = new LinkedHashSet<>();
-            for (String role : LAB_ROLES) {
-                recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(performingHospitalId, role));
-            }
-            if (recipients.isEmpty()) {
-                log.info("Lab order {} routed to hospital {} which has no active lab user to notify",
-                    order.getId(), performingHospitalId);
-                return;
-            }
-            String orderingHospital = order.getHospital() != null ? order.getHospital().getName() : null;
-            String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
-            String message = messageSource.getMessage(MESSAGE_KEY,
-                new Object[]{orderingHospital, testName}, NotificationLocales.STAFF);
-            UUID orderId = order.getId();
-            log.info("Lab order {} routed to hospital {}: notifying {} lab user(s) after commit",
-                orderId, performingHospitalId, recipients.size());
-            TransactionCallbacks.afterCommit(() -> deliver(orderId, recipients, message));
+            routing = new Routing(
+                orderId,
+                order.getPerformingHospital().getId(),
+                order.getHospital() != null ? order.getHospital().getName() : null,
+                order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null);
         } catch (RuntimeException ex) {
-            log.warn("Could not schedule the performing-lab notification for lab order {}: {}",
-                order.getId(), ex.getMessage());
+            log.warn("Could not read the routing of lab order {} for its performing-lab notification: {}",
+                orderId, ex.getMessage());
+            return;
         }
+        log.info("Lab order {} routed to hospital {}: notifying its lab users after commit",
+            orderId, routing.performingHospitalId());
+        TransactionCallbacks.afterCommit(() -> deliver(routing));
     }
 
-    private void deliver(UUID orderId, Set<String> recipients, String message) {
+    /** What the notification needs, as plain values detached from the session. */
+    private record Routing(UUID orderId, UUID performingHospitalId, String orderingHospitalName, String testName) { }
+
+    private void deliver(Routing routing) {
         TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
         ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        Set<String> recipients;
+        try {
+            recipients = ownTransaction.execute(status -> resolveRecipients(routing.performingHospitalId()));
+        } catch (RuntimeException ex) {
+            log.warn("Could not resolve the lab users of hospital {} for lab order {}: {}",
+                routing.performingHospitalId(), routing.orderId(), ex.getMessage());
+            return;
+        }
+        if (recipients == null || recipients.isEmpty()) {
+            log.info("Lab order {} routed to hospital {} which has no active lab user to notify",
+                routing.orderId(), routing.performingHospitalId());
+            return;
+        }
+
+        String message;
+        try {
+            message = messageSource.getMessage(MESSAGE_KEY,
+                new Object[]{routing.orderingHospitalName(), routing.testName()}, NotificationLocales.STAFF);
+        } catch (RuntimeException ex) {
+            log.warn("Could not render the performing-lab notification for lab order {}: {}",
+                routing.orderId(), ex.getMessage());
+            return;
+        }
+
         for (String username : recipients) {
             try {
                 ownTransaction.executeWithoutResult(status ->
                     notificationService.createNotification(message, username, NOTIFICATION_TYPE));
             } catch (RuntimeException ex) {
                 log.warn("Performing-lab notification for lab order {} failed for one recipient: {}",
-                    orderId, ex.getMessage());
+                    routing.orderId(), ex.getMessage());
             }
         }
+    }
+
+    private Set<String> resolveRecipients(UUID performingHospitalId) {
+        Set<String> recipients = new LinkedHashSet<>();
+        for (String role : LAB_ROLES) {
+            recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(performingHospitalId, role));
+        }
+        return recipients;
     }
 }

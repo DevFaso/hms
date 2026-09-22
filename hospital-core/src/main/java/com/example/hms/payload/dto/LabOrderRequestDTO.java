@@ -1,10 +1,13 @@
 package com.example.hms.payload.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,8 +22,17 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 @Builder
+// The all-args constructor is package-private on purpose: a PUBLIC one is
+// auto-detected as Jackson's properties creator, and binding through a
+// creator never calls a setter — which is where the presence flag below is
+// set, so an explicit null could not be told from an absent field. The
+// builder (same package) still uses it; nothing constructs this DTO
+// positionally from outside. The flag itself is bookkeeping, never a wire
+// field, and is ignored here as well as on the field so no client can spoof
+// presence.
+@JsonIgnoreProperties("performingHospitalIdPresent")
 public class LabOrderRequestDTO {
 
     private UUID id;
@@ -114,6 +126,44 @@ public class LabOrderRequestDTO {
     private UUID assignmentId;
 
     @Schema(description = "Laboratory (hospital) that performs the test when it is not this hospital's own. "
-            + "Optional; omitted or equal to hospitalId means the ordering hospital performs it.")
+            + "On PUT the three states are distinct: omitted keeps the current laboratory, an explicit "
+            + "null (or this hospital's own id) brings the test back in-house, any other id routes it there.")
     private UUID performingHospitalId;
+
+    /**
+     * Whether the payload carried {@code performingHospitalId} at all.
+     *
+     * <p>Jackson calls a setter only for a key that is present, so an omitted
+     * field (leave the routing alone — the shape every pre-B1 client sends)
+     * is distinguishable from an explicit {@code null} (bring the test back
+     * in-house). Without this flag the two collapse and an outsourced order
+     * can never be brought home. Not part of the JSON in either direction.
+     */
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Boolean performingHospitalIdPresent;
+
+    public void setPerformingHospitalId(UUID performingHospitalId) {
+        this.performingHospitalId = performingHospitalId;
+        this.performingHospitalIdPresent = Boolean.TRUE;
+    }
+
+    /** True when the caller named the performing laboratory, even as {@code null}. */
+    public boolean hasPerformingHospitalId() {
+        return Boolean.TRUE.equals(performingHospitalIdPresent);
+    }
+
+    /**
+     * The builder marks the field present exactly as the setter does, so a
+     * test that writes {@code .performingHospitalId(null)} expresses an
+     * explicit null and one that omits the call expresses an absent field.
+     */
+    public static class LabOrderRequestDTOBuilder {
+        public LabOrderRequestDTOBuilder performingHospitalId(UUID performingHospitalId) {
+            this.performingHospitalId = performingHospitalId;
+            this.performingHospitalIdPresent = Boolean.TRUE;
+            return this;
+        }
+    }
 }
