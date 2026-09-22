@@ -24,6 +24,7 @@ class PatientPortalPrescriptionCopyTest {
                 .pharmacyContact("+22670000000")
                 .dispatchStatus("SENT")
                 .lastPharmacyEvent("PENDING_CLARIFICATION")
+                .lastPharmacyEventAt(LocalDateTime.now())
                 .clarificationReason("Dose au-dessus du plafond rénal")
                 .clarificationRequestedAt(LocalDateTime.now())
                 .clarificationResponse("Dose confirmée")
@@ -39,6 +40,24 @@ class PatientPortalPrescriptionCopyTest {
         assertThat(copy.getClarificationRequestedAt()).isNull();
         assertThat(copy.getClarificationResponse()).isNull();
         assertThat(copy.getClarificationResolvedAt()).isNull();
+        // lastPharmacyEventAt IS the instant the pharmacist asked: stripping
+        // the narrative and leaving the pair behind is the same leak.
+        assertThat(copy.getLastPharmacyEvent()).isNull();
+        assertThat(copy.getLastPharmacyEventAt()).isNull();
+    }
+
+    @Test
+    void keepsAPharmacyEventThePatientShouldSee() {
+        PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder()
+                .id(UUID.randomUUID())
+                .lastPharmacyEvent("DISPENSED")
+                .lastPharmacyEventAt(LocalDateTime.now())
+                .build();
+
+        PrescriptionResponseDTO copy = dto.withoutClarificationExchange();
+
+        assertThat(copy.getLastPharmacyEvent()).isEqualTo("DISPENSED");
+        assertThat(copy.getLastPharmacyEventAt()).isNotNull();
     }
 
     @Test

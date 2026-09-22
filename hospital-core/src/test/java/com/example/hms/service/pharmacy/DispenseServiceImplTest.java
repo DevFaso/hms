@@ -414,38 +414,18 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("G3 round 3: an order a partner accepted and never delivered can be filled in-house, superseding that acceptance")
-        void partnerAcceptedIsDispensableAndSupersedesTheAcceptance() {
+        @DisplayName("G3 round 4: an order a partner accepted is NOT fillable in-house — the no-show has to be recorded first")
+        void partnerAcceptedIsNotDispensable() {
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
-            com.example.hms.model.pharmacy.PrescriptionRoutingDecision accepted =
-                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
-                            .prescription(prescription)
-                            .routingType(com.example.hms.enums.RoutingType.PARTNER)
-                            .status(com.example.hms.enums.RoutingDecisionStatus.ACCEPTED)
-                            .build();
-            accepted.setId(UUID.randomUUID());
             DispenseRequestDTO dto = buildRequest();
-            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
-            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
-            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
-                    .thenReturn(BigDecimal.TEN);
-            when(prescriptionRepository.save(any())).thenReturn(prescription);
-            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
-            when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
-                    .thenReturn(List.of(accepted));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
 
-            service.createDispense(dto);
-
-            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
-            assertThat(accepted.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a dispensable state");
+            verify(dispenseRepository, never()).save(any());
         }
 
         @Test
@@ -1129,9 +1109,14 @@ class DispenseServiceImplTest {
             List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
                     service.getWorkQueue(pageable).getContent();
 
+            // The queue lists more than it may dispense: an order sitting with
+            // a partner that accepted it is on the screen (flagged) but is
+            // not fillable until a no-show is recorded.
             assertThat(asked.getValue()).contains(PrescriptionStatus.PENDING_STOCK,
-                    PrescriptionStatus.PARTNER_REJECTED)
+                    PrescriptionStatus.PARTNER_REJECTED, PrescriptionStatus.PARTNER_ACCEPTED)
                     .doesNotContain(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(DispenseServiceImpl.DISPENSABLE_STATUSES)
+                    .doesNotContain(PrescriptionStatus.PARTNER_ACCEPTED);
             assertThat(rows).extracting(
                     com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO::isNeedsAttention)
                     .containsExactly(true, true, true);

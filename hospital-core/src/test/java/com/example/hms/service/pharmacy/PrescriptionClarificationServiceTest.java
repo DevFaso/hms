@@ -148,6 +148,26 @@ class PrescriptionClarificationServiceTest {
         }
 
         @Test
+        @DisplayName("an order that is with a partner cannot be put on a prescriber hold")
+        void refusesAnOrderWithAPartner() {
+            // The gate states its own statuses instead of borrowing the
+            // dispensable set, which briefly made PARTNER_ACCEPTED clarifiable.
+            assertThat(PrescriptionClarificationService.CLARIFIABLE_STATUSES)
+                    .doesNotContain(PrescriptionStatus.PARTNER_ACCEPTED,
+                            PrescriptionStatus.SENT_TO_PARTNER,
+                            PrescriptionStatus.PRINTED_FOR_PATIENT);
+
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("PARTNER_ACCEPTED");
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("refuses a blank reason")
         void refusesBlankReason() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

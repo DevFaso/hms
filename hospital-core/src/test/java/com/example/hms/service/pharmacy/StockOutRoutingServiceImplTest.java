@@ -44,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -688,6 +689,112 @@ class StockOutRoutingServiceImplTest {
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
         verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
+    }
+
+    @Test
+    @DisplayName("confirmPartnerDispense refuses to overwrite an open clarification")
+    void confirmPartnerDispenseRefusesWhileAwaitingClarification() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.ACCEPTED)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+
+        assertThatThrownBy(() -> service.confirmPartnerDispense(decisionId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("awaiting the prescriber's clarification");
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+    }
+
+    @Nested
+    @DisplayName("partnerNoShow (G3 round 4: the explicit in-house exit)")
+    class PartnerNoShow {
+
+        private PrescriptionRoutingDecision accepted() {
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .targetPharmacy(partnerPharmacy)
+                    .routingType(RoutingType.PARTNER)
+                    .status(RoutingDecisionStatus.ACCEPTED)
+                    .reason("Nearest partner has stock")
+                    .build();
+            decision.setId(UUID.randomUUID());
+            return decision;
+        }
+
+        @Test
+        @DisplayName("cancels the acceptance with the reason and returns the order to SIGNED")
+        void happyPath() {
+            PrescriptionRoutingDecision decision = accepted();
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            prescription.setPharmacyId(partnerId);
+            prescription.setPharmacyName("Partner Pharmacy");
+            prescription.setPharmacyContact("+22670000000");
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(decision))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
+
+            service.partnerNoShow(decision.getId(), "  Patient waited two days, nothing delivered ");
+
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            assertThat(decision.getReason())
+                    .startsWith("Nearest partner has stock")
+                    .contains("Partner no-show: Patient waited two days, nothing delivered");
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            assertThat(prescription.getPharmacyId()).isNull();
+            assertThat(prescription.getPharmacyName()).isNull();
+            verify(prescriptionRepository).save(prescription);
+        }
+
+        @Test
+        @DisplayName("refuses a decision that is not an acceptance")
+        void refusesNonAccepted() {
+            PrescriptionRoutingDecision decision = accepted();
+            decision.setStatus(RoutingDecisionStatus.PENDING);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("ACCEPTED");
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("refuses a blank reason — this cancels a partner's claim")
+        void refusesBlankReason() {
+            PrescriptionRoutingDecision decision = accepted();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "   "))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("reason");
+        }
+
+        @Test
+        @DisplayName("a decision at another hospital is 404, not 403")
+        void crossTenantIs404() {
+            PrescriptionRoutingDecision decision = accepted();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+            when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
+
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
     }
 
     @Test

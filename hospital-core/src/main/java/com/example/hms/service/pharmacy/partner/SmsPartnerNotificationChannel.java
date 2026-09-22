@@ -5,6 +5,7 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.pharmacy.FillAccounting;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import lombok.RequiredArgsConstructor;
@@ -173,13 +174,14 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (remaining == null) {
             return null;
         }
-        java.math.BigDecimal prescribed = prescription.getQuantity();
-        if (prescribed != null && remaining.compareTo(prescribed) == 0) {
+        // Against the LIFETIME entitlement, not the per-fill quantity: an
+        // untouched prescription with one released refill owes 2 × quantity,
+        // and comparing that with quantity alone announced a remainder to a
+        // partner that is being offered the whole thing.
+        if (remaining.compareTo(FillAccounting.expectedLifetimeQuantity(prescription)) == 0) {
             return null;
         }
-        String amount = remaining.stripTrailingZeros().toPlainString();
-        String unit = prescription.getQuantityUnit();
-        return unit != null && !unit.isBlank() ? amount + " " + unit.trim() : amount;
+        return FillAccounting.remainingLabel(remaining, prescription.getQuantityUnit());
     }
 
     private Locale patientLocale(Patient patient) {

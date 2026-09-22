@@ -57,6 +57,26 @@ import java.util.UUID;
 public class PrescriptionClarificationService {
 
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+
+    /**
+     * What a pharmacist may send back with a question — stated here rather
+     * than borrowed from {@code DispenseServiceImpl.DISPENSABLE_STATUSES},
+     * because the two sets answer different questions and drifted apart the
+     * moment one of them changed: PARTNER_ACCEPTED briefly became dispensable
+     * and silently became clarifiable with it, which put an order that is
+     * with a partner into a hold only the prescriber could release.
+     *
+     * <p>An order the hospital pharmacy is holding, in other words. Once it
+     * has left for a partner or been printed for the patient, the question
+     * to ask is no longer "should I fill this?".
+     */
+    static final java.util.Set<PrescriptionStatus> CLARIFIABLE_STATUSES = java.util.Set.of(
+            PrescriptionStatus.SIGNED,
+            PrescriptionStatus.TRANSMITTED,
+            PrescriptionStatus.PARTIALLY_FILLED,
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.PARTNER_REJECTED
+    );
     private static final String AUDIT_ENTITY = "PRESCRIPTION";
 
     private final PrescriptionRepository prescriptionRepository;
@@ -77,7 +97,7 @@ public class PrescriptionClarificationService {
             throw new BusinessException("A clarification request needs a reason.");
         }
         PrescriptionStatus status = prescription.getStatus();
-        if (status == null || !DispenseServiceImpl.DISPENSABLE_STATUSES.contains(status)) {
+        if (status == null || !CLARIFIABLE_STATUSES.contains(status)) {
             throw new BusinessException("Only a prescription awaiting a fill can be sent back for "
                     + "clarification; this one is " + status + ".");
         }

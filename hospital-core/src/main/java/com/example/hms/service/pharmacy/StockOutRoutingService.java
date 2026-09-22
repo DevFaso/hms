@@ -23,6 +23,17 @@ public interface StockOutRoutingService {
 
     RoutingDecisionResponseDTO confirmPartnerDispense(UUID routingDecisionId);
 
+    /**
+     * Record that a partner which accepted a prescription never delivered it.
+     *
+     * <p>The acceptance is cancelled with the pharmacist's reason and the
+     * prescription returns to SIGNED, where it is dispensable and routable
+     * again. Deliberately an explicit act rather than a side effect of
+     * filling it in-house: an order a partner has accepted is one the patient
+     * may be collecting at that partner right now.
+     */
+    RoutingDecisionResponseDTO partnerNoShow(UUID routingDecisionId, String reason);
+
     Page<RoutingDecisionResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable);
 
     Page<RoutingDecisionResponseDTO> listByPatient(UUID patientId, Pageable pageable);

@@ -128,20 +128,35 @@ public class DispenseServiceImpl implements DispenseService {
      * absent: the pharmacist asked a question, and nothing is dispensed until
      * the prescriber answers and the order returns to SIGNED.
      *
-     * <p>PARTNER_ACCEPTED is here for the same reason as the other two (round
-     * 3): a partner that accepted and never delivered left the patient with
-     * an order nobody could fill. Filling it in-house supersedes the accepted
-     * decision, so the partner cannot later confirm a dispense of medication
-     * this pharmacy has already handed over.
+     * <p>PARTNER_ACCEPTED is deliberately NOT here. It was, briefly, so that a
+     * partner who never delivered did not leave a dead end — but a partner
+     * that has accepted is on its way to handing the medication over, and a
+     * counter that can fill it meanwhile can double-dispense it by accident.
+     * The exit is an explicit statement instead: {@code POST
+     * /pharmacy/routing/partner-no-show/{decisionId}} cancels the acceptance
+     * and returns the order to SIGNED, after which it is dispensable like any
+     * other. The row still appears on the queue ({@link #WORK_QUEUE_STATUSES})
+     * flagged for attention, so the pharmacist can see that it is waiting on
+     * a partner and say so.
      */
     static final Set<PrescriptionStatus> DISPENSABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.PARTNER_REJECTED,
-            PrescriptionStatus.PARTNER_ACCEPTED
+            PrescriptionStatus.PARTNER_REJECTED
     );
+
+    /**
+     * What the pharmacist's queue lists, which is not the same question as
+     * what may be handed over. An order sitting with a partner that accepted
+     * it belongs on the screen — that is the only way anybody notices it was
+     * never delivered — but it is not fillable until somebody says the
+     * partner did not deliver.
+     */
+    static final Set<PrescriptionStatus> WORK_QUEUE_STATUSES = java.util.stream.Stream.concat(
+            DISPENSABLE_STATUSES.stream(), java.util.stream.Stream.of(PrescriptionStatus.PARTNER_ACCEPTED))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     /**
      * Queue rows that are not a plain first fill: something happened to them
@@ -307,7 +322,6 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense saved = dispenseRepository.save(dispense);
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
-        PrescriptionStatus before = prescription.getStatus();
         updatePrescriptionStatusFromHistory(prescription, true);
         // A partial fill against a back order leaves the remainder unavailable,
         // so the BACKORDER decision stays PENDING until the order is fully
@@ -315,13 +329,6 @@ public class DispenseServiceImpl implements DispenseService {
         // (PENDING_STOCK → PARTIALLY_FILLED → DISPENSED).
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
             closeOutBackOrder(prescription);
-        }
-        // Filling in-house what a partner accepted and never delivered ends
-        // that partner's claim on the order: the accepted decision is
-        // superseded, so confirmPartnerDispense refuses a late confirmation
-        // of medication this counter has already handed over.
-        if (before == PrescriptionStatus.PARTNER_ACCEPTED) {
-            supersedeAcceptedPartnerDecision(prescription);
         }
 
         // T-38 / G15: the dispensed receipt SMS — only when the Rx is now fully DISPENSED
@@ -693,7 +700,7 @@ public class DispenseServiceImpl implements DispenseService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         Page<Prescription> page = prescriptionRepository
                 .findByHospital_IdAndStatusIn(hospitalId,
-                        List.copyOf(DISPENSABLE_STATUSES), pageable);
+                        List.copyOf(WORK_QUEUE_STATUSES), pageable);
         List<Prescription> rows = page.getContent();
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(rows);
         Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
@@ -882,25 +889,6 @@ public class DispenseServiceImpl implements DispenseService {
         log.info("Back order {} completed by an in-house dispense", decision.getId());
     }
 
-    /** Best-effort, for the same reason as {@link #closeOutBackOrder}. */
-    private void supersedeAcceptedPartnerDecision(Prescription prescription) {
-        try {
-            routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())
-                    .stream()
-                    .filter(d -> d.getRoutingType() == RoutingType.PARTNER
-                            && d.getStatus() == RoutingDecisionStatus.ACCEPTED)
-                    .findFirst()
-                    .ifPresent(d -> {
-                        d.setStatus(RoutingDecisionStatus.CANCELLED);
-                        routingDecisionRepository.save(d);
-                        log.info("Partner decision {} superseded by an in-house dispense", d.getId());
-                    });
-        } catch (RuntimeException ex) {
-            log.warn("Could not supersede the partner decision for prescription {}: {}",
-                    prescription.getId(), ex.getMessage());
-        }
-    }
-
     /**
      * Total quantity this prescription is entitled to across its whole life:
      * the prescribed quantity once for the original fill, plus once more for
@@ -993,11 +981,14 @@ public class DispenseServiceImpl implements DispenseService {
 
     /**
      * Why a queue row needs a second look before dispensing, or null for a
-     * plain fill: a back order (the stock may or may not have arrived), a
-     * partner's refusal or an undelivered acceptance (re-route or fill
-     * in-house), a supplier order still outstanding behind a partial fill,
-     * or a clarification the prescriber has just answered (read the answer
-     * first). The last one
+     * plain fill. The five values the portal switches on, in the order this
+     * method decides them: PENDING_STOCK (a back order — the stock may or may
+     * not have arrived), PARTNER_REJECTED (re-route or fill in-house),
+     * PARTNER_ACCEPTED (with a partner, not fillable here until somebody
+     * records a no-show), BACK_ORDER_OUTSTANDING (a partial fill moved the
+     * row off PENDING_STOCK but the supplier order is still open) and
+     * CLARIFICATION_RESOLVED (the prescriber has just answered — read the
+     * answer first). The last one
      * holds only until the pharmacy acts on the answer — a dispense or a
      * routing decision after the resolution clears it; without that the row
      * would be flagged for the rest of its life.

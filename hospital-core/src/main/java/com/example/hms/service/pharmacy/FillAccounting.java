@@ -14,7 +14,7 @@ import java.math.BigDecimal;
  * prescribed one. Routing a partially filled order used to send the whole
  * quantity, which is a double-dispense waiting to happen.
  */
-final class FillAccounting {
+public final class FillAccounting {
 
     private FillAccounting() {
     }
@@ -24,7 +24,7 @@ final class FillAccounting {
      * the prescribed quantity once for the original fill, plus once more for
      * every refill an approval has released.
      */
-    static BigDecimal expectedLifetimeQuantity(Prescription prescription) {
+    public static BigDecimal expectedLifetimeQuantity(Prescription prescription) {
         BigDecimal perFill = prescription.getQuantity() != null
                 ? prescription.getQuantity() : BigDecimal.ZERO;
         int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
@@ -37,7 +37,7 @@ final class FillAccounting {
      * "unknown", and callers must not print a number they do not have.
      * Never negative: an over-dispense owes nothing.
      */
-    static BigDecimal remaining(Prescription prescription, BigDecimal dispensedToDate) {
+    public static BigDecimal remaining(Prescription prescription, BigDecimal dispensedToDate) {
         if (prescription.getQuantity() == null) {
             return null;
         }
@@ -52,7 +52,7 @@ final class FillAccounting {
      * "6" or "6 comprimés" — with the trailing zeros of a NUMERIC(12,2)
      * column stripped. Null when the remainder is unknown.
      */
-    static String remainingLabel(BigDecimal remaining, String quantityUnit) {
+    public static String remainingLabel(BigDecimal remaining, String quantityUnit) {
         if (remaining == null) {
             return null;
         }

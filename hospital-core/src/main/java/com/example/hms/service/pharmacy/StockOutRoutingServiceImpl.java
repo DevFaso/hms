@@ -374,6 +374,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         Prescription prescription = decision.getPrescription();
+        // A confirmation must not overwrite an open question: PENDING_CLARIFICATION
+        // has no writer but this one, and silently stamping PARTNER_DISPENSED over
+        // it would leave the pharmacist's question unanswerable for good.
+        if (prescription.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new BusinessException("This prescription is awaiting the prescriber's clarification; "
+                    + "resolve that before recording a partner dispense.");
+        }
         prescription.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
         prescriptionRepository.save(prescription);
         prescriberNotifier.notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
@@ -393,6 +400,49 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         return routingMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public RoutingDecisionResponseDTO partnerNoShow(UUID routingDecisionId, String reason) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
+                .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
+        enforceDecisionHospitalScope(decision, hospitalId);
+
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("Recording a partner no-show needs a reason.");
+        }
+        if (decision.getRoutingType() != RoutingType.PARTNER) {
+            throw new BusinessException("Only PARTNER routing decisions can be recorded as a no-show");
+        }
+        if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
+            throw new BusinessException("Only an ACCEPTED partner decision can be recorded as a no-show; "
+                    + "this one is " + decision.getStatus() + ".");
+        }
+
+        Prescription prescription = decision.getPrescription();
+        decision.setStatus(RoutingDecisionStatus.CANCELLED);
+        decision.setReason(appendNoShowReason(decision.getReason(), reason.trim()));
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        // The partner that did not deliver is no longer this order's pharmacy.
+        clearPharmacy(prescription);
+        prescriptionRepository.save(prescription);
+        PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+
+        logAudit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
+                "Partner no-show recorded for prescription " + prescription.getId()
+                        + "; returned to the hospital queue",
+                routingDecisionId.toString());
+
+        return routingMapper.toResponseDTO(saved);
+    }
+
+    /** Keeps the routing reason the decision was taken for, and adds why it ended. */
+    private static String appendNoShowReason(String existing, String noShowReason) {
+        String suffix = "Partner no-show: " + noShowReason;
+        String combined = existing == null || existing.isBlank() ? suffix : existing + " | " + suffix;
+        return combined.length() > 1024 ? combined.substring(0, 1024) : combined;
     }
 
     @Override

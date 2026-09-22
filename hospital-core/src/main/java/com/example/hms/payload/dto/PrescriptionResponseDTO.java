@@ -129,6 +129,14 @@ public class PrescriptionResponseDTO {
         this.clarificationRequestedAt = null;
         this.clarificationResponse = null;
         this.clarificationResolvedAt = null;
+        // The pharmacy-event pair restates the exchange when the exchange is
+        // what the pharmacy last did: lastPharmacyEventAt IS the instant the
+        // pharmacist asked. Stripping the narrative while leaving its
+        // timestamp behind would be a leak by another name.
+        if ("PENDING_CLARIFICATION".equals(this.lastPharmacyEvent)) {
+            this.lastPharmacyEvent = null;
+            this.lastPharmacyEventAt = null;
+        }
         return this;
     }
 

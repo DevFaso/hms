@@ -114,9 +114,12 @@ class PharmacyServiceSupport {
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
-        String message = render("sms.pharmacy.dispensed", patientLocale(patient),
-                firstName, medicationName, pharmacyName);
-        send(phone, message, patient, "dispensed");
+        try {
+            smsService.send(phone, render("sms.pharmacy.dispensed", patientLocale(patient),
+                    firstName, medicationName, pharmacyName));
+        } catch (Exception e) {
+            logFailure("dispensed", patient, e);
+        }
     }
 
     /**
@@ -136,12 +139,15 @@ class PharmacyServiceSupport {
         if (phone == null || phone.isBlank()) {
             return;
         }
-        Locale locale = patientLocale(patient);
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String medication = medicationName != null ? medicationName : "";
-        String suffix = routingKey != null ? render(routingKey, locale, routingArgs) : "";
-        String message = render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix);
-        send(phone, message, patient, "out-of-stock");
+        try {
+            Locale locale = patientLocale(patient);
+            String suffix = routingKey != null ? render(routingKey, locale, routingArgs) : "";
+            smsService.send(phone, render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix));
+        } catch (Exception e) {
+            logFailure("out-of-stock", patient, e);
+        }
     }
 
     /**
@@ -162,10 +168,13 @@ class PharmacyServiceSupport {
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String medication = medicationName != null ? medicationName : "";
-        // The day count goes through as text so MessageFormat never groups it.
-        String message = render("sms.pharmacy.refillReminder", patientLocale(patient),
-                firstName, String.valueOf(daysLeft), medication);
-        send(phone, message, patient, "refill reminder");
+        try {
+            // The day count goes through as text so MessageFormat never groups it.
+            smsService.send(phone, render("sms.pharmacy.refillReminder", patientLocale(patient),
+                    firstName, String.valueOf(daysLeft), medication));
+        } catch (Exception e) {
+            logFailure("refill reminder", patient, e);
+        }
     }
 
     private Locale patientLocale(Patient patient) {
@@ -176,11 +185,17 @@ class PharmacyServiceSupport {
         return messageSource.getMessage(key, args, locale).trim();
     }
 
-    private void send(String phone, String message, Patient patient, String what) {
-        try {
-            smsService.send(phone, message);
-        } catch (Exception e) {
-            log.warn("Failed to send {} SMS to patient {}: {}", what, patient.getId(), e.getMessage());
-        }
+    /**
+     * Everything an SMS needs — the locale lookup, the bundle render and the
+     * gateway call — happens inside each method's try, and lands here.
+     *
+     * <p>The locale resolver runs a query and {@code getMessage} throws on a
+     * missing key: with either outside the guard, a bundle typo or a database
+     * hiccup would roll back a dispense that has already been handed over,
+     * which is the rollback-only trap in reverse. Nothing about telling a
+     * patient their medication is ready may undo the fact that it is.
+     */
+    private void logFailure(String what, Patient patient, Exception e) {
+        log.warn("Failed to send {} SMS to patient {}: {}", what, patient.getId(), e.getMessage());
     }
 }

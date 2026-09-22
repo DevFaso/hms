@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -187,6 +188,33 @@ class PharmacyServiceSupportTest {
         ph.setName(null);
         support.notifyDispensed(patient(), ph, "Med");
         verify(smsService).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("a locale-resolver failure cannot roll back the dispense that has already happened")
+    void localeResolverFailureIsSwallowed() {
+        when(patientLocaleResolver.resolve(any(), any()))
+                .thenThrow(new IllegalStateException("could not extract ResultSet"));
+
+        Patient p = patient();
+        assertThatCode(() -> support.notifyDispensed(p, pharmacy("X"), "Med")).doesNotThrowAnyException();
+        assertThatCode(() -> support.notifyOutOfStock(p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> support.notifyRefillReminder(p, "Med", 3)).doesNotThrowAnyException();
+
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    @DisplayName("a missing bundle key cannot roll back the dispense either")
+    void missingBundleKeyIsSwallowed() {
+        PharmacyServiceSupport broken = new PharmacyServiceSupport(roleValidator, userRepository,
+                auditEventLogService, smsService,
+                new org.springframework.context.support.StaticMessageSource(), patientLocaleResolver);
+
+        assertThatCode(() -> broken.notifyDispensed(patient(), pharmacy("X"), "Med"))
+                .doesNotThrowAnyException();
+        verify(smsService, never()).send(any(), any());
     }
 
     // ---------- notifyOutOfStock (T-40, G14) ----------

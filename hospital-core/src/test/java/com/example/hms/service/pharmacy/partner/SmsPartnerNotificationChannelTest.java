@@ -174,6 +174,24 @@ class SmsPartnerNotificationChannelTest {
     }
 
     @Test
+    @DisplayName("an untouched prescription with a released refill is offered in full, not as a remainder")
+    void releasedRefillIsNotAnnouncedAsARemainder() {
+        // Lifetime entitlement is quantity × (1 + refillsUsed): comparing the
+        // remainder with the per-fill quantity announced "(reste 20)" on an
+        // order nothing had been dispensed against.
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        prescription.setRefillsUsed(1);
+        decision.setRemainingQuantity(new java.math.BigDecimal("20.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).doesNotContain("reste");
+    }
+
+    @Test
     @DisplayName("an offer for the full prescribed amount carries no remainder clause")
     void sendPrescriptionOfferForTheFullAmountHasNoRemainder() {
         prescription.setQuantity(new java.math.BigDecimal("10.00"));
