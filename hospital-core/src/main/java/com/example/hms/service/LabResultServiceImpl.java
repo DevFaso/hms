@@ -332,6 +332,10 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
 
         labResultRepository.save(labResult);
+        // The ORU enqueued at creation went out as preliminary (OBX-11 P),
+        // because that is what an unreleased result is. Without this second
+        // message a receiver would hold that preliminary for ever.
+        instrumentOutboxService.enqueueResultObservation(labResult);
         return labResultMapper.toResponseDTO(labResult);
     }
 

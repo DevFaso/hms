@@ -33,6 +33,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +61,8 @@ class LabResultServiceImplWorkflowTest {
     private AuthService authService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private com.example.hms.service.InstrumentOutboxService instrumentOutboxService;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;
@@ -194,6 +198,30 @@ class LabResultServiceImplWorkflowTest {
         assertThat(labResult.getReleasedByUserId()).isEqualTo(actorId);
         assertThat(labResult.getReleasedByDisplay()).isEqualTo("Casey Clinician");
         verify(labResultRepository).save(labResult);
+    }
+
+    /**
+     * The ORU enqueued when the result was created said OBX-11 = P, because
+     * that is what an unreleased result is. The release has to send the final
+     * form or the receiver holds a preliminary for ever.
+     */
+    @Test
+    void releaseLabResultEnqueuesTheFinalObservation() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.isLabScientist(any(), any())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(instrumentOutboxService).enqueueResultObservation(captor.capture());
+        assertThat(captor.getValue().isReleased())
+            .as("the enqueued row must already be released, so OBX-11 goes out as F")
+            .isTrue();
     }
 
     @Test
