@@ -48,6 +48,12 @@ enum APIEndpoints {
     static let afterVisitSummaries = "/me/patient/after-visit-summaries"
     static let careTeam = "/me/patient/care-team"
     static let vitals = "/me/patient/vitals"
+    // My medical history: four read-only sections, each ApiResponseWrapper-wrapped.
+    static let medicalHistory = "/me/patient/medical-history"
+    static let surgicalHistory = "/me/patient/surgical-history"
+    static let familyHistory = "/me/patient/family-history"
+    // `data` is null when nothing was ever recorded, so the caller decodes the wrapper itself.
+    static let socialHistory = "/me/patient/social-history"
     static let immunizations = "/me/patient/immunizations"
     static let consultations = "/me/patient/consultations"
     static let consents = "/me/patient/consents"
