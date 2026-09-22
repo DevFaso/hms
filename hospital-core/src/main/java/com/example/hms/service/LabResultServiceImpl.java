@@ -123,9 +123,18 @@ public class LabResultServiceImpl implements LabResultService {
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
-        // doctor's review queue, which keys on COMPLETED.
+        // doctor's review queue, which keys on COMPLETED. A result landing on
+        // a COMPLETED order (a correction, a late analyte) re-opens it first:
+        // the doctor must see the order as having something new to review.
+        if (LabOrderLifecycle.reopenForResult(labOrder)) {
+            labOrderRepository.save(labOrder);
+        }
         advanceOrder(labOrder, LabOrderStatus.RESULTED);
-        performAutoVerification(saved);
+        // One severity for both decisions below. The REST path never sets
+        // abnormalFlag (no DTO field; only MLLP populates it), so gating
+        // auto-release on the flag alone released critical manual results.
+        String severity = severityOf(saved);
+        performAutoVerification(saved, severity);
         if (saved.isReleased()) {
             completeOrderIfAllReleased(labOrder);
         }
@@ -133,9 +142,27 @@ public class LabResultServiceImpl implements LabResultService {
         instrumentOutboxService.enqueueResultObservation(saved);
         // P0 #5 — critical values must reach the ordering provider; the
         // service swallows its own failures so the result write never rolls back.
-        criticalValueNotificationService.notifyIfCritical(saved);
+        criticalValueNotificationService.notifyIfCritical(saved, severity);
 
         return labResultMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * The mapper's reference-range verdict (NORMAL / LOW / HIGH / UNSPECIFIED),
+     * or null when it cannot map.
+     *
+     * <p>The mapper answers UNSPECIFIED for a test definition it finds
+     * uninitialised, and the order's definition is LAZY: on a laboratory
+     * role's entry nothing has touched it yet at this point (the entry guard
+     * reads it only for bedside roles), so without the explicit initialise a
+     * potassium of 50 read as "unspecified" here and as HIGH in the response.
+     */
+    private String severityOf(LabResult result) {
+        if (result.getLabOrder() != null && result.getLabOrder().getLabTestDefinition() != null) {
+            org.hibernate.Hibernate.initialize(result.getLabOrder().getLabTestDefinition());
+        }
+        LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
+        return dto != null ? dto.getSeverityFlag() : null;
     }
 
     private void advanceOrder(LabOrder labOrder, LabOrderStatus target) {
@@ -146,16 +173,29 @@ public class LabResultServiceImpl implements LabResultService {
 
     /**
      * The order is COMPLETED once every one of its results is released — the
-     * point at which the ordering doctor's review queue picks it up. One
-     * unreleased result of a panel keeps the order open.
+     * point at which the ordering doctor's review queue picks it up.
+     *
+     * <p>"Every result" means every result that exists when the release
+     * lands. A LabOrder names exactly one {@code LabTestDefinition}
+     * ({@code @ManyToOne}), so the common case is one result per order;
+     * reflex tests are separate child orders. A result that arrives later
+     * (a correction, an extra analyte) re-opens the order to RESULTED in
+     * {@code createLabResult}, so completing early is never final.
+     *
+     * <p>The order row is locked ({@code PESSIMISTIC_WRITE}) before the
+     * results are counted: under READ COMMITTED two concurrent releases of
+     * the last two results each saw the other as unreleased, so neither
+     * completed the order and nothing ever re-evaluated. With the lock the
+     * second release waits for the first to commit and sees it.
      */
     private void completeOrderIfAllReleased(LabOrder labOrder) {
         if (labOrder == null || labOrder.getId() == null) {
             return;
         }
-        List<LabResult> results = labResultRepository.findByLabOrder_Id(labOrder.getId());
+        LabOrder locked = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
+        List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
         if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
-            advanceOrder(labOrder, LabOrderStatus.COMPLETED);
+            advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
     }
 
@@ -557,11 +597,22 @@ public class LabResultServiceImpl implements LabResultService {
 
     // ── MVP3 helpers ─────────────────────────────────────────────────────────
 
-    private void performAutoVerification(LabResult result) {
+    /**
+     * Auto-release only a result that is normal by BOTH signals: the HL7
+     * abnormal flag (set by MLLP inbound) and the mapper's reference-range
+     * severity (the only signal a manually entered result has). LOW, HIGH
+     * and CRITICAL stay unreleased for a human; UNSPECIFIED (no reference
+     * range on the test) counts as "nothing abnormal found".
+     */
+    private void performAutoVerification(LabResult result, String severity) {
         if (!autoVerificationEnabled) {
             return;
         }
+        boolean severityNormal = severity == null
+            || "NORMAL".equalsIgnoreCase(severity)
+            || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity);
         if (!result.isReleased()
+                && severityNormal
                 && (result.getAbnormalFlag() == null
                     || result.getAbnormalFlag() == AbnormalFlag.NORMAL)) {
             result.setReleased(true);
@@ -639,16 +690,18 @@ public class LabResultServiceImpl implements LabResultService {
             .orderChannel(parent.getOrderChannel())
             .orderChannelOther(parent.getOrderChannelOther())
             // A reflex order is the parent order continued (B12): the same
-            // medical necessity, the same provider, the same attestation.
-            // createLabOrder mandates every one of these; the child used to
-            // carry none of them.
+            // medical necessity, the same provider, the same documentation.
+            // createLabOrder mandates these; the child used to carry none.
+            // NOT copied: providerSignatureDigest / signedAt / signedByUserId.
+            // The provider attested to the PARENT test; copying their
+            // e-signature onto a test the rule ordered would fabricate an
+            // attestation. The entity persists without one (only the REST
+            // create path demands a signature), so the child records
+            // truthfully that no provider signed it.
             .primaryDiagnosisCode(parent.getPrimaryDiagnosisCode())
             .additionalDiagnosisCodes(new ArrayList<>(parent.getAdditionalDiagnosisCodes() != null
                 ? parent.getAdditionalDiagnosisCodes() : List.of()))
             .orderingProviderNpi(parent.getOrderingProviderNpi())
-            .providerSignatureDigest(parent.getProviderSignatureDigest())
-            .signedAt(parent.getSignedAt())
-            .signedByUserId(parent.getSignedByUserId())
             .documentationSharedWithLab(parent.isDocumentationSharedWithLab())
             .documentationReference(parent.getDocumentationReference())
             .build();

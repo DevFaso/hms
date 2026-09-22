@@ -100,7 +100,12 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .forEach(order -> {
                     List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
                     for (LabResult result : results) {
-                        queue.add(toQueueItem(order, result, locale));
+                        // Only what the laboratory has released is the
+                        // doctor's to review: a result entered on an order
+                        // that had already completed is not on the chart yet.
+                        if (result.isReleased()) {
+                            queue.add(toQueueItem(order, result, locale));
+                        }
                     }
                 });
 

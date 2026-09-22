@@ -58,6 +58,23 @@ class LabOrderLifecycleTest {
     }
 
     @Test
+    @DisplayName("a result on a COMPLETED order re-opens it to RESULTED; nothing else re-opens")
+    void reopenForResultIsTheOneSanctionedStepBack() {
+        LabOrder completed = orderAt(LabOrderStatus.COMPLETED);
+        assertThat(LabOrderLifecycle.reopenForResult(completed)).isTrue();
+        assertThat(completed.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+
+        LabOrder cancelled = orderAt(LabOrderStatus.CANCELLED);
+        assertThat(LabOrderLifecycle.reopenForResult(cancelled)).isFalse();
+        assertThat(cancelled.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+
+        LabOrder open = orderAt(LabOrderStatus.RECEIVED);
+        assertThat(LabOrderLifecycle.reopenForResult(open)).isFalse();
+        assertThat(open.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+        assertThat(LabOrderLifecycle.reopenForResult(null)).isFalse();
+    }
+
+    @Test
     @DisplayName("cancellation is a decision, never a side effect")
     void cancelledIsNeverATarget() {
         LabOrder order = orderAt(LabOrderStatus.ORDERED);

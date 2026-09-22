@@ -34,6 +34,22 @@ public final class LabOrderLifecycle {
     }
 
     /**
+     * The one sanctioned move backwards: a result arriving on a COMPLETED
+     * order (a correction, a late analyte) re-opens it to RESULTED so the
+     * ordering doctor sees it as having something new to review and the
+     * normal release → COMPLETED path runs again. CANCELLED stays cancelled.
+     *
+     * @return true when the order was COMPLETED and is now RESULTED
+     */
+    public static boolean reopenForResult(LabOrder order) {
+        if (order == null || order.getStatus() != LabOrderStatus.COMPLETED) {
+            return false;
+        }
+        order.setStatus(LabOrderStatus.RESULTED);
+        return true;
+    }
+
+    /**
      * Move {@code order} to {@code target} when that is a forward step.
      *
      * @return true when the status changed; false when the order is null,

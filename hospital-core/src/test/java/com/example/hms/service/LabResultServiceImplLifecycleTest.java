@@ -136,7 +136,9 @@ class LabResultServiceImplLifecycleTest {
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(LabResultResponseDTO.builder().build());
+        // lenient: the out-of-range test overrides this with HIGH
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
     }
@@ -155,15 +157,44 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("B2 — entering a result on a COMPLETED order does not reopen it")
-    void enteringAResultNeverMovesACompletedOrderBack() {
+    @DisplayName("B2 — a result entered on a COMPLETED order re-opens it to RESULTED")
+    void enteringAResultReopensACompletedOrder() {
+        // A correction or a late analyte after completion: the doctor must
+        // see the order as having something new to review, and the release
+        // path must run again for the new result.
         order.setStatus(LabOrderStatus.COMPLETED);
         stubEntryPath();
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labOrderRepository, org.mockito.Mockito.atLeastOnce()).save(order);
+    }
+
+    @Test
+    @DisplayName("B2 — completion locks the order row before counting released results")
+    void completionLocksTheOrderRow() {
+        // Under READ COMMITTED two concurrent releases of the last two results
+        // each saw the other as unreleased; the write lock serialises them.
+        // (The H2 IT cannot exercise the race; this pins that the lock is
+        // requested on the release path.)
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult last = resultOn(order, false);
+        when(labResultRepository.findById(last.getId())).thenReturn(Optional.of(last));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
+        when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
+
+        service.releaseLabResult(last.getId(), Locale.ENGLISH);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
+        inOrder.verify(labOrderRepository).findWithLockById(order.getId());
+        inOrder.verify(labResultRepository).findByLabOrder_Id(order.getId());
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test
@@ -238,6 +269,27 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
         assertThat(saved.getAllValues()).anyMatch(r -> r.isReleased() && "Autoverification".equals(r.getReleasedByDisplay()));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("B5 — even switched on, a manual result outside the reference range is not auto-released, and the critical notification still fires")
+    void autoVerificationSkipsAnOutOfRangeManualResult() {
+        // The REST path never sets abnormalFlag, so the flag alone said
+        // "normal" for a potassium of 50: the mapper's reference-range
+        // severity is the only signal a manually entered result carries.
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("HIGH").build());
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
+        assertThat(saved.getValue().getAbnormalFlag()).isNull();
+        verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
+        verify(labOrderRepository, never()).findWithLockById(any());
     }
 
     @Test
@@ -347,7 +399,7 @@ class LabResultServiceImplLifecycleTest {
     // ── B12: reflex children carry the parent's provenance ─────────────────
 
     @Test
-    @DisplayName("B12 — a reflex child order carries the parent's diagnosis, NPI, signature and documentation flag")
+    @DisplayName("B12 — a reflex child order carries the parent's diagnosis, NPI and documentation flag, never its signature")
     void reflexChildCopiesTheParentsMandatoryFields() {
         order.setPrimaryDiagnosisCode("E87.5");
         order.setAdditionalDiagnosisCodes(new java.util.ArrayList<>(List.of("N18.9")));
@@ -386,9 +438,11 @@ class LabResultServiceImplLifecycleTest {
         assertThat(child.getPrimaryDiagnosisCode()).isEqualTo("E87.5");
         assertThat(child.getAdditionalDiagnosisCodes()).containsExactly("N18.9");
         assertThat(child.getOrderingProviderNpi()).isEqualTo("1234567893");
-        assertThat(child.getProviderSignatureDigest()).isEqualTo("digest-of-the-attestation");
-        assertThat(child.getSignedAt()).isEqualTo(order.getSignedAt());
-        assertThat(child.getSignedByUserId()).isEqualTo(actorId);
+        // The provider attested to the parent test, not to the one the rule
+        // ordered: no e-signature is fabricated onto the child.
+        assertThat(child.getProviderSignatureDigest()).isNull();
+        assertThat(child.getSignedAt()).isNull();
+        assertThat(child.getSignedByUserId()).isNull();
         assertThat(child.isDocumentationSharedWithLab()).isTrue();
         assertThat(child.getDocumentationReference()).isEqualTo("DOC-42");
         assertThat(child.getOrderChannel()).isEqualTo(LabOrderChannel.ELECTRONIC);

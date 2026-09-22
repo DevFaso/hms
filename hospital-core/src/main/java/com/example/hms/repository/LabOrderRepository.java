@@ -5,7 +5,9 @@ import com.example.hms.model.LabOrder;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +17,15 @@ import java.util.UUID;
 
 public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOrderCustomRepository {
     List<LabOrder> findByPatient_Id(UUID patientId);
+
+    /**
+     * The order row under a write lock, for the release path that decides
+     * whether every result is released: two concurrent releases must
+     * serialise on the order or both see the other's result as unreleased.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM LabOrder o WHERE o.id = :id")
+    java.util.Optional<LabOrder> findWithLockById(@Param("id") UUID id);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
