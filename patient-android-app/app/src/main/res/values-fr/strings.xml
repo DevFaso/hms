@@ -412,7 +412,7 @@
     <string name="screening_recorded">Reçu par votre équipe soignante.</string>
     <string name="instrument_load_failed">Les questions n\'ont pas pu être chargées</string>
     <string name="screening_progress">%1$d sur %2$d répondus</string>
-    <string name="screening_incomplete">Veuillez d\'abord répondre à tous les items. Manquants :</string>
+    <string name="screening_incomplete">Veuillez d\'abord répondre à tous les items (manquants : %1$s).</string>
     <string name="send_my_answers">Envoyer mes réponses</string>
     <string name="sending">Envoi…</string>
     <string name="screening_submitted">Merci. Vos réponses ont été envoyées à votre équipe soignante.</string>

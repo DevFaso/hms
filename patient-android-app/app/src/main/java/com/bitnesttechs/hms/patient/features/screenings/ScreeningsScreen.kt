@@ -107,13 +107,15 @@ private fun ScreeningsList(state: ScreeningsViewModel.UiState, viewModel: Screen
                 }
             }
         } else {
-            item { SectionHeader(stringResource(R.string.screenings_open_now)) }
+            item {
+                SectionHeader(stringResource(R.string.screenings_open_now))
+                Text(stringResource(R.string.screenings_open_hint), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             items(state.available, key = { it.code }) { a ->
                 Card(shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(a.name ?: a.code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(stringResource(R.string.screenings_open_hint), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Button(onClick = { viewModel.start(a) }, colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)) {
                             Text(stringResource(R.string.start_screening))
                         }
@@ -254,7 +256,8 @@ private fun InstrumentItems(instrument: ProInstrumentView, state: ScreeningsView
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.submitError?.let { err ->
                     Text(
-                        listOfNotNull(stringResource(err.resId), err.detail).joinToString(" "),
+                        if (err.resId == R.string.screening_incomplete) stringResource(err.resId, err.detail ?: "")
+                        else listOfNotNull(stringResource(err.resId), err.detail).joinToString(": "),
                         color = ErrorRed, style = MaterialTheme.typography.bodySmall
                     )
                 }

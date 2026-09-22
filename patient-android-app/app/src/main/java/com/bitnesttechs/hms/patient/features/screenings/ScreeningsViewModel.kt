@@ -136,7 +136,13 @@ class ScreeningsViewModel @Inject constructor(
     }
 
     fun answer(itemNo: Int, optionNo: Int) {
-        _state.update { it.copy(answers = it.answers + (itemNo to optionNo), submitError = null) }
+        _state.update { s ->
+            val next = s.copy(answers = s.answers + (itemNo to optionNo))
+            // An "items missing" refusal follows the remaining gaps; any other error clears.
+            val error = s.submitError
+            val still = if (error?.resId == R.string.screening_incomplete) unanswered(next) else emptyList()
+            next.copy(submitError = if (still.isEmpty()) null else Outcome(R.string.screening_incomplete, still.joinToString(", ")))
+        }
     }
 
     /** Item numbers still without an answer, in order. */

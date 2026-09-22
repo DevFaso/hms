@@ -412,7 +412,7 @@
     <string name="screening_recorded">Received by your care team.</string>
     <string name="instrument_load_failed">The questions could not be loaded</string>
     <string name="screening_progress">%1$d of %2$d answered</string>
-    <string name="screening_incomplete">Please answer every item first. Missing:</string>
+    <string name="screening_incomplete">Please answer every item first (missing: %1$s).</string>
     <string name="send_my_answers">Send my answers</string>
     <string name="sending">Sending…</string>
     <string name="screening_submitted">Thank you. Your answers have been sent to your care team.</string>
