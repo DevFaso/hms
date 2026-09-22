@@ -115,6 +115,9 @@ struct ProfileView: View {
                             NavigationLink { DocumentsView() } label: {
                                 Label("documents".localized, systemImage: "doc.fill")
                             }
+                            NavigationLink { ScreeningsView() } label: {
+                                Label("screenings".localized, systemImage: "brain.head.profile")
+                            }
                             NavigationLink { SharingPrivacyView() } label: {
                                 Label("sharing_privacy".localized, systemImage: "lock.shield")
                             }
