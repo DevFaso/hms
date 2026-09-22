@@ -197,11 +197,12 @@ private fun InstrumentItems(instrument: ProInstrumentView, state: ScreeningsView
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (instrument.availableLanguages.size > 1) {
-                    ExposedDropdownMenuBox(expanded = languageMenu, onExpandedChange = { languageMenu = !languageMenu }) {
+                    ExposedDropdownMenuBox(expanded = languageMenu, onExpandedChange = { if (!state.submitting) languageMenu = !languageMenu }) {
                         OutlinedTextField(
                             value = instrument.language ?: state.language,
                             onValueChange = {},
                             readOnly = true,
+                            enabled = !state.submitting,
                             label = { Text(stringResource(R.string.language)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(languageMenu) },
                             modifier = Modifier.fillMaxWidth().menuAnchor()
@@ -236,11 +237,12 @@ private fun InstrumentItems(instrument: ProInstrumentView, state: ScreeningsView
                             Modifier
                                 .fillMaxWidth()
                                 .selectable(selected = chosen == option.optionNo, role = Role.RadioButton,
+                                    enabled = !state.submitting,
                                     onClick = { viewModel.answer(item.itemNo, option.optionNo) })
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(selected = chosen == option.optionNo, onClick = null)
+                            RadioButton(selected = chosen == option.optionNo, onClick = null, enabled = !state.submitting)
                             Spacer(Modifier.width(8.dp))
                             Text(option.label ?: "", style = MaterialTheme.typography.bodyMedium)
                         }

@@ -90,7 +90,9 @@ fun MainScreen(onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // Show bottom bar on tab routes AND drawer sub-screens
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin")
+    // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot
+    // pop a form with a request in flight (see pre_checkin in #703).
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(

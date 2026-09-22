@@ -115,9 +115,14 @@ class ScreeningsViewModel @Inject constructor(
                 val resp = api.getScreeningInstrument(code, language.ifBlank { null })
                 val view = resp.body()
                 if (resp.isSuccessful && view != null) {
+                    // Item and option numbers are language-independent, so a
+                    // language switch keeps what was already answered (as the web
+                    // does); only answers to items the new wording lacks are dropped.
+                    val itemNos = view.items.map { it.itemNo }.toSet()
                     _state.update {
                         it.copy(instrument = view, instrumentLoading = false,
-                            language = view.language ?: it.language, answers = emptyMap())
+                            language = view.language ?: it.language,
+                            answers = it.answers.filterKeys { k -> k in itemNos })
                     }
                 } else {
                     _state.update { it.copy(instrument = null, instrumentLoading = false, instrumentFailed = true) }
