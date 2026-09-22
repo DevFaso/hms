@@ -455,7 +455,10 @@ final class SharingPrivacyViewModel: ObservableObject {
 
     // ── Opt-out ──
 
+    /// Skipped while a save is out: a refresh answered after the POST/DELETE
+    /// would hand back the pre-save state and overwrite what the save returned.
     func loadOptOut() async {
+        guard !optOutSaving else { return }
         optOutLoading = true
         optOutFailed = false
         do {
