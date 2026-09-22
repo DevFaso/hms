@@ -73,7 +73,9 @@ class EducationViewModel @Inject constructor(
                 val resp = api.getMyEducation()
                 val list = resp.body()?.data
                 if (resp.isSuccessful && list != null) {
-                    _state.update { it.copy(loading = false, items = list) }
+                    // The progress table has no unique (patient, resource) row, so one
+                    // resource can come back twice; the list keys on resourceId.
+                    _state.update { it.copy(loading = false, items = list.distinctBy { r -> r.resourceId }) }
                 } else {
                     _state.update { it.copy(loading = false, failed = true) }
                 }

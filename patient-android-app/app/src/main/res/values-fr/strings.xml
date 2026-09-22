@@ -477,4 +477,7 @@
     <string name="edu_cat_high_risk_pregnancy">Grossesse à risque</string>
     <string name="edu_cat_ultrasound_scans">Échographies</string>
     <string name="edu_cat_other">Autre</string>
+    <string name="education_all_read">Vous avez lu tout ce qui vous a été attribué.</string>
+    <string name="education_all_read_desc">Les nouveaux documents de votre équipe soignante apparaîtront ici.</string>
+    <string name="edu_cat_genetic_screening">Dépistage génétique</string>
 </resources>

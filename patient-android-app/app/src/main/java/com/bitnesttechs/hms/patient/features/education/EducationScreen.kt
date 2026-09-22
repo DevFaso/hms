@@ -106,7 +106,12 @@ fun EducationScreen(
                     }
                 }
                 when (state.tab) {
-                    EducationViewModel.Tab.ASSIGNED -> ItemList(state.assigned, showBanner = true, R.string.education_empty_title, R.string.education_empty_desc, viewModel)
+                    EducationViewModel.Tab.ASSIGNED -> if (state.assigned.isEmpty() && state.completed.isNotEmpty()) {
+                        // Everything assigned has been read: say so, not "nothing yet".
+                        ItemList(state.assigned, showBanner = true, R.string.education_all_read, R.string.education_all_read_desc, viewModel)
+                    } else {
+                        ItemList(state.assigned, showBanner = true, R.string.education_empty_title, R.string.education_empty_desc, viewModel)
+                    }
                     EducationViewModel.Tab.COMPLETED -> ItemList(state.completed, showBanner = false, R.string.education_no_completed, null, viewModel)
                     EducationViewModel.Tab.QUESTIONS -> QuestionList(state, viewModel)
                 }
@@ -379,7 +384,12 @@ private fun AskSheet(state: EducationViewModel.UiState, viewModel: EducationView
         sheetState = sheetState,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = !state.askSubmitting)
     ) {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text(stringResource(R.string.ask_question), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             state.askTarget?.let {
                 Text(stringResource(R.string.ask_about, it.title ?: ""), style = MaterialTheme.typography.bodySmall,
@@ -453,6 +463,7 @@ private fun categoryRes(category: String): Int = when (category.uppercase()) {
     "MANAGING_DISCOMFORT" -> R.string.edu_cat_managing_discomfort
     "HIGH_RISK_PREGNANCY" -> R.string.edu_cat_high_risk_pregnancy
     "ULTRASOUND_SCANS" -> R.string.edu_cat_ultrasound_scans
+    "GENETIC_SCREENING" -> R.string.edu_cat_genetic_screening
     else -> R.string.edu_cat_other
 }
 
