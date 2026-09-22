@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsViewModel
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
+import com.bitnesttechs.hms.patient.features.appointments.PreCheckInScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
 import com.bitnesttechs.hms.patient.features.careteam.CareTeamScreen
 import com.bitnesttechs.hms.patient.features.dashboard.DashboardScreen
@@ -87,11 +88,15 @@ fun MainScreen(onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // Show bottom bar on tab routes AND drawer sub-screens
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail")
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        // The full-screen routes have a back arrow, not a menu; an edge swipe
+        // there could pull the drawer over a pre-check-in mid-submit and a
+        // drawer item would then destroy the only observer of that request.
+        gesturesEnabled = drawerState.isOpen || showBottomBar,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -145,7 +150,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         )
                         val activeTab = when (currentRoute) {
                             in dashboardSubRoutes -> Tab.Dashboard.route
-                            "appointment_detail" -> Tab.Appointments.route
+                            "appointment_detail", "pre_checkin" -> Tab.Appointments.route
                             "thread/{threadId}" -> Tab.Messages.route
                             else -> currentRoute
                         }
@@ -274,6 +279,36 @@ fun MainScreen(onLogout: () -> Unit) {
                                 // no way to move an appointment.
                                 appointmentsViewModel.rescheduleAppointment(id, newDate, newStartTime, newEndTime)
                                 navController.popBackStack()
+                            },
+                            onPreCheckIn = {
+                                navController.currentBackStackEntry?.savedStateHandle?.set("appointment", appointment)
+                                navController.navigate("pre_checkin")
+                            }
+                        )
+                    }
+                }
+
+                composable("pre_checkin") { backStackEntry ->
+                    val appointment = navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.get<com.bitnesttechs.hms.patient.core.models.AppointmentDto>("appointment")
+                    if (appointment != null) {
+                        val listEntry = remember(backStackEntry) {
+                            runCatching {
+                                navController.getBackStackEntry(Tab.Appointments.route)
+                            }.getOrNull()
+                        }
+                        val appointmentsViewModel: AppointmentsViewModel =
+                            if (listEntry != null) hiltViewModel(listEntry) else hiltViewModel()
+                        PreCheckInScreen(
+                            appointment = appointment,
+                            onBack = { navController.popBackStack() },
+                            onCompleted = {
+                                // The detail's copy of the appointment is stale now; the
+                                // list is reloaded and is where the patient lands.
+                                appointmentsViewModel.announce(R.string.pre_checkin_done)
+                                appointmentsViewModel.load()
+                                navController.popBackStack(Tab.Appointments.route, inclusive = false)
                             }
                         )
                     }

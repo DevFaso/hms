@@ -1345,7 +1345,12 @@ class PatientPortalServiceImplPhase2Test {
             AppointmentResponseDTO result = service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
 
             assertThat(result).isNotNull();
-            verify(appointmentRepository).save(any(Appointment.class));
+            // The reason a patient types is part of the visit, not just the notes:
+            // it used to be dropped on the floor while notes were kept.
+            ArgumentCaptor<Appointment> saved = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getReason()).isEqualTo("Annual checkup");
+            assertThat(saved.getValue().getNotes()).isEqualTo("First visit");
         }
 
         @Test

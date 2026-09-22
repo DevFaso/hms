@@ -532,6 +532,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setStartTime(dto.getStartTime());
         appointment.setEndTime(endTime);
         appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setReason(dto.getReason());
         appointment.setNotes(dto.getNotes());
         appointment.setCreatedBy(patientEntity.getUser());
         appointment.setAssignment(assignment);
