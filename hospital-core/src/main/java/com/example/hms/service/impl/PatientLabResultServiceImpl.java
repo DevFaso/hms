@@ -192,7 +192,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         if (!result.isReleased()) {
             return STATUS_PENDING;
         }
-        String fromRange = statusFromRange(mapped != null ? mapped.getSeverityFlag() : null, result.isAcknowledged());
+        String fromRange = statusFromRange(mapped != null ? mapped.getSeverityFlag() : null);
         String fromFlag = statusOf(result.getAbnormalFlag());
         if (fromRange == null) {
             return fromFlag;
@@ -205,14 +205,22 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return isDirectional(fromRange) || !isDirectional(fromFlag) ? fromRange : fromFlag;
     }
 
-    /** What the configured reference range says, or null when there is none to grade against. */
-    private static String statusFromRange(String severity, boolean acknowledged) {
+    /**
+     * What the configured reference range says, or null when there is
+     * none to grade against. Out of range is ABNORMAL with a direction,
+     * nothing more: CRITICAL comes only from a mapper severity that is
+     * itself CRITICAL or from the recorded flag. (An earlier reading
+     * upgraded an unacknowledged HIGH to CRITICAL as a review nudge; once
+     * merged with the analyzer flag that synthetic CRITICAL outranked an
+     * explicit N and reached the patient unreviewed.)
+     */
+    private static String statusFromRange(String severity) {
         if (severity == null || severity.isBlank() || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
             return null;
         }
         return switch (severity.toUpperCase(Locale.ROOT)) {
             case STATUS_CRITICAL -> STATUS_CRITICAL;
-            case "HIGH" -> acknowledged ? STATUS_ABNORMAL_HIGH : STATUS_CRITICAL;
+            case "HIGH" -> STATUS_ABNORMAL_HIGH;
             case "LOW" -> STATUS_ABNORMAL_LOW;
             default -> STATUS_NORMAL;
         };

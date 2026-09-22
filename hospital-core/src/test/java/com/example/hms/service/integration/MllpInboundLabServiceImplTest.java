@@ -76,9 +76,14 @@ class MllpInboundLabServiceImplTest {
 
     private ParsedObservation observation(String placer, String value, String setId,
                                           String testCode, String abnormalFlag) {
+        return observation(placer, value, setId, testCode, abnormalFlag, "F");
+    }
+
+    private ParsedObservation observation(String placer, String value, String setId,
+                                          String testCode, String abnormalFlag, String resultStatus) {
         return new ParsedObservation(
             "patient-mrn", placer, "filler-1", setId, testCode, value, "mmol/L",
-            "3.9-6.1", abnormalFlag, LocalDateTime.of(2026, 4, 29, 8, 30));
+            "3.9-6.1", abnormalFlag, LocalDateTime.of(2026, 4, 29, 8, 30), resultStatus);
     }
 
     @Test
@@ -306,6 +311,38 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("OBX-11 — a preliminary, pending, partial or unstated observation is stored but leaves the order alone")
+    void nonFinalObservationDoesNotResultTheOrder() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        for (String obx11 : List.of("P", "I", "S", "", " ", "x")) {
+            labOrder.setStatus(LabOrderStatus.PENDING);
+            MllpInboundOutcome outcome = service.processOruR01(
+                List.of(observation("ACC-1", "5.4", "1", "GLU", "N", obx11)),
+                hospital, "APP", "FAC", null, "MSH|...\r");
+            assertThat(outcome).as("OBX-11 '%s'", obx11).isEqualTo(MllpInboundOutcome.ACCEPTED);
+            assertThat(labOrder.getStatus()).as("OBX-11 '%s'", obx11).isEqualTo(LabOrderStatus.PENDING);
+        }
+        verify(labResultRepository, times(6)).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("OBX-11 — a final or corrected observation results the order, any case, trimmed")
+    void finalOrCorrectedObservationResultsTheOrder() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        for (String obx11 : List.of("F", "C", " f ", "c")) {
+            labOrder.setStatus(LabOrderStatus.PENDING);
+            service.processOruR01(
+                List.of(observation("ACC-1", "5.4", "1", "GLU", "N", obx11)),
+                hospital, "APP", "FAC", null, "MSH|...\r");
+            assertThat(labOrder.getStatus()).as("OBX-11 '%s'", obx11).isEqualTo(LabOrderStatus.RESULTED);
+        }
+    }
+
+    @Test
     @DisplayName("B14 — the status advance is guarded: pre-result states move to RESULTED, later and cancelled ones stay")
     void orderStatusAdvanceIsGuarded() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -355,7 +392,7 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("REJECTED_INVALID — missing OBR-2 placer order number")
     void rejectedInvalidWhenPlacerMissing() {
         ParsedObservation obs = new ParsedObservation(
-            "p", "", "f", "1", "GLU", "5.4", "mmol/L", "", "N", LocalDateTime.now());
+            "p", "", "f", "1", "GLU", "5.4", "mmol/L", "", "N", LocalDateTime.now(), "F");
 
         assertThat(service.processOruR01(List.of(obs), hospital, "APP", "FAC", "MSG-CTRL-4", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
@@ -366,7 +403,7 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("REJECTED_INVALID — missing OBX result value")
     void rejectedInvalidWhenResultValueBlank() {
         ParsedObservation obs = new ParsedObservation(
-            "p", "ACC-1", "f", "1", "GLU", "", "mmol/L", "", "N", LocalDateTime.now());
+            "p", "ACC-1", "f", "1", "GLU", "", "mmol/L", "", "N", LocalDateTime.now(), "F");
 
         assertThat(service.processOruR01(List.of(obs), hospital, "APP", "FAC", "MSG-CTRL-5", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);

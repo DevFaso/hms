@@ -37,4 +37,23 @@ class Hl7v2MessageBuilderOruFlagTest {
 
         assertThat(oru).contains("||5.7|mmol/L||||" + obx8 + "|||F|||");
     }
+
+    /** OBX-11 (observation result status) is parsed; a short OBX yields an empty status, not null. */
+    @ParameterizedTest
+    @CsvSource({
+        "'OBX|1|NM|GLU^Glucose||5.6|mmol/L|3.9-6.1|N|||F|||20260428', F",
+        "'OBX|1|NM|GLU^Glucose||5.6|mmol/L|3.9-6.1|N|||P|||20260428', P",
+        "'OBX|1|NM|GLU^Glucose||5.6|mmol/L|3.9-6.1|N||| C |||20260428', C",
+        "'OBX|1|NM|GLU^Glucose||5.6|mmol/L|3.9-6.1|N', ''"
+    })
+    void inboundObx11IsParsed(String obx, String expectedStatus) {
+        String oru = "MSH|^~\\&|APP|FAC|HMS|HOSP|20260428||ORU^R01|MSG-1|P|2.5\r"
+            + "PID|1||p\r"
+            + "OBR|1|ACC-1||GLU^Glucose|||20260428\r"
+            + obx + "\r";
+
+        assertThat(builder.parseOruR01(oru)).singleElement()
+            .extracting(Hl7v2MessageBuilder.ParsedObservation::resultStatus)
+            .isEqualTo(expectedStatus);
+    }
 }

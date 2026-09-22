@@ -211,8 +211,11 @@ class PatientLabResultServiceImplTest {
         List<Case> cases = List.of(
             // inside the range, but the analyzer flagged H → the flag's direction
             new Case("NORMAL", false, AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_HIGH"),
-            // range says mildly high (acknowledged), analyzer said HH → CRITICAL, never merely ABNORMAL_HIGH
+            // range says high, analyzer said HH → CRITICAL, never merely ABNORMAL_HIGH
             new Case("HIGH", true, AbnormalFlag.CRITICAL, "CRITICAL"),
+            // 16.0 against 12–15.5 that the analyzer flagged N and auto-released: out of range,
+            // unacknowledged — ABNORMAL_HIGH, never a synthetic CRITICAL the patient reads unreviewed
+            new Case("HIGH", false, AbnormalFlag.NORMAL, "ABNORMAL_HIGH"),
             // range says low, analyzer said nothing abnormal → the range's direction
             new Case("LOW", false, AbnormalFlag.NORMAL, "ABNORMAL_LOW"),
             // range says low, technologist recorded an undirected ABNORMAL → the directional source
@@ -299,6 +302,7 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(0).getStatus()).isEqualTo("CRITICAL");
     }
 
+    /** Out of range is ABNORMAL_HIGH whether or not a clinician has acknowledged it: no synthetic CRITICAL. */
     @Test void getLabResults_released_highSeverity_notAcknowledged() {
         LabResult lr = buildLabResult("200", "mg/dL", true, false);
         LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
@@ -313,7 +317,7 @@ class PatientLabResultServiceImplTest {
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
-        assertThat(results.get(0).getStatus()).isEqualTo("CRITICAL");
+        assertThat(results.get(0).getStatus()).isEqualTo("ABNORMAL_HIGH");
     }
 
     @Test void getLabResults_released_highSeverity_acknowledged() {

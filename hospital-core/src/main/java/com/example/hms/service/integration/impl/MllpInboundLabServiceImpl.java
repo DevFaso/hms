@@ -203,7 +203,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .build();
             autoReleaseIfExplicitlyNormal(result, observation.abnormalFlag());
             saved.add(labResultRepository.save(result));
-            advanceToResulted(order);
+            if (isFinalOrCorrected(observation.resultStatus())) {
+                advanceToResulted(order);
+            }
         }
         log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={}/{} hospital={} msgCtrlId={}",
             saved.size(), ordersByPlacer.keySet(),
@@ -252,8 +254,24 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     }
 
     /**
-     * B14 — an order that has just received an analyzer observation is
-     * RESULTED. Forward-only, event-based: the ordinal only ever moves
+     * OBX-11 (HL7 table 0085): only a final ({@code F}) or corrected
+     * ({@code C}) observation is the event that results an order. A
+     * preliminary, pending or partial one ({@code P}, {@code I},
+     * {@code S}) — or no status at all — is stored, unreleased, and
+     * leaves the order where the bench has it, so the later COLLECTED /
+     * RECEIVED / IN_PROGRESS steps are not refused.
+     */
+    private static boolean isFinalOrCorrected(String obx11) {
+        if (!StringUtils.hasText(obx11)) {
+            return false;
+        }
+        String status = obx11.trim().toUpperCase(Locale.ROOT);
+        return "F".equals(status) || "C".equals(status);
+    }
+
+    /**
+     * B14 — an order that has just received a FINAL or CORRECTED analyzer
+     * observation is RESULTED. Forward-only, event-based: the ordinal only ever moves
      * up (a state at or past RESULTED is never wound back), never out of
      * CANCELLED, never into CANCELLED. This deliberately does not walk
      * {@code LabOrderServiceImpl.ALLOWED_TRANSITIONS}: those guard a
