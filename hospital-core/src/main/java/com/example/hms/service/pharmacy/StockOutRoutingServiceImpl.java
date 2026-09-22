@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
+import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -22,6 +23,7 @@ import com.example.hms.payload.dto.pharmacy.StockCheckResultDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
@@ -51,6 +53,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final InventoryItemRepository inventoryItemRepository;
     private final MedicationCatalogItemRepository medicationCatalogItemRepository;
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    private final DispenseRepository dispenseRepository;
     private final UserRepository userRepository;
     private final PrescriptionRoutingMapper routingMapper;
     private final RoleValidator roleValidator;
@@ -74,6 +77,14 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * timeout sweep does it for them, and PARTNER_REJECTED is routable.
      * PARTIALLY_FILLED is routable so the remainder of a fill the shelf could
      * not complete can be back-ordered or sent to a partner.
+     *
+     * <p>PARTNER_ACCEPTED is routable too (gap G3, round 3): a partner that
+     * accepted and then never delivered left the order with no exit at all —
+     * not dispensable, not routable, reachable only by that partner
+     * confirming a dispense that is not going to happen. Re-routing it
+     * supersedes the accepted decision ({@link #supersedeOpenDecisions}), so
+     * a late confirmation from the original partner is refused rather than
+     * flipping an order somebody else has since filled.
      */
     static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
@@ -81,8 +92,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.PARTNER_REJECTED
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.PARTNER_ACCEPTED
     );
+
+    /** Decisions nothing has closed yet: a re-route supersedes these. */
+    private static final Set<RoutingDecisionStatus> OPEN_DECISION_STATUSES =
+            Set.of(RoutingDecisionStatus.PENDING, RoutingDecisionStatus.ACCEPTED);
 
     private static final String PRESCRIPTION_PREFIX = "Prescription ";
 
@@ -172,7 +188,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
-        supersedePendingBackOrder(prescription);
+        BigDecimal remaining = remainingQuantity(prescription);
+        supersedeOpenDecisions(prescription);
 
         // Update prescription
         prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
@@ -185,7 +202,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // Create routing decision
         dto.setRoutingType(RoutingType.PARTNER);
         PrescriptionRoutingMapper.RoutingContext ctx = new PrescriptionRoutingMapper.RoutingContext(
-                prescription, targetPharmacy, currentUser, patient);
+                prescription, targetPharmacy, currentUser, patient, remaining);
         PrescriptionRoutingDecision decision = routingMapper.toEntity(dto, ctx);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
@@ -216,7 +233,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
-        supersedePendingBackOrder(prescription);
+        BigDecimal remaining = remainingQuantity(prescription);
+        supersedeOpenDecisions(prescription);
 
         prescription.setStatus(PrescriptionStatus.PRINTED_FOR_PATIENT);
         prescriptionRepository.save(prescription);
@@ -227,6 +245,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
                 .reason("Prescription printed for patient to fill at external pharmacy")
+                .remainingQuantity(remaining)
                 .status(RoutingDecisionStatus.COMPLETED)
                 .decidedAt(LocalDateTime.now())
                 .build();
@@ -252,7 +271,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
-        supersedePendingBackOrder(prescription);
+        BigDecimal remaining = remainingQuantity(prescription);
+        supersedeOpenDecisions(prescription);
 
         prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
         prescriptionRepository.save(prescription);
@@ -264,6 +284,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
                 .reason("Medication out of stock; placed on back order")
+                .remainingQuantity(remaining)
                 .estimatedRestockDate(estimatedRestockDate)
                 .status(RoutingDecisionStatus.PENDING)
                 .decidedAt(LocalDateTime.now())
@@ -416,32 +437,38 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     }
 
     /**
-     * Re-routing a back-ordered prescription supersedes the BACKORDER decision
-     * that was waiting for stock; leave it CANCELLED rather than PENDING so the
-     * routing history reads as it happened. Best-effort: a bookkeeping miss
-     * must not stop the re-route.
+     * Whatever this order was waiting for, the pharmacist has just decided
+     * something else: every decision still open (a back order waiting for
+     * stock, a partner offer, a partner that accepted and never delivered)
+     * is CANCELLED so the routing history reads as it happened — and so a
+     * late partner reply cannot act on a decision this route replaced.
+     * Best-effort: a bookkeeping miss must not stop the re-route.
      */
-    private void supersedePendingBackOrder(Prescription prescription) {
-        // A PARTIALLY_FILLED order may carry a PENDING back order for its
-        // remainder (PENDING_STOCK → partial fill); a re-route supersedes it too.
-        if (prescription.getStatus() != PrescriptionStatus.PENDING_STOCK
-                && prescription.getStatus() != PrescriptionStatus.PARTIALLY_FILLED) {
-            return;
-        }
+    private void supersedeOpenDecisions(Prescription prescription) {
         try {
-            routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())
-                    .stream()
-                    .filter(d -> d.getRoutingType() == RoutingType.BACKORDER
-                            && d.getStatus() == RoutingDecisionStatus.PENDING)
-                    .findFirst()
-                    .ifPresent(d -> {
-                        d.setStatus(RoutingDecisionStatus.CANCELLED);
-                        routingDecisionRepository.save(d);
-                    });
+            for (PrescriptionRoutingDecision decision
+                    : routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())) {
+                if (OPEN_DECISION_STATUSES.contains(decision.getStatus())) {
+                    decision.setStatus(RoutingDecisionStatus.CANCELLED);
+                    routingDecisionRepository.save(decision);
+                }
+            }
         } catch (RuntimeException ex) {
-            log.warn("Could not supersede the back order for prescription {}: {}",
+            log.warn("Could not supersede the open routing decisions of prescription {}: {}",
                     prescription.getId(), ex.getMessage());
         }
+    }
+
+    /**
+     * What this routing is actually for. A partially filled order routes its
+     * REMAINDER: the partner SMS, the printed copy and the supplier's back
+     * order all used to carry the full prescribed amount, which invites the
+     * external filler to hand over a second complete course.
+     */
+    private BigDecimal remainingQuantity(Prescription prescription) {
+        BigDecimal dispensedToDate = dispenseRepository
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+        return FillAccounting.remaining(prescription, dispensedToDate);
     }
 
     private static void clearPharmacy(Prescription prescription) {

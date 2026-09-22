@@ -5,7 +5,11 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
+import com.example.hms.enums.RoutingDecisionStatus;
+import com.example.hms.enums.RoutingType;
+import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.i18n.NotificationLocales;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +45,7 @@ public class PrescriberPharmacyNotificationWriter {
     private static final String PATIENT_FALLBACK_KEY = "prescription.pharmacy.patientFallback";
 
     private final PrescriptionRepository prescriptionRepository;
+    private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
 
@@ -105,13 +110,41 @@ public class PrescriberPharmacyNotificationWriter {
         return message.substring(0, MAX_MESSAGE_LENGTH - 1) + "\u2026";
     }
 
+    /**
+     * Which partner the message names.
+     *
+     * <p>The prescription's own pharmacy columns are cleared when a partner
+     * refuses (the work queue must group the row under the in-house
+     * dispensary), and this writer reads the committed row — so a refusal
+     * would otherwise always say "the partner pharmacy" and never name who
+     * refused. The routing decisions are the durable record of that, so fall
+     * back to the newest one that carries a target pharmacy.
+     */
     private String partnerName(Prescription prescription) {
         String name = prescription.getPharmacyName();
         if (name != null && !name.isBlank()) {
             return name;
         }
+        String fromDecision = latestPartnerPharmacyName(prescription);
+        if (fromDecision != null) {
+            return fromDecision;
+        }
         return messageSource.getMessage("prescription.pharmacy.partnerFallback", null,
                 NotificationLocales.STAFF);
+    }
+
+    private String latestPartnerPharmacyName(Prescription prescription) {
+        for (PrescriptionRoutingDecision decision
+                : routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())) {
+            if (decision.getRoutingType() == RoutingType.PARTNER
+                    && decision.getStatus() != RoutingDecisionStatus.CANCELLED
+                    && decision.getTargetPharmacy() != null
+                    && decision.getTargetPharmacy().getName() != null
+                    && !decision.getTargetPharmacy().getName().isBlank()) {
+                return decision.getTargetPharmacy().getName();
+            }
+        }
+        return null;
     }
 
     private String patientName(Patient patient) {

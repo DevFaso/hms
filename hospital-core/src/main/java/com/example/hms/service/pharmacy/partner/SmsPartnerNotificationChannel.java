@@ -49,8 +49,16 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         }
         String initials = patientInitials(prescription.getPatient());
         String ref = buildRefToken(decision);
-        trySend(phone, templates.prescriptionOffer(
-                ref, safeMedication(prescription.getMedicationName()), initials));
+        String medication = safeMedication(prescription.getMedicationName());
+        // A partially filled order offers its remainder, and the partner is
+        // told the number: the offer used to name the full prescribed amount
+        // whatever had already been handed over (gap G3, round 3).
+        String remainder = remainderLabel(decision, prescription);
+        if (remainder != null) {
+            trySend(phone, templates.prescriptionOfferPartial(ref, medication, remainder, initials));
+            return;
+        }
+        trySend(phone, templates.prescriptionOffer(ref, medication, initials));
     }
 
     @Override
@@ -153,6 +161,25 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
 
     private static char initial(String s) {
         return (s == null || s.isBlank()) ? 0 : Character.toUpperCase(s.trim().charAt(0));
+    }
+
+    /**
+     * The remainder to name in the offer, or null when there is nothing to
+     * qualify: an unknown quantity, or a decision that routes exactly what
+     * was prescribed.
+     */
+    private static String remainderLabel(PrescriptionRoutingDecision decision, Prescription prescription) {
+        java.math.BigDecimal remaining = decision != null ? decision.getRemainingQuantity() : null;
+        if (remaining == null) {
+            return null;
+        }
+        java.math.BigDecimal prescribed = prescription.getQuantity();
+        if (prescribed != null && remaining.compareTo(prescribed) == 0) {
+            return null;
+        }
+        String amount = remaining.stripTrailingZeros().toPlainString();
+        String unit = prescription.getQuantityUnit();
+        return unit != null && !unit.isBlank() ? amount + " " + unit.trim() : amount;
     }
 
     private Locale patientLocale(Patient patient) {

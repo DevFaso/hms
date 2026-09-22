@@ -19,3 +19,10 @@ ALTER TABLE clinical.prescriptions
     -- The status the order held when the question was asked, restored on
     -- resolve: a partially filled or back-ordered order keeps its progress.
     ADD COLUMN IF NOT EXISTS clarification_previous_status VARCHAR(40);
+
+-- Gap G3: what a routing decision is actually for. A partially filled order
+-- is routable (the shelf could not complete it), so the partner, the
+-- supplier and the printed copy must be told the REMAINING amount; the
+-- decision carried no quantity at all, so they saw the full prescribed one.
+ALTER TABLE clinical.prescription_routing_decisions
+    ADD COLUMN IF NOT EXISTS remaining_quantity NUMERIC(12, 2);

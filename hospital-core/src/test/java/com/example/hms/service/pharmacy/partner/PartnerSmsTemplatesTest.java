@@ -24,6 +24,14 @@ class PartnerSmsTemplatesTest {
     }
 
     @Test
+    void partialOfferNamesTheRemainder() {
+        String msg = templates.prescriptionOfferPartial("ABC12", "Paracétamol 500mg", "6 comprimés", "JD");
+        assertThat(msg).isEqualTo(
+                "HMS Rx ABC12 : Paracétamol 500mg (reste 6 comprimés) pour JD. "
+                        + "Répondez 1 pour accepter, 2 pour refuser.");
+    }
+
+    @Test
     void reminderContainsRef() {
         assertThat(templates.reminder("ABC12")).contains("ABC12").contains("rappel");
     }

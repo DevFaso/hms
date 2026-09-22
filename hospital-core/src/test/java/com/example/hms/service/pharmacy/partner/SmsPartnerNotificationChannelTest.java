@@ -158,6 +158,36 @@ class SmsPartnerNotificationChannelTest {
     }
 
     @Test
+    @DisplayName("an offer for the remainder of a partially filled order names the amount still owed")
+    void sendPrescriptionOfferNamesTheRemainder() {
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        prescription.setQuantityUnit("comprimés");
+        decision.setRemainingQuantity(new java.math.BigDecimal("6.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).contains("reste 6 comprim");
+        assertThat(msg.getValue()).doesNotContain("10");
+    }
+
+    @Test
+    @DisplayName("an offer for the full prescribed amount carries no remainder clause")
+    void sendPrescriptionOfferForTheFullAmountHasNoRemainder() {
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        decision.setRemainingQuantity(new java.math.BigDecimal("10.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).doesNotContain("reste");
+    }
+
+    @Test
     @DisplayName("sendPrescriptionOffer uses fallback medication text when name blank")
     void sendPrescriptionOfferBlankMedication() {
         prescription.setMedicationName("  ");

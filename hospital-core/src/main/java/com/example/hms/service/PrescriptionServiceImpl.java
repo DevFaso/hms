@@ -370,28 +370,62 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * The status rule on an edit.
+     * The status rule on an edit, which applies only while the order is
+     * awaiting a pharmacist's clarification. Everything else keeps the
+     * client-assertable rule exactly as it was.
      *
-     * <p>The portal echoes the current status into every PUT, so a status
-     * equal to the row's is a no-op and always accepted — otherwise editing
-     * an order the pharmacist sent back for clarification (the "doctor edits
-     * first" path of gap G5) would be refused for echoing
-     * PENDING_CLARIFICATION. While PENDING_CLARIFICATION, any OTHER status is
-     * refused with 409: the only exit is resolve-clarification, which records
-     * who answered and returns the order to the status it held. Everything
-     * else falls to the client-assertable rule.
+     * <p>The portal echoes the current status into every PUT, so a PUT that
+     * echoes PENDING_CLARIFICATION is a no-op and is accepted — otherwise the
+     * "doctor edits first" path of gap G5 would be refused for saying what
+     * the row already says. The exemption is deliberately narrow: an echoed
+     * DISPENSED or PARTNER_ACCEPTED must still be refused, because
+     * {@code updatePrescription} rewrites the drug and the dose and those
+     * statuses mean the medication has already left the counter.
+     *
+     * <p>Withdrawal is the one status change permitted from
+     * PENDING_CLARIFICATION: a contraindicated order must be cancellable on
+     * the spot, not first resolved back into the pharmacy queue. The open
+     * clarification is closed as it goes, so nothing reads it as a question
+     * still waiting for an answer. Any other status is refused with 409 —
+     * resolve-clarification is the only way back into the queue.
      */
     private void rejectStatusChangeOnUpdate(Prescription existing, PrescriptionRequestDTO request) {
         PrescriptionStatus requested = request.getStatus();
-        if (requested == null || requested == existing.getStatus()) {
+        if (requested == null) {
             return;
         }
-        if (existing.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
-            throw new ConflictException(
-                "This prescription is awaiting the prescriber's clarification; edit it and answer with "
-                    + "POST /prescriptions/{id}/resolve-clarification rather than changing its status.");
+        if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
+            rejectClientAssertedWorkflowStatus(request);
+            return;
         }
-        rejectClientAssertedWorkflowStatus(request);
+        if (requested == PrescriptionStatus.PENDING_CLARIFICATION) {
+            return;
+        }
+        if (requested == PrescriptionStatus.CANCELLED || requested == PrescriptionStatus.DISCONTINUED) {
+            closeClarificationOnWithdrawal(existing);
+            return;
+        }
+        throw new ConflictException(
+            "This prescription is awaiting the prescriber's clarification; edit it and answer with "
+                + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
+                + "its status.");
+    }
+
+    /**
+     * Withdrawing an order answers the pharmacist's question in the only way
+     * that matters, so the clarification is stamped resolved by whoever
+     * withdrew it. The reason and the previous status stay on the row as the
+     * record of what was asked and from where. The PUT itself is audited by
+     * convention (WriteAuditInterceptor DATA_UPDATE).
+     */
+    private void closeClarificationOnWithdrawal(Prescription existing) {
+        if (existing.getClarificationResolvedAt() != null) {
+            return;
+        }
+        existing.setClarificationResolvedAt(LocalDateTime.now());
+        existing.setClarificationResolvedByUserId(roleValidator.getCurrentUserId());
+        logger.info("Prescription {} withdrawn while awaiting clarification; the question is closed",
+            existing.getId());
     }
 
     /**

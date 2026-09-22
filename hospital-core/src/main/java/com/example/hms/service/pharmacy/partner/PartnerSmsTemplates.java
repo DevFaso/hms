@@ -31,9 +31,20 @@ public class PartnerSmsTemplates {
 
     private final MessageSource messageSource;
 
-    /** Outbound: new prescription offered to a partner pharmacy. */
+    /** Outbound: new prescription offered to a partner pharmacy, in full. */
     public String prescriptionOffer(String refToken, String medicationName, String patientInitials) {
         return partner("sms.partner.offer", refToken, medicationName, patientInitials);
+    }
+
+    /**
+     * Outbound: the REMAINDER of a partially filled prescription offered to a
+     * partner. A separate template rather than an optional clause, because an
+     * empty clause leaves a partner reading a stray bracket — and this is the
+     * number that stops a second full course being handed over.
+     */
+    public String prescriptionOfferPartial(String refToken, String medicationName,
+                                           String remainingLabel, String patientInitials) {
+        return partner("sms.partner.offer.partial", refToken, medicationName, remainingLabel, patientInitials);
     }
 
     /** Outbound: reminder if no reply received in 2 hours. */

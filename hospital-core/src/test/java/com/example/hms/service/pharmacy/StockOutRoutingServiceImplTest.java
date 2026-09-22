@@ -55,6 +55,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private InventoryItemRepository inventoryItemRepository;
     @Mock private MedicationCatalogItemRepository medicationCatalogItemRepository;
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private UserRepository userRepository;
     @Mock private PrescriptionRoutingMapper routingMapper;
     @Mock private RoleValidator roleValidator;
@@ -491,6 +492,61 @@ class StockOutRoutingServiceImplTest {
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);
+        }
+
+        @Test
+        @DisplayName("G3 round 3: an order a partner accepted and never delivered can be re-routed, and that acceptance is superseded")
+        void partnerAcceptedIsRoutableAndSupersedesTheAcceptance() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            PrescriptionRoutingDecision accepted = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .targetPharmacy(partnerPharmacy)
+                    .routingType(RoutingType.PARTNER)
+                    .status(RoutingDecisionStatus.ACCEPTED)
+                    .build();
+            accepted.setId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(accepted));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(any()))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
+
+            service.printForPatient(prescriptionId);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
+            // The original partner can no longer confirm a dispense of an
+            // order somebody else is now filling.
+            assertThat(accepted.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        }
+
+        @Test
+        @DisplayName("G3 round 3: a routed partially filled order carries the REMAINDER, not the full prescribed amount")
+        void routingCarriesTheRemainingQuantity() {
+            prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            prescription.setQuantity(java.math.BigDecimal.TEN);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.sumQuantityDispensedForPrescription(
+                    prescriptionId, com.example.hms.enums.DispenseStatus.CANCELLED))
+                    .thenReturn(java.math.BigDecimal.valueOf(4));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(any()))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("BACKORDER").build());
+
+            service.backOrder(prescriptionId, null);
+
+            org.mockito.ArgumentCaptor<PrescriptionRoutingDecision> saved =
+                    org.mockito.ArgumentCaptor.forClass(PrescriptionRoutingDecision.class);
+            verify(routingDecisionRepository).save(saved.capture());
+            assertThat(saved.getValue().getRemainingQuantity()).isEqualByComparingTo(java.math.BigDecimal.valueOf(6));
         }
 
         @Test

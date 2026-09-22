@@ -61,6 +61,7 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private InventoryItemRepository inventoryItemRepository;
     @Mock private MedicationCatalogItemRepository medicationCatalogItemRepository;
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private UserRepository userRepository;
     @Mock private PrescriptionRoutingMapper routingMapper;
     @Mock private RoleValidator roleValidator;

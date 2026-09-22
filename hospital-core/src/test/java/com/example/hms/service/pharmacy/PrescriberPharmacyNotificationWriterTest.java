@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 class PrescriberPharmacyNotificationWriterTest {
 
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
     @Mock private NotificationService notificationService;
 
     private PrescriberPharmacyNotificationWriter writer;
@@ -41,8 +42,8 @@ class PrescriberPharmacyNotificationWriterTest {
 
     @BeforeEach
     void setUp() {
-        writer = new PrescriberPharmacyNotificationWriter(prescriptionRepository, notificationService,
-                TestMessageSources.bundles());
+        writer = new PrescriberPharmacyNotificationWriter(prescriptionRepository, routingDecisionRepository,
+                notificationService, TestMessageSources.bundles());
 
         User account = new User();
         account.setUsername("dr.awa");
@@ -111,6 +112,35 @@ class PrescriberPharmacyNotificationWriterTest {
                 org.mockito.ArgumentMatchers.eq("PHARMACY_EVENT"));
         assertThat(body.getValue()).hasSize(PrescriberPharmacyNotificationWriter.MAX_MESSAGE_LENGTH)
                 .endsWith("\u2026");
+    }
+
+    @Test
+    @DisplayName("a refusal names the partner from the routing decision — the prescription's pharmacy columns are cleared on rejection")
+    void partnerRejectedNamesTheRefusingPartnerFromTheDecision() {
+        // partnerRespond(rejected) clears pharmacyName so the work queue
+        // groups the row in-house; this writer reads the committed row, so
+        // without the decision lookup the prescriber would only ever be told
+        // "the partner pharmacy".
+        prescription.setPharmacyName(null);
+        com.example.hms.model.pharmacy.Pharmacy partner =
+                com.example.hms.model.pharmacy.Pharmacy.builder().name("Pharmacie du Marché").build();
+        com.example.hms.model.pharmacy.PrescriptionRoutingDecision refusal =
+                com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                        .prescription(prescription)
+                        .targetPharmacy(partner)
+                        .routingType(com.example.hms.enums.RoutingType.PARTNER)
+                        .status(com.example.hms.enums.RoutingDecisionStatus.REJECTED)
+                        .build();
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                .thenReturn(java.util.List.of(refusal));
+
+        writer.write(prescriptionId, PrescriptionStatus.PARTNER_REJECTED);
+
+        verify(notificationService).createNotification(
+                "Pharmacie : Amoxicilline 500 mg (Aminata Diallo) a été refusé par la pharmacie "
+                        + "partenaire Pharmacie du Marché et doit être réorienté.",
+                "dr.awa", "PHARMACY_EVENT");
     }
 
     @Test
