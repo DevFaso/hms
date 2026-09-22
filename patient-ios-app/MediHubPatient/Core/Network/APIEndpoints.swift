@@ -32,6 +32,11 @@ enum APIEndpoints {
     static func appointmentQuestionnaires(id: String) -> String { "/me/patient/appointments/\(id)/questionnaires" }
     static func preCheckIn(id: String) -> String { "/me/patient/appointments/\(id)/pre-checkin" }
     static let rescheduleAppointment = "/me/patient/appointments/reschedule"
+    // Patient education, the web's My Education: the five self-service routes.
+    static let myEducation = "/me/patient/education"
+    static func educationItem(resourceId: String) -> String { "/me/patient/education/\(resourceId)" }
+    static func educationProgress(resourceId: String) -> String { "/me/patient/education/\(resourceId)/progress" }
+    static let educationQuestions = "/me/patient/education/questions"
     static let labResults = "/me/patient/lab-results"
     static let medications = "/me/patient/medications"
     static let prescriptions = "/me/patient/prescriptions"
@@ -43,10 +48,18 @@ enum APIEndpoints {
     static let afterVisitSummaries = "/me/patient/after-visit-summaries"
     static let careTeam = "/me/patient/care-team"
     static let vitals = "/me/patient/vitals"
+    // My medical history: four read-only sections, each ApiResponseWrapper-wrapped.
+    static let medicalHistory = "/me/patient/medical-history"
+    static let surgicalHistory = "/me/patient/surgical-history"
+    static let familyHistory = "/me/patient/family-history"
+    // `data` is null when nothing was ever recorded, so the caller decodes the wrapper itself.
+    static let socialHistory = "/me/patient/social-history"
     static let immunizations = "/me/patient/immunizations"
     static let consultations = "/me/patient/consultations"
-    static let consents = "/me/patient/consents"
-    static let accessLog = "/me/patient/access-log"
+    // Accounting of disclosures (Tier 2 item 39): who saw, received or exported
+    // the record, classified and counted; the consent list and the plain
+    // access log it replaced are no longer shown anywhere.
+    static let disclosures = "/me/patient/disclosures"
     static let referrals = "/me/patient/referrals"
     static let treatmentPlans = "/me/patient/treatment-plans"
     static let documents = "/me/patient/documents"
@@ -105,10 +118,13 @@ enum APIEndpoints {
     static func proxyBilling(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/billing" }
     static func proxyRecords(patientId: String) -> String { "/me/patient/proxy-access/\(patientId)/records" }
 
-    // MARK: Consent actions
+    // MARK: Record-sharing opt-out (E9 #66)
 
-    static func revokeConsent(fromHospitalId: String, toHospitalId: String) -> String {
-        "/me/patient/consents?fromHospitalId=\(fromHospitalId)&toHospitalId=\(toHospitalId)"
+    // Patient-scoped on the API (a patient may only touch their own, 403
+    // otherwise) and a bare DTO on the wire: GET status, POST opt out with an
+    // optional reason, DELETE to allow sharing again.
+    static func recordSharingOptOut(patientId: String) -> String {
+        "/patients/\(patientId)/record-sharing/opt-out"
     }
 
     // MARK: Refills helpers
