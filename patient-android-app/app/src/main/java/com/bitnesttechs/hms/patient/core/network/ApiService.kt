@@ -43,9 +43,28 @@ interface ApiService {
         @Query("size") size: Int = 50
     ): Response<ApiResponse<List<AppointmentDto>>>
 
-    /** Book appointment — POST /appointments returns flat AppointmentDto (201) */
-    @POST("appointments")
-    suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<AppointmentDto>
+    /**
+     * Self-scheduling goes through the patient portal endpoint, which verifies
+     * the registration and the hospital/department pairing; the staff endpoint
+     * (POST /appointments) skips both.
+     */
+    @POST("me/patient/appointments")
+    suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<ApiResponse<AppointmentDto>>
+
+    // The booking wizard's three lists, same as the web's.
+    @GET("me/patient/booking/hospitals")
+    suspend fun getBookingHospitals(): Response<ApiResponse<List<BookingHospitalDto>>>
+
+    @GET("me/patient/booking/hospitals/{hospitalId}/departments")
+    suspend fun getBookingDepartments(
+        @Path("hospitalId") hospitalId: String
+    ): Response<ApiResponse<List<BookingDepartmentDto>>>
+
+    @GET("me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/providers")
+    suspend fun getBookingProviders(
+        @Path("hospitalId") hospitalId: String,
+        @Path("departmentId") departmentId: String
+    ): Response<ApiResponse<List<BookingProviderDto>>>
 
     @PUT("me/patient/appointments/cancel")
     suspend fun cancelAppointment(
