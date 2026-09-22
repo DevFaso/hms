@@ -284,7 +284,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * strip used to count every CRITICAL result ever filed for the staff and
      * show it as the live safety-alert count.
      */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
         UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
 
     /**

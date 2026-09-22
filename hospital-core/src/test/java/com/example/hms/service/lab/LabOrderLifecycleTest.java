@@ -92,6 +92,34 @@ class LabOrderLifecycleTest {
     }
 
     @Test
+    @DisplayName("every LabOrderStatus has a declared workflow rank")
+    void everyStatusHasARank() {
+        // Workflow order is declared, not inherited from enum ordinals: adding
+        // a value to the middle of LabOrderStatus used to re-order the whole
+        // lifecycle silently. A new value now fails here until somebody says
+        // where it belongs.
+        for (LabOrderStatus status : LabOrderStatus.values()) {
+            assertThat(LabOrderLifecycle.rankOf(status))
+                .as("LabOrderStatus.%s has no rank in LabOrderLifecycle.RANK", status)
+                .isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("the workflow order is the declared one, not the enum's")
+    void rankOrdersTheWorkflow() {
+        assertThat(LabOrderLifecycle.rankOf(LabOrderStatus.ORDERED))
+            .isLessThan(LabOrderLifecycle.rankOf(LabOrderStatus.COLLECTED));
+        assertThat(LabOrderLifecycle.rankOf(LabOrderStatus.COLLECTED))
+            .isLessThan(LabOrderLifecycle.rankOf(LabOrderStatus.RESULTED));
+        assertThat(LabOrderLifecycle.rankOf(LabOrderStatus.RESULTED))
+            .isLessThan(LabOrderLifecycle.rankOf(LabOrderStatus.COMPLETED));
+        // CANCELLED ranks terminal so a cancelled order is never advanced.
+        assertThat(LabOrderLifecycle.rankOf(LabOrderStatus.CANCELLED))
+            .isEqualTo(LabOrderLifecycle.rankOf(LabOrderStatus.COMPLETED));
+    }
+
+    @Test
     @DisplayName("a null order or target is ignored; an order with no status takes the target")
     void nullsAreTolerated() {
         assertThat(LabOrderLifecycle.advance(null, LabOrderStatus.RESULTED)).isFalse();

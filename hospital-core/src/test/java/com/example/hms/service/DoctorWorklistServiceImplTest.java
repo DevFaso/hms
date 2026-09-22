@@ -136,9 +136,10 @@ class DoctorWorklistServiceImplTest {
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        // Critical labs (B15): CRITICAL, unacknowledged, inside the window — the
-        // all-time count is gone from the repository, so the stub IS the proof.
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+        // Critical labs (B15): CRITICAL, unacknowledged, filed inside the
+        // window — the all-time count is gone from the repository, so the stub
+        // IS the proof.
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
                 eq(staffId), eq(AbnormalFlag.CRITICAL), any(LocalDateTime.class))).thenReturn(5L);
 
         // Waiting long: 2 encounters, 1 > 30 min
@@ -156,9 +157,9 @@ class DoctorWorklistServiceImplTest {
         // Unsigned notes
         when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(3L);
 
-        // Pending order review
-        when(labOrderRepository.countByOrderingStaff_IdAndStatus(staffId, LabOrderStatus.PENDING)).thenReturn(2L);
-        when(labOrderRepository.countByOrderingStaff_IdAndStatus(staffId, LabOrderStatus.IN_PROGRESS)).thenReturn(1L);
+        // Orders still with the lab: one count over every state the lifecycle
+        // produces, not PENDING + IN_PROGRESS (which it barely sets any more).
+        when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(3L);
 
         CriticalStripDTO result = service.getCriticalStrip(userId);
 
@@ -179,9 +180,9 @@ class DoctorWorklistServiceImplTest {
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
         org.mockito.ArgumentCaptor<LocalDateTime> floor = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
                 eq(staffId), eq(AbnormalFlag.CRITICAL), floor.capture())).thenReturn(2L);
-        when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
+        when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
@@ -208,15 +209,46 @@ class DoctorWorklistServiceImplTest {
     }
 
     @Test
+    void getCriticalStrip_pendingOrderReviewCountsEveryStateStillWithTheLab() {
+        // The tile counted PENDING + IN_PROGRESS. The lifecycle sets neither
+        // for long (ORDERED → COLLECTED → RECEIVED → RESULTED) and V163 drains
+        // the old rows, so on deploy the tile would have read a permanent 0.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<LabOrderStatus>> statuses =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
+                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
+        when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), statuses.capture())).thenReturn(4L);
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
+
+        CriticalStripDTO result = service.getCriticalStrip(userId);
+
+        assertEquals(4, result.getPendingOrderReviewCount());
+        assertTrue(statuses.getValue().containsAll(List.of(
+                LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.COLLECTED,
+                LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS)),
+                "every state still with the lab must be counted");
+        assertFalse(statuses.getValue().contains(LabOrderStatus.COMPLETED), "completed orders are not pending");
+        assertFalse(statuses.getValue().contains(LabOrderStatus.CANCELLED), "cancelled orders are not pending");
+    }
+
+    @Test
     void getCriticalStrip_consultationQueryFails_shouldDefaultToZero() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
                 eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
-        when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
+        when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
@@ -1000,7 +1032,7 @@ class DoctorWorklistServiceImplTest {
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
+        when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
 
         Encounter nullDateEnc = mock(Encounter.class);
         when(nullDateEnc.getEncounterDate()).thenReturn(null);

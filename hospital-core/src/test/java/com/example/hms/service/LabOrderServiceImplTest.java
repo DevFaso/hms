@@ -238,6 +238,28 @@ class LabOrderServiceImplTest {
     }
 
     @Test
+    void createLabOrderAlwaysStartsAtOrdered() {
+        // The other half of B9: an order created at COMPLETED is frozen
+        // against every specimen and result event (the lifecycle refuses to
+        // move a terminal order) and lands on the doctor's review queue with
+        // no results behind it.
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
+                LabOrderStatus.RESULTED, LabOrderStatus.ORDERED)) {
+            labOrderService.createLabOrder(baseRequestBuilder().status(requested.name()).build(), Locale.ENGLISH);
+        }
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, org.mockito.Mockito.times(4)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(
+            saved -> assertThat(saved.getStatus()).isEqualTo(LabOrderStatus.ORDERED));
+    }
+
+    @Test
     void updateLabOrderIgnoresARequestedStatusJump() {
         // B9: the edit form echoes `status` back, and a doctor could point it at
         // COMPLETED. On update the current status wins; the lifecycle moves

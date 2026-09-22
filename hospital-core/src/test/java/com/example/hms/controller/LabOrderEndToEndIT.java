@@ -6,7 +6,6 @@ import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;

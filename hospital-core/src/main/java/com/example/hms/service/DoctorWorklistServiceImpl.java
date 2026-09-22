@@ -77,8 +77,30 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
      * How far back the critical strip looks for unacknowledged criticals (B15).
      * A critical value from months ago is a chart fact, not a live alert; the
      * escalation sweep, not this tile, chases those.
+     *
+     * <p>Measured on the ROW's own {@code createdAt}, not on {@code resultDate}:
+     * the result date is supplied by the caller (OBX-14 on an HL7 result, a
+     * form field on a manual one), so a result filed today with a back-dated
+     * result date would never reach the tile it exists for.
      */
     static final int SAFETY_ALERT_WINDOW_DAYS = 30;
+
+    /**
+     * Lab-order states that still belong to the laboratory — what the
+     * "orders needing review" tile counts.
+     *
+     * <p>It used to count PENDING + IN_PROGRESS only. Once the lifecycle
+     * started moving orders on the specimen events (and V163 drained the old
+     * rows), those two states became transient or unused, so the tile would
+     * have shown a permanent 0 from the deploy onwards.
+     */
+    private static final java.util.Set<LabOrderStatus> AWAITING_LAB =
+            java.util.EnumSet.of(
+                    LabOrderStatus.ORDERED,
+                    LabOrderStatus.PENDING,
+                    LabOrderStatus.COLLECTED,
+                    LabOrderStatus.RECEIVED,
+                    LabOrderStatus.IN_PROGRESS);
 
     @Override
     public CriticalStripDTO getCriticalStrip(UUID userId) {
@@ -94,9 +116,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         // by the lab, not yet acknowledged, and recent (B15). The old count was
         // every CRITICAL result ever filed for the staff, so the tile never
         // went back down.
+        // Explicit zone: the floor is compared against stored timestamps, so
+        // which clock it is read from must be stated, not inherited.
+        LocalDateTime safetyAlertFloor = LocalDateTime.now(java.time.ZoneId.systemDefault())
+                .minusDays(SAFETY_ALERT_WINDOW_DAYS);
         long criticalLabs = labResultRepository
-                .countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
-                        staffId, AbnormalFlag.CRITICAL, LocalDateTime.now().minusDays(SAFETY_ALERT_WINDOW_DAYS));
+                .countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
+                        staffId, AbnormalFlag.CRITICAL, safetyAlertFloor);
 
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);
@@ -118,9 +144,9 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         // Unsigned notes / documents to sign
         long unsignedNotes = digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING);
 
-        // Pending orders needing review: PENDING + IN_PROGRESS lab orders
-        long pendingOrderReview = labOrderRepository.countByOrderingStaff_IdAndStatus(staffId, LabOrderStatus.PENDING)
-                + labOrderRepository.countByOrderingStaff_IdAndStatus(staffId, LabOrderStatus.IN_PROGRESS);
+        // Orders still with the laboratory, in every state the lifecycle
+        // actually produces (see AWAITING_LAB).
+        long pendingOrderReview = labOrderRepository.countByOrderingStaff_IdAndStatusIn(staffId, AWAITING_LAB);
 
         return CriticalStripDTO.builder()
                 .criticalLabsCount((int) Math.min(criticalLabs, Integer.MAX_VALUE))

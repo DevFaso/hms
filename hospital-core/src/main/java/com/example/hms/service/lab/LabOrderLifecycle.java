@@ -30,6 +30,37 @@ public final class LabOrderLifecycle {
     private static final Set<LabOrderStatus> TERMINAL =
         EnumSet.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
 
+    /**
+     * How far through the workflow each state is.
+     *
+     * <p>Declared here rather than read from {@code ordinal()}: with ordinals,
+     * inserting a value into the middle of {@link LabOrderStatus} silently
+     * re-orders the workflow and reinstates the bug this class exists to fix,
+     * with nothing failing. {@code everyStatusHasARank} in the test makes a new
+     * enum value a compile-green but test-red change until someone decides
+     * where it belongs.
+     *
+     * <p>CANCELLED is given the terminal rank: it is never a forward target
+     * (see {@link #advance}), and ranking it low would let a cancelled order
+     * be advanced.
+     */
+    private static final java.util.Map<LabOrderStatus, Integer> RANK =
+        new java.util.EnumMap<>(java.util.Map.of(
+            LabOrderStatus.ORDERED, 0,
+            LabOrderStatus.PENDING, 1,
+            LabOrderStatus.COLLECTED, 2,
+            LabOrderStatus.RECEIVED, 3,
+            LabOrderStatus.IN_PROGRESS, 4,
+            LabOrderStatus.RESULTED, 5,
+            LabOrderStatus.VERIFIED, 6,
+            LabOrderStatus.COMPLETED, 7,
+            LabOrderStatus.CANCELLED, 7));
+
+    /** The workflow position of {@code status}; visible for the coverage test. */
+    static Integer rankOf(LabOrderStatus status) {
+        return RANK.get(status);
+    }
+
     private LabOrderLifecycle() {
     }
 
@@ -77,7 +108,13 @@ public final class LabOrderLifecycle {
             return false;
         }
         LabOrderStatus current = order.getStatus();
-        if (current != null && (TERMINAL.contains(current) || current.ordinal() >= target.ordinal())) {
+        Integer currentRank = RANK.get(current);
+        Integer targetRank = RANK.get(target);
+        if (targetRank == null) {
+            return false;
+        }
+        if (current != null && (TERMINAL.contains(current)
+                || (currentRank != null && currentRank >= targetRank))) {
             return false;
         }
         order.setStatus(target);

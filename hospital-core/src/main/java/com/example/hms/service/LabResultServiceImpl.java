@@ -190,17 +190,31 @@ public class LabResultServiceImpl implements LabResultService {
      * (a correction, an extra analyte) re-opens the order to RESULTED in
      * {@code createLabResult}, so completing early is never final.
      *
-     * <p>The order row is locked ({@code PESSIMISTIC_WRITE}) before the
-     * results are counted: under READ COMMITTED two concurrent releases of
-     * the last two results each saw the other as unreleased, so neither
-     * completed the order and nothing ever re-evaluated. With the lock the
-     * second release waits for the first to commit and sees it.
+     * <p>The order row is locked ({@code PESSIMISTIC_WRITE}) first, which
+     * serialises two concurrent releases of the last two results; what then
+     * fixes the race is the RE-QUERY of the results underneath that lock —
+     * the second release re-reads them after the first has committed and sees
+     * its sibling released. (The lock alone would not: the locking finder
+     * returns the order instance this persistence context already has, with
+     * the field values it was loaded with.)
+     *
+     * <p>Because that instance can be stale, the committed status is read
+     * under the lock before deciding. A cancellation that landed while this
+     * transaction worked is a decision somebody made, and completing over it
+     * would erase it.
      */
     private void completeOrderIfAllReleased(LabOrder labOrder) {
         if (labOrder == null || labOrder.getId() == null) {
             return;
         }
         LabOrder locked = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(locked.getId());
+        if (committedStatus == LabOrderStatus.CANCELLED) {
+            locked.setStatus(LabOrderStatus.CANCELLED);
+            LOG.debug("Lab order {} was cancelled while its result was being released; not completing",
+                locked.getId());
+            return;
+        }
         List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
         if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
             advanceOrder(locked, LabOrderStatus.COMPLETED);
@@ -436,6 +450,11 @@ public class LabResultServiceImpl implements LabResultService {
         validateReleasePermissions(actorId, hospitalId);
 
         if (labResult.isReleased()) {
+            // Not a no-op: a result released by a path that does not touch the
+            // order (MLLP inbound, or a release from before this lifecycle
+            // existed) leaves the order short of COMPLETED with nothing to
+            // repair it. Re-releasing is the repair. The call is idempotent.
+            completeOrderIfAllReleased(labResult.getLabOrder());
             return labResultMapper.toResponseDTO(labResult);
         }
 
@@ -734,6 +753,13 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     private void validateLabResultAuthor(UUID userId, UUID hospitalId) {
+        // A real super-admin is unscoped by design across this product, and the
+        // edge matcher admits them to POST /lab-results (B8). Without the same
+        // bypass validateReleasePermissions has, they reached this check with
+        // no per-hospital assignment and got a 400 from their own endpoint.
+        if (authService.hasRole(ROLE_SUPER_ADMIN)) {
+            return;
+        }
         boolean allowed = roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_SCIENTIST")
             || roleValidator.isMidwife(userId, hospitalId)
             || roleValidator.isDoctor(userId, hospitalId)

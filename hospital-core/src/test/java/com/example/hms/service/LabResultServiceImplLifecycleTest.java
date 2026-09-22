@@ -42,7 +42,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -173,7 +175,7 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, org.mockito.Mockito.atLeastOnce()).save(order);
+        verify(labOrderRepository, atLeastOnce()).save(order);
     }
 
     @Test
@@ -188,7 +190,7 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, org.mockito.Mockito.atLeastOnce()).save(order);
+        verify(labOrderRepository, atLeastOnce()).save(order);
     }
 
     @Test
@@ -206,6 +208,7 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -249,6 +252,8 @@ class LabResultServiceImplLifecycleTest {
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released, pending));
         when(labResultMapper.toResponseDTO(released)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -280,13 +285,15 @@ class LabResultServiceImplLifecycleTest {
     void autoVerificationReleasesNormalResultsWhenEnabled() {
         ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
         stubEntryPath();
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
         when(labResultRepository.findByLabOrder_Id(order.getId()))
             .thenAnswer(inv -> List.of(resultOn(order, true)));
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
-        verify(labResultRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        verify(labResultRepository, atLeastOnce()).save(saved.capture());
         assertThat(saved.getAllValues()).anyMatch(r -> r.isReleased() && "Autoverification".equals(r.getReleasedByDisplay()));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
     }
@@ -310,7 +317,7 @@ class LabResultServiceImplLifecycleTest {
         assertThat(saved.getValue().getAbnormalFlag()).isNull();
         verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
         // not released, so no completion pass: the only locked load is the entry one
-        verify(labOrderRepository, org.mockito.Mockito.times(1)).findWithLockById(order.getId());
+        verify(labOrderRepository, times(1)).findWithLockById(order.getId());
     }
 
     @Test
@@ -334,6 +341,83 @@ class LabResultServiceImplLifecycleTest {
     // ── B10: release belongs to the laboratory ─────────────────────────────
 
     @Test
+    @DisplayName("B8 — a super-admin may enter a result, as the edge matcher promises")
+    void superAdminMayEnterAResult() {
+        // SecurityConfig admits ROLE_SUPER_ADMIN to POST /lab-results, but
+        // validateLabResultAuthor had no bypass, so a super-admin with no
+        // per-hospital assignment got a 400 from their own endpoint.
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labResultRepository).save(any(LabResult.class));
+        // the per-hospital role checks are never consulted for a super-admin
+        verify(roleValidator, never()).isDoctor(any(), any());
+    }
+
+    @Test
+    @DisplayName("re-releasing an already-released result completes an order a previous path left behind")
+    void reReleasingRepairsAStrandedOrder() {
+        // MLLP inbound releases results without touching the order, and
+        // results released before this lifecycle existed left theirs at
+        // RESULTED. The early return meant nothing could ever repair them.
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult alreadyReleased = resultOn(order, true);
+        when(labResultRepository.findById(alreadyReleased.getId())).thenReturn(Optional.of(alreadyReleased));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyReleased));
+        when(labResultMapper.toResponseDTO(alreadyReleased)).thenReturn(LabResultResponseDTO.builder().build());
+
+        service.releaseLabResult(alreadyReleased.getId(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        verify(labOrderRepository).save(order);
+        // the result itself is untouched: its original release stands
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a cancellation committed during the release wins over completion")
+    void aConcurrentCancellationIsNotOverwritten() {
+        // The locking finder returns the instance this persistence context
+        // already holds, so its status can predate the lock. The committed
+        // status is read under the lock: completing over somebody's
+        // cancellation would erase their decision.
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult last = resultOn(order, false);
+        when(labResultRepository.findById(last.getId())).thenReturn(Optional.of(last));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.CANCELLED);
+        when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
+
+        service.releaseLabResult(last.getId(), Locale.ENGLISH);
+
+        assertThat(last.isReleased()).isTrue();
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+        verify(labOrderRepository, never()).save(order);
+        verify(labResultRepository, never()).findByLabOrder_Id(order.getId());
+    }
+
+    @Test
     @DisplayName("B10 — a doctor assigned at the hospital cannot release")
     void doctorCannotRelease() {
         LabResult result = resultOn(order, false);
@@ -349,7 +433,8 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.Mockito.lenient().when(roleValidator.isNurse(actorId, hospitalId)).thenReturn(true);
         org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(actorId, hospitalId)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), Locale.ENGLISH))
+        UUID resultId = result.getId();
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
         assertThat(result.isReleased()).isFalse();
         verify(labResultRepository, never()).save(any(LabResult.class));
@@ -366,6 +451,8 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isLabManager(actorId, hospitalId)).thenReturn(false);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -384,7 +471,8 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), Locale.ENGLISH))
+        UUID resultId = result.getId();
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(result.isReleased()).isFalse();
         verify(authService, never()).hasRole(any());
@@ -401,7 +489,8 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         org.mockito.Mockito.lenient().when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.releaseLabResult(result.getId(), Locale.ENGLISH))
+        UUID resultId = result.getId();
+        assertThatThrownBy(() -> service.releaseLabResult(resultId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -411,7 +500,8 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.createLabResult(entryRequest(), Locale.ENGLISH))
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);

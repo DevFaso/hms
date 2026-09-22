@@ -72,8 +72,9 @@ class SecurityConfigLabMatcherTest {
     @Test
     @DisplayName("PUT /lab-results has no narrower matcher than the annotation")
     void resultUpdateHasNoNarrowerMatcher() throws IOException {
-        // PUT rides anyRequest().authenticated() plus the same ENTRY_EXPRESSION;
-        // a PUT matcher listing fewer roles would reopen B8 for updates.
+        // There is deliberately no PUT matcher for lab results: the path falls
+        // through to the authenticated catch-all and the controller annotation
+        // decides. A PUT matcher naming fewer roles would reopen B8 for updates.
         String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
         assertThat(source).doesNotContain(".requestMatchers(HttpMethod.PUT, API_LAB_RESULTS");
     }
