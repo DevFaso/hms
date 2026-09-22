@@ -5,6 +5,8 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,6 +27,8 @@ import java.util.Locale;
 public class SmsPartnerNotificationChannel implements PartnerNotificationChannel {
 
     private final ObjectProvider<SmsService> smsServiceProvider;
+    private final PartnerSmsTemplates templates;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     /** Short, human-friendly token shared with partners; prefix of the routing decision UUID. */
     @Override
@@ -45,7 +49,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         }
         String initials = patientInitials(prescription.getPatient());
         String ref = buildRefToken(decision);
-        trySend(phone, PartnerSmsTemplates.prescriptionOffer(
+        trySend(phone, templates.prescriptionOffer(
                 ref, safeMedication(prescription.getMedicationName()), initials));
     }
 
@@ -55,7 +59,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.reminder(buildRefToken(decision)));
+        trySend(phone, templates.reminder(buildRefToken(decision)));
     }
 
     @Override
@@ -64,7 +68,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.autoRejected(buildRefToken(decision)));
+        trySend(phone, templates.autoRejected(buildRefToken(decision)));
     }
 
     @Override
@@ -73,7 +77,8 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || partner == null) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.patientAccepted(safeName(partner.getName())));
+        Locale locale = patientLocale(patient);
+        trySend(phone, templates.patientAccepted(safeName(partner.getName(), locale), locale));
     }
 
     @Override
@@ -82,7 +87,8 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || partner == null) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.patientDispensed(safeName(partner.getName())));
+        Locale locale = patientLocale(patient);
+        trySend(phone, templates.patientDispensed(safeName(partner.getName(), locale), locale));
     }
 
     // ---------- helpers ----------
@@ -149,11 +155,15 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         return (s == null || s.isBlank()) ? 0 : Character.toUpperCase(s.trim().charAt(0));
     }
 
-    private static String safeMedication(String name) {
-        return (name == null || name.isBlank()) ? "médicament" : name;
+    private Locale patientLocale(Patient patient) {
+        return patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
     }
 
-    private static String safeName(String name) {
-        return (name == null || name.isBlank()) ? "la pharmacie partenaire" : name;
+    private String safeMedication(String name) {
+        return (name == null || name.isBlank()) ? templates.medicationFallback() : name;
+    }
+
+    private String safeName(String name, Locale patientLocale) {
+        return (name == null || name.isBlank()) ? templates.pharmacyFallback(patientLocale) : name;
     }
 }

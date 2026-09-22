@@ -331,14 +331,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /**
      * Statuses a request body may assert. Everything else belongs to a server
      * workflow — SIGNED to the signing ceremony, TRANSMITTED/DISPENSED and the
-     * partner states to dispatch and pharmacy — and being able to assert one in
-     * a create/update body is a bypass of whichever ceremony owns it.
+     * partner states to dispatch and pharmacy, PENDING_CLARIFICATION to the
+     * pharmacist's clarification ceremony (gap G5, which records the reason
+     * and notifies the prescriber; asserting the word would skip both) — and
+     * being able to assert one in a create/update body is a bypass of
+     * whichever ceremony owns it.
      */
     private static final java.util.Set<PrescriptionStatus> CLIENT_ASSERTABLE_STATUSES =
         java.util.EnumSet.of(
             PrescriptionStatus.DRAFT,
             PrescriptionStatus.PENDING_SIGNATURE,
-            PrescriptionStatus.PENDING_CLARIFICATION,
             PrescriptionStatus.CANCELLED,
             PrescriptionStatus.DISCONTINUED);
 

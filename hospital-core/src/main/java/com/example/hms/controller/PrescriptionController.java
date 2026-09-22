@@ -23,7 +23,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.example.hms.payload.dto.PharmacistVerificationRequestDTO;
+import com.example.hms.payload.dto.PrescriptionClarificationRequestDTO;
+import com.example.hms.payload.dto.PrescriptionClarificationResolutionDTO;
 import com.example.hms.service.pharmacy.PharmacistVerificationService;
+import com.example.hms.service.pharmacy.PrescriptionClarificationService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,6 +49,7 @@ public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
     private final PharmacistVerificationService pharmacistVerificationService;
+    private final PrescriptionClarificationService clarificationService;
     private final PrescriptionSmsDispatchService smsDispatchService;
     private final MessageSource messageSource;
 
@@ -125,6 +129,50 @@ public class PrescriptionController {
         Locale locale) {
         String note = request != null ? request.getNote() : null;
         pharmacistVerificationService.verify(id, note);
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+    }
+
+    /**
+     * Gap G5 — the pharmacist sends an order back with a question.
+     *
+     * <p>Pharmacist roles, mirroring {@link #pharmacistVerify}. No
+     * {@code SecurityConfig} matcher covers {@code /prescriptions/**}: the
+     * path rides {@code anyRequest().authenticated()} and this annotation is
+     * the gate, so the two cannot disagree (PrescriptionControllerTest pins
+     * the absence of a matcher).
+     */
+    @PostMapping("/{id}/request-clarification")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Send a prescription back to its prescriber for clarification",
+        description = "Moves a prescription awaiting a fill to PENDING_CLARIFICATION with the "
+            + "pharmacist's reason, takes it off the work queue, and notifies the prescriber. "
+            + "Only a SIGNED, TRANSMITTED, PARTIALLY_FILLED, PENDING_STOCK or PARTNER_REJECTED "
+            + "prescription can be sent back.")
+    public ResponseEntity<PrescriptionResponseDTO> requestClarification(
+        @PathVariable UUID id,
+        @Valid @RequestBody PrescriptionClarificationRequestDTO request,
+        Locale locale) {
+        clarificationService.requestClarification(id, request.getReason());
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+    }
+
+    /**
+     * Gap G5 — a doctor at the prescribing hospital answers and the order
+     * returns to SIGNED. Doctors only, as for sign and co-sign; the service
+     * additionally requires a staff profile at the prescription's hospital.
+     */
+    @PostMapping("/{id}/resolve-clarification")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Resolve a pharmacist's clarification request",
+        description = "Records the prescriber's answer and returns a PENDING_CLARIFICATION "
+            + "prescription to SIGNED so the pharmacy can fill or route it. Any doctor with a "
+            + "staff profile at the prescribing hospital may answer; the answer is optional when "
+            + "the order itself was edited.")
+    public ResponseEntity<PrescriptionResponseDTO> resolveClarification(
+        @PathVariable UUID id,
+        @Valid @RequestBody(required = false) PrescriptionClarificationResolutionDTO request,
+        Locale locale) {
+        clarificationService.resolveClarification(id, request != null ? request.getResponse() : null);
         return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 

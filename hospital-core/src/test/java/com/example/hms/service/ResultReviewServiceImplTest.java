@@ -77,6 +77,7 @@ class ResultReviewServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
@@ -279,6 +280,41 @@ class ResultReviewServiceImplTest {
     }
 
     // ========== getInboxItems() ==========
+
+    @Test
+    void getInboxItems_withUnreadPharmacyEvents_shouldAddOnePharmacyEventItemEach() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        User account = mock(User.class);
+        when(account.getUsername()).thenReturn("dr.awa");
+        when(staff.getUser()).thenReturn(account);
+        givenStaffFor(userId, staff);
+
+        com.example.hms.model.Notification fill = com.example.hms.model.Notification.builder()
+                .id(UUID.randomUUID())
+                .message("Pharmacie : Amoxicilline (Aminata Diallo) a été entièrement délivré.")
+                .type("PHARMACY_EVENT")
+                .createdAt(LocalDateTime.now())
+                .read(false)
+                .recipientUsername("dr.awa")
+                .build();
+        when(notificationRepository.findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                "dr.awa", "PHARMACY_EVENT")).thenReturn(List.of(fill));
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = result.stream()
+                .filter(i -> "PHARMACY_EVENT".equals(i.getCategory()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(item);
+        assertEquals(fill.getId(), item.getId());
+        assertEquals("Pharmacy", item.getSource());
+        assertEquals(fill.getMessage(), item.getSubject());
+        assertEquals("REVIEW", item.getActionType());
+        assertEquals("NORMAL", item.getUrgency());
+    }
 
     @Test
     void getInboxItems_noStaff_shouldReturnEmptyList() {

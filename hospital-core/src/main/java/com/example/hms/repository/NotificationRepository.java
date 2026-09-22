@@ -33,5 +33,9 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     long countByRecipientUsernameAndReadFalse(String recipientUsername);
 
+    /** Unread rows of one type, newest first — the clinical inbox's pharmacy section (gap G6). */
+    List<Notification> findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+            String recipientUsername, String type);
+
     long countByReadFalseAndCreatedAtBefore(LocalDateTime timestamp);
 }

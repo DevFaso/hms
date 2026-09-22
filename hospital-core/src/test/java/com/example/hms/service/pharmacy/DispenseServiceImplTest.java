@@ -81,6 +81,8 @@ class DispenseServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
     @Mock private CdsCheckService cdsCheckService;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
 
     // Real, not mocked: the guard is a pure rule with its own test.
     @org.mockito.Spy
@@ -265,6 +267,86 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).save(stockLot);
             verify(inventoryItemRepository).save(inventoryItem);
             verify(stockTransactionRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("G5: a prescription awaiting clarification is not dispensable")
+        void shouldRejectPendingClarification() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            DispenseRequestDTO dto = buildRequest();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a dispensable state");
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("G3: a back-ordered prescription is dispensable once stock lands, and the back order closes")
+        void shouldDispensePendingStockAndCloseTheBackOrder() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(prescription)
+                            .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.PENDING)
+                            .build();
+            backOrder.setId(UUID.randomUUID());
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(backOrder));
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(backOrder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.COMPLETED);
+            verify(routingDecisionRepository).save(backOrder);
+        }
+
+        @Test
+        @DisplayName("G3: a partner-rejected prescription can be filled in-house")
+        void shouldDispensePartnerRejected() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+            dto.setQuantityDispensed(BigDecimal.valueOf(4));
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(4));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            // G6: a partial fill is reported to the prescriber too
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTIALLY_FILLED);
+            verify(routingDecisionRepository, never()).findByPrescriptionIdOrderByDecidedAtDesc(any());
         }
 
         @Test
@@ -457,7 +539,9 @@ class DispenseServiceImplTest {
             service.createDispense(dto);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
-            verify(support).notifyReadyForPickup(patient, pharmacy, "Amoxicillin");
+            verify(support).notifyDispensed(patient, pharmacy, "Amoxicillin");
+            // G6: the prescriber is told the order was filled
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.DISPENSED);
         }
 
         @Test
@@ -596,7 +680,7 @@ class DispenseServiceImplTest {
 
             service.createDispense(dto);
 
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
         }
     }
 
@@ -872,6 +956,48 @@ class DispenseServiceImplTest {
             assertThat(result.getContent()).hasSize(1);
             assertThat(result.getContent().get(0).getId()).isEqualTo(prescriptionId);
             assertThat(result.getContent().get(0).getPatient().getId()).isEqualTo(patientId);
+            assertThat(result.getContent().get(0).isNeedsAttention()).isFalse();
+            assertThat(result.getContent().get(0).getAttentionReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("G3/G13: the queue asks for the dead-end statuses and flags them as needing attention")
+        void getWorkQueueListsDeadEndStatusesWithNeedsAttention() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription backOrdered = new Prescription();
+            backOrdered.setId(UUID.randomUUID());
+            backOrdered.setStatus(PrescriptionStatus.PENDING_STOCK);
+            backOrdered.setMedicationName("Amoxicillin");
+            Prescription refused = new Prescription();
+            refused.setId(UUID.randomUUID());
+            refused.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            refused.setPharmacyName("Pharmacie du Marché");
+            Prescription answered = new Prescription();
+            answered.setId(UUID.randomUUID());
+            answered.setStatus(PrescriptionStatus.SIGNED);
+            answered.setClarificationResolvedAt(java.time.LocalDateTime.now(FIXED_CLOCK));
+
+            @SuppressWarnings("unchecked")
+            org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+                    eq(hospitalId), asked.capture(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(backOrdered, refused, answered)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable).getContent();
+
+            assertThat(asked.getValue()).contains(PrescriptionStatus.PENDING_STOCK,
+                    PrescriptionStatus.PARTNER_REJECTED)
+                    .doesNotContain(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(rows).extracting(
+                    com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO::isNeedsAttention)
+                    .containsExactly(true, true, true);
+            assertThat(rows).extracting(
+                    com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO::getAttentionReason)
+                    .containsExactly("PENDING_STOCK", "PARTNER_REJECTED", "CLARIFICATION_RESOLVED");
+            assertThat(rows.get(1).getPharmacyName()).isEqualTo("Pharmacie du Marché");
         }
     }
 
@@ -917,7 +1043,7 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any());
             verify(prescriptionRepository, never()).save(any());
             verify(stockLotRepository, never()).save(any());
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 
@@ -1029,7 +1155,7 @@ class DispenseServiceImplTest {
             // tx (in production) would have rolled back. Mockito verifies
             // we never reached those code paths after the violation.
             verify(prescriptionRepository, never()).save(any(Prescription.class));
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 

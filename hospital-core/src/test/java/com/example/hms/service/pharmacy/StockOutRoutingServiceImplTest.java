@@ -27,6 +27,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -60,6 +61,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
     @Mock private com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -204,9 +206,9 @@ class StockOutRoutingServiceImplTest {
         assertThat(prescription.getPharmacyName()).isEqualTo("Partner Pharmacy");
         verify(prescriptionRepository).save(prescription);
         verify(routingDecisionRepository).save(decision);
-        // T-40: patient notified out-of-stock with partner routing suffix
-        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
-                contains("Partner Pharmacy"));
+        // T-40 / G14: patient notified out-of-stock with the partner routing sentence
+        verify(support).notifyOutOfStock(patient, prescription.getMedicationName(),
+                PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, "Partner Pharmacy");
     }
 
     @Test
@@ -358,9 +360,9 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getRoutingType()).isEqualTo("PRINT");
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
         verify(prescriptionRepository).save(prescription);
-        // T-40: patient notified out-of-stock with print-for-patient suffix
-        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
-                contains("pharmacie de votre choix"));
+        // T-40 / G14: patient notified out-of-stock with the print-for-patient sentence
+        verify(support).notifyOutOfStock(patient, prescription.getMedicationName(),
+                PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
     }
 
     @Test
@@ -381,9 +383,103 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getRoutingType()).isEqualTo("BACKORDER");
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
         verify(prescriptionRepository).save(prescription);
-        // T-40: patient notified out-of-stock with back-order suffix including restock date
+        // T-40 / G14: patient notified out-of-stock with the dated back-order sentence
         verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
-                contains("estim\u00e9e au"));
+                eq(PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED), contains("-"));
+        // G6: the prescriber hears about the back order
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);
+    }
+
+    @Nested
+    @DisplayName("G3: dead-end statuses are routable again")
+    class DeadEndStatuses {
+
+        private PrescriptionRoutingDecision pendingBackOrder() {
+            PrescriptionRoutingDecision backOrder = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription)
+                    .routingType(RoutingType.BACKORDER)
+                    .status(RoutingDecisionStatus.PENDING)
+                    .build();
+            backOrder.setId(UUID.randomUUID());
+            return backOrder;
+        }
+
+        @Test
+        @DisplayName("a back-ordered prescription can be re-routed to a partner, and the back order is superseded")
+        void pendingStockIsRoutable() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+            PrescriptionRoutingDecision backOrder = pendingBackOrder();
+            RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                    .prescriptionId(prescriptionId).targetPharmacyId(partnerId).build();
+            PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                    .prescription(prescription).targetPharmacy(partnerPharmacy)
+                    .routingType(RoutingType.PARTNER).status(RoutingDecisionStatus.PENDING).build();
+            decision.setId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(backOrder));
+            when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(decision))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PARTNER").build());
+
+            service.routeToPartner(prescriptionId, request);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+            assertThat(backOrder.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            verify(routingDecisionRepository).save(backOrder);
+        }
+
+        @Test
+        @DisplayName("a partner-rejected prescription can be printed for the patient")
+        void partnerRejectedIsRoutable() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(any()))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
+
+            service.printForPatient(prescriptionId);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
+        }
+
+        @Test
+        @DisplayName("a prescription still with a partner is NOT re-routable — the partner's reply must land first")
+        void sentToPartnerIsNotRoutable() {
+            prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+            RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                    .prescriptionId(prescriptionId).targetPharmacyId(partnerId).build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a routable state");
+        }
+
+        @Test
+        @DisplayName("a prescription awaiting clarification is NOT routable")
+        void pendingClarificationIsNotRoutable() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a routable state");
+        }
     }
 
     @Test
@@ -412,6 +508,8 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getStatus()).isEqualTo("ACCEPTED");
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
+        // G6: the prescriber hears about the partner's answer
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_ACCEPTED);
     }
 
     @Test
@@ -439,6 +537,7 @@ class StockOutRoutingServiceImplTest {
 
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_REJECTED);
     }
 
     @Test
@@ -483,6 +582,7 @@ class StockOutRoutingServiceImplTest {
 
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
+        verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
     }
 
     @Test

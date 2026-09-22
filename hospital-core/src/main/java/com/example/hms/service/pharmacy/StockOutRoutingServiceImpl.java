@@ -56,13 +56,29 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
+    private final PrescriberPharmacyNotifier prescriberNotifier;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
-    private static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
+    /**
+     * What a pharmacist may route (to a partner, to paper, or to a back
+     * order).
+     *
+     * <p>PENDING_STOCK and PARTNER_REJECTED are routable (gap G3): a back
+     * order the supplier cannot fill goes to a partner instead, and a partner
+     * that refused sends the order back to be routed elsewhere. Both used to
+     * be dead ends. SENT_TO_PARTNER is deliberately NOT routable: its PARTNER
+     * decision is still PENDING and a late "1" reply from that partner would
+     * flip the prescription to PARTNER_ACCEPTED under the new route. The
+     * pharmacist records the refusal first ({@link #partnerRespond}), or the
+     * timeout sweep does it for them, and PARTNER_REJECTED is routable.
+     */
+    static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
             PrescriptionStatus.SIGNED,
-            PrescriptionStatus.TRANSMITTED
+            PrescriptionStatus.TRANSMITTED,
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.PARTNER_REJECTED
     );
 
     private static final String PRESCRIPTION_PREFIX = "Prescription ";
@@ -153,6 +169,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
+        supersedePendingBackOrder(prescription);
 
         // Update prescription
         prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
@@ -175,7 +192,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // T-40: notify patient the medication is unavailable at hospital; routed to partner
         support.notifyOutOfStock(patient, prescription.getMedicationName(),
-                "Elle a \u00e9t\u00e9 envoy\u00e9e \u00e0 " + targetPharmacy.getName() + ".");
+                PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, targetPharmacy.getName());
 
         // T-54: notify the partner pharmacy via SMS (best-effort, never fails the routing)
         try {
@@ -196,6 +213,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
+        supersedePendingBackOrder(prescription);
 
         prescription.setStatus(PrescriptionStatus.PRINTED_FOR_PATIENT);
         prescriptionRepository.save(prescription);
@@ -217,7 +235,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // T-40: notify patient the medication is unavailable; Rx printed for any pharmacy
         support.notifyOutOfStock(patient, prescription.getMedicationName(),
-                "Veuillez apporter l'ordonnance imprim\u00e9e \u00e0 une pharmacie de votre choix.");
+                PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
 
         return routingMapper.toResponseDTO(saved);
     }
@@ -231,9 +249,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();
+        supersedePendingBackOrder(prescription);
 
         prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
         prescriptionRepository.save(prescription);
+        prescriberNotifier.notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);
 
         PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
                 .prescription(prescription)
@@ -253,10 +273,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 prescriptionId.toString());
 
         // T-40: notify patient the medication is unavailable; back-ordered with optional restock date
-        String suffix = estimatedRestockDate != null
-                ? "Nous vous contacterons d\u00e8s sa disponibilit\u00e9 (estim\u00e9e au " + estimatedRestockDate + ")."
-                : "Nous vous contacterons d\u00e8s sa disponibilit\u00e9.";
-        support.notifyOutOfStock(patient, prescription.getMedicationName(), suffix);
+        if (estimatedRestockDate != null) {
+            support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                    PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED, estimatedRestockDate.toString());
+        } else {
+            support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                    PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
+        }
 
         return routingMapper.toResponseDTO(saved);
     }
@@ -288,6 +311,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         prescriptionRepository.save(prescription);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        prescriberNotifier.notifyPrescriber(prescription, prescription.getStatus());
 
         logAudit(accepted ? AuditEventType.PRESCRIPTION_SENT_TO_PARTNER : AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
                 "Partner pharmacy " + (accepted ? "accepted" : "rejected")
@@ -324,6 +348,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         Prescription prescription = decision.getPrescription();
         prescription.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
         prescriptionRepository.save(prescription);
+        prescriberNotifier.notifyPrescriber(prescription, PrescriptionStatus.PARTNER_DISPENSED);
 
         decision.setStatus(RoutingDecisionStatus.COMPLETED);
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
@@ -380,6 +405,32 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 || decision.getPrescription().getHospital() == null
                 || !hospitalId.equals(decision.getPrescription().getHospital().getId())) {
             throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+    }
+
+    /**
+     * Re-routing a back-ordered prescription supersedes the BACKORDER decision
+     * that was waiting for stock; leave it CANCELLED rather than PENDING so the
+     * routing history reads as it happened. Best-effort: a bookkeeping miss
+     * must not stop the re-route.
+     */
+    private void supersedePendingBackOrder(Prescription prescription) {
+        if (prescription.getStatus() != PrescriptionStatus.PENDING_STOCK) {
+            return;
+        }
+        try {
+            routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())
+                    .stream()
+                    .filter(d -> d.getRoutingType() == RoutingType.BACKORDER
+                            && d.getStatus() == RoutingDecisionStatus.PENDING)
+                    .findFirst()
+                    .ifPresent(d -> {
+                        d.setStatus(RoutingDecisionStatus.CANCELLED);
+                        routingDecisionRepository.save(d);
+                    });
+        } catch (RuntimeException ex) {
+            log.warn("Could not supersede the back order for prescription {}: {}",
+                    prescription.getId(), ex.getMessage());
         }
     }
 

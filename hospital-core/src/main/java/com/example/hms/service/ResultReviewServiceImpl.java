@@ -46,6 +46,10 @@ import java.util.Locale;
 public class ResultReviewServiceImpl implements ResultReviewService {
 
     private static final String URGENCY_NORMAL = "NORMAL";
+    /** Inbox category for a pharmacy outcome on the prescriber's own order (gap G6). */
+    static final String CATEGORY_PHARMACY_EVENT = "PHARMACY_EVENT";
+    /** {@code Notification.type} written by PrescriberPharmacyNotificationWriter. */
+    static final String PHARMACY_EVENT_NOTIFICATION_TYPE = "PHARMACY_EVENT";
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // severity / urgency string SEVERITY_CRITICAL appears 3x in this file.
@@ -62,6 +66,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final EncounterRepository encounterRepository;
     private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
 
     @Override
@@ -250,6 +255,32 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             }
         } catch (Exception e) {
             log.debug("Pharmacy clarification inbox query error: {}", e.getMessage());
+        }
+
+        // 5b. Pharmacy outcomes on this prescriber's orders (gap G6): the
+        //     unread PHARMACY_EVENT notifications, one item each, so a fill,
+        //     a back order or a partner's refusal reaches the inbox and not
+        //     only the bell. The portal groups on the category, so this is
+        //     a new category rather than a second PHARMACY_CLARIFICATION
+        //     count; the portal lists it in its category order.
+        try {
+            String username = staff.getUser() != null ? staff.getUser().getUsername() : null;
+            if (username != null) {
+                notificationRepository
+                        .findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                                username, PHARMACY_EVENT_NOTIFICATION_TYPE)
+                        .forEach(n -> items.add(ClinicalInboxItemDTO.builder()
+                                .id(n.getId())
+                                .category(CATEGORY_PHARMACY_EVENT)
+                                .source(text("inbox.source.pharmacy", locale))
+                                .subject(n.getMessage() != null ? truncate(n.getMessage(), 160) : null)
+                                .urgency(URGENCY_NORMAL)
+                                .timestamp(n.getCreatedAt())
+                                .actionType("REVIEW")
+                                .build()));
+            }
+        } catch (Exception e) {
+            log.debug("Pharmacy event inbox query error: {}", e.getMessage());
         }
 
         // 6. Patient-initiated medication refill requests awaiting this prescriber's decision.

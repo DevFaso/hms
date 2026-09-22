@@ -37,6 +37,24 @@ public class WorkQueuePrescriptionDTO {
     private Staff staff;
 
     /**
+     * The pharmacy recorded on the prescription — a partner it was routed to
+     * or a community pharmacy it was dispatched to — so the queue can group
+     * by dispensary (gap G13). Null for an in-house first fill.
+     */
+    private String pharmacyName;
+
+    /**
+     * True when the row is not a plain fill and the pharmacist should look
+     * before dispensing (gap G3): a back order, a partner's refusal, or a
+     * clarification the prescriber has just answered. {@link #attentionReason}
+     * says which.
+     */
+    private boolean needsAttention;
+
+    /** PENDING_STOCK, PARTNER_REJECTED or CLARIFICATION_RESOLVED; null when nothing needs attention. */
+    private String attentionReason;
+
+    /**
      * Refill context for the dispensing decision. Null on a prescription that
      * has never had a refill request, which keeps the payload unchanged for
      * first fills.

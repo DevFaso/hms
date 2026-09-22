@@ -11,27 +11,48 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Shared helpers for pharmacy services (current-user resolution and audit logging).
- * Extracted to avoid duplication between {@link DispenseServiceImpl} and
- * {@link StockOutRoutingServiceImpl}.
+ * Shared helpers for pharmacy services (current-user resolution, audit logging
+ * and the patient-facing SMS). Extracted to avoid duplication between
+ * {@link DispenseServiceImpl} and {@link StockOutRoutingServiceImpl}.
+ *
+ * <p>Every SMS body here comes from the message bundle (gap G14), rendered in
+ * the patient's stated language via {@link PatientLocaleResolver} with the
+ * French product default as fallback. The French wording is the source of
+ * truth and is unchanged from the literals it replaced; English and Spanish
+ * were added alongside.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 class PharmacyServiceSupport {
 
+    /** Routing sentence appended to the out-of-stock SMS: sent to a partner pharmacy ({0}). */
+    static final String OUT_OF_STOCK_PARTNER = "sms.pharmacy.outOfStock.partner";
+    /** Routing sentence: printed for the patient to take anywhere. */
+    static final String OUT_OF_STOCK_PRINT = "sms.pharmacy.outOfStock.print";
+    /** Routing sentence: back-ordered, no restock estimate. */
+    static final String OUT_OF_STOCK_BACKORDER = "sms.pharmacy.outOfStock.backorder";
+    /** Routing sentence: back-ordered, restock estimated at {0}. */
+    static final String OUT_OF_STOCK_BACKORDER_DATED = "sms.pharmacy.outOfStock.backorder.dated";
+
     private final RoleValidator roleValidator;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
     private final SmsService smsService;
+    private final MessageSource messageSource;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     /**
      * Resolve the authenticated user, or throw if unavailable / not persisted.
@@ -66,16 +87,21 @@ class PharmacyServiceSupport {
     }
 
     /**
-     * Send a French ready-for-pickup SMS to the patient. Failures are swallowed so
-     * they do not roll back the dispense transaction. No-op if SMS service is
-     * unavailable, the patient has no primary phone number, or the medication name
-     * is blank.
+     * Send the dispensed receipt SMS to the patient (gap G15).
      *
-     * <p>Template (French):
-     * <code>Bonjour {firstName}, votre ordonnance ({medication}) est prête
-     * à être récupérée à {pharmacy}. Merci.</code>
+     * <p>This used to be worded "ready for pickup", but it only ever fires
+     * once the prescription is fully DISPENSED — that is, after the hand-over.
+     * There is no "ready" state in the dispense workflow ({@code
+     * DispenseStatus.PENDING} is never written), so the message now says what
+     * happened rather than what is about to. Failures are swallowed so they do
+     * not roll back the dispense transaction. No-op if SMS service is
+     * unavailable, the patient has no primary phone number, or the medication
+     * name is blank.
+     *
+     * <p>Key {@code sms.pharmacy.dispensed}: {0} first name, {1} medication,
+     * {2} pharmacy name.
      */
-    void notifyReadyForPickup(Patient patient, Pharmacy pharmacy, String medicationName) {
+    void notifyDispensed(Patient patient, Pharmacy pharmacy, String medicationName) {
         if (smsService == null || patient == null) {
             return;
         }
@@ -87,29 +113,22 @@ class PharmacyServiceSupport {
             return;
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String medication = medicationName;
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
-        String message = String.format(
-                "Bonjour %s, votre ordonnance (%s) est prête à être récupérée à %s. Merci.",
-                firstName, medication, pharmacyName).trim();
-        try {
-            smsService.send(phone, message);
-        } catch (Exception e) {
-            log.warn("Failed to send ready-for-pickup SMS to patient {}: {}",
-                    patient.getId(), e.getMessage());
-        }
+        String message = render("sms.pharmacy.dispensed", patientLocale(patient),
+                firstName, medicationName, pharmacyName);
+        send(phone, message, patient, "dispensed");
     }
 
     /**
-     * Send a French out-of-stock SMS to the patient, explaining where their
-     * medication will be filled. Safe to call with any routing type; the
-     * message wording adapts. Failures are swallowed.
+     * Send the out-of-stock SMS to the patient, explaining where their
+     * medication will be filled. Failures are swallowed.
      *
-     * @param routingMessage the routing-specific French sentence to append,
-     *                       e.g. "Elle a été envoyée à {partner}." or
-     *                       "Veuillez l'apporter dans une pharmacie de votre choix."
+     * @param routingKey  one of the {@code OUT_OF_STOCK_*} keys — the
+     *                    routing-specific sentence appended to the body,
+     *                    resolved in the patient's own language
+     * @param routingArgs arguments for that sentence (partner name, restock date)
      */
-    void notifyOutOfStock(Patient patient, String medicationName, String routingMessage) {
+    void notifyOutOfStock(Patient patient, String medicationName, String routingKey, Object... routingArgs) {
         if (smsService == null || patient == null) {
             return;
         }
@@ -117,28 +136,21 @@ class PharmacyServiceSupport {
         if (phone == null || phone.isBlank()) {
             return;
         }
+        Locale locale = patientLocale(patient);
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String medication = medicationName != null ? medicationName : "";
-        String suffix = routingMessage != null ? routingMessage : "";
-        String message = String.format(
-                "Bonjour %s, le médicament (%s) n'est pas disponible à la pharmacie de l'hôpital. %s",
-                firstName, medication, suffix).trim();
-        try {
-            smsService.send(phone, message);
-        } catch (Exception e) {
-            log.warn("Failed to send out-of-stock SMS to patient {}: {}",
-                    patient.getId(), e.getMessage());
-        }
+        String suffix = routingKey != null ? render(routingKey, locale, routingArgs) : "";
+        String message = render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix);
+        send(phone, message, patient, "out-of-stock");
     }
 
     /**
-     * T-39: Send a French refill reminder SMS to the patient, indicating how many
-     * days of treatment remain. No-op when SMS service / patient / phone is missing.
-     * Failures are swallowed.
+     * T-39: Send the refill reminder SMS to the patient, indicating how many
+     * days of treatment remain. No-op when SMS service / patient / phone is
+     * missing. Failures are swallowed.
      *
-     * <p>Template (French):
-     * <code>Bonjour {firstName}, il vous reste environ {daysLeft} jours de traitement
-     * ({medication}). Pensez à renouveler votre ordonnance. Merci.</code>
+     * <p>Key {@code sms.pharmacy.refillReminder}: {0} first name, {1} days
+     * left, {2} medication.
      */
     void notifyRefillReminder(Patient patient, String medicationName, int daysLeft) {
         if (smsService == null || patient == null) {
@@ -150,15 +162,25 @@ class PharmacyServiceSupport {
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String medication = medicationName != null ? medicationName : "";
-        String message = String.format(
-                "Bonjour %s, il vous reste environ %d jours de traitement (%s). "
-                        + "Pensez à renouveler votre ordonnance. Merci.",
-                firstName, daysLeft, medication).trim();
+        // The day count goes through as text so MessageFormat never groups it.
+        String message = render("sms.pharmacy.refillReminder", patientLocale(patient),
+                firstName, String.valueOf(daysLeft), medication);
+        send(phone, message, patient, "refill reminder");
+    }
+
+    private Locale patientLocale(Patient patient) {
+        return patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+    }
+
+    private String render(String key, Locale locale, Object... args) {
+        return messageSource.getMessage(key, args, locale).trim();
+    }
+
+    private void send(String phone, String message, Patient patient, String what) {
         try {
             smsService.send(phone, message);
         } catch (Exception e) {
-            log.warn("Failed to send refill reminder SMS to patient {}: {}",
-                    patient.getId(), e.getMessage());
+            log.warn("Failed to send {} SMS to patient {}: {}", what, patient.getId(), e.getMessage());
         }
     }
 }

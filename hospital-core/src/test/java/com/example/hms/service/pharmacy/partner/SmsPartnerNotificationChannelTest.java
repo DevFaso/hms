@@ -4,7 +4,9 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
+import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -40,6 +44,9 @@ class SmsPartnerNotificationChannelTest {
     @Mock
     private SmsService smsService;
 
+    @Mock
+    private PatientLocaleResolver patientLocaleResolver;
+
     private SmsPartnerNotificationChannel channel;
 
     private PrescriptionRoutingDecision decision;
@@ -50,7 +57,10 @@ class SmsPartnerNotificationChannelTest {
 
     @BeforeEach
     void setUp() {
-        channel = new SmsPartnerNotificationChannel(smsServiceProvider);
+        channel = new SmsPartnerNotificationChannel(smsServiceProvider,
+                new PartnerSmsTemplates(TestMessageSources.bundles()), patientLocaleResolver);
+        lenient().when(patientLocaleResolver.resolve(any(), any()))
+                .thenAnswer(inv -> inv.getArgument(1));
 
         decisionId = UUID.randomUUID();
         decision = PrescriptionRoutingDecision.builder().build();
