@@ -23,8 +23,8 @@ import javax.inject.Inject
  * The web's three-step pre-check-in: demographics that have changed (blank
  * keeps the current value), the hospital's questionnaires for the visit, then
  * review and consent. Answers are kept as the patient typed them and typed on
- * submit (YES_NO -> boolean, NUMBER/SCALE -> number, the rest -> text), which
- * is the JSON the web produces.
+ * submit (YES_NO -> boolean, NUMBER -> number, the rest -> text, SCALE
+ * included), which is the JSON the web produces.
  */
 @HiltViewModel
 class PreCheckInViewModel @Inject constructor(
@@ -233,11 +233,14 @@ class PreCheckInViewModel @Inject constructor(
         )
     }
 
-    /** The JSON value the web would send for this answer. */
+    /**
+     * The JSON value the web would send for this answer: only NUMBER becomes a
+     * number; the web's form has no SCALE input and stores it as text.
+     */
     private fun typed(question: QuestionnaireQuestion?, value: Any): Any {
         if (value is Boolean) return value
         val text = value.toString().trim()
-        if (question != null && isNumeric(question)) {
+        if (question != null && question.type == "NUMBER") {
             val number = text.replace(',', '.').toDoubleOrNull() ?: return text
             return if (number % 1.0 == 0.0) number.toLong() else number
         }

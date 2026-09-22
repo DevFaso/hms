@@ -365,9 +365,6 @@ private fun RescheduleSheet(
  * "now minus 24 hours" window let yesterday through for most of the day,
  * and the backend's @FutureOrPresent then answered 400.
  */
-/** The server's pre-check-in window: from this many days before the visit to the day itself. */
-private const val PRE_CHECKIN_WINDOW_DAYS = 7L
-
 @OptIn(ExperimentalMaterial3Api::class)
 object TodayOrLater : SelectableDates {
     override fun isSelectableDate(utcTimeMillis: Long): Boolean {
@@ -378,6 +375,9 @@ object TodayOrLater : SelectableDates {
         return utcTimeMillis >= todayLocalAsUtc
     }
 }
+
+/** The server's pre-check-in window: from this many days before the visit to the day itself. */
+private const val PRE_CHECKIN_WINDOW_DAYS = 7L
 
 @Composable
 fun DetailCard(
