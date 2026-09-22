@@ -26,6 +26,8 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientProblemHistoryRepository;
+import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -86,6 +88,8 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private StaffRepository staffRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired private PatientProblemRepository patientProblemRepository;
+    @Autowired private PatientProblemHistoryRepository patientProblemHistoryRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
@@ -105,6 +109,11 @@ class PatientPortalLabResultsIT extends BaseIT {
         labOrderRepository.deleteAll();
         labTestDefinitionRepository.deleteAll();
         registrationRepository.deleteAll();
+        // patient_problems (and their history) reference staff: a sibling IT
+        // that records a diagnosis leaves rows here, and deleting staff under
+        // them fails on fk_problem_staff. Children first.
+        patientProblemHistoryRepository.deleteAllInBatch();
+        patientProblemRepository.deleteAllInBatch();
         patientRepository.deleteAll();
         staffRepository.deleteAll();
         assignmentRepository.deleteAll();
