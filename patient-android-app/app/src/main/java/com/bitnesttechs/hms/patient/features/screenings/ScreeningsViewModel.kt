@@ -181,6 +181,9 @@ class ScreeningsViewModel @Inject constructor(
                         ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
                         ?.takeIf { it.isNotBlank() }
                     _state.update { it.copy(submitting = false, submitError = Outcome(R.string.screening_submit_failed, detail)) }
+                    // A refusal usually means the plan closed since the form was
+                    // opened; the overview is reloaded so the list stops offering it.
+                    if (resp.code() in 400..499) load()
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(submitting = false, submitError = Outcome(R.string.screening_submit_failed, e.message)) }
