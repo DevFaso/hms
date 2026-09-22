@@ -61,6 +61,31 @@ public class PartnerSmsReplyParser {
     private static final Pattern INSTRUCTION_SENTENCE =
             Pattern.compile("r[ée]pondez\\b.*?refuser\\s*\\.?", Pattern.DOTALL);
 
+    /**
+     * The same instructions when the handset truncated the quote before
+     * "refuser", which would otherwise leave "« 1 ABC12 »" in our own words for
+     * {@link #INSTRUCTED_FORM} to read as the pharmacy's answer. Bounded to the
+     * line so a reply underneath the quote survives.
+     */
+    private static final Pattern TRUNCATED_INSTRUCTIONS =
+            Pattern.compile("(?m)r[ée]pondez\\b[^\\n]*");
+
+    /**
+     * The instructed reply as the offer prints it, {@code « 1 ABC12 »}, found
+     * anywhere in what the pharmacy added. The guillemets and the reference are
+     * both required, so no digit in prose can be mistaken for an answer.
+     */
+    private static final Pattern INSTRUCTED_FORM =
+            Pattern.compile("«\\s*([123])\\s+[a-z0-9]{3,16}\\s*»");
+
+    /**
+     * A code opening a LINE, for the common handset that quotes the offer above
+     * the reply. Anchored to a line start for the same reason: "il reste 1
+     * boîte" mid-sentence is not an acceptance.
+     */
+    private static final Pattern LINE_LEADING_CODE =
+            Pattern.compile("(?m)^" + QUOTES + "([123])\\b");
+
     /** The offer's own prefix, so the reference survives a quoted-back copy. */
     private static final Pattern OFFER_REFERENCE = Pattern.compile("hms\\s+rx\\s+([a-z0-9]{3,16})");
 
@@ -97,7 +122,8 @@ public class PartnerSmsReplyParser {
      * quotes the offer back does not answer on the pharmacy's behalf.
      */
     private static String stripQuotedInstructions(String lower) {
-        return INSTRUCTION_SENTENCE.matcher(lower).replaceAll(" ").trim();
+        String withoutSentence = INSTRUCTION_SENTENCE.matcher(lower).replaceAll(" ");
+        return TRUNCATED_INSTRUCTIONS.matcher(withoutSentence).replaceAll(" ").trim();
     }
 
     private static Action detectAction(String lower, String sanitized) {
@@ -105,11 +131,14 @@ public class PartnerSmsReplyParser {
         // pharmacy that copies "« 1 ABC12 »" out of the offer has accepted.
         Matcher code = LEADING_CODE.matcher(lower);
         if (code.find()) {
-            return switch (code.group(1)) {
-                case "1" -> Action.ACCEPT;
-                case "2" -> Action.REJECT;
-                default -> Action.CONFIRM_DISPENSE;
-            };
+            return actionForCode(code.group(1));
+        }
+        // The instructed reply, once our own quoted words are out of the way:
+        // a handset that quotes the offer and puts "« 1 ABC12 »" underneath has
+        // accepted, and nothing in the quoted text is the pharmacy's word.
+        Action instructed = instructedCode(sanitized);
+        if (instructed != null) {
+            return instructed;
         }
         // Keyword fallback, whole words, over the text the pharmacy actually
         // added. A refusal wins outright: the words a pharmacy refuses with
@@ -133,6 +162,27 @@ public class PartnerSmsReplyParser {
             return Action.CONFIRM_DISPENSE;
         }
         return null;
+    }
+
+    /** The instructed form, or a code opening a line, in the pharmacy's own text. */
+    private static Action instructedCode(String sanitized) {
+        Matcher instructed = INSTRUCTED_FORM.matcher(sanitized);
+        if (instructed.find()) {
+            return actionForCode(instructed.group(1));
+        }
+        Matcher lineLeading = LINE_LEADING_CODE.matcher(sanitized);
+        if (lineLeading.find()) {
+            return actionForCode(lineLeading.group(1));
+        }
+        return null;
+    }
+
+    private static Action actionForCode(String code) {
+        return switch (code) {
+            case "1" -> Action.ACCEPT;
+            case "2" -> Action.REJECT;
+            default -> Action.CONFIRM_DISPENSE;
+        };
     }
 
     private static String extractToken(String lower, String sanitized) {

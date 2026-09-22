@@ -212,6 +212,8 @@ class PrescriptionSmsDispatchServiceImplTest {
         Pharmacy previous = new Pharmacy();
         previous.setId(UUID.randomUUID());
         previous.setName("Pharmacie du Nord");
+        // A pharmacy that was offered the prescription necessarily has a number.
+        previous.setPhoneNumber("+22670555444");
         PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
                 .prescription(rx)
                 .routingType(RoutingType.PARTNER)
@@ -235,9 +237,13 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("round 4: a failure telling the superseded pharmacy does not undo the dispatch")
     void dispatch_supersededNotificationIsBestEffort() {
         rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+        Pharmacy previous = new Pharmacy();
+        previous.setId(UUID.randomUUID());
+        previous.setPhoneNumber("+22670555444");
         PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
                 .prescription(rx)
                 .routingType(RoutingType.PARTNER)
+                .targetPharmacy(previous)
                 .status(RoutingDecisionStatus.PENDING)
                 .build();
         stale.setId(UUID.randomUUID());
@@ -254,6 +260,47 @@ class PrescriptionSmsDispatchServiceImplTest {
 
         assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
         assertThat(stale.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("round 5: a superseded pharmacy with no number on file is simply not called")
+    void dispatch_supersededWithoutPhoneIsNotNotified() {
+        rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .targetPharmacy(new Pharmacy())
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        stale.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(stale.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verify(partnerChannel, never()).sendSuperseded(any(), any());
+    }
+
+    @Test
+    @DisplayName("round 5: a prescription a pharmacy has gone quiet on can be sent to another one")
+    void dispatch_acceptsSentToPartner() {
+        rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of());
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(rx.getPharmacyId()).isEqualTo(pharmacyId);
     }
 
     @Test

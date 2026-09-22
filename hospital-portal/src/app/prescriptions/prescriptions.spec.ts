@@ -279,6 +279,8 @@ describe('PrescriptionsComponent — signing', () => {
       rx('rx-1', 'DRAFT'),
       rx('rx-2', 'SIGNED'),
       rx('rx-3', 'TRANSMITTED'),
+      // A silent pharmacy is the ordinary case to escape from: re-sending
+      // supersedes the offer it is holding.
       rx('rx-4', 'SENT_TO_PARTNER'),
       rx('rx-5', 'DISPENSED'),
       // A refusal or a back order must leave a way to send it elsewhere.
@@ -292,7 +294,7 @@ describe('PrescriptionsComponent — signing', () => {
     expect(dispatch('rx-1')).toBeNull();
     expect(dispatch('rx-2')).not.toBeNull();
     expect(dispatch('rx-3')).not.toBeNull();
-    expect(dispatch('rx-4')).toBeNull();
+    expect(dispatch('rx-4')).not.toBeNull();
     expect(dispatch('rx-5')).toBeNull();
     expect(dispatch('rx-6')).not.toBeNull();
     expect(dispatch('rx-7')).not.toBeNull();

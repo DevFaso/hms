@@ -208,4 +208,51 @@ class PartnerSmsReplyParserTest {
         assertThat(parser.parse("1 3F2A9B1C " + offer()).orElseThrow().action())
                 .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
     }
+
+    @Test
+    @DisplayName("round 5: the offer quoted ABOVE the instructed reply — the reply the offer asks for")
+    void quotedOfferAboveTheInstructedCode() {
+        // Exactly what a handset that quotes sends back: our message, then the
+        // line the pharmacy actually typed.
+        Optional<PartnerSmsReplyParser.ParsedReply> parsed =
+                parser.parse(offer() + "\n\u00ab 1 3F2A9B1C \u00bb");
+
+        assertThat(parsed)
+                .as("the instructed reply must not be dropped just because the quote sits above it")
+                .isPresent();
+        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 5: the same, refusing, and on one line")
+    void quotedOfferThenInstructedRefusal() {
+        assertThat(parser.parse(offer() + "\n\u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse(offer() + " \u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse(offer() + "\n2 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+    }
+
+    @Test
+    @DisplayName("round 5: a quote truncated mid-instruction does not answer for the pharmacy")
+    void truncatedQuoteIsNotAnAnswer() {
+        // The handset cut our own "« 1 ... »" out of the instructions; it is
+        // still our text, not theirs.
+        String truncated = "hms rx 3F2A9B1C : amoxicilline 500mg pour ab."
+                + " r\u00e9pondez \u00ab 1 3F2A9B1C \u00bb pour acc\u2026";
+
+        assertThat(parser.parse(truncated)).isEmpty();
+        assertThat(parser.parse(truncated + "\noui").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse(truncated + "\nnon").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+    }
+
+    @Test
+    @DisplayName("round 5: a digit inside prose still decides nothing, even on a quoted body")
+    void digitInProseIsStillNotAnAnswer() {
+        assertThat(parser.parse(offer() + "\nil nous reste 1 bo\u00eete seulement")).isEmpty();
+    }
 }

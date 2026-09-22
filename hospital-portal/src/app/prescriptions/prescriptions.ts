@@ -347,17 +347,18 @@ export class PrescriptionsComponent implements OnInit {
   /**
    * SMS dispatch hands a prescription to an outside pharmacy and moves it to
    * SENT_TO_PARTNER; the backend refuses any other state (400), so the button
-   * is only offered where the call can succeed. PARTNER_REJECTED and
-   * PENDING_STOCK are in the list because a pharmacy's refusal (or a back
-   * order) must leave the clinician free to send it somewhere else — without
-   * them, that recovery has no entry point in the UI.
+   * is only offered where the call can succeed. The list mirrors the backend's
+   * DISPATCHABLE_STATUSES exactly: a refusal, a back order, and a pharmacy that
+   * has gone quiet on an offer must all leave the clinician free to send the
+   * prescription somewhere else. Re-sending supersedes the previous offer.
    */
   canDispatchSms(p: PrescriptionResponse): boolean {
     return (
       p.status === 'SIGNED' ||
       p.status === 'TRANSMITTED' ||
       p.status === 'PARTNER_REJECTED' ||
-      p.status === 'PENDING_STOCK'
+      p.status === 'PENDING_STOCK' ||
+      p.status === 'SENT_TO_PARTNER'
     );
   }
 

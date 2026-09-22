@@ -78,8 +78,11 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -396,9 +399,10 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         UUID decisionId = routeToPartner(rxId, partnerA);
         String partnerToken = tokenFromOfferSentTo(PARTNER_A_PHONE);
 
-        // The pharmacist decides not to wait for the partner: the doctor re-sends to the community pharmacy.
-        transactionTemplate.executeWithoutResult(tx ->
-                prescriptionRepository.findById(rxId).orElseThrow().setStatus(PrescriptionStatus.PARTNER_REJECTED));
+        // The partner has gone quiet. The clinician re-sends to the community
+        // pharmacy straight from SENT_TO_PARTNER — no waiting for the 4 h sweep,
+        // and no test-only surgery on the row to get there.
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
         dispatchSms(rxId, communityA);
 
         assertThat(routingDecisionRepository.findById(decisionId).orElseThrow().getStatus())
@@ -455,6 +459,30 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
 
         dispatchSms(rxId, communityA);
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+    }
+
+    @Test
+    @DisplayName("round 5: if the new pharmacy's SMS fails, nothing moves and the old pharmacy is never told")
+    void failedRedispatchLeavesTheOldOfferAlone() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        UUID decisionId = routeToPartner(rxId, partnerA);
+        tokenFromOfferSentTo(PARTNER_A_PHONE);
+
+        doThrow(new IllegalStateException("gateway refused"))
+                .when(smsService).send(eq(COMMUNITY_A_PHONE), anyString());
+
+        mockMvc.perform(apiPost(API + "/prescriptions/{id}/dispatch-sms", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("pharmacyId", communityA.getId()))))
+                .andExpect(status().isBadRequest());
+
+        // The transaction rolled back: the partner still holds a live offer...
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(routingDecisionRepository.findById(decisionId).orElseThrow().getStatus())
+                .isEqualTo(RoutingDecisionStatus.PENDING);
+        // ...and must not have been told to drop it (the notification is AFTER_COMMIT).
+        verify(smsService, never()).send(eq(PARTNER_A_PHONE), contains("autre pharmacie"));
     }
 
     // ───────────────────────── leg 4: tenancy ─────────────────────────

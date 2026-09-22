@@ -32,10 +32,6 @@ public interface PrescriptionRoutingDecisionRepository extends JpaRepository<Pre
     List<PrescriptionRoutingDecision> findByRoutingTypeAndStatusAndDecidedAtBefore(
             RoutingType routingType, RoutingDecisionStatus status, LocalDateTime before);
 
-    /** T-55: lookup PENDING partner decisions by short-token prefix from inbound SMS replies. */
-    List<PrescriptionRoutingDecision> findByRoutingTypeAndStatus(
-            RoutingType routingType, RoutingDecisionStatus status);
-
     /**
      * G8: the open decisions whose id starts with the short SMS reference
      * token (the first 8 hex characters of the UUID, lower-cased — see

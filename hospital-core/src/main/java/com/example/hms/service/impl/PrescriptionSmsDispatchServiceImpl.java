@@ -22,6 +22,7 @@ import com.example.hms.repository.prescription.PrescriptionTransmissionRepositor
 import com.example.hms.service.PrescriptionSmsDispatchService;
 import com.example.hms.service.SmsService;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
+import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -58,16 +59,21 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
     /**
      * States a prescription may be handed to an outside pharmacy from: signed
-     * and unclaimed (SIGNED / TRANSMITTED), or refused by the previous pharmacy
-     * / waiting on stock (PARTNER_REJECTED / PENDING_STOCK) — a refusal must
-     * cost the clinician nothing more than choosing another pharmacy. Any
-     * decision still open on the prescription is superseded on re-dispatch.
+     * and unclaimed (SIGNED / TRANSMITTED), refused by the previous pharmacy or
+     * waiting on stock (PARTNER_REJECTED / PENDING_STOCK), or already offered to
+     * one (SENT_TO_PARTNER).
+     *
+     * <p>SENT_TO_PARTNER is here because a silent pharmacy is the ordinary case
+     * a clinician has to escape: without it the only way out was the four-hour
+     * auto-reject sweep, and {@link #supersedeOpenDecisions} could never run at
+     * all. Re-dispatching supersedes the offer the previous pharmacy holds.
      */
     static final Set<PrescriptionStatus> DISPATCHABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTNER_REJECTED,
-            PrescriptionStatus.PENDING_STOCK
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.SENT_TO_PARTNER
     );
 
     /** A decision the pharmacy could still answer (mirrors PartnerExchangeService.OPEN_STATUSES). */
@@ -180,8 +186,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private static void requireDispatchable(Prescription rx) {
         if (!DISPATCHABLE_STATUSES.contains(rx.getStatus())) {
             throw new BusinessException(
-                "Only a signed prescription that no pharmacy has claimed (or one a pharmacy refused / "
-                    + "placed on back order) can be dispatched by SMS; this one is " + rx.getStatus() + ".");
+                "Only a signed prescription, or one a pharmacy has been offered, refused or placed on "
+                    + "back order, can be dispatched by SMS; this one is " + rx.getStatus() + ".");
         }
     }
 
@@ -217,14 +223,31 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         }
     }
 
-    /** Never let a notification failure roll back the dispatch that succeeded. */
+    /**
+     * Tell the superseded pharmacy — but only once the dispatch that replaced
+     * its offer has actually committed. Sent inline, this went out before the
+     * new pharmacy's SMS: if that send failed the transaction rolled back and
+     * the old pharmacy had been told to drop an offer that was still live.
+     *
+     * <p>The LAZY pharmacy is dereferenced HERE, inside the transaction. The
+     * callback runs with no persistence context, where touching a proxy would
+     * throw instead of sending anything.
+     */
     private void notifySuperseded(PrescriptionRoutingDecision superseded) {
-        try {
-            partnerChannel.sendSuperseded(superseded, superseded.getTargetPharmacy());
-        } catch (Exception ex) {
-            log.warn("Could not tell the superseded pharmacy about decision {}: {}",
-                    superseded.getId(), ex.getMessage());
+        Pharmacy previous = superseded.getTargetPharmacy();
+        String phone = previous != null ? previous.getPhoneNumber() : null;
+        if (phone == null || phone.isBlank()) {
+            return;
         }
+        UUID decisionId = superseded.getId();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                partnerChannel.sendSuperseded(superseded, previous);
+            } catch (Exception ex) {
+                log.warn("Could not tell the superseded pharmacy about decision {}: {}",
+                        decisionId, ex.getMessage());
+            }
+        });
     }
 
     private static String appendReason(String existing, String suffix) {
