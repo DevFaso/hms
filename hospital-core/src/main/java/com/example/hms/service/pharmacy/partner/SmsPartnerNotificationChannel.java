@@ -36,6 +36,15 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
     }
 
     @Override
+    public String prescriptionOfferBody(PrescriptionRoutingDecision decision,
+                                        Prescription prescription,
+                                        String medicationSummary) {
+        String initials = patientInitials(prescription != null ? prescription.getPatient() : null);
+        return PartnerSmsTemplates.prescriptionOffer(
+                buildRefToken(decision), safeMedication(medicationSummary), initials);
+    }
+
+    @Override
     public void sendPrescriptionOffer(PrescriptionRoutingDecision decision,
                                       Prescription prescription,
                                       Pharmacy partner) {
@@ -43,10 +52,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank() || prescription == null) {
             return;
         }
-        String initials = patientInitials(prescription.getPatient());
-        String ref = buildRefToken(decision);
-        trySend(phone, PartnerSmsTemplates.prescriptionOffer(
-                ref, safeMedication(prescription.getMedicationName()), initials));
+        trySend(phone, prescriptionOfferBody(decision, prescription, prescription.getMedicationName()));
     }
 
     @Override

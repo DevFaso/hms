@@ -118,6 +118,27 @@ class SmsPartnerNotificationChannelTest {
     }
 
     @Test
+    @DisplayName("prescriptionOfferBody frames the caller's summary with token, initials and reply codes")
+    void prescriptionOfferBodyFramesSummary() {
+        String body = channel.prescriptionOfferBody(decision, prescription, "Amoxicilline 500mg PO BID x 7 j");
+
+        assertThat(body)
+                .startsWith("HMS Rx " + decisionId.toString().substring(0, 8).toUpperCase())
+                .contains("Amoxicilline 500mg PO BID x 7 j")
+                .contains("pour AB")
+                .endsWith("2 pour refuser.");
+        verifyNoInteractions(smsServiceProvider);
+    }
+
+    @Test
+    @DisplayName("prescriptionOfferBody falls back to the generic medication word and em-dash initials")
+    void prescriptionOfferBodyFallbacks() {
+        String body = channel.prescriptionOfferBody(decision, null, " ");
+
+        assertThat(body).contains("m\u00e9dicament").contains("pour \u2014");
+    }
+
+    @Test
     @DisplayName("sendPrescriptionOffer is a no-op when partner is null")
     void sendPrescriptionOfferNullPartner() {
         channel.sendPrescriptionOffer(decision, prescription, null);

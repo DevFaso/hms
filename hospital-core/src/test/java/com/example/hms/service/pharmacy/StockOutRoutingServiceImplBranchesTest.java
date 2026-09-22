@@ -117,8 +117,9 @@ class StockOutRoutingServiceImplBranchesTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of(partnerPharmacy));
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES))
+                .thenReturn(List.of(partnerPharmacy));
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 
@@ -135,8 +136,8 @@ class StockOutRoutingServiceImplBranchesTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of());
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES)).thenReturn(List.of());
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 
@@ -179,8 +180,8 @@ class StockOutRoutingServiceImplBranchesTest {
                 .thenReturn(Optional.of(catalogItem));
         when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
                 hospitalId, medicationId)).thenReturn(List.of(nullQty, nullPharmacy));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of());
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES)).thenReturn(List.of());
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 

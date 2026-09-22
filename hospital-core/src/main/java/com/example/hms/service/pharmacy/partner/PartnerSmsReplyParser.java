@@ -16,8 +16,11 @@ import java.util.regex.Pattern;
  *   <li>{@code "oui ABC12"} (fuzzy accept)</li>
  *   <li>{@code "non ABC12"} (fuzzy reject)</li>
  *   <li>{@code "3 ABC12"} — dispense confirmation</li>
- *   <li>{@code "Rx:ABC12 1"} — reversed order</li>
  * </ul>
+ * A numeric action code is only honoured as the LEADING word of the body
+ * (after trimming). Matching the digit anywhere used to turn
+ * {@code "refus ABC12, il reste 1 boîte"} into an ACCEPT; a digit that is
+ * not the first word is now ordinary text and the keyword branch decides.
  * Returns empty when the message is unparseable.
  */
 @Component
@@ -27,6 +30,9 @@ public class PartnerSmsReplyParser {
 
     /** Alphanumeric reference token (3..16 chars), case-insensitive when returned. */
     private static final Pattern TOKEN_PATTERN = Pattern.compile("([A-Za-z0-9]{3,16})");
+
+    /** Leading action code: {@code 1} accept, {@code 2} reject, {@code 3} dispensed. */
+    private static final Pattern LEADING_CODE = Pattern.compile("^([123])\\b");
 
     public record ParsedReply(Action action, String refToken) { }
 
@@ -50,15 +56,15 @@ public class PartnerSmsReplyParser {
     }
 
     private static Action detectAction(String lower) {
-        // numeric code first
-        if (lower.matches(".*\\b1\\b.*")) {
-            return Action.ACCEPT;
-        }
-        if (lower.matches(".*\\b2\\b.*")) {
-            return Action.REJECT;
-        }
-        if (lower.matches(".*\\b3\\b.*")) {
-            return Action.CONFIRM_DISPENSE;
+        // Numeric code first, and only as the leading word: "1 ABC12" is an
+        // accept, "refus ABC12 il reste 1 boîte" is not.
+        Matcher code = LEADING_CODE.matcher(lower);
+        if (code.find()) {
+            return switch (code.group(1)) {
+                case "1" -> Action.ACCEPT;
+                case "2" -> Action.REJECT;
+                default -> Action.CONFIRM_DISPENSE;
+            };
         }
         // French fuzzy fallback
         if (lower.contains("oui") || lower.contains("accept") || lower.contains("ok")) {

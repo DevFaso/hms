@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
@@ -1276,6 +1277,50 @@ class DispenseServiceImplTest {
             assertThat(entity.getVerificationStatus())
                     .isEqualTo(DispenseVerificationStatus.NOT_VERIFIED);
             assertThat(entity.getVerificationOverrides()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("G12: in-house dispenses are booked against dispensaries only")
+    class DispensaryOnly {
+
+        @Test
+        @DisplayName("a COMMUNITY_PHARMACY row at the same hospital is refused before any state moves")
+        void rejectsCommunityPharmacy() {
+            pharmacy.setPharmacyType(PharmacyType.COMMUNITY_PHARMACY);
+            DispenseRequestDTO dto = buildRequest();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("HOSPITAL_DISPENSARY")
+                    .hasMessageContaining("COMMUNITY_PHARMACY");
+
+            verify(dispenseRepository, never()).save(any());
+            verify(cdsCheckService, never()).checkAtDispense(any(), any());
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        }
+
+        @Test
+        @DisplayName("a PARTNER_PHARMACY row is refused the same way")
+        void rejectsPartnerPharmacy() {
+            pharmacy.setPharmacyType(PharmacyType.PARTNER_PHARMACY);
+            DispenseRequestDTO dto = buildRequest();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("PARTNER_PHARMACY");
+
+            verify(dispenseRepository, never()).save(any());
         }
     }
 }

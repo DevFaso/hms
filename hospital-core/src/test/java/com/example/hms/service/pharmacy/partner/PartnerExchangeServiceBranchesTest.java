@@ -39,6 +39,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PartnerExchangeServiceBranchesTest {
 
+    private static final String PARTNER_PHONE = "+22670000000";
+
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PartnerNotificationChannel channel;
@@ -52,6 +54,7 @@ class PartnerExchangeServiceBranchesTest {
     private Prescription prescription;
     private Pharmacy partner;
     private UUID decisionId;
+    private String token;
 
     @BeforeEach
     void setUp() {
@@ -60,7 +63,8 @@ class PartnerExchangeServiceBranchesTest {
                 channel, parser, auditEventLogService);
 
         decisionId = UUID.randomUUID();
-        partner = Pharmacy.builder().name("Pharmacie Nord").build();
+        token = decisionId.toString().substring(0, 8).toUpperCase();
+        partner = Pharmacy.builder().name("Pharmacie Nord").phoneNumber(PARTNER_PHONE).build();
         partner.setId(UUID.randomUUID());
 
         prescription = new Prescription();
@@ -75,6 +79,12 @@ class PartnerExchangeServiceBranchesTest {
                 .decidedAt(LocalDateTime.now())
                 .build();
         decision.setId(decisionId);
+    }
+
+    private void stubPrefixLookup(PrescriptionRoutingDecision... found) {
+        when(routingDecisionRepository.findOpenByIdPrefix(
+                RoutingType.PARTNER, PartnerExchangeService.OPEN_STATUSES, token.toLowerCase()))
+                .thenReturn(List.of(found));
     }
 
     @Test
@@ -101,18 +111,28 @@ class PartnerExchangeServiceBranchesTest {
     @Test
     @DisplayName("handleInboundReply returns empty and does not throw on null body")
     void handleInboundReplyNull() {
-        assertThat(service.handleInboundReply(null)).isEmpty();
+        assertThat(service.handleInboundReply(PARTNER_PHONE, null)).isEmpty();
         verifyNoInteractions(channel, routingDecisionRepository, prescriptionRepository);
     }
 
     @Test
-    @DisplayName("handleInboundReply returns empty when no pending decisions found")
+    @DisplayName("handleInboundReply returns empty when no open decision carries the prefix")
     void handleInboundReplyNoPending() {
-        when(routingDecisionRepository.findByRoutingTypeAndStatus(
-                RoutingType.PARTNER, RoutingDecisionStatus.PENDING))
+        when(routingDecisionRepository.findOpenByIdPrefix(
+                RoutingType.PARTNER, PartnerExchangeService.OPEN_STATUSES, "abcdefgh"))
                 .thenReturn(List.of());
 
-        assertThat(service.handleInboundReply("1 ABCDEFGH")).isEmpty();
+        assertThat(service.handleInboundReply(PARTNER_PHONE, "1 ABCDEFGH")).isEmpty();
+        verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a matching decision whose target pharmacy has no phone cannot be claimed by anyone")
+    void targetWithoutPhoneNeverMatches() {
+        decision.setTargetPharmacy(null);
+        stubPrefixLookup(decision);
+
+        assertThat(service.handleInboundReply(PARTNER_PHONE, "1 " + token)).isEmpty();
         verify(routingDecisionRepository, never()).save(any());
     }
 
@@ -121,7 +141,7 @@ class PartnerExchangeServiceBranchesTest {
     void handleInboundReplyLongUnparseable() {
         // 120 chars of non-action text — parser returns empty, safeTruncate branch exercised
         String longBody = "a".repeat(120);
-        assertThat(service.handleInboundReply(longBody)).isEmpty();
+        assertThat(service.handleInboundReply(PARTNER_PHONE, longBody)).isEmpty();
     }
 
     @Test
@@ -159,16 +179,13 @@ class PartnerExchangeServiceBranchesTest {
     @Test
     @DisplayName("inbound accept still works when audit service throws")
     void inboundAcceptAuditFailureIsSwallowed() {
-        String token = decisionId.toString().substring(0, 8).toUpperCase();
-        when(routingDecisionRepository.findByRoutingTypeAndStatus(
-                RoutingType.PARTNER, RoutingDecisionStatus.PENDING))
-                .thenReturn(List.of(decision));
+        stubPrefixLookup(decision);
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(prescriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         doThrow(new RuntimeException("audit down"))
                 .when(auditEventLogService).logEvent(any());
 
-        Optional<PrescriptionRoutingDecision> updated = service.handleInboundReply("1 " + token);
+        Optional<PrescriptionRoutingDecision> updated = service.handleInboundReply(PARTNER_PHONE, "1 " + token);
 
         assertThat(updated).isPresent();
         assertThat(updated.get().getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
@@ -178,21 +195,18 @@ class PartnerExchangeServiceBranchesTest {
     @DisplayName("blank ref token in reply is ignored (no repo lookup)")
     void blankRefTokenIgnored() {
         // "1 a" — "a" is 1 char, below token pattern min of 3. Parser returns empty.
-        assertThat(service.handleInboundReply("1 a")).isEmpty();
+        assertThat(service.handleInboundReply(PARTNER_PHONE, "1 a")).isEmpty();
         verifyNoInteractions(routingDecisionRepository);
     }
 
     @Test
     @DisplayName("audit fired via PRESCRIPTION_SENT_TO_PARTNER type for accept")
     void acceptFiresSentAudit() {
-        String token = decisionId.toString().substring(0, 8).toUpperCase();
-        when(routingDecisionRepository.findByRoutingTypeAndStatus(
-                RoutingType.PARTNER, RoutingDecisionStatus.PENDING))
-                .thenReturn(List.of(decision));
+        stubPrefixLookup(decision);
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(prescriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.handleInboundReply("1 " + token);
+        service.handleInboundReply(PARTNER_PHONE, "1 " + token);
 
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
                 req -> req != null && req.getEventType() == AuditEventType.PRESCRIPTION_SENT_TO_PARTNER));

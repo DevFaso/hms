@@ -59,10 +59,27 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
+    /**
+     * States a stock-out decision can be taken from. REQUIRES_EXTERNAL_FILL is
+     * deliberately absent (G4): nothing in the backend writes it — a pharmacist
+     * who cannot fill in-house records the decision itself (route-to-partner,
+     * print-for-patient, back-order) straight from SIGNED — so listing it here
+     * only suggested a "flagged for external fill" step that does not exist.
+     */
     private static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
-            PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
             PrescriptionStatus.SIGNED,
             PrescriptionStatus.TRANSMITTED
+    );
+
+    /**
+     * Pharmacies a prescription can be handed to from here. Both are reached by
+     * SMS and reply through the same partner webhook; the directory the portal
+     * offers for dispatch (PharmacyDirectoryController) lists both, so the
+     * routing gate must admit both (G2).
+     */
+    static final Set<PharmacyType> EXTERNAL_PHARMACY_TYPES = Set.of(
+            PharmacyType.PARTNER_PHARMACY,
+            PharmacyType.COMMUNITY_PHARMACY
     );
 
     private static final String PRESCRIPTION_PREFIX = "Prescription ";
@@ -97,8 +114,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         List<PartnerOptionDTO> partnerOptions = new ArrayList<>();
         if (!sufficient) {
-            List<Pharmacy> partners = pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                    hospitalId, PharmacyType.PARTNER_PHARMACY);
+            List<Pharmacy> partners = pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                    hospitalId, EXTERNAL_PHARMACY_TYPES);
             for (Pharmacy partner : partners) {
                 boolean hasOnFormulary = false;
                 if (catalogItem != null) {
@@ -147,8 +164,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (!targetPharmacy.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("pharmacy.notfound");
         }
-        if (targetPharmacy.getPharmacyType() != PharmacyType.PARTNER_PHARMACY) {
-            throw new BusinessException("Target pharmacy must be a PARTNER_PHARMACY for partner routing");
+        if (!EXTERNAL_PHARMACY_TYPES.contains(targetPharmacy.getPharmacyType())) {
+            throw new BusinessException(
+                    "Target pharmacy must be a PARTNER_PHARMACY or COMMUNITY_PHARMACY for partner routing");
         }
 
         User currentUser = resolveCurrentUser();

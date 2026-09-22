@@ -17,6 +17,15 @@ public interface PartnerNotificationChannel {
     /** Returns a short reference token that the partner must include in replies. */
     String buildRefToken(PrescriptionRoutingDecision decision);
 
+    /**
+     * The offer text for one decision — reference token, medication summary,
+     * patient initials and the reply codes — so every path that hands a
+     * prescription to an outside pharmacy (stock-out routing, SMS dispatch)
+     * sends a message the inbound reply parser recognises.
+     */
+    String prescriptionOfferBody(PrescriptionRoutingDecision decision, Prescription prescription,
+                                 String medicationSummary);
+
     /** Outbound: offer a new prescription to a partner pharmacy. */
     void sendPrescriptionOffer(PrescriptionRoutingDecision decision, Prescription prescription, Pharmacy partner);
 

@@ -20,8 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * T-53/54/55/59 — Orchestrates partner pharmacy exchange that happens outside a
@@ -42,6 +45,14 @@ public class PartnerExchangeService {
     /** T-59: auto-reject and move on after this idle period. */
     static final Duration AUTO_REJECT_AFTER = Duration.ofHours(4);
 
+    /**
+     * Decisions an SMS reply may still act on. ACCEPTED is open because the
+     * partner confirms the dispense ({@code 3 <ref>}) after having accepted;
+     * matching PENDING only made that third message unroutable.
+     */
+    static final Set<RoutingDecisionStatus> OPEN_STATUSES =
+            EnumSet.of(RoutingDecisionStatus.PENDING, RoutingDecisionStatus.ACCEPTED);
+
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final PartnerNotificationChannel channel;
@@ -59,9 +70,16 @@ public class PartnerExchangeService {
     /**
      * T-55 — Process an inbound SMS reply from a partner pharmacy.
      * Returns the updated decision when the reply was matched and applied.
+     *
+     * <p>G8: the reply is bound to the pharmacy that was offered the
+     * prescription. The short token is only the first 8 hex characters of the
+     * decision id, and the webhook secret is shared by every gateway, so the
+     * token alone must never select a decision: the sender's number has to be
+     * the target pharmacy's number, and exactly one open decision has to match
+     * both. Anything else is ignored (and logged) rather than guessed.
      */
     @Transactional
-    public Optional<PrescriptionRoutingDecision> handleInboundReply(String rawBody) {
+    public Optional<PrescriptionRoutingDecision> handleInboundReply(String senderPhone, String rawBody) {
         Optional<PartnerSmsReplyParser.ParsedReply> parsed = replyParser.parse(rawBody);
         if (parsed.isEmpty()) {
             log.info("Partner SMS reply unparseable: {}", safeTruncate(rawBody));
@@ -69,14 +87,13 @@ public class PartnerExchangeService {
         }
         PartnerSmsReplyParser.ParsedReply reply = parsed.get();
 
-        PrescriptionRoutingDecision decision = findPendingByRef(reply.refToken())
+        PrescriptionRoutingDecision decision = findOpenByRef(reply.refToken(), senderPhone)
                 .orElse(null);
         if (decision == null) {
-            log.info("Partner SMS reply referenced unknown/non-pending token {}", reply.refToken());
             return Optional.empty();
         }
 
-        return Optional.of(applyReply(decision, reply.action()));
+        return Optional.ofNullable(applyReply(decision, reply.action()));
     }
 
     /**
@@ -111,23 +128,70 @@ public class PartnerExchangeService {
         return new TimeoutSweepResult(reminded, autoRejected);
     }
 
+    /**
+     * Digits only, international prefix {@code 00} folded into the bare
+     * country code, so {@code "+226 70 11 12 22"}, {@code "0022670111222"} and
+     * {@code "22670111222"} compare equal. Empty when nothing usable remains.
+     */
+    static String normalizePhone(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String digits = raw.replaceAll("\\D", "");
+        if (digits.startsWith("00")) {
+            digits = digits.substring(2);
+        }
+        return digits;
+    }
+
     // ---------- internals ----------
 
-    private Optional<PrescriptionRoutingDecision> findPendingByRef(String refToken) {
+    private Optional<PrescriptionRoutingDecision> findOpenByRef(String refToken, String senderPhone) {
         if (refToken == null || refToken.isBlank()) {
             return Optional.empty();
         }
-        String needle = refToken.toUpperCase(java.util.Locale.ROOT);
-        return routingDecisionRepository
-                .findByRoutingTypeAndStatus(RoutingType.PARTNER, RoutingDecisionStatus.PENDING)
+        String sender = normalizePhone(senderPhone);
+        if (sender.isEmpty()) {
+            log.info("Partner SMS reply for token {} carried no sender number; ignored", refToken);
+            return Optional.empty();
+        }
+        String prefix = refToken.toLowerCase(Locale.ROOT);
+        List<PrescriptionRoutingDecision> matches = routingDecisionRepository
+                .findOpenByIdPrefix(RoutingType.PARTNER, OPEN_STATUSES, prefix)
                 .stream()
-                .filter(d -> d.getId() != null
-                        && d.getId().toString().toUpperCase(java.util.Locale.ROOT).startsWith(needle))
-                .findFirst();
+                .filter(d -> sender.equals(normalizePhone(targetPhone(d))))
+                .toList();
+        if (matches.isEmpty()) {
+            log.info("Partner SMS reply referenced unknown/closed token {} for sender {}; ignored",
+                    refToken, SmsPartnerNotificationChannel.maskPhone(senderPhone));
+            return Optional.empty();
+        }
+        if (matches.size() > 1) {
+            log.warn("Partner SMS token {} from sender {} matches {} open decisions; ignored",
+                    refToken, SmsPartnerNotificationChannel.maskPhone(senderPhone), matches.size());
+            return Optional.empty();
+        }
+        return Optional.of(matches.get(0));
     }
 
+    private static String targetPhone(PrescriptionRoutingDecision d) {
+        Pharmacy target = d.getTargetPharmacy();
+        return target != null ? target.getPhoneNumber() : null;
+    }
+
+    /**
+     * Applies the reply, or returns {@code null} when the decision is not in a
+     * state that action can move: ACCEPT/REJECT answer a PENDING offer, and a
+     * dispense is confirmed from PENDING (implicit accept) or ACCEPTED — the
+     * same transitions the staff endpoints in StockOutRoutingServiceImpl allow.
+     */
     private PrescriptionRoutingDecision applyReply(PrescriptionRoutingDecision decision,
                                                    PartnerSmsReplyParser.Action action) {
+        if (action != PartnerSmsReplyParser.Action.CONFIRM_DISPENSE
+                && decision.getStatus() != RoutingDecisionStatus.PENDING) {
+            log.info("Partner SMS {} ignored: decision {} is {}", action, decision.getId(), decision.getStatus());
+            return null;
+        }
         Prescription rx = decision.getPrescription();
         switch (action) {
             case ACCEPT -> {
