@@ -397,4 +397,5 @@
     <string name="questionnaires_completed">Questionnaires completed: %1$d of %2$d</string>
     <string name="precheckin_failed">The pre-check-in could not be submitted</string>
     <string name="answers_invalid">Fix the highlighted answers to continue.</string>
+    <string name="pre_checkin_closed">Pre-check-in is no longer available for this visit.</string>
 </resources>

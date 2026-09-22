@@ -397,4 +397,5 @@
     <string name="questionnaires_completed">Questionnaires complétés : %1$d sur %2$d</string>
     <string name="precheckin_failed">Le pré-enregistrement n\'a pas pu être soumis</string>
     <string name="answers_invalid">Corrigez les réponses signalées pour continuer.</string>
+    <string name="pre_checkin_closed">Le pré-enregistrement n\'est plus disponible pour cette visite.</string>
 </resources>

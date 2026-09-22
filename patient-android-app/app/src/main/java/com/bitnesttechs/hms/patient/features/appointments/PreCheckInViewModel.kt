@@ -248,7 +248,8 @@ class PreCheckInViewModel @Inject constructor(
         val text = value.toString().trim()
         if (question != null && question.type == "NUMBER") {
             val number = text.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() } ?: return text
-            return if (number % 1.0 == 0.0) number.toLong() else number
+            // toLong() saturates past 2^63; such a value stays a Double.
+            return if (number % 1.0 == 0.0 && kotlin.math.abs(number) < 9.0e18) number.toLong() else number
         }
         return text
     }

@@ -93,6 +93,10 @@ fun MainScreen(onLogout: () -> Unit) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        // The full-screen routes have a back arrow, not a menu; an edge swipe
+        // there could pull the drawer over a pre-check-in mid-submit and a
+        // drawer item would then destroy the only observer of that request.
+        gesturesEnabled = drawerState.isOpen || showBottomBar,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {

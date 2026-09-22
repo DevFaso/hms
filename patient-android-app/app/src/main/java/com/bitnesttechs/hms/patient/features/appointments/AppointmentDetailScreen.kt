@@ -165,8 +165,11 @@ fun AppointmentDetailScreen(
                         Text(stringResource(R.string.pre_checkin_online))
                     }
                     if (!inWindow) {
+                        // Before the window it has not opened; a visit already dated in the past has closed.
+                        val closed = daysUntil != null && daysUntil < 0
                         Text(
-                            stringResource(R.string.pre_checkin_window, PRE_CHECKIN_WINDOW_DAYS),
+                            if (closed) stringResource(R.string.pre_checkin_closed)
+                            else stringResource(R.string.pre_checkin_window, PRE_CHECKIN_WINDOW_DAYS),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
