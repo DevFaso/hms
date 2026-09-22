@@ -28,6 +28,7 @@ import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
 import com.bitnesttechs.hms.patient.features.appointments.PreCheckInScreen
 import com.bitnesttechs.hms.patient.features.screenings.ScreeningsScreen
+import com.bitnesttechs.hms.patient.features.education.EducationScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
 import com.bitnesttechs.hms.patient.features.careteam.CareTeamScreen
 import com.bitnesttechs.hms.patient.features.dashboard.DashboardScreen
@@ -73,6 +74,7 @@ val drawerItems = listOf(
     DrawerItem(R.string.after_visit_summaries, Icons.Default.Description, "visit_summaries"),
     DrawerItem(R.string.documents, Icons.Default.Description, "documents"),
     DrawerItem(R.string.screenings, Icons.Default.Psychology, "screenings"),
+    DrawerItem(R.string.education, Icons.Default.MenuBook, "education"),
     DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
     DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
     DrawerItem(R.string.messages, Icons.Default.Message, "tab_messages"),
@@ -149,7 +151,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "screenings",
+                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "screenings", "education",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
@@ -223,6 +225,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("notifications") { NotificationsScreen(onBack = { navController.popBackStack() }) }
                 composable("documents") { DocumentsScreen(onBack = { navController.popBackStack() }) }
                 composable("screenings") { ScreeningsScreen(onBack = { navController.popBackStack() }) }
+                composable("education") { EducationScreen(onBack = { navController.popBackStack() }) }
                 composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }
                 composable("sharing_privacy") {
                     SharingPrivacyScreen(onBack = { navController.popBackStack() })
