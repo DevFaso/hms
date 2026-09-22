@@ -65,6 +65,8 @@ enum APIEndpoints {
     static let documents = "/me/patient/documents"
     /// Authenticated, owner-checked stream; document bytes have no public URL.
     static func documentDownload(id: String) -> String { "/me/patient/documents/\(id)/download" }
+    /// DELETE — a patient may remove only what they uploaded; the server checks ownership.
+    static func documentById(id: String) -> String { "/me/patient/documents/\(id)" }
 
     // MARK: Notifications
 
