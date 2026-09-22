@@ -335,7 +335,7 @@ class PatientPortalServiceImplPhase1Test {
         void getHealthSummary_success() {
             stubPatientResolution();
 
-            when(labResultService.getLabResultsForPatient(eq(patientId), isNull(), eq(5)))
+            when(labResultService.getLabResultsForPatientPortal(eq(patientId), isNull(), eq(5)))
                     .thenReturn(List.of(new PatientLabResultResponseDTO()));
             when(medicationService.getMedicationsForPatient(eq(patientId), isNull(), eq(10)))
                     .thenReturn(List.of(new PatientMedicationResponseDTO()));
@@ -362,7 +362,7 @@ class PatientPortalServiceImplPhase1Test {
         void getHealthSummary_subServiceFailure_returnsEmptyLists() {
             stubPatientResolution();
 
-            when(labResultService.getLabResultsForPatient(any(), any(), anyInt()))
+            when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("lab service down"));
             when(medicationService.getMedicationsForPatient(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("med service down"));
@@ -386,7 +386,7 @@ class PatientPortalServiceImplPhase1Test {
             patient.setChronicConditions(null);
             stubPatientResolution();
 
-            when(labResultService.getLabResultsForPatient(any(), any(), anyInt())).thenReturn(List.of());
+            when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
             when(medicationService.getMedicationsForPatient(any(), any(), anyInt())).thenReturn(List.of());
             when(vitalSignService.getRecentVitals(any(), any(), anyInt())).thenReturn(List.of());
             when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
@@ -411,12 +411,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyLabResults_delegates() {
             stubPatientResolution();
             List<PatientLabResultResponseDTO> expected = List.of(new PatientLabResultResponseDTO());
-            when(labResultService.getLabResultsForPatient(patientId, null, 10)).thenReturn(expected);
+            when(labResultService.getLabResultsForPatientPortal(patientId, null, 10)).thenReturn(expected);
 
             List<PatientLabResultResponseDTO> result = service.getMyLabResults(auth, 10);
 
             assertThat(result).isEqualTo(expected);
-            verify(labResultService).getLabResultsForPatient(patientId, null, 10);
+            verify(labResultService).getLabResultsForPatientPortal(patientId, null, 10);
         }
     }
 

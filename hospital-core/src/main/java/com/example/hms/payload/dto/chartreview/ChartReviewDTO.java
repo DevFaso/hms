@@ -114,7 +114,10 @@ public class ChartReviewDTO {
         private String testCode;
         private String resultValue;
         private String resultUnit;
+        /** NORMAL / ABNORMAL / CRITICAL — the family the tab and the timeline pill colour on. */
         private String abnormalFlag;
+        /** LOW / HIGH when the abnormal result's side of the range is known. */
+        private com.example.hms.enums.AbnormalDirection abnormalDirection;
         private LocalDateTime resultDate;
         private String orderingStaffName;
         private boolean acknowledged;

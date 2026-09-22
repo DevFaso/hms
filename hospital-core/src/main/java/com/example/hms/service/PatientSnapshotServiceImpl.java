@@ -294,6 +294,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                     : "Lab Test")
                             .value(r.getResultValue())
                             .flag(labResultFlag(r))
+                            .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
                             .build()));
         } catch (Exception e) {
@@ -302,9 +303,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return labs;
     }
 
+    /** The three-value family: the drawer colours on the literal ABNORMAL / CRITICAL. */
     private String labResultFlag(LabResult r) {
         if (r.getAbnormalFlag() != null) {
-            return r.getAbnormalFlag().name();
+            return r.getAbnormalFlag().severity().name();
         }
         return r.isAcknowledged() ? FLAG_NORMAL : FLAG_REVIEW;
     }
