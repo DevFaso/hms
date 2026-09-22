@@ -38,9 +38,29 @@ enum DocumentUploadRules {
     ]
 
     /// The service allows 20 MB but `spring.servlet.multipart.max-file-size`
-    /// is 10 MB, so 10 MB is what actually gets through.
+    /// and `max-request-size` are 10 MB, so 10 MB is what actually gets
+    /// through — and the request limit counts the whole body (boundaries,
+    /// part headers, the text parts), not just the file. A file a few bytes
+    /// under 10 MiB is still a 413, so the client keeps a margin for the rest.
     static let maxMegabytes = 10
-    static let maxBytes = maxMegabytes * 1024 * 1024
+    static let multipartOverhead = 64 * 1024
+    static let maxBytes = maxMegabytes * 1024 * 1024 - multipartOverhead
+
+    /// What the bytes say they are, for a library photo. The picker's
+    /// `supportedContentTypes` lists every representation the item CAN give,
+    /// not the one `loadTransferable(Data.self)` returned: a HEIC photo also
+    /// advertising JPEG would be uploaded as HEIC bytes named `.jpg`, which
+    /// passes the server's extension check and shows as a broken image.
+    static func imageKind(of data: Data) -> (ext: String, mimeType: String)? {
+        let head = [UInt8](data.prefix(4))
+        guard head.count == 4 else { return nil }
+        if head[0] == 0xFF, head[1] == 0xD8 { return ("jpg", "image/jpeg") }
+        if head == [0x89, 0x50, 0x4E, 0x47] { return ("png", "image/png") }
+        if head[0] == 0x47, head[1] == 0x49, head[2] == 0x46, head[3] == 0x38 { return ("gif", "image/gif") }
+        if head == [0x49, 0x49, 0x2A, 0x00] || head == [0x4D, 0x4D, 0x00, 0x2A] { return ("tiff", "image/tiff") }
+        if head[0] == 0x42, head[1] == 0x4D { return ("bmp", "image/bmp") }
+        return nil
+    }
 
     /// `patient_uploaded_documents.notes` is varchar(2048); the DTO itself
     /// does not check, so the app does.
@@ -464,18 +484,18 @@ final class DocumentsViewModel: ObservableObject {
     }
 
     /// A photo from the library. The server accepts JPG/PNG/GIF/BMP/TIFF by
-    /// extension, so anything else the library holds (HEIC above all) is
-    /// re-encoded as JPEG the way the avatar upload does.
+    /// extension, so the extension comes from the bytes actually returned
+    /// (see `DocumentUploadRules.imageKind`), and anything else the library
+    /// holds (HEIC above all) is re-encoded as JPEG the way the avatar
+    /// upload does.
     func stage(photo: PhotosPickerItem) async {
         guard let raw = try? await photo.loadTransferable(type: Data.self) else {
             actionError = "photo_process_failed".localized
             return
         }
         let stamp = Self.photoStamp.string(from: Date())
-        let accepted: [(UTType, String)] = [(.jpeg, "jpg"), (.png, "png"), (.gif, "gif"), (.tiff, "tiff"), (.bmp, "bmp")]
-        let types = photo.supportedContentTypes
-        if let match = accepted.first(where: { pair in types.contains { $0.conforms(to: pair.0) } }) {
-            stage(data: raw, fileName: "photo-\(stamp).\(match.1)")
+        if let kind = DocumentUploadRules.imageKind(of: raw) {
+            stage(data: raw, fileName: "photo-\(stamp).\(kind.ext)")
             return
         }
         guard let image = UIImage(data: raw), let jpeg = image.jpegData(compressionQuality: 0.9) else {
@@ -569,7 +589,13 @@ final class DocumentsViewModel: ObservableObject {
             pending = nil
             await load()
         case .failure(let error):
-            uploadError = "document_upload_failed".localized + ": " + error.localizedDescription
+            // Tomcat answers 413 before the controller runs, with no message
+            // worth showing; the same wording as the local check.
+            if case APIError.httpError(let status, _) = error, status == 413 {
+                uploadError = String(format: "document_too_large".localized, DocumentUploadRules.maxMegabytes)
+            } else {
+                uploadError = "document_upload_failed".localized + ": " + error.localizedDescription
+            }
         }
     }
 

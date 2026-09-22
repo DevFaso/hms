@@ -18,12 +18,25 @@ final class PatientDocumentsTests: XCTestCase {
         XCTAssertNil(PatientDocumentType.label(for: nil))
     }
 
+    func testPhotoKindComesFromTheBytes() {
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0xFF, 0xD8, 0xFF, 0xE0]))?.ext, "jpg")
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0x89, 0x50, 0x4E, 0x47]))?.mimeType, "image/png")
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0x47, 0x49, 0x46, 0x38]))?.ext, "gif")
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0x49, 0x49, 0x2A, 0x00]))?.ext, "tiff")
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0x4D, 0x4D, 0x00, 0x2A]))?.ext, "tiff")
+        XCTAssertEqual(DocumentUploadRules.imageKind(of: Data([0x42, 0x4D, 0x00, 0x00]))?.ext, "bmp")
+        // HEIC ("....ftypheic") and a short blob: not accepted as-is, re-encoded.
+        XCTAssertNil(DocumentUploadRules.imageKind(of: Data([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])))
+        XCTAssertNil(DocumentUploadRules.imageKind(of: Data([0xFF])))
+    }
+
     func testUploadRulesMirrorTheServer() {
         // FileUploadService.ALLOWED_ATTACHMENT_EXTENSIONS
         XCTAssertEqual(DocumentUploadRules.allowedExtensions,
                        ["pdf", "jpg", "jpeg", "png", "gif", "bmp", "tiff", "txt", "rtf", "doc", "docx"])
-        // spring.servlet.multipart.max-file-size=10MB is the effective cap.
-        XCTAssertEqual(DocumentUploadRules.maxBytes, 10 * 1024 * 1024)
+        // spring.servlet.multipart.max-request-size=10MB covers the whole
+        // body, so the file cap keeps a margin for boundaries and text parts.
+        XCTAssertEqual(DocumentUploadRules.maxBytes, 10 * 1024 * 1024 - 64 * 1024)
         XCTAssertEqual(DocumentUploadRules.maxNotesLength, 2048)
         XCTAssertEqual(DocumentUploadRules.mimeType(forExtension: "pdf"), "application/pdf")
         XCTAssertEqual(DocumentUploadRules.mimeType(forExtension: "jpg"), "image/jpeg")
