@@ -197,15 +197,18 @@ class EducationViewModel @Inject constructor(
                 )
                 val question = resp.body()?.data
                 if (resp.isSuccessful && question != null) {
+                    // Prepended to a loaded list (deduped by id); an unloaded list is
+                    // fetched on the tab's first visit, this question included. A GET
+                    // still in flight would land without it, so it is re-run after.
+                    val reloadAfter = _state.value.questionsLoading
                     _state.update {
                         it.copy(
                             askSubmitting = false, askOpen = false, askTarget = null,
-                            // Prepended only to a list that was loaded; otherwise the tab's
-                            // first visit fetches everything, this question included.
-                            questions = if (it.questionsLoaded) listOf(question) + it.questions else it.questions,
+                            questions = if (it.questionsLoaded) (listOf(question) + it.questions).distinctBy { q -> q.id } else it.questions,
                             outcome = Outcome(R.string.question_sent)
                         )
                     }
+                    if (reloadAfter) loadQuestions()
                 } else {
                     _state.update {
                         it.copy(askSubmitting = false, askError = Outcome(R.string.question_failed, serverMessage(resp.errorBody()?.string())))
