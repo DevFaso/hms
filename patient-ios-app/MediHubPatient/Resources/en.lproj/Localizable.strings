@@ -413,7 +413,7 @@
 "document_delete_success" = "Document deleted";
 "document_delete_failed" = "Failed to delete document";
 "document_too_large" = "The file must be under %d MB.";
-"document_type_not_allowed" = "This file type is not accepted. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
+"document_type_not_allowed" = "%@ files are not accepted. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
 "document_read_failed" = "The file could not be read.";
 "document_empty" = "The file is empty.";
 "photo_process_failed" = "The photo could not be processed.";
@@ -428,3 +428,4 @@
 "document_type_invoice" = "Invoice";
 "document_type_immunization_record" = "Immunization Record";
 "document_type_other" = "Other";
+"preparing_file" = "Preparing…";

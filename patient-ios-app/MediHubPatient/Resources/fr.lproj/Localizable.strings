@@ -413,7 +413,7 @@
 "document_delete_success" = "Document supprimé";
 "document_delete_failed" = "Échec de la suppression";
 "document_too_large" = "Le fichier doit faire moins de %d Mo.";
-"document_type_not_allowed" = "Ce type de fichier n’est pas accepté. Formats acceptés : PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
+"document_type_not_allowed" = "Les fichiers %@ ne sont pas acceptés. Formats acceptés : PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
 "document_read_failed" = "Le fichier n’a pas pu être lu.";
 "document_empty" = "Le fichier est vide.";
 "photo_process_failed" = "La photo n’a pas pu être traitée.";
@@ -428,3 +428,4 @@
 "document_type_invoice" = "Facture";
 "document_type_immunization_record" = "Carnet de vaccination";
 "document_type_other" = "Autre";
+"preparing_file" = "Préparation…";

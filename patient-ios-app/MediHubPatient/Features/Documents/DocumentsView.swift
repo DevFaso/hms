@@ -81,8 +81,16 @@ enum DocumentUploadRules {
 
     static func notesLength(_ notes: String) -> Int { notes.unicodeScalars.count }
 
+    /// The picker works on types, not extensions: `public.tiff` also covers
+    /// `.tif`, so that spelling is mapped to the one the server accepts when
+    /// the file is staged (`canonicalExtension`).
     static var contentTypes: [UTType] {
         allowedExtensions.sorted().compactMap { UTType(filenameExtension: $0) }
+    }
+
+    static func canonicalExtension(_ ext: String) -> String {
+        let lower = ext.lowercased()
+        return lower == "tif" ? "tiff" : lower
     }
 
     static func mimeType(forExtension ext: String) -> String {
@@ -166,7 +174,14 @@ struct DocumentsView: View {
                 } label: {
                     Label("upload_document".localized, systemImage: "plus")
                 }
-                .disabled(vm.pending != nil)
+                .disabled(vm.pending != nil || vm.isPreparing)
+            }
+        }
+        .overlay {
+            if vm.isPreparing {
+                ProgressView("preparing_file".localized)
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
         }
         .refreshable { await vm.load() }
@@ -175,7 +190,7 @@ struct DocumentsView: View {
                       allowsMultipleSelection: false) { result in
             switch result {
             case .success(let urls):
-                if let url = urls.first { vm.stage(fileURL: url) }
+                if let url = urls.first { Task { await vm.stage(fileURL: url) } }
             case .failure(let error):
                 vm.actionError = error.localizedDescription
             }
@@ -389,6 +404,9 @@ final class DocumentsViewModel: ObservableObject {
     @Published var deleteCandidate: DocumentDTO?
     @Published var deletingId: String?
 
+    /// Reading a picked file or re-encoding a photo, off the main actor.
+    @Published var isPreparing = false
+
     /// Picker, read and delete failures — shown under one "Error" title.
     @Published var actionError: String?
     /// The web's success toasts; here an alert, raised after the sheet closes.
@@ -484,18 +502,35 @@ final class DocumentsViewModel: ObservableObject {
     // MARK: Upload
 
     /// A file from the document picker. The URL is security-scoped: it can be
-    /// read only between start/stop, and only in this process.
-    func stage(fileURL url: URL) {
+    /// read only between start/stop, and only in this process. The size is
+    /// checked from the file's attributes before a byte is read, and the
+    /// read runs off the main actor: a 400 MB pick, or an iCloud file that
+    /// still has to come down, must not freeze the screen.
+    func stage(fileURL url: URL) async {
+        guard !isPreparing else { return }
+        let ext = DocumentUploadRules.canonicalExtension((url.lastPathComponent as NSString).pathExtension)
+        guard DocumentUploadRules.allowedExtensions.contains(ext) else {
+            actionError = Self.notAllowedMessage(extension: (url.lastPathComponent as NSString).pathExtension)
+            return
+        }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
+        if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+           size > DocumentUploadRules.maxBytes {
+            actionError = String(format: "document_too_large".localized, DocumentUploadRules.maxMegabytes)
+            return
+        }
+        isPreparing = true
+        defer { isPreparing = false }
+        let read = await Task.detached(priority: .userInitiated) { () -> Data? in
+            try? Data(contentsOf: url)
+        }.value
+        guard let data = read else {
             actionError = "document_read_failed".localized
             return
         }
-        stage(data: data, fileName: url.lastPathComponent)
+        let baseName = (url.lastPathComponent as NSString).deletingPathExtension
+        stage(data: data, fileName: "\(baseName).\(ext)")
     }
 
     /// A photo from the library. Every photo is re-encoded through UIImage,
@@ -507,20 +542,40 @@ final class DocumentsViewModel: ObservableObject {
     /// through the document picker is not touched — the patient picked
     /// that file deliberately.
     func stage(photo: PhotosPickerItem) async {
-        guard let raw = try? await photo.loadTransferable(type: Data.self),
-              let image = UIImage(data: raw) else {
+        guard !isPreparing else { return }
+        isPreparing = true
+        defer { isPreparing = false }
+        guard let raw = try? await photo.loadTransferable(type: Data.self) else {
             actionError = "photo_process_failed".localized
             return
         }
-        let stamp = Self.photoStamp.string(from: Date())
-        let output = DocumentUploadRules.photoOutput(forSource: raw)
-        let encoded = output.ext == "png" ? image.pngData() : image.jpegData(compressionQuality: 0.9)
+        // Decoding and re-encoding a full-resolution photo is CPU-bound work
+        // for a background thread, not the main actor.
+        let encoded = await Task.detached(priority: .userInitiated) { () -> (data: Data, ext: String)? in
+            Self.reencode(photo: raw)
+        }.value
         guard let encoded else {
             actionError = "photo_process_failed".localized
             return
         }
-        stage(data: encoded, fileName: "photo-\(stamp).\(output.ext)")
+        let stamp = Self.photoStamp.string(from: Date())
+        stage(data: encoded.data, fileName: "photo-\(stamp).\(encoded.ext)")
     }
+
+    nonisolated private static func reencode(photo raw: Data) -> (data: Data, ext: String)? {
+        guard let image = UIImage(data: raw) else { return nil }
+        let output = DocumentUploadRules.photoOutput(forSource: raw)
+        let data = output.ext == "png" ? image.pngData() : image.jpegData(compressionQuality: 0.9)
+        return data.map { ($0, output.ext) }
+    }
+
+    private static func notAllowedMessage(extension ext: String) -> String {
+        let shown = ext.isEmpty ? "?" : ext.uppercased()
+        return String(format: "document_type_not_allowed".localized, shown)
+    }
+
+    /// Longer than the confirmation dialog's dismissal animation.
+    private static let dialogDismissal: Duration = .milliseconds(600)
 
     private static let photoStamp: DateFormatter = {
         let f = DateFormatter()
@@ -531,9 +586,9 @@ final class DocumentsViewModel: ObservableObject {
 
     /// The same checks the server makes, before the bytes leave the phone.
     private func stage(data: Data, fileName: String) {
-        let ext = (fileName as NSString).pathExtension.lowercased()
+        let ext = DocumentUploadRules.canonicalExtension((fileName as NSString).pathExtension)
         guard DocumentUploadRules.allowedExtensions.contains(ext) else {
-            actionError = "document_type_not_allowed".localized
+            actionError = Self.notAllowedMessage(extension: (fileName as NSString).pathExtension)
             return
         }
         guard !data.isEmpty else {
@@ -620,10 +675,16 @@ final class DocumentsViewModel: ObservableObject {
 
     /// Soft delete on the server, owner-checked there. One at a time, in the
     /// view model's own task, so leaving the screen cannot lose the result.
+    ///
+    /// The alert that follows is held back until the confirmation dialog's
+    /// dismissal is over: a dialog has no onDismiss the way a sheet does,
+    /// and an alert raised while one is still animating out is dropped by
+    /// SwiftUI. A fast DELETE therefore waits out the animation.
     func delete(_ doc: DocumentDTO) async {
         guard let id = doc.id, deletingId == nil else { return }
         deleteCandidate = nil
         deletingId = id
+        let started = ContinuousClock.now
         let task = Task<Error?, Never> {
             do {
                 let _: EmptyResponse = try await APIClient.shared.delete(APIEndpoints.documentById(id: id))
@@ -633,6 +694,8 @@ final class DocumentsViewModel: ObservableObject {
             }
         }
         let failure = await task.value
+        let remaining = Self.dialogDismissal - started.duration(to: ContinuousClock.now)
+        if remaining > .zero { try? await Task.sleep(for: remaining) }
         deletingId = nil
         if let failure {
             actionError = "document_delete_failed".localized + ": " + failure.localizedDescription

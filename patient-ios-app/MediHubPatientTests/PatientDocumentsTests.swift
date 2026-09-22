@@ -46,6 +46,14 @@ final class PatientDocumentsTests: XCTestCase {
         XCTAssertEqual(DocumentUploadRules.notesLength("abc"), 3)
     }
 
+    func testTifIsStagedAsTiff() {
+        XCTAssertEqual(DocumentUploadRules.canonicalExtension("tif"), "tiff")
+        XCTAssertEqual(DocumentUploadRules.canonicalExtension("TIF"), "tiff")
+        XCTAssertEqual(DocumentUploadRules.canonicalExtension("PDF"), "pdf")
+        XCTAssertEqual(DocumentUploadRules.canonicalExtension("md"), "md")
+        XCTAssertFalse(DocumentUploadRules.allowedExtensions.contains("md"))
+    }
+
     func testUploadRulesMirrorTheServer() {
         // FileUploadService.ALLOWED_ATTACHMENT_EXTENSIONS
         XCTAssertEqual(DocumentUploadRules.allowedExtensions,
