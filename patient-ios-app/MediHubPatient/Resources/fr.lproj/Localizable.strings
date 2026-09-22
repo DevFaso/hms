@@ -433,6 +433,8 @@
 "sharing_optout_saved_on" = "Le partage avec les autres hôpitaux est maintenant désactivé.";
 "sharing_optout_saved_off" = "Le partage avec les autres hôpitaux est de nouveau activé.";
 "sharing_optout_failed" = "Votre réglage de partage n’a pas pu être enregistré.";
+"sharing_optout_already_off" = "Le partage avec les autres hôpitaux était déjà désactivé.";
+"sharing_optout_already_on" = "Le partage avec les autres hôpitaux était déjà activé.";
 "sharing_optout_own_hospital_note" = "L’accès de votre propre hôpital ne change pas. Chaque ouverture de votre dossier ailleurs apparaît dans la liste ci-dessous.";
 "disclosures_role_accountant" = "Comptable";
 "disclosures_role_admin" = "Administrateur";

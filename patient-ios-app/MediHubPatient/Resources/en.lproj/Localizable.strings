@@ -433,6 +433,8 @@
 "sharing_optout_saved_on" = "Sharing with other hospitals is now off.";
 "sharing_optout_saved_off" = "Sharing with other hospitals is on again.";
 "sharing_optout_failed" = "Your sharing setting could not be saved.";
+"sharing_optout_already_off" = "Sharing with other hospitals was already off.";
+"sharing_optout_already_on" = "Sharing with other hospitals was already on.";
 "sharing_optout_own_hospital_note" = "Your own hospital's access does not change. Every time your record is opened elsewhere, it appears in the list below.";
 "disclosures_role_accountant" = "Accountant";
 "disclosures_role_admin" = "Admin";

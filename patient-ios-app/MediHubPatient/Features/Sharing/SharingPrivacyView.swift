@@ -20,7 +20,8 @@ struct SharingPrivacyView: View {
         .navigationTitle("disclosures_page_title".localized)
         .task { await vm.loadAll() }
         .refreshable { await vm.loadAll() }
-        .sheet(isPresented: $vm.showOptOutForm) {
+        // A swipe-down after a failed save must not leave the error under the card.
+        .sheet(isPresented: $vm.showOptOutForm, onDismiss: { vm.optOutFormDismissed() }) {
             OptOutReasonSheet(vm: vm)
         }
     }
@@ -383,6 +384,10 @@ final class SharingPrivacyViewModel: ObservableObject {
 
     /// Owned here, not by the sheet, so leaving the screen cannot abandon a save.
     private var saveTask: Task<Void, Never>?
+    /// Bumped by every page-0 load; a page-0 or load-more answer from an older
+    /// generation is dropped, so a refresh and a "Show more" cannot split the
+    /// rows and the paging cursor between them.
+    private var disclosuresGeneration = 0
 
     var optedOut: Bool { optOut?.inForce == true }
 
@@ -415,29 +420,36 @@ final class SharingPrivacyViewModel: ObservableObject {
     // ── Disclosures ──
 
     func loadDisclosures() async {
+        disclosuresGeneration += 1
+        let generation = disclosuresGeneration
         logLoading = true
         logFailed = false
         loadMoreFailed = false
         do {
             let first = try await fetchPage(0)
+            guard generation == disclosuresGeneration else { return }
             accounting = first
             entries = first.entries ?? []
         } catch {
+            guard generation == disclosuresGeneration else { return }
             logFailed = true
         }
         logLoading = false
     }
 
     func loadMore() async {
-        guard !loadingMore, hasMorePages, let current = accounting else { return }
+        guard !loadingMore, !logLoading, hasMorePages, let current = accounting else { return }
+        let generation = disclosuresGeneration
         loadingMore = true
         loadMoreFailed = false
         do {
             let next = try await fetchPage((current.page ?? 0) + 1)
+            guard generation == disclosuresGeneration else { loadingMore = false; return }
             accounting = next
             let seen = Set(entries.map { $0.id })
             entries += (next.entries ?? []).filter { !seen.contains($0.id) }
         } catch {
+            guard generation == disclosuresGeneration else { loadingMore = false; return }
             loadMoreFailed = true
         }
         loadingMore = false
@@ -489,8 +501,13 @@ final class SharingPrivacyViewModel: ObservableObject {
 
     func cancelOptOutForm() {
         guard !optOutSaving else { return }
-        optOutError = nil
         showOptOutForm = false
+    }
+
+    /// Runs on every dismissal (Cancel, swipe-down, a successful save): an
+    /// error the patient walked away from is not shown under the card.
+    func optOutFormDismissed() {
+        optOutError = nil
     }
 
     /// `POST .../record-sharing/opt-out` with the trimmed reason, or none.
@@ -513,8 +530,11 @@ final class SharingPrivacyViewModel: ObservableObject {
                 showOptOutForm = false
                 optOutNotice = "sharing_optout_saved_on".localized
             } catch {
-                optOutError = Self.failureText(error)
-                await reloadIfConflict(error)
+                if Self.isConflict(error) {
+                    await settleConflict(noticeKey: "sharing_optout_already_off")
+                } else {
+                    optOutError = Self.failureText(error)
+                }
             }
             optOutSaving = false
         }
@@ -533,19 +553,32 @@ final class SharingPrivacyViewModel: ObservableObject {
                 optOut = state
                 optOutNotice = "sharing_optout_saved_off".localized
             } catch {
-                optOutError = Self.failureText(error)
-                await reloadIfConflict(error)
+                if Self.isConflict(error) {
+                    await settleConflict(noticeKey: "sharing_optout_already_on")
+                } else {
+                    optOutError = Self.failureText(error)
+                }
             }
             optOutSaving = false
         }
     }
 
     /// A 409 means the setting already is what we asked for (a second opt-out,
-    /// a revoke of nothing); the server's state, not ours, is the truth then.
-    private func reloadIfConflict(_ error: Error) async {
-        if case let APIError.httpError(code, _) = error, code == 409 {
-            await loadOptOut()
-        }
+    /// a revoke of nothing): the card we showed was stale, not the request wrong.
+    private static func isConflict(_ error: Error) -> Bool {
+        if case let APIError.httpError(code, _) = error { return code == 409 }
+        return false
+    }
+
+    /// The server's state, not ours, is the truth then: close the form, say so
+    /// in our own words, and reload. The save is over before the reload so the
+    /// reload's "not while saving" guard does not swallow it.
+    private func settleConflict(noticeKey: String) async {
+        optOutSaving = false
+        showOptOutForm = false
+        optOutError = nil
+        optOutNotice = noticeKey.localized
+        await loadOptOut()
     }
 
     /// The web's generic wording, plus the server's own message when it sent one.
