@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.core.network
 
 import com.bitnesttechs.hms.patient.core.models.*
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
@@ -188,11 +189,30 @@ interface ApiService {
     ): Response<ApiResponse<List<DischargeSummaryDto>>>
 
     // ── Documents ─────────────────────────────────────────────────────────────
+    /** The backend returns a Spring Page (an object with `content`), never a bare list. */
     @GET("me/patient/documents")
     suspend fun getDocuments(
         @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<List<DocumentDto>>>
+        @Query("size") size: Int = 50,
+        @Query("sort") sort: String = "createdAt,desc"
+    ): Response<ApiResponse<PageDto<DocumentDto>>>
+
+    /**
+     * Multipart like the web's FormData: `file` + `documentType` are required
+     * parts, `collectionDate` (ISO date) and `notes` are sent only when set.
+     */
+    @Multipart
+    @POST("me/patient/documents")
+    suspend fun uploadDocument(
+        @Part file: MultipartBody.Part,
+        @Part("documentType") documentType: RequestBody,
+        @Part("collectionDate") collectionDate: RequestBody?,
+        @Part("notes") notes: RequestBody?
+    ): Response<ApiResponse<DocumentDto>>
+
+    /** Soft delete; the backend only checks that the document belongs to the caller. */
+    @DELETE("me/patient/documents/{documentId}")
+    suspend fun deleteDocument(@Path("documentId") documentId: String): Response<ApiResponse<Unit>>
 
     /**
      * Document bytes have no public URL: the backend streams them only to

@@ -103,15 +103,35 @@ data class ConsentHospitalDto(
 @JsonClass(generateAdapter = true)
 data class DocumentDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "name") val name: String = "",
-    @Json(name = "type") val type: String? = null,
-    @Json(name = "fileType") val fileType: String? = null,
+    // What PatientDocumentResponseDTO actually serialises.
+    @Json(name = "displayName") val displayName: String? = null,
+    @Json(name = "mimeType") val mimeType: String? = null,
     @Json(name = "documentType") val documentType: String? = null,
-    @Json(name = "uploadedAt") val uploadedAt: String = "",
+    @Json(name = "fileSizeBytes") val fileSizeBytes: Long? = null,
+    @Json(name = "collectionDate") val collectionDate: String? = null,
+    @Json(name = "notes") val notes: String? = null,
+    @Json(name = "uploadedByDisplayName") val uploadedByDisplayName: String? = null,
+    @Json(name = "createdAt") val createdAt: String? = null,
     @Json(name = "fileUrl") val fileUrl: String? = null,
-    @Json(name = "fileSize") val fileSize: Long? = null,
+    // Scaffold-era names, kept optional so an older payload still decodes.
+    @Json(name = "name") val legacyName: String? = null,
+    @Json(name = "fileType") val fileType: String? = null,
+    @Json(name = "uploadedAt") val legacyUploadedAt: String? = null,
+    @Json(name = "fileSize") val legacyFileSize: Long? = null,
     @Json(name = "description") val description: String? = null
-)
+) {
+    val name: String get() = displayName ?: legacyName ?: ""
+    /** ISO date-time of the upload; the screen shows its first 10 chars. */
+    val uploadedAt: String get() = createdAt ?: legacyUploadedAt ?: ""
+    val sizeBytes: Long? get() = fileSizeBytes ?: legacyFileSize
+    /** Kind for the row icon: the server's mimeType wins, then the extension. */
+    val kind: String? get() = when {
+        mimeType?.startsWith("image/") == true -> "IMAGE"
+        mimeType == "application/pdf" -> "PDF"
+        fileType != null -> fileType
+        else -> name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class NotificationDto(

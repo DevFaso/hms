@@ -418,4 +418,35 @@
     <string name="screening_submitted">Merci. Vos réponses ont été envoyées à votre équipe soignante.</string>
     <string name="screening_submit_failed">Vos réponses n\'ont pas pu être envoyées</string>
     <string name="emergency_contact_phone">Téléphone du contact d\'urgence</string>
+    <!-- Phase 2 parity: document upload and delete -->
+    <string name="upload_document">Téléverser un document</string>
+    <string name="upload">Téléverser</string>
+    <string name="uploading">Téléversement…</string>
+    <string name="no_documents_desc">Téléversez vos dossiers médicaux, résultats de laboratoire ou autres documents de santé</string>
+    <string name="document_type">Type de document</string>
+    <string name="collection_date_optional">Date de collecte (optionnel)</string>
+    <string name="notes_optional">Notes (optionnel)</string>
+    <string name="document_notes_placeholder">Ajouter une note sur ce document…</string>
+    <string name="clear_date">Effacer la date</string>
+    <string name="document_uploaded">Document téléversé avec succès</string>
+    <string name="document_upload_failed">Échec du téléversement</string>
+    <string name="document_too_large">Ce fichier dépasse %1$s Mo</string>
+    <string name="document_type_unsupported">Type de fichier non pris en charge. Autorisés : PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX</string>
+    <string name="document_file_unreadable">Le fichier sélectionné n\'a pas pu être lu</string>
+    <string name="documents_refresh_failed">La liste des documents n\'a pas pu être actualisée</string>
+    <string name="delete_document">Supprimer le document</string>
+    <string name="delete_document_confirm">Êtes-vous sûr de vouloir supprimer « %1$s » ? Cette action est irréversible.</string>
+    <string name="document_deleted">Document supprimé</string>
+    <string name="document_delete_failed">Échec de la suppression</string>
+    <string name="uploaded_by">Téléversé par %1$s</string>
+    <string name="file_size_kb">%1$s Ko</string>
+    <string name="doc_type_lab_result">Résultat de labo</string>
+    <string name="doc_type_imaging_report">Rapport d\'imagerie</string>
+    <string name="doc_type_discharge_summary">Résumé de sortie</string>
+    <string name="doc_type_referral_letter">Lettre de référence</string>
+    <string name="doc_type_prescription">Ordonnance</string>
+    <string name="doc_type_insurance_document">Document d\'assurance</string>
+    <string name="doc_type_invoice">Facture</string>
+    <string name="doc_type_immunization_record">Carnet de vaccination</string>
+    <string name="doc_type_other">Autre</string>
 </resources>
