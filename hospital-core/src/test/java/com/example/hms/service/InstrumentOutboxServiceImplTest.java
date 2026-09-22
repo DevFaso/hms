@@ -178,6 +178,30 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
+    void getMessagesByLabOrder_performingLaboratorySeesItsOwnResultMessages() {
+        Hospital performing = new Hospital();
+        performing.setId(UUID.randomUUID());
+        labOrder.setPerformingHospital(performing);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(outboxRepository.findByLabOrder_Id(labOrderId))
+            .thenReturn(List.of(message(InstrumentOutboxStatus.PENDING)));
+
+        assertThat(service.getMessagesByLabOrder(labOrderId)).hasSize(1);
+    }
+
+    @Test
+    void getMessage_performingLaboratoryReadsTheMessage() {
+        Hospital performing = new Hospital();
+        performing.setId(UUID.randomUUID());
+        labOrder.setPerformingHospital(performing);
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ACK);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+
+        assertThat(service.getMessage(row.getId()).getId()).isEqualTo(row.getId());
+    }
+
+    @Test
     void getMessagesByLabOrder_scopedCallerCannotSeeAnotherHospitalsOrder() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         when(outboxRepository.findByLabOrder_Id(labOrderId))

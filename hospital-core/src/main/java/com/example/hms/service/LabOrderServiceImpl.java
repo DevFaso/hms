@@ -44,6 +44,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -72,6 +73,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+    private final com.example.hms.repository.LabResultRepository labResultRepository;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
@@ -94,8 +97,16 @@ public class LabOrderServiceImpl implements LabOrderService {
         // performing laboratory reads and results it but never rewrites it.
         requireOrderingHospital(existing);
 
+        Hospital previousPerformer = existing.getPerformingHospital();
         LabOrder updated = buildLabOrder(existing, request, false);
-        return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(updated));
+        LabOrder saved = labOrderRepository.save(updated);
+        // A legitimate re-route is a new order for the new laboratory.
+        if (saved.isPerformedExternally()
+                && (previousPerformer == null
+                    || !Objects.equals(previousPerformer.getId(), saved.getPerformingHospital().getId()))) {
+            routingNotifier.notifyPerformingLab(saved);
+        }
+        return labOrderMapper.toLabOrderResponseDTO(saved);
     }
 
     /** 404-not-403: an ordering-side write from any other hospital does not exist. */
@@ -124,17 +135,47 @@ public class LabOrderServiceImpl implements LabOrderService {
      * Any other target must be an active hospital: the platform has no notion
      * of partner or affiliated hospitals to narrow it to.
      */
-    private Hospital resolvePerformingHospital(LabOrderRequestDTO request, Hospital orderingHospital) {
+    private Hospital resolvePerformingHospital(LabOrderRequestDTO request, Hospital orderingHospital, LabOrder base) {
         UUID requested = request.getPerformingHospitalId();
+        if (requested == null && base != null) {
+            // PUT without the field keeps the current laboratory: an omitted
+            // field is not an instruction to bring the test back in-house.
+            return base.getPerformingHospital();
+        }
+        Hospital performing;
         if (requested == null || requested.equals(orderingHospital.getId())) {
-            return null;
+            performing = null;
+        } else {
+            performing = hospitalRepository.findById(requested)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            if (!isRoutableLab(performing)) {
+                throw new BusinessException("The performing laboratory must be an active hospital.");
+            }
         }
-        Hospital performing = hospitalRepository.findById(requested)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
-        if (!isRoutableLab(performing)) {
-            throw new BusinessException("The performing laboratory must be an active hospital.");
-        }
+        requirePerformerChangeAllowed(base, performing);
         return performing;
+    }
+
+    /**
+     * The performing laboratory may change only while nobody has worked the
+     * order: once a specimen or a result exists there, moving the order (or
+     * bringing it in-house) would orphan that laboratory's rows —
+     * {@code LabResult.validate()} would refuse every later release or sign.
+     */
+    private void requirePerformerChangeAllowed(LabOrder base, Hospital performing) {
+        if (base == null || base.getId() == null) {
+            return;
+        }
+        UUID current = base.getPerformingHospital() != null ? base.getPerformingHospital().getId() : null;
+        UUID next = performing != null ? performing.getId() : null;
+        if (Objects.equals(current, next)) {
+            return;
+        }
+        if (!labSpecimenRepository.findByLabOrder_Id(base.getId()).isEmpty()
+                || !labResultRepository.findByLabOrder_Id(base.getId()).isEmpty()) {
+            throw new com.example.hms.exception.ConflictException(
+                "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
+        }
     }
 
     private static boolean isRoutableLab(Hospital hospital) {
@@ -224,7 +265,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setOrderingStaff(staff);
         labOrder.setEncounter(encounter);
         labOrder.setHospital(hospital);
-        labOrder.setPerformingHospital(resolvePerformingHospital(request, hospital));
+        labOrder.setPerformingHospital(resolvePerformingHospital(request, hospital, base));
         labOrder.setLabTestDefinition(testDefinition);
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());

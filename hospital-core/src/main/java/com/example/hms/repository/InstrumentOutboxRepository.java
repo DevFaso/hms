@@ -22,7 +22,8 @@ public interface InstrumentOutboxRepository extends JpaRepository<InstrumentOutb
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT o FROM InstrumentOutbox o "
-        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId) "
+        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId "
+        + "OR o.labOrder.performingHospital.id = :hospitalId) "
         + "AND (:status IS NULL OR o.status = :status)")
     org.springframework.data.domain.Page<InstrumentOutbox> searchScoped(
         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
@@ -32,7 +33,8 @@ public interface InstrumentOutboxRepository extends JpaRepository<InstrumentOutb
     /** Queue-level counts per status for the monitor header, same scoping rule. */
     @org.springframework.data.jpa.repository.Query(
         "SELECT o.status, COUNT(o) FROM InstrumentOutbox o "
-        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId) "
+        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId "
+        + "OR o.labOrder.performingHospital.id = :hospitalId) "
         + "GROUP BY o.status")
     List<Object[]> countByStatusScoped(
         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId);

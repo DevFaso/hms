@@ -10,6 +10,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Role;
@@ -76,6 +77,8 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private RecordAccessPolicy recordAccessPolicy;
     @Mock private CrossHospitalReachRecorder reachRecorder;
     @Mock private LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     @InjectMocks
     private LabOrderServiceImpl service;
@@ -245,6 +248,92 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThatThrownBy(() -> service.updateLabOrder(id, request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateWithoutThePerformingFieldKeepsTheCurrentLaboratory() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.updateLabOrder(order.getId(), request().performingHospitalId(null).build(), Locale.ENGLISH);
+
+        assertThat(order.getPerformingHospital()).isSameAs(performing);
+        verify(hospitalRepository, never()).findById(performing.getId());
+        verify(routingNotifier, never()).notifyPerformingLab(any());
+    }
+
+    @Test
+    void updateCannotMoveTheOrderOnceTheLaboratoryHasRecordedAResult() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findById(third.getId())).thenReturn(Optional.of(third));
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        LabResult result = new LabResult();
+        result.setId(UUID.randomUUID());
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
+
+        UUID id = order.getId();
+        LabOrderRequestDTO moveToThird = request().performingHospitalId(third.getId()).build();
+        assertThatThrownBy(() -> service.updateLabOrder(id, moveToThird, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("cannot change");
+        LabOrderRequestDTO bringInHouse = request().performingHospitalId(ordering.getId()).build();
+        assertThatThrownBy(() -> service.updateLabOrder(id, bringInHouse, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(order.getPerformingHospital()).isSameAs(performing);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCannotMoveTheOrderOnceASpecimenWasCollected() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findById(third.getId())).thenReturn(Optional.of(third));
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(new com.example.hms.model.LabSpecimen()));
+
+        UUID id = order.getId();
+        LabOrderRequestDTO moveToThird = request().performingHospitalId(third.getId()).build();
+        assertThatThrownBy(() -> service.updateLabOrder(id, moveToThird, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateReRoutesAnUntouchedOrderAndNotifiesTheNewLaboratory() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findById(third.getId())).thenReturn(Optional.of(third));
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.updateLabOrder(order.getId(), request().performingHospitalId(third.getId()).build(), Locale.ENGLISH);
+
+        assertThat(order.getPerformingHospital()).isSameAs(third);
+        verify(routingNotifier).notifyPerformingLab(order);
+    }
+
+    @Test
+    void updateKeepingTheSameLaboratoryDoesNotNotifyAgain() {
+        mockOrderLookups();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.updateLabOrder(order.getId(), request().performingHospitalId(performing.getId()).build(), Locale.ENGLISH);
+
+        verify(routingNotifier, never()).notifyPerformingLab(any());
+        verify(labSpecimenRepository, never()).findByLabOrder_Id(any());
     }
 
     @Test

@@ -142,10 +142,12 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "specimen without hospital-scoped order");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
-            if (!Objects.equals(order.getHospital().getId(), hospitalId)) {
-                // Cross-tenant: the analyzer's allowlisted hospital does not
-                // own this order. Hard reject so the analyzer surfaces the
-                // misconfiguration rather than silently retrying.
+            if (!order.isHandledBy(hospitalId)) {
+                // Cross-tenant: the analyzer's allowlisted hospital neither
+                // ordered nor performs this order (B1: the performing
+                // laboratory's analyser is a legitimate sender). Hard reject
+                // so the analyzer surfaces the misconfiguration rather than
+                // silently retrying.
                 log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
                     order.getHospital().getId(), hospitalId,
                     sendingApplication, sendingFacility, placer);
