@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -32,14 +31,17 @@ import java.util.UUID;
  * The order leaves the work queue (it is not dispensable while the question
  * is open) and the prescriber is notified after commit.
  *
- * <p><b>Out:</b> a doctor answers and the order returns to SIGNED — not DRAFT,
- * because the signing ceremony refuses to re-sign a prescription that already
- * carries a digest, so DRAFT would be a second dead end. SIGNED is both
- * dispensable and routable, and the row keeps the pharmacist's question, the
- * doctor's answer and both timestamps so the pharmacist reads the exchange in
- * the queue ({@code attentionReason = CLARIFICATION_RESOLVED}). If the doctor
- * changed the order first, {@code updatePrescription} has no status guard and
- * the signature digest disagreeing with the row is the documented evidence.
+ * <p><b>Out:</b> a doctor answers and the order returns to the status it held
+ * when the question was asked (SIGNED, PARTIALLY_FILLED, PENDING_STOCK…) —
+ * never DRAFT, because the signing ceremony refuses to re-sign a prescription
+ * that already carries a digest, so DRAFT would be a second dead end. Every
+ * status a question can be raised from is dispensable, so the order is back
+ * on the queue with its progress intact, and the row keeps the pharmacist's
+ * question, the doctor's answer and both timestamps so the pharmacist reads
+ * the exchange there ({@code attentionReason = CLARIFICATION_RESOLVED}). If
+ * the doctor changed the order first, {@code updatePrescription} has no
+ * status guard and the signature digest disagreeing with the row is the
+ * documented evidence.
  *
  * <p><b>Who may answer:</b> any doctor with a staff profile at the
  * prescription's hospital, not only the prescriber. Signing is prescriber-only
@@ -84,6 +86,7 @@ public class PrescriptionClarificationService {
             throw new BusinessException("Unable to determine current user");
         }
 
+        prescription.setClarificationPreviousStatus(status);
         prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
         prescription.setClarificationReason(reason.trim());
         prescription.setClarificationRequestedAt(LocalDateTime.now(clock));
@@ -114,14 +117,17 @@ public class PrescriptionClarificationService {
         }
         Staff doctor = resolveDoctorAtHospital(prescription);
 
-        prescription.setStatus(PrescriptionStatus.SIGNED);
+        PrescriptionStatus restored = prescription.getClarificationPreviousStatus() != null
+                ? prescription.getClarificationPreviousStatus()
+                : PrescriptionStatus.SIGNED;
+        prescription.setStatus(restored);
         prescription.setClarificationResponse(response != null && !response.isBlank() ? response.trim() : null);
         prescription.setClarificationResolvedAt(LocalDateTime.now(clock));
         prescription.setClarificationResolvedByUserId(doctor.getUser() != null ? doctor.getUser().getId() : null);
         prescriptionRepository.save(prescription);
 
         support.logAudit(AuditEventType.PRESCRIPTION_CLARIFICATION_RESOLVED,
-                "Clarification resolved on prescription " + prescriptionId + "; returned to SIGNED",
+                "Clarification resolved on prescription " + prescriptionId + "; returned to " + restored,
                 prescriptionId.toString(), AUDIT_ENTITY);
         log.info("Prescription {} clarification resolved by staff {}", prescriptionId, doctor.getId());
     }
@@ -149,15 +155,16 @@ public class PrescriptionClarificationService {
         if (currentUserId == null) {
             throw new AccessDeniedException("Unable to determine the answering clinician.");
         }
-        Staff staff = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Only a clinician with a staff profile can resolve a clarification."));
-        UUID staffHospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
         UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
-        if (staffHospitalId == null || !Objects.equals(staffHospitalId, rxHospitalId)) {
+        if (rxHospitalId == null) {
             throw new AccessDeniedException(
                     "Only a clinician at the prescribing hospital can resolve a clarification.");
         }
-        return staff;
+        // Looked up at the prescription's hospital, not "the doctor's first
+        // profile": a clinician credentialed at two hospitals has two.
+        return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Only a clinician with a staff profile at the prescribing hospital can "
+                                + "resolve a clarification."));
     }
 }

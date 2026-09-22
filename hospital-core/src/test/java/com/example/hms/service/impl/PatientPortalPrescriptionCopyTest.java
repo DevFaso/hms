@@ -30,7 +30,7 @@ class PatientPortalPrescriptionCopyTest {
                 .clarificationResolvedAt(LocalDateTime.now())
                 .build();
 
-        PrescriptionResponseDTO copy = PatientPortalServiceImpl.withoutClarificationExchange(dto);
+        PrescriptionResponseDTO copy = dto.withoutClarificationExchange();
 
         assertThat(copy.getPharmacyName()).isEqualTo("Pharmacie du Marché");
         assertThat(copy.getPharmacyContact()).isEqualTo("+22670000000");
@@ -42,7 +42,8 @@ class PatientPortalPrescriptionCopyTest {
     }
 
     @Test
-    void nullStaysNull() {
-        assertThat(PatientPortalServiceImpl.withoutClarificationExchange(null)).isNull();
+    void returnsTheSameInstanceForChaining() {
+        PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().build();
+        assertThat(dto.withoutClarificationExchange()).isSameAs(dto);
     }
 }

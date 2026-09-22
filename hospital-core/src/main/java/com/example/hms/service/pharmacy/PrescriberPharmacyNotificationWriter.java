@@ -35,6 +35,9 @@ public class PrescriberPharmacyNotificationWriter {
     public static final String NOTIFICATION_TYPE = "PHARMACY_EVENT";
 
     private static final String KEY_PREFIX = "prescription.pharmacy.event.";
+
+    /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
+    static final int MAX_MESSAGE_LENGTH = 255;
     private static final String PATIENT_FALLBACK_KEY = "prescription.pharmacy.patientFallback";
 
     private final PrescriptionRepository prescriptionRepository;
@@ -58,7 +61,8 @@ public class PrescriberPharmacyNotificationWriter {
                     prescriptionId);
             return false;
         }
-        notificationService.createNotification(message(prescription, event), username, NOTIFICATION_TYPE);
+        notificationService.createNotification(
+                capped(message(prescription, event)), username, NOTIFICATION_TYPE);
         return true;
     }
 
@@ -71,19 +75,34 @@ public class PrescriberPharmacyNotificationWriter {
     /**
      * Rendered in {@link NotificationLocales#STAFF}: the row is persisted once
      * and read later by the prescriber, not by whoever triggered it.
+     *
+     * <p>The clarification body names the medication only. The pharmacist's
+     * question is clinical narrative, stored encrypted on the prescription
+     * where the prescriber reads it; the notification row is plaintext and
+     * 255 characters wide, so it must not carry the question (or the patient).
      */
     private String message(Prescription prescription, PrescriptionStatus event) {
         String medication = prescription.getMedicationName() != null
                 ? prescription.getMedicationName() : "";
+        if (event == PrescriptionStatus.PENDING_CLARIFICATION) {
+            return messageSource.getMessage(KEY_PREFIX + event.name(),
+                    new Object[]{medication}, NotificationLocales.STAFF);
+        }
         String patient = patientName(prescription.getPatient());
         String third = switch (event) {
-            case PENDING_CLARIFICATION -> prescription.getClarificationReason() != null
-                    ? prescription.getClarificationReason() : "";
             case PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED -> partnerName(prescription);
             default -> "";
         };
         return messageSource.getMessage(KEY_PREFIX + event.name(),
                 new Object[]{medication, patient, third}, NotificationLocales.STAFF);
+    }
+
+    /** A body the column can hold: an overlong medication name is cut, never a failed INSERT. */
+    static String capped(String message) {
+        if (message == null || message.length() <= MAX_MESSAGE_LENGTH) {
+            return message;
+        }
+        return message.substring(0, MAX_MESSAGE_LENGTH - 1) + "\u2026";
     }
 
     private String partnerName(Prescription prescription) {

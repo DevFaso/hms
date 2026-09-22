@@ -283,8 +283,11 @@ public class DispenseServiceImpl implements DispenseService {
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
         PrescriptionStatus before = prescription.getStatus();
-        updatePrescriptionStatusFromHistory(prescription);
-        if (before == PrescriptionStatus.PENDING_STOCK) {
+        updatePrescriptionStatusFromHistory(prescription, true);
+        // A partial fill against a back order leaves the remainder unavailable:
+        // the BACKORDER decision stays PENDING until the order is fully filled.
+        if (before == PrescriptionStatus.PENDING_STOCK
+                && prescription.getStatus() == PrescriptionStatus.DISPENSED) {
             closeOutBackOrder(prescription);
         }
 
@@ -630,8 +633,16 @@ public class DispenseServiceImpl implements DispenseService {
 
         Dispense saved = dispenseRepository.save(dispense);
 
-        // Recompute the prescription status from remaining non-cancelled dispenses
-        updatePrescriptionStatusFromHistory(dispense.getPrescription());
+        // Recompute the prescription status from remaining non-cancelled
+        // dispenses — unless the pharmacist has a question open: a
+        // cancellation must not put a PENDING_CLARIFICATION order back on
+        // the queue as SIGNED with the question unanswered. Nothing is
+        // announced to the prescriber either: undoing a fill is the
+        // pharmacy's own bookkeeping, not a pharmacy outcome.
+        Prescription prescription = dispense.getPrescription();
+        if (prescription.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
+            updatePrescriptionStatusFromHistory(prescription, false);
+        }
 
         logAudit(AuditEventType.DISPENSE_CANCELLED,
                 "Cancelled dispense of " + dispense.getQuantityDispensed() + " "
@@ -700,7 +711,12 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
-    private void updatePrescriptionStatusFromHistory(Prescription prescription) {
+    /**
+     * @param announce whether a status change is a pharmacy outcome the
+     *                 prescriber should hear about (a fill), as opposed to
+     *                 bookkeeping after a cancellation
+     */
+    private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
@@ -724,7 +740,9 @@ public class DispenseServiceImpl implements DispenseService {
             // G6: the prescriber hears about a fill or a partial fill; the
             // return to SIGNED after a cancellation is the pharmacy's own
             // bookkeeping and is not announced.
-            prescriberNotifier.notifyPrescriber(prescription, nextStatus);
+            if (announce) {
+                prescriberNotifier.notifyPrescriber(prescription, nextStatus);
+            }
         }
 
         if (nextStatus == PrescriptionStatus.DISPENSED) {

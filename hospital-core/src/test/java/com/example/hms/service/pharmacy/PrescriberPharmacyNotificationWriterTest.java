@@ -86,7 +86,7 @@ class PrescriberPharmacyNotificationWriterTest {
     }
 
     @Test
-    @DisplayName("a clarification request carries the pharmacist's question")
+    @DisplayName("a clarification request names the medication only — the question stays encrypted on the prescription")
     void pendingClarification() {
         prescription.setClarificationReason("Dose au-dessus du plafond rénal");
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
@@ -94,9 +94,23 @@ class PrescriberPharmacyNotificationWriterTest {
         writer.write(prescriptionId, PrescriptionStatus.PENDING_CLARIFICATION);
 
         verify(notificationService).createNotification(
-                "Pharmacie : clarification demandée pour Amoxicilline 500 mg (Aminata Diallo) "
-                        + "— Dose au-dessus du plafond rénal",
+                "Pharmacie : clarification demandée pour Amoxicilline 500 mg. Voir l'ordonnance.",
                 "dr.awa", "PHARMACY_EVENT");
+    }
+
+    @Test
+    @DisplayName("the body never exceeds the 255-character notification column")
+    void bodyIsCappedToTheColumn() {
+        prescription.setMedicationName("X".repeat(300));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        writer.write(prescriptionId, PrescriptionStatus.DISPENSED);
+
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(body.capture(), org.mockito.ArgumentMatchers.eq("dr.awa"),
+                org.mockito.ArgumentMatchers.eq("PHARMACY_EVENT"));
+        assertThat(body.getValue()).hasSize(PrescriberPharmacyNotificationWriter.MAX_MESSAGE_LENGTH)
+                .endsWith("\u2026");
     }
 
     @Test

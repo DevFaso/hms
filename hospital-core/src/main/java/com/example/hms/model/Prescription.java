@@ -312,6 +312,16 @@ public class Prescription extends BaseEntity {
     private java.util.UUID clarificationResolvedByUserId;
 
     /**
+     * The status the order held when the pharmacist asked, restored when the
+     * prescriber answers — so a PARTIALLY_FILLED or PENDING_STOCK order keeps
+     * its progress (and its pending BACKORDER decision) instead of reverting
+     * to SIGNED. Null on rows from before this column; those resolve to SIGNED.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "clarification_previous_status", length = 40)
+    private PrescriptionStatus clarificationPreviousStatus;
+
+    /**
      * SHA-256 digest over the canonical signed content (P2 #16).
      *
      * <p>Before this, {@code SIGNED} was a status string and nothing more —

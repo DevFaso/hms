@@ -321,6 +321,34 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("a PARTIAL fill against a back order leaves the back order pending — the remainder is still unavailable")
+        void partialFillKeepsTheBackOrderPending() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(4));
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(4));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            verify(routingDecisionRepository, never()).findByPrescriptionIdOrderByDecidedAtDesc(any());
+            verify(routingDecisionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("G3: a partner-rejected prescription can be filled in-house")
         void shouldDispensePartnerRejected() {
             prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
@@ -765,6 +793,27 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).save(stockLot);
             verify(inventoryItemRepository).save(inventoryItem);
             verify(stockTransactionRepository).save(any());
+            // Undoing a fill is bookkeeping, not a pharmacy outcome: nothing is announced.
+            verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        }
+
+        @Test
+        @DisplayName("cancelling a dispense on an order awaiting clarification keeps PENDING_CLARIFICATION")
+        void cancelKeepsPendingClarification() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            Dispense dispense = buildDispense(DispenseStatus.PARTIAL);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(dispenseMapper.toResponseDTO(dispense))
+                    .thenReturn(DispenseResponseDTO.builder().id(dispenseId).status("CANCELLED").build());
+
+            service.cancelDispense(dispenseId);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            verify(prescriptionRepository, never()).save(any());
+            verify(dispenseRepository, never()).sumQuantityDispensedForPrescription(any(), any());
+            verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
         }
 
         @Test

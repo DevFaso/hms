@@ -354,24 +354,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Same DTO as the clinician surface; the pharmacist-to-prescriber
         // clarification exchange comes off the patient's copy (gap G7).
         return prescriptionService.getPrescriptionsByPatientId(patientId, locale).stream()
-                .map(PatientPortalServiceImpl::withoutClarificationExchange)
+                .map(PrescriptionResponseDTO::withoutClarificationExchange)
                 .toList();
-    }
-
-    /**
-     * The pharmacist-to-prescriber clarification exchange is a professional
-     * consultation about the order, not patient-facing information. Pharmacy
-     * name, contact and dispatch state stay: they tell the patient where to go.
-     */
-    static PrescriptionResponseDTO withoutClarificationExchange(PrescriptionResponseDTO dto) {
-        if (dto == null) {
-            return null;
-        }
-        dto.setClarificationReason(null);
-        dto.setClarificationRequestedAt(null);
-        dto.setClarificationResponse(null);
-        dto.setClarificationResolvedAt(null);
-        return dto;
     }
 
     // ── Vital signs ──────────────────────────────────────────────────────

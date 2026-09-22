@@ -72,11 +72,14 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * flip the prescription to PARTNER_ACCEPTED under the new route. The
      * pharmacist records the refusal first ({@link #partnerRespond}), or the
      * timeout sweep does it for them, and PARTNER_REJECTED is routable.
+     * PARTIALLY_FILLED is routable so the remainder of a fill the shelf could
+     * not complete can be back-ordered or sent to a partner.
      */
     static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
             PrescriptionStatus.SIGNED,
             PrescriptionStatus.TRANSMITTED,
+            PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
             PrescriptionStatus.PARTNER_REJECTED
     );

@@ -219,7 +219,7 @@ class PrescriptionClarificationIT extends BaseIT {
         assertThat(forDoctor).hasSize(1);
         assertThat(forDoctor.get(0).getMessage())
             .contains("Amoxicilline 500 mg")
-            .contains(REASON);
+            .doesNotContain(REASON);
 
         List<AuditEventLog> audits = auditEventLogRepository.findAll().stream()
             .filter(row -> row.getEventType() == AuditEventType.PRESCRIPTION_CLARIFICATION_REQUESTED)

@@ -100,6 +100,7 @@ class PrescriptionClarificationServiceTest {
             service.requestClarification(prescriptionId, "  Dose au-dessus du plafond rénal ");
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(prescription.getClarificationPreviousStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             assertThat(prescription.getClarificationReason()).isEqualTo("Dose au-dessus du plafond rénal");
             assertThat(prescription.getClarificationRequestedAt()).isEqualTo(NOW);
             assertThat(prescription.getClarificationRequestedByUserId()).isEqualTo(pharmacistId);
@@ -175,17 +176,44 @@ class PrescriptionClarificationServiceTest {
         @BeforeEach
         void pending() {
             prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            prescription.setClarificationPreviousStatus(PrescriptionStatus.SIGNED);
             prescription.setClarificationReason("why");
+        }
+
+        private void doctorHere() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(staffRepository.findByUserIdAndHospitalId(doctorUserId, hospitalId))
+                    .thenReturn(Optional.of(doctorAt(hospital)));
+        }
+
+        @Test
+        @DisplayName("the order returns to the status it held when the question was asked, not blindly to SIGNED")
+        void restoresThePreviousStatus() {
+            prescription.setClarificationPreviousStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            doctorHere();
+
+            service.resolveClarification(prescriptionId, "ok");
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        @Test
+        @DisplayName("a row from before the previous-status column resolves to SIGNED")
+        void legacyRowResolvesToSigned() {
+            prescription.setClarificationPreviousStatus(null);
+            doctorHere();
+
+            service.resolveClarification(prescriptionId, "ok");
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
         }
 
         @Test
         @DisplayName("a doctor at the hospital returns the order to SIGNED with the answer on record")
         void happyPath() {
-            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(doctorUserId))
-                    .thenReturn(Optional.of(doctorAt(hospital)));
+            doctorHere();
 
             service.resolveClarification(prescriptionId, " Dose confirmée, clairance vérifiée ");
 
@@ -202,11 +230,7 @@ class PrescriptionClarificationServiceTest {
         @Test
         @DisplayName("the answer is optional when the order itself was edited")
         void answerIsOptional() {
-            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(doctorUserId))
-                    .thenReturn(Optional.of(doctorAt(hospital)));
+            doctorHere();
 
             service.resolveClarification(prescriptionId, null);
 
@@ -216,32 +240,28 @@ class PrescriptionClarificationServiceTest {
         }
 
         @Test
-        @DisplayName("a doctor whose staff profile is at another hospital is refused (403)")
-        void doctorElsewhereIsRefused() {
-            Hospital other = new Hospital();
-            other.setId(UUID.randomUUID());
-            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(doctorUserId))
-                    .thenReturn(Optional.of(doctorAt(other)));
+        @DisplayName("the staff profile is looked up at the prescription's hospital, so a doctor credentialed elsewhere too is admitted")
+        void staffProfileIsResolvedAtThePrescribingHospital() {
+            doctorHere();
 
-            assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
-                    .isInstanceOf(AccessDeniedException.class);
-            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            service.resolveClarification(prescriptionId, "ok");
+
+            verify(staffRepository).findByUserIdAndHospitalId(doctorUserId, hospitalId);
+            verify(staffRepository, never()).findFirstByUserIdOrderByCreatedAtAsc(any());
         }
 
         @Test
-        @DisplayName("a caller with no staff profile is refused (403)")
-        void noStaffProfileIsRefused() {
+        @DisplayName("a doctor with no staff profile at the prescribing hospital is refused (403)")
+        void doctorElsewhereIsRefused() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(doctorUserId))
+            when(staffRepository.findByUserIdAndHospitalId(doctorUserId, hospitalId))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
                     .isInstanceOf(AccessDeniedException.class);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
         }
 
         @Test

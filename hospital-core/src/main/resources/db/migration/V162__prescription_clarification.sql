@@ -15,4 +15,7 @@ ALTER TABLE clinical.prescriptions
     ADD COLUMN IF NOT EXISTS clarification_requested_by_user_id UUID,
     ADD COLUMN IF NOT EXISTS clarification_response TEXT,
     ADD COLUMN IF NOT EXISTS clarification_resolved_at TIMESTAMP WITHOUT TIME ZONE,
-    ADD COLUMN IF NOT EXISTS clarification_resolved_by_user_id UUID;
+    ADD COLUMN IF NOT EXISTS clarification_resolved_by_user_id UUID,
+    -- The status the order held when the question was asked, restored on
+    -- resolve: a partially filled or back-ordered order keeps its progress.
+    ADD COLUMN IF NOT EXISTS clarification_previous_status VARCHAR(40);

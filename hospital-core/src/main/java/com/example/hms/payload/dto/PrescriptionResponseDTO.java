@@ -120,6 +120,19 @@ public class PrescriptionResponseDTO {
     private LocalDateTime updatedAt;
 
     /**
+     * The copy a patient may read (gap G7): where to go stays, the
+     * pharmacist-to-prescriber clarification exchange — a professional
+     * consultation about the order — comes off. Mutates and returns this.
+     */
+    public PrescriptionResponseDTO withoutClarificationExchange() {
+        this.clarificationReason = null;
+        this.clarificationRequestedAt = null;
+        this.clarificationResponse = null;
+        this.clarificationResolvedAt = null;
+        return this;
+    }
+
+    /**
      * CDS rule-engine cards produced when the prescription was last
      * created or updated. Empty when the engine had nothing to flag.
      * Null on read-only responses where the engine did not run.

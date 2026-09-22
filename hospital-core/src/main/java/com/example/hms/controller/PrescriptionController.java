@@ -176,13 +176,45 @@ public class PrescriptionController {
         return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 
+    /** The reader roles of {@link #getById} that see the clarification exchange. */
+    static final java.util.Set<String> CLINICAL_READER_ROLES = java.util.Set.of(
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_PATIENT')")
-    @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID.")
+    @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID. A patient "
+        + "receives their copy without the pharmacist-to-prescriber clarification exchange.")
     public ResponseEntity<PrescriptionResponseDTO> getById(
         @PathVariable UUID id,
+        Authentication auth,
         Locale locale) {
-        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+        PrescriptionResponseDTO dto = prescriptionService.getPrescriptionById(id, locale);
+        if (isPatientOnly(auth)) {
+            dto = dto.withoutClarificationExchange();
+        }
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * The same patient-copy rule as {@code /me/patient/prescriptions} (gap
+     * G7): a principal that holds ROLE_PATIENT and no clinical reader role
+     * gets the copy without the clarification exchange.
+     */
+    static boolean isPatientOnly(Authentication auth) {
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+        boolean patient = false;
+        for (org.springframework.security.core.GrantedAuthority authority : auth.getAuthorities()) {
+            String name = authority.getAuthority();
+            if (CLINICAL_READER_ROLES.contains(name)) {
+                return false;
+            }
+            if ("ROLE_PATIENT".equals(name)) {
+                patient = true;
+            }
+        }
+        return patient;
     }
 
     @GetMapping

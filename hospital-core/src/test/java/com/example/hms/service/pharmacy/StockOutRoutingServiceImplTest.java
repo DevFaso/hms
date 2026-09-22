@@ -454,6 +454,25 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("a partially filled prescription can be back-ordered for the remainder")
+        void partiallyFilledIsRoutable() {
+            prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(any()))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("BACKORDER").build());
+
+            service.backOrder(prescriptionId, null);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);
+        }
+
+        @Test
         @DisplayName("a prescription still with a partner is NOT re-routable — the partner's reply must land first")
         void sentToPartnerIsNotRoutable() {
             prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
