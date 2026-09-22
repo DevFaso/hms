@@ -443,6 +443,7 @@
 "edu_status_completed" = "Terminé";
 "edu_status_confirmed" = "Compris";
 "edu_status_needs_clarification" = "À clarifier";
+"edu_status_feedback_provided" = "Retour transmis";
 "edu_cat_prenatal_care" = "Soins prénatals";
 "edu_cat_nutrition" = "Nutrition";
 "edu_cat_exercise" = "Exercice";

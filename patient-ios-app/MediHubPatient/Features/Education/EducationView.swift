@@ -471,6 +471,7 @@ enum EducationLabels {
         case "IN_PROGRESS": "edu_status_in_progress"
         case "COMPLETED": "edu_status_completed"
         case "CONFIRMED_UNDERSTANDING": "edu_status_confirmed"
+        case "FEEDBACK_PROVIDED": "edu_status_feedback_provided"
         case "NEEDS_CLARIFICATION": "edu_status_needs_clarification"
         default: "edu_status_not_started"
         }
@@ -478,7 +479,7 @@ enum EducationLabels {
 
     static func statusColor(_ status: String) -> Color {
         switch status.uppercased() {
-        case "COMPLETED", "CONFIRMED_UNDERSTANDING": .green
+        case "COMPLETED", "CONFIRMED_UNDERSTANDING", "FEEDBACK_PROVIDED": .green
         case "NEEDS_CLARIFICATION": .red
         default: Color("BrandBlue")
         }
@@ -567,6 +568,8 @@ final class EducationViewModel: ObservableObject {
     @Published var questionsLoaded = false
     @Published var questionsLoading = false
     @Published var questionsFailed = false
+    /// Set when a fetch is asked for while one is out; the running fetch re-runs once.
+    private var questionsReloadPending = false
 
     /// The resource open in the reader; nil pops it.
     @Published var readingId: String?
@@ -624,16 +627,26 @@ final class EducationViewModel: ObservableObject {
         Task { await self.loadQuestions() }
     }
 
+    /// One fetch at a time: a second call while one is out is folded into it
+    /// by re-running the fetch once it lands, so a question sent mid-load (see
+    /// submitQuestion) is never overwritten by a list fetched before it existed.
     func loadQuestions() async {
-        questionsLoading = true
-        questionsFailed = false
-        do {
-            let list: [EducationQuestion] = try await APIClient.shared.get(APIEndpoints.educationQuestions)
-            questions = list
-            questionsLoaded = true
-        } catch {
-            questionsFailed = true
+        if questionsLoading {
+            questionsReloadPending = true
+            return
         }
+        questionsLoading = true
+        repeat {
+            questionsReloadPending = false
+            questionsFailed = false
+            do {
+                let list: [EducationQuestion] = try await APIClient.shared.get(APIEndpoints.educationQuestions)
+                questions = list
+                questionsLoaded = true
+            } catch {
+                questionsFailed = true
+            }
+        } while questionsReloadPending
         questionsLoading = false
     }
 
@@ -720,12 +733,17 @@ final class EducationViewModel: ObservableObject {
         Task {
             do {
                 let question: EducationQuestion = try await APIClient.shared.post(APIEndpoints.educationQuestions, body: request)
-                // Prepended only to a list that was loaded; otherwise the tab's
-                // first visit fetches everything, this question included.
-                if self.questionsLoaded { self.questions.insert(question, at: 0) }
+                // Prepended to a loaded list (deduped by id); an unloaded list is
+                // fetched on the tab's first visit, this question included. A GET
+                // still in flight would land without it, so it is re-run after.
+                let reloadAfter = self.questionsLoading
+                if self.questionsLoaded, !self.questions.contains(where: { $0.id == question.id }) {
+                    self.questions.insert(question, at: 0)
+                }
                 self.askSubmitting = false
                 self.askOpen = false
                 self.showOutcome("question_sent".localized)
+                if reloadAfter { await self.loadQuestions() }
             } catch {
                 self.askSubmitting = false
                 self.askError = "question_failed".localized + ": " + error.localizedDescription
