@@ -32,6 +32,11 @@ enum APIEndpoints {
     static func appointmentQuestionnaires(id: String) -> String { "/me/patient/appointments/\(id)/questionnaires" }
     static func preCheckIn(id: String) -> String { "/me/patient/appointments/\(id)/pre-checkin" }
     static let rescheduleAppointment = "/me/patient/appointments/reschedule"
+    // Patient education, the web's My Education: the five self-service routes.
+    static let myEducation = "/me/patient/education"
+    static func educationItem(resourceId: String) -> String { "/me/patient/education/\(resourceId)" }
+    static func educationProgress(resourceId: String) -> String { "/me/patient/education/\(resourceId)/progress" }
+    static let educationQuestions = "/me/patient/education/questions"
     static let labResults = "/me/patient/lab-results"
     static let medications = "/me/patient/medications"
     static let prescriptions = "/me/patient/prescriptions"
