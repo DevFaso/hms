@@ -141,7 +141,8 @@ struct PreCheckInView: View {
                     get: { value?.text ?? "" },
                     set: { vm.answer(questionnaireId, question.id, $0.isEmpty ? nil : .text($0)) }
                 ))
-                .keyboardType(.decimalPad)
+                // The decimal pad has no minus key; a range below zero needs one.
+                .keyboardType((question.min ?? 0) < 0 ? .numbersAndPunctuation : .decimalPad)
                 if let problem = vm.problem(question, value) {
                     Text(problem == .notANumber
                          ? "answer_not_a_number".localized
@@ -249,7 +250,7 @@ enum AnswerValue: Equatable {
     var isAnswered: Bool {
         switch self {
         case .bool: return true
-        case .text(let t): return !t.trimmingCharacters(in: .whitespaces).isEmpty
+        case .text(let t): return !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 }
@@ -332,7 +333,7 @@ final class PreCheckInViewModel: ObservableObject {
 
     /// Numbers must parse, be finite and sit inside min..max; the rest is free text or a choice.
     func problem(_ question: QuestionnaireQuestion, _ value: AnswerValue?) -> AnswerProblem? {
-        guard isNumeric(question), let text = value?.text?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        guard isNumeric(question), let text = value?.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
         guard let number = Double(text.replacingOccurrences(of: ",", with: ".")), number.isFinite else { return .notANumber }
         if let min = question.min, number < min { return .outOfRange }
         if let max = question.max, number > max { return .outOfRange }
@@ -428,7 +429,7 @@ final class PreCheckInViewModel: ObservableObject {
         switch value {
         case .bool(let b): return b
         case .text(let t):
-            let text = t.trimmingCharacters(in: .whitespaces)
+            let text = t.trimmingCharacters(in: .whitespacesAndNewlines)
             guard question?.type == "NUMBER",
                   let number = Double(text.replacingOccurrences(of: ",", with: ".")), number.isFinite else { return text }
             return number.rounded() == number && abs(number) < 9.0e18 ? Int64(number) as Any : number as Any
