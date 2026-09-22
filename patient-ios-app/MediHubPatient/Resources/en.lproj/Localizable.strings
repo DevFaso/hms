@@ -412,7 +412,7 @@
 "document_delete_confirm" = "Are you sure you want to delete this document?";
 "document_delete_success" = "Document deleted";
 "document_delete_failed" = "Failed to delete document";
-"document_too_large" = "The file is larger than %d MB.";
+"document_too_large" = "The file must be under %d MB.";
 "document_type_not_allowed" = "This file type is not accepted. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
 "document_read_failed" = "The file could not be read.";
 "document_empty" = "The file is empty.";

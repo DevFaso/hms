@@ -52,6 +52,17 @@ enum DocumentUploadRules {
     /// advertising JPEG would be uploaded as HEIC bytes named `.jpg`, which
     /// passes the server's extension check and shows as a broken image.
     static func imageKind(of data: Data) -> (ext: String, mimeType: String)? {
+        sniff(data)
+    }
+
+    /// The re-encoded form a library photo is uploaded in: PNG when the
+    /// source bytes are PNG (transparency kept), JPEG otherwise. Both go
+    /// through UIImage so the source's metadata never leaves the phone.
+    static func photoOutput(forSource data: Data) -> (ext: String, mimeType: String) {
+        sniff(data)?.ext == "png" ? ("png", "image/png") : ("jpg", "image/jpeg")
+    }
+
+    private static func sniff(_ data: Data) -> (ext: String, mimeType: String)? {
         let head = [UInt8](data.prefix(4))
         guard head.count == 4 else { return nil }
         if head[0] == 0xFF, head[1] == 0xD8 { return ("jpg", "image/jpeg") }
@@ -63,8 +74,12 @@ enum DocumentUploadRules {
     }
 
     /// `patient_uploaded_documents.notes` is varchar(2048); the DTO itself
-    /// does not check, so the app does.
+    /// does not check, so the app does. Postgres counts code points, Swift's
+    /// `count` counts grapheme clusters (one for a whole emoji sequence), so
+    /// the cap and the counter use `unicodeScalars`.
     static let maxNotesLength = 2048
+
+    static func notesLength(_ notes: String) -> Int { notes.unicodeScalars.count }
 
     static var contentTypes: [UTType] {
         allowedExtensions.sorted().compactMap { UTType(filenameExtension: $0) }
@@ -288,8 +303,8 @@ private struct DocumentUploadSheet: View {
                 } header: {
                     Text("notes_optional".localized)
                 } footer: {
-                    Text("\(vm.notes.count)/\(DocumentUploadRules.maxNotesLength)")
-                        .foregroundColor(vm.notes.count > DocumentUploadRules.maxNotesLength ? .red : .secondary)
+                    Text("\(DocumentUploadRules.notesLength(vm.notes))/\(DocumentUploadRules.maxNotesLength)")
+                        .foregroundColor(DocumentUploadRules.notesLength(vm.notes) > DocumentUploadRules.maxNotesLength ? .red : .secondary)
                 }
                 if let error = vm.uploadError {
                     Section {
@@ -483,26 +498,28 @@ final class DocumentsViewModel: ObservableObject {
         stage(data: data, fileName: url.lastPathComponent)
     }
 
-    /// A photo from the library. The server accepts JPG/PNG/GIF/BMP/TIFF by
-    /// extension, so the extension comes from the bytes actually returned
-    /// (see `DocumentUploadRules.imageKind`), and anything else the library
-    /// holds (HEIC above all) is re-encoded as JPEG the way the avatar
-    /// upload does.
+    /// A photo from the library. Every photo is re-encoded through UIImage,
+    /// the way the avatar upload does: a library photo carries EXIF (GPS,
+    /// device, capture time) that must not travel with the document, and
+    /// HEIC is not a type the server accepts anyway. The bytes decide the
+    /// output (see `DocumentUploadRules.photoOutput`): a PNG stays PNG so
+    /// transparency survives, everything else becomes JPEG. A file chosen
+    /// through the document picker is not touched — the patient picked
+    /// that file deliberately.
     func stage(photo: PhotosPickerItem) async {
-        guard let raw = try? await photo.loadTransferable(type: Data.self) else {
+        guard let raw = try? await photo.loadTransferable(type: Data.self),
+              let image = UIImage(data: raw) else {
             actionError = "photo_process_failed".localized
             return
         }
         let stamp = Self.photoStamp.string(from: Date())
-        if let kind = DocumentUploadRules.imageKind(of: raw) {
-            stage(data: raw, fileName: "photo-\(stamp).\(kind.ext)")
-            return
-        }
-        guard let image = UIImage(data: raw), let jpeg = image.jpegData(compressionQuality: 0.9) else {
+        let output = DocumentUploadRules.photoOutput(forSource: raw)
+        let encoded = output.ext == "png" ? image.pngData() : image.jpegData(compressionQuality: 0.9)
+        guard let encoded else {
             actionError = "photo_process_failed".localized
             return
         }
-        stage(data: jpeg, fileName: "photo-\(stamp).jpg")
+        stage(data: encoded, fileName: "photo-\(stamp).\(output.ext)")
     }
 
     private static let photoStamp: DateFormatter = {
@@ -557,7 +574,7 @@ final class DocumentsViewModel: ObservableObject {
     func upload() async {
         guard let staged = pending, !isUploading else { return }
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedNotes.count <= DocumentUploadRules.maxNotesLength else {
+        guard DocumentUploadRules.notesLength(trimmedNotes) <= DocumentUploadRules.maxNotesLength else {
             uploadError = String(format: "notes_too_long".localized, DocumentUploadRules.maxNotesLength)
             return
         }

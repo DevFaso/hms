@@ -30,6 +30,22 @@ final class PatientDocumentsTests: XCTestCase {
         XCTAssertNil(DocumentUploadRules.imageKind(of: Data([0xFF])))
     }
 
+    func testPhotoOutputKeepsPngAndTurnsTheRestIntoJpeg() {
+        XCTAssertEqual(DocumentUploadRules.photoOutput(forSource: Data([0x89, 0x50, 0x4E, 0x47])).ext, "png")
+        XCTAssertEqual(DocumentUploadRules.photoOutput(forSource: Data([0xFF, 0xD8, 0xFF, 0xE0])).ext, "jpg")
+        XCTAssertEqual(DocumentUploadRules.photoOutput(forSource: Data([0x49, 0x49, 0x2A, 0x00])).ext, "jpg")
+        // HEIC and anything unrecognised: JPEG.
+        XCTAssertEqual(DocumentUploadRules.photoOutput(forSource: Data([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70])).mimeType, "image/jpeg")
+    }
+
+    func testNotesAreCountedInCodePointsLikeTheColumn() {
+        // One grapheme cluster, several code points: what varchar(2048) counts.
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"
+        XCTAssertEqual(family.count, 1)
+        XCTAssertEqual(DocumentUploadRules.notesLength(family), 5)
+        XCTAssertEqual(DocumentUploadRules.notesLength("abc"), 3)
+    }
+
     func testUploadRulesMirrorTheServer() {
         // FileUploadService.ALLOWED_ATTACHMENT_EXTENSIONS
         XCTAssertEqual(DocumentUploadRules.allowedExtensions,
