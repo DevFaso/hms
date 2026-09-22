@@ -62,6 +62,14 @@ public class Hl7v2MessageBuilder {
 
     /**
      * Builds an ORU^R01 (unsolicited observation result) for the given lab result.
+     *
+     * <p>OBX field numbering is the HL7 v2.5 one, the same
+     * {@link #parseOruR01} reads: OBX-7 reference range, OBX-8 abnormal
+     * flags, OBX-11 observation result status, OBX-14 date/time of the
+     * observation. Until this was fixed the flag went out at OBX-10, the
+     * status at OBX-13 and the date at OBX-16 — two fields late each —
+     * so a receiver (our own parser included) read no flag at all and
+     * graded every result normal.
      */
     public String buildOruR01(LabResult result) {
         LabOrder order = result.getLabOrder();
@@ -82,7 +90,7 @@ public class Hl7v2MessageBuilder {
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
             "OBX|1|ST|" + testCode + "^" + testName + "||" + result.getResultValue() + "|" +
-            result.getResultUnit() + "||||" + abnormalFlag + "|||F|||" + resultDate + SEG_TERM;
+            result.getResultUnit() + "||" + abnormalFlag + "|||F|||" + resultDate + SEG_TERM;
     }
 
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────

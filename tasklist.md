@@ -3103,6 +3103,41 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   whichever PR moves the pin, where the new version's parsing of `tracks`
   can actually be checked instead of guessed.
 
+- **Pharmacy and laboratory end-to-end flows (audit 2026-09-22).** Two
+  read-only audits found neither flow works end to end. Lab: nothing advanced
+  `LabOrderStatus` so the doctor's review queue was permanently empty; the
+  patient received unreleased values; both mobile apps deserialise field names
+  the API never sends; there was no concept of a performing laboratory, so a
+  lab in another organisation could neither see nor result an order. Pharmacy:
+  sending to a community pharmacy was one-way with no reply path and left the
+  prescription dispensable in-house; refused and back-ordered prescriptions
+  vanished from every screen; the prescriber was never notified of anything the
+  pharmacy did; and no DTO carried which pharmacy a prescription went to.
+  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161). Still owed:
+  wave 2, the portal (lab tab on the patient chart, a lab category in the
+  clinical inbox, the pending-release worklist screen, the pharmacist
+  clarification UI, prescriber visibility of dispense and routing history, the
+  PHARMACY_VERIFIER nav entry, post-pharmacy status tabs); wave 3, the two
+  patient apps (the lab wire-contract mismatch, and pharmacy status labels
+  rendering raw enum names); and the open design question of whether a pharmacy
+  should be a platform tenant with its own work queue, since today the only
+  channel that crosses organisations is SMS.
+
+- **The cross-tenant oracle is still open on the ADT and merge inbound
+  paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
+  answer `REJECTED_CROSS_TENANT` → AR when the referenced patient exists but
+  belongs to another hospital, while an unknown one answers AE, so an
+  allowlisted sender can learn that an MRN exists in a hospital it cannot read.
+  #715 collapsed the two outcomes for the lab (ORU^R01) path only; the same
+  one-line change is owed on both, with the reason kept in the integration
+  message row rather than in the ACK.
+
+- **The co-sign path picks a doctor's oldest staff profile.** The
+  staff-profile lookup behind co-signature resolves by taking the first
+  profile it finds, so a doctor credentialed at two hospitals is matched to the
+  older one and refused at the newer. #717 fixed the clarification path only;
+  the co-sign path still needs the profile chosen by the active hospital.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

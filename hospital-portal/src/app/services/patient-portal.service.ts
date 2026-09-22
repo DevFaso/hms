@@ -48,8 +48,13 @@ export interface LabResultSummary {
   testName: string;
   result: string;
   referenceRange: string;
+  /** PENDING while unreleased, else NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL. */
   status: string;
   collectedDate: string;
+  /** The lab has released this result; until then the API sends no value at all. */
+  released: boolean;
+  /** Ordered and awaiting release: show it as expected, never as a normal result. */
+  isPending: boolean;
   isAbnormal: boolean;
   unit: string;
   orderedBy: string;
@@ -63,7 +68,9 @@ export interface LabResultSummary {
 interface LabResultApiResponse {
   id: string;
   testName: string;
+  /** Absent entirely while the result is unreleased — the API redacts it. */
   value: string;
+  released: boolean;
   unit: string;
   referenceRange: string;
   status: string;
@@ -289,25 +296,25 @@ function mapAppointment(a: AppointmentApiResponse): PortalAppointment {
   };
 }
 
+/** Statuses the API sends for a released result that is out of range. */
+const ABNORMAL_LAB_STATUSES = new Set(['ABNORMAL', 'ABNORMAL_LOW', 'ABNORMAL_HIGH', 'CRITICAL']);
+
 /**
- * Determine if a lab result is abnormal by comparing to the reference range.
- * Reference ranges are typically formatted as "low-high" (e.g., "70-100").
+ * The API grades the result — against the hospital's own reference range AND
+ * the flag the analyser or technologist recorded — and sends the verdict in
+ * `status`. Re-deriving it here from value + reference range was wrong twice
+ * over: it missed a result flagged abnormal by the analyser with no range
+ * configured, and, once the API stopped sending values for unreleased results,
+ * it graded every pending row "not abnormal", which the templates drew as a
+ * green check beside a blank value. So: read `status`, and treat a row the lab
+ * has not released as pending, never as a result.
  */
-function isLabResultAbnormal(
-  value: string | null | undefined,
-  refRange: string | null | undefined,
-): boolean {
-  if (!value || !refRange) return false;
-  const num = Number.parseFloat(value);
-  if (Number.isNaN(num)) return false;
-  const match = /([\d.]+)\s*[-–]\s*([\d.]+)/.exec(refRange);
-  if (!match) return false;
-  const low = Number.parseFloat(match[1]);
-  const high = Number.parseFloat(match[2]);
-  return num < low || num > high;
+function isPendingLabResult(l: LabResultApiResponse): boolean {
+  return l.status === 'PENDING' || l.released === false;
 }
 
 function mapLabResult(l: LabResultApiResponse): LabResultSummary {
+  const pending = isPendingLabResult(l);
   return {
     id: l.id,
     testName: l.testName ?? '',
@@ -315,7 +322,9 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     referenceRange: l.referenceRange ?? '',
     status: l.status ?? '',
     collectedDate: l.collectedAt ?? '',
-    isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+    released: !pending,
+    isPending: pending,
+    isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',

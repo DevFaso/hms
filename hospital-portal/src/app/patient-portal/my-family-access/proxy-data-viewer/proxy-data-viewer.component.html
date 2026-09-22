@@ -160,9 +160,13 @@
                   <tr [class.abnormal-row]="l.isAbnormal">
                     <td>{{ l.testName }}</td>
                     <td>
-                      {{ l.result }} {{ l.unit }}
-                      @if (l.isAbnormal) {
-                        <span class="material-symbols-outlined abnormal-flag">warning</span>
+                      @if (l.isPending) {
+                        {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
+                      } @else {
+                        {{ l.result }} {{ l.unit }}
+                        @if (l.isAbnormal) {
+                          <span class="material-symbols-outlined abnormal-flag">warning</span>
+                        }
                       }
                     </td>
                     <td>{{ l.referenceRange || '—' }}</td>
