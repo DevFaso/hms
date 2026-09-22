@@ -135,8 +135,10 @@ class DoctorWorklistServiceImplTest {
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        // Critical labs (results flagged CRITICAL)
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlag(staffId, AbnormalFlag.CRITICAL)).thenReturn(5L);
+        // Critical labs (B15): CRITICAL, unacknowledged, inside the window — the
+        // all-time count is gone from the repository, so the stub IS the proof.
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+                eq(staffId), eq(AbnormalFlag.CRITICAL), any(LocalDateTime.class))).thenReturn(5L);
 
         // Waiting long: 2 encounters, 1 > 30 min
         Encounter longWait = mock(Encounter.class);
@@ -168,13 +170,41 @@ class DoctorWorklistServiceImplTest {
     }
 
     @Test
+    void getCriticalStrip_safetyAlertsUseTheThirtyDayFloor() {
+        // B15: the floor handed to the finder is "now minus the window", not
+        // epoch — an acknowledged or months-old critical is a chart fact, not
+        // a live alert.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        org.mockito.ArgumentCaptor<LocalDateTime> floor = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+                eq(staffId), eq(AbnormalFlag.CRITICAL), floor.capture())).thenReturn(2L);
+        when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
+
+        CriticalStripDTO result = service.getCriticalStrip(userId);
+
+        assertEquals(2, result.getCriticalLabsCount());
+        assertEquals(2, result.getActiveSafetyAlertsCount());
+        LocalDateTime expected = LocalDateTime.now().minusDays(DoctorWorklistServiceImpl.SAFETY_ALERT_WINDOW_DAYS);
+        assertTrue(Math.abs(java.time.Duration.between(expected, floor.getValue()).toSeconds()) < 60,
+                "floor should be now minus the safety-alert window");
+    }
+
+    @Test
     void getCriticalStrip_consultationQueryFails_shouldDefaultToZero() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlag(eq(staffId), any())).thenReturn(0L);
+        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());

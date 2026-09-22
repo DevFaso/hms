@@ -73,6 +73,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private static final int LONG_WAIT_THRESHOLD_MINUTES = 30;
 
+    /**
+     * How far back the critical strip looks for unacknowledged criticals (B15).
+     * A critical value from months ago is a chart fact, not a live alert; the
+     * escalation sweep, not this tile, chases those.
+     */
+    static final int SAFETY_ALERT_WINDOW_DAYS = 30;
+
     @Override
     public CriticalStripDTO getCriticalStrip(UUID userId) {
         log.info("Building critical strip for user: {}", userId);
@@ -83,8 +90,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         Staff staff = staffOpt.get();
         UUID staffId = staff.getId();
 
-        // Critical labs: results flagged as CRITICAL by the lab (replaces proxy)
-        long criticalLabs = labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlag(staffId, AbnormalFlag.CRITICAL);
+        // Critical labs still needing this doctor's attention: flagged CRITICAL
+        // by the lab, not yet acknowledged, and recent (B15). The old count was
+        // every CRITICAL result ever filed for the staff, so the tile never
+        // went back down.
+        long criticalLabs = labResultRepository
+                .countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndResultDateAfter(
+                        staffId, AbnormalFlag.CRITICAL, LocalDateTime.now().minusDays(SAFETY_ALERT_WINDOW_DAYS));
 
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);

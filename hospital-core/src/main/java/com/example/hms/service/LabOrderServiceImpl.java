@@ -159,7 +159,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setLabTestDefinition(testDefinition);
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
-        labOrder.setStatus(LabOrderStatus.valueOf(request.getStatus().toUpperCase()));
+        applyRequestedStatus(labOrder, request.getStatus(), isNew);
         labOrder.setClinicalIndication(clinicalIndication);
         labOrder.setMedicalNecessityNote(medicalNecessityNote);
         labOrder.setNotes(notes);
@@ -179,6 +179,31 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * The request's status is honoured on create only (B9). On update it is
+     * echoed back by every edit form, so it is tolerated when it still matches
+     * — but a differing value is NOT applied: the lifecycle advances through
+     * {@link #transitionLabOrderStatus} (role-checked per step) and through
+     * the specimen and result events, never through a PUT that a doctor can
+     * point at COMPLETED.
+     */
+    private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
+        LabOrderStatus requested;
+        try {
+            requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("Unknown lab order status: " + requestedStatus);
+        }
+        if (isNew) {
+            labOrder.setStatus(requested);
+            return;
+        }
+        if (labOrder.getStatus() != requested) {
+            log.warn("Ignoring status {} on update of lab order {} (current {}): use the transition endpoint",
+                requested, labOrder.getId(), labOrder.getStatus());
+        }
     }
 
     @Override

@@ -22,6 +22,7 @@ import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -45,16 +46,19 @@ import com.example.hms.model.LabReflexRule;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.repository.LabReflexRuleRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
+import com.example.hms.service.lab.LabOrderLifecycle;
 
 @Service
 @RequiredArgsConstructor
 public class LabResultServiceImpl implements LabResultService {
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String ROLE_LAB_DIRECTOR = "ROLE_LAB_DIRECTOR";
     private static final String UNKNOWN_CLINICIAN = "Unknown clinician";
     private static final String CRITICAL_FLAG = "CRITICAL";
 
 
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
+    private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
@@ -71,11 +75,32 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final CriticalValueNotificationService criticalValueNotificationService;
 
+    /**
+     * Whether a normal-range result is released the moment it is saved, with
+     * nobody attesting to it.
+     *
+     * <p><b>Default false, and that is deliberate (B5).</b> Release is the
+     * laboratory saying "this number is correct and you may act on it"
+     * ({@link com.example.hms.service.lab.LabResultAuthority#RELEASE_ROLES}
+     * narrows who may say so). Auto-verification used to say it for every
+     * non-abnormal result instantly, under the name "Autoverification", which
+     * made the release gate decorative for the bulk of results. A hospital
+     * whose analysers and delta checks justify auto-release turns this on with
+     * {@code hms.lab.auto-verification.enabled=true}; until then a human
+     * releases.
+     */
+    @Value("${hms.lab.auto-verification.enabled:false}")
+    private boolean autoVerificationEnabled;
+
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        // Same 404-not-403 tenancy comparison as every other single-row path
+        // here (B11): a foreign tenant must not learn the order exists, let
+        // alone attach a result to it.
+        requireOrderInActiveHospital(labOrder);
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
 
@@ -96,7 +121,14 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
 
+        // An entered result IS the order's RESULTED state (B2). Nothing else
+        // advanced the order, so released results never reached the ordering
+        // doctor's review queue, which keys on COMPLETED.
+        advanceOrder(labOrder, LabOrderStatus.RESULTED);
         performAutoVerification(saved);
+        if (saved.isReleased()) {
+            completeOrderIfAllReleased(labOrder);
+        }
         triggerReflexOrders(saved);
         instrumentOutboxService.enqueueResultObservation(saved);
         // P0 #5 — critical values must reach the ordering provider; the
@@ -104,6 +136,35 @@ public class LabResultServiceImpl implements LabResultService {
         criticalValueNotificationService.notifyIfCritical(saved);
 
         return labResultMapper.toResponseDTO(saved);
+    }
+
+    private void advanceOrder(LabOrder labOrder, LabOrderStatus target) {
+        if (LabOrderLifecycle.advance(labOrder, target)) {
+            labOrderRepository.save(labOrder);
+        }
+    }
+
+    /**
+     * The order is COMPLETED once every one of its results is released — the
+     * point at which the ordering doctor's review queue picks it up. One
+     * unreleased result of a panel keeps the order open.
+     */
+    private void completeOrderIfAllReleased(LabOrder labOrder) {
+        if (labOrder == null || labOrder.getId() == null) {
+            return;
+        }
+        List<LabResult> results = labResultRepository.findByLabOrder_Id(labOrder.getId());
+        if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
+            advanceOrder(labOrder, LabOrderStatus.COMPLETED);
+        }
+    }
+
+    private void requireOrderInActiveHospital(LabOrder labOrder) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && labOrder.getHospital() != null
+                && !activeHospitalId.equals(labOrder.getHospital().getId())) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
     }
 
     @Override
@@ -189,7 +250,7 @@ public class LabResultServiceImpl implements LabResultService {
             labResult.getLabOrder() != null ? labResult.getLabOrder().getLabTestDefinition() : null);
 
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
     UUID currentUserId = authService.getCurrentUserId();
@@ -303,6 +364,10 @@ public class LabResultServiceImpl implements LabResultService {
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        // Release was the one write path here without the scope comparison
+        // (B11); it runs before the role check so a foreign tenant — including
+        // a super-admin pinned to another hospital — sees 404, not 403.
+        requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
         UUID hospitalId = hospital != null ? hospital.getId() : null;
@@ -320,6 +385,7 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
 
         labResultRepository.save(labResult);
+        completeOrderIfAllReleased(labResult.getLabOrder());
         return labResultMapper.toResponseDTO(labResult);
     }
 
@@ -403,14 +469,17 @@ public class LabResultServiceImpl implements LabResultService {
             throw new BusinessException("Unable to determine hospital context for lab result release.");
         }
 
+        // LabResultAuthority.RELEASE_ROLES, checked against the caller's
+        // assignment at THIS hospital (B10). This list used to admit doctors,
+        // nurses, midwives and hospital admins — exactly the roles the
+        // annotation had already shut out, so a doctor holding a lab role at
+        // some other hospital could still release here.
         boolean allowed = roleValidator.isLabScientist(userId, hospitalId)
-            || roleValidator.isHospitalAdmin(userId, hospitalId)
-            || roleValidator.isDoctor(userId, hospitalId)
-            || roleValidator.isNurse(userId, hospitalId)
-            || roleValidator.isMidwife(userId, hospitalId);
+            || roleValidator.isLabManager(userId, hospitalId)
+            || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR);
 
         if (!allowed) {
-            throw new BusinessException("Only authorized laboratory or clinical staff can release lab results.");
+            throw new BusinessException("Only laboratory scientists, managers or directors can release lab results.");
         }
     }
 
@@ -489,6 +558,9 @@ public class LabResultServiceImpl implements LabResultService {
     // ── MVP3 helpers ─────────────────────────────────────────────────────────
 
     private void performAutoVerification(LabResult result) {
+        if (!autoVerificationEnabled) {
+            return;
+        }
         if (!result.isReleased()
                 && (result.getAbnormalFlag() == null
                     || result.getAbnormalFlag() == AbnormalFlag.NORMAL)) {
@@ -565,6 +637,20 @@ public class LabResultServiceImpl implements LabResultService {
             .clinicalIndication("Reflex from order: " + parent.getId())
             .medicalNecessityNote("Auto-generated reflex order triggered by result " + result.getId())
             .orderChannel(parent.getOrderChannel())
+            .orderChannelOther(parent.getOrderChannelOther())
+            // A reflex order is the parent order continued (B12): the same
+            // medical necessity, the same provider, the same attestation.
+            // createLabOrder mandates every one of these; the child used to
+            // carry none of them.
+            .primaryDiagnosisCode(parent.getPrimaryDiagnosisCode())
+            .additionalDiagnosisCodes(new ArrayList<>(parent.getAdditionalDiagnosisCodes() != null
+                ? parent.getAdditionalDiagnosisCodes() : List.of()))
+            .orderingProviderNpi(parent.getOrderingProviderNpi())
+            .providerSignatureDigest(parent.getProviderSignatureDigest())
+            .signedAt(parent.getSignedAt())
+            .signedByUserId(parent.getSignedByUserId())
+            .documentationSharedWithLab(parent.isDocumentationSharedWithLab())
+            .documentationReference(parent.getDocumentationReference())
             .build();
         labOrderRepository.save(child);
         LOG.info("Created reflex child order {} (test: {}) triggered by result {}",
@@ -578,7 +664,7 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.isNurse(userId, hospitalId)
             || roleValidator.isLabTechnician(userId, hospitalId)
             || roleValidator.isLabManager(userId, hospitalId)
-            || roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_DIRECTOR")
+            || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR)
             || roleValidator.hasRole(userId, hospitalId, "ROLE_QUALITY_MANAGER");
         if (!allowed) {
             throw new BusinessException("User does not have a lab or clinical role for this hospital.");

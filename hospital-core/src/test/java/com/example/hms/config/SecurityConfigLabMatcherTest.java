@@ -46,6 +46,38 @@ class SecurityConfigLabMatcherTest {
         }
     }
 
+    /**
+     * B8 — the coarse matcher is first-match-wins and terminal, so every role
+     * the controller's {@code @PreAuthorize} admits must be admitted here too;
+     * LAB_DIRECTOR, QUALITY_MANAGER and SUPER_ADMIN used to get 403 before the
+     * annotation that permits them ever ran.
+     */
+    @Test
+    @DisplayName("POST /lab-results matcher admits every LabResultAuthority.ENTRY_EXPRESSION role")
+    void resultEntryMatcherCoversTheAnnotation() throws IOException {
+        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
+        String matcherRoles = rolesOf(source, ".requestMatchers(HttpMethod.POST, API_LAB_RESULTS)");
+
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("'([A-Z_]+)'")
+            .matcher(com.example.hms.service.lab.LabResultAuthority.ENTRY_EXPRESSION);
+        int seen = 0;
+        while (m.find()) {
+            seen++;
+            assertThat(matcherRoles).as("POST /lab-results admits %s", m.group(1))
+                .contains("ROLE_" + m.group(1));
+        }
+        assertThat(seen).as("the annotation names at least one role").isPositive();
+    }
+
+    @Test
+    @DisplayName("PUT /lab-results has no narrower matcher than the annotation")
+    void resultUpdateHasNoNarrowerMatcher() throws IOException {
+        // PUT rides anyRequest().authenticated() plus the same ENTRY_EXPRESSION;
+        // a PUT matcher listing fewer roles would reopen B8 for updates.
+        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
+        assertThat(source).doesNotContain(".requestMatchers(HttpMethod.PUT, API_LAB_RESULTS");
+    }
+
     @Test
     @DisplayName("lab configuration and integration matchers keep HOSPITAL_ADMIN")
     void labConfigurationMatchersKeepTheRole() throws IOException {
