@@ -24,9 +24,10 @@ import java.util.regex.Pattern;
  * not the first word is now ordinary text and the keyword branch decides.
  * <p>
  * Keywords are whole words: {@code "rupture de stock"} used to be an ACCEPT
- * because "stock" contains "ok". Refusal is looked for before acceptance, and
- * a body that carries words from more than one family is ambiguous and
- * refused rather than guessed.
+ * because "stock" contains "ok". A refusal word decides on its own — "non, on
+ * ne peut pas livrer" is a refusal, not a confusing mixture — and only an
+ * acceptance mixed with a dispense claim, with no refusal anywhere, is
+ * ambiguous enough to ignore.
  * Returns empty when the message is unparseable.
  */
 @Component
@@ -79,18 +80,21 @@ public class PartnerSmsReplyParser {
                 default -> Action.CONFIRM_DISPENSE;
             };
         }
-        // Keyword fallback: refusal first, whole words only, one family only.
+        // Keyword fallback, whole words only. A refusal wins outright: the
+        // words a pharmacy refuses with routinely name what it cannot do
+        // ("non, on ne peut pas livrer"), so treating that as a mixture would
+        // silently drop refusals the old parser understood. Only an acceptance
+        // sitting next to a dispense claim, with no refusal, is genuinely
+        // undecidable.
         boolean reject = REJECT_WORDS.matcher(lower).find();
         boolean accept = ACCEPT_WORDS.matcher(lower).find();
         boolean dispense = DISPENSE_WORDS.matcher(lower).find();
-        int families = (reject ? 1 : 0) + (accept ? 1 : 0) + (dispense ? 1 : 0);
-        if (families > 1) {
-            log.info("Partner SMS reply ambiguous (reject={}, accept={}, dispense={}); ignored",
-                    reject, accept, dispense);
-            return null;
-        }
         if (reject) {
             return Action.REJECT;
+        }
+        if (accept && dispense) {
+            log.info("Partner SMS reply ambiguous (accept and dispense, no refusal); ignored");
+            return null;
         }
         if (accept) {
             return Action.ACCEPT;

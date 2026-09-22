@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -303,6 +304,54 @@ class StockOutRoutingServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("REQUIRES_EXTERNAL_FILL");
         verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("round 3: a target with no phone number is refused — the offer is an SMS")
+    void routeToPartnerShouldRejectTargetWithoutPhone() {
+        Pharmacy noPhone = Pharmacy.builder()
+                .hospital(hospital)
+                .name("Pharmacie sans t\u00e9l\u00e9phone")
+                .pharmacyType(PharmacyType.COMMUNITY_PHARMACY)
+                .build();
+        UUID noPhoneId = UUID.randomUUID();
+        noPhone.setId(noPhoneId);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(noPhoneId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(noPhoneId)).thenReturn(Optional.of(noPhone));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no phone number");
+
+        // Nothing moved: the prescription is still dispensable in-house.
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(routingDecisionRepository, never()).save(any());
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(partnerChannel);
+    }
+
+    @Test
+    @DisplayName("round 3: a blank phone number counts as none")
+    void routeToPartnerShouldRejectTargetWithBlankPhone() {
+        partnerPharmacy.setPhoneNumber("   ");
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no phone number");
     }
 
     @Test

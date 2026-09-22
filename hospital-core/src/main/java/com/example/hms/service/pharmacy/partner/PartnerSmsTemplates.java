@@ -11,8 +11,11 @@ package com.example.hms.service.pharmacy.partner;
  *   <li>{@code 3} = confirm dispensed</li>
  *   <li>{@code 0} = cancel / unsubscribe (not auto-handled)</li>
  * </ul>
- * The Rx reference token is appended so the partner's reply can be parsed
- * unambiguously when multiple prescriptions are active.
+ * Every outbound message carries the Rx reference token AND shows it inside
+ * the reply it asks for ({@code « 1 ABC12 »}): the inbound parser requires a
+ * token, so an offer that only said "Répondez 1 pour accepter" produced bare
+ * replies that were parsed and then discarded — the decision stayed PENDING
+ * and auto-rejected four hours later.
  */
 public final class PartnerSmsTemplates {
 
@@ -25,13 +28,22 @@ public final class PartnerSmsTemplates {
     public static String prescriptionOffer(String refToken, String medicationName, String patientInitials) {
         return RX_PREFIX + refToken + " : " + medicationName
                 + " pour " + patientInitials
-                + ". Répondez 1 pour accepter, 2 pour refuser.";
+                + ". " + replyInstructions(refToken);
     }
 
     /** Outbound: reminder if no reply received in 2 hours. */
     public static String reminder(String refToken) {
         return RX_PREFIX + refToken + " : rappel, aucune réponse reçue."
-                + " Répondez 1 pour accepter, 2 pour refuser.";
+                + " " + replyInstructions(refToken);
+    }
+
+    /**
+     * The reply the parser can actually act on: the code AND the reference,
+     * spelled out. Quoting the reference is not decoration — a reply without
+     * it cannot be matched to a prescription and is dropped.
+     */
+    static String replyInstructions(String refToken) {
+        return "Répondez « 1 " + refToken + " » pour accepter, « 2 " + refToken + " » pour refuser.";
     }
 
     /** Outbound: auto-rejection notice after timeout expiry. */

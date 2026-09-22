@@ -168,6 +168,16 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             throw new BusinessException(
                     "Target pharmacy must be a PARTNER_PHARMACY or COMMUNITY_PHARMACY for partner routing");
         }
+        // The offer is an SMS and the send is best-effort: without a number the
+        // prescription would leave the dispense queue and the patient be sent to
+        // a pharmacy that was never told anything. Same check the SMS dispatch
+        // path makes, and for the same reason.
+        String targetPhone = targetPharmacy.getPhoneNumber();
+        if (targetPhone == null || targetPhone.isBlank()) {
+            throw new BusinessException(
+                    "Target pharmacy has no phone number on file and cannot be sent the prescription; "
+                            + "add one, or print the prescription for the patient instead.");
+        }
 
         User currentUser = resolveCurrentUser();
         Patient patient = prescription.getPatient();

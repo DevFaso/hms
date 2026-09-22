@@ -126,7 +126,7 @@ class SmsPartnerNotificationChannelTest {
                 .startsWith("HMS Rx " + decisionId.toString().substring(0, 8).toUpperCase())
                 .contains("Amoxicilline 500mg PO BID x 7 j")
                 .contains("pour AB")
-                .endsWith("2 pour refuser.");
+                .endsWith("« 2 " + decisionId.toString().substring(0, 8).toUpperCase() + " » pour refuser.");
         verifyNoInteractions(smsServiceProvider);
     }
 

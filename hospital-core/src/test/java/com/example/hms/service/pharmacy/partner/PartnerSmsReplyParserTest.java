@@ -129,10 +129,30 @@ class PartnerSmsReplyParserTest {
     }
 
     @Test
-    @DisplayName("round 2: a body with both a refusal and an acceptance word is ambiguous and ignored")
-    void ambiguousBodyIgnored() {
-        assertThat(parser.parse("oui non 3F2A9B1C")).isEmpty();
-        assertThat(parser.parse("ok 3F2A9B1C mais refus\u00e9")).isEmpty();
-        assertThat(parser.parse("non 3F2A9B1C livr\u00e9")).isEmpty();
+    @DisplayName("round 3: a refusal decides on its own — a refusal word beats an accept or dispense word")
+    void refusalWinsOverOtherFamilies() {
+        // The words a pharmacy refuses with name what it cannot do; the round-2
+        // ambiguity guard turned these into silence, where the original parser
+        // (and the pharmacy) meant REJECT.
+        assertThat(parser.parse("Non 3F2A9B1C, on ne peut pas livrer").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse("oui non 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse("ok 3F2A9B1C mais refus\u00e9").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+    }
+
+    @Test
+    @DisplayName("round 3: the reference is still read out of a refusal in free text")
+    void refusalKeepsTheReference() {
+        assertThat(parser.parse("Non 3F2A9B1C, on ne peut pas livrer").orElseThrow().refToken())
+                .isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 3: an acceptance next to a dispense claim, with no refusal, stays ambiguous and ignored")
+    void acceptPlusDispenseStillAmbiguous() {
+        assertThat(parser.parse("oui 3F2A9B1C livr\u00e9")).isEmpty();
+        assertThat(parser.parse("ok 3F2A9B1C d\u00e9j\u00e0 dispens\u00e9")).isEmpty();
     }
 }

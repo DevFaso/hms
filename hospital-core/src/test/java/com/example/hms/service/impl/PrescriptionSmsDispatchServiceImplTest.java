@@ -157,7 +157,9 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .contains("Note: priority")
                 .contains("pour AD")
                 .doesNotContain("Alice")
-                .endsWith("2 pour refuser.");
+                // The pharmacy is told which reply to send, reference included.
+                .contains("« 1 " + REF_TOKEN + " »")
+                .endsWith("« 2 " + REF_TOKEN + " » pour refuser.");
 
         ArgumentCaptor<PrescriptionRoutingDecision> decisionCaptor =
                 ArgumentCaptor.forClass(PrescriptionRoutingDecision.class);
@@ -195,7 +197,7 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(bodyCaptor.getValue())
                 .hasSizeLessThanOrEqualTo(480)
                 .startsWith("HMS Rx " + REF_TOKEN)
-                .endsWith("2 pour refuser.");
+                .endsWith("« 2 " + REF_TOKEN + " » pour refuser.");
     }
 
     @Test
