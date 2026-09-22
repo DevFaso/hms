@@ -454,6 +454,27 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("re-routing a partially filled order supersedes the back order waiting for its remainder")
+        void partiallyFilledRerouteSupersedesTheBackOrder() {
+            prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            PrescriptionRoutingDecision backOrder = pendingBackOrder();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(backOrder));
+            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(routingMapper.toResponseDTO(any()))
+                    .thenReturn(RoutingDecisionResponseDTO.builder().routingType("PRINT").build());
+
+            service.printForPatient(prescriptionId);
+
+            assertThat(backOrder.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        }
+
+        @Test
         @DisplayName("a partially filled prescription can be back-ordered for the remainder")
         void partiallyFilledIsRoutable() {
             prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
@@ -551,12 +572,21 @@ class StockOutRoutingServiceImplTest {
         when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
         when(routingDecisionRepository.save(any())).thenReturn(decision);
         when(routingMapper.toResponseDTO(decision)).thenReturn(response);
+        prescription.setPharmacyId(partnerId);
+        prescription.setPharmacyName("Partner Pharmacy");
+        prescription.setPharmacyContact("+22670000000");
+        prescription.setPharmacyAddress("Rue 12");
 
         service.partnerRespond(decisionId, false);
 
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
         verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTNER_REJECTED);
+        // The refusing partner is no longer the order's pharmacy: the queue groups it in-house.
+        assertThat(prescription.getPharmacyId()).isNull();
+        assertThat(prescription.getPharmacyName()).isNull();
+        assertThat(prescription.getPharmacyContact()).isNull();
+        assertThat(prescription.getPharmacyAddress()).isNull();
     }
 
     @Test

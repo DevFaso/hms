@@ -148,6 +148,16 @@ public class DispenseServiceImpl implements DispenseService {
     static final String ATTENTION_CLARIFICATION_RESOLVED = "CLARIFICATION_RESOLVED";
 
     /**
+     * The fill states a cancellation may recompute from. Every other status
+     * belongs to a routing or clarification workflow that owns the exit.
+     */
+    static final Set<PrescriptionStatus> RECOMPUTABLE_AFTER_CANCEL = Set.of(
+            PrescriptionStatus.SIGNED,
+            PrescriptionStatus.PARTIALLY_FILLED,
+            PrescriptionStatus.DISPENSED
+    );
+
+    /**
      * Roadmap row 4 / T-68 — orchestrator that enforces idempotent replay
      * semantics around the transactional create body in
      * {@link #createDispenseTransactionally(DispenseRequestDTO)}.
@@ -282,12 +292,12 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense saved = dispenseRepository.save(dispense);
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
-        PrescriptionStatus before = prescription.getStatus();
         updatePrescriptionStatusFromHistory(prescription, true);
-        // A partial fill against a back order leaves the remainder unavailable:
-        // the BACKORDER decision stays PENDING until the order is fully filled.
-        if (before == PrescriptionStatus.PENDING_STOCK
-                && prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+        // A partial fill against a back order leaves the remainder unavailable,
+        // so the BACKORDER decision stays PENDING until the order is fully
+        // filled — whether that happens in one dispense or over several
+        // (PENDING_STOCK → PARTIALLY_FILLED → DISPENSED).
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
             closeOutBackOrder(prescription);
         }
 
@@ -634,13 +644,15 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense saved = dispenseRepository.save(dispense);
 
         // Recompute the prescription status from remaining non-cancelled
-        // dispenses — unless the pharmacist has a question open: a
-        // cancellation must not put a PENDING_CLARIFICATION order back on
-        // the queue as SIGNED with the question unanswered. Nothing is
-        // announced to the prescriber either: undoing a fill is the
-        // pharmacy's own bookkeeping, not a pharmacy outcome.
+        // dispenses — but only from a fill state. A cancellation never
+        // leaves a pharmacy-owned state: an order awaiting clarification
+        // must not return to the queue as SIGNED with the question open,
+        // and an order with a partner or on back order must not drop to
+        // SIGNED while its PARTNER / BACKORDER decision is still PENDING.
+        // Nothing is announced to the prescriber either: undoing a fill is
+        // the pharmacy's own bookkeeping, not a pharmacy outcome.
         Prescription prescription = dispense.getPrescription();
-        if (prescription.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
+        if (RECOMPUTABLE_AFTER_CANCEL.contains(prescription.getStatus())) {
             updatePrescriptionStatusFromHistory(prescription, false);
         }
 
@@ -659,8 +671,55 @@ public class DispenseServiceImpl implements DispenseService {
         Page<Prescription> page = prescriptionRepository
                 .findByHospital_IdAndStatusIn(hospitalId,
                         List.copyOf(DISPENSABLE_STATUSES), pageable);
-        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(page.getContent());
-        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId())));
+        List<Prescription> rows = page.getContent();
+        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(rows);
+        Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
+        Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
+        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId()),
+                latestDecisions.get(p.getId()), lastActions.get(p.getId())));
+    }
+
+    /** Newest routing decision per prescription on the page, one query. */
+    private Map<UUID, PrescriptionRoutingDecision> latestDecisionsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, PrescriptionRoutingDecision> latest = new HashMap<>();
+        for (PrescriptionRoutingDecision d : routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(ids)) {
+            if (d.getPrescription() != null) {
+                latest.putIfAbsent(d.getPrescription().getId(), d);
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * When the pharmacy last acted on each prescription — the newer of its
+     * latest live dispense and its latest routing decision. Null when the
+     * pharmacy has never touched it. One query for the dispenses; the
+     * decisions were already fetched.
+     */
+    private Map<UUID, LocalDateTime> lastPharmacyActionsFor(List<Prescription> prescriptions,
+                                                            Map<UUID, PrescriptionRoutingDecision> latestDecisions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, LocalDateTime> last = new HashMap<>();
+        for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
+                ids, DispenseStatus.CANCELLED)) {
+            if (d.getPrescription() != null && d.getDispensedAt() != null) {
+                last.putIfAbsent(d.getPrescription().getId(), d.getDispensedAt());
+            }
+        }
+        latestDecisions.forEach((id, decision) -> {
+            LocalDateTime decidedAt = decision.getDecidedAt();
+            if (decidedAt != null) {
+                last.merge(id, decidedAt, (a, b) -> a.isAfter(b) ? a : b);
+            }
+        });
+        return last;
     }
 
     /**
@@ -820,7 +879,9 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
-    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p, RefillRequest latestRefill) {
+    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p, RefillRequest latestRefill,
+                                                    PrescriptionRoutingDecision latestDecision,
+                                                    LocalDateTime lastPharmacyAction) {
         WorkQueuePrescriptionDTO.Patient patient = null;
         if (p.getPatient() != null) {
             patient = WorkQueuePrescriptionDTO.Patient.builder()
@@ -844,7 +905,7 @@ public class DispenseServiceImpl implements DispenseService {
                     .user(staffUser)
                     .build();
         }
-        String attentionReason = attentionReason(p);
+        String attentionReason = attentionReason(p, lastPharmacyAction);
         return WorkQueuePrescriptionDTO.builder()
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
@@ -858,6 +919,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .staff(staff)
                 .refill(toRefillContext(p, latestRefill))
                 .pharmacyName(p.getPharmacyName())
+                .lastRefusedBy(lastRefusedBy(p, latestDecision))
                 .needsAttention(attentionReason != null)
                 .attentionReason(attentionReason)
                 .build();
@@ -867,16 +929,37 @@ public class DispenseServiceImpl implements DispenseService {
      * Why a queue row needs a second look before dispensing, or null for a
      * plain fill: a back order (the stock may or may not have arrived), a
      * partner's refusal (re-route or fill in-house), or a clarification the
-     * prescriber has just answered (read the answer first).
+     * prescriber has just answered (read the answer first). The last one
+     * holds only until the pharmacy acts on the answer — a dispense or a
+     * routing decision after the resolution clears it; without that the row
+     * would be flagged for the rest of its life.
      */
-    private static String attentionReason(Prescription p) {
+    private static String attentionReason(Prescription p, LocalDateTime lastPharmacyAction) {
         if (p.getStatus() != null && NEEDS_ATTENTION_STATUSES.contains(p.getStatus())) {
             return p.getStatus().name();
         }
-        if (p.getClarificationResolvedAt() != null) {
+        LocalDateTime resolvedAt = p.getClarificationResolvedAt();
+        if (resolvedAt != null && (lastPharmacyAction == null || resolvedAt.isAfter(lastPharmacyAction))) {
             return ATTENTION_CLARIFICATION_RESOLVED;
         }
         return null;
+    }
+
+    /**
+     * The partner that refused a PARTNER_REJECTED row. The prescription's own
+     * pharmacy columns are cleared on refusal so the row groups under the
+     * in-house dispensary; the refusing partner is still worth showing.
+     */
+    private static String lastRefusedBy(Prescription p, PrescriptionRoutingDecision latestDecision) {
+        if (p.getStatus() != PrescriptionStatus.PARTNER_REJECTED || latestDecision == null) {
+            return null;
+        }
+        if (latestDecision.getRoutingType() != RoutingType.PARTNER
+                || latestDecision.getStatus() != RoutingDecisionStatus.REJECTED
+                || latestDecision.getTargetPharmacy() == null) {
+            return null;
+        }
+        return latestDecision.getTargetPharmacy().getName();
     }
 
     /**

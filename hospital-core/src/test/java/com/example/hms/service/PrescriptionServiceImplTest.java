@@ -2556,6 +2556,83 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void updatePrescriptionAcceptsTheCurrentStatusEchoedBackWhileAwaitingClarification() {
+        // The portal echoes the current status into every PUT (prescriptions.ts);
+        // the "doctor edits first" path of gap G5 depends on that echo being
+        // a no-op rather than a refused client assertion.
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        existing.setControlledSubstance(true);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION)
+            .controlledSubstance(false)
+            .build();
+
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+
+        // The echoed status passes the status rule; the safeguard rule, which
+        // runs next, is what refuses this request — proving the status check
+        // did not.
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cannot be removed by editing");
+    }
+
+    @Test
+    void updatePrescriptionRefusesLeavingClarificationByStatus() {
+        // The only exit from PENDING_CLARIFICATION is resolve-clarification.
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.DRAFT)
+            .build();
+
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("resolve-clarification");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void updatePrescriptionStillRefusesAClientAssertedWorkflowStatus() {
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.DISPENSED)
+            .build();
+
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cannot be set directly");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void updatePrescriptionRefusesWithdrawingTheControlledFlag() {
         // Clearing controlledSubstance on an edit would drop the two-factor
         // gate an earlier revision declared it needed.

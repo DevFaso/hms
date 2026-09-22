@@ -44,6 +44,12 @@ public class WorkQueuePrescriptionDTO {
     private String pharmacyName;
 
     /**
+     * On a PARTNER_REJECTED row, the partner that refused it. The row itself
+     * groups under the in-house dispensary ({@code pharmacyName} is null).
+     */
+    private String lastRefusedBy;
+
+    /**
      * True when the row is not a plain fill and the pharmacist should look
      * before dispensing (gap G3): a back order, a partner's refusal, or a
      * clarification the prescriber has just answered. {@link #attentionReason}

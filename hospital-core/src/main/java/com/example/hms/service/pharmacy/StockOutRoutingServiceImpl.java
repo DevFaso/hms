@@ -310,6 +310,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         } else {
             decision.setStatus(RoutingDecisionStatus.REJECTED);
             prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            // The refusing partner is no longer this order's pharmacy: the
+            // work queue groups the row under the in-house dispensary and
+            // shows the refusal from the decision (lastRefusedBy).
+            clearPharmacy(prescription);
         }
 
         prescriptionRepository.save(prescription);
@@ -418,7 +422,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * must not stop the re-route.
      */
     private void supersedePendingBackOrder(Prescription prescription) {
-        if (prescription.getStatus() != PrescriptionStatus.PENDING_STOCK) {
+        // A PARTIALLY_FILLED order may carry a PENDING back order for its
+        // remainder (PENDING_STOCK → partial fill); a re-route supersedes it too.
+        if (prescription.getStatus() != PrescriptionStatus.PENDING_STOCK
+                && prescription.getStatus() != PrescriptionStatus.PARTIALLY_FILLED) {
             return;
         }
         try {
@@ -435,6 +442,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             log.warn("Could not supersede the back order for prescription {}: {}",
                     prescription.getId(), ex.getMessage());
         }
+    }
+
+    private static void clearPharmacy(Prescription prescription) {
+        prescription.setPharmacyId(null);
+        prescription.setPharmacyName(null);
+        prescription.setPharmacyContact(null);
+        prescription.setPharmacyAddress(null);
     }
 
     private void validateRoutableStatus(Prescription prescription) {

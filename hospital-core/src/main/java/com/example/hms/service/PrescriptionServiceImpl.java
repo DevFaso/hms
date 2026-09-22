@@ -7,6 +7,7 @@ import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.model.Encounter;
@@ -369,6 +370,31 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * The status rule on an edit.
+     *
+     * <p>The portal echoes the current status into every PUT, so a status
+     * equal to the row's is a no-op and always accepted — otherwise editing
+     * an order the pharmacist sent back for clarification (the "doctor edits
+     * first" path of gap G5) would be refused for echoing
+     * PENDING_CLARIFICATION. While PENDING_CLARIFICATION, any OTHER status is
+     * refused with 409: the only exit is resolve-clarification, which records
+     * who answered and returns the order to the status it held. Everything
+     * else falls to the client-assertable rule.
+     */
+    private void rejectStatusChangeOnUpdate(Prescription existing, PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null || requested == existing.getStatus()) {
+            return;
+        }
+        if (existing.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new ConflictException(
+                "This prescription is awaiting the prescriber's clarification; edit it and answer with "
+                    + "POST /prescriptions/{id}/resolve-clarification rather than changing its status.");
+        }
+        rejectClientAssertedWorkflowStatus(request);
+    }
+
+    /**
      * A declared safeguard cannot be quietly un-declared.
      *
      * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
@@ -438,9 +464,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        rejectClientAssertedWorkflowStatus(request);
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
         UUID currentUserId = authService.getCurrentUserId();
