@@ -231,6 +231,33 @@ describe('LabComponent — performing laboratory', () => {
     expect(detail.textContent).toContain('Central Laboratory B');
   });
 
+  it('offers the performing laboratory no Edit or Delete on an incoming order', async () => {
+    // PUT and DELETE are the ordering hospital's; a button the backend 404s
+    // teaches the laboratory to distrust its own worklist.
+    const incoming = order({
+      performingHospitalId: LAB_B,
+      performingHospitalName: 'Central Laboratory B',
+    });
+    await setup(['ROLE_LAB_SCIENTIST'], [incoming], LAB_B);
+
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.view-link'))
+      .withContext('viewing stays available')
+      .not.toBeNull();
+  });
+
+  it('keeps Edit and Delete for the hospital that placed the order', async () => {
+    const outgoing = order({
+      performingHospitalId: LAB_B,
+      performingHospitalName: 'Central Laboratory B',
+    });
+    await setup(['ROLE_DOCTOR'], [outgoing]);
+
+    expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
   it('shows no routing hint for an in-house order', async () => {
     await setup(['ROLE_DOCTOR'], [order({})]);
 

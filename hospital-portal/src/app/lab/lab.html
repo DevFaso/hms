@@ -146,13 +146,15 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link edit-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(order)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!isIncomingExternal(order)) {
+                    <button
+                      class="action-link edit-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(order)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                   @if (canManageSpecimens) {
                     <button
                       class="action-link specimen-link"
@@ -162,13 +164,15 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
-                  <button
-                    class="action-link delete-link"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(order)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (!isIncomingExternal(order)) {
+                    <button
+                      class="action-link delete-link"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(order)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

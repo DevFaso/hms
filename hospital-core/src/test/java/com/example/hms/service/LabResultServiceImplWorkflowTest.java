@@ -106,7 +106,7 @@ class LabResultServiceImplWorkflowTest {
         unreleased.setReleased(false);
         LabResultResponseDTO mapped = LabResultResponseDTO.builder().id(unreleased.getId().toString()).build();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable))
+        when(labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(unreleased)));
         when(labResultMapper.toResponseDTO(unreleased)).thenReturn(mapped);
 
@@ -120,7 +120,7 @@ class LabResultServiceImplWorkflowTest {
 
         assertThrows(com.example.hms.exception.BusinessException.class,
             () -> labResultService.getPendingRelease(pageable, Locale.US));
-        verify(labResultRepository, never()).findByLabOrder_Hospital_IdAndReleasedFalse(any(), any());
+        verify(labResultRepository, never()).findPendingReleaseHandledBy(any(), any());
     }
 
     @Test

@@ -38,6 +38,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -222,6 +223,31 @@ class LabResultServiceImplPerformingHospitalTest {
         service.signLabResult(result.getId(), null, Locale.ENGLISH);
 
         assertThat(result.getSignedByUserId()).isEqualTo(labUserId);
+    }
+
+    @Test
+    void theReleaseWorklistOfThePerformingLaboratoryHoldsItsOutsourcedResults() {
+        PageRequest page = PageRequest.of(0, 20);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findPendingReleaseHandledBy(performing.getId(), page))
+            .thenReturn(new PageImpl<>(List.of(result)));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        assertThat(service.getPendingRelease(page, Locale.ENGLISH).getContent()).containsExactly(mapped);
+    }
+
+    @Test
+    void theReleaseWorklistOfAThirdHospitalHoldsNothingOfThisOrder() {
+        // The predicate is the repository's; what this pins is that the queue
+        // asks for the acting hospital and shows only what comes back for it.
+        PageRequest page = PageRequest.of(0, 20);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(third.getId());
+        when(labResultRepository.findPendingReleaseHandledBy(third.getId(), page))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(service.getPendingRelease(page, Locale.ENGLISH).getContent()).isEmpty();
+        verify(labResultRepository, never()).findPendingReleaseHandledBy(eq(ordering.getId()), any());
+        verify(labResultRepository, never()).findPendingReleaseHandledBy(eq(performing.getId()), any());
     }
 
     @Test

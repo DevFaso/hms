@@ -59,7 +59,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * a no-op): when on, an observation the analyzer explicitly flagged
      * normal is released at once; when off (the default) it waits on
      * the lab worklist
-     * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
+     * ({@code LabResultRepository.findPendingReleaseHandledBy})
      * like every other unreleased row. Field-injected so the positional
      * constructor the tests use stays as it is.
      */

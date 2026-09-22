@@ -177,7 +177,13 @@ public class LabResultServiceImpl implements LabResultService {
             // A release worklist is one hospital's queue; the global view has none.
             throw new BusinessException("A hospital scope is required for the release worklist.");
         }
-        return labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable)
+        // B1: a laboratory releases what it ran, so an order another hospital
+        // sent here belongs on this queue — releasing it is exactly what the
+        // performing laboratory is for. Every other lab-side read was widened
+        // to the ordering-OR-performing predicate; this queue was the one that
+        // still asked only who ordered, leaving outsourced results unreleasable
+        // by the only people who can release them.
+        return labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable)
             .map(labResultMapper::toResponseDTO);
     }
 
