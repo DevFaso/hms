@@ -205,25 +205,29 @@ struct MedicalHistoryView: View {
     }
 
     /// The web's "personal notes" block: the note if there is one, the
-    /// device-only disclaimer, and Add or Edit.
+    /// device-only disclaimer, and Add or Edit. Absent altogether when the
+    /// session has no identity to keep the notes under.
+    @ViewBuilder
     private func notesRows(_ section: HistorySection) -> some View {
-        let note = vm.notes[section] ?? ""
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(section.notesKey.localized).font(.subheadline.weight(.semibold))
-            if !note.isEmpty {
-                Text(note).font(.subheadline)
+        if vm.notesAvailable {
+            let note = vm.notes[section] ?? ""
+            VStack(alignment: .leading, spacing: 6) {
+                Text(section.notesKey.localized).font(.subheadline.weight(.semibold))
+                if !note.isEmpty {
+                    Text(note).font(.subheadline)
+                }
+                Text("history_notes_disclaimer".localized).font(.caption).foregroundColor(.secondary)
+                Button {
+                    vm.beginEditing(section)
+                } label: {
+                    Label(note.isEmpty ? "history_notes_add".localized : "edit".localized,
+                          systemImage: note.isEmpty ? "plus" : "pencil")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered)
             }
-            Text("history_notes_disclaimer".localized).font(.caption).foregroundColor(.secondary)
-            Button {
-                vm.beginEditing(section)
-            } label: {
-                Label(note.isEmpty ? "history_notes_add".localized : "edit".localized,
-                      systemImage: note.isEmpty ? "plus" : "pencil")
-                    .font(.subheadline)
-            }
-            .buttonStyle(.bordered)
+            .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
     }
 
     private func socialCard<Content: View>(_ titleKey: String, @ViewBuilder content: () -> Content) -> some View {
@@ -388,10 +392,13 @@ final class MedicalHistoryViewModel: ObservableObject {
 
     @Published var notes: [HistorySection: String] = [:]
     @Published var editingSection: HistorySection?
-
-    private var loadedOnce = false
+    /// False when neither login path left an identity to key the notes on;
+    /// the notes block is hidden rather than shared between patients.
+    let notesAvailable: Bool
 
     init() {
+        notesAvailable = KeychainHelper.shared.historyNoteOwner != nil
+        guard notesAvailable else { return }
         for section in HistorySection.allCases {
             if let note = KeychainHelper.shared.historyNote(section: section.rawValue), !note.isEmpty {
                 notes[section] = note
@@ -400,51 +407,56 @@ final class MedicalHistoryViewModel: ObservableObject {
     }
 
     /// `.task` runs again when the view reappears (a sheet closing, a pop
-    /// back); the four requests are not repeated for that.
+    /// back): only the sections that never finished are requested again —
+    /// the first time that is all four, later only one whose request the
+    /// modifier cancelled by leaving mid-load.
     func loadIfNeeded() async {
-        guard !loadedOnce else { return }
-        await load()
+        let pending = HistorySection.allCases.filter { state(of: $0) == .loading }
+        await load(pending)
     }
 
     /// The four sections at once; each keeps its own outcome.
     func load() async {
-        loadedOnce = true
+        await load(HistorySection.allCases)
+    }
+
+    private func load(_ sections: [HistorySection]) async {
         await withTaskGroup(of: Void.self) { group in
-            for section in HistorySection.allCases {
+            for section in sections {
                 group.addTask { await self.load(section) }
             }
         }
     }
 
-    func load(_ section: HistorySection) async {
+    func state(of section: HistorySection) -> HistoryLoadState {
         switch section {
-        case .medical:
-            medicalState = .loading
-            do {
+        case .medical: return medicalState
+        case .surgical: return surgicalState
+        case .family: return familyState
+        case .social: return socialState
+        }
+    }
+
+    private func setState(_ state: HistoryLoadState, of section: HistorySection) {
+        switch section {
+        case .medical: medicalState = state
+        case .surgical: surgicalState = state
+        case .family: familyState = state
+        case .social: socialState = state
+        }
+    }
+
+    func load(_ section: HistorySection) async {
+        setState(.loading, of: section)
+        do {
+            switch section {
+            case .medical:
                 medical = try await APIClient.shared.get(APIEndpoints.medicalHistory)
-                medicalState = .loaded
-            } catch {
-                medicalState = .failed
-            }
-        case .surgical:
-            surgicalState = .loading
-            do {
+            case .surgical:
                 surgical = try await APIClient.shared.get(APIEndpoints.surgicalHistory)
-                surgicalState = .loaded
-            } catch {
-                surgicalState = .failed
-            }
-        case .family:
-            familyState = .loading
-            do {
+            case .family:
                 family = try await APIClient.shared.get(APIEndpoints.familyHistory)
-                familyState = .loaded
-            } catch {
-                familyState = .failed
-            }
-        case .social:
-            socialState = .loading
-            do {
+            case .social:
                 // `{"success":true,"data":null}` is the "nothing recorded" answer.
                 // Asked for the object itself, the client would fall back to
                 // decoding the wrapper as a HistorySocial and fail on the
@@ -452,11 +464,22 @@ final class MedicalHistoryViewModel: ObservableObject {
                 // wrapper keeps null as null.
                 let wrapper: APIResponse<HistorySocial> = try await APIClient.shared.get(APIEndpoints.socialHistory)
                 social = wrapper.data
-                socialState = .loaded
-            } catch {
-                socialState = .failed
             }
+            setState(.loaded, of: section)
+        } catch {
+            // Leaving the screen mid-load cancels the `.task`; that is not a
+            // failure to show. The section stays "loading" so loadIfNeeded
+            // requests it again when the screen comes back.
+            guard !Self.isCancellation(error) else { return }
+            setState(.failed, of: section)
         }
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let url = error as? URLError, url.code == .cancelled { return true }
+        if case APIError.networkError(let inner) = error { return isCancellation(inner) }
+        return false
     }
 
     func beginEditing(_ section: HistorySection) {

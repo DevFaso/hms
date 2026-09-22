@@ -112,33 +112,77 @@ final class KeychainHelper {
     // MARK: - Personal notes on My Medical History
 
     /// The web keeps these notes encrypted in localStorage; here the
-    /// Keychain is the device-only store. Keyed per signed-in user so a
+    /// Keychain is the device-only store, one bucket per patient so a
     /// relative sharing the phone never reads another patient's notes.
+    ///
+    /// The bucket is the patient's identity on whichever path signed them
+    /// in: the `sub` of the stored Keycloak ID token, else the user id the
+    /// password login persisted. Without either there is no bucket and the
+    /// notes feature is hidden for the session; a shared fallback would
+    /// pool every SSO patient's notes together.
     static let historyNoteSections = ["medical", "surgical", "family", "social"]
     private static let historyNotePrefix = "com.bitnesttechs.hms.patient.historyNote."
 
-    private func historyNoteKey(_ section: String) -> String {
-        Self.historyNotePrefix + (savedUserId ?? "anonymous") + "." + section
+    var historyNoteOwner: String? {
+        if let subject = Self.jwtSubject(oidcIdToken), !subject.isEmpty { return subject }
+        if let id = savedUserId, !id.isEmpty { return id }
+        return nil
+    }
+
+    private func historyNoteKey(_ section: String) -> String? {
+        guard let owner = historyNoteOwner else { return nil }
+        return Self.historyNotePrefix + owner + "." + section
     }
 
     func historyNote(section: String) -> String? {
-        read(key: historyNoteKey(section))
+        guard let key = historyNoteKey(section) else { return nil }
+        return read(key: key)
     }
 
-    /// An empty or blank note is removed, as the web does.
+    /// An empty or blank note is removed, as the web does. Nothing is
+    /// written without an owner.
     func setHistoryNote(_ value: String?, section: String) {
+        guard let key = historyNoteKey(section) else { return }
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
-            delete(key: historyNoteKey(section))
+            delete(key: key)
         } else {
-            save(trimmed, key: historyNoteKey(section))
+            save(trimmed, key: key)
         }
     }
 
+    /// Every patient's notes on this device, not only the current one:
+    /// `clearAll()` means "forget this device entirely".
     func clearHistoryNotes() {
-        for section in Self.historyNoteSections {
-            delete(key: historyNoteKey(section))
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else { return }
+        for item in items {
+            if let account = item[kSecAttrAccount as String] as? String,
+               account.hasPrefix(Self.historyNotePrefix) {
+                delete(key: account)
+            }
         }
+    }
+
+    /// The `sub` claim of a JWT, read locally: the payload is base64url
+    /// JSON. No signature check is needed for a bucket name.
+    private static func jwtSubject(_ token: String?) -> String? {
+        guard let token else { return nil }
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload += "=" }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["sub"] as? String
     }
 
     // MARK: - Private Keychain operations
