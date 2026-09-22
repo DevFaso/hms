@@ -165,7 +165,7 @@ struct DashboardView: View {
                 case .notifications: NotificationsView(embeddedInNav: false)
                 case .healthRecords: HealthRecordsView(embeddedInNav: false)
                 case .familyAccess: FamilyAccessView(embeddedInNav: false)
-                case .sharingPrivacy: SharingPrivacyView(embeddedInNav: false)
+                case .sharingPrivacy: SharingPrivacyView()
                 }
             }
             .overlay {
