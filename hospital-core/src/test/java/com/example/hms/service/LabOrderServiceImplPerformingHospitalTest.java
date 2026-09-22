@@ -49,6 +49,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -502,7 +503,7 @@ class LabOrderServiceImplPerformingHospitalTest {
     }
 
     @Test
-    void byPatientIncludesOrdersPerformedHereWithoutRecordingThemAsAReach() {
+    void byPatientIncludesOrdersPerformedHereAndAccountsThemAsADisclosure() {
         UUID requester = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(requester);
@@ -514,10 +515,12 @@ class LabOrderServiceImplPerformingHospitalTest {
 
         assertThat(service.getLabOrdersByPatientId(patient.getId(), Locale.ENGLISH)).containsExactly(mapped);
 
+        // The order belongs to the ordering hospital and was surfaced at the
+        // laboratory running it: a disclosure, permitted or not.
         ArgumentCaptor<java.util.Map<String, Long>> reach = ArgumentCaptor.captor();
         verify(reachRecorder).recordReach(eq(patient.getId()), eq(performing.getId()), eq(requester),
             any(), reach.capture(), any());
-        assertThat(reach.getValue()).isEmpty();
+        assertThat(reach.getValue()).containsExactly(entry(ordering.getId().toString(), 1L));
     }
 
     // ── the candidate laboratories ────────────────────────────────────────

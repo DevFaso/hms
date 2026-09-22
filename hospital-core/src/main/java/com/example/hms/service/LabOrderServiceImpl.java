@@ -364,11 +364,21 @@ public class LabOrderServiceImpl implements LabOrderService {
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
             // B1: plus the orders this hospital's laboratory performs for others.
-            // Those are the lab's own work, not a cross-hospital reach.
             List<LabOrder> orders = labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, readable, hospitalId);
+            // Every row is accounted against the hospital it belongs to — the
+            // ordering one — including the orders this laboratory performs.
+            // The accounting asks whose record was surfaced where, not whether
+            // the reader was entitled to it: RECORD_SHARE pairs a source
+            // hospital with an acting hospital, and permitted reads are exactly
+            // what it exists to account for (the treatment-relationship reads
+            // E8 records are all permitted too). An order placed at A for a
+            // patient registered at A, read at the laboratory B that runs it,
+            // is A's record surfaced at B. Rewriting those rows to B's own id
+            // made reachOf skip them, so the one disclosure this feature
+            // introduces was the one disclosure nobody could see.
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(orders.stream()
-                    .map(o -> o.isPerformedAt(hospitalId) ? hospitalId : CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()))
+                    .map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()))
                     .toList(), hospitalId),
                 "Cross-hospital lab order read on the treatment relationship");
             return orders.stream()

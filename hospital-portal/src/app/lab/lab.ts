@@ -177,6 +177,27 @@ export class LabComponent implements OnInit {
     return !!o.performingHospitalId && !this.isIncomingExternal(o);
   }
 
+  /**
+   * The hospital on this side of the relationship — the one whose worklist
+   * this is. For an order another hospital sent here that is the performing
+   * laboratory (us), not the hospital that ordered it.
+   */
+  actingHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.performingHospitalName : o.hospitalName;
+    return name || '—';
+  }
+
+  /** The hospital on the other side: who ordered it, or where it was sent. */
+  counterpartHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.hospitalName : o.performingHospitalName;
+    return name || '—';
+  }
+
+  /** The label that side carries: "Ordered by" when it came to us, "Sent to" when it left us. */
+  counterpartLabelKey(o: LabOrderResponse): string {
+    return this.isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO';
+  }
+
   onTestDefChange(defId: string): void {
     const def = this.labTestDefs().find((d) => d.id === defId);
     if (def) {

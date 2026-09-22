@@ -251,6 +251,26 @@ class LabResultServiceImplPerformingHospitalTest {
     }
 
     @Test
+    void thePerformingLaboratorySeesAndChasesTheCriticalValuesItProduced() {
+        result.setResultDate(LocalDateTime.now());
+        LabResultResponseDTO critical = LabResultResponseDTO.builder()
+            .id(result.getId().toString())
+            .severityFlag("CRITICAL")
+            .resultDate(result.getResultDate())
+            .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitals(List.of(performing.getId())))
+            .thenReturn(List.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(critical);
+
+        assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
+            .containsExactly(critical);
+        assertThat(service.getCriticalResultsRequiringAcknowledgment(ordering.getId(), Locale.ENGLISH))
+            .containsExactly(critical);
+        verify(labResultRepository, never()).findByLabOrder_Hospital_IdIn(any(java.util.Collection.class));
+    }
+
+    @Test
     void pagedResultsReadWhatTheHospitalOrdersOrPerforms() {
         PageRequest page = PageRequest.of(0, 10);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());

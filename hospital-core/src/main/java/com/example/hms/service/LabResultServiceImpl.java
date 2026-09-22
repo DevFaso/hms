@@ -782,7 +782,10 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
+        // B1: a critical value is the running laboratory's to see and chase —
+        // it is the one that produced it. These two were the last lab-side
+        // reads still asking only who ordered.
+        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
@@ -797,7 +800,7 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
+        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> !r.isAcknowledged())

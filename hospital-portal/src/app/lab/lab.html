@@ -115,15 +115,16 @@
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
               <td>
-                @if (isIncomingExternal(order)) {
-                  <div class="cell-primary">{{ order.hospitalName || '—' }}</div>
-                  <div class="cell-secondary routing-hint" data-testid="routing-incoming">
-                    {{ 'LAB.ORDERED_BY' | translate }}: {{ order.hospitalName || '—' }}
-                  </div>
-                } @else if (isSentOut(order)) {
-                  <div class="cell-primary">{{ order.hospitalName || '—' }}</div>
-                  <div class="cell-secondary routing-hint" data-testid="routing-outgoing">
-                    {{ 'LAB.SENT_TO' | translate }}: {{ order.performingHospitalName || '—' }}
+                @if (isIncomingExternal(order) || isSentOut(order)) {
+                  <div class="cell-primary">{{ actingHospitalName(order) }}</div>
+                  <div
+                    class="cell-secondary routing-hint"
+                    [attr.data-testid]="
+                      isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
+                    "
+                  >
+                    {{ counterpartLabelKey(order) | translate }}:
+                    {{ counterpartHospitalName(order) }}
                   </div>
                 } @else {
                   {{ order.hospitalName || '—' }}
@@ -217,16 +218,12 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ o.hospitalName || '—' }}</span>
+              ><span class="field-value">{{ actingHospitalName(o) }}</span>
             </div>
             @if (o.performingHospitalId) {
               <div class="detail-field" data-testid="detail-performing-lab">
-                <span class="field-label">{{
-                  (isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO') | translate
-                }}</span
-                ><span class="field-value">{{
-                  isIncomingExternal(o) ? o.hospitalName || '—' : o.performingHospitalName || '—'
-                }}</span>
+                <span class="field-label">{{ counterpartLabelKey(o) | translate }}</span
+                ><span class="field-value">{{ counterpartHospitalName(o) }}</span>
               </div>
             }
             <div class="detail-field">

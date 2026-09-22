@@ -205,6 +205,16 @@ describe('LabComponent — performing laboratory', () => {
     expect(hint).withContext('ordered-by hint').not.toBeNull();
     expect(hint.textContent).toContain('Ordering Hospital A');
     expect(fixture.nativeElement.querySelector('[data-testid="routing-outgoing"]')).toBeNull();
+
+    // Each hospital once: the primary line is this laboratory, the hint is
+    // who sent the order. Naming the ordering hospital on both lines left
+    // the laboratory unnamed and told the reader nothing twice.
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    expect(cell.querySelector('.cell-primary')!.textContent).toContain('Central Laboratory B');
+    expect(cell.textContent!.match(/Ordering Hospital A/g)!.length).toBe(1);
+    expect(component.actingHospitalName(incoming)).toBe('Central Laboratory B');
+    expect(component.counterpartHospitalName(incoming)).toBe('Ordering Hospital A');
+    expect(component.counterpartLabelKey(incoming)).toBe('LAB.ORDERED_BY');
   });
 
   it('tells the ordering hospital where an order was sent', async () => {
@@ -222,6 +232,13 @@ describe('LabComponent — performing laboratory', () => {
     expect(hint).withContext('sent-to hint').not.toBeNull();
     expect(hint.textContent).toContain('Central Laboratory B');
 
+    // The other side of the same relationship: our hospital on the primary
+    // line, the laboratory it went to on the hint, each named once.
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    expect(cell.querySelector('.cell-primary')!.textContent).toContain('Ordering Hospital A');
+    expect(cell.textContent!.match(/Central Laboratory B/g)!.length).toBe(1);
+    expect(component.counterpartLabelKey(outgoing)).toBe('LAB.SENT_TO');
+
     component.viewOrder(outgoing);
     fixture.detectChanges();
     const detail: HTMLElement = fixture.nativeElement.querySelector(
@@ -229,6 +246,12 @@ describe('LabComponent — performing laboratory', () => {
     );
     expect(detail).withContext('detail field').not.toBeNull();
     expect(detail.textContent).toContain('Central Laboratory B');
+    // The HOSPITAL field above it names our own hospital, not the lab again.
+    const hospitalField = Array.from(
+      fixture.nativeElement.querySelectorAll('.detail-field') as NodeListOf<HTMLElement>,
+    ).find((f) => f.textContent!.includes('ENCOUNTERS.HOSPITAL'));
+    expect(hospitalField!.textContent).toContain('Ordering Hospital A');
+    expect(hospitalField!.textContent).not.toContain('Central Laboratory B');
   });
 
   it('offers the performing laboratory no Edit or Delete on an incoming order', async () => {

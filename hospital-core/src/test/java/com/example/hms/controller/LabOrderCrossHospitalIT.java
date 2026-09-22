@@ -7,6 +7,7 @@ import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Notification;
 import com.example.hms.model.Organization;
@@ -62,6 +63,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -292,6 +294,55 @@ class LabOrderCrossHospitalIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("the worklist search keeps in-house orders alongside outsourced ones, on both sides")
+    void searchReturnsInHouseAndOutsourcedOrdersFromBothSides() throws Exception {
+        // The widened predicate ORs a nullable association into the criteria
+        // query, and an implicit INNER join on performing_hospital_id would
+        // silently drop every in-house order — the common case — from the
+        // worklist. Only a real database can answer that, so both kinds of
+        // order are created here and counted from each hospital.
+        UUID inHouse = createOrder(doctorA, orderRequest(null));
+        UUID outsourced = createOrder(doctorA, orderRequest(hospitalB.getId()));
+
+        assertThat(labOrderRepository.findById(inHouse))
+            .get().extracting(LabOrder::getPerformingHospital).isNull();
+
+        // The ordering hospital sees both.
+        mockMvc.perform(get(API + "/lab-orders").with(acting(doctorA)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content", hasSize(2)))
+            .andExpect(jsonPath("$.data.content[*].id",
+                containsInAnyOrder(inHouse.toString(), outsourced.toString())));
+
+        // The performing laboratory sees the one sent to it, and only that one.
+        mockMvc.perform(get(API + "/lab-orders").with(acting(scientistB)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content", hasSize(1)))
+            .andExpect(jsonPath("$.data.content[0].id", is(outsourced.toString())));
+
+        // A hospital on neither side of either order sees nothing.
+        mockMvc.perform(get(API + "/lab-orders").with(acting(scientistC)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content", hasSize(0)));
+
+        // The JPQL finders navigate the same nullable association, so they are
+        // asked the same question directly — they have no HTTP surface of
+        // their own on this controller.
+        assertThat(labOrderRepository.findHandledBy(hospitalA.getId()))
+            .extracting(LabOrder::getId).containsExactlyInAnyOrder(inHouse, outsourced);
+        assertThat(labOrderRepository.findHandledBy(hospitalB.getId()))
+            .extracting(LabOrder::getId).containsExactly(outsourced);
+        assertThat(labOrderRepository.findByStatusHandledBy(LabOrderStatus.ORDERED, hospitalA.getId()))
+            .extracting(LabOrder::getId).containsExactlyInAnyOrder(inHouse, outsourced);
+        assertThat(labOrderRepository.findByPatientIdReadableOrPerformedAt(
+                patient.getId(), Set.of(hospitalA.getId()), hospitalA.getId()))
+            .extracting(LabOrder::getId).containsExactlyInAnyOrder(inHouse, outsourced);
+        assertThat(labOrderRepository.findByPatientIdReadableOrPerformedAt(
+                patient.getId(), Set.of(hospitalB.getId()), hospitalB.getId()))
+            .extracting(LabOrder::getId).containsExactly(outsourced);
+    }
+
+    @Test
     @DisplayName("naming the ordering hospital itself as performing laboratory is an in-house order")
     void performingHospitalEqualToOrderingHospitalIsInHouse() throws Exception {
         mockMvc.perform(post(API + "/lab-orders")
@@ -317,6 +368,16 @@ class LabOrderCrossHospitalIT extends BaseIT {
                 .content(objectMapper.writeValueAsString(orderRequest(hospitalC.getId()))))
             .andExpect(status().isBadRequest());
         assertThat(labOrderRepository.count()).isZero();
+    }
+
+    private UUID createOrder(Actor actor, LabOrderRequestDTO request) throws Exception {
+        String body = mockMvc.perform(post(API + "/lab-orders")
+                .with(acting(actor))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("data").get("id").asText());
     }
 
     // ── fixtures ──────────────────────────────────────────────────────────
