@@ -395,3 +395,36 @@
 "questionnaires_completed" = "Questionnaires completed: %d of %d";
 "precheckin_failed" = "The pre-check-in could not be submitted";
 "emergency_contact_phone" = "Emergency contact phone";
+
+// My Medical History
+"history_title" = "Medical and Family History";
+"history_medical" = "Medical History";
+"history_surgical" = "Surgical History";
+"history_family" = "Family History";
+"history_social" = "Social History";
+"history_date" = "Date";
+"history_outcome" = "Outcome";
+"history_age_at_onset" = "Age at onset";
+"history_notes_medical" = "Personal notes about medical history";
+"history_notes_surgical" = "Personal notes about surgical history";
+"history_notes_family" = "Personal notes about family history";
+"history_notes_social" = "Personal notes about social history";
+"history_notes_disclaimer" = "These notes are stored on your device only and are not shared with your care team.";
+"history_notes_add" = "Add";
+"history_no_medical" = "No medical history on record.";
+"history_no_surgical" = "No surgical history on record.";
+"history_no_family" = "No family history on record.";
+"history_no_social" = "No social history on record.";
+"history_section_load_failed" = "This section could not be loaded";
+"history_smoking_tobacco" = "Smoking Tobacco";
+"history_tobacco_use" = "Tobacco use";
+"history_tobacco_types" = "Types";
+"history_quit_date" = "Quit date";
+"history_smokeless_tobacco" = "Smokeless Tobacco";
+"history_smokeless_use" = "Smokeless tobacco use";
+"history_alcohol" = "Alcohol";
+"history_alcohol_use" = "Alcohol use";
+"history_drinks_per_week" = "Drinks per week";
+"history_tobacco_former" = "Former";
+"history_tobacco_current" = "Current";
+"history_tobacco_never" = "Never";

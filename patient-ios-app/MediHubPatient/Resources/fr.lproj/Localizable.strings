@@ -395,3 +395,36 @@
 "questionnaires_completed" = "Questionnaires complétés : %d sur %d";
 "precheckin_failed" = "Le pré-enregistrement n’a pas pu être soumis";
 "emergency_contact_phone" = "Téléphone du contact d’urgence";
+
+// My Medical History
+"history_title" = "Antécédents médicaux et familiaux";
+"history_medical" = "Antécédents médicaux";
+"history_surgical" = "Antécédents chirurgicaux";
+"history_family" = "Antécédents familiaux";
+"history_social" = "Antécédents sociaux";
+"history_date" = "Date";
+"history_outcome" = "Résultat";
+"history_age_at_onset" = "Âge au diagnostic";
+"history_notes_medical" = "Notes personnelles sur les antécédents médicaux";
+"history_notes_surgical" = "Notes personnelles sur les antécédents chirurgicaux";
+"history_notes_family" = "Notes personnelles sur les antécédents familiaux";
+"history_notes_social" = "Notes personnelles sur les antécédents sociaux";
+"history_notes_disclaimer" = "Ces notes sont conservées uniquement sur votre appareil et ne sont pas partagées avec votre équipe de soins.";
+"history_notes_add" = "Ajouter";
+"history_no_medical" = "Aucun antécédent médical enregistré.";
+"history_no_surgical" = "Aucun antécédent chirurgical enregistré.";
+"history_no_family" = "Aucun antécédent familial enregistré.";
+"history_no_social" = "Aucun antécédent social enregistré.";
+"history_section_load_failed" = "Cette section n’a pas pu être chargée";
+"history_smoking_tobacco" = "Tabac à fumer";
+"history_tobacco_use" = "Consommation de tabac";
+"history_tobacco_types" = "Types";
+"history_quit_date" = "Date d’arrêt";
+"history_smokeless_tobacco" = "Tabac sans fumée";
+"history_smokeless_use" = "Consommation de tabac sans fumée";
+"history_alcohol" = "Alcool";
+"history_alcohol_use" = "Consommation d’alcool";
+"history_drinks_per_week" = "Verres par semaine";
+"history_tobacco_former" = "Ancienne consommation";
+"history_tobacco_current" = "Consommation actuelle";
+"history_tobacco_never" = "Jamais";

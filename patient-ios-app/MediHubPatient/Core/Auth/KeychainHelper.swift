@@ -92,6 +92,7 @@ final class KeychainHelper {
     }
 
     func clearAll() {
+        clearHistoryNotes()
         delete(key: Keys.accessToken)
         delete(key: Keys.refreshToken)
         delete(key: Keys.username)
@@ -106,6 +107,38 @@ final class KeychainHelper {
         delete(key: Keys.oidcAuthState)
         delete(key: Keys.oidcAccessToken)
         delete(key: Keys.oidcIdToken)
+    }
+
+    // MARK: - Personal notes on My Medical History
+
+    /// The web keeps these notes encrypted in localStorage; here the
+    /// Keychain is the device-only store. Keyed per signed-in user so a
+    /// relative sharing the phone never reads another patient's notes.
+    static let historyNoteSections = ["medical", "surgical", "family", "social"]
+    private static let historyNotePrefix = "com.bitnesttechs.hms.patient.historyNote."
+
+    private func historyNoteKey(_ section: String) -> String {
+        Self.historyNotePrefix + (savedUserId ?? "anonymous") + "." + section
+    }
+
+    func historyNote(section: String) -> String? {
+        read(key: historyNoteKey(section))
+    }
+
+    /// An empty or blank note is removed, as the web does.
+    func setHistoryNote(_ value: String?, section: String) {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            delete(key: historyNoteKey(section))
+        } else {
+            save(trimmed, key: historyNoteKey(section))
+        }
+    }
+
+    func clearHistoryNotes() {
+        for section in Self.historyNoteSections {
+            delete(key: historyNoteKey(section))
+        }
     }
 
     // MARK: - Private Keychain operations
