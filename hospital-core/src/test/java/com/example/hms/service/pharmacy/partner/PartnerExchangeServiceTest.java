@@ -54,7 +54,7 @@ class PartnerExchangeServiceTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService);
+                channel, parser, auditEventLogService, "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();
@@ -187,6 +187,17 @@ class PartnerExchangeServiceTest {
     }
 
     @Test
+    @DisplayName("round 1: a pharmacy stored in local format matches the international number its reply comes from")
+    void locallyStoredNumberMatchesInternationalReply() {
+        partner.setPhoneNumber("70 00 00 00");
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        assertThat(service.handleInboundReply("+22670000000", "1 " + token)).isPresent();
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+    }
+
+    @Test
     @DisplayName("G8: a reply without a sender number is ignored")
     void replyWithoutSenderIgnored() {
         assertThat(service.handleInboundReply(null, "1 " + token)).isEmpty();
@@ -213,13 +224,14 @@ class PartnerExchangeServiceTest {
     }
 
     @Test
-    @DisplayName("normalizePhone keeps digits only and folds the 00 prefix")
-    void normalizePhone() {
-        assertThat(PartnerExchangeService.normalizePhone("+226 70 11 12 22")).isEqualTo("22670111222");
-        assertThat(PartnerExchangeService.normalizePhone("0022670111222")).isEqualTo("22670111222");
-        assertThat(PartnerExchangeService.normalizePhone("22670111222")).isEqualTo("22670111222");
-        assertThat(PartnerExchangeService.normalizePhone(null)).isEmpty();
-        assertThat(PartnerExchangeService.normalizePhone("abc")).isEmpty();
+    @DisplayName("canonicalPhone is the gateway's wire form: local, international and 00-prefixed all agree")
+    void canonicalPhone() {
+        assertThat(service.canonicalPhone("70 11 12 22")).isEqualTo("22670111222");
+        assertThat(service.canonicalPhone("+226 70 11 12 22")).isEqualTo("22670111222");
+        assertThat(service.canonicalPhone("0022670111222")).isEqualTo("22670111222");
+        assertThat(service.canonicalPhone("22670111222")).isEqualTo("22670111222");
+        assertThat(service.canonicalPhone(null)).isEmpty();
+        assertThat(service.canonicalPhone("abc")).isEmpty();
     }
 
     @Test

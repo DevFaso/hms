@@ -345,6 +345,15 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
+   * SMS dispatch hands a signed prescription to an outside pharmacy and moves it
+   * to SENT_TO_PARTNER; the backend refuses any other state (400), so the button
+   * is only offered where the call can succeed.
+   */
+  canDispatchSms(p: PrescriptionResponse): boolean {
+    return p.status === 'SIGNED' || p.status === 'TRANSMITTED';
+  }
+
+  /**
    * A co-sign is offered while the prescription is still signable and the
    * declared requirement is unmet. Whether the CALLER may co-sign (a second
    * prescriber, not the prescription's own) is the backend's check — the row

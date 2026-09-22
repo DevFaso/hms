@@ -60,7 +60,7 @@ class PartnerExchangeServiceBranchesTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService);
+                channel, parser, auditEventLogService, "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();

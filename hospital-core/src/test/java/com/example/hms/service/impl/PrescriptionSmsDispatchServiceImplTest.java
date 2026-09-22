@@ -6,6 +6,7 @@ import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -257,6 +258,36 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .isInstanceOf(AccessDeniedException.class);
 
         verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("a caller scoped to another hospital gets 404, before the pharmacy is even looked at")
+    void dispatch_rejectsCallerFromOtherHospital() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(authUtils.currentHospitalId(auth)).thenReturn(UUID.randomUUID());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(pharmacyRepository, never()).findById(any());
+        verify(smsService, never()).send(anyString(), anyString());
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("a caller scoped to the prescription's own hospital passes the tenant check")
+    void dispatch_acceptsCallerFromSameHospital() {
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(authUtils.currentHospitalId(auth)).thenReturn(hospitalId);
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
     }
 
     @Test

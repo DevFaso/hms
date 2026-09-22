@@ -82,6 +82,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
         Prescription rx = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+        requireCallerHospital(auth, rx);
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
 
@@ -120,6 +121,20 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 .status(transmission.getStatus())
                 .dispatchedAt(transmission.getLastAttemptedAt())
                 .build();
+    }
+
+    /**
+     * Tenant isolation, the same 404-not-403 idiom as every other prescription
+     * read: a caller whose active hospital is not the prescription's must not
+     * be able to tell it from one that does not exist. A null active hospital
+     * (super-admin in global view) is not scoped.
+     */
+    private void requireCallerHospital(Authentication auth, Prescription rx) {
+        UUID callerHospitalId = authUtils.currentHospitalId(auth);
+        UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
+        if (callerHospitalId != null && !callerHospitalId.equals(rxHospitalId)) {
+            throw new ResourceNotFoundException("Prescription not found");
+        }
     }
 
     private void validateScope(Prescription rx, Pharmacy pharmacy) {

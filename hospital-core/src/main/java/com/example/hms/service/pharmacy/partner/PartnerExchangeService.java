@@ -13,8 +13,9 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.AuditEventLogService;
-import lombok.RequiredArgsConstructor;
+import com.example.hms.utility.PhoneNumbers;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +37,6 @@ import java.util.Set;
  * method (system user).
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PartnerExchangeService {
 
@@ -58,6 +58,22 @@ public class PartnerExchangeService {
     private final PartnerNotificationChannel channel;
     private final PartnerSmsReplyParser replyParser;
     private final AuditEventLogService auditEventLogService;
+    /** The gateway's country code, so a locally stored number matches the international reply. */
+    private final String countryNumberCode;
+
+    public PartnerExchangeService(PrescriptionRoutingDecisionRepository routingDecisionRepository,
+                                  PrescriptionRepository prescriptionRepository,
+                                  PartnerNotificationChannel channel,
+                                  PartnerSmsReplyParser replyParser,
+                                  AuditEventLogService auditEventLogService,
+                                  @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode) {
+        this.routingDecisionRepository = routingDecisionRepository;
+        this.prescriptionRepository = prescriptionRepository;
+        this.channel = channel;
+        this.replyParser = replyParser;
+        this.auditEventLogService = auditEventLogService;
+        this.countryNumberCode = countryNumberCode;
+    }
 
     /** Convenience: tell the channel to notify the partner of a brand new offer. */
     public void sendNewOffer(PrescriptionRoutingDecision decision, Prescription prescription, Pharmacy partner) {
@@ -129,19 +145,13 @@ public class PartnerExchangeService {
     }
 
     /**
-     * Digits only, international prefix {@code 00} folded into the bare
-     * country code, so {@code "+226 70 11 12 22"}, {@code "0022670111222"} and
-     * {@code "22670111222"} compare equal. Empty when nothing usable remains.
+     * The wire form the gateway sends to, so a pharmacy stored as
+     * {@code "70 11 12 22"} matches the {@code +22670111222} its reply comes
+     * from — the same canonicalisation IkoddiGatewayImpl applies on the way
+     * out. Empty when nothing usable remains.
      */
-    static String normalizePhone(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String digits = raw.replaceAll("\\D", "");
-        if (digits.startsWith("00")) {
-            digits = digits.substring(2);
-        }
-        return digits;
+    String canonicalPhone(String raw) {
+        return PhoneNumbers.toInternationalDigits(raw, countryNumberCode);
     }
 
     // ---------- internals ----------
@@ -150,7 +160,7 @@ public class PartnerExchangeService {
         if (refToken == null || refToken.isBlank()) {
             return Optional.empty();
         }
-        String sender = normalizePhone(senderPhone);
+        String sender = canonicalPhone(senderPhone);
         if (sender.isEmpty()) {
             log.info("Partner SMS reply for token {} carried no sender number; ignored", refToken);
             return Optional.empty();
@@ -159,7 +169,7 @@ public class PartnerExchangeService {
         List<PrescriptionRoutingDecision> matches = routingDecisionRepository
                 .findOpenByIdPrefix(RoutingType.PARTNER, OPEN_STATUSES, prefix)
                 .stream()
-                .filter(d -> sender.equals(normalizePhone(targetPhone(d))))
+                .filter(d -> sender.equals(canonicalPhone(targetPhone(d))))
                 .toList();
         if (matches.isEmpty()) {
             log.info("Partner SMS reply referenced unknown/closed token {} for sender {}; ignored",

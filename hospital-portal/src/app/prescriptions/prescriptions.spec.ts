@@ -242,6 +242,25 @@ describe('PrescriptionsComponent — signing', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="rx-sign-rx-2"]')).toBeNull();
   });
 
+  it('offers SMS dispatch only where the backend would accept it (SIGNED / TRANSMITTED)', () => {
+    component.filtered.set([
+      rx('rx-1', 'DRAFT'),
+      rx('rx-2', 'SIGNED'),
+      rx('rx-3', 'TRANSMITTED'),
+      rx('rx-4', 'SENT_TO_PARTNER'),
+      rx('rx-5', 'DISPENSED'),
+    ]);
+    fixture.detectChanges();
+
+    const dispatch = (id: string) =>
+      fixture.nativeElement.querySelector(`[data-testid="rx-dispatch-sms-${id}"]`);
+    expect(dispatch('rx-1')).toBeNull();
+    expect(dispatch('rx-2')).not.toBeNull();
+    expect(dispatch('rx-3')).not.toBeNull();
+    expect(dispatch('rx-4')).toBeNull();
+    expect(dispatch('rx-5')).toBeNull();
+  });
+
   it('does not offer TRANSMITTED in the editable status list', () => {
     // A dispensable state nothing in the backend ever writes — the only
     // writer it ever had was the client-asserted-status hole, now refused.

@@ -118,7 +118,12 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_PHARMACIST = "ROLE_PHARMACIST";
     private static final String MEDICATION = "Amoxicillin";
-    private static final String PARTNER_A_PHONE = "+22670000001";
+    /**
+     * Stored exactly as typed at the desk (local format), while the gateway sends
+     * to +226… and the reply comes back from that number: the two must match.
+     */
+    private static final String PARTNER_A_PHONE = "70 00 00 01";
+    private static final String PARTNER_A_REPLY_FROM = "+22670000001";
     private static final String COMMUNITY_A_PHONE = "+22670000002";
     private static final String PARTNER_B_PHONE = "+22670000003";
     private static final String UNKNOWN_PHONE = "+22699999999";
@@ -275,13 +280,13 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         String token = tokenFromOfferSentTo(PARTNER_A_PHONE);
         assertThat(token).isEqualTo(decisionId.toString().substring(0, 8).toUpperCase(Locale.ROOT));
 
-        mockMvc.perform(webhook(PARTNER_A_PHONE, "1 " + token))
+        mockMvc.perform(webhook(PARTNER_A_REPLY_FROM, "1 " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("applied"))
                 .andExpect(jsonPath("$.decisionStatus").value("ACCEPTED"));
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
 
-        mockMvc.perform(webhook(PARTNER_A_PHONE, "3 " + token))
+        mockMvc.perform(webhook(PARTNER_A_REPLY_FROM, "3 " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("applied"))
                 .andExpect(jsonPath("$.decisionStatus").value("COMPLETED"));
@@ -375,6 +380,13 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                         .with(pharmacist(pharmacistB, hospitalB)))
                 .andExpect(status().isNotFound());
 
+        // Round 1: dispatch-sms compares the caller's active hospital too.
+        mockMvc.perform(apiPost(API + "/prescriptions/{id}/dispatch-sms", rxId)
+                        .with(pharmacist(pharmacistB, hospitalB))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("pharmacyId", communityA.getId()))))
+                .andExpect(status().isNotFound());
+
         mockMvc.perform(apiPost(ROUTE_TO_PARTNER)
                         .with(pharmacist(pharmacistB, hospitalB))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -415,7 +427,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                 .isEqualTo(RoutingDecisionStatus.PENDING);
 
         // The genuine partner can still answer afterwards.
-        mockMvc.perform(webhook(PARTNER_A_PHONE, "1 " + token))
+        mockMvc.perform(webhook(PARTNER_A_REPLY_FROM, "1 " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("applied"));
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);

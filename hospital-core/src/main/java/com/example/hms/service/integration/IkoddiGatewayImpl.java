@@ -1,6 +1,7 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.exception.NotificationTransportUnavailableException;
+import com.example.hms.utility.PhoneNumbers;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -228,14 +229,9 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
         if (rawPhone == null) {
             return null;
         }
-        String digits = rawPhone.trim().replaceAll("\\D", "");
-        if (digits.startsWith("00")) {
-            digits = digits.substring(2);
-        }
-        if (!digits.isEmpty() && digits.length() <= 10) {
-            digits = countryNumberCode + digits;
-        }
-        return digits;
+        // Shared with the inbound side (PartnerExchangeService): a reply from
+        // the number this sent to must compare equal to the stored number.
+        return PhoneNumbers.toInternationalDigits(rawPhone, countryNumberCode);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
