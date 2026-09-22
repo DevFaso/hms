@@ -271,14 +271,20 @@ final class APIClient {
 
     // MARK: - Multipart upload
 
+    /// One file part plus optional text parts (`fields`), in that order. The
+    /// text parts are what a Spring `@RequestPart("documentType")` /
+    /// `@RequestParam` reads from a multipart body. Same bearer selection
+    /// and one refresh on 401 as `request()`: a document upload that hits an
+    /// expired token must retry with a fresh one, not surface as an error.
     func uploadMultipart<T: Decodable>(
         _ path: String,
         fileData: Data,
         fileName: String,
         mimeType: String,
-        fieldName: String = "file"
+        fieldName: String = "file",
+        fields: [String: String] = [:]
     ) async throws -> T {
-        var components = URLComponents(string: AppEnvironment.baseURL + path)
+        let components = URLComponents(string: AppEnvironment.baseURL + path)
         guard let url = components?.url else { throw APIError.invalidURL }
 
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -290,20 +296,59 @@ final class APIClient {
         // Same preference as request(): the OIDC token when a Keycloak
         // session is active, else the legacy one. Sending only the legacy
         // token made every avatar upload 401 under SSO.
+        let usingOidc = KeychainHelper.shared.oidcAccessToken != nil
         if let token = KeychainHelper.shared.oidcAccessToken ?? KeychainHelper.shared.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        // The file name goes into a quoted header: quotes and CR/LF from a
+        // user-chosen name would end the part early.
+        let safeName = fileName
+            .replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(safeName)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+        for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: text/plain; charset=utf-8\r\n\r\n".data(using: .utf8)!)
+            body.append(value.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         request.httpBody = body
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
+        var (data, response) = try await session.data(for: request)
+        guard var http = response as? HTTPURLResponse else { throw APIError.unknown }
+
+        if http.statusCode == 401 {
+            if usingOidc {
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                guard let fresh = refreshed else {
+                    await AuthManager.shared.logout()
+                    throw APIError.unauthorized
+                }
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            } else {
+                try await AuthManager.shared.refreshTokens()
+                if let token = KeychainHelper.shared.accessToken {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+            }
+            (data, response) = try await session.data(for: request)
+            guard let retry = response as? HTTPURLResponse else { throw APIError.unknown }
+            http = retry
+            if http.statusCode == 401 {
+                await AuthManager.shared.logout()
+                throw APIError.unauthorized
+            }
+        }
         return try decodeResponse(data, statusCode: http.statusCode)
     }
 }

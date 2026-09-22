@@ -95,23 +95,37 @@ data class CareTeamMemberDto(
 )
 
 @JsonClass(generateAdapter = true)
-data class ConsentHospitalDto(
-    @Json(name = "id") val id: String? = null,
-    @Json(name = "name") val name: String? = null
-)
-
-@JsonClass(generateAdapter = true)
 data class DocumentDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "name") val name: String = "",
-    @Json(name = "type") val type: String? = null,
-    @Json(name = "fileType") val fileType: String? = null,
+    // What PatientDocumentResponseDTO actually serialises.
+    @Json(name = "displayName") val displayName: String? = null,
+    @Json(name = "mimeType") val mimeType: String? = null,
     @Json(name = "documentType") val documentType: String? = null,
-    @Json(name = "uploadedAt") val uploadedAt: String = "",
+    @Json(name = "fileSizeBytes") val fileSizeBytes: Long? = null,
+    @Json(name = "collectionDate") val collectionDate: String? = null,
+    @Json(name = "notes") val notes: String? = null,
+    @Json(name = "uploadedByDisplayName") val uploadedByDisplayName: String? = null,
+    @Json(name = "createdAt") val createdAt: String? = null,
     @Json(name = "fileUrl") val fileUrl: String? = null,
-    @Json(name = "fileSize") val fileSize: Long? = null,
+    // Scaffold-era names, kept optional so an older payload still decodes.
+    @Json(name = "name") val legacyName: String? = null,
+    @Json(name = "fileType") val fileType: String? = null,
+    @Json(name = "uploadedAt") val legacyUploadedAt: String? = null,
+    @Json(name = "fileSize") val legacyFileSize: Long? = null,
     @Json(name = "description") val description: String? = null
-)
+) {
+    val name: String get() = displayName ?: legacyName ?: ""
+    /** ISO date-time of the upload; the screen shows its first 10 chars. */
+    val uploadedAt: String get() = createdAt ?: legacyUploadedAt ?: ""
+    val sizeBytes: Long? get() = fileSizeBytes ?: legacyFileSize
+    /** Kind for the row icon: the server's mimeType wins, then the extension. */
+    val kind: String? get() = when {
+        mimeType?.startsWith("image/") == true -> "IMAGE"
+        mimeType == "application/pdf" -> "PDF"
+        fileType != null -> fileType
+        else -> name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class NotificationDto(
@@ -179,50 +193,6 @@ data class TreatmentPlanDto(
     @Json(name = "status") val status: String = "",
     @Json(name = "goals") val goals: List<String>? = null,
     @Json(name = "createdBy") val createdBy: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class ConsentDto(
-    @Json(name = "id") val id: String = "",
-    @Json(name = "type") val type: String? = null,
-    @Json(name = "consentType") val consentType: String? = null,
-    @Json(name = "title") val title: String? = null,
-    @Json(name = "description") val description: String? = null,
-    @Json(name = "status") val status: String? = null,
-    @Json(name = "isGranted") val isGranted: Boolean = false,
-    @Json(name = "consentGiven") val consentGiven: Boolean? = null,
-    @Json(name = "recipientName") val recipientName: String? = null,
-    @Json(name = "grantedAt") val grantedAt: String? = null,
-    @Json(name = "expiresAt") val expiresAt: String? = null,
-    @Json(name = "consentTimestamp") val consentTimestamp: String? = null,
-    @Json(name = "consentExpiration") val consentExpiration: String? = null,
-    @Json(name = "purpose") val purpose: String? = null,
-    @Json(name = "scope") val scope: String? = null,
-    @Json(name = "fromHospital") val fromHospital: ConsentHospitalDto? = null,
-    @Json(name = "toHospital") val toHospital: ConsentHospitalDto? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class GrantConsentRequest(
-    @Json(name = "granted") val granted: Boolean,
-    @Json(name = "notes") val notes: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class AccessLogDto(
-    @Json(name = "id") val id: String = "",
-    @Json(name = "accessedBy") val accessedBy: String? = null,
-    @Json(name = "accessedAt") val accessedAt: String? = null,
-    @Json(name = "action") val action: String? = null,
-    @Json(name = "resourceType") val resourceType: String? = null,
-    @Json(name = "ipAddress") val ipAddress: String? = null,
-    @Json(name = "actor") val actor: String? = null,
-    @Json(name = "eventType") val eventType: String? = null,
-    @Json(name = "entityType") val entityType: String? = null,
-    @Json(name = "resourceId") val resourceId: String? = null,
-    @Json(name = "description") val description: String? = null,
-    @Json(name = "status") val status: String? = null,
-    @Json(name = "timestamp") val timestamp: String? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -46,6 +46,12 @@ public interface LabResultService {
 
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
 
+    /**
+     * The release worklist of the caller's hospital: every result nobody
+     * has released yet, hand-entered or analyzer-ingested alike.
+     */
+    Page<LabResultResponseDTO> getPendingRelease(Pageable pageable, Locale locale);
+
     LabResultResponseDTO signLabResult(UUID id, LabResultSignatureRequestDTO request, Locale locale);
 
     // Enhanced trending and comparison methods (Story #5)

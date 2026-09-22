@@ -247,7 +247,8 @@ class ResultReviewServiceImplTest {
         lenient().when(labResult.isReleased()).thenReturn(true);
         when(labResult.getId()).thenReturn(resultId);
         when(labResult.getResultValue()).thenReturn("12.5 g/dL");
-        when(labResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL);
+        // B18: a directional row still lands in the portal's ABNORMAL bucket.
+        when(labResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL_HIGH);
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now().minusHours(2));
 
         when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
@@ -262,6 +263,7 @@ class ResultReviewServiceImplTest {
         assertEquals("CBC", item.getTestName());
         assertEquals("12.5 g/dL", item.getResultValue());
         assertEquals("ABNORMAL", item.getAbnormalFlag());
+        assertEquals(com.example.hms.enums.AbnormalDirection.HIGH, item.getAbnormalDirection());
         assertEquals("Routine screening", item.getOrderingContext());
     }
 

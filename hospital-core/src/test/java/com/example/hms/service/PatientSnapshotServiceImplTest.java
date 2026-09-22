@@ -325,6 +325,37 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
+    void getSnapshot_directionalFlag_keepsTheFamilyAndCarriesTheDirection() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        LabTestDefinition testDef = mock(LabTestDefinition.class);
+        when(testDef.getName()).thenReturn("Potassium");
+        LabOrder order = mock(LabOrder.class);
+        when(order.getLabTestDefinition()).thenReturn(testDef);
+        LabResult labResult = mock(LabResult.class);
+        when(labResult.getLabOrder()).thenReturn(order);
+        when(labResult.getResultValue()).thenReturn("5.9");
+        when(labResult.getAbnormalFlag()).thenReturn(com.example.hms.enums.AbnormalFlag.ABNORMAL_HIGH);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO.LabItem lab = service.getSnapshot(patientId, null).getLatestLabs().get(0);
+
+        // The drawer colours on the literal ABNORMAL; the arrow is a separate field.
+        assertEquals("ABNORMAL", lab.getFlag());
+        assertEquals(com.example.hms.enums.AbnormalDirection.HIGH, lab.getAbnormalDirection());
+    }
+
+    @Test
     void getSnapshot_withPendingOrders_shouldInclude() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
