@@ -409,6 +409,8 @@
 "education_no_completed" = "You have not finished any material yet.";
 "education_no_questions" = "You have not asked any questions yet.";
 "questions_load_failed" = "Your questions could not be loaded";
+"questions_refresh_failed" = "Your questions could not be refreshed";
+"education_refresh_failed" = "Your education material could not be refreshed";
 "education_warning_title" = "Important safety information";
 "education_warning_desc" = "Your care team shared material about warning signs. Please read it.";
 "education_duration" = "%d min read";

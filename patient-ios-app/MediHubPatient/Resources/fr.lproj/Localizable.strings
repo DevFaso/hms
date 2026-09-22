@@ -409,6 +409,8 @@
 "education_no_completed" = "Vous n’avez encore terminé aucun document.";
 "education_no_questions" = "Vous n’avez encore posé aucune question.";
 "questions_load_failed" = "Vos questions n’ont pas pu être chargées";
+"questions_refresh_failed" = "Vos questions n’ont pas pu être actualisées";
+"education_refresh_failed" = "Vos documents n’ont pas pu être actualisés";
 "education_warning_title" = "Informations de sécurité importantes";
 "education_warning_desc" = "Votre équipe soignante a partagé un document sur les signes d’alerte. Veuillez le lire.";
 "education_duration" = "%d min de lecture";

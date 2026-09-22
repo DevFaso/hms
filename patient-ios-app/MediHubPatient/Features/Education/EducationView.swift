@@ -65,15 +65,19 @@ struct EducationView: View {
     private var assignedTab: some View {
         let list = vm.assigned
         if list.isEmpty {
-            if vm.completed.isEmpty {
-                ContentUnavailableView("education_empty_title".localized,
-                                       systemImage: "book.closed",
-                                       description: Text("education_empty_desc".localized))
-            } else {
-                // Everything assigned has been read: say so, not "nothing yet".
-                ContentUnavailableView("education_all_read".localized,
-                                       systemImage: "checkmark.seal",
-                                       description: Text("education_all_read_desc".localized))
+            refreshableEmpty {
+                if vm.completed.isEmpty {
+                    ContentUnavailableView("education_empty_title".localized,
+                                           systemImage: "book.closed",
+                                           description: Text("education_empty_desc".localized))
+                } else {
+                    // Everything assigned has been read: say so, not "nothing yet".
+                    ContentUnavailableView("education_all_read".localized,
+                                           systemImage: "checkmark.seal",
+                                           description: Text("education_all_read_desc".localized))
+                }
+            } refresh: {
+                await vm.load()
             }
         } else {
             itemList(list, showBanner: true)
@@ -84,7 +88,11 @@ struct EducationView: View {
     private var completedTab: some View {
         let list = vm.completed
         if list.isEmpty {
-            ContentUnavailableView("education_no_completed".localized, systemImage: "book.closed")
+            refreshableEmpty {
+                ContentUnavailableView("education_no_completed".localized, systemImage: "book.closed")
+            } refresh: {
+                await vm.load()
+            }
         } else {
             itemList(list, showBanner: false)
         }
@@ -115,6 +123,20 @@ struct EducationView: View {
         .refreshable { await vm.load() }
     }
 
+    /// An empty state that still answers pull-to-refresh: material assigned
+    /// after "nothing yet" was shown must not need a leave-and-return.
+    private func refreshableEmpty<Content: View>(
+        @ViewBuilder content: () -> Content,
+        refresh: @escaping @Sendable () async -> Void
+    ) -> some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity)
+                .containerRelativeFrame(.vertical)
+        }
+        .refreshable { await refresh() }
+    }
+
     @ViewBuilder
     private var questionsTab: some View {
         if vm.questionsLoading, !vm.questionsLoaded {
@@ -126,10 +148,14 @@ struct EducationView: View {
                 Button("retry".localized) { Task { await vm.loadQuestions() } }
             }
         } else if vm.questions.isEmpty {
-            ContentUnavailableView {
-                Label("education_no_questions".localized, systemImage: "questionmark.bubble")
-            } actions: {
-                Button("ask_question".localized) { vm.openAsk(nil) }
+            refreshableEmpty {
+                ContentUnavailableView {
+                    Label("education_no_questions".localized, systemImage: "questionmark.bubble")
+                } actions: {
+                    Button("ask_question".localized) { vm.openAsk(nil) }
+                }
+            } refresh: {
+                await vm.loadQuestions()
             }
         } else {
             ScrollView {
@@ -398,10 +424,10 @@ struct AskQuestionSheet: View {
     @State private var text = ""
     @State private var urgent = false
 
-    private var trimmedLength: Int { text.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count }
-    private var length: Int { text.utf16.count }
+    /// What is sent: the trimmed text, counted in UTF-16 units as the server does.
+    private var length: Int { text.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count }
     private var canSend: Bool {
-        !vm.askSubmitting && trimmedLength >= EducationViewModel.questionMin && length <= EducationViewModel.questionMax
+        !vm.askSubmitting && length >= EducationViewModel.questionMin && length <= EducationViewModel.questionMax
     }
 
     var body: some View {
@@ -618,6 +644,8 @@ final class EducationViewModel: ObservableObject {
             loaded = true
         } catch {
             failed = true
+            // The list stays on screen after a failed refresh; say it did not refresh.
+            if loaded { showOutcome("education_refresh_failed".localized) }
         }
         isLoading = false
     }
@@ -645,6 +673,7 @@ final class EducationViewModel: ObservableObject {
                 questionsLoaded = true
             } catch {
                 questionsFailed = true
+                if questionsLoaded { showOutcome("questions_refresh_failed".localized) }
             }
         } while questionsReloadPending
         questionsLoading = false
