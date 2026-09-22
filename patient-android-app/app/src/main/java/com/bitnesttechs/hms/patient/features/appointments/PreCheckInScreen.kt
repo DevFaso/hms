@@ -282,7 +282,7 @@ private fun ReviewStep(state: UiState, viewModel: PreCheckInViewModel) {
     val updated = listOf(
         R.string.phone to d.phoneNumber, R.string.email to d.email, R.string.address to d.addressLine1,
         R.string.city to d.city, R.string.state_region to d.state, R.string.zip_code to d.zipCode,
-        R.string.emergency_contact to d.emergencyContactName, R.string.phone to d.emergencyContactPhone,
+        R.string.emergency_contact to d.emergencyContactName, R.string.emergency_contact_phone to d.emergencyContactPhone,
         R.string.relationship to d.emergencyContactRelationship,
         R.string.insurance_provider to d.insuranceProvider, R.string.member_id to d.insuranceMemberId,
         R.string.insurance_plan to d.insurancePlan

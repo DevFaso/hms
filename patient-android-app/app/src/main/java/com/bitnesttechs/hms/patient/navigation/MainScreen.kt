@@ -27,6 +27,7 @@ import com.bitnesttechs.hms.patient.features.appointments.AppointmentsViewModel
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
 import com.bitnesttechs.hms.patient.features.appointments.PreCheckInScreen
+import com.bitnesttechs.hms.patient.features.screenings.ScreeningsScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
 import com.bitnesttechs.hms.patient.features.careteam.CareTeamScreen
 import com.bitnesttechs.hms.patient.features.dashboard.DashboardScreen
@@ -71,6 +72,7 @@ val drawerItems = listOf(
     DrawerItem(R.string.visit_history, Icons.Default.History, "visits"),
     DrawerItem(R.string.after_visit_summaries, Icons.Default.Description, "visit_summaries"),
     DrawerItem(R.string.documents, Icons.Default.Description, "documents"),
+    DrawerItem(R.string.screenings, Icons.Default.Psychology, "screenings"),
     DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
     DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
     DrawerItem(R.string.messages, Icons.Default.Message, "tab_messages"),
@@ -88,7 +90,9 @@ fun MainScreen(onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // Show bottom bar on tab routes AND drawer sub-screens
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin")
+    // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot
+    // pop a form with a request in flight (see pre_checkin in #703).
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
@@ -145,7 +149,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records",
+                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "screenings",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
@@ -218,6 +222,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("visit_summaries") { VisitSummariesScreen(onBack = { navController.popBackStack() }) }
                 composable("notifications") { NotificationsScreen(onBack = { navController.popBackStack() }) }
                 composable("documents") { DocumentsScreen(onBack = { navController.popBackStack() }) }
+                composable("screenings") { ScreeningsScreen(onBack = { navController.popBackStack() }) }
                 composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }
                 composable("sharing_privacy") {
                     SharingPrivacyScreen(onBack = { navController.popBackStack() })

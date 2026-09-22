@@ -398,4 +398,24 @@
     <string name="precheckin_failed">The pre-check-in could not be submitted</string>
     <string name="answers_invalid">Fix the highlighted answers to continue.</string>
     <string name="pre_checkin_closed">Pre-check-in is no longer available for this visit.</string>
+    <string name="screenings">Screenings</string>
+    <string name="screenings_load_failed">Your screenings could not be loaded</string>
+    <string name="screenings_privacy_note">Your answers go straight to your care team. Nothing is scored on this screen.</string>
+    <string name="screenings_open_now">Open for you now</string>
+    <string name="screenings_open_hint">A few short questions about how you have been feeling in the past week.</string>
+    <string name="start_screening">Start</string>
+    <string name="screenings_none_open_title">No screening open right now</string>
+    <string name="screenings_none_open_desc">Your care team opens a screening for you during postpartum follow-up.</string>
+    <string name="your_answers">Your answers</string>
+    <string name="care_team_alerted">Your care team was alerted and will reach out to you.</string>
+    <string name="follow_up_planned">Your care team will follow up with you.</string>
+    <string name="screening_recorded">Received by your care team.</string>
+    <string name="instrument_load_failed">The questions could not be loaded</string>
+    <string name="screening_progress">%1$d of %2$d answered</string>
+    <string name="screening_incomplete">Please answer every item first (missing: %1$s).</string>
+    <string name="send_my_answers">Send my answers</string>
+    <string name="sending">Sending…</string>
+    <string name="screening_submitted">Thank you. Your answers have been sent to your care team.</string>
+    <string name="screening_submit_failed">Your answers could not be sent</string>
+    <string name="emergency_contact_phone">Emergency contact phone</string>
 </resources>
