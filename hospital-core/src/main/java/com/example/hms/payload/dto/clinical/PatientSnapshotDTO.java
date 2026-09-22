@@ -50,7 +50,10 @@ public class PatientSnapshotDTO {
     public static class LabItem {
         private String test;
         private String value;
+        /** NORMAL / ABNORMAL / CRITICAL, or REVIEW for an unflagged, unacknowledged row. */
         private String flag;
+        /** LOW / HIGH when the abnormal result's side of the range is known. */
+        private com.example.hms.enums.AbnormalDirection abnormalDirection;
         private String date;
     }
 

@@ -55,14 +55,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     /**
      * B14 — same switch as the manual entry path
-     * ({@code LabResultServiceImpl.performAutoVerification}): when on, a
-     * NORMAL ingested observation is released at once; when off (the
+     * ({@code LabResultServiceImpl.performAutoVerification}, PR #716 —
+     * same property, declared once in application.properties): when on,
+     * an observation the analyzer explicitly flagged normal is released
+     * at once; when off (the
      * default) it waits on the lab worklist
      * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
      * like every other unreleased row. Field-injected so the positional
      * constructor the tests use stays as it is.
      */
-    @Value("${hms.lab.auto-release.enabled:false}")
+    @Value("${hms.lab.auto-verification.enabled:false}")
     private boolean autoReleaseEnabled;
 
     @Override
@@ -199,7 +201,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .testCode(trimToNull(observation.testCode(), 255))
                 .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();
-            autoReleaseIfNormal(result);
+            autoReleaseIfExplicitlyNormal(result, observation.abnormalFlag());
             saved.add(labResultRepository.save(result));
             advanceToResulted(order);
         }
@@ -221,31 +223,43 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     /**
      * B14 — mirrors {@code LabResultServiceImpl.performAutoVerification}
-     * for analyzer results: only a NORMAL observation may be released
-     * without a person looking at it, and only when the hospital has
-     * switched auto-release on. Everything else lands unreleased and
-     * waits on the worklist; the patient sees "pending", never the value.
+     * for analyzer results: only an observation the analyzer itself
+     * flagged normal (OBX-8 {@code N} or empty) may be released without a
+     * person looking at it, and only when the hospital has switched
+     * auto-verification on. An OBX-8 code this mapper does not know
+     * ({@code W}, {@code R}, {@code S}, {@code I}, {@code U}, ...) is
+     * stored as NORMAL, exactly as before, but is NOT released: "we could
+     * not read the flag" is not "the analyzer said normal". Everything
+     * else lands unreleased and waits on the worklist; the patient sees
+     * "pending", never the value.
      */
-    private void autoReleaseIfNormal(LabResult result) {
-        if (!autoReleaseEnabled || result.isReleased()) {
+    private void autoReleaseIfExplicitlyNormal(LabResult result, String hl7Flag) {
+        if (!autoReleaseEnabled || result.isReleased() || !isExplicitlyNormal(hl7Flag)) {
             return;
         }
-        AbnormalFlag flag = result.getAbnormalFlag();
-        if (flag == null || flag == AbnormalFlag.NORMAL) {
-            result.setReleased(true);
-            result.setReleasedAt(LocalDateTime.now());
-            result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
-        }
+        result.setReleased(true);
+        result.setReleasedAt(LocalDateTime.now());
+        result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
+    }
+
+    private static boolean isExplicitlyNormal(String hl7Flag) {
+        return !StringUtils.hasText(hl7Flag) || "N".equals(hl7Flag.trim().toUpperCase(Locale.ROOT));
     }
 
     /**
      * B14 — an order that has just received an analyzer observation is
-     * RESULTED. Guarded: a state at or past RESULTED (VERIFIED,
-     * COMPLETED) is never wound back, and a CANCELLED order keeps its
-     * cancellation — the row still persists so the lab can reconcile it.
-     * No state yet (never persisted) counts as pre-result.
-     * The order is the managed entity off the specimen, so the change
-     * flushes with the surrounding transaction.
+     * RESULTED. Forward-only, event-based: the ordinal only ever moves
+     * up (a state at or past RESULTED is never wound back), never out of
+     * CANCELLED, never into CANCELLED. This deliberately does not walk
+     * {@code LabOrderServiceImpl.ALLOWED_TRANSITIONS}: those guard a
+     * person's manual step, and an analyzer answering an order IS the
+     * event that makes it resulted whatever bench step was skipped. PR
+     * #716 ships the same rule for the manual path as
+     * {@code service/lab/LabOrderLifecycle.advance(order, target)}; once
+     * both merge this private method becomes a call to it.
+     * No state yet (never persisted) counts as pre-result. The order is
+     * the managed entity off the specimen, so the change flushes with
+     * the surrounding transaction.
      */
     private static void advanceToResulted(LabOrder order) {
         LabOrderStatus status = order.getStatus();

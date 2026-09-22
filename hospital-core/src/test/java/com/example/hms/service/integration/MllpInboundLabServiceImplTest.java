@@ -253,6 +253,32 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("B14 — auto-release on: an OBX-8 code the mapper does not know stays NORMAL but is NOT released")
+    void unknownObxFlagIsNeverAutoReleased() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(
+                observation("ACC-1", "5.4", "1", "GLU", "W"),
+                observation("ACC-1", "5.4", "2", "GLU", "*"),
+                observation("ACC-1", "5.4", "3", "GLU", ""),
+                observation("ACC-1", "5.4", "4", "GLU", " n ")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(4)).save(captor.capture());
+        List<LabResult> saved = captor.getAllValues();
+        // What the patient sees is unchanged: the unknown codes still read NORMAL.
+        assertThat(saved).extracting(LabResult::getAbnormalFlag).containsOnly(AbnormalFlag.NORMAL);
+        assertThat(saved.get(0).isReleased()).isFalse();
+        assertThat(saved.get(1).isReleased()).isFalse();
+        // Empty and an explicit N are the analyzer saying normal.
+        assertThat(saved.get(2).isReleased()).isTrue();
+        assertThat(saved.get(3).isReleased()).isTrue();
+    }
+
+    @Test
     @DisplayName("B14 — the status advance is guarded: pre-result states move to RESULTED, later and cancelled ones stay")
     void orderStatusAdvanceIsGuarded() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));

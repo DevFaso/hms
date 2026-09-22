@@ -304,6 +304,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
+                .abnormalDirection(result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null)
                 .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
                 .patientId(order.getPatient().getId())
                 .testName(testName)

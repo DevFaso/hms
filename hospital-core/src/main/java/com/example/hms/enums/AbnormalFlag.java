@@ -21,4 +21,13 @@ public enum AbnormalFlag {
     public AbnormalFlag severity() {
         return (this == ABNORMAL_LOW || this == ABNORMAL_HIGH) ? ABNORMAL : this;
     }
+
+    /** The side of the range that was crossed, or {@code null} when unknown or not applicable. */
+    public AbnormalDirection direction() {
+        return switch (this) {
+            case ABNORMAL_LOW -> AbnormalDirection.LOW;
+            case ABNORMAL_HIGH -> AbnormalDirection.HIGH;
+            default -> null;
+        };
+    }
 }

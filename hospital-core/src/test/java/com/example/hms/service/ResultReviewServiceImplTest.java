@@ -169,6 +169,7 @@ class ResultReviewServiceImplTest {
         assertEquals("CBC", item.getTestName());
         assertEquals("12.5 g/dL", item.getResultValue());
         assertEquals("ABNORMAL", item.getAbnormalFlag());
+        assertEquals(com.example.hms.enums.AbnormalDirection.HIGH, item.getAbnormalDirection());
         assertEquals("Routine screening", item.getOrderingContext());
     }
 

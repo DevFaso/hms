@@ -169,6 +169,18 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getPendingRelease(Pageable pageable, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // A release worklist is one hospital's queue; the global view has none.
+            throw new BusinessException("A hospital scope is required for the release worklist.");
+        }
+        return labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable)
+            .map(labResultMapper::toResponseDTO);
+    }
+
+    @Override
     @Transactional
     public LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO request, Locale locale) {
     LabResult labResult = labResultRepository.findById(id)

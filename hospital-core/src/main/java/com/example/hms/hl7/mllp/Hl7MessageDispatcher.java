@@ -56,7 +56,10 @@ import java.util.UUID;
  * <p>The {@link MllpInboundOutcome} returned by the inbound services
  * maps to ACK codes: {@code ACCEPTED → AA},
  * {@code REJECTED_NOT_FOUND/INVALID → AE},
- * {@code REJECTED_CROSS_TENANT → AR}.
+ * {@code REJECTED_CROSS_TENANT → AR}. The ORU^R01 path never returns
+ * REJECTED_CROSS_TENANT (B13): an accession owned by another hospital
+ * answers exactly like an unknown one, so a sender cannot probe other
+ * tenants' accession numbers. The ADT and merge paths still do.
  */
 @Component
 public class Hl7MessageDispatcher {
