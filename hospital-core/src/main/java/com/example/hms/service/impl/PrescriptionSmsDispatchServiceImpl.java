@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -56,12 +57,22 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
     /**
      * States a prescription may be handed to an outside pharmacy from: signed
-     * by the prescriber and not yet claimed by any pharmacy. Mirrors the
-     * stock-out routing gate (StockOutRoutingServiceImpl.ROUTABLE_STATUSES).
+     * and unclaimed (SIGNED / TRANSMITTED), or refused by the previous pharmacy
+     * / waiting on stock (PARTNER_REJECTED / PENDING_STOCK) — a refusal must
+     * cost the clinician nothing more than choosing another pharmacy. Any
+     * decision still open on the prescription is superseded on re-dispatch.
      */
     static final Set<PrescriptionStatus> DISPATCHABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
-            PrescriptionStatus.TRANSMITTED
+            PrescriptionStatus.TRANSMITTED,
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.PENDING_STOCK
+    );
+
+    /** A decision the pharmacy could still answer (mirrors PartnerExchangeService.OPEN_STATUSES). */
+    private static final Set<RoutingDecisionStatus> OPEN_DECISION_STATUSES = Set.of(
+            RoutingDecisionStatus.PENDING,
+            RoutingDecisionStatus.ACCEPTED
     );
 
     private final PrescriptionRepository prescriptionRepository;
@@ -90,6 +101,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         requireDispatchable(rx);
         String phone = requirePharmacyPhone(pharmacy);
         User decidedBy = resolveCurrentUser(auth);
+        supersedeOpenDecisions(rx, pharmacy);
 
         // The decision is persisted first: its id is the reference token the
         // pharmacy quotes back, so the body cannot be built before it exists.
@@ -157,9 +169,34 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private static void requireDispatchable(Prescription rx) {
         if (!DISPATCHABLE_STATUSES.contains(rx.getStatus())) {
             throw new BusinessException(
-                "Only a signed prescription that no pharmacy has claimed can be dispatched by SMS; this one is "
-                    + rx.getStatus() + ".");
+                "Only a signed prescription that no pharmacy has claimed (or one a pharmacy refused / "
+                    + "placed on back order) can be dispatched by SMS; this one is " + rx.getStatus() + ".");
         }
+    }
+
+    /**
+     * Re-dispatch closes whatever the prescription still had open (a refused
+     * offer that timed out, a back order, a reply that never came): the old
+     * reference token must not act on the prescription once a new pharmacy
+     * holds it, and the inbound finder only matches open decisions.
+     */
+    private void supersedeOpenDecisions(Prescription rx, Pharmacy newTarget) {
+        List<PrescriptionRoutingDecision> open = routingDecisionRepository.findByPrescriptionId(rx.getId())
+                .stream()
+                .filter(d -> OPEN_DECISION_STATUSES.contains(d.getStatus()))
+                .toList();
+        for (PrescriptionRoutingDecision d : open) {
+            d.setStatus(RoutingDecisionStatus.CANCELLED);
+            d.setReason(appendReason(d.getReason(),
+                    "Superseded: re-dispatched by SMS to " + newTarget.getName()));
+            routingDecisionRepository.save(d);
+            log.info("Routing decision {} superseded by re-dispatch of prescription {}", d.getId(), rx.getId());
+        }
+    }
+
+    private static String appendReason(String existing, String suffix) {
+        String joined = (existing == null || existing.isBlank()) ? suffix : existing + ". " + suffix;
+        return joined.length() > 1024 ? joined.substring(0, 1024) : joined;
     }
 
     private String requirePharmacyPhone(Pharmacy pharmacy) {

@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy.partner;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -21,9 +22,15 @@ import java.util.regex.Pattern;
  * (after trimming). Matching the digit anywhere used to turn
  * {@code "refus ABC12, il reste 1 boîte"} into an ACCEPT; a digit that is
  * not the first word is now ordinary text and the keyword branch decides.
+ * <p>
+ * Keywords are whole words: {@code "rupture de stock"} used to be an ACCEPT
+ * because "stock" contains "ok". Refusal is looked for before acceptance, and
+ * a body that carries words from more than one family is ambiguous and
+ * refused rather than guessed.
  * Returns empty when the message is unparseable.
  */
 @Component
+@Slf4j
 public class PartnerSmsReplyParser {
 
     public enum Action { ACCEPT, REJECT, CONFIRM_DISPENSE }
@@ -33,6 +40,12 @@ public class PartnerSmsReplyParser {
 
     /** Leading action code: {@code 1} accept, {@code 2} reject, {@code 3} dispensed. */
     private static final Pattern LEADING_CODE = Pattern.compile("^([123])\\b");
+
+    /** Whole-word French / English keywords; (?U) so accented letters count as word characters. */
+    private static final Pattern REJECT_WORDS = Pattern.compile("(?U)\\b(non|refus\\w*|rejet\\w*)\\b");
+    private static final Pattern ACCEPT_WORDS = Pattern.compile("(?U)\\b(oui|ok|accept\\w*)\\b");
+    private static final Pattern DISPENSE_WORDS =
+            Pattern.compile("(?U)\\b(d[ée]liv\\w*|livr[ée]\\w*|dispen\\w*)\\b");
 
     public record ParsedReply(Action action, String refToken) { }
 
@@ -66,14 +79,23 @@ public class PartnerSmsReplyParser {
                 default -> Action.CONFIRM_DISPENSE;
             };
         }
-        // French fuzzy fallback
-        if (lower.contains("oui") || lower.contains("accept") || lower.contains("ok")) {
-            return Action.ACCEPT;
+        // Keyword fallback: refusal first, whole words only, one family only.
+        boolean reject = REJECT_WORDS.matcher(lower).find();
+        boolean accept = ACCEPT_WORDS.matcher(lower).find();
+        boolean dispense = DISPENSE_WORDS.matcher(lower).find();
+        int families = (reject ? 1 : 0) + (accept ? 1 : 0) + (dispense ? 1 : 0);
+        if (families > 1) {
+            log.info("Partner SMS reply ambiguous (reject={}, accept={}, dispense={}); ignored",
+                    reject, accept, dispense);
+            return null;
         }
-        if (lower.contains("non") || lower.contains("refus") || lower.contains("rejet")) {
+        if (reject) {
             return Action.REJECT;
         }
-        if (lower.contains("deliv") || lower.contains("délivr") || lower.contains("dispen")) {
+        if (accept) {
+            return Action.ACCEPT;
+        }
+        if (dispense) {
             return Action.CONFIRM_DISPENSE;
         }
         return null;
@@ -99,7 +121,7 @@ public class PartnerSmsReplyParser {
         String l = s.toLowerCase(java.util.Locale.ROOT);
         return switch (l) {
             case "oui", "non", "ok", "accept", "refus", "rejet", "rejete",
-                 "deliv", "delivre", "delivr", "dispen", "dispense" -> true;
+                 "deliv", "delivre", "delivr", "livr", "livre", "dispen", "dispense" -> true;
             default -> false;
         };
     }

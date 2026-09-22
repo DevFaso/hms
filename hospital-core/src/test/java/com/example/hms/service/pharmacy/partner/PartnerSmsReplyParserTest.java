@@ -94,4 +94,45 @@ class PartnerSmsReplyParserTest {
         assertThat(parser.parse("2 ABC12 ok").orElseThrow().action())
                 .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
     }
+
+    @Test
+    @DisplayName("round 2: 'rupture de stock' is a refusal — 'stock' is not 'ok'")
+    void ruptureDeStockIsARefusal() {
+        Optional<PartnerSmsReplyParser.ParsedReply> parsed =
+                parser.parse("Non 3F2A9B1C, rupture de stock");
+        assertThat(parsed).isPresent();
+        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 2: keywords are whole words")
+    void keywordsAreWholeWords() {
+        assertThat(parser.parse("ok 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("oui 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("non 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse("refus 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+        assertThat(parser.parse("livr\u00e9 3F2A9B1C").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.CONFIRM_DISPENSE);
+        assertThat(parser.parse("stock 3F2A9B1C")).isEmpty();
+        assertThat(parser.parse("nonante 3F2A9B1C")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("round 2: 'livr\u00e9' is the dispense word, not the token")
+    void livreIsNotTheToken() {
+        assertThat(parser.parse("livr\u00e9 3F2A9B1C").orElseThrow().refToken()).isEqualTo("3F2A9B1C");
+    }
+
+    @Test
+    @DisplayName("round 2: a body with both a refusal and an acceptance word is ambiguous and ignored")
+    void ambiguousBodyIgnored() {
+        assertThat(parser.parse("oui non 3F2A9B1C")).isEmpty();
+        assertThat(parser.parse("ok 3F2A9B1C mais refus\u00e9")).isEmpty();
+        assertThat(parser.parse("non 3F2A9B1C livr\u00e9")).isEmpty();
+    }
 }

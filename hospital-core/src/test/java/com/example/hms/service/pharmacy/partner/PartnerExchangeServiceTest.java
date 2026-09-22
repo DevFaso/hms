@@ -116,20 +116,22 @@ class PartnerExchangeServiceTest {
     }
 
     @Test
-    @DisplayName("inbound dispense confirmation notifies patient and completes decision")
-    void inboundDispense() {
+    @DisplayName("round 2: a '3' on a PENDING offer is not an implicit accept — ignored, nothing moves")
+    void inboundDispenseOnPendingIgnored() {
         stubPrefixLookup(decision);
-        stubSaves();
 
-        service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+        Optional<PrescriptionRoutingDecision> result =
+                service.handleInboundReply(PARTNER_PHONE, "3 " + token);
 
-        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
-        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
-        verify(channel).notifyPatientDispensed(any(), eq(partner));
+        assertThat(result).isEmpty();
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        verify(routingDecisionRepository, never()).save(any());
+        verifyNoInteractions(channel);
     }
 
     @Test
-    @DisplayName("an ACCEPTED decision still takes the dispense confirmation (1 then 3)")
+    @DisplayName("inbound dispense confirmation on an ACCEPTED decision (1 then 3) completes it and notifies the patient")
     void inboundDispenseAfterAccept() {
         decision.setStatus(RoutingDecisionStatus.ACCEPTED);
         prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
@@ -142,6 +144,7 @@ class PartnerExchangeServiceTest {
         assertThat(updated).isPresent();
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
+        verify(channel).notifyPatientDispensed(any(), eq(partner));
     }
 
     @Test

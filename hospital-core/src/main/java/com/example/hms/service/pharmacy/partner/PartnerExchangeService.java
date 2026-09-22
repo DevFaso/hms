@@ -48,7 +48,9 @@ public class PartnerExchangeService {
     /**
      * Decisions an SMS reply may still act on. ACCEPTED is open because the
      * partner confirms the dispense ({@code 3 <ref>}) after having accepted;
-     * matching PENDING only made that third message unroutable.
+     * matching PENDING only made that third message unroutable. A decision
+     * superseded by a re-dispatch (CANCELLED) or already answered is not open,
+     * so a late reply to its token is ignored.
      */
     static final Set<RoutingDecisionStatus> OPEN_STATUSES =
             EnumSet.of(RoutingDecisionStatus.PENDING, RoutingDecisionStatus.ACCEPTED);
@@ -190,16 +192,22 @@ public class PartnerExchangeService {
     }
 
     /**
-     * Applies the reply, or returns {@code null} when the decision is not in a
-     * state that action can move: ACCEPT/REJECT answer a PENDING offer, and a
-     * dispense is confirmed from PENDING (implicit accept) or ACCEPTED — the
-     * same transitions the staff endpoints in StockOutRoutingServiceImpl allow.
+     * Applies the reply, or returns {@code null} when the decision is not in
+     * the state that action moves from — exactly the transitions the staff
+     * endpoints in StockOutRoutingServiceImpl allow: ACCEPT / REJECT answer a
+     * PENDING offer; CONFIRM_DISPENSE requires ACCEPTED (partnerRespond then
+     * confirmPartnerDispense). A {@code 3} on a PENDING offer is not an
+     * implicit accept: it is ignored and logged, so the patient is never told
+     * "délivré" for an offer nobody accepted.
      */
     private PrescriptionRoutingDecision applyReply(PrescriptionRoutingDecision decision,
                                                    PartnerSmsReplyParser.Action action) {
-        if (action != PartnerSmsReplyParser.Action.CONFIRM_DISPENSE
-                && decision.getStatus() != RoutingDecisionStatus.PENDING) {
-            log.info("Partner SMS {} ignored: decision {} is {}", action, decision.getId(), decision.getStatus());
+        RoutingDecisionStatus required = action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE
+                ? RoutingDecisionStatus.ACCEPTED
+                : RoutingDecisionStatus.PENDING;
+        if (decision.getStatus() != required) {
+            log.info("Partner SMS {} ignored: decision {} is {}, needs {}",
+                    action, decision.getId(), decision.getStatus(), required);
             return null;
         }
         Prescription rx = decision.getPrescription();

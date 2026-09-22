@@ -355,6 +355,60 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
     }
 
+    @Test
+    @DisplayName("round 2: a refused community dispatch can be re-sent; the old token is superseded")
+    void communityRefusalThenRedispatch() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        dispatchSms(rxId, communityA);
+        String firstToken = tokenFromOfferSentTo(COMMUNITY_A_PHONE);
+
+        mockMvc.perform(webhook(COMMUNITY_A_PHONE, "2 " + firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("applied"))
+                .andExpect(jsonPath("$.decisionStatus").value("REJECTED"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+
+        dispatchSms(rxId, communityA);
+        String secondToken = tokenFromOfferSentTo(COMMUNITY_A_PHONE);
+        assertThat(secondToken).isNotEqualTo(firstToken);
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        List<PrescriptionRoutingDecision> decisions = routingDecisionRepository.findByPrescriptionId(rxId);
+        assertThat(decisions).hasSize(2);
+        assertThat(decisions).extracting(PrescriptionRoutingDecision::getStatus)
+                .containsExactlyInAnyOrder(RoutingDecisionStatus.REJECTED, RoutingDecisionStatus.PENDING);
+
+        // A late reply to the first offer does nothing.
+        mockMvc.perform(webhook(COMMUNITY_A_PHONE, "1 " + firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ignored"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+
+        mockMvc.perform(webhook(COMMUNITY_A_PHONE, "1 " + secondToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("applied"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("round 2: a still-open offer is cancelled by a re-dispatch and its token stops working")
+    void redispatchSupersedesOpenOffer() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        UUID decisionId = routeToPartner(rxId, partnerA);
+        String partnerToken = tokenFromOfferSentTo(PARTNER_A_PHONE);
+
+        // The pharmacist decides not to wait for the partner: the doctor re-sends to the community pharmacy.
+        transactionTemplate.executeWithoutResult(tx ->
+                prescriptionRepository.findById(rxId).orElseThrow().setStatus(PrescriptionStatus.PARTNER_REJECTED));
+        dispatchSms(rxId, communityA);
+
+        assertThat(routingDecisionRepository.findById(decisionId).orElseThrow().getStatus())
+                .isEqualTo(RoutingDecisionStatus.CANCELLED);
+        mockMvc.perform(webhook(PARTNER_A_REPLY_FROM, "1 " + partnerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ignored"));
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+    }
+
     // ───────────────────────── leg 4: tenancy ─────────────────────────
 
     @Test
@@ -482,6 +536,15 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                 .andExpect(jsonPath("$.status").value("SIGNED"));
         assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SIGNED);
         return rxId;
+    }
+
+    private void dispatchSms(UUID rxId, Pharmacy target) throws Exception {
+        mockMvc.perform(apiPost(API + "/prescriptions/{id}/dispatch-sms", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("pharmacyId", target.getId()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SENT"));
     }
 
     private UUID routeToPartner(UUID rxId, Pharmacy target) throws Exception {

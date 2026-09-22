@@ -35,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -195,6 +196,55 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .hasSizeLessThanOrEqualTo(480)
                 .startsWith("HMS Rx " + REF_TOKEN)
                 .endsWith("2 pour refuser.");
+    }
+
+    @Test
+    @DisplayName("round 2: a refused or back-ordered prescription can be dispatched again, superseding the open decision")
+    void dispatch_redispatchSupersedesOpenDecision() {
+        rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+        PrescriptionRoutingDecision stale = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .reason("first offer")
+                .build();
+        stale.setId(UUID.randomUUID());
+        PrescriptionRoutingDecision closed = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.REJECTED)
+                .build();
+        closed.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale, closed));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(stale.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        assertThat(stale.getReason()).startsWith("first offer. Superseded").contains("Pharmacie Centrale");
+        assertThat(closed.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
+        verify(routingDecisionRepository).save(stale);
+        verify(routingDecisionRepository, never()).save(closed);
+    }
+
+    @Test
+    @DisplayName("round 2: PENDING_STOCK is dispatchable too")
+    void dispatch_acceptsPendingStock() {
+        rx.setStatus(PrescriptionStatus.PENDING_STOCK);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
     }
 
     @Test
