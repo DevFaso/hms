@@ -447,6 +447,8 @@
     <string name="sharing_opt_out_saved_on">Le partage avec les autres hôpitaux est maintenant désactivé.</string>
     <string name="sharing_opt_out_saved_off">Le partage avec les autres hôpitaux est de nouveau activé.</string>
     <string name="sharing_opt_out_failed">Votre réglage de partage n\'a pas pu être enregistré.</string>
+    <string name="sharing_already_off">Le partage avec les autres hôpitaux était déjà désactivé.</string>
+    <string name="sharing_already_on">Le partage avec les autres hôpitaux était déjà activé.</string>
     <string name="sharing_opt_out_own_hospital_note">L\'accès de votre propre hôpital ne change pas. Chaque ouverture de votre dossier ailleurs apparaît dans la liste ci-dessous.</string>
     <string name="role_accountant">Comptable</string>
     <string name="role_admin">Administrateur</string>

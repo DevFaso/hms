@@ -12,11 +12,14 @@ import com.bitnesttechs.hms.patient.core.models.RecordSharingOptOutDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.Response
 import javax.inject.Inject
 
 /**
@@ -35,7 +38,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SharingPrivacyViewModel @Inject constructor(
     private val api: ApiService,
-    @ApplicationScope private val applicationScope: CoroutineScope
+    @ApplicationScope private val applicationScope: CoroutineScope,
+    private val saveTracker: OptOutSaveTracker
 ) : ViewModel() {
 
     data class Outcome(@StringRes val resId: Int, val detail: String? = null)
@@ -136,6 +140,9 @@ class SharingPrivacyViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(optOutLoading = true, optOutFailed = false) }
             try {
+                // A save started by a ViewModel that is gone (back, then reopen)
+                // must land before this read, or the card shows the old state.
+                saveTracker.inFlight.value?.join()
                 if (patientId.isBlank()) {
                     val profile = api.getProfile()
                     patientId = profile.body()?.data?.id.orEmpty()
@@ -180,27 +187,8 @@ class SharingPrivacyViewModel @Inject constructor(
         val s = _state.value
         if (s.optOutSaving || patientId.isBlank()) return
         val reason = s.optOutReason.trim().takeIf { it.isNotEmpty() }
-        _state.update { it.copy(optOutSaving = true) }
-        applicationScope.launch {
-            try {
-                val resp = api.optOutOfRecordSharing(patientId, OptOutRequest(reason))
-                val body = resp.body()
-                if (resp.isSuccessful && body != null) {
-                    _state.update {
-                        it.copy(optOutSaving = false, showOptOutForm = false, optOut = body,
-                            outcome = Outcome(R.string.sharing_opt_out_saved_on))
-                    }
-                } else {
-                    _state.update {
-                        it.copy(optOutSaving = false,
-                            outcome = Outcome(R.string.sharing_opt_out_failed, serverMessage(resp.errorBody()?.string())))
-                    }
-                    // A 409 means the opt-out is already in force (set elsewhere); show the real state.
-                    if (resp.code() == 409) loadOptOut()
-                }
-            } catch (e: Exception) {
-                _state.update { it.copy(optOutSaving = false, outcome = Outcome(R.string.sharing_opt_out_failed, e.message)) }
-            }
+        save(R.string.sharing_opt_out_saved_on, R.string.sharing_already_off) {
+            api.optOutOfRecordSharing(patientId, OptOutRequest(reason))
         }
     }
 
@@ -208,24 +196,52 @@ class SharingPrivacyViewModel @Inject constructor(
     fun revokeOptOut() {
         val s = _state.value
         if (s.optOutSaving || patientId.isBlank()) return
+        save(R.string.sharing_opt_out_saved_off, R.string.sharing_already_on) { api.revokeRecordSharingOptOut(patientId) }
+    }
+
+    /**
+     * One save at a time, process-wide, registered with [saveTracker] so a
+     * ViewModel created after this one is gone still reads the committed state.
+     *
+     * A 409 is "already in that state" (the server refuses a second opt-out
+     * and a revocation of none): the real state is reloaded, the sheet closes
+     * and [alreadyRes] is shown alone, never the server's sentence. Any other
+     * refusal shows the server's message after the localized headline; an
+     * exception (offline, malformed body) shows the headline only, since its
+     * text is a developer's, not a patient's.
+     */
+    private fun save(
+        @StringRes savedRes: Int,
+        @StringRes alreadyRes: Int,
+        call: suspend () -> Response<RecordSharingOptOutDto>
+    ) {
+        if (saveTracker.inFlight.value != null) return
         _state.update { it.copy(optOutSaving = true) }
-        applicationScope.launch {
+        val job: Job = applicationScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val resp = api.revokeRecordSharingOptOut(patientId)
+                val resp = call()
                 val body = resp.body()
-                if (resp.isSuccessful && body != null) {
-                    _state.update {
-                        it.copy(optOutSaving = false, optOut = body, outcome = Outcome(R.string.sharing_opt_out_saved_off))
+                when {
+                    resp.isSuccessful && body != null -> _state.update {
+                        it.copy(optOutSaving = false, showOptOutForm = false, optOut = body, outcome = Outcome(savedRes))
                     }
-                } else {
-                    _state.update {
+                    resp.code() == 409 -> {
+                        _state.update { it.copy(optOutSaving = false, showOptOutForm = false, outcome = Outcome(alreadyRes)) }
+                        loadOptOut()
+                    }
+                    else -> _state.update {
                         it.copy(optOutSaving = false,
                             outcome = Outcome(R.string.sharing_opt_out_failed, serverMessage(resp.errorBody()?.string())))
                     }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(optOutSaving = false, outcome = Outcome(R.string.sharing_opt_out_failed, e.message)) }
+                _state.update { it.copy(optOutSaving = false, outcome = Outcome(R.string.sharing_opt_out_failed)) }
             }
+        }
+        if (saveTracker.start(job)) job.start()
+        else {
+            job.cancel()
+            _state.update { it.copy(optOutSaving = false) }
         }
     }
 

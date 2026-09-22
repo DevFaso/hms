@@ -447,6 +447,8 @@
     <string name="sharing_opt_out_saved_on">Sharing with other hospitals is now off.</string>
     <string name="sharing_opt_out_saved_off">Sharing with other hospitals is on again.</string>
     <string name="sharing_opt_out_failed">Your sharing setting could not be saved.</string>
+    <string name="sharing_already_off">Sharing with other hospitals was already off.</string>
+    <string name="sharing_already_on">Sharing with other hospitals was already on.</string>
     <string name="sharing_opt_out_own_hospital_note">Your own hospital\'s access does not change. Every time your record is opened elsewhere, it appears in the list below.</string>
     <string name="role_accountant">Accountant</string>
     <string name="role_admin">Admin</string>
