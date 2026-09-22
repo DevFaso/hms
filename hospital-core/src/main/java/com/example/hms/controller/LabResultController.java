@@ -101,6 +101,15 @@ public class LabResultController {
         return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
     }
 
+    @GetMapping("/pending-release")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER')")
+    @Operation(summary = "Release worklist", description = "Results of the caller's hospital that nobody has released yet, analyzer-ingested or hand-entered; oldest first by default.")
+    public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getPendingRelease(
+            @PageableDefault(size = 20, sort = "resultDate") Pageable pageable,
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getPendingRelease(pageable, locale)));
+    }
+
     @PutMapping("/{id}")
     // Role alone cannot answer this: whether a bedside role may enter a
     // result depends on the TEST being point-of-care, and the annotation runs

@@ -244,8 +244,8 @@
 "conversations" = "Conversations";
 
 /* Documents */
-"no_documents" = "Aucun document";
-"no_documents_desc" = "Aucun document enregistré.";
+"no_documents" = "Aucun document téléversé";
+"no_documents_desc" = "Téléversez vos dossiers médicaux, résultats de laboratoire ou autres documents de santé";
 "category" = "Catégorie";
 "search_documents" = "Rechercher des documents";
 
@@ -396,6 +396,39 @@
 "precheckin_failed" = "Le pré-enregistrement n’a pas pu être soumis";
 "emergency_contact_phone" = "Téléphone du contact d’urgence";
 
+// Patient parity phase 2 (2026-09-21): document upload and delete
+"upload_document" = "Téléverser un document";
+"choose_file" = "Choisir un fichier";
+"choose_photo" = "Choisir une photo";
+"selected_file" = "Fichier sélectionné";
+"document_type" = "Type de document";
+"collection_date_optional" = "Date de collecte (optionnel)";
+"notes_optional" = "Notes (optionnel)";
+"notes_placeholder" = "Ajouter une note sur ce document…";
+"upload" = "Téléverser";
+"document_upload_success" = "Document téléversé avec succès";
+"document_upload_failed" = "Échec du téléversement";
+"delete_document" = "Supprimer le document";
+"document_delete_confirm" = "Êtes-vous sûr de vouloir supprimer ce document ?";
+"document_delete_success" = "Document supprimé";
+"document_delete_failed" = "Échec de la suppression";
+"document_too_large" = "Le fichier doit faire moins de %d Mo.";
+"document_type_not_allowed" = "Les fichiers %@ ne sont pas acceptés. Formats acceptés : PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX";
+"document_read_failed" = "Le fichier n’a pas pu être lu.";
+"document_empty" = "Le fichier est vide.";
+"photo_process_failed" = "La photo n’a pas pu être traitée.";
+"notes_too_long" = "Les notes doivent compter au plus %d caractères.";
+"file_size_kb" = "%@ Ko";
+"document_type_lab_result" = "Résultat de labo";
+"document_type_imaging_report" = "Rapport d’imagerie";
+"document_type_discharge_summary" = "Résumé de sortie";
+"document_type_referral_letter" = "Lettre de référence";
+"document_type_prescription" = "Ordonnance";
+"document_type_insurance_document" = "Document d’assurance";
+"document_type_invoice" = "Facture";
+"document_type_immunization_record" = "Carnet de vaccination";
+"document_type_other" = "Autre";
+"preparing_file" = "Préparation…";
 // My Education (the web's my-education)
 "education" = "Mes documents";
 "education_load_failed" = "Vos documents n’ont pas pu être chargés";

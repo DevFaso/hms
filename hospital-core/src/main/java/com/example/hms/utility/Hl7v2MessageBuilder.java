@@ -101,6 +101,12 @@ public class Hl7v2MessageBuilder {
      * <p>{@code setId} (OBX-1) discriminates sibling observations of one
      * message — every OBX shares the MSH-level dedup triple, so this is
      * what keeps them distinct rows under the V131 unique index.
+     *
+     * <p>{@code resultStatus} (OBX-11, HL7 table 0085) says whether the
+     * value is final ({@code F}), corrected ({@code C}), preliminary
+     * ({@code P}), pending ({@code I}), partial ({@code S}) ...; the
+     * ingest stores every one but only a final or corrected result moves
+     * the order on.
      */
     public record ParsedObservation(
         String patientId,
@@ -112,7 +118,8 @@ public class Hl7v2MessageBuilder {
         String resultUnit,
         String referenceRange,
         String abnormalFlag,
-        LocalDateTime resultDate
+        LocalDateTime resultDate,
+        String resultStatus
     ) {}
 
     /**
@@ -156,9 +163,10 @@ public class Hl7v2MessageBuilder {
         String unit     = f.length > 6  ? f[6]                 : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
+        String status   = f.length > 11 ? f[11].trim()         : "";
         String datePart = f.length > 14 ? f[14]                : "";
         return new ParsedObservation(patientId, placer, filler, setId, testCode,
-            value, unit, refRange, abnFlag, parseHl7DateTime(datePart));
+            value, unit, refRange, abnFlag, parseHl7DateTime(datePart), status);
     }
 
     // ── Inbound ADT parser ────────────────────────────────────────────────────
@@ -404,6 +412,8 @@ public class Hl7v2MessageBuilder {
         return switch (flagName) {
             case "NORMAL"   -> "N";
             case "ABNORMAL" -> "A";
+            case "ABNORMAL_LOW" -> "L";
+            case "ABNORMAL_HIGH" -> "H";
             case "CRITICAL" -> "HH";
             default         -> "N";
         };

@@ -170,6 +170,18 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getPendingRelease(Pageable pageable, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // A release worklist is one hospital's queue; the global view has none.
+            throw new BusinessException("A hospital scope is required for the release worklist.");
+        }
+        return labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable)
+            .map(labResultMapper::toResponseDTO);
+    }
+
+    @Override
     @Transactional
     public LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO request, Locale locale) {
     LabResult labResult = labResultRepository.findById(id)
@@ -533,9 +545,12 @@ public class LabResultServiceImpl implements LabResultService {
                     .readValue(conditionJson, java.util.Map.class);
             if (cond.containsKey("severityFlag")) {
                 String required = (String) cond.get("severityFlag");
-                String actual = result.getAbnormalFlag() != null
-                    ? result.getAbnormalFlag().name() : "NORMAL";
-                return required.equalsIgnoreCase(actual);
+                AbnormalFlag flag = result.getAbnormalFlag() != null
+                    ? result.getAbnormalFlag() : AbnormalFlag.NORMAL;
+                // A rule written against the family ("ABNORMAL") fires on
+                // either direction; a directional rule stays exact.
+                return required.equalsIgnoreCase(flag.name())
+                    || required.equalsIgnoreCase(flag.severity().name());
             }
             if (cond.containsKey("thresholdValue") && cond.containsKey("thresholdOperator")) {
                 double threshold = ((Number) cond.get("thresholdValue")).doubleValue();
