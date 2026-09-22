@@ -49,6 +49,22 @@ interface ApiService {
     @GET("me/patient/social-history")
     suspend fun getMySocialHistory(): Response<ApiResponse<SocialHistory>>
 
+    // ── Patient education, the web's My Education ────────────────────────────
+    @GET("me/patient/education")
+    suspend fun getMyEducation(): Response<ApiResponse<List<EducationItemDto>>>
+
+    @PUT("me/patient/education/{resourceId}/progress")
+    suspend fun updateEducationProgress(
+        @Path("resourceId") resourceId: String,
+        @Body update: EducationProgressUpdate
+    ): Response<ApiResponse<EducationItemDto>>
+
+    @GET("me/patient/education/questions")
+    suspend fun getEducationQuestions(): Response<ApiResponse<List<EducationQuestionDto>>>
+
+    @POST("me/patient/education/questions")
+    suspend fun submitEducationQuestion(@Body request: EducationQuestionSubmit): Response<ApiResponse<EducationQuestionDto>>
+
     // ── PRO self-screenings (unwrapped DTOs, like the web's ProScreeningService) ──
     @GET("me/patient/pro-screenings")
     suspend fun getMyScreenings(): Response<ProSelfReport>

@@ -188,6 +188,7 @@ fun DashboardScreen(
                         Triple(stringResource(R.string.documents), Icons.Default.Description, "documents"),
                         Triple(stringResource(R.string.screenings), Icons.Default.Psychology, "screenings"),
                         Triple(stringResource(R.string.medical_history_short), Icons.Default.MedicalInformation, "medical_history"),
+                        Triple(stringResource(R.string.education), Icons.Default.MenuBook, "education"),
                         Triple(stringResource(R.string.family), Icons.Default.People, "family_access"),
                         Triple(stringResource(R.string.sharing), Icons.Default.Security, "sharing_privacy")
                     )
