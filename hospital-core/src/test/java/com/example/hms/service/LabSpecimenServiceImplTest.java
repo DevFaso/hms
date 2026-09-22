@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,6 +88,9 @@ class LabSpecimenServiceImplTest {
 
         assertThat(result).isEqualTo(responseDTO);
         verify(labSpecimenRepository).save(any(LabSpecimen.class));
+        // B2: a collected specimen IS the order's COLLECTED state.
+        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
+        verify(labOrderRepository).save(labOrder);
     }
 
     @Test
@@ -230,7 +235,30 @@ class LabSpecimenServiceImplTest {
 
         assertThat(result).isEqualTo(responseDTO);
         assertThat(specimen.getStatus()).isEqualTo(LabSpecimenStatus.RECEIVED);
+        // B2: receipt at the lab IS the order's RECEIVED state.
+        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+        verify(labOrderRepository).save(labOrder);
         verify(instrumentOutboxService).enqueueSpecimenReceived(specimen);
+    }
+
+    @Test
+    void receiveSpecimen_neverMovesAResultedOrderBack() {
+        labOrder.setStatus(LabOrderStatus.RESULTED);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
+        when(labSpecimenMapper.toResponseDTO(specimen)).thenReturn(responseDTO);
+
+        service.receiveSpecimen(specimenId, Locale.ENGLISH);
+
+        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test

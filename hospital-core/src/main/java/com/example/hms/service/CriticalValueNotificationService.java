@@ -111,8 +111,17 @@ public class CriticalValueNotificationService {
      * clinical write (same policy as PatientTrackerEventPublisher).
      */
     public void notifyIfCritical(LabResult result) {
+        notifyIfCritical(result, null);
+    }
+
+    /**
+     * Same as {@link #notifyIfCritical(LabResult)} with the severity the caller
+     * already computed from the mapper, so the entry path and this check agree
+     * on one value; {@code null} means compute it here.
+     */
+    public void notifyIfCritical(LabResult result, String severityFlag) {
         try {
-            if (result.getCriticalNotifiedAt() != null || !isCritical(result)) {
+            if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
                 return;
             }
             String username = resolveOrderingUsername(result);
@@ -312,12 +321,15 @@ public class CriticalValueNotificationService {
     }
 
     /** Same semantics as the /lab-results/hospital/{id}/critical endpoints. */
-    private boolean isCritical(LabResult result) {
+    private boolean isCritical(LabResult result, String knownSeverity) {
         if (result.getAbnormalFlag() == AbnormalFlag.CRITICAL) {
             return true;
         }
-        LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-        String severity = dto != null ? dto.getSeverityFlag() : null;
+        String severity = knownSeverity;
+        if (severity == null) {
+            LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
+            severity = dto != null ? dto.getSeverityFlag() : null;
+        }
         return "CRITICAL".equalsIgnoreCase(severity) || "HIGH".equalsIgnoreCase(severity);
     }
 

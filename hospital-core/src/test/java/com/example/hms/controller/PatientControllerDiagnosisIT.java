@@ -86,6 +86,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 
 	private final AtomicInteger sequence = new AtomicInteger();
 
+	/** Problems this class created, so the teardown removes exactly those. */
+	private final List<java.util.UUID> createdProblemIds = new ArrayList<>();
+
 	@Autowired
 	private MockMvc mockMvc;
 
@@ -363,11 +366,23 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	}
 
 	@AfterEach
-	void clearContextsAndAuditRows() {
+	void clearContextsAndOwnRows() {
 		SecurityContextHolder.clearContext();
 		HospitalContextHolder.clear();
 		// The H2 database is shared with the sibling controller ITs, whose
-		// cleanup deletes assignments: leave no audit row anchored to ours.
+		// cleanup deletes assignments and staff table-wide. Leave nothing
+		// of ours pointing at a row they are about to delete: the audit rows
+		// (fk_audit_assignment) and — the failure PatientPortalLabResultsIT
+		// hit — the problems this class records against its own doctor
+		// (fk_problem_staff). Children before parents, and only rows this
+		// class created.
+		patientProblemHistoryRepository.deleteAll(
+			patientProblemHistoryRepository.findAll().stream()
+				.filter(history -> history.getProblem() != null
+					&& createdProblemIds.contains(history.getProblem().getId()))
+				.toList());
+		patientProblemRepository.deleteAllById(createdProblemIds);
+		createdProblemIds.clear();
 		auditEventLogRepository.deleteAllInBatch();
 	}
 
@@ -441,7 +456,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
                         .notes("Test note")
                         .diagnosisCodes(new ArrayList<>(List.of("A" + nextId())))
                         .build();
-                return patientProblemRepository.save(problem);
+                PatientProblem saved = patientProblemRepository.save(problem);
+                createdProblemIds.add(saved.getId());
+                return saved;
         }	private RequestPostProcessor doctorAuthentication() {
 		Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_DOCTOR));
 		CustomUserDetails principal = new CustomUserDetails(

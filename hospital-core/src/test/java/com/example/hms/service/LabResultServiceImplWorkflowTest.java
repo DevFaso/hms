@@ -100,6 +100,30 @@ class LabResultServiceImplWorkflowTest {
     }
 
     @Test
+    void pendingReleaseIsTheActiveHospitalsUnreleasedRows() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        LabResult unreleased = buildLabResult(UUID.randomUUID());
+        unreleased.setReleased(false);
+        LabResultResponseDTO mapped = LabResultResponseDTO.builder().id(unreleased.getId().toString()).build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(unreleased)));
+        when(labResultMapper.toResponseDTO(unreleased)).thenReturn(mapped);
+
+        assertThat(labResultService.getPendingRelease(pageable, Locale.US).getContent()).containsExactly(mapped);
+    }
+
+    @Test
+    void pendingReleaseNeedsAHospitalScope() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> labResultService.getPendingRelease(pageable, Locale.US));
+        verify(labResultRepository, never()).findByLabOrder_Hospital_IdAndReleasedFalse(any(), any());
+    }
+
+    @Test
     void getLabResultByIdIncludesTrendHistory() {
         UUID labResultId = UUID.randomUUID();
         LabResult current = buildLabResult(labResultId);
@@ -209,11 +233,12 @@ class LabResultServiceImplWorkflowTest {
 
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
         when(authService.getCurrentUserId()).thenReturn(actorId);
+        // B10: release is LabResultAuthority.RELEASE_ROLES at this hospital —
+        // scientist, manager, director. Doctors, nurses, midwives and hospital
+        // admins are no longer consulted at all.
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isDoctor(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isNurse(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isMidwife(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.isLabManager(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(false);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> labResultService.releaseLabResult(labResultId, Locale.US));

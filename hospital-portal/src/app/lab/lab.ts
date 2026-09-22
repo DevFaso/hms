@@ -52,6 +52,23 @@ export class LabComponent implements OnInit {
     this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN']),
   );
 
+  /**
+   * Everything the laboratory still owes: from the order being placed,
+   * through the specimen being collected and received, to the analysis.
+   * COLLECTED and RECEIVED are here because the backend now moves an
+   * order through them on the specimen events; without them an order
+   * vanished from both tabs between collection and result entry.
+   */
+  static readonly PENDING_STATUSES: readonly string[] = [
+    'ORDERED',
+    'PENDING',
+    'COLLECTED',
+    'RECEIVED',
+    'IN_PROGRESS',
+  ];
+  /** Results are in: entered, verified, or released and closed. */
+  static readonly COMPLETED_STATUSES: readonly string[] = ['RESULTED', 'VERIFIED', 'COMPLETED'];
+
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
   searchTerm = '';
@@ -350,13 +367,19 @@ export class LabComponent implements OnInit {
     });
   }
 
+  isPending(order: LabOrderResponse): boolean {
+    return LabComponent.PENDING_STATUSES.includes(order.status ?? '');
+  }
+
+  isCompleted(order: LabOrderResponse): boolean {
+    return LabComponent.COMPLETED_STATUSES.includes(order.status ?? '');
+  }
+
   private computeStats(list: LabOrderResponse[]): void {
     this.stats.set({
       total: list.length,
-      pending: list.filter(
-        (o) => o.status === 'PENDING' || o.status === 'IN_PROGRESS' || o.status === 'ORDERED',
-      ).length,
-      completed: list.filter((o) => o.status === 'COMPLETED' || o.status === 'RESULTED').length,
+      pending: list.filter((o) => this.isPending(o)).length,
+      completed: list.filter((o) => this.isCompleted(o)).length,
       cancelled: list.filter((o) => o.status === 'CANCELLED').length,
     });
   }
@@ -370,11 +393,9 @@ export class LabComponent implements OnInit {
     let list = this.orders();
     const tab = this.activeTab();
     if (tab === 'pending') {
-      list = list.filter(
-        (o) => o.status === 'PENDING' || o.status === 'IN_PROGRESS' || o.status === 'ORDERED',
-      );
+      list = list.filter((o) => this.isPending(o));
     } else if (tab === 'completed') {
-      list = list.filter((o) => o.status === 'COMPLETED' || o.status === 'RESULTED');
+      list = list.filter((o) => this.isCompleted(o));
     }
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -400,11 +421,13 @@ export class LabComponent implements OnInit {
   getStatusClass(status: string): string {
     switch (status) {
       case 'COMPLETED':
+      case 'VERIFIED':
       case 'RESULTED':
         return 'status-badge status-completed';
       case 'IN_PROGRESS':
         return 'status-badge status-in_progress';
       case 'COLLECTED':
+      case 'RECEIVED':
         return 'status-badge status-collected';
       case 'PENDING':
       case 'ORDERED':

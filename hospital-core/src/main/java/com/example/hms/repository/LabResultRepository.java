@@ -243,9 +243,6 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         Pageable pageable
     );
 
-    /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
-
     /**
      * Look up an existing result by the composite
      * (MSH-3 sending application, MSH-4 sending facility, MSH-10 control id)
@@ -282,11 +279,34 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
 
     /**
+     * The doctor's critical strip (B15): critical results of this provider's
+     * orders that nobody has acknowledged yet, no older than the floor. The
+     * strip used to count every CRITICAL result ever filed for the staff and
+     * show it as the live safety-alert count.
+     */
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
+        UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
+
+    /**
      * Hospital-scoped tile count for the super-admin dashboard. LabResult
      * has no direct hospital_id column — the scope flows through the
      * parent LabOrder.hospital. Derived via Spring Data's nested-property
      * naming.
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
+
+    /**
+     * B14 — the release worklist: every row of the hospital nobody has
+     * released yet, hand-entered or analyzer-ingested alike. With
+     * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
+     * observation lands here and stays "pending" for the patient until a
+     * lab user releases it, so a worklist MUST be able to find it.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.labTestDefinition"
+    })
+    Page<LabResult> findByLabOrder_Hospital_IdAndReleasedFalse(UUID hospitalId, Pageable pageable);
 }
 
