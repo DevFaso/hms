@@ -106,8 +106,8 @@ fun EducationScreen(
                     }
                 }
                 when (state.tab) {
-                    EducationViewModel.Tab.ASSIGNED -> ItemList(state.assigned, state.warningSigns, R.string.education_empty_title, R.string.education_empty_desc, viewModel)
-                    EducationViewModel.Tab.COMPLETED -> ItemList(state.completed, emptyList(), R.string.education_no_completed, null, viewModel)
+                    EducationViewModel.Tab.ASSIGNED -> ItemList(state.assigned, showBanner = true, R.string.education_empty_title, R.string.education_empty_desc, viewModel)
+                    EducationViewModel.Tab.COMPLETED -> ItemList(state.completed, showBanner = false, R.string.education_no_completed, null, viewModel)
                     EducationViewModel.Tab.QUESTIONS -> QuestionList(state, viewModel)
                 }
             }
@@ -130,7 +130,7 @@ private val EducationViewModel.Tab.titleRes: Int get() = when (this) {
 @Composable
 private fun ItemList(
     items: List<EducationItemDto>,
-    warningSigns: List<EducationItemDto>,
+    showBanner: Boolean,
     emptyTitle: Int,
     emptyDesc: Int?,
     viewModel: EducationViewModel
@@ -150,7 +150,9 @@ private fun ItemList(
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (warningSigns.isNotEmpty()) {
+        // Safety content first, as on the web; a completed warning-sign item stays in Completed.
+        val warningSigns = items.filter { it.isWarningSignContent == true }
+        if (showBanner && warningSigns.isNotEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -166,7 +168,6 @@ private fun ItemList(
                 }
             }
         }
-        // Safety content first, as on the web.
         items(warningSigns + items.filter { it.isWarningSignContent != true }, key = { it.resourceId }) { item ->
             ItemCard(item, viewModel)
         }
@@ -367,7 +368,12 @@ private fun Reader(item: EducationItemDto, state: EducationViewModel.UiState, vi
 private fun AskSheet(state: EducationViewModel.UiState, viewModel: EducationViewModel) {
     var text by rememberSaveable { mutableStateOf("") }
     var urgent by rememberSaveable { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(confirmValueChange = { !state.askSubmitting })
+    // One remembered lambda over the latest flag: Material3 keys the sheet
+    // state on it, and a fresh lambda per recomposition would rebuild the
+    // sheet at Hidden on every keystroke.
+    val submitting by rememberUpdatedState(state.askSubmitting)
+    val keepWhileSubmitting = remember { { _: SheetValue -> !submitting } }
+    val sheetState = rememberModalBottomSheetState(confirmValueChange = keepWhileSubmitting)
     ModalBottomSheet(
         onDismissRequest = { viewModel.closeAsk() },
         sheetState = sheetState,

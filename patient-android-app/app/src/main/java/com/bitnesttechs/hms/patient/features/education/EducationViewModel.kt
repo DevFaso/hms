@@ -45,7 +45,8 @@ class EducationViewModel @Inject constructor(
         val questionsFailed: Boolean = false,
         /** The item open in the reader. */
         val reading: EducationItemDto? = null,
-        val savingProgress: Boolean = false,
+        /** Resources with a progress save in flight; the reader's buttons wait on its own. */
+        val savingIds: Set<String> = emptySet(),
         /** The item a question is being asked about; null with askOpen = a general question. */
         val askTarget: EducationItemDto? = null,
         val askOpen: Boolean = false,
@@ -57,6 +58,7 @@ class EducationViewModel @Inject constructor(
         val completed: List<EducationItemDto> get() = items.filter { it.isCompleted }
         /** Warning-sign material is safety content; it is surfaced first. */
         val warningSigns: List<EducationItemDto> get() = assigned.filter { it.isWarningSignContent == true }
+        val savingProgress: Boolean get() = reading != null && reading.resourceId in savingIds
     }
 
     private val _state = MutableStateFlow(UiState())
@@ -131,8 +133,10 @@ class EducationViewModel @Inject constructor(
      * must not abandon a "read" or "understood" the server may already hold.
      */
     private fun saveProgress(item: EducationItemDto, update: EducationProgressUpdate, notify: Boolean) {
-        if (_state.value.savingProgress) return
-        _state.update { it.copy(savingProgress = true) }
+        // A save for another resource must not swallow this one (open A, back,
+        // open B while A's 1 % is still in flight): the guard is per resource.
+        if (item.resourceId in _state.value.savingIds) return
+        _state.update { it.copy(savingIds = it.savingIds + item.resourceId) }
         applicationScope.launch {
             try {
                 val resp = api.updateEducationProgress(item.resourceId, update)
@@ -140,7 +144,7 @@ class EducationViewModel @Inject constructor(
                 if (resp.isSuccessful && updated != null) {
                     _state.update { s ->
                         s.copy(
-                            savingProgress = false,
+                            savingIds = s.savingIds - item.resourceId,
                             items = s.items.map { if (it.resourceId == updated.resourceId) updated else it },
                             reading = if (s.reading?.resourceId == updated.resourceId) updated else s.reading,
                             outcome = if (notify) Outcome(R.string.education_saved) else s.outcome
@@ -148,13 +152,13 @@ class EducationViewModel @Inject constructor(
                     }
                 } else {
                     _state.update {
-                        it.copy(savingProgress = false,
+                        it.copy(savingIds = it.savingIds - item.resourceId,
                             outcome = if (notify) Outcome(R.string.education_save_failed, serverMessage(resp.errorBody()?.string())) else it.outcome)
                     }
                 }
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(savingProgress = false, outcome = if (notify) Outcome(R.string.education_save_failed, e.message) else it.outcome)
+                    it.copy(savingIds = it.savingIds - item.resourceId, outcome = if (notify) Outcome(R.string.education_save_failed, e.message) else it.outcome)
                 }
             }
         }
@@ -194,7 +198,9 @@ class EducationViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             askSubmitting = false, askOpen = false, askTarget = null,
-                            questions = listOf(question) + it.questions, questionsLoaded = true,
+                            // Prepended only to a list that was loaded; otherwise the tab's
+                            // first visit fetches everything, this question included.
+                            questions = if (it.questionsLoaded) listOf(question) + it.questions else it.questions,
                             outcome = Outcome(R.string.question_sent)
                         )
                     }
