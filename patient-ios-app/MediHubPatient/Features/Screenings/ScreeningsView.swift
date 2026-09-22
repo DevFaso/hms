@@ -74,7 +74,7 @@ struct ScreeningsView: View {
         .navigationTitle("screenings".localized)
         .task { await vm.load() }
         .refreshable { await vm.load() }
-        .fullScreenCover(item: $vm.active) { active in
+        .fullScreenCover(item: $vm.active, onDismiss: { vm.coverDismissed() }) { active in
             ScreeningFormView(vm: vm, active: active)
         }
         .alert("screening_submitted_title".localized, isPresented: $vm.showSubmitted) {
@@ -221,6 +221,15 @@ final class ScreeningsViewModel: ObservableObject {
     @Published var isSubmitting = false
     @Published var submitError: String?
     @Published var showSubmitted = false
+    /// Set by a successful send; the cover's onDismiss turns it into the alert.
+    var submittedPending = false
+
+    func coverDismissed() {
+        if submittedPending {
+            submittedPending = false
+            showSubmitted = true
+        }
+    }
     private var instrumentTask: Task<Void, Never>?
 
     func load() async {
@@ -241,18 +250,20 @@ final class ScreeningsViewModel: ObservableObject {
         answers = [:]
         missingItems = []
         submitError = nil
-        language = Locale.current.language.languageCode?.identifier ?? ""
+        instrument = nil
+        instrumentFailed = false
+        // The app's own language (switchable in the profile), not the phone's.
+        language = LocalizationManager.shared.currentLanguage
         active = instrument
         loadInstrument(code: instrument.code, language: language)
     }
 
+    /// The instrument stays until the next start: clearing it here would show
+    /// the "could not be loaded" branch for the whole dismiss animation.
     func cancel() {
         guard !isSubmitting else { return }
         instrumentTask?.cancel()
         active = nil
-        instrument = nil
-        instrumentLoading = false
-        instrumentFailed = false
     }
 
     func changeLanguage(_ language: String) {
@@ -333,10 +344,10 @@ final class ScreeningsViewModel: ObservableObject {
         case .success(let entry):
             history.insert(entry, at: 0)
             instrumentTask?.cancel()
-            active = nil
-            instrument = nil
             answers = [:]
-            showSubmitted = true
+            // The cover's onDismiss raises the alert once the dismissal is over.
+            submittedPending = true
+            active = nil
         case .failure(let error):
             submitError = "screening_submit_failed".localized + ": " + error.localizedDescription
             // A refusal usually means the plan closed since the form was
