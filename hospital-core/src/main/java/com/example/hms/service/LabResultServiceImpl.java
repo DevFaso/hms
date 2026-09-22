@@ -521,9 +521,12 @@ public class LabResultServiceImpl implements LabResultService {
                     .readValue(conditionJson, java.util.Map.class);
             if (cond.containsKey("severityFlag")) {
                 String required = (String) cond.get("severityFlag");
-                String actual = result.getAbnormalFlag() != null
-                    ? result.getAbnormalFlag().name() : "NORMAL";
-                return required.equalsIgnoreCase(actual);
+                AbnormalFlag flag = result.getAbnormalFlag() != null
+                    ? result.getAbnormalFlag() : AbnormalFlag.NORMAL;
+                // A rule written against the family ("ABNORMAL") fires on
+                // either direction; a directional rule stays exact.
+                return required.equalsIgnoreCase(flag.name())
+                    || required.equalsIgnoreCase(flag.severity().name());
             }
             if (cond.containsKey("thresholdValue") && cond.containsKey("thresholdOperator")) {
                 double threshold = ((Number) cond.get("thresholdValue")).doubleValue();

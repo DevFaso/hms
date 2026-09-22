@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import java.util.Map;
 import java.util.Set;
 import static org.mockito.Mockito.lenient;
+import com.example.hms.enums.AbnormalFlag;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
@@ -120,26 +121,111 @@ class PatientLabResultServiceImplTest {
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 999)).isEmpty();
     }
 
-    @Test void getLabResults_withResults_pendingStatus() {
+    /** An unreleased glucose with everything a leak could carry: value, unit, notes, performer. */
+    private LabResult unreleasedGlucoseWithEverything() {
         LabResult lr = buildLabResult("5.0", "mg/dL", false, false);
+        lr.setNotes("preliminary — repeat requested");
         LabTestDefinition testDef = new LabTestDefinition();
-        testDef.setName("Glucose"); testDef.setTestCode("GLU");
+        testDef.setName("Glucose"); testDef.setTestCode("GLU"); testDef.setCategory("CHEMISTRY");
         LabOrder order = new LabOrder();
         order.setLabTestDefinition(testDef);
         order.setOrderDatetime(LocalDateTime.now());
         lr.setLabOrder(order);
-        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        User tech = new User(); tech.setFirstName("Tech"); tech.setLastName("Nician");
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment(); assignment.setUser(tech);
+        lr.setAssignment(assignment);
+        return lr;
+    }
 
+    private void givenTheOnlyRowIs(LabResult lr) {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
+    }
+
+    /** Staff path: the unreleased row keeps its preliminary value, labelled released=false. */
+    @Test void getLabResults_withResults_pendingStatus() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyRowIs(lr);
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).getStatus()).isEqualTo("PENDING");
-        assertThat(results.get(0).getTestName()).isEqualTo("Glucose");
-        assertThat(results.get(0).getTestCode()).isEqualTo("GLU");
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getTestCode()).isEqualTo("GLU");
+        assertThat(row.getValue()).isEqualTo("5.0");
+        assertThat(row.getUnit()).isEqualTo("mg/dL");
+        assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /** B3 — patient path: the row is there so the patient knows a result is expected, but nothing of it. */
+    @Test void portalView_unreleasedRow_isPendingWithoutValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
+        assertThat(results).hasSize(1);
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getTestCode()).isEqualTo("GLU");
+        assertThat(row.getCategory()).isEqualTo("CHEMISTRY");
+        assertThat(row.getValue()).isNull();
+        assertThat(row.getUnit()).isNull();
+        assertThat(row.getReferenceRange()).isNull();
+        assertThat(row.getNotes()).isNull();
+        assertThat(row.getPerformedBy()).isNull();
+    }
+
+    /** B3 — the same row, once released, reaches the patient whole. */
+    @Test void portalView_releasedRow_carriesTheValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        lr.setReleased(true);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("NORMAL");
+        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
+        assertThat(row.isReleased()).isTrue();
+        assertThat(row.getStatus()).isEqualTo("NORMAL");
+        assertThat(row.getValue()).isEqualTo("5.0");
+        assertThat(row.getUnit()).isEqualTo("mg/dL");
+        assertThat(row.getReferenceRange()).isEqualTo("3.9 - 6.1 mg/dL");
+        assertThat(row.getNotes()).isEqualTo("preliminary — repeat requested");
+        assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /** B18 — no reference range to grade against: the recorded flag decides, direction kept. */
+    @Test void releasedRow_withoutRanges_statusFollowsTheRecordedFlag() {
+        for (Map.Entry<AbnormalFlag, String> expected : Map.of(
+                AbnormalFlag.ABNORMAL_LOW, "ABNORMAL_LOW",
+                AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_HIGH",
+                AbnormalFlag.ABNORMAL, "ABNORMAL",
+                AbnormalFlag.CRITICAL, "CRITICAL",
+                AbnormalFlag.NORMAL, "NORMAL").entrySet()) {
+            LabResult lr = buildLabResult("1", null, true, false);
+            lr.setAbnormalFlag(expected.getKey());
+            LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
+            lr.setLabOrder(order);
+            LabResultResponseDTO mapped = new LabResultResponseDTO();
+            mapped.setSeverityFlag(LabResultMapper.FLAG_UNSPECIFIED);
+            when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+            givenTheOnlyRowIs(lr);
+
+            assertThat(service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0).getStatus())
+                .as("flag %s", expected.getKey())
+                .isEqualTo(expected.getValue());
+        }
     }
 
     @Test void getLabResults_released_normalStatus() {

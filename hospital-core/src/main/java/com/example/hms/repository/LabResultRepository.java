@@ -288,5 +288,19 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * naming.
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
+
+    /**
+     * B14 — the release worklist: every row of the hospital nobody has
+     * released yet, hand-entered or analyzer-ingested alike. With
+     * {@code hms.lab.auto-release.enabled=false} (the default) an ORU
+     * observation lands here and stays "pending" for the patient until a
+     * lab user releases it, so a worklist MUST be able to find it.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.labTestDefinition"
+    })
+    Page<LabResult> findByLabOrder_Hospital_IdAndReleasedFalse(UUID hospitalId, Pageable pageable);
 }
 

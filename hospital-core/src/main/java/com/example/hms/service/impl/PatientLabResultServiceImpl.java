@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.Hospital;
@@ -41,6 +42,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 100;
     private static final String STATUS_NORMAL = "NORMAL";
+    private static final String STATUS_ABNORMAL = "ABNORMAL";
     private static final String STATUS_ABNORMAL_HIGH = "ABNORMAL_HIGH";
     private static final String STATUS_ABNORMAL_LOW = "ABNORMAL_LOW";
     private static final String STATUS_CRITICAL = "CRITICAL";
@@ -56,6 +58,24 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit) {
+        return getLabResults(patientId, hospitalId, limit, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
+        return getLabResults(patientId, hospitalId, limit, true);
+    }
+
+    /**
+     * @param redactUnreleased B3 — true on the patient-facing path: an
+     *        unreleased row keeps its identity (test, order, hospital) and
+     *        {@code PENDING} but loses the value, unit, reference range,
+     *        notes and performer. A preliminary value is the lab's until
+     *        it is released; the patient learns only that one is coming.
+     */
+    private List<PatientLabResultResponseDTO> getLabResults(UUID patientId, UUID hospitalId, int limit,
+                                                            boolean redactUnreleased) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
         // See PatientChartAccess — cross-hospital safe, and adds the hospital
@@ -93,35 +113,38 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         }
 
         return results.stream()
-            .map(this::toResponse)
+            .map(result -> toResponse(result, redactUnreleased))
             .toList();
     }
 
-    private PatientLabResultResponseDTO toResponse(LabResult result) {
+    private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased) {
         LabOrder labOrder = result.getLabOrder();
         LabTestDefinition testDefinition = labOrder != null ? labOrder.getLabTestDefinition() : null;
         LabResultResponseDTO mapped = labResultMapper.toResponseDTO(result);
 
-        String unit = resolveUnit(result, testDefinition);
-        String referenceRange = formatReferenceRange(mapped != null ? mapped.getReferenceRanges() : null, unit);
-        String status = resolveStatus(result, mapped);
-
-        return PatientLabResultResponseDTO.builder()
+        PatientLabResultResponseDTO.PatientLabResultResponseDTOBuilder response = PatientLabResultResponseDTO.builder()
             .id(result.getId())
             .testName(resolveTestName(labOrder, mapped))
             .testCode(testDefinition != null ? testDefinition.getTestCode() : null)
-            .value(result.getResultValue())
-            .unit(unit)
-            .referenceRange(referenceRange)
-            .status(status)
+            .status(resolveStatus(result, mapped))
+            .released(result.isReleased())
             .collectedAt(labOrder != null ? labOrder.getOrderDatetime() : null)
             .resultedAt(result.getResultDate())
             .orderedBy(resolveStaffName(labOrder != null ? labOrder.getOrderingStaff() : null))
-            .performedBy(resolveAssignmentUser(result.getAssignment()))
             .category(testDefinition != null ? testDefinition.getCategory() : null)
-            .notes(result.getNotes())
             .hospitalId(hospitalIdOf(labOrder))
-            .hospitalName(labOrder != null && labOrder.getHospital() != null ? labOrder.getHospital().getName() : null)
+            .hospitalName(labOrder != null && labOrder.getHospital() != null ? labOrder.getHospital().getName() : null);
+
+        if (redactUnreleased && !result.isReleased()) {
+            return response.build();
+        }
+        String unit = resolveUnit(result, testDefinition);
+        return response
+            .value(result.getResultValue())
+            .unit(unit)
+            .referenceRange(formatReferenceRange(mapped != null ? mapped.getReferenceRanges() : null, unit))
+            .performedBy(resolveAssignmentUser(result.getAssignment()))
+            .notes(result.getNotes())
             .build();
     }
 
@@ -160,8 +183,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return STATUS_PENDING;
         }
         String severity = mapped != null ? mapped.getSeverityFlag() : null;
-        if (severity == null || severity.isBlank()) {
-            return STATUS_NORMAL;
+        if (severity == null || severity.isBlank() || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
+            // No reference range to grade against (typical for an
+            // analyzer row whose test has none configured): the flag the
+            // analyzer or the technologist recorded is the only grading
+            // there is — B18 keeps its direction.
+            return statusOf(result.getAbnormalFlag());
         }
         switch (severity.toUpperCase(Locale.ROOT)) {
             case STATUS_CRITICAL:
@@ -175,6 +202,19 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             default:
                 return STATUS_NORMAL;
         }
+    }
+
+    private static String statusOf(AbnormalFlag flag) {
+        if (flag == null) {
+            return STATUS_NORMAL;
+        }
+        return switch (flag) {
+            case CRITICAL -> STATUS_CRITICAL;
+            case ABNORMAL_HIGH -> STATUS_ABNORMAL_HIGH;
+            case ABNORMAL_LOW -> STATUS_ABNORMAL_LOW;
+            case ABNORMAL -> STATUS_ABNORMAL;
+            case NORMAL -> STATUS_NORMAL;
+        };
     }
 
     private String resolveStaffName(Staff staff) {

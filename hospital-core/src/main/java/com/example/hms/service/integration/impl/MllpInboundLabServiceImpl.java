@@ -4,6 +4,7 @@ import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
@@ -32,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -41,12 +43,27 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
+    /** Same display the manual path writes, so a released-by column reads the same either way. */
+    static final String AUTO_RELEASE_DISPLAY = "Autoverification";
+
     private final LabSpecimenRepository specimenRepository;
     private final LabResultRepository labResultRepository;
     private final IntegrationMessageRecorder messageRecorder;
     private final AuditEventLogService auditEventLogService;
     // Last so existing positional constructor calls in tests only append.
     private final com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+
+    /**
+     * B14 — same switch as the manual entry path
+     * ({@code LabResultServiceImpl.performAutoVerification}): when on, a
+     * NORMAL ingested observation is released at once; when off (the
+     * default) it waits on the lab worklist
+     * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
+     * like every other unreleased row. Field-injected so the positional
+     * constructor the tests use stays as it is.
+     */
+    @Value("${hms.lab.auto-release.enabled:false}")
+    private boolean autoReleaseEnabled;
 
     @Override
     @Transactional
@@ -143,15 +160,20 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
             if (!Objects.equals(order.getHospital().getId(), hospitalId)) {
-                // Cross-tenant: the analyzer's allowlisted hospital does not
-                // own this order. Hard reject so the analyzer surfaces the
-                // misconfiguration rather than silently retrying.
+                // B13 — cross-tenant: the analyzer's allowlisted hospital
+                // does not own this order. Internally (log + integration
+                // message row) this is kept apart from "unknown accession"
+                // so an operator can spot a misconfigured sender, but the
+                // outcome — and so the ACK the sender reads — is the SAME
+                // as for an unknown placer. Answering AR here and AE there
+                // let any allowlisted sender probe whether an accession
+                // number exists in another hospital.
                 log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
                     order.getHospital().getId(), hospitalId,
                     sendingApplication, sendingFacility, placer);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "cross-tenant rejection");
-                return MllpInboundOutcome.REJECTED_CROSS_TENANT;
+                return MllpInboundOutcome.REJECTED_NOT_FOUND;
             }
             ordersByPlacer.put(placer, order);
         }
@@ -177,7 +199,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .testCode(trimToNull(observation.testCode(), 255))
                 .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();
+            autoReleaseIfNormal(result);
             saved.add(labResultRepository.save(result));
+            advanceToResulted(order);
         }
         log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={}/{} hospital={} msgCtrlId={}",
             saved.size(), ordersByPlacer.keySet(),
@@ -193,6 +217,43 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             criticalValueNotificationService.notifyIfCritical(savedResult);
         }
         return MllpInboundOutcome.ACCEPTED;
+    }
+
+    /**
+     * B14 — mirrors {@code LabResultServiceImpl.performAutoVerification}
+     * for analyzer results: only a NORMAL observation may be released
+     * without a person looking at it, and only when the hospital has
+     * switched auto-release on. Everything else lands unreleased and
+     * waits on the worklist; the patient sees "pending", never the value.
+     */
+    private void autoReleaseIfNormal(LabResult result) {
+        if (!autoReleaseEnabled || result.isReleased()) {
+            return;
+        }
+        AbnormalFlag flag = result.getAbnormalFlag();
+        if (flag == null || flag == AbnormalFlag.NORMAL) {
+            result.setReleased(true);
+            result.setReleasedAt(LocalDateTime.now());
+            result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
+        }
+    }
+
+    /**
+     * B14 — an order that has just received an analyzer observation is
+     * RESULTED. Guarded: a state at or past RESULTED (VERIFIED,
+     * COMPLETED) is never wound back, and a CANCELLED order keeps its
+     * cancellation — the row still persists so the lab can reconcile it.
+     * No state yet (never persisted) counts as pre-result.
+     * The order is the managed entity off the specimen, so the change
+     * flushes with the surrounding transaction.
+     */
+    private static void advanceToResulted(LabOrder order) {
+        LabOrderStatus status = order.getStatus();
+        if (status != null
+            && (status == LabOrderStatus.CANCELLED || status.compareTo(LabOrderStatus.RESULTED) >= 0)) {
+            return;
+        }
+        order.setStatus(LabOrderStatus.RESULTED);
     }
 
     /**
@@ -300,6 +361,12 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     /**
      * Maps the HL7 v2 OBX-8 abnormal-flag code to the internal enum.
+     * B18 — {@code L}/{@code H} keep their direction
+     * ({@link AbnormalFlag#ABNORMAL_LOW}/{@link AbnormalFlag#ABNORMAL_HIGH});
+     * the patient-facing status is built from it. {@code LL}/{@code HH}
+     * collapse to {@link AbnormalFlag#CRITICAL}: the enum carries no
+     * critical direction and every critical consumer (notification,
+     * escalation sweep, worklist counts) keys on that one value.
      * Anything outside the recognised set degrades to {@link AbnormalFlag#NORMAL}
      * — better to mis-flag a result as normal and surface it for review
      * than to silently drop it.
@@ -308,7 +375,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         if (!StringUtils.hasText(hl7Flag)) return AbnormalFlag.NORMAL;
         return switch (hl7Flag.trim().toUpperCase(Locale.ROOT)) {
             case "N", "" -> AbnormalFlag.NORMAL;
-            case "A", "L", "H" -> AbnormalFlag.ABNORMAL;
+            case "A" -> AbnormalFlag.ABNORMAL;
+            case "L" -> AbnormalFlag.ABNORMAL_LOW;
+            case "H" -> AbnormalFlag.ABNORMAL_HIGH;
             case "LL", "HH", "AA", ">", "<" -> AbnormalFlag.CRITICAL;
             default -> AbnormalFlag.NORMAL;
         };

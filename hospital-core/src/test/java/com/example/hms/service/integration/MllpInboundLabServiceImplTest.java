@@ -1,6 +1,8 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ActorType;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
@@ -23,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -181,22 +184,118 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
-    @DisplayName("REJECTED_CROSS_TENANT — order belongs to a different hospital than the sender")
+    @DisplayName("B13 — an order of another hospital is rejected exactly like an unknown accession; only the internal row says why")
     void rejectedWhenCrossTenant() {
         Hospital otherHospital = new Hospital();
         otherHospital.setId(UUID.randomUUID());
         labOrder.setHospital(otherHospital);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(specimenRepository.findByAccessionNumber("ACC-MISSING")).thenReturn(Optional.empty());
 
-        MllpInboundOutcome outcome = service.processOruR01(
+        MllpInboundOutcome crossTenant = service.processOruR01(
             List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
             "MSG-CTRL-3", "MSH|...\r");
+        MllpInboundOutcome unknown = service.processOruR01(
+            List.of(observation("ACC-MISSING", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-3b", "MSH|...\r");
 
-        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        // The sender cannot tell "exists elsewhere" from "does not exist".
+        assertThat(crossTenant).isEqualTo(unknown).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(labResultRepository, never()).save(any());
+        // The operator still can: the integration-message row keeps the reason.
         verify(messageRecorder).recordMessage(
             any(), any(), any(), any(), any(),
-            eq(IntegrationMessageStatus.FAILED), any());
+            eq(IntegrationMessageStatus.FAILED), eq("cross-tenant rejection"));
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("accession ACC-MISSING not found"));
+    }
+
+    // ── B14 — release + order status on ingest ───────────────────────────
+
+    @Test
+    @DisplayName("B14 — auto-release off (default): the row lands unreleased and the order is RESULTED")
+    void ingestedRowStaysUnreleasedByDefault() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        labOrder.setStatus(LabOrderStatus.ORDERED);
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+        assertThat(captor.getValue().getReleasedAt()).isNull();
+        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
+    @DisplayName("B14 — auto-release on: a NORMAL observation is released as Autoverification, an abnormal one is not")
+    void autoReleaseReleasesOnlyNormalRows() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(
+                observation("ACC-1", "5.4", "1", "GLU", "N"),
+                observation("ACC-1", "9.9", "2", "GLU2", "H"),
+                observation("ACC-1", "1.1", "3", "K", "LL")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(3)).save(captor.capture());
+        List<LabResult> saved = captor.getAllValues();
+        assertThat(saved.get(0).isReleased()).isTrue();
+        assertThat(saved.get(0).getReleasedAt()).isNotNull();
+        assertThat(saved.get(0).getReleasedByDisplay()).isEqualTo("Autoverification");
+        assertThat(saved.get(1).isReleased()).isFalse();
+        assertThat(saved.get(2).isReleased()).isFalse();
+    }
+
+    @Test
+    @DisplayName("B14 — the status advance is guarded: pre-result states move to RESULTED, later and cancelled ones stay")
+    void orderStatusAdvanceIsGuarded() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        for (LabOrderStatus before : List.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING,
+                LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS)) {
+            labOrder.setStatus(before);
+            service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", null, "MSH|...\r");
+            assertThat(labOrder.getStatus()).as("from %s", before).isEqualTo(LabOrderStatus.RESULTED);
+        }
+        for (LabOrderStatus untouched : List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED,
+                LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED)) {
+            labOrder.setStatus(untouched);
+            service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", null, "MSH|...\r");
+            assertThat(labOrder.getStatus()).as("from %s", untouched).isEqualTo(untouched);
+        }
+    }
+
+    // ── B18 — OBX-8 direction ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("B18 — L/H keep their direction, LL/HH/A map to the family the consumers key on")
+    void abnormalFlagKeepsDirection() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(
+                observation("ACC-1", "1", "1", "T1", "L"),
+                observation("ACC-1", "2", "2", "T2", "H"),
+                observation("ACC-1", "3", "3", "T3", "LL"),
+                observation("ACC-1", "4", "4", "T4", "HH"),
+                observation("ACC-1", "5", "5", "T5", "A"),
+                observation("ACC-1", "6", "6", "T6", "N"),
+                observation("ACC-1", "7", "7", "T7", "zz")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(7)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabResult::getAbnormalFlag).containsExactly(
+            AbnormalFlag.ABNORMAL_LOW, AbnormalFlag.ABNORMAL_HIGH,
+            AbnormalFlag.CRITICAL, AbnormalFlag.CRITICAL,
+            AbnormalFlag.ABNORMAL, AbnormalFlag.NORMAL, AbnormalFlag.NORMAL);
     }
 
     @Test

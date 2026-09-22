@@ -404,6 +404,8 @@ public class Hl7v2MessageBuilder {
         return switch (flagName) {
             case "NORMAL"   -> "N";
             case "ABNORMAL" -> "A";
+            case "ABNORMAL_LOW" -> "L";
+            case "ABNORMAL_HIGH" -> "H";
             case "CRITICAL" -> "HH";
             default         -> "N";
         };

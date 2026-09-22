@@ -297,8 +297,10 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         String testName = order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName()
                 : text("lab.test.fallback", locale);
+        // The queue exposes the three-value family: the portal buckets on
+        // the exact strings NORMAL/ABNORMAL/CRITICAL, direction lives on the row.
         String abnormalFlag = result.getAbnormalFlag() != null
-                ? result.getAbnormalFlag().name()
+                ? result.getAbnormalFlag().severity().name()
                 : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
