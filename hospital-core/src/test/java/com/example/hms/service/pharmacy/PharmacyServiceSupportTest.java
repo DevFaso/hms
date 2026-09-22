@@ -96,8 +96,8 @@ class PharmacyServiceSupportTest {
     void sendsFrenchDispensedReceipt() {
         support.notifyDispensed(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
-        verify(smsService).send(eq("+22670000000"),
-                eq("Bonjour Awa, votre ordonnance (Amoxicilline) a été délivrée à Pharmacie Centrale. Merci."));
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, votre ordonnance (Amoxicilline) a été délivrée à Pharmacie Centrale. Merci.");
     }
 
     @Test
@@ -116,8 +116,8 @@ class PharmacyServiceSupportTest {
 
         support.notifyDispensed(p, pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
-        verify(smsService).send(eq("+22670000000"),
-                eq("Hello Awa, your prescription (Amoxicilline) has been dispensed at Pharmacie Centrale. Thank you."));
+        verify(smsService).send("+22670000000",
+                "Hello Awa, your prescription (Amoxicilline) has been dispensed at Pharmacie Centrale. Thank you.");
     }
 
     @Test
@@ -225,9 +225,9 @@ class PharmacyServiceSupportTest {
         support.notifyOutOfStock(patient(), "Paracétamol",
                 PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, "Pharmacie X");
 
-        verify(smsService).send(eq("+22670000000"),
-                eq("Bonjour Awa, le médicament (Paracétamol) n'est pas disponible à la pharmacie "
-                        + "de l'hôpital. Elle a été envoyée à Pharmacie X."));
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, le médicament (Paracétamol) n'est pas disponible à la pharmacie "
+                        + "de l'hôpital. Elle a été envoyée à Pharmacie X.");
     }
 
     @Test
@@ -312,9 +312,9 @@ class PharmacyServiceSupportTest {
     void refillReminderIncludesDetails() {
         support.notifyRefillReminder(patient(), "Amoxicilline", 3);
 
-        verify(smsService).send(eq("+22670000000"),
-                eq("Bonjour Awa, il vous reste environ 3 jours de traitement (Amoxicilline). "
-                        + "Pensez à renouveler votre ordonnance. Merci."));
+        verify(smsService).send("+22670000000",
+                "Bonjour Awa, il vous reste environ 3 jours de traitement (Amoxicilline). "
+                        + "Pensez à renouveler votre ordonnance. Merci.");
     }
 
     @Test

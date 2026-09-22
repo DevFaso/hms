@@ -201,7 +201,10 @@ public class PrescriptionController {
      * gets the copy without the clarification exchange.
      */
     static boolean isPatientOnly(Authentication auth) {
-        if (auth == null || auth.getAuthorities() == null) {
+        // Only the null check: Authentication.getAuthorities() never returns
+        // null by contract, and the handler is behind @PreAuthorize on five
+        // roles, so an unauthenticated call cannot reach it either way.
+        if (auth == null) {
             return false;
         }
         boolean patient = false;

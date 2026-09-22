@@ -46,6 +46,9 @@ import java.util.Locale;
 public class ResultReviewServiceImpl implements ResultReviewService {
 
     private static final String URGENCY_NORMAL = "NORMAL";
+    /** Inbox action for an item the clinician opens and reads. */
+    private static final String ACTION_REVIEW = "REVIEW";
+
     /** Inbox category for a pharmacy outcome on the prescriber's own order (gap G6). */
     static final String CATEGORY_PHARMACY_EVENT = "PHARMACY_EVENT";
     /** {@code Notification.type} written by PrescriberPharmacyNotificationWriter. */
@@ -250,7 +253,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .subject(text("inbox.pharmacy.clarification", locale, clarificationCount))
                         .urgency("HIGH")
                         .timestamp(LocalDateTime.now())
-                        .actionType("REVIEW")
+                        .actionType(ACTION_REVIEW)
                         .build());
             }
         } catch (Exception e) {
@@ -276,7 +279,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .subject(n.getMessage() != null ? truncate(n.getMessage(), 160) : null)
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(n.getCreatedAt())
-                                .actionType("REVIEW")
+                                .actionType(ACTION_REVIEW)
                                 .build()));
             }
         } catch (Exception e) {
@@ -305,7 +308,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .subject(text("inbox.refill.requested", locale, truncate(medication, 80)))
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(refill.getCreatedAt())
-                                .actionType("REVIEW")
+                                .actionType(ACTION_REVIEW)
                                 .build());
                     });
         } catch (Exception e) {

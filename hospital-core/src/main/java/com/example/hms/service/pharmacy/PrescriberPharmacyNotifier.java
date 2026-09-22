@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,8 +31,8 @@ import java.util.UUID;
 @Slf4j
 public class PrescriberPharmacyNotifier {
 
-    /** The pharmacy outcomes a prescriber is told about. */
-    public static final Set<PrescriptionStatus> NOTIFIED_EVENTS = EnumSet.of(
+    /** The pharmacy outcomes a prescriber is told about. Immutable: it is public. */
+    public static final Set<PrescriptionStatus> NOTIFIED_EVENTS = Set.of(
             PrescriptionStatus.DISPENSED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,

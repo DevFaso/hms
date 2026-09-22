@@ -75,6 +75,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /**
+     * From config/TimeConfig, as {@code PrescriptionClarificationService}
+     * takes it: the two halves of a clarification are stamped by the same
+     * clock. The signing and co-signing timestamps a few methods up still
+     * call {@code LocalDateTime.now()} — pre-existing, and changing them is
+     * not this PR's business.
+     */
+    private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
@@ -422,7 +430,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.getClarificationResolvedAt() != null) {
             return;
         }
-        existing.setClarificationResolvedAt(LocalDateTime.now());
+        existing.setClarificationResolvedAt(LocalDateTime.now(clock));
         existing.setClarificationResolvedByUserId(roleValidator.getCurrentUserId());
         logger.info("Prescription {} withdrawn while awaiting clarification; the question is closed",
             existing.getId());

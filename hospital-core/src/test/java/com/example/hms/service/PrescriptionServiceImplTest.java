@@ -102,6 +102,11 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    /** Server clock, as the service takes it from config/TimeConfig. */
+    @org.mockito.Spy
+    private java.time.Clock clock = java.time.Clock.fixed(
+        java.time.Instant.parse("2026-09-22T10:30:00Z"), java.time.ZoneOffset.UTC);
+
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
