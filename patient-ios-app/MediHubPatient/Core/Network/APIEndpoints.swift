@@ -32,6 +32,11 @@ enum APIEndpoints {
     static func appointmentQuestionnaires(id: String) -> String { "/me/patient/appointments/\(id)/questionnaires" }
     static func preCheckIn(id: String) -> String { "/me/patient/appointments/\(id)/pre-checkin" }
     static let rescheduleAppointment = "/me/patient/appointments/reschedule"
+    // Patient education, the web's My Education: the five self-service routes.
+    static let myEducation = "/me/patient/education"
+    static func educationItem(resourceId: String) -> String { "/me/patient/education/\(resourceId)" }
+    static func educationProgress(resourceId: String) -> String { "/me/patient/education/\(resourceId)/progress" }
+    static let educationQuestions = "/me/patient/education/questions"
     static let labResults = "/me/patient/lab-results"
     static let medications = "/me/patient/medications"
     static let prescriptions = "/me/patient/prescriptions"
@@ -43,6 +48,12 @@ enum APIEndpoints {
     static let afterVisitSummaries = "/me/patient/after-visit-summaries"
     static let careTeam = "/me/patient/care-team"
     static let vitals = "/me/patient/vitals"
+    // My medical history: four read-only sections, each ApiResponseWrapper-wrapped.
+    static let medicalHistory = "/me/patient/medical-history"
+    static let surgicalHistory = "/me/patient/surgical-history"
+    static let familyHistory = "/me/patient/family-history"
+    // `data` is null when nothing was ever recorded, so the caller decodes the wrapper itself.
+    static let socialHistory = "/me/patient/social-history"
     static let immunizations = "/me/patient/immunizations"
     static let consultations = "/me/patient/consultations"
     // Accounting of disclosures (Tier 2 item 39): who saw, received or exported

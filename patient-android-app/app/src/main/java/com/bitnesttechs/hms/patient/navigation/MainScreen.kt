@@ -36,6 +36,7 @@ import com.bitnesttechs.hms.patient.features.documents.DocumentsScreen
 import com.bitnesttechs.hms.patient.features.familyaccess.FamilyAccessScreen
 import com.bitnesttechs.hms.patient.features.healthrecords.HealthRecordsScreen
 import com.bitnesttechs.hms.patient.features.labresults.LabResultsScreen
+import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryScreen
 import com.bitnesttechs.hms.patient.features.medications.MedicationsScreen
 import com.bitnesttechs.hms.patient.features.messages.MessagesScreen
 import com.bitnesttechs.hms.patient.features.messages.MessageThreadScreen
@@ -76,6 +77,7 @@ val drawerItems = listOf(
     DrawerItem(R.string.screenings, Icons.Default.Psychology, "screenings"),
     DrawerItem(R.string.education, Icons.Default.MenuBook, "education"),
     DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
+    DrawerItem(R.string.medical_history_title, Icons.Default.MedicalInformation, "medical_history"),
     DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
     DrawerItem(R.string.messages, Icons.Default.Message, "tab_messages"),
     DrawerItem(R.string.privacy, Icons.Default.Security, "sharing_privacy"),
@@ -151,7 +153,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "screenings", "education",
+                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "medical_history", "screenings", "education",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
@@ -227,6 +229,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("screenings") { ScreeningsScreen(onBack = { navController.popBackStack() }) }
                 composable("education") { EducationScreen(onBack = { navController.popBackStack() }) }
                 composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }
+                composable("medical_history") { MedicalHistoryScreen(onBack = { navController.popBackStack() }) }
                 composable("sharing_privacy") {
                     SharingPrivacyScreen(onBack = { navController.popBackStack() })
                 }
