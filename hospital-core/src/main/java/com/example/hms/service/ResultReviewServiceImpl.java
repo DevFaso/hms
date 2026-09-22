@@ -52,6 +52,23 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     // Naming follows the existing URGENCY_NORMAL sibling above.
     private static final String SEVERITY_CRITICAL = "CRITICAL";
 
+    /**
+     * Order states whose released results belong on a doctor's review queue.
+     *
+     * <p>COMPLETED alone was wrong once orders could move again: a late or
+     * corrected result re-opens a COMPLETED order to RESULTED
+     * ({@code LabOrderLifecycle.reopenForResult}), and every result of that
+     * order — including the ones released days ago — dropped out of the queue
+     * until the new one was released. An order with at least one released
+     * result is reviewable whatever stage it is at; the released-only filter
+     * below is what decides which of its results the doctor sees.
+     */
+    private static final java.util.Set<LabOrderStatus> REVIEWABLE_ORDER_STATUSES =
+            java.util.EnumSet.of(
+                    LabOrderStatus.RESULTED,
+                    LabOrderStatus.VERIFIED,
+                    LabOrderStatus.COMPLETED);
+
     private final StaffRepository staffRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -95,7 +112,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // commit. For a single physician's queue this stays bounded by the
         // staff-scoped completed-order count, which is small in practice.
         completedOrders.stream()
-                .filter(order -> order.getStatus() == LabOrderStatus.COMPLETED)
+                .filter(order -> REVIEWABLE_ORDER_STATUSES.contains(order.getStatus()))
                 .filter(order -> order.getPatient() != null)
                 .forEach(order -> {
                     List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());

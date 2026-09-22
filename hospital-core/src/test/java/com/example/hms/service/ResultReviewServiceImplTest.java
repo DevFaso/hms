@@ -116,6 +116,62 @@ class ResultReviewServiceImplTest {
     // ========== getResultReviewQueue() ==========
 
     @Test
+    void reopenedOrdersKeepTheirReleasedResultsInTheQueue() {
+        // A late or corrected result re-opens a COMPLETED order to RESULTED.
+        // Keying the queue on COMPLETED alone made every result of that order
+        // — including ones released days earlier — vanish from the doctor's
+        // queue until the new one was released.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Traore");
+
+        List<DoctorResultQueueItemDTO> seen = new java.util.ArrayList<>();
+        for (LabOrderStatus status : List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED)) {
+            UUID orderId = UUID.randomUUID();
+            LabOrder order = mock(LabOrder.class);
+            when(order.getId()).thenReturn(orderId);
+            when(order.getStatus()).thenReturn(status);
+            when(order.getPatient()).thenReturn(patient);
+
+            LabResult released = mock(LabResult.class);
+            lenient().when(released.getId()).thenReturn(UUID.randomUUID());
+            lenient().when(released.isReleased()).thenReturn(true);
+
+            when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+            when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
+
+            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+            assertEquals(1, queue.size(), "queue for order status " + status);
+            seen.addAll(queue);
+        }
+        assertEquals(2, seen.size());
+    }
+
+    @Test
+    void ordersStillWithTheLabStayOutOfTheQueue() {
+        // The other side of the same rule: nothing has come back yet, so the
+        // order is the laboratory's, not the doctor's.
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        givenStaffFor(userId, staff);
+
+        LabOrder collected = mock(LabOrder.class);
+        when(collected.getStatus()).thenReturn(LabOrderStatus.COLLECTED);
+        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(collected));
+
+        assertEquals(0, service.getResultReviewQueue(userId).size());
+    }
+
+    @Test
     void unreleasedResultsStayOutOfTheQueue() {
         // A result entered on an order that had already completed (a
         // correction, a late analyte) is not on the chart until the lab

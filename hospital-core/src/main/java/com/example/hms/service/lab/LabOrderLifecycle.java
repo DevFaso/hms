@@ -34,15 +34,31 @@ public final class LabOrderLifecycle {
     }
 
     /**
-     * The one sanctioned move backwards: a result arriving on a COMPLETED
-     * order (a correction, a late analyte) re-opens it to RESULTED so the
-     * ordering doctor sees it as having something new to review and the
-     * normal release → COMPLETED path runs again. CANCELLED stays cancelled.
+     * States a NEW result re-opens: the order was finished with, and something
+     * has come back anyway.
      *
-     * @return true when the order was COMPLETED and is now RESULTED
+     * <p>VERIFIED belongs here with COMPLETED. It is not merely a stage on the
+     * way: {@code EncounterServiceImpl.LAB_TERMINAL} counts VERIFIED as done,
+     * so an encounter can be closed over it. A result entered on a VERIFIED
+     * order used to be neither re-opened (only COMPLETED was) nor advanced
+     * (VERIFIED is already past RESULTED), which left the order parked in a
+     * terminal state carrying an unreleased result nobody was going to be
+     * shown. CANCELLED is excluded: a cancelled order is a decision somebody
+     * made, and a stray result does not overturn it.
+     */
+    private static final Set<LabOrderStatus> REOPENABLE =
+        EnumSet.of(LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
+
+    /**
+     * The one sanctioned move backwards: a result arriving on an order that
+     * was already finished (a correction, a late analyte) re-opens it to
+     * RESULTED so the ordering doctor sees it as having something new to
+     * review and the normal release → COMPLETED path runs again.
+     *
+     * @return true when the order was VERIFIED or COMPLETED and is now RESULTED
      */
     public static boolean reopenForResult(LabOrder order) {
-        if (order == null || order.getStatus() != LabOrderStatus.COMPLETED) {
+        if (order == null || !REOPENABLE.contains(order.getStatus())) {
             return false;
         }
         order.setStatus(LabOrderStatus.RESULTED);

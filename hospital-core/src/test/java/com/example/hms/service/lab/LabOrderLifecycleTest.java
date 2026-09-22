@@ -58,11 +58,19 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("a result on a COMPLETED order re-opens it to RESULTED; nothing else re-opens")
+    @DisplayName("a result on a COMPLETED or VERIFIED order re-opens it to RESULTED; nothing else re-opens")
     void reopenForResultIsTheOneSanctionedStepBack() {
         LabOrder completed = orderAt(LabOrderStatus.COMPLETED);
         assertThat(LabOrderLifecycle.reopenForResult(completed)).isTrue();
         assertThat(completed.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+
+        // VERIFIED is terminal for EncounterServiceImpl.LAB_TERMINAL, so a
+        // result landing there would otherwise sit unreleased on an order
+        // nobody looks at again: advance() cannot move it (VERIFIED is past
+        // RESULTED) and only COMPLETED used to re-open.
+        LabOrder verified = orderAt(LabOrderStatus.VERIFIED);
+        assertThat(LabOrderLifecycle.reopenForResult(verified)).isTrue();
+        assertThat(verified.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
 
         LabOrder cancelled = orderAt(LabOrderStatus.CANCELLED);
         assertThat(LabOrderLifecycle.reopenForResult(cancelled)).isFalse();

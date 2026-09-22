@@ -46,6 +46,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -187,13 +188,23 @@ class DoctorWorklistServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
 
+        // Bracket the call rather than measuring a duration between two
+        // LocalDateTimes (Sonar java:S6877 — a duration across zone-less
+        // values is not well defined): the floor must land inside the window
+        // the clock could have produced during the call, which is also a
+        // tighter assertion than "within a minute".
+        LocalDateTime beforeCall = LocalDateTime.now();
         CriticalStripDTO result = service.getCriticalStrip(userId);
+        LocalDateTime afterCall = LocalDateTime.now();
 
         assertEquals(2, result.getCriticalLabsCount());
         assertEquals(2, result.getActiveSafetyAlertsCount());
-        LocalDateTime expected = LocalDateTime.now().minusDays(DoctorWorklistServiceImpl.SAFETY_ALERT_WINDOW_DAYS);
-        assertTrue(Math.abs(java.time.Duration.between(expected, floor.getValue()).toSeconds()) < 60,
-                "floor should be now minus the safety-alert window");
+        int window = DoctorWorklistServiceImpl.SAFETY_ALERT_WINDOW_DAYS;
+        LocalDateTime captured = floor.getValue();
+        assertFalse(captured.isBefore(beforeCall.minusDays(window)),
+                "floor must not predate the safety-alert window");
+        assertFalse(captured.isAfter(afterCall.minusDays(window)),
+                "floor must not be later than the safety-alert window");
     }
 
     @Test

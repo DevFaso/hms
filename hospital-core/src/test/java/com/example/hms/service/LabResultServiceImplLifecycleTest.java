@@ -177,6 +177,21 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("B2 — a result entered on a VERIFIED order re-opens it to RESULTED")
+    void enteringAResultReopensAVerifiedOrder() {
+        // VERIFIED counts as terminal for encounter closure, and advance()
+        // cannot move it forward to RESULTED, so without the re-open the new
+        // result sat unreleased on an order treated as done.
+        order.setStatus(LabOrderStatus.VERIFIED);
+        stubEntryPath();
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labOrderRepository, org.mockito.Mockito.atLeastOnce()).save(order);
+    }
+
+    @Test
     @DisplayName("B2 — completion locks the order row before counting released results")
     void completionLocksTheOrderRow() {
         // Under READ COMMITTED two concurrent releases of the last two results
