@@ -448,6 +448,7 @@
     <string name="doc_type_insurance_document">Insurance document</string>
     <string name="doc_type_invoice">Invoice</string>
     <string name="doc_type_immunization_record">Immunization record</string>
+    <string name="document_request_busy">Another document request is still in progress. Please wait a moment.</string>
     <string name="doc_type_other">Other</string>
     <string name="education">Education</string>
     <string name="education_load_failed">Your education material could not be loaded</string>

@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,6 +52,11 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
     val uploadError by viewModel.uploadError.collectAsState()
     val deleting by viewModel.deleting.collectAsState()
     val outcome by viewModel.outcome.collectAsState()
+    val inFlight by viewModel.inFlight.collectAsState()
+    // One document request at a time, process-wide: while a delete is out the
+    // FAB and the sheet's Upload are withheld, and the rows' Delete while an
+    // upload is (deleteEnabled below), so no tap ever silently does nothing.
+    val requestBusy = inFlight != null
     val context = LocalContext.current
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -117,8 +124,10 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
         },
         floatingActionButton = {
             // Offered whenever the list is usable (loaded, empty or not); a
-            // failed first load keeps its retry page instead.
-            if (!isLoading && loadError == null) {
+            // failed first load keeps its retry page instead, and a delete
+            // still out withholds it (ExtendedFloatingActionButton has no
+            // enabled state, so it steps aside until the request lands).
+            if (!isLoading && loadError == null && !requestBusy) {
                 ExtendedFloatingActionButton(
                     onClick = { filePicker.launch(DocumentsViewModel.PICKER_MIME_TYPES) },
                     icon = { Icon(Icons.Default.UploadFile, null) },
@@ -172,7 +181,7 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
                         doc = doc,
                         isOpening = opening == doc.id,
                         isDeleting = deleting == doc.id,
-                        deleteEnabled = deleting == null,
+                        deleteEnabled = deleting == null && !requestBusy,
                         onOpen = { viewModel.open(doc) },
                         onDelete = { pendingDelete = doc }
                     )
@@ -203,6 +212,7 @@ fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hil
         UploadSheet(
             file = file,
             uploading = uploading,
+            busy = requestBusy && !uploading,
             error = uploadError,
             onUpload = { type, date, notes -> viewModel.upload(type, date, notes) },
             onDismiss = { viewModel.cancelPick() }
@@ -225,6 +235,8 @@ private fun outcomeText(o: DocumentsViewModel.Outcome): String = when (o.resId) 
 private fun UploadSheet(
     file: DocumentsViewModel.PickedFile,
     uploading: Boolean,
+    /** Another document request (a delete) is out: the form stays editable, Upload waits. */
+    busy: Boolean,
     error: DocumentsViewModel.Outcome?,
     onUpload: (documentType: String, collectionDate: String?, notes: String?) -> Unit,
     onDismiss: () -> Unit
@@ -245,7 +257,17 @@ private fun UploadSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = keepWhileUploading)
 
     val notesMax = DocumentsViewModel.NOTES_MAX
-    val canSubmit = !uploading && notes.length <= notesMax
+    val canSubmit = !uploading && !busy && notes.length <= notesMax
+
+    // A readOnly OutlinedTextField consumes the tap, so a clickable modifier
+    // on it never fires; the field's own interaction source reports the
+    // release instead and opens the picker, like the trailing icon does.
+    val dateInteraction = remember { MutableInteractionSource() }
+    LaunchedEffect(dateInteraction) {
+        dateInteraction.interactions.collect { interaction ->
+            if (interaction is PressInteraction.Release && !isUploading) showDatePicker = true
+        }
+    }
     val dateLabel = collectionDate?.let { iso ->
         runCatching { LocalDate.parse(iso).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault())) }
             .getOrDefault(iso)
@@ -313,7 +335,8 @@ private fun UploadSheet(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().clickable(enabled = !uploading) { showDatePicker = true }
+                interactionSource = dateInteraction,
+                modifier = Modifier.fillMaxWidth()
             )
 
             OutlinedTextField(

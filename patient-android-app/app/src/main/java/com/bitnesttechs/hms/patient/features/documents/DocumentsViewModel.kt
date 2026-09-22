@@ -79,6 +79,9 @@ class DocumentsViewModel @Inject constructor(
 
     private val _outcome = MutableStateFlow<Outcome?>(null)
     val outcome: StateFlow<Outcome?> = _outcome
+
+    /** The upload or delete still out, process-wide; the screen withholds the other action while it runs. */
+    val inFlight: StateFlow<Job?> = requestTracker.inFlight
     fun clearOutcome() { _outcome.value = null }
 
     private val _events = MutableSharedFlow<DocumentEvent>(extraBufferCapacity = 1)
@@ -165,7 +168,13 @@ class DocumentsViewModel @Inject constructor(
      */
     fun upload(documentType: String, collectionDate: String?, notes: String?) {
         val file = _picked.value ?: return
-        if (_uploading.value || requestTracker.inFlight.value != null) return
+        if (_uploading.value) return
+        if (requestTracker.inFlight.value != null) {
+            // The screen disables Upload while a delete is out; a tap that
+            // still lands (a race with the row's spinner) is answered, not dropped.
+            _uploadError.value = Outcome(R.string.document_request_busy)
+            return
+        }
         if (documentType !in DOCUMENT_TYPES) return
         val trimmedNotes = notes?.trim()?.takeIf { it.isNotEmpty() }
         if (trimmedNotes != null && trimmedNotes.length > NOTES_MAX) return
@@ -222,6 +231,7 @@ class DocumentsViewModel @Inject constructor(
         else {
             job.cancel()
             _uploading.value = false
+            _uploadError.value = Outcome(R.string.document_request_busy)
         }
     }
 
@@ -274,7 +284,11 @@ class DocumentsViewModel @Inject constructor(
      * with [requestTracker] like the upload.
      */
     fun delete(doc: DocumentDto) {
-        if (_deleting.value != null || requestTracker.inFlight.value != null) return
+        if (_deleting.value != null) return
+        if (requestTracker.inFlight.value != null) {
+            _outcome.value = Outcome(R.string.document_request_busy)
+            return
+        }
         _deleting.value = doc.id
         val job: Job = applicationScope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -299,6 +313,7 @@ class DocumentsViewModel @Inject constructor(
         else {
             job.cancel()
             _deleting.value = null
+            _outcome.value = Outcome(R.string.document_request_busy)
         }
     }
 
