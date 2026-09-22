@@ -33,6 +33,9 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
     let status: String?
     let createdAt: String?
     let updatedAt: String?
+    // Pre-check-in state, set by POST /me/patient/appointments/{id}/pre-checkin.
+    let preCheckedIn: Bool?
+    let preCheckinTimestamp: String?
 
     /// Convenience: display name of the doctor/staff
     var doctorName: String? {

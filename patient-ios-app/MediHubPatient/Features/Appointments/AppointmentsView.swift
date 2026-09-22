@@ -34,7 +34,9 @@ struct AppointmentsView: View {
                     if !vm.upcoming.isEmpty {
                         Section("upcoming".localized) {
                             ForEach(vm.upcoming) { appt in
-                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt, onPreCheckedIn: {
+                                    Task { await vm.load() }
+                                })) {
                                     AppointmentRowView(appointment: appt)
                                 }
                                 .padding(.vertical, 4)

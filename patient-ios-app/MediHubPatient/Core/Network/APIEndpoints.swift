@@ -23,6 +23,9 @@ enum APIEndpoints {
     static let healthSummary = "/me/patient/health-summary"
     static let appointments = "/me/patient/appointments"
     static let cancelAppointment = "/me/patient/appointments/cancel"
+    // Pre-check-in, the same two calls as the web's form.
+    static func appointmentQuestionnaires(id: String) -> String { "/me/patient/appointments/\(id)/questionnaires" }
+    static func preCheckIn(id: String) -> String { "/me/patient/appointments/\(id)/pre-checkin" }
     static let rescheduleAppointment = "/me/patient/appointments/reschedule"
     static let labResults = "/me/patient/lab-results"
     static let medications = "/me/patient/medications"
