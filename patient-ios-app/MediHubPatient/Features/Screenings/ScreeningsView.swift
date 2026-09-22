@@ -246,7 +246,7 @@ final class ScreeningsViewModel: ObservableObject {
     }
 
     /// Opens the form in the device language; the server falls back to English and says which it served.
-    func start(_ instrument: ProScreeningAvailable) {
+    func start(_ available: ProScreeningAvailable) {
         answers = [:]
         missingItems = []
         submitError = nil
@@ -254,8 +254,8 @@ final class ScreeningsViewModel: ObservableObject {
         instrumentFailed = false
         // The app's own language (switchable in the profile), not the phone's.
         language = LocalizationManager.shared.currentLanguage
-        active = instrument
-        loadInstrument(code: instrument.code, language: language)
+        active = available
+        loadInstrument(code: available.code, language: language)
     }
 
     /// The instrument stays until the next start: clearing it here would show
