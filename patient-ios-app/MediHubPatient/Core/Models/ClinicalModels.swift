@@ -320,40 +320,6 @@ struct TreatmentPlanDTO: Codable, Identifiable {
     let notes: String?
 }
 
-// MARK: - Consent Models
-
-struct ConsentDTO: Codable, Identifiable {
-    let id: String?
-    let fromHospitalId: String?
-    let fromHospitalName: String?
-    let toHospitalId: String?
-    let toHospitalName: String?
-    let consentType: String?
-    let purpose: String?
-    let grantedAt: String?
-    let expiresAt: String?
-    let status: String?
-}
-
-struct GrantConsentRequest: Encodable {
-    let fromHospitalId: String
-    let toHospitalId: String
-    let purpose: String?
-    let consentExpiration: String?
-}
-
-// MARK: - Access Log Models
-
-struct AccessLogDTO: Codable, Identifiable {
-    let id: String?
-    let accessedBy: String?
-    let accessedByRole: String?
-    let accessType: String?
-    let resourceAccessed: String?
-    let accessedAt: String?
-    let ipAddress: String?
-}
-
 // MARK: - Immunization Models
 
 struct ImmunizationDTO: Codable, Identifiable {
