@@ -5,7 +5,9 @@ import com.example.hms.model.LabOrder;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +17,25 @@ import java.util.UUID;
 
 public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOrderCustomRepository {
     List<LabOrder> findByPatient_Id(UUID patientId);
+
+    /**
+     * The order row under a write lock, for the release path that decides
+     * whether every result is released: two concurrent releases must
+     * serialise on the order or both see the other's result as unreleased.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM LabOrder o WHERE o.id = :id")
+    java.util.Optional<LabOrder> findWithLockById(@Param("id") UUID id);
+
+    /**
+     * The status as the database currently holds it, bypassing the entity
+     * instance this persistence context may already have: a scalar projection
+     * is not served from the first-level cache, so a status another
+     * transaction committed (a cancellation) is visible here even though the
+     * managed order still carries the value it was loaded with.
+     */
+    @Query("SELECT o.status FROM LabOrder o WHERE o.id = :id")
+    LabOrderStatus findStatusById(@Param("id") UUID id);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
@@ -89,6 +110,14 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
 
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
+
+    /**
+     * Orders of one provider sitting in any of {@code statuses} — the critical
+     * strip's "still with the laboratory" tile. A per-status count cannot
+     * express it any more: the lifecycle now moves an order through COLLECTED
+     * and RECEIVED as well.
+     */
+    long countByOrderingStaff_IdAndStatusIn(UUID staffId, java.util.Collection<LabOrderStatus> statuses);
 
     // ── Dashboard count queries ──────────────────────────────────────────────
 

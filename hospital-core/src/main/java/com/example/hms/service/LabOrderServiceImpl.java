@@ -282,7 +282,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setLabTestDefinition(testDefinition);
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
-        labOrder.setStatus(LabOrderStatus.valueOf(request.getStatus().toUpperCase()));
+        applyRequestedStatus(labOrder, request.getStatus(), isNew);
         labOrder.setClinicalIndication(clinicalIndication);
         labOrder.setMedicalNecessityNote(medicalNecessityNote);
         labOrder.setNotes(notes);
@@ -302,6 +302,41 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * The status a lab order gets from a create or an update request: none.
+     *
+     * <p>A NEW order always starts at ORDERED. Honouring the request here was
+     * the other half of B9: an order created at COMPLETED or CANCELLED is
+     * frozen against every specimen and result event the lifecycle sends
+     * ({@code LabOrderLifecycle} refuses to move a terminal order), and a
+     * COMPLETED one lands on the ordering doctor's review queue with no
+     * results behind it. On UPDATE the value is echoed back by every edit
+     * form, so a matching one is tolerated silently and a differing one is
+     * ignored with a warning. Either way the lifecycle moves only through
+     * {@link #transitionLabOrderStatus} (role-checked per step) and the
+     * specimen and result events.
+     */
+    private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
+        LabOrderStatus requested;
+        try {
+            requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("Unknown lab order status: " + requestedStatus);
+        }
+        if (isNew) {
+            if (requested != LabOrderStatus.ORDERED) {
+                log.warn("Ignoring status {} on creation of a lab order: new orders start at ORDERED",
+                    requested);
+            }
+            labOrder.setStatus(LabOrderStatus.ORDERED);
+            return;
+        }
+        if (labOrder.getStatus() != requested) {
+            log.warn("Ignoring status {} on update of lab order {} (current {}): use the transition endpoint",
+                requested, labOrder.getId(), labOrder.getStatus());
+        }
     }
 
     @Override

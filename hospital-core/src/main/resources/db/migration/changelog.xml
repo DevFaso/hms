@@ -2419,4 +2419,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V163 — lab orders the old auto-verification left behind.
+         Nothing advanced lab_orders.status before #716, so orders whose
+         results were all auto-released still sit at ORDERED and have
+         never appeared on the ordering doctor's review queue. One-off
+         catch-up; the service keeps the status current from here.
+         Plain DML (UPDATE only), idempotent, CANCELLED/VERIFIED untouched.
+         ================================================================= -->
+    <changeSet id="V163-lab-order-status-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V163__lab_order_status_backfill.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

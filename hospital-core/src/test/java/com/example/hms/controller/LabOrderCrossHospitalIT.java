@@ -284,12 +284,15 @@ class LabOrderCrossHospitalIT extends BaseIT {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[*].id", hasItem(resultId.toString())));
 
-        // The row itself says who performs it.
+        // The row itself says who performs it. Its status is #716's business,
+        // not this PR's: releasing the last result now completes the order,
+        // so the lifecycle is asserted here only to record that the
+        // performing laboratory drives it exactly as the ordering one would.
         assertThat(labOrderRepository.findById(orderId))
             .get()
             .satisfies(order -> {
                 assertThat(order.getPerformingHospital().getId()).isEqualTo(hospitalB.getId());
-                assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+                assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
             });
     }
 

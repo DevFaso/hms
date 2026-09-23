@@ -110,7 +110,7 @@ class LabResultServiceImplPerformingHospitalTest {
 
     @Test
     void performingLaboratoryEntersAResultJudgedByItsRolesThere() {
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(authService.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -128,7 +128,7 @@ class LabResultServiceImplPerformingHospitalTest {
 
     @Test
     void thirdHospitalCannotEnterAResult() {
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(third.getId());
 
         LabResultRequestDTO request = request();
@@ -140,7 +140,7 @@ class LabResultServiceImplPerformingHospitalTest {
     @Test
     void orderingHospitalActorIsStillJudgedByTheOrderingHospitalRoles() {
         UUID doctorId = UUID.randomUUID();
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(authService.getCurrentUserId()).thenReturn(doctorId);
         when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(false);

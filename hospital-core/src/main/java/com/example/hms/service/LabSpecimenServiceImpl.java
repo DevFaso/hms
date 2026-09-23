@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import com.example.hms.payload.dto.LabSpecimenRequestDTO;
 import com.example.hms.payload.dto.LabSpecimenResponseDTO;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabSpecimenRepository;
+import com.example.hms.service.lab.LabOrderLifecycle;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,7 +65,11 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             .notes(request.getNotes())
             .build();
 
-        return labSpecimenMapper.toResponseDTO(labSpecimenRepository.save(specimen));
+        LabSpecimen saved = labSpecimenRepository.save(specimen);
+        // A collected specimen IS the order's COLLECTED state (B2): nothing
+        // else records it, and the transition endpoint has no callers.
+        advanceOrder(labOrder, LabOrderStatus.COLLECTED);
+        return labSpecimenMapper.toResponseDTO(saved);
     }
 
     @Override
@@ -113,8 +119,15 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         specimen.setReceivedById(roleValidator.getCurrentUserId());
         specimen.setStatus(LabSpecimenStatus.RECEIVED);
         LabSpecimen saved = labSpecimenRepository.save(specimen);
+        advanceOrder(specimen.getLabOrder(), LabOrderStatus.RECEIVED);
         instrumentOutboxService.enqueueSpecimenReceived(saved);
         return labSpecimenMapper.toResponseDTO(saved);
+    }
+
+    private void advanceOrder(LabOrder labOrder, LabOrderStatus target) {
+        if (LabOrderLifecycle.advance(labOrder, target)) {
+            labOrderRepository.save(labOrder);
+        }
     }
 
     // ── Accession number generation ───────────────────────────────────────────

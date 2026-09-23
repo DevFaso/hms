@@ -294,9 +294,6 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         Pageable pageable
     );
 
-    /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
-
     /**
      * Look up an existing result by the composite
      * (MSH-3 sending application, MSH-4 sending facility, MSH-10 control id)
@@ -331,6 +328,15 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment.user"
     })
     Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
+
+    /**
+     * The doctor's critical strip (B15): critical results of this provider's
+     * orders that nobody has acknowledged yet, no older than the floor. The
+     * strip used to count every CRITICAL result ever filed for the staff and
+     * show it as the live safety-alert count.
+     */
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
+        UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
 
     /**
      * Hospital-scoped tile count for the super-admin dashboard. LabResult
