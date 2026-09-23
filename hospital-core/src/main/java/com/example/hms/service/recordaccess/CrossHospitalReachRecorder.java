@@ -105,18 +105,20 @@ public class CrossHospitalReachRecorder {
         if (perPatient == null || perPatient.isEmpty()) {
             return;
         }
-        try {
-            Map<UUID, Optional<UUID>> breakGlassByPatient = new HashMap<>();
-            List<AuditEventRequestDTO> pending = new ArrayList<>();
-
-            for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
-                UUID patientId = patient.getKey();
-                if (patientId == null) {
-                    continue;
-                }
+        List<AuditEventRequestDTO> pending = new ArrayList<>();
+        for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
+            UUID patientId = patient.getKey();
+            if (patientId == null) {
+                continue;
+            }
+            // Per patient, so one patient's failure costs one patient's rows.
+            // Wrapping the whole loop meant a single break-glass lookup going
+            // down threw away the page's disclosures — worse than the
+            // per-patient recorder it replaced, which lost only its own.
+            try {
+                Optional<UUID> breakGlassSessionId =
+                    breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId);
                 for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
-                    Optional<UUID> breakGlassSessionId = breakGlassByPatient.computeIfAbsent(patientId,
-                        id -> breakGlassGate.liveSessionId(requesterUserId, id, actingHospitalId));
                     Map<String, Object> details = new HashMap<>();
                     details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
                     details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
@@ -134,13 +136,19 @@ public class CrossHospitalReachRecorder {
                         .details(details)
                         .build());
                 }
+            } catch (RuntimeException ex) {
+                log.warn("[record-access] could not prepare the disclosure of patient {} at hospital {}: {}",
+                    patientId, actingHospitalId, ex.getMessage());
             }
-            if (!pending.isEmpty()) {
-                auditEventLogService.logEvents(pending);
-            }
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvents(pending);
         } catch (RuntimeException ex) {
-            log.warn("[record-access] batched cross-hospital disclosure audit failed for {} patient(s): {}",
-                perPatient.size(), ex.getMessage());
+            log.warn("[record-access] batched cross-hospital disclosure audit failed for {} row(s): {}",
+                pending.size(), ex.getMessage());
         }
     }
 

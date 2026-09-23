@@ -117,35 +117,52 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     }
 
     /**
-     * One transaction for the whole batch, and therefore all-or-nothing: the
-     * rows flush together at commit, so catching per row would only look like
-     * independence — the failure surfaces at commit, long after any per-row
-     * catch could contain it.
+     * One transaction for the batch, and a per-event replay when it fails.
      *
-     * <p>The catch has to sit OUTSIDE the transaction to be worth anything.
-     * Annotating this method {@code REQUIRES_NEW} and catching inside it
-     * caught nothing that mattered: a failed row leaves the transaction
-     * rollback-only and the proxy's commit throws after the body has
-     * returned, so "never throws" was false and held only because the single
-     * caller happened to wrap it. The template makes the boundary explicit
-     * and the guarantee real.
+     * <p>The rows flush together at commit, so catching per row inside the
+     * transaction would only look like independence — the failure surfaces at
+     * commit, after the body has returned. (That is also why this method is
+     * not annotated: a {@code REQUIRES_NEW} annotation put the commit outside
+     * the catch, so "never throws" was false and held only because the single
+     * caller wrapped it. The template puts the boundary where the catch can
+     * see it.)
+     *
+     * <p>Losing the page because one row is unpersistable is too high a price
+     * for a compliance record, so a failed batch is replayed one event at a
+     * time, each in its own transaction. The happy path still costs one
+     * commit; the unhappy one costs N and loses only the row that deserved
+     * it.
      */
     @Override
     public void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs) {
         if (requestDTOs == null || requestDTOs.isEmpty()) {
             return;
         }
-        TransactionTemplate batchTransaction = new TransactionTemplate(transactionManager);
-        batchTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
+        ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         try {
-            batchTransaction.executeWithoutResult(status -> {
+            ownTransaction.executeWithoutResult(status -> {
                 for (AuditEventRequestDTO requestDTO : requestDTOs) {
                     doLogEvent(requestDTO);
                 }
             });
         } catch (RuntimeException e) {
-            log.error("[AUDIT] Failed to persist a batch of {} audit event(s); the whole batch is lost: {}",
-                    requestDTOs.size(), e.getMessage(), e);
+            log.warn("[AUDIT] Batch of {} audit event(s) failed ({}); replaying one at a time so a bad row "
+                    + "costs one row rather than the page", requestDTOs.size(), e.getMessage());
+            replayIndividually(requestDTOs, ownTransaction);
+        }
+    }
+
+    private void replayIndividually(java.util.List<AuditEventRequestDTO> requestDTOs,
+                                    TransactionTemplate ownTransaction) {
+        for (AuditEventRequestDTO requestDTO : requestDTOs) {
+            try {
+                ownTransaction.executeWithoutResult(status -> doLogEvent(requestDTO));
+            } catch (RuntimeException e) {
+                log.error("[AUDIT] Failed to persist audit event on replay (eventType={}, resourceId={}, userId={}): {}",
+                        requestDTO.getEventType(), requestDTO.getResourceId(), requestDTO.getUserId(),
+                        e.getMessage(), e);
+            }
         }
     }
 

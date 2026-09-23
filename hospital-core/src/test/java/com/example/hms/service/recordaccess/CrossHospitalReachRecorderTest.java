@@ -161,6 +161,31 @@ class CrossHospitalReachRecorderTest {
     }
 
     @Test
+    @DisplayName("one patient failing costs that patient's row, not the page's")
+    void batchedReachLosesOnlyTheFailingPatient() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID broken = UUID.randomUUID();
+        UUID healthy = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(actor, broken, acting))
+            .thenThrow(new IllegalStateException("break-glass lookup down"));
+        when(breakGlassGate.liveSessionId(actor, healthy, acting)).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(
+            broken, Map.of(source.toString(), 1L),
+            healthy, Map.of(source.toString(), 2L)), acting, actor, null, "Batched read");
+
+        // The per-patient recorder this replaced lost only its own patient;
+        // wrapping the whole loop was a regression on that.
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(captor.capture());
+        assertThat(captor.getValue()).singleElement()
+            .extracting(AuditEventRequestDTO::getPatientId).isEqualTo(healthy);
+    }
+
+    @Test
     @DisplayName("a failing audit write never reaches the read either")
     void batchedReachSwallowsAWriteFailure() {
         UUID acting = UUID.randomUUID();

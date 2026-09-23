@@ -24,12 +24,12 @@ public interface AuditEventLogService {
      * hospitals writes a row per patient; one committed transaction each
      * turned a worklist into hundreds.
      *
-     * <p><strong>All or nothing.</strong> The rows share a transaction and
-     * Hibernate flushes them at commit, so a row that fails to persist takes
-     * the whole batch with it — this method cannot offer {@link #logEvent}'s
-     * per-event independence, and does not pretend to. A caller that needs
-     * each event to stand or fall on its own must call {@link #logEvent} per
-     * event and pay a transaction for each.
+     * <p>The rows share a transaction and Hibernate flushes them at commit,
+     * so a row that cannot be persisted takes that transaction with it. When
+     * that happens the batch is <strong>replayed one event at a time</strong>,
+     * each in its own transaction, so a single bad row costs one row rather
+     * than the page — the fast path keeps its single commit and the
+     * compliance rows survive the slow one.
      *
      * <p>It never throws, and it does not rely on its callers for that: the
      * batch runs in a transaction this method opens and commits itself, so

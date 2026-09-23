@@ -12,7 +12,9 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultTrendPointDTO;
 import lombok.RequiredArgsConstructor;
+import com.example.hms.model.Hospital;
 import org.hibernate.Hibernate;
+import org.hibernate.proxy.HibernateProxy;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -195,25 +197,32 @@ public class LabResultMapper {
      * B1: the laboratory the order was routed to, null when the ordering
      * hospital ran it.
      *
-     * <p>Deliberately NOT guarded on {@code Hibernate.isInitialized}, unlike
-     * the sibling resolvers here. {@code performingHospital} is a lazy
-     * many-to-one that no entity graph fetches, so that guard was false on
-     * every real response and this field came back null everywhere — which
-     * made the release-button fix it exists for inert, and showed the control
-     * to the ordering hospital's lab staff exactly as before. Reading the
-     * <em>identifier</em> off a proxy does not initialise it: Hibernate
-     * answers from the proxy without touching the database, so this costs
-     * nothing and works on the finders that carry no graph at all. Only the
-     * id is read for that reason — a name would initialise the proxy and
-     * bring back the N+1 the graphs exist to prevent.
+     * <p>{@code performingHospital} is a lazy many-to-one that no entity
+     * graph fetches, so the {@code Hibernate.isInitialized} guard the sibling
+     * resolvers use was false on every real response and this field came back
+     * null everywhere — which made the release-button fix it exists for
+     * inert. But {@code proxy.getId()} is not the free read it looks like
+     * either: {@code BaseEntity} puts {@code @Id} on the FIELD with no
+     * {@code @Access(PROPERTY)} override, so Hibernate uses field access, has
+     * no identifier getter to intercept, and the call initialises the proxy —
+     * a SELECT per outsourced row on {@code GET /lab-results}, and a
+     * {@code LazyInitializationException} on any path that maps a detached
+     * result.
+     *
+     * <p>So the identifier is taken from the proxy's own initializer, which
+     * holds it by definition: no query, no initialisation, correct while
+     * detached, and no dependence on which finder loaded the row. An
+     * already-initialised association is read directly.
      */
     private String resolvePerformingHospitalId(LabOrder order) {
-        if (order.getPerformingHospital() == null) {
+        Hospital performing = order.getPerformingHospital();
+        if (performing == null) {
             return null;
         }
-        return order.getPerformingHospital().getId() != null
-            ? order.getPerformingHospital().getId().toString()
-            : null;
+        Object id = performing instanceof HibernateProxy proxy
+            ? proxy.getHibernateLazyInitializer().getIdentifier()
+            : performing.getId();
+        return id != null ? id.toString() : null;
     }
 
     private String resolveHospitalName(LabOrder order) {
