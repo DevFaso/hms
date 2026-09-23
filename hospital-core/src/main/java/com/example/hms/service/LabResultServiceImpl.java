@@ -240,6 +240,12 @@ public class LabResultServiceImpl implements LabResultService {
      * exists to open. A third hospital must not learn the order exists, let
      * alone attach a result to it.
      */
+    private void requireOrderInActiveHospital(LabOrder labOrder) {
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+    }
+
     /**
      * Whether this row reached us from an external analyzer. The message
      * control id is the precise signal; the sending application is kept
@@ -249,12 +255,6 @@ public class LabResultServiceImpl implements LabResultService {
     private static boolean wasIngestedFromAnAnalyzer(LabResult labResult) {
         return labResult.getSourceMessageControlId() != null
             || labResult.getSourceSendingApplication() != null;
-    }
-
-    private void requireOrderInActiveHospital(LabOrder labOrder) {
-        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
-        }
     }
 
     @Override
