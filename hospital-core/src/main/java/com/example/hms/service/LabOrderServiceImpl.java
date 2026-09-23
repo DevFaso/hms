@@ -182,19 +182,32 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
-     * The status a lab order gets from a create or an update request: none.
+     * Where a new order may start, and what an update may say about status.
      *
-     * <p>A NEW order always starts at ORDERED. Honouring the request here was
-     * the other half of B9: an order created at COMPLETED or CANCELLED is
-     * frozen against every specimen and result event the lifecycle sends
-     * ({@code LabOrderLifecycle} refuses to move a terminal order), and a
-     * COMPLETED one lands on the ordering doctor's review queue with no
-     * results behind it. On UPDATE the value is echoed back by every edit
-     * form, so a matching one is tolerated silently and a differing one is
-     * ignored with a warning. Either way the lifecycle moves only through
-     * {@link #transitionLabOrderStatus} (role-checked per step) and the
-     * specimen and result events.
+     * <p>A new order starts at a START state. Two callers legitimately choose
+     * which one — {@code SuperAdminLabOrderServiceImpl}, where the status is a
+     * mandatory field of the super-admin request, and
+     * {@code OrderSetItemDispatcher}, which places order-set items as PENDING
+     * — so forcing every create to ORDERED discarded a value one caller
+     * validated and made the other log a warning for every order it placed.
+     *
+     * <p>What a create may NOT do is claim work the laboratory has not done:
+     * an order born COMPLETED or CANCELLED is frozen against every specimen
+     * and result event ({@code LabOrderLifecycle} will not move a terminal
+     * order) and a COMPLETED one reaches the ordering doctor's review queue
+     * with no results behind it. Those are refused. The states in between
+     * (COLLECTED … VERIFIED) describe laboratory progress with no specimen or
+     * result row to back it, so a create is held to the start states and told
+     * why.
+     *
+     * <p>On UPDATE the value is echoed back by every edit form, so a matching
+     * one is tolerated silently and a differing one is ignored with a warning:
+     * the lifecycle moves only through {@link #transitionLabOrderStatus}
+     * (role-checked per step) and the specimen and result events.
      */
+    private static final Set<LabOrderStatus> START_STATUSES =
+        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+
     private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
         LabOrderStatus requested;
         try {
@@ -203,11 +216,13 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("Unknown lab order status: " + requestedStatus);
         }
         if (isNew) {
-            if (requested != LabOrderStatus.ORDERED) {
-                log.warn("Ignoring status {} on creation of a lab order: new orders start at ORDERED",
-                    requested);
+            if (!START_STATUSES.contains(requested)) {
+                throw new BusinessException(
+                    "A new lab order cannot be created with status " + requested.name()
+                        + ". New orders start at ORDERED or PENDING; the laboratory workflow "
+                        + "moves them on from there.");
             }
-            labOrder.setStatus(LabOrderStatus.ORDERED);
+            labOrder.setStatus(requested);
             return;
         }
         if (labOrder.getStatus() != requested) {

@@ -83,7 +83,8 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
      * express it any more: the lifecycle now moves an order through COLLECTED
      * and RECEIVED as well.
      */
-    long countByOrderingStaff_IdAndStatusIn(UUID staffId, java.util.Collection<LabOrderStatus> statuses);
+    long countByOrderingStaff_IdAndStatusInAndOrderDatetimeAfter(
+        UUID staffId, java.util.Collection<LabOrderStatus> statuses, LocalDateTime floor);
 
     // ── Dashboard count queries ──────────────────────────────────────────────
 

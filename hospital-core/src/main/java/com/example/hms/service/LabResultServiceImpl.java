@@ -20,6 +20,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -95,20 +96,18 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
-        // Loaded under the same write lock the release path takes: the
-        // reopen/advance decision below reads the status, and an unlocked
-        // read could see RESULTED while a concurrent release of the last
-        // result is committing COMPLETED — this insert would then neither
-        // reopen nor wait, leaving an unreleased result on a completed
-        // order. Locking first makes this transaction wait for that commit
-        // and see COMPLETED. (A foreign tenant holds the lock only for the
-        // instant before the 404 below.)
-        LabOrder labOrder = labOrderRepository.findWithLockById(request.getLabOrderId())
+        // Read first, lock later. The write lock on the order is needed only
+        // for the status decision further down, and taking it here held it
+        // across the permission checks and — before the side effects moved
+        // after the commit — across a blocking SMS gateway call.
+        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
         // Same 404-not-403 tenancy comparison as every other single-row path
-        // here (B11): a foreign tenant must not learn the order exists, let
-        // alone attach a result to it.
-        requireOrderInActiveHospital(labOrder);
+        // here (B11), but only for a caller that HAS a hospital scope: HL7
+        // ingestion posts ORU results with no X-Hospital-Id under a service
+        // account that may hold no assignment at all, and it carries its own
+        // tenancy check (sender allowlist to hospital).
+        requireOrderInActiveHospitalIfScoped(labOrder);
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
 
@@ -126,31 +125,61 @@ public class LabResultServiceImpl implements LabResultService {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
 
+        // Whether this order already holds the same number, decided BEFORE
+        // the new row joins them.
+        boolean repeatOfExisting = isRepeatOfExistingResult(labOrder, request);
+
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
+
+        // The status decision needs the order row locked: a concurrent release
+        // of the last result may be committing COMPLETED right now, and this
+        // insert must see it rather than decide on a stale status.
+        LabOrder lockedOrder = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
         // doctor's review queue, which keys on COMPLETED. A result landing on
         // a COMPLETED order (a correction, a late analyte) re-opens it first:
-        // the doctor must see the order as having something new to review.
-        if (LabOrderLifecycle.reopenForResult(labOrder)) {
-            labOrderRepository.save(labOrder);
+        // the doctor must see the order as having something new to review —
+        // but a RETRIED post of a result the order already holds is not new,
+        // and re-opening on it would strand a finished order at RESULTED with
+        // nothing to release.
+        if (repeatOfExisting) {
+            LOG.info("Lab result for order {} repeats a value already recorded; leaving the order at {}",
+                lockedOrder.getId(), lockedOrder.getStatus());
+        } else if (LabOrderLifecycle.reopenForResult(lockedOrder)) {
+            labOrderRepository.save(lockedOrder);
         }
-        advanceOrder(labOrder, LabOrderStatus.RESULTED);
+        LabOrder labOrderForStatus = lockedOrder;
+        advanceOrder(labOrderForStatus, LabOrderStatus.RESULTED);
         // One severity for both decisions below. The REST path never sets
         // abnormalFlag (no DTO field; only MLLP populates it), so gating
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
         if (saved.isReleased()) {
-            completeOrderIfAllReleased(labOrder);
+            completeOrderIfAllReleased(labOrderForStatus);
         }
         triggerReflexOrders(saved);
-        instrumentOutboxService.enqueueResultObservation(saved);
-        // P0 #5 — critical values must reach the ordering provider; the
-        // service swallows its own failures so the result write never rolls back.
-        criticalValueNotificationService.notifyIfCritical(saved, severity);
+
+        // Both of these reach outside the database — the outbox builds an HL7
+        // message, and the critical-value notification calls the SMS gateway,
+        // which blocks. Running them inside this transaction held the order's
+        // write lock and a pooled connection for as long as that gateway took
+        // to answer, which on a hung gateway is until the socket times out,
+        // blocking every concurrent collect / receive / release on the order.
+        // They run after the commit instead, in transactions of their own,
+        // carrying ids rather than entities: this persistence context is
+        // closed by then.
+        UUID savedId = saved.getId();
+        TransactionCallbacks.afterCommit(() -> {
+            instrumentOutboxService.enqueueResultObservation(savedId);
+            // P0 #5 — critical values must reach the ordering provider. The
+            // service swallows its own failures; after the commit a failure
+            // cannot roll the clinical write back in any case.
+            criticalValueNotificationService.notifyIfCriticalById(savedId, severity);
+        });
 
         return labResultMapper.toResponseDTO(saved);
     }
@@ -219,6 +248,58 @@ public class LabResultServiceImpl implements LabResultService {
         if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
             advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
+    }
+
+    /**
+     * Is there a hospital scope to check this caller against at all?
+     *
+     * <p>Mirrors the branches {@code requireActiveHospitalId} takes before it
+     * gives up and throws: a real super-admin (unscoped by design), an
+     * explicit context from the {@code X-Hospital-Id} header, or a single
+     * active assignment. When none of them resolves — an HL7 lab-interface
+     * service account posting ORU results with no header and no assignment —
+     * the answer is no, and the caller skips the comparison rather than
+     * receiving a 400 on a path that has always worked.
+     */
+    private boolean hasResolvableHospitalScope() {
+        com.example.hms.security.context.HospitalContext ctx =
+            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
+        return ctx.isSuperAdmin()
+            || ctx.getActiveHospitalId() != null
+            || roleValidator.isSuperAdminFromAuth()
+            || roleValidator.getCurrentHospitalId() != null;
+    }
+
+    private void requireOrderInActiveHospitalIfScoped(LabOrder labOrder) {
+        if (!hasResolvableHospitalScope()) {
+            return;
+        }
+        requireOrderInActiveHospital(labOrder);
+    }
+
+    /**
+     * Does this order already hold the value being posted?
+     *
+     * <p>A retried {@code POST /lab-results} carries the same order, value,
+     * unit and result date as the row it is retrying. The HL7 path dedups on
+     * sender + MSH-10; the REST path has nothing, so this is what keeps a
+     * retry from re-opening a finished order.
+     */
+    private boolean isRepeatOfExistingResult(LabOrder labOrder, LabResultRequestDTO request) {
+        if (labOrder == null || labOrder.getId() == null) {
+            return false;
+        }
+        return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .anyMatch(existing -> sameValue(existing.getResultValue(), request.getResultValue())
+                && sameValue(existing.getResultUnit(), request.getResultUnit())
+                && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()));
+    }
+
+    private boolean sameValue(String left, String right) {
+        if (left == null || right == null) {
+            return left == null && right == null;
+        }
+        return left.trim().equalsIgnoreCase(right.trim());
     }
 
     private void requireOrderInActiveHospital(LabOrder labOrder) {

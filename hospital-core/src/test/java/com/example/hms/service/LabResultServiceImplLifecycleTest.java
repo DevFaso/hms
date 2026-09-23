@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -131,9 +132,14 @@ class LabResultServiceImplLifecycleTest {
 
     /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     private void stubEntryPath() {
-        // Entry loads the order under the write lock (round 2): the
-        // reopen/advance decision must see a concurrent release's COMPLETED.
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // Entry reads the order unlocked and takes the write lock only for the
+        // status decision (follow-up 2), so both finders are exercised.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        // a caller WITH a hospital scope: one active assignment, which is what
+        // hasResolvableHospitalScope() looks for before running the guard
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -158,9 +164,10 @@ class LabResultServiceImplLifecycleTest {
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         verify(labOrderRepository).save(order);
-        // the status decision was made on the locked row, never on a plain read
+        // the order is read unlocked; the write lock is taken only for the
+        // status decision, so it is never held across the permission checks
+        verify(labOrderRepository).findById(order.getId());
         verify(labOrderRepository).findWithLockById(order.getId());
-        verify(labOrderRepository, never()).findById(any());
     }
 
     @Test
@@ -315,7 +322,8 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository).save(saved.capture());
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getAbnormalFlag()).isNull();
-        verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
+        // the notification is deferred to after the commit and carries the id
+        verify(criticalValueNotificationService).notifyIfCriticalById(saved.getValue().getId(), "HIGH");
         // not released, so no completion pass: the only locked load is the entry one
         verify(labOrderRepository, times(1)).findWithLockById(order.getId());
     }
@@ -346,7 +354,10 @@ class LabResultServiceImplLifecycleTest {
         // SecurityConfig admits ROLE_SUPER_ADMIN to POST /lab-results, but
         // validateLabResultAuthor had no bypass, so a super-admin with no
         // per-hospital assignment got a 400 from their own endpoint.
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
@@ -495,10 +506,94 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("HL7 ingest with no hospital context is not refused — it has its own tenancy check")
+    void ingestWithoutAHospitalContextIsLetThrough() {
+        // Hl7InboundController posts ORU results with no X-Hospital-Id, under
+        // a service account that may hold no assignment at all.
+        // requireActiveHospitalId() THROWS in that case, so calling it here
+        // turned working ingestion into a 400.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        // the throwing resolver is never reached when nothing can resolve
+        verify(roleValidator, never()).requireActiveHospitalId();
+    }
+
+    @Test
+    @DisplayName("a retried post of a value the order already holds does not re-open it")
+    void aRepeatedResultDoesNotReopenAFinishedOrder() {
+        // The REST path has no dedup (HL7 dedups on sender + MSH-10), and with
+        // auto-verification off nothing would release the duplicate: the order
+        // would sit at RESULTED for good.
+        order.setStatus(LabOrderStatus.COMPLETED);
+        LabResultRequestDTO request = entryRequest();
+        LabResult alreadyThere = resultOn(order, true);
+        alreadyThere.setResultValue(request.getResultValue());
+        alreadyThere.setResultUnit(request.getResultUnit());
+        alreadyThere.setResultDate(request.getResultDate());
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyThere));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("the outbox and the critical-value notification run after the commit, by id")
+    void sideEffectsRunAfterTheCommit() {
+        // Both reach outside the database (the notification calls the SMS
+        // gateway, which blocks). Inside the transaction they held the order's
+        // write lock for as long as the gateway took to answer.
+        stubEntryPath();
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        // No transaction is active in a unit test, so TransactionCallbacks
+        // runs the action inline — what matters is that it is the ID-based
+        // entry point, the one that re-loads in its own transaction.
+        verify(instrumentOutboxService).enqueueResultObservation(any(UUID.class));
+        verify(criticalValueNotificationService).notifyIfCriticalById(any(UUID.class), eq("NORMAL"));
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+    }
+
+    @Test
     @DisplayName("B11 — entering a result on another hospital's order reads as 404")
     void entryOnAnotherHospitalsOrderReadsAsNotFound() {
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
-        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        UUID foreignHospitalId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.getCurrentHospitalId()).thenReturn(foreignHospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(foreignHospitalId);
 
         LabResultRequestDTO request = entryRequest();
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))

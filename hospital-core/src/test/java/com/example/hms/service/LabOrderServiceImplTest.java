@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -238,25 +239,41 @@ class LabOrderServiceImplTest {
     }
 
     @Test
-    void createLabOrderAlwaysStartsAtOrdered() {
-        // The other half of B9: an order created at COMPLETED is frozen
-        // against every specimen and result event (the lifecycle refuses to
-        // move a terminal order) and lands on the doctor's review queue with
-        // no results behind it.
+    void createLabOrderKeepsAStartStatusTheCallerChose() {
+        // SuperAdminLabOrderServiceImpl validates status as a mandatory field
+        // and passes it through, and OrderSetItemDispatcher places order-set
+        // items as PENDING. Forcing every create to ORDERED discarded the
+        // first and made the second log a warning for every order it placed.
         mockCommonLookups();
         when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
             .thenReturn(LabOrderResponseDTO.builder().build());
 
-        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
-                LabOrderStatus.RESULTED, LabOrderStatus.ORDERED)) {
+        for (LabOrderStatus requested : List.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING)) {
             labOrderService.createLabOrder(baseRequestBuilder().status(requested.name()).build(), Locale.ENGLISH);
         }
 
         ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
-        verify(labOrderRepository, org.mockito.Mockito.times(4)).save(captor.capture());
-        assertThat(captor.getAllValues()).allSatisfy(
-            saved -> assertThat(saved.getStatus()).isEqualTo(LabOrderStatus.ORDERED));
+        verify(labOrderRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabOrder::getStatus)
+            .containsExactly(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+    }
+
+    @Test
+    void createLabOrderRefusesAStatusThatClaimsWorkTheLabHasNotDone() {
+        // The B9 half that still matters: an order born COMPLETED or CANCELLED
+        // is frozen against every specimen and result event, and a COMPLETED
+        // one reaches the review queue with no results behind it.
+        mockCommonLookups();
+
+        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
+                LabOrderStatus.RESULTED, LabOrderStatus.COLLECTED)) {
+            LabOrderRequestDTO request = baseRequestBuilder().status(requested.name()).build();
+            assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(requested.name());
+        }
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test

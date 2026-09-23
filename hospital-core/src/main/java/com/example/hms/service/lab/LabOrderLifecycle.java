@@ -86,6 +86,13 @@ public final class LabOrderLifecycle {
      * RESULTED so the ordering doctor sees it as having something new to
      * review and the normal release → COMPLETED path runs again.
      *
+     * <p>Only a result that is genuinely new may do this. The REST entry path
+     * has no duplicate detection (the HL7 path dedups on sender + MSH-10), so
+     * a retried {@code POST /lab-results} would otherwise un-complete a
+     * finished order — and with auto-verification off by default nothing would
+     * release the duplicate, stranding the order at RESULTED for good. The
+     * caller decides what "new" means and passes the verdict in.
+     *
      * @return true when the order was VERIFIED or COMPLETED and is now RESULTED
      */
     public static boolean reopenForResult(LabOrder order) {

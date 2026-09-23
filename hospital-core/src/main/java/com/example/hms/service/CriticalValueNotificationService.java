@@ -115,6 +115,25 @@ public class CriticalValueNotificationService {
     }
 
     /**
+     * The id-only entry point for callers that defer this to after their
+     * commit: the result is re-loaded in a transaction of its own, because the
+     * caller's persistence context is closed by then and the entity would be
+     * a detached shell with lazy associations that cannot be touched.
+     *
+     * <p>Notification is also where the SMS gateway is called, which is a
+     * blocking network hop. Running it here rather than inside the clinical
+     * write keeps a hung gateway from pinning that transaction's row locks.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void notifyIfCriticalById(UUID resultId, String severityFlag) {
+        if (resultId == null) {
+            return;
+        }
+        labResultRepository.findById(resultId)
+            .ifPresent(result -> notifyIfCritical(result, severityFlag));
+    }
+
+    /**
      * Same as {@link #notifyIfCritical(LabResult)} with the severity the caller
      * already computed from the mapper, so the entry path and this check agree
      * on one value; {@code null} means compute it here.
