@@ -84,7 +84,15 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
-        Pageable pageable = PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // Read a full page and cut it to the caller's limit AFTER the pairing,
+        // never before. Limiting first was wrong twice: the filter then removed
+        // rows from an already-short page, so asking for five results returned
+        // four; and a preliminary could sit inside the page while the final that
+        // supersedes it sat just outside — the two carry the same observation
+        // time, so the ordering ties exactly at the boundary — leaving the
+        // patient a permanent "Result pending" for a test that is released.
+        int pairingWindow = Math.max(effectiveLimit, MAX_LIMIT);
+        Pageable pageable = PageRequest.of(0, pairingWindow, Sort.by(Sort.Direction.DESC, "resultDate"));
 
         List<LabResult> results;
         if (hospitalId != null) {
@@ -97,9 +105,6 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             results = labResultRepository
                 .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
-            reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(results.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospital.getId()),
-                "Cross-hospital lab result read on the treatment relationship");
         } else {
             // Fallback: patient-only query (no hospital scope) — common for patient portal
             results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
@@ -109,21 +114,35 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                     if (b.getResultDate() == null) return -1;
                     return b.getResultDate().compareTo(a.getResultDate());
                 })
-                .limit(effectiveLimit)
+                .limit(pairingWindow)
                 .toList();
         }
 
         // An analyzer reporting preliminary then final stores two rows — it
         // must, because the message control id is the replay key and the set
-        // id keeps a timed series distinct. The patient should see the
-        // finished value alone, not a "pending" lingering beside it, so the
-        // superseded row is dropped from their view rather than from the
-        // record. Order completion applies the same rule, from the same class.
-        Set<SupersededLabResults.AnalyteKey> releasedAnalytes = redactUnreleased
-            ? SupersededLabResults.releasedAnalytes(results)
+        // id keeps a timed series distinct. The patient sees one row per
+        // observation, the latest; the row it replaced is dropped from their
+        // view rather than from the record. Order completion applies the same
+        // rule, from the same class.
+        Set<LabResult> superseded = redactUnreleased
+            ? SupersededLabResults.superseded(results)
             : Set.of();
-        return results.stream()
-            .filter(result -> !SupersededLabResults.isSupersededByRelease(result, releasedAnalytes))
+        List<LabResult> visible = results.stream()
+            .filter(result -> !superseded.contains(result))
+            .limit(effectiveLimit)
+            .toList();
+
+        if (hospitalId != null) {
+            // Accounted on what the patient is actually shown, not on the wider
+            // window the pairing needed.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                "Cross-hospital lab result read on the treatment relationship");
+        }
+
+        return visible.stream()
             .map(result -> toResponse(result, redactUnreleased))
             .toList();
     }

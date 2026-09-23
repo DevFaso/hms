@@ -225,7 +225,6 @@ class LabResultServiceImplWorkflowTest {
         LabResult labResult = buildLabResult(labResultId);
         labResult.setReleased(false);
         givenAReleasableResult(labResult);
-        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
 
         // A real synchronization, or TransactionCallbacks runs the action inline
         // and this test passes just as happily with the deferral deleted.
@@ -259,7 +258,6 @@ class LabResultServiceImplWorkflowTest {
         LabResult labResult = buildLabResult(labResultId);
         labResult.setReleased(false);
         givenAReleasableResult(labResult);
-        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
         doThrow(new IllegalStateException("outbox insert failed at commit"))
             .when(instrumentOutboxService).enqueueReleasedObservation(labResultId);
 
@@ -285,22 +283,58 @@ class LabResultServiceImplWorkflowTest {
      * A result INGESTED from an analyzer never had a first ORU from us, so a
      * release must not transmit one: it would be unsolicited, and its OBR-2
      * would carry our internal order UUID rather than the accession number the
-     * analyzer knows the order by. "We announced this order" is what the
-     * outbox records.
+     * analyzer knows the order by. The signal is the ROW's provenance — asking
+     * whether an ORU had gone out for the ORDER answered yes for an order that
+     * also held a hand-entered result, and sent exactly that message.
      */
     @Test
-    void releaseDoesNotTransmitForAnOrderWeNeverAnnounced() {
+    void releaseDoesNotTransmitForAResultIngestedFromAnAnalyzer() {
         UUID labResultId = UUID.randomUUID();
         LabResult labResult = buildLabResult(labResultId);
         labResult.setReleased(false);
+        labResult.setSourceSendingApplication("SYSMEX");
+        labResult.setSourceMessageControlId("MSG-1");
         givenAReleasableResult(labResult);
-        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(false);
 
         labResultService.releaseLabResult(labResultId, Locale.US);
 
         assertThat(labResult.isReleased()).isTrue();
         verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
         verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+    }
+
+    /** An analyzer that omits MSH-10 still leaves its sending application on the row. */
+    @Test
+    void releaseDoesNotTransmitForAnIngestedResultWithNoMessageControlId() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        labResult.setSourceSendingApplication("SYSMEX");
+        givenAReleasableResult(labResult);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+    }
+
+    /**
+     * The defect the order-granular guard had: one order, one hand-entered
+     * result and one ingested one. Releasing the ingested row must stay silent
+     * even though we did transmit for that order.
+     */
+    @Test
+    void releasingAnIngestedRowOnAnOrderWeAlsoTransmittedForStaysSilent() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult ingested = buildLabResult(labResultId);
+        ingested.setReleased(false);
+        ingested.setSourceSendingApplication("SYSMEX");
+        ingested.setSourceMessageControlId("MSG-2");
+        // A sibling result we created and announced sits on the same order.
+        givenAReleasableResult(ingested);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
     }
 
     @Test

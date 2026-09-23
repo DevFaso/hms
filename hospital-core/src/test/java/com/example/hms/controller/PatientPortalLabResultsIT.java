@@ -22,6 +22,7 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
@@ -100,6 +101,7 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
+    @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private LabResultService labResultService;
 
@@ -117,6 +119,9 @@ class PatientPortalLabResultsIT extends BaseIT {
     void seedAnUnreleasedAnalyzerResult() {
         auditEventLogRepository.deleteAllInBatch();
         labResultRepository.deleteAll();
+        // Releasing a result we created enqueues an outbound message that
+        // references the order, so it has to go before the orders do.
+        instrumentOutboxRepository.deleteAll();
         labOrderRepository.deleteAll();
         labTestDefinitionRepository.deleteAll();
         registrationRepository.deleteAll();
@@ -244,6 +249,10 @@ class PatientPortalLabResultsIT extends BaseIT {
             .notes(PRELIMINARY_NOTES)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
+            .sourceSendingApplication("SYSMEX")
+            .sourceSendingFacility("LAB_A")
+            .sourceMessageControlId("MSG-PRELIM-1")
+            .sourceObservationSetId("1")
             .build());
     }
 
@@ -341,6 +350,12 @@ class PatientPortalLabResultsIT extends BaseIT {
             .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
+            // The same observation, in the same position, from the same
+            // analyzer — a second message, so a second control id.
+            .sourceSendingApplication("SYSMEX")
+            .sourceSendingFacility("LAB_A")
+            .sourceMessageControlId("MSG-FINAL-1")
+            .sourceObservationSetId("1")
             .build();
         finalRow.setReleased(released);
         if (released) {

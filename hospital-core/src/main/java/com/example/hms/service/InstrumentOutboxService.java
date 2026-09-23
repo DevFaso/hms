@@ -23,12 +23,6 @@ public interface InstrumentOutboxService {
      */
     void enqueueResultObservation(LabResult result);
 
-    /**
-     * Whether an ORU^R01 has already gone out for this order, i.e. whether the
-     * instrument peers know it under the OBR-2 we send. Only then is a
-     * follow-up observation a continuation rather than an unsolicited message.
-     */
-    boolean hasTransmittedObservation(UUID labOrderId);
 
     /**
      * Enqueues the final form of a result that has just been released, by id

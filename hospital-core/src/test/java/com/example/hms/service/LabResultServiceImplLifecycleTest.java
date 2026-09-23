@@ -251,8 +251,11 @@ class LabResultServiceImplLifecycleTest {
         order.setStatus(LabOrderStatus.RESULTED);
         LabResult preliminary = resultOn(order, false);
         preliminary.setTestCode("K");
+        preliminary.setSourceObservationSetId("1");
+        preliminary.setResultDate(LocalDateTime.now().minusMinutes(10));
         LabResult finalResult = resultOn(order, false);
         finalResult.setTestCode("K");
+        finalResult.setSourceObservationSetId("1");
         when(labResultRepository.findById(finalResult.getId())).thenReturn(Optional.of(finalResult));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
@@ -277,8 +280,10 @@ class LabResultServiceImplLifecycleTest {
         order.setStatus(LabOrderStatus.RESULTED);
         LabResult pendingOtherAnalyte = resultOn(order, false);
         pendingOtherAnalyte.setTestCode("NA");
+        pendingOtherAnalyte.setSourceObservationSetId("2");
         LabResult finalResult = resultOn(order, false);
         finalResult.setTestCode("K");
+        finalResult.setSourceObservationSetId("1");
         when(labResultRepository.findById(finalResult.getId())).thenReturn(Optional.of(finalResult));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);

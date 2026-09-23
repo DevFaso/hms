@@ -61,13 +61,6 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public boolean hasTransmittedObservation(UUID labOrderId) {
-        return labOrderId != null
-            && outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, ORU_R01);
-    }
-
     /**
      * Runs in its own transaction, after the release has committed, so a
      * failure here cannot roll the release back — and cannot be rolled back BY
