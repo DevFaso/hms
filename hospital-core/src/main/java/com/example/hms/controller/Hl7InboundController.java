@@ -95,7 +95,7 @@ public class Hl7InboundController {
             .notes("Imported via HL7v2 ORU^R01 inbound adapter.")
             .build();
 
-        LabResultResponseDTO created = labResultService.createLabResult(dto, locale);
+        LabResultResponseDTO created = labResultService.createIngestedLabResult(dto, locale);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 

@@ -57,7 +57,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void enqueueResultObservation(java.util.UUID resultId) {
         if (resultId == null) {
             return;

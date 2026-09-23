@@ -81,6 +81,13 @@ public class CriticalValueNotificationService {
      */
     private final org.springframework.transaction.support.TransactionTemplate mismatchTx;
 
+    /**
+     * How far back the sweep looks for results whose first notification was
+     * lost. Bounds the re-test described on
+     * {@code findNeverNotifiedCandidates}.
+     */
+    private static final Duration NEVER_NOTIFIED_LOOKBACK = Duration.ofDays(2);
+
     /** Minutes an unacknowledged critical result waits before escalation. */
     @Value("${hms.lab.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
@@ -183,6 +190,23 @@ public class CriticalValueNotificationService {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
         LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
+
+        // First alert for anything whose after-commit notification was lost —
+        // a restart between the clinical commit and the callback leaves a
+        // critical result with no stamp, and the escalation feed below needs
+        // one, so without this it would stay silent for good.
+        for (LabResult neverNotified : labResultRepository.findNeverNotifiedCandidates(
+                cutoff, LocalDateTime.now().minus(NEVER_NOTIFIED_LOOKBACK))) {
+            try {
+                // notifyIfCritical re-tests criticality and stamps only when
+                // the answer is yes, so a non-critical row costs one check.
+                notifyIfCritical(neverNotified);
+            } catch (RuntimeException ex) {
+                log.warn("Recovery notification failed for lab result {}: {}",
+                    neverNotified.getId(), ex.getMessage(), ex);
+            }
+        }
+
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (LabResult result : overdue) {

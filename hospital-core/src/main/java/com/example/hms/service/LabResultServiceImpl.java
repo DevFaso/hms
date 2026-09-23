@@ -96,6 +96,21 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
+        return createLabResult(request, locale, false);
+    }
+
+    @Override
+    @Transactional
+    public LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO request, Locale locale) {
+        // The HL7 inbound adapter: the caller is an interface account posting
+        // an ORU under a lab role, with no X-Hospital-Id and possibly no
+        // assignment of its own. It is named explicitly rather than inferred
+        // from "no scope resolves", which also fitted any ordinary staff user
+        // holding two assignments who forgot the header.
+        return createLabResult(request, locale, true);
+    }
+
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale, boolean ingested) {
         // Read first, lock later. The write lock on the order is needed only
         // for the status decision further down, and taking it here held it
         // across the permission checks and — before the side effects moved
@@ -103,11 +118,13 @@ public class LabResultServiceImpl implements LabResultService {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
         // Same 404-not-403 tenancy comparison as every other single-row path
-        // here (B11), but only for a caller that HAS a hospital scope: HL7
-        // ingestion posts ORU results with no X-Hospital-Id under a service
-        // account that may hold no assignment at all, and it carries its own
-        // tenancy check (sender allowlist to hospital).
-        requireOrderInActiveHospitalIfScoped(labOrder);
+        // here (B11). Only the HL7 ingest entry point is exempt, and only
+        // because it has no hospital context to compare against: its caller
+        // is an interface account posting under a lab role, addressed by the
+        // order id in the message. Every interactive caller is checked.
+        if (!ingested) {
+            requireOrderInActiveHospital(labOrder);
+        }
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
 
@@ -136,6 +153,17 @@ public class LabResultServiceImpl implements LabResultService {
         // of the last result may be committing COMPLETED right now, and this
         // insert must see it rather than decide on a stale status.
         LabOrder lockedOrder = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
+        // The locking finder hands back the instance this persistence context
+        // loaded a few lines above, unlocked, and Hibernate does not refresh
+        // its fields — so the lock is held but the status can predate it, and
+        // deciding on it would flush RESULTED over a COMPLETED that committed
+        // meanwhile. The committed value comes from a scalar projection, which
+        // is not served from the first-level cache (same workaround, and same
+        // reason, as completeOrderIfAllReleased).
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
+        if (committedStatus != null) {
+            lockedOrder.setStatus(committedStatus);
+        }
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
@@ -251,39 +279,19 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * Is there a hospital scope to check this caller against at all?
-     *
-     * <p>Mirrors the branches {@code requireActiveHospitalId} takes before it
-     * gives up and throws: a real super-admin (unscoped by design), an
-     * explicit context from the {@code X-Hospital-Id} header, or a single
-     * active assignment. When none of them resolves — an HL7 lab-interface
-     * service account posting ORU results with no header and no assignment —
-     * the answer is no, and the caller skips the comparison rather than
-     * receiving a 400 on a path that has always worked.
-     */
-    private boolean hasResolvableHospitalScope() {
-        com.example.hms.security.context.HospitalContext ctx =
-            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
-        return ctx.isSuperAdmin()
-            || ctx.getActiveHospitalId() != null
-            || roleValidator.isSuperAdminFromAuth()
-            || roleValidator.getCurrentHospitalId() != null;
-    }
-
-    private void requireOrderInActiveHospitalIfScoped(LabOrder labOrder) {
-        if (!hasResolvableHospitalScope()) {
-            return;
-        }
-        requireOrderInActiveHospital(labOrder);
-    }
-
-    /**
      * Does this order already hold the value being posted?
      *
      * <p>A retried {@code POST /lab-results} carries the same order, value,
-     * unit and result date as the row it is retrying. The HL7 path dedups on
-     * sender + MSH-10; the REST path has nothing, so this is what keeps a
-     * retry from re-opening a finished order.
+     * unit, result date AND notes as the row it is retrying. The HL7 path
+     * dedups on sender + MSH-10; the REST path has nothing, so this is what
+     * keeps a retry from re-opening a finished order.
+     *
+     * <p>The notes are part of the comparison because an AMENDMENT can carry
+     * the same number: a laboratory correcting an interpretation, adding a
+     * comment or re-filing a value against a changed reference is saying
+     * something new about the result, and that must re-open the order like
+     * any other new result. Only a byte-for-byte repeat of what is already
+     * recorded is treated as a retry.
      */
     private boolean isRepeatOfExistingResult(LabOrder labOrder, LabResultRequestDTO request) {
         if (labOrder == null || labOrder.getId() == null) {
@@ -292,6 +300,7 @@ public class LabResultServiceImpl implements LabResultService {
         return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
             .anyMatch(existing -> sameValue(existing.getResultValue(), request.getResultValue())
                 && sameValue(existing.getResultUnit(), request.getResultUnit())
+                && sameValue(existing.getNotes(), request.getNotes())
                 && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()));
     }
 

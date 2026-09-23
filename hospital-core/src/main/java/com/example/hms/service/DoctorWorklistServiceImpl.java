@@ -94,16 +94,6 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
      * rows), those two states became transient or unused, so the tile would
      * have shown a permanent 0 from the deploy onwards.
      */
-    /**
-     * How far back the "orders needing review" tile looks.
-     *
-     * <p>Same reason as {@link #SAFETY_ALERT_WINDOW_DAYS}, and the defect the
-     * sibling count already had fixed: ORDERED has no natural end, so without
-     * a floor the tile counted every order this doctor ever placed that the
-     * laboratory never collected — a number that only grows.
-     */
-    static final int PENDING_ORDER_WINDOW_DAYS = 30;
-
     private static final java.util.Set<LabOrderStatus> AWAITING_LAB =
             java.util.EnumSet.of(
                     LabOrderStatus.ORDERED,
@@ -155,11 +145,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         long unsignedNotes = digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING);
 
         // Orders still with the laboratory, in every state the lifecycle
-        // actually produces (see AWAITING_LAB), placed recently enough to be
-        // a live tile rather than a growing archive.
-        long pendingOrderReview = labOrderRepository.countByOrderingStaff_IdAndStatusInAndOrderDatetimeAfter(
-                staffId, AWAITING_LAB,
-                LocalDateTime.now(java.time.ZoneId.systemDefault()).minusDays(PENDING_ORDER_WINDOW_DAYS));
+        // actually produces (see AWAITING_LAB), with NO recency floor: the
+        // reason the critical-labs tile has one — an old critical value is a
+        // chart fact, not a live alert — does not apply here. An order the
+        // laboratory never collected is outstanding work however long it has
+        // been waiting, and the longest-waiting ones are exactly the ones a
+        // doctor needs to see.
+        long pendingOrderReview = labOrderRepository.countByOrderingStaff_IdAndStatusIn(staffId, AWAITING_LAB);
 
         return CriticalStripDTO.builder()
                 .criticalLabsCount((int) Math.min(criticalLabs, Integer.MAX_VALUE))

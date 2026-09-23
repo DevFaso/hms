@@ -17,6 +17,32 @@ import java.util.UUID;
 public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
     /**
+     * Results that may never have been notified at all (P0 #5, #721 round 1).
+     *
+     * <p>The notification and its {@code criticalNotifiedAt} stamp happen
+     * after the clinical transaction commits, so a restart between the two
+     * loses both — and the escalation feed above requires a stamp, which means
+     * such a result would never alert anyone, ever. This feed is the
+     * self-heal: unstamped, unresolved results inside a bounded recent window,
+     * which the sweep re-tests for criticality (the test is the mapper's
+     * reference-range verdict, which no SQL predicate can express) and
+     * notifies if they are.
+     *
+     * <p>Bounded deliberately: {@code lookbackFloor} keeps the sweep from
+     * re-testing every unacknowledged result ever filed. A result that is not
+     * critical is simply re-tested on the next pass until it leaves the
+     * window, which costs one mapper call.
+     */
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT r FROM LabResult r WHERE r.acknowledged = false "
+        + "AND r.criticalReadBackAt IS NULL "
+        + "AND r.criticalNotifiedAt IS NULL "
+        + "AND r.createdAt < :cutoff AND r.createdAt > :lookbackFloor")
+    java.util.List<LabResult> findNeverNotifiedCandidates(
+        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff,
+        @org.springframework.data.repository.query.Param("lookbackFloor") java.time.LocalDateTime lookbackFloor);
+
+    /**
      * Escalation sweep feed (P0 #5): critical results whose provider was
      * notified and that are still unresolved past the cutoff. Unscoped by
      * design — the sweep is a system actor covering every hospital.
@@ -36,6 +62,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         + "AND r.criticalReadBackAt IS NULL "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
         + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
+
     java.util.List<LabResult> findCriticalAwaitingEscalation(
         @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
 

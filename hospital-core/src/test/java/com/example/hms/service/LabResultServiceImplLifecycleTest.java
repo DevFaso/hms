@@ -137,9 +137,9 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
             .thenReturn(Optional.of(order));
-        // a caller WITH a hospital scope: one active assignment, which is what
-        // hasResolvableHospitalScope() looks for before running the guard
-        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        // the committed status the locked row is decided on
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -357,7 +357,6 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
             .thenReturn(Optional.of(order));
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
@@ -506,17 +505,19 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("HL7 ingest with no hospital context is not refused — it has its own tenancy check")
-    void ingestWithoutAHospitalContextIsLetThrough() {
-        // Hl7InboundController posts ORU results with no X-Hospital-Id, under
-        // a service account that may hold no assignment at all.
-        // requireActiveHospitalId() THROWS in that case, so calling it here
-        // turned working ingestion into a 400.
+    @DisplayName("the HL7 ingest entry point skips the hospital comparison; the ordinary one never does")
+    void onlyTheIngestEntryPointIsExemptFromTheHospitalCheck() {
+        // Hl7InboundController posts ORU results with no X-Hospital-Id under
+        // an interface account, and requireActiveHospitalId() THROWS when
+        // nothing resolves — so ingestion needs the exemption. It is named
+        // (createIngestedLabResult), not inferred from "no scope resolves",
+        // which also covered any staff user with two assignments and no
+        // header.
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
             .thenReturn(Optional.of(order));
-        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
@@ -527,11 +528,82 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
-        service.createLabResult(entryRequest(), Locale.ENGLISH);
+        service.createIngestedLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        // the throwing resolver is never reached when nothing can resolve
+        // the throwing resolver is never reached on the ingest path
         verify(roleValidator, never()).requireActiveHospitalId();
+    }
+
+    @Test
+    @DisplayName("an ordinary caller whose hospital scope does not resolve is refused, not exempted")
+    void anUnscopedInteractiveCallerIsStillChecked() {
+        // The hole the "no resolvable scope" exemption left: a staff user with
+        // two active assignments and no X-Hospital-Id took the same branch the
+        // HL7 interface account did, and skipped the tenancy comparison.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new BusinessException("Hospital context required."));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("the locked status decision reads the COMMITTED status, not the instance loaded before the lock")
+    void theStatusDecisionUsesTheCommittedStatus() {
+        // findWithLockById returns the instance loaded unlocked a few lines
+        // earlier; Hibernate does not refresh it, so a COMPLETED committed by
+        // a concurrent release is invisible and RESULTED would be flushed over
+        // it. The scalar projection is what sees it.
+        order.setStatus(LabOrderStatus.RECEIVED);
+        stubEntryPath();
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.COMPLETED);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        // COMPLETED was seen, so this is a re-open rather than a blind advance
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        verify(labOrderRepository, atLeastOnce()).save(order);
+    }
+
+    @Test
+    @DisplayName("an amendment carrying the same number DOES re-open a finished order")
+    void anAmendmentIsNotTreatedAsARetry() {
+        // Same value, different notes: a laboratory correcting an
+        // interpretation is saying something new, and keying the repeat check
+        // on value/unit/date alone silently swallowed it.
+        order.setStatus(LabOrderStatus.COMPLETED);
+        LabResultRequestDTO amendment = entryRequest();
+        amendment.setNotes("Amended: re-run on a fresh draw, interpretation corrected.");
+        LabResult alreadyThere = resultOn(order, true);
+        alreadyThere.setResultValue(amendment.getResultValue());
+        alreadyThere.setResultUnit(amendment.getResultUnit());
+        alreadyThere.setResultDate(amendment.getResultDate());
+        alreadyThere.setNotes(null);
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyThere));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createLabResult(amendment, Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
     }
 
     @Test
@@ -550,7 +622,6 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
             .thenReturn(Optional.of(order));
-        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -590,10 +661,8 @@ class LabResultServiceImplLifecycleTest {
     @Test
     @DisplayName("B11 — entering a result on another hospital's order reads as 404")
     void entryOnAnotherHospitalsOrderReadsAsNotFound() {
-        UUID foreignHospitalId = UUID.randomUUID();
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(roleValidator.getCurrentHospitalId()).thenReturn(foreignHospitalId);
-        when(roleValidator.requireActiveHospitalId()).thenReturn(foreignHospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         LabResultRequestDTO request = entryRequest();
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
