@@ -21,6 +21,7 @@ import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -196,7 +197,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .actorLabel(buildActorLabel(sendingApplication, sendingFacility))
                 .resultValue(observation.resultValue().trim())
                 .resultUnit(trimToNull(observation.resultUnit(), 50))
-                .resultDate(observation.resultDate() != null ? observation.resultDate() : LocalDateTime.now())
+                .resultDate(observation.resultDate() != null ? observation.resultDate() : nowHere())
                 .abnormalFlag(toAbnormalFlag(observation.abnormalFlag()))
                 .sourceSendingApplication(senderApp)
                 .sourceSendingFacility(senderFac)
@@ -254,8 +255,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             return;
         }
         result.setReleased(true);
-        result.setReleasedAt(LocalDateTime.now());
+        result.setReleasedAt(nowHere());
         result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
+    }
+
+    /**
+     * The hospital's own clock, stated rather than assumed: an observation time
+     * and a release time are read by people standing in the laboratory.
+     */
+    private static LocalDateTime nowHere() {
+        return LocalDateTime.now(ZoneId.systemDefault());
     }
 
     private static boolean isExplicitlyNormal(String hl7Flag) {
