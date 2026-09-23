@@ -7,6 +7,7 @@ import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.model.Encounter;
@@ -74,6 +75,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /**
+     * From config/TimeConfig, as {@code PrescriptionClarificationService}
+     * takes it: the two halves of a clarification are stamped by the same
+     * clock. The signing and co-signing timestamps a few methods up still
+     * call {@code LocalDateTime.now()} — pre-existing, and changing them is
+     * not this PR's business.
+     */
+    private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
@@ -331,14 +340,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /**
      * Statuses a request body may assert. Everything else belongs to a server
      * workflow — SIGNED to the signing ceremony, TRANSMITTED/DISPENSED and the
-     * partner states to dispatch and pharmacy — and being able to assert one in
-     * a create/update body is a bypass of whichever ceremony owns it.
+     * partner states to dispatch and pharmacy, PENDING_CLARIFICATION to the
+     * pharmacist's clarification ceremony (gap G5, which records the reason
+     * and notifies the prescriber; asserting the word would skip both) — and
+     * being able to assert one in a create/update body is a bypass of
+     * whichever ceremony owns it.
      */
     private static final java.util.Set<PrescriptionStatus> CLIENT_ASSERTABLE_STATUSES =
         java.util.EnumSet.of(
             PrescriptionStatus.DRAFT,
             PrescriptionStatus.PENDING_SIGNATURE,
-            PrescriptionStatus.PENDING_CLARIFICATION,
             PrescriptionStatus.CANCELLED,
             PrescriptionStatus.DISCONTINUED);
 
@@ -364,6 +375,65 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
                     + "their own workflows.");
         }
+    }
+
+    /**
+     * The status rule on an edit, which applies only while the order is
+     * awaiting a pharmacist's clarification. Everything else keeps the
+     * client-assertable rule exactly as it was.
+     *
+     * <p>The portal echoes the current status into every PUT, so a PUT that
+     * echoes PENDING_CLARIFICATION is a no-op and is accepted — otherwise the
+     * "doctor edits first" path of gap G5 would be refused for saying what
+     * the row already says. The exemption is deliberately narrow: an echoed
+     * DISPENSED or PARTNER_ACCEPTED must still be refused, because
+     * {@code updatePrescription} rewrites the drug and the dose and those
+     * statuses mean the medication has already left the counter.
+     *
+     * <p>Withdrawal is the one status change permitted from
+     * PENDING_CLARIFICATION: a contraindicated order must be cancellable on
+     * the spot, not first resolved back into the pharmacy queue. The open
+     * clarification is closed as it goes, so nothing reads it as a question
+     * still waiting for an answer. Any other status is refused with 409 —
+     * resolve-clarification is the only way back into the queue.
+     */
+    private void rejectStatusChangeOnUpdate(Prescription existing, PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null) {
+            return;
+        }
+        if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
+            rejectClientAssertedWorkflowStatus(request);
+            return;
+        }
+        if (requested == PrescriptionStatus.PENDING_CLARIFICATION) {
+            return;
+        }
+        if (requested == PrescriptionStatus.CANCELLED || requested == PrescriptionStatus.DISCONTINUED) {
+            closeClarificationOnWithdrawal(existing);
+            return;
+        }
+        throw new ConflictException(
+            "This prescription is awaiting the prescriber's clarification; edit it and answer with "
+                + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
+                + "its status.");
+    }
+
+    /**
+     * Withdrawing an order answers the pharmacist's question in the only way
+     * that matters, so the clarification is stamped resolved by whoever
+     * withdrew it. The reason and the previous status stay on the row as the
+     * record of what was asked and from where. The PUT itself is audited by
+     * convention (WriteAuditInterceptor DATA_UPDATE).
+     */
+    private void closeClarificationOnWithdrawal(Prescription existing) {
+        if (existing.getClarificationResolvedAt() != null) {
+            return;
+        }
+        existing.setClarificationResolvedAt(LocalDateTime.now(clock));
+        existing.setClarificationResolvedByUserId(roleValidator.getCurrentUserId());
+        logger.info("Prescription {} withdrawn while awaiting clarification; the question is closed",
+            existing.getId());
     }
 
     /**
@@ -436,9 +506,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        rejectClientAssertedWorkflowStatus(request);
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
         UUID currentUserId = authService.getCurrentUserId();

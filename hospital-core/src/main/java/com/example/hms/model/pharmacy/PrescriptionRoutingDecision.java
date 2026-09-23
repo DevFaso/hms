@@ -83,6 +83,15 @@ public class PrescriptionRoutingDecision extends BaseEntity {
     @Column(name = "estimated_restock_date")
     private LocalDate estimatedRestockDate;
 
+    /**
+     * What this decision is for: the quantity still owed when it was taken
+     * (prescribed lifetime minus dispensed), not the full prescribed amount.
+     * Null when the prescription carries no quantity, or on rows written
+     * before V162 — both mean "unknown", never "nothing left".
+     */
+    @Column(name = "remaining_quantity", precision = 12, scale = 2)
+    private java.math.BigDecimal remainingQuantity;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
