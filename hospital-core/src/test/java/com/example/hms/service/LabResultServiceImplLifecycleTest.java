@@ -322,8 +322,8 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository).save(saved.capture());
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getAbnormalFlag()).isNull();
-        // the notification is deferred to after the commit and carries the id
-        verify(criticalValueNotificationService).notifyIfCriticalById(saved.getValue().getId(), "HIGH");
+        // the alert is raised in this transaction, with the severity computed once
+        verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
         // not released, so no completion pass: the only locked load is the entry one
         verify(labOrderRepository, times(1)).findWithLockById(order.getId());
     }
@@ -518,8 +518,10 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
             .thenAnswer(inv -> order.getStatus());
+        // an interface principal: no context, no assignment, no super-admin
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
-        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -533,6 +535,26 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         // the throwing resolver is never reached on the ingest path
         verify(roleValidator, never()).requireActiveHospitalId();
+        // and no per-hospital role is demanded of an account that has none —
+        // this test stubs no role, which is the real interface-account case
+        verify(roleValidator, never()).hasRole(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a lab user WITH a hospital scope is checked even on the ingest endpoint")
+    void aScopedHumanIsCheckedOnTheIngestPathToo() {
+        // /lab/hl7/adapter/inbound is open to LAB_TECHNICIAN, LAB_SCIENTIST,
+        // LAB_MANAGER and HOSPITAL_ADMIN humans. Exempting the endpoint let a
+        // multi-hospital lab user write into another tenant's order through
+        // it; the exemption is for a principal with no scope at all.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -607,55 +629,72 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("a retried post of a value the order already holds does not re-open it")
-    void aRepeatedResultDoesNotReopenAFinishedOrder() {
-        // The REST path has no dedup (HL7 dedups on sender + MSH-10), and with
-        // auto-verification off nothing would release the duplicate: the order
-        // would sit at RESULTED for good.
+    @DisplayName("a retried post of a value the order already holds records nothing and returns the row it has")
+    void aRepeatedResultIsNotRecordedTwice() {
+        // Persisting the retry and merely not re-opening moved the stranding
+        // rather than removing it: the duplicate can never be released, and
+        // completeOrderIfAllReleased needs every result released, so a later
+        // genuine amendment could never complete the order.
         order.setStatus(LabOrderStatus.COMPLETED);
         LabResultRequestDTO request = entryRequest();
         LabResult alreadyThere = resultOn(order, true);
         alreadyThere.setResultValue(request.getResultValue());
         alreadyThere.setResultUnit(request.getResultUnit());
         alreadyThere.setResultDate(request.getResultDate());
+        alreadyThere.setNotes(request.getNotes());
+        LabResultResponseDTO existingDto = LabResultResponseDTO.builder()
+            .id(alreadyThere.getId().toString()).build();
 
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
-            .thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyThere));
-        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
-        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
-            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
-        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
-            .thenReturn(List.of());
+        when(labResultMapper.toResponseDTO(alreadyThere)).thenReturn(existingDto);
 
-        service.createLabResult(request, Locale.ENGLISH);
+        LabResultResponseDTO response = service.createLabResult(request, Locale.ENGLISH);
 
+        assertThat(response).isSameAs(existingDto);
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        // nothing recorded, nothing re-opened, and none of the side effects fire
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any(UUID.class));
     }
 
     @Test
-    @DisplayName("the outbox and the critical-value notification run after the commit, by id")
-    void sideEffectsRunAfterTheCommit() {
-        // Both reach outside the database (the notification calls the SMS
-        // gateway, which blocks). Inside the transaction they held the order's
-        // write lock for as long as the gateway took to answer.
+    @DisplayName("the alert is raised in the clinical transaction; only the outbox is deferred")
+    void theAlertCommitsWithTheResultAndOnlyTheOutboxIsDeferred() {
+        // The alert row and the criticalNotifiedAt stamp are local writes, so
+        // they belong to the same transaction as the result: deferring them
+        // meant a restart between commit and callback lost the alert with
+        // nothing able to recover it. The notification service defers its own
+        // SMS, which is the only blocking hop. The outbox is work for the
+        // instrument interface and stays deferred, by id.
         stubEntryPath();
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
-        // No transaction is active in a unit test, so TransactionCallbacks
-        // runs the action inline — what matters is that it is the ID-based
-        // entry point, the one that re-loads in its own transaction.
+        verify(criticalValueNotificationService).notifyIfCritical(any(LabResult.class), eq("NORMAL"));
+        // no transaction is active in a unit test, so the callback runs inline
         verify(instrumentOutboxService).enqueueResultObservation(any(UUID.class));
-        verify(criticalValueNotificationService).notifyIfCriticalById(any(UUID.class), eq("NORMAL"));
         verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
-        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+    }
+
+    @Test
+    @DisplayName("a failed outbox enqueue does not fail the request or the alert")
+    void aFailedOutboxEnqueueIsContained() {
+        // It runs after the commit, on a result that is already on the chart:
+        // surfacing as a 500 would tell the clinician their result was lost.
+        stubEntryPath();
+        org.mockito.Mockito.doThrow(new IllegalStateException("outbox down"))
+            .when(instrumentOutboxService).enqueueResultObservation(any(UUID.class));
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        verify(criticalValueNotificationService).notifyIfCritical(any(LabResult.class), eq("NORMAL"));
     }
 
     @Test

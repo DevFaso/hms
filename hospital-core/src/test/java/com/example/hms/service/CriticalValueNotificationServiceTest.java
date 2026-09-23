@@ -154,6 +154,10 @@ class CriticalValueNotificationServiceTest {
     @Test
     void smsStaysOffWhileTransportIsMock() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        // The SMS waits for the commit and re-loads by id; the transport
+        // still says no.
+        org.mockito.Mockito.lenient().when(labResultRepository.findById(result.getId()))
+            .thenReturn(java.util.Optional.of(result));
         when(smsService.deliversRealSms()).thenReturn(false);
 
         service.notifyIfCritical(result);
@@ -164,11 +168,44 @@ class CriticalValueNotificationServiceTest {
     @Test
     void smsSentOverRealTransport() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        // The alert row and the stamp are local writes that commit with the
+        // result; only the gateway hop waits for the commit, and it re-loads
+        // by id because the caller's persistence context is gone by then.
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
         when(smsService.deliversRealSms()).thenReturn(true);
 
         service.notifyIfCritical(result);
 
         verify(smsService).send(eq("+22670707070"), contains("Potassium"));
+    }
+
+    @Test
+    void sendCriticalSmsByIdIgnoresNothingToSendTo() {
+        // The deferred half runs from an after-commit callback, where the
+        // only thing it is handed is an id: a null one (nothing was saved)
+        // and an id whose row has since gone are both no-ops, never throws —
+        // it must not turn a committed result into a failed request.
+        service.sendCriticalSmsById(null, "unused");
+
+        java.util.UUID vanished = java.util.UUID.randomUUID();
+        when(labResultRepository.findById(vanished)).thenReturn(java.util.Optional.empty());
+        service.sendCriticalSmsById(vanished, "unused");
+
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void sendCriticalSmsByIdSwallowsAGatewayFailure() {
+        // Already committed and already alerted in-app: a gateway that throws
+        // must not propagate out of the callback.
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        org.mockito.Mockito.doThrow(new IllegalStateException("gateway down"))
+            .when(smsService).send(anyString(), anyString());
+
+        service.sendCriticalSmsById(result.getId(), "Critical potassium");
+
+        verify(smsService).send(anyString(), anyString());
     }
 
     @Test

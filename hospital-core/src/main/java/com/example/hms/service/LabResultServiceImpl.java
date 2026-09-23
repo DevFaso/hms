@@ -118,11 +118,17 @@ public class LabResultServiceImpl implements LabResultService {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
         // Same 404-not-403 tenancy comparison as every other single-row path
-        // here (B11). Only the HL7 ingest entry point is exempt, and only
-        // because it has no hospital context to compare against: its caller
-        // is an interface account posting under a lab role, addressed by the
-        // order id in the message. Every interactive caller is checked.
-        if (!ingested) {
+        // here (B11). The exemption needs BOTH halves: the ingest door AND a
+        // caller with no resolvable hospital scope, i.e. an interface
+        // principal. /lab/hl7/adapter/inbound is open to LAB_TECHNICIAN,
+        // LAB_SCIENTIST, LAB_MANAGER and HOSPITAL_ADMIN humans, so exempting
+        // the ENDPOINT would let a multi-hospital lab user write into another
+        // tenant's order through it; exempting "no scope resolves" alone
+        // would let any unscoped interactive caller do the same. Resolving
+        // the hospital from the sending facility, so the ingest path is
+        // checked rather than exempted, is its own slice
+        // (fix/hl7-inbound-tenancy) — this is the narrower guard until then.
+        if (!(ingested && !hasResolvableHospitalScope())) {
             requireOrderInActiveHospital(labOrder);
         }
 
@@ -137,14 +143,37 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
-    validateLabResultAuthor(currentUserId, hospital.getId());
+    // The author check reads the caller's role AT THIS HOSPITAL, which an
+    // interface account does not have — that is the premise of the ingest
+    // path — so it would 400 every ORU. What authorises ingestion is the
+    // endpoint's own @PreAuthorize (lab roles only) plus, once
+    // fix/hl7-inbound-tenancy lands, the allowlisted sending facility.
+    if (!ingested) {
+        validateLabResultAuthor(currentUserId, hospital.getId());
+    }
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
 
-        // Whether this order already holds the same number, decided BEFORE
-        // the new row joins them.
-        boolean repeatOfExisting = isRepeatOfExistingResult(labOrder, request);
+        // A retry of a result this order already holds is not recorded twice.
+        //
+        // The alternative — persist it and exclude it from the all-released
+        // test — keeps a row nobody can release (the entry API has no release
+        // path for a duplicate) and leaves the order's history claiming two
+        // identical results where the laboratory produced one. Returning the
+        // existing row makes the endpoint idempotent, which is what a retrying
+        // client is asking for, and removes the stranding rather than moving
+        // it: no new row, no re-open, no second notification, no second
+        // outbound message. "Exact" means every field an amendment could
+        // change (see isRepeatOfExistingResult), so a correction still lands
+        // as a new result.
+        java.util.Optional<LabResult> existingIdentical = findIdenticalResult(labOrder, request);
+        if (existingIdentical.isPresent()) {
+            LabResult existing = existingIdentical.get();
+            LOG.info("Lab result for order {} repeats result {}; returning the recorded row unchanged",
+                labOrder.getId(), existing.getId());
+            return labResultMapper.toResponseDTO(existing);
+        }
 
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
@@ -168,15 +197,10 @@ public class LabResultServiceImpl implements LabResultService {
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
         // doctor's review queue, which keys on COMPLETED. A result landing on
-        // a COMPLETED order (a correction, a late analyte) re-opens it first:
-        // the doctor must see the order as having something new to review —
-        // but a RETRIED post of a result the order already holds is not new,
-        // and re-opening on it would strand a finished order at RESULTED with
-        // nothing to release.
-        if (repeatOfExisting) {
-            LOG.info("Lab result for order {} repeats a value already recorded; leaving the order at {}",
-                lockedOrder.getId(), lockedOrder.getStatus());
-        } else if (LabOrderLifecycle.reopenForResult(lockedOrder)) {
+        // a COMPLETED order (a correction, a late analyte) re-opens it: the
+        // doctor must see the order as having something new to review. A
+        // retry never reaches here — it returned above.
+        if (LabOrderLifecycle.reopenForResult(lockedOrder)) {
             labOrderRepository.save(lockedOrder);
         }
         LabOrder labOrderForStatus = lockedOrder;
@@ -191,22 +215,27 @@ public class LabResultServiceImpl implements LabResultService {
         }
         triggerReflexOrders(saved);
 
-        // Both of these reach outside the database — the outbox builds an HL7
-        // message, and the critical-value notification calls the SMS gateway,
-        // which blocks. Running them inside this transaction held the order's
-        // write lock and a pooled connection for as long as that gateway took
-        // to answer, which on a hung gateway is until the socket times out,
-        // blocking every concurrent collect / receive / release on the order.
-        // They run after the commit instead, in transactions of their own,
-        // carrying ids rather than entities: this persistence context is
-        // closed by then.
+        // P0 #5 — critical values must reach the ordering provider. This runs
+        // IN this transaction: the alert row and the criticalNotifiedAt stamp
+        // are local writes, so they commit with the result and no restart can
+        // lose them. The service defers only its SMS, which is the blocking
+        // network hop.
+        criticalValueNotificationService.notifyIfCritical(saved, severity);
+
+        // The outbound HL7 message is a different story: building and queuing
+        // it is work for the instrument interface, not for this clinician's
+        // request, and it runs after the commit in its own transaction. Its
+        // own callback, and guarded: a failure here must not surface as a 500
+        // on a result that is already on the chart, and must not take any
+        // other after-commit work down with it.
         UUID savedId = saved.getId();
         TransactionCallbacks.afterCommit(() -> {
-            instrumentOutboxService.enqueueResultObservation(savedId);
-            // P0 #5 — critical values must reach the ordering provider. The
-            // service swallows its own failures; after the commit a failure
-            // cannot roll the clinical write back in any case.
-            criticalValueNotificationService.notifyIfCriticalById(savedId, severity);
+            try {
+                instrumentOutboxService.enqueueResultObservation(savedId);
+            } catch (RuntimeException ex) {
+                LOG.warn("Outbound instrument message could not be queued for lab result {}: {}",
+                    savedId, ex.getMessage(), ex);
+            }
         });
 
         return labResultMapper.toResponseDTO(saved);
@@ -279,6 +308,24 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
+     * Can a hospital scope be resolved for this caller at all?
+     *
+     * <p>Mirrors the branches {@code requireActiveHospitalId} takes before it
+     * gives up and throws: a real super-admin, an explicit {@code
+     * X-Hospital-Id} context, or a single active assignment. False means an
+     * interface principal — nothing to compare an order against. It is one
+     * half of the ingest exemption, never the whole of it.
+     */
+    private boolean hasResolvableHospitalScope() {
+        com.example.hms.security.context.HospitalContext ctx =
+            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
+        return ctx.isSuperAdmin()
+            || ctx.getActiveHospitalId() != null
+            || roleValidator.isSuperAdminFromAuth()
+            || roleValidator.getCurrentHospitalId() != null;
+    }
+
+    /**
      * Does this order already hold the value being posted?
      *
      * <p>A retried {@code POST /lab-results} carries the same order, value,
@@ -293,15 +340,16 @@ public class LabResultServiceImpl implements LabResultService {
      * any other new result. Only a byte-for-byte repeat of what is already
      * recorded is treated as a retry.
      */
-    private boolean isRepeatOfExistingResult(LabOrder labOrder, LabResultRequestDTO request) {
+    private java.util.Optional<LabResult> findIdenticalResult(LabOrder labOrder, LabResultRequestDTO request) {
         if (labOrder == null || labOrder.getId() == null) {
-            return false;
+            return java.util.Optional.empty();
         }
         return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .anyMatch(existing -> sameValue(existing.getResultValue(), request.getResultValue())
+            .filter(existing -> sameValue(existing.getResultValue(), request.getResultValue())
                 && sameValue(existing.getResultUnit(), request.getResultUnit())
                 && sameValue(existing.getNotes(), request.getNotes())
-                && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()));
+                && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()))
+            .findFirst();
     }
 
     private boolean sameValue(String left, String right) {

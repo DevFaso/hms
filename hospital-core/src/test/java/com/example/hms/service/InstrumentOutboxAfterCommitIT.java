@@ -153,9 +153,11 @@ class InstrumentOutboxAfterCommitIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("an unknown result id is a no-op, not a failure")
+    @DisplayName("an unknown or absent result id is a no-op, not a failure")
     void unknownIdIsIgnored() {
         instrumentOutboxService.enqueueResultObservation(UUID.randomUUID());
+        // a null id means the callback fired for something that was not saved
+        instrumentOutboxService.enqueueResultObservation((UUID) null);
 
         assertThat(outboxRepository.count()).isZero();
     }

@@ -81,13 +81,6 @@ public class CriticalValueNotificationService {
      */
     private final org.springframework.transaction.support.TransactionTemplate mismatchTx;
 
-    /**
-     * How far back the sweep looks for results whose first notification was
-     * lost. Bounds the re-test described on
-     * {@code findNeverNotifiedCandidates}.
-     */
-    private static final Duration NEVER_NOTIFIED_LOOKBACK = Duration.ofDays(2);
-
     /** Minutes an unacknowledged critical result waits before escalation. */
     @Value("${hms.lab.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
@@ -122,28 +115,17 @@ public class CriticalValueNotificationService {
     }
 
     /**
-     * The id-only entry point for callers that defer this to after their
-     * commit: the result is re-loaded in a transaction of its own, because the
-     * caller's persistence context is closed by then and the entity would be
-     * a detached shell with lazy associations that cannot be touched.
-     *
-     * <p>Notification is also where the SMS gateway is called, which is a
-     * blocking network hop. Running it here rather than inside the clinical
-     * write keeps a hung gateway from pinning that transaction's row locks.
-     */
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void notifyIfCriticalById(UUID resultId, String severityFlag) {
-        if (resultId == null) {
-            return;
-        }
-        labResultRepository.findById(resultId)
-            .ifPresent(result -> notifyIfCritical(result, severityFlag));
-    }
-
-    /**
      * Same as {@link #notifyIfCritical(LabResult)} with the severity the caller
      * already computed from the mapper, so the entry path and this check agree
      * on one value; {@code null} means compute it here.
+     *
+     * <p><b>Runs in the caller's transaction, deliberately.</b> The alert row
+     * and the {@code criticalNotifiedAt} stamp are ordinary local writes —
+     * they were never the reason to defer anything — so they commit with the
+     * result itself: if the result is on the chart, the provider has been
+     * told, and there is no window in which a restart loses the alert. Only
+     * the SMS is deferred, because it is the one blocking network hop, and it
+     * is the one thing that can be retried by hand if it is lost.
      */
     public void notifyIfCritical(LabResult result, String severityFlag) {
         try {
@@ -153,19 +135,53 @@ public class CriticalValueNotificationService {
             String username = resolveOrderingUsername(result);
             if (username == null) {
                 // SYSTEM-actor results can arrive on orders whose staff has no
-                // user account; stamp anyway so the sweep doesn't spin on them.
+                // user account; stamp anyway so the escalation sweep does not
+                // spin on them.
                 log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
                     result.getId());
             } else {
                 String message = buildMessage(result, false);
                 notificationService.createNotification(message, username, NOTIFICATION_TYPE);
-                sendSmsBestEffort(result, message);
+                // The gateway call waits for the commit: a hung gateway must
+                // not hold the clinical transaction's row locks, and an SMS
+                // for a result that then rolled back would be worse than a
+                // late one.
+                UUID resultId = result.getId();
+                com.example.hms.utility.TransactionCallbacks.afterCommit(
+                    () -> sendCriticalSmsById(resultId, message));
             }
             result.setCriticalNotifiedAt(LocalDateTime.now());
             labResultRepository.save(result);
         } catch (RuntimeException ex) {
             log.warn("Critical-value notification failed for lab result {}: {}",
                 result.getId(), ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * The deferred half: the SMS, sent once the caller's transaction has
+     * committed and its persistence context is closed, which is why it takes
+     * an id and re-loads.
+     *
+     * <p>Deliberately NOT annotated {@code @Transactional}: it is invoked from
+     * {@link #notifyIfCritical} on this same bean, so an annotation here would
+     * be inert anyway (self-invocation does not go through the proxy), and
+     * nothing here needs a transaction — the one read is a repository call,
+     * which opens its own, and the gateway hop must not sit inside one.
+     *
+     * <p>Never propagates: the in-app alert and the stamp are already
+     * committed, so a gateway failure must not surface as a 500 on a result
+     * that is safely on the chart.
+     */
+    public void sendCriticalSmsById(UUID resultId, String message) {
+        if (resultId == null) {
+            return;
+        }
+        try {
+            labResultRepository.findById(resultId)
+                .ifPresent(result -> sendSmsBestEffort(result, message));
+        } catch (RuntimeException ex) {
+            log.warn("Critical-value SMS failed for lab result {}: {}", resultId, ex.getMessage(), ex);
         }
     }
 
@@ -190,23 +206,6 @@ public class CriticalValueNotificationService {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
         LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
-
-        // First alert for anything whose after-commit notification was lost —
-        // a restart between the clinical commit and the callback leaves a
-        // critical result with no stamp, and the escalation feed below needs
-        // one, so without this it would stay silent for good.
-        for (LabResult neverNotified : labResultRepository.findNeverNotifiedCandidates(
-                cutoff, LocalDateTime.now().minus(NEVER_NOTIFIED_LOOKBACK))) {
-            try {
-                // notifyIfCritical re-tests criticality and stamps only when
-                // the answer is yes, so a non-critical row costs one check.
-                notifyIfCritical(neverNotified);
-            } catch (RuntimeException ex) {
-                log.warn("Recovery notification failed for lab result {}: {}",
-                    neverNotified.getId(), ex.getMessage(), ex);
-            }
-        }
-
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (LabResult result : overdue) {
