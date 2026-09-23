@@ -68,6 +68,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private LabReflexRuleRepository labReflexRuleRepository;
     @Mock private LabTestDefinitionRepository labTestDefinitionRepository;
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     @InjectMocks
     private LabResultServiceImpl service;

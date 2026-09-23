@@ -74,6 +74,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabReflexRuleRepository labReflexRuleRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final CriticalValueNotificationService criticalValueNotificationService;
+    private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -538,10 +539,14 @@ public class LabResultServiceImpl implements LabResultService {
         requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital, roleValidator.requireActiveHospitalId());
+        // B1: signing is the laboratory attesting its own work — the same act
+        // as releasing, judged the same way. Falling back to the ordering
+        // hospital let its lab scientist attest a result another laboratory
+        // produced, which is precisely what the release path refuses.
+        UUID hospitalId = runningHospitalId(labResult.getLabOrder(), hospital);
         UUID actorId = authService.getCurrentUserId();
 
-        validateSignPermissions(actorId, hospitalId);
+        validateSignPermissions(actorId, hospitalId, roleValidator.requireActiveHospitalId());
 
         String actorDisplay = resolveActorDisplay(actorId, hospitalId);
         LocalDateTime now = LocalDateTime.now();
@@ -633,16 +638,22 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    private void validateSignPermissions(UUID userId, UUID hospitalId) {
+    private void validateSignPermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for sign operation.");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (hospitalId == null) {
+        if (runningHospitalId == null) {
             throw new BusinessException("Unable to determine hospital context for lab result sign-off.");
         }
+        // B1: the attestation belongs to the laboratory that ran the test.
+        if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
+            throw new BusinessException(
+                "Only the laboratory performing this order may sign off its results.");
+        }
+        UUID hospitalId = runningHospitalId;
 
         boolean allowed = roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isMidwife(userId, hospitalId)
@@ -819,9 +830,14 @@ public class LabResultServiceImpl implements LabResultService {
             .documentationSharedWithLab(parent.isDocumentationSharedWithLab())
             .documentationReference(parent.getDocumentationReference())
             .build();
-        labOrderRepository.save(child);
+        LabOrder saved = labOrderRepository.save(child);
+        // B1: the child inherits the parent's performing laboratory, so it
+        // lands on another hospital's worklist — silently, until now. A
+        // reflex order is still an order arriving at that laboratory, and it
+        // is announced the way createLabOrder announces one.
+        routingNotifier.notifyPerformingLab(saved);
         LOG.info("Created reflex child order {} (test: {}) triggered by result {}",
-            child.getId(), reflexDef.getTestCode(), result.getId());
+            saved.getId(), reflexDef.getTestCode(), result.getId());
     }
 
     private void validateLabResultAuthor(UUID userId, UUID hospitalId) {

@@ -22,6 +22,7 @@ import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,6 +65,7 @@ class LabResultServiceImplPerformingHospitalTest {
     @Mock private LabReflexRuleRepository labReflexRuleRepository;
     @Mock private LabTestDefinitionRepository labTestDefinitionRepository;
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -235,6 +238,60 @@ class LabResultServiceImplPerformingHospitalTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("performing this order");
         assertThat(result.isReleased()).isFalse();
+    }
+
+    @Test
+    void theOrderingHospitalDoesNotSignWhatAnotherLaboratoryRan() {
+        // Signing is the laboratory attesting its own work; the ordering
+        // hospital reads the result but does not put its name to it.
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
+
+        UUID id = result.getId();
+        assertThatThrownBy(() -> service.signLabResult(id, null, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("performing this order");
+        assertThat(result.getSignedAt()).isNull();
+    }
+
+    @Test
+    void aReflexChildRoutedToTheSameLaboratoryIsAnnouncedToIt() {
+        // The child inherits the parent's performing laboratory, so it lands
+        // on another hospital's worklist — it must arrive announced.
+        com.example.hms.model.LabReflexRule rule = new com.example.hms.model.LabReflexRule();
+        rule.setId(UUID.randomUUID());
+        rule.setCondition("{\"severityFlag\":\"NORMAL\"}");
+        LabTestDefinition reflexDef = new LabTestDefinition();
+        reflexDef.setId(UUID.randomUUID());
+        reflexDef.setTestCode("FT4");
+        rule.setReflexTestDefinition(reflexDef);
+
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(labAssignment.getId())).thenReturn(Optional.of(labAssignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenReturn(result);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(any())).thenReturn(List.of(rule));
+        when(labTestDefinitionRepository.findById(reflexDef.getId())).thenReturn(Optional.of(reflexDef));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        service.createLabResult(request(), Locale.ENGLISH);
+
+        // #716 saves the parent as it advances too; the child is the other one.
+        ArgumentCaptor<LabOrder> saved = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, atLeastOnce()).save(saved.capture());
+        LabOrder child = saved.getAllValues().stream()
+            .filter(candidate -> candidate != order)
+            .findFirst()
+            .orElseThrow();
+        assertThat(child.getPerformingHospital()).isSameAs(performing);
+        assertThat(child.getLabTestDefinition().getTestCode()).isEqualTo("FT4");
+        verify(routingNotifier).notifyPerformingLab(child);
     }
 
     @Test
