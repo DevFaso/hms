@@ -60,6 +60,18 @@ public class LabOrderServiceImpl implements LabOrderService {
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
+    /**
+     * Ceiling on a single worklist page.
+     *
+     * <p>See {@link com.example.hms.utility.PageBounds}: 500 is well clear of
+     * the portal's own request (200).
+     */
+    private static final int MAX_WORKLIST_PAGE_SIZE = 500;
+
+    /** The one description every performing-laboratory disclosure carries (Sonar S1192). */
+    private static final String PERFORMED_HERE_REACH_DESCRIPTION =
+        "Cross-hospital lab order read at the performing laboratory";
+
     private final LabOrderRepository labOrderRepository;
     private final PatientRepository patientRepository;
     private final StaffRepository staffRepository;
@@ -115,16 +127,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (hospitalId != null
                 && labOrder.getHospital() != null
                 && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
-        }
-    }
-
-    /**
-     * 404-not-403 for every read and every lab-side write: the ordering
-     * hospital and the performing hospital handle the order, nobody else.
-     */
-    private void requireHandledByActiveHospital(LabOrder labOrder) {
-        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
@@ -188,6 +190,51 @@ public class LabOrderServiceImpl implements LabOrderService {
                 || !labResultRepository.findByLabOrder_Id(base.getId()).isEmpty()) {
             throw new com.example.hms.exception.ConflictException(
                 "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
+        }
+    }
+
+    /**
+     * B1 + E8: an order this hospital's laboratory performs belongs to the
+     * hospital that ordered it, so surfacing it here is a cross-hospital
+     * disclosure — the same conclusion round 4 reached for the patient's
+     * list, applied to the routes the feature is actually used from. One
+     * RECORD_SHARE per patient per source hospital; an in-house order, or a
+     * caller with no hospital scope, records nothing.
+     */
+    private void recordPerformedHereReach(java.util.Collection<LabOrder> orders, UUID actingHospitalId) {
+        if (actingHospitalId == null || orders.isEmpty()) {
+            return;
+        }
+        // Accounting a read must never fail it. Everything here — resolving
+        // the patients, the actor, the break-glass session inside the
+        // recorder — is wrapped, so a worklist still answers when the audit
+        // side is down. The reach itself is best-effort by the same contract
+        // the notifier and the critical-value service follow.
+        try {
+            Map<UUID, Map<String, Long>> perPatient = new java.util.HashMap<>();
+            for (LabOrder order : orders) {
+                if (order.isPerformedAt(actingHospitalId)) {
+                    UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                    UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
+                    if (patientId != null && source != null) {
+                        perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                            .merge(source.toString(), 1L, Long::sum);
+                    }
+                }
+            }
+            if (perPatient.isEmpty()) {
+                return;
+            }
+            // Batched purely for cost: the page's patients are resolved once
+            // and written in one pass, where recording per patient cost a
+            // committed transaction each. The break-glass lookup is still per
+            // patient — it is per patient by nature. Nothing is suppressed:
+            // every read is recorded.
+            reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
+                roleValidator.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            log.warn("Cross-hospital disclosure accounting failed for a performing-laboratory read at {}: {}",
+                actingHospitalId, ex.getMessage());
         }
     }
 
@@ -382,7 +429,11 @@ public class LabOrderServiceImpl implements LabOrderService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         // ── Hospital scope enforcement (ordering OR performing hospital) ──
-        requireHandledByActiveHospital(labOrder);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (!labOrder.isHandledBy(hospitalId)) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        recordPerformedHereReach(List.of(labOrder), hospitalId);
 
         return labOrderMapper.toLabOrderResponseDTO(labOrder);
     }
@@ -393,7 +444,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement: scope to hospital when non-superadmin ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findHandledBy(hospitalId).stream()
+            List<LabOrder> orders = labOrderRepository.findHandledBy(hospitalId);
+            recordPerformedHereReach(orders, hospitalId);
+            return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
@@ -418,8 +471,10 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.search(hospitalId, patientId, fromDate, toDate, pageable)
-            .map(labOrderMapper::toLabOrderResponseDTO);
+        Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_WORKLIST_PAGE_SIZE));
+        recordPerformedHereReach(page.getContent(), hospitalId);
+        return page.map(labOrderMapper::toLabOrderResponseDTO);
     }
 
     @Override
@@ -486,6 +541,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             orders = orders.stream()
                 .filter(lo -> lo.isHandledBy(hospitalId))
                 .toList();
+            recordPerformedHereReach(orders, hospitalId);
         }
         return orders.stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
@@ -498,7 +554,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findByStatusHandledBy(status, hospitalId).stream()
+            List<LabOrder> orders = labOrderRepository.findByStatusHandledBy(status, hospitalId);
+            recordPerformedHereReach(orders, hospitalId);
+            return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }

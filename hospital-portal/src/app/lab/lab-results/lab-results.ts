@@ -108,6 +108,13 @@ export class LabResultsComponent implements OnInit {
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
   ]);
+  /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
+  private static readonly RELEASE_ROLES = [
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_SUPER_ADMIN',
+  ];
   /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
   readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
@@ -302,6 +309,34 @@ export class LabResultsComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /**
+   * B1: releasing is the running laboratory's attestation of its own work, so
+   * an order sent to another hospital is released there, not here. The button
+   * was offered to everyone on an unreleased row and answered 400 for the
+   * ordering hospital's lab staff — a control that refuses the person it is
+   * shown to teaches them to distrust the screen.
+   */
+  canReleaseResult(r: LabResultResponse): boolean {
+    // Both halves read live. A role snapshot taken at construction goes stale
+    // the moment the scope changes in place, and pairing it with a live scope
+    // signal brought the button back for a user the endpoint refuses.
+    if (r.released || !this.roleContext.hasAnyActiveRole(LabResultsComponent.RELEASE_ROLES)) {
+      return false;
+    }
+    const performing = r.performingHospitalId;
+    if (!performing) {
+      return true;
+    }
+    // A super-admin is unscoped by design across this product and the backend
+    // bypasses the hospital check for them outright; in global view they have
+    // no effective hospital id, so comparing one would hide the control from
+    // the single role that can always use it.
+    if (this.roleContext.isSuperAdmin()) {
+      return true;
+    }
+    return performing === this.roleContext.effectiveHospitalIdForRequest();
   }
 
   releaseResult(r: LabResultResponse): void {

@@ -286,6 +286,15 @@ class LabOrderCrossHospitalIT extends BaseIT {
             .andExpect(jsonPath("$.resultValue", is("12.4")));
         mockMvc.perform(get(API + "/lab-results/{id}", resultId).with(acting(scientistB)))
             .andExpect(status().isOk());
+
+        // B1: the result says which laboratory ran it, so the portal can tell
+        // whose release control this is. Asserted on the LIST, where the
+        // entity graph initialises labOrder and performingHospital is left a
+        // proxy — the shape a real response has, and the one a mapper guard
+        // on Hibernate.isInitialized silently answered null for.
+        mockMvc.perform(get(API + "/lab-results").with(acting(scientistB)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].performingHospitalId", is(hospitalB.getId().toString())));
         mockMvc.perform(get(API + "/lab-results/{id}", resultId).with(acting(scientistC)))
             .andExpect(status().isNotFound());
 

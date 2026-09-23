@@ -76,6 +76,15 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabReflexRuleRepository labReflexRuleRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final CriticalValueNotificationService criticalValueNotificationService;
+    private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
+    /** Ceiling on an accounted result page — see {@link com.example.hms.utility.PageBounds}. */
+    private static final int MAX_RESULT_PAGE_SIZE = 500;
+
+    /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
+    private static final String PERFORMED_HERE_REACH_DESCRIPTION =
+        "Cross-hospital lab result read at the performing laboratory";
+    private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -468,6 +477,7 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
+        recordPerformedHereReach(List.of(labResult));
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(buildTrendHistory(labResult));
@@ -500,7 +510,9 @@ public class LabResultServiceImpl implements LabResultService {
             return List.of();
         }
 
-        return labResultRepository.findHandledByHospitals(hospitalIds).stream()
+        List<LabResult> results = labResultRepository.findHandledByHospitals(hospitalIds);
+        recordPerformedHereReach(results);
+        return results.stream()
             .map(labResultMapper::toResponseDTO)
             .toList();
     }
@@ -514,8 +526,10 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        return labResultRepository.findHandledByHospital(hospitalId, pageable)
-            .map(labResultMapper::toResponseDTO);
+        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId,
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
+        recordPerformedHereReach(page.getContent());
+        return page.map(labResultMapper::toResponseDTO);
     }
 
     @Override
@@ -533,8 +547,10 @@ public class LabResultServiceImpl implements LabResultService {
         // result waits on the performing laboratory's queue alone, because
         // putting it on both invited the ordering hospital to sign off work
         // its laboratory never did.
-        return labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable)
-            .map(labResultMapper::toResponseDTO);
+        Page<LabResult> page = labResultRepository.findPendingReleaseHandledBy(hospitalId,
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
+        recordPerformedHereReach(page.getContent());
+        return page.map(labResultMapper::toResponseDTO);
     }
 
     @Override
@@ -685,11 +701,53 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
+     * B1 + E8: a result of an order this hospital's laboratory performs
+     * belongs to the hospital that ordered it, so surfacing it here is a
+     * cross-hospital disclosure — the same conclusion the order reads reached,
+     * one layer down. The reads were widened by the same predicate change and
+     * accounted nothing, which left the result routes disclosing silently
+     * while the order routes recorded.
+     *
+     * <p>Never throws: accounting a read must not fail it.
+     */
+    private void recordPerformedHereReach(java.util.Collection<LabResult> results) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId == null || results.isEmpty()) {
+            return;
+        }
+        try {
+            java.util.Map<UUID, java.util.Map<String, Long>> perPatient = new java.util.HashMap<>();
+            for (LabResult result : results) {
+                LabOrder order = result.getLabOrder();
+                if (order != null && order.isPerformedAt(actingHospitalId)) {
+                    UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                    UUID source = com.example.hms.service.recordaccess.CrossHospitalReachRecorder
+                        .hospitalIdOf(order.getHospital());
+                    if (patientId != null && source != null) {
+                        perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                            .merge(source.toString(), 1L, Long::sum);
+                    }
+                }
+            }
+            if (perPatient.isEmpty()) {
+                return;
+            }
+            reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
+                authService.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            LOG.warn("Cross-hospital disclosure accounting failed for a performing-laboratory result read at {}: {}",
+                actingHospitalId, ex.getMessage());
+        }
+    }
+
+    /**
      * B1: the hospital whose laboratory runs the order — the one it was sent
      * to, else the one that ordered it. Releasing a result is that
-     * laboratory's sign-off on its own work, so it is the running hospital's
-     * roles that authorise it and the running hospital's queue the result
-     * waits on.
+     * laboratory's attestation of its own work, so it is the running
+     * hospital's roles that authorise a release and the running hospital's
+     * queue the result waits on. Signing is not a release: it is the
+     * receiving clinician taking the result into the chart, and either
+     * hospital's clinicians may do it (see {@code signLabResult}).
      */
     private static UUID runningHospitalId(LabOrder labOrder, Hospital orderingHospital) {
         UUID running = labOrder != null ? labOrder.resolvePerformingHospitalId() : null;
@@ -835,7 +893,18 @@ public class LabResultServiceImpl implements LabResultService {
         requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital, roleValidator.requireActiveHospitalId());
+        // B1: signing and releasing are different acts, and only releasing is
+        // the laboratory's. Three things say so: this endpoint admits DOCTOR
+        // and MIDWIFE where /release admits lab roles only, its own summary
+        // calls it "a clinician signature", and signing auto-acknowledges —
+        // and acknowledging is the ORDERING CLINICIAN confirming receipt (see
+        // below). Restricting it to the running laboratory removed the
+        // attending doctor's signature from every outsourced order, which is
+        // exactly the person who has to take that result into the chart. So
+        // the actor is judged at the hospital they act at, either side of the
+        // relationship; a third hospital never reaches here (404 above).
+        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital,
+            roleValidator.requireActiveHospitalId());
         UUID actorId = authService.getCurrentUserId();
 
         validateSignPermissions(actorId, hospitalId);
@@ -849,8 +918,8 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setSignatureValue(normalizeSignatureValue(request));
         labResult.setSignatureNotes(normalizeSignatureNotes(request));
 
-        // Signing is the LAB attesting its own result; acknowledging is the
-        // ORDERING CLINICIAN confirming receipt. Conflating them is mostly a
+        // Signing and acknowledging are both the receiving clinician's, and
+        // this endpoint does the two together. Folding them is mostly a
         // harmless convenience — except on a critical result, where the
         // auto-acknowledge would silence the escalation sweep with no read-back
         // ever recorded, bypassing the guard on the acknowledge path. A signed
@@ -1116,9 +1185,14 @@ public class LabResultServiceImpl implements LabResultService {
             .documentationSharedWithLab(parent.isDocumentationSharedWithLab())
             .documentationReference(parent.getDocumentationReference())
             .build();
-        labOrderRepository.save(child);
+        LabOrder saved = labOrderRepository.save(child);
+        // B1: the child inherits the parent's performing laboratory, so it
+        // lands on another hospital's worklist — silently, until now. A
+        // reflex order is still an order arriving at that laboratory, and it
+        // is announced the way createLabOrder announces one.
+        routingNotifier.notifyPerformingLab(saved);
         LOG.info("Created reflex child order {} (test: {}) triggered by result {}",
-            child.getId(), reflexDef.getTestCode(), result.getId());
+            saved.getId(), reflexDef.getTestCode(), result.getId());
     }
 
     private void validateLabResultAuthor(UUID userId, UUID hospitalId) {
@@ -1308,14 +1382,9 @@ public class LabResultServiceImpl implements LabResultService {
         // B1: a critical value is the running laboratory's to see and chase —
         // it is the one that produced it. These two were the last lab-side
         // reads still asking only who ordered.
-        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
-
-        return results.stream()
-            .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
-            .map(labResultMapper::toResponseDTO)
-            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
-            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-            .toList();
+        List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        return surfaceCritical(candidates,
+            r -> r.getResultDate() != null && r.getResultDate().isAfter(since));
     }
 
     @Override
@@ -1323,14 +1392,43 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        return surfaceCritical(candidates, r -> !r.isAcknowledged());
+    }
 
-        return results.stream()
-            .filter(r -> !r.isAcknowledged())
-            .map(labResultMapper::toResponseDTO)
-            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
-            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+    /**
+     * The critical rows a caller actually gets, accounted for exactly.
+     *
+     * <p>Both critical-value endpoints read every result the hospital handles
+     * and then filter hard — by date or acknowledgement, then by severity —
+     * so accounting the query result rather than the answer wrote disclosures
+     * for patients who were never surfaced, inflated every surfaced count,
+     * and let a polled dashboard write without bound. The filtering happens
+     * first now and only the survivors are accounted.
+     */
+    private List<LabResultResponseDTO> surfaceCritical(List<LabResult> candidates,
+                                                       java.util.function.Predicate<LabResult> queueFilter) {
+        List<LabResult> surfaced = new ArrayList<>();
+        List<LabResultResponseDTO> answer = new ArrayList<>();
+        for (LabResult result : candidates) {
+            if (queueFilter.test(result)) {
+                LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
+                if (dto != null && isCriticalSeverity(dto)) {
+                    surfaced.add(result);
+                    answer.add(dto);
+                }
+            }
+        }
+        recordPerformedHereReach(surfaced);
+        return answer.stream()
+            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
+    }
+
+    private static boolean isCriticalSeverity(LabResultResponseDTO dto) {
+        return CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag())
+            || "HIGH".equalsIgnoreCase(dto.getSeverityFlag());
     }
 
     private LabResultComparisonDTO.ComparisonMetadata calculateComparison(LabResult current, LabResult previous, List<LabResultTrendPointDTO> trendHistory) {

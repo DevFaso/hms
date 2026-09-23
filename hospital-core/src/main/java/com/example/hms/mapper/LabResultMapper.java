@@ -37,6 +37,7 @@ public class LabResultMapper {
         null,
         null,
         null,
+        null,
         Collections.emptyList()
     );
 
@@ -61,6 +62,7 @@ public class LabResultMapper {
             .patientEmail(context.patientEmail())
             .hospitalId(context.hospitalId())
             .hospitalName(context.hospitalName())
+            .performingHospitalId(context.performingHospitalId())
             .orderedByName(context.orderedByName())
             .labTestName(context.labTestName())
             .resultValue(result.getResultValue())
@@ -135,6 +137,7 @@ public class LabResultMapper {
         PatientInfo patientInfo = resolvePatientInfo(order);
         String hospitalId = resolveHospitalId(order);
         String hospitalName = resolveHospitalName(order);
+        String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
         String labOrderCode = order.getId() != null ? order.getId().toString() : null;
         String orderedByName = resolveOrderingStaffName(order);
@@ -144,6 +147,7 @@ public class LabResultMapper {
             patientInfo.email(),
             hospitalId,
             hospitalName,
+            performingHospitalId,
             labTestMetadata.name(),
             labTestMetadata.testCode(),
             labOrderCode,
@@ -157,6 +161,7 @@ public class LabResultMapper {
             String patientEmail,
             String hospitalId,
             String hospitalName,
+            String performingHospitalId,
             String labTestName,
             String labTestCode,
             String labOrderCode,
@@ -188,6 +193,32 @@ public class LabResultMapper {
             return null;
         }
         return order.getHospital().getId() != null ? order.getHospital().getId().toString() : null;
+    }
+
+    /**
+     * B1: the laboratory the order was routed to, null when the ordering
+     * hospital ran it.
+     *
+     * <p>{@code performingHospital} is a lazy many-to-one that no entity
+     * graph fetches, so the {@code Hibernate.isInitialized} guard the sibling
+     * resolvers use was false on every real response and this field came back
+     * null everywhere — which made the release-button fix it exists for
+     * inert. But {@code proxy.getId()} is not the free read it looks like
+     * either: {@code BaseEntity} puts {@code @Id} on the FIELD with no
+     * {@code @Access(PROPERTY)} override, so Hibernate uses field access, has
+     * no identifier getter to intercept, and the call initialises the proxy —
+     * a SELECT per outsourced row on {@code GET /lab-results}, and a
+     * {@code LazyInitializationException} on any path that maps a detached
+     * result.
+     *
+     * <p>So the identifier is taken from the proxy's own initializer, which
+     * holds it by definition: no query, no initialisation, correct while
+     * detached, and no dependence on which finder loaded the row. An
+     * already-initialised association is read directly.
+     */
+    private String resolvePerformingHospitalId(LabOrder order) {
+        java.util.UUID id = com.example.hms.persistence.JpaProxyUtils.idOf(order.getPerformingHospital());
+        return id != null ? id.toString() : null;
     }
 
     private String resolveHospitalName(LabOrder order) {

@@ -170,7 +170,7 @@
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  @if (!r.released) {
+                  @if (canReleaseResult(r)) {
                     <button
                       class="action-link release-link"
                       [title]="'LAB_RESULTS.RELEASE' | translate"
