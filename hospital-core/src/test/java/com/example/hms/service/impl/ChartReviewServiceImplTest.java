@@ -329,6 +329,25 @@ class ChartReviewServiceImplTest {
     }
 
     @Test
+    void directionalResultKeepsTheFamilyOnTabAndTimelineAndCarriesTheDirection() {
+        LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL_LOW, "Sodium", "2951-2");
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
+            any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).singleElement().satisfies(e -> {
+            assertThat(e.getAbnormalFlag()).isEqualTo("ABNORMAL");
+            assertThat(e.getAbnormalDirection()).isEqualTo(com.example.hms.enums.AbnormalDirection.LOW);
+        });
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> assertThat(e.getStatus()).isEqualTo("ABNORMAL"));
+    }
+
+    @Test
     void resultTimelineEventHasNoEnglishSummary() {
         // Regression: previously the service injected "Abnormal flag: ..." as the
         // event summary, which leaked English into FR/ES UIs. Now summary stays null

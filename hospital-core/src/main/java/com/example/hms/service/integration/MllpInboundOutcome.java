@@ -12,7 +12,10 @@ package com.example.hms.service.integration;
  *   <li>{@link #REJECTED_CROSS_TENANT} → AR (application reject — the
  *       referenced entity exists but belongs to a different hospital
  *       than the allowlisted receiving hospital; treated as a hard
- *       reject so the analyzer doesn't keep retrying)</li>
+ *       reject so the analyzer doesn't keep retrying). Returned by the
+ *       ADT and merge paths only: the ORU^R01 lab path answers
+ *       {@link #REJECTED_NOT_FOUND} for a cross-tenant accession so the
+ *       sender cannot tell "exists elsewhere" from "does not exist".</li>
  *   <li>{@link #REJECTED_INVALID}      → AE (parse failure, missing
  *       mandatory fields, etc.)</li>
  * </ul>

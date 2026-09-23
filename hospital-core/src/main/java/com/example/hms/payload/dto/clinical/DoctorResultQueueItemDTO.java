@@ -23,6 +23,8 @@ public class DoctorResultQueueItemDTO {
     private String testName;
     private String resultValue;
     private String abnormalFlag;  // NORMAL, ABNORMAL, CRITICAL
+    /** LOW / HIGH when the abnormal result's side of the range is known. */
+    private com.example.hms.enums.AbnormalDirection abnormalDirection;
     private LocalDateTime resultedAt;
     private String orderingContext;
 }

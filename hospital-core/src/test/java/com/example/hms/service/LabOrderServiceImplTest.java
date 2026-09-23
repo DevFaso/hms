@@ -238,6 +238,89 @@ class LabOrderServiceImplTest {
     }
 
     @Test
+    void createLabOrderAlwaysStartsAtOrdered() {
+        // The other half of B9: an order created at COMPLETED is frozen
+        // against every specimen and result event (the lifecycle refuses to
+        // move a terminal order) and lands on the doctor's review queue with
+        // no results behind it.
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
+                LabOrderStatus.RESULTED, LabOrderStatus.ORDERED)) {
+            labOrderService.createLabOrder(baseRequestBuilder().status(requested.name()).build(), Locale.ENGLISH);
+        }
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, org.mockito.Mockito.times(4)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(
+            saved -> assertThat(saved.getStatus()).isEqualTo(LabOrderStatus.ORDERED));
+    }
+
+    @Test
+    void updateLabOrderIgnoresARequestedStatusJump() {
+        // B9: the edit form echoes `status` back, and a doctor could point it at
+        // COMPLETED. On update the current status wins; the lifecycle moves
+        // through the transition endpoint and the specimen/result events only.
+        mockCommonLookups();
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        existing.setStatus(LabOrderStatus.COLLECTED);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().id(labOrderId.toString()).build());
+
+        LabOrderRequestDTO request = baseRequestBuilder()
+            .id(labOrderId)
+            .status(LabOrderStatus.COMPLETED.name())
+            .documentationSharedWithLab(true)
+            .build();
+
+        labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
+    }
+
+    @Test
+    void updateLabOrderToleratesTheCurrentStatusEchoedBack() {
+        mockCommonLookups();
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        existing.setStatus(LabOrderStatus.RECEIVED);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().id(labOrderId.toString()).build());
+
+        LabOrderRequestDTO request = baseRequestBuilder()
+            .id(labOrderId)
+            .status("received")
+            .documentationSharedWithLab(true)
+            .build();
+
+        labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    void createLabOrderRejectsAnUnknownStatus() {
+        mockCommonLookups();
+        LabOrderRequestDTO request = baseRequestBuilder().status("FINISHED").build();
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("FINISHED");
+    }
+
+    @Test
     void createLabOrderAppliesStandingOrderMetadata() {
         mockCommonLookups();
         LocalDateTime orderDate = LocalDateTime.now();

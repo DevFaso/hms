@@ -25,7 +25,17 @@ public class PatientLabResultResponseDTO {
     private String value;
     private String unit;
     private String referenceRange;
+    /**
+     * NORMAL / ABNORMAL / ABNORMAL_LOW / ABNORMAL_HIGH / CRITICAL, or PENDING
+     * while unreleased.
+     */
     private String status;
+    /**
+     * Whether the lab has released this result. On the patient-facing path an
+     * unreleased row carries no value; on the staff path it may carry a
+     * preliminary one, and this flag is what lets a UI label it as such.
+     */
+    private boolean released;
     private LocalDateTime collectedAt;
     private LocalDateTime resultedAt;
     private String orderedBy;

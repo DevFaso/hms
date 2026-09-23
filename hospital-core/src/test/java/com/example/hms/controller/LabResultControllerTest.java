@@ -62,6 +62,30 @@ class LabResultControllerTest {
         return roles;
     }
 
+    // ── pending-release worklist ─────────────────────────────────────────────
+
+    @Test
+    void getPendingRelease_returnsTheServicePage() {
+        LabResultResponseDTO dto = LabResultResponseDTO.builder().id(UUID.randomUUID().toString()).released(false).build();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(labResultService.getPendingRelease(pageable, Locale.ENGLISH))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(dto)));
+
+        var result = controller.getPendingRelease(pageable, Locale.ENGLISH);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().getData().getContent()).containsExactly(dto);
+    }
+
+    @Test
+    void getPendingRelease_preAuthorize_isLabRolesOnly() throws Exception {
+        List<String> roles = extractRolesFromMethod("getPendingRelease",
+                org.springframework.data.domain.Pageable.class, Locale.class);
+        assertThat(roles).containsExactlyInAnyOrder(
+                "LAB_TECHNICIAN", "LAB_SCIENTIST", "LAB_MANAGER", "LAB_DIRECTOR", "QUALITY_MANAGER");
+    }
+
     // ── createLabResult endpoint ─────────────────────────────────────────────
 
     @Test
