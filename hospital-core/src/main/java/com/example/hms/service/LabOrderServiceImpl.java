@@ -221,8 +221,9 @@ public class LabOrderServiceImpl implements LabOrderService {
             }
             // Batched purely for cost: the page's patients are resolved once
             // and written in one pass, where recording per patient cost a
-            // break-glass query and a committed transaction each. Nothing is
-            // suppressed — every read is recorded.
+            // committed transaction each. The break-glass lookup is still per
+            // patient — it is per patient by nature. Nothing is suppressed:
+            // every read is recorded.
             reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
                 roleValidator.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
         } catch (RuntimeException ex) {

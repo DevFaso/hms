@@ -193,11 +193,22 @@ public class LabResultMapper {
 
     /**
      * B1: the laboratory the order was routed to, null when the ordering
-     * hospital ran it. Guarded like every other association here — a
-     * uninitialised proxy answers null rather than throwing mid-list.
+     * hospital ran it.
+     *
+     * <p>Deliberately NOT guarded on {@code Hibernate.isInitialized}, unlike
+     * the sibling resolvers here. {@code performingHospital} is a lazy
+     * many-to-one that no entity graph fetches, so that guard was false on
+     * every real response and this field came back null everywhere — which
+     * made the release-button fix it exists for inert, and showed the control
+     * to the ordering hospital's lab staff exactly as before. Reading the
+     * <em>identifier</em> off a proxy does not initialise it: Hibernate
+     * answers from the proxy without touching the database, so this costs
+     * nothing and works on the finders that carry no graph at all. Only the
+     * id is read for that reason — a name would initialise the proxy and
+     * bring back the N+1 the graphs exist to prevent.
      */
     private String resolvePerformingHospitalId(LabOrder order) {
-        if (order.getPerformingHospital() == null || !Hibernate.isInitialized(order.getPerformingHospital())) {
+        if (order.getPerformingHospital() == null) {
             return null;
         }
         return order.getPerformingHospital().getId() != null

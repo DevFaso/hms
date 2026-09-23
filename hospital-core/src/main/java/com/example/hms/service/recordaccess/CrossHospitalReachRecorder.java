@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -79,8 +78,12 @@ public class CrossHospitalReachRecorder {
     /**
      * Batched sibling of {@link #recordReach} for a list read: the disclosures
      * of a whole page resolved once and written in one pass, where a
-     * per-patient loop cost a break-glass query and a committed transaction
-     * each — a few hundred patients on a worklist meant a few hundred of both.
+     * per-patient loop cost a committed transaction each — a few hundred
+     * patients on a worklist meant a few hundred transactions. The
+     * break-glass session is still looked up per patient, because it IS per
+     * patient; what batching removes is the transaction per patient, and the
+     * repeat lookups when one patient's rows come from several source
+     * hospitals.
      *
      * <p>Efficiency only: <strong>every read is recorded</strong>, exactly as
      * {@code getLabOrdersByPatientId} records one. Nothing here suppresses a

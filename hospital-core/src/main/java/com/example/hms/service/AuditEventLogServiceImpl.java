@@ -24,7 +24,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.example.hms.enums.AuditStatus;
 
 import java.time.LocalDateTime;
@@ -42,6 +44,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private final ObjectMapper objectMapper;
     private final PatientRepository patientRepository;
     private final StaffRepository staffRepository;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -115,22 +118,32 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
 
     /**
      * One transaction for the whole batch, and therefore all-or-nothing: the
-     * rows flush together at commit, so catching per row here would only look
-     * like independence — the failure surfaces when the transaction commits,
-     * long after any per-row catch could have contained it. The batch is
-     * wrapped instead, and what is lost is said out loud.
+     * rows flush together at commit, so catching per row would only look like
+     * independence — the failure surfaces at commit, long after any per-row
+     * catch could contain it.
+     *
+     * <p>The catch has to sit OUTSIDE the transaction to be worth anything.
+     * Annotating this method {@code REQUIRES_NEW} and catching inside it
+     * caught nothing that mattered: a failed row leaves the transaction
+     * rollback-only and the proxy's commit throws after the body has
+     * returned, so "never throws" was false and held only because the single
+     * caller happened to wrap it. The template makes the boundary explicit
+     * and the guarantee real.
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs) {
         if (requestDTOs == null || requestDTOs.isEmpty()) {
             return;
         }
+        TransactionTemplate batchTransaction = new TransactionTemplate(transactionManager);
+        batchTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         try {
-            for (AuditEventRequestDTO requestDTO : requestDTOs) {
-                doLogEvent(requestDTO);
-            }
-        } catch (Exception e) {
+            batchTransaction.executeWithoutResult(status -> {
+                for (AuditEventRequestDTO requestDTO : requestDTOs) {
+                    doLogEvent(requestDTO);
+                }
+            });
+        } catch (RuntimeException e) {
             log.error("[AUDIT] Failed to persist a batch of {} audit event(s); the whole batch is lost: {}",
                     requestDTOs.size(), e.getMessage(), e);
         }

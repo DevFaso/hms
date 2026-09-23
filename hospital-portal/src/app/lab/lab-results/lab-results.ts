@@ -326,6 +326,13 @@ export class LabResultsComponent implements OnInit {
     if (!performing) {
       return true;
     }
+    // A super-admin is unscoped by design across this product and the backend
+    // bypasses the hospital check for them outright; in global view they have
+    // no effective hospital id, so comparing one would hide the control from
+    // the single role that can always use it.
+    if (this.roleContext.isSuperAdmin()) {
+      return true;
+    }
     return performing === this.roleContext.effectiveHospitalIdForRequest();
   }
 

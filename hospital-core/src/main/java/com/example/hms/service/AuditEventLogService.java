@@ -27,10 +27,14 @@ public interface AuditEventLogService {
      * <p><strong>All or nothing.</strong> The rows share a transaction and
      * Hibernate flushes them at commit, so a row that fails to persist takes
      * the whole batch with it — this method cannot offer {@link #logEvent}'s
-     * per-event independence, and does not pretend to. It never throws: a
-     * lost batch is logged. A caller that needs each event to stand or fall
-     * on its own must call {@link #logEvent} per event and pay a transaction
-     * for each.
+     * per-event independence, and does not pretend to. A caller that needs
+     * each event to stand or fall on its own must call {@link #logEvent} per
+     * event and pay a transaction for each.
+     *
+     * <p>It never throws, and it does not rely on its callers for that: the
+     * batch runs in a transaction this method opens and commits itself, so
+     * the commit failure is caught here rather than escaping to whoever was
+     * being audited.
      */
     void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs);
 

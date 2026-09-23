@@ -438,6 +438,40 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(component.canReleaseResult({ ...inHouse, released: true })).toBeFalse();
   });
 
+  it('keeps the release control for a super-admin in global view', () => {
+    // The backend bypasses the hospital check for a super-admin, and in
+    // global view there is no effective hospital id to compare — hiding the
+    // control there would withhold it from the one role that always has it.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [LabResultsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: () => true,
+            globalView: signal(true),
+            activeHospitalId: null,
+            effectiveHospitalIdForRequest: () => null,
+            hasAnyActiveRole: () => true,
+          },
+        },
+      ],
+    });
+    const component = TestBed.createComponent(LabResultsComponent).componentInstance;
+
+    expect(
+      component.canReleaseResult({
+        id: 'r1',
+        released: false,
+        performingHospitalId: 'lab-b',
+      } as LabResultResponse),
+    ).toBeTrue();
+  });
+
   it('offers the release control to no one the release endpoint refuses', () => {
     const doctor = createWithRoles(['ROLE_DOCTOR']);
     expect(doctor.canReleaseResult({ id: 'r1', released: false } as LabResultResponse)).toBeFalse();
