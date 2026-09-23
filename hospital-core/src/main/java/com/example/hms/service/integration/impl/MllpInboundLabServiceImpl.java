@@ -185,39 +185,22 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         for (int i = 0; i < observations.size(); i++) {
             ParsedObservation observation = observations.get(i);
             LabOrder order = ordersByPlacer.get(observation.placerOrderNumber().trim());
-            String testCode = trimToNull(observation.testCode(), 255);
-            LocalDateTime observedAt = observation.resultDate() != null
-                ? observation.resultDate() : LocalDateTime.now();
-
-            LabResult superseded = supersedableRow(order, testCode, senderApp, senderFac);
-            if (superseded != null && observedAt.isBefore(superseded.getResultDate())) {
-                // A retransmission of an observation we have already moved past
-                // — typically the preliminary arriving again after its final.
-                // Writing it would either revert the row or stack a second
-                // "pending" beside the value. The message is still ACCEPTED:
-                // there is nothing for the sender to correct.
-                log.info("MLLP ORU^R01 stale observation ignored — order={} testCode={} observedAt={} older than stored {}",
-                    order.getId(), testCode, observedAt, superseded.getResultDate());
-                continue;
-            }
-
-            LabResult result = superseded != null ? superseded : LabResult.builder()
+            LabResult result = LabResult.builder()
                 .labOrder(order)
                 .assignment(null)
                 .actorType(ActorType.SYSTEM)
+                .actorLabel(buildActorLabel(sendingApplication, sendingFacility))
+                .resultValue(observation.resultValue().trim())
+                .resultUnit(trimToNull(observation.resultUnit(), 50))
+                .resultDate(observation.resultDate() != null ? observation.resultDate() : LocalDateTime.now())
+                .abnormalFlag(toAbnormalFlag(observation.abnormalFlag()))
+                .sourceSendingApplication(senderApp)
+                .sourceSendingFacility(senderFac)
+                .sourceMessageControlId(controlId)
+                .sourceObservationSetId(setIds.get(i))
+                .testCode(trimToNull(observation.testCode(), 255))
+                .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();
-            result.setActorLabel(buildActorLabel(sendingApplication, sendingFacility));
-            result.setResultValue(observation.resultValue().trim());
-            result.setResultUnit(trimToNull(observation.resultUnit(), 50));
-            result.setResultDate(observedAt);
-            result.setAbnormalFlag(toAbnormalFlag(observation.abnormalFlag()));
-            result.setSourceSendingApplication(senderApp);
-            result.setSourceSendingFacility(senderFac);
-            result.setSourceMessageControlId(controlId);
-            result.setSourceObservationSetId(setIds.get(i));
-            result.setTestCode(testCode);
-            result.setReferenceRange(trimToNull(observation.referenceRange(), 255));
-
             boolean finalOrCorrected = isFinalOrCorrected(observation.resultStatus());
             autoReleaseIfExplicitlyNormal(result, observation.abnormalFlag(), finalOrCorrected);
             saved.add(labResultRepository.save(result));
@@ -273,39 +256,6 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     private static boolean isExplicitlyNormal(String hl7Flag) {
         return StringUtils.hasText(hl7Flag) && "N".equals(hl7Flag.trim().toUpperCase(Locale.ROOT));
-    }
-
-    /**
-     * The unreleased row this observation revises, or {@code null} if it is the
-     * first we have seen of this analyte on this order.
-     *
-     * <p>An analyzer reports one observation twice — preliminary, then final —
-     * as two messages with two MSH-10s, so the replay index cannot collapse
-     * them: they really are different messages. Left alone that puts two rows
-     * in front of the patient, and since a preliminary row is never
-     * auto-released (and never results the order), the second one reads as
-     * "Result pending" for ever, beside the final value.
-     *
-     * <p>Revise in place rather than flag the old row superseded: it needs no
-     * column and no migration, every read path — patient portal, release
-     * worklist, chart, order completion — is correct without knowing the
-     * concept exists, and the row keeps its identity, so an acknowledgement or
-     * a critical-value notification already hanging off it still points at the
-     * result it was raised for. What it gives up is the first value the bench
-     * reported; the inbound message itself is retained verbatim by the
-     * integration message recorder, which is where that history belongs.
-     *
-     * <p>An untyped observation ({@code testCode} absent) matches nothing:
-     * without an analyte there is no "same observation" to revise.
-     */
-    private LabResult supersedableRow(LabOrder order, String testCode, String senderApp, String senderFac) {
-        if (order == null || order.getId() == null || testCode == null
-            || senderApp == null || senderFac == null) {
-            return null;
-        }
-        List<LabResult> candidates = labResultRepository.findUnreleasedAnalyzerRows(
-            order.getId(), testCode, senderApp, senderFac);
-        return candidates.isEmpty() ? null : candidates.get(0);
     }
 
     /**

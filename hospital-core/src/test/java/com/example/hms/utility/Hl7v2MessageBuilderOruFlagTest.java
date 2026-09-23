@@ -79,6 +79,28 @@ class Hl7v2MessageBuilderOruFlagTest {
             .build());
     }
 
+    /**
+     * OBX-5 and OBX-6 were concatenated straight from the entity, so a unitless
+     * result put the four characters "null" on the wire — and since a release
+     * builds the message a second time, it went out twice.
+     */
+    @Test
+    void anAbsentUnitIsEmptyNotTheWordNull() {
+        LabResult unitless = released(LabResult.builder()
+            .labOrder(new LabOrder())
+            .resultValue("POSITIVE")
+            .resultDate(LocalDateTime.of(2026, 5, 15, 10, 12))
+            .abnormalFlag(AbnormalFlag.ABNORMAL)
+            .build());
+
+        String oru = builder.buildOruR01(unitless);
+
+        assertThat(oru).doesNotContain("null");
+        String[] fields = obxOf(oru).split("\\|", -1);
+        assertThat(fields[5]).as("OBX-5 value").isEqualTo("POSITIVE");
+        assertThat(fields[6]).as("OBX-6 units").isEmpty();
+    }
+
     private static LabResult released(LabResult result) {
         result.setReleased(true);
         return result;

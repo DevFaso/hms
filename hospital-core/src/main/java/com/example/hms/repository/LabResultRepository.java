@@ -6,8 +6,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -296,35 +294,6 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * naming.
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
-
-    /**
-     * The unreleased analyzer rows for one analyte of one order, newest first.
-     *
-     * <p>An analyzer commonly reports the same observation twice — preliminary,
-     * then final — in two messages with different MSH-10s, which the replay
-     * index cannot collapse because they really are different messages. The
-     * ingest uses this to supersede the earlier row rather than stack a second
-     * one, so the patient sees one result per analyte instead of a value beside
-     * a "pending" that never resolves. Scoped to the sending system as well as
-     * the order, so two analyzers reporting the same test code on one order
-     * never overwrite each other. A released row is never returned: once a
-     * person has released a result, a later observation is new, not a revision
-     * of the same pending row.
-     */
-    @Query("""
-        SELECT r FROM LabResult r
-        WHERE r.labOrder.id = :labOrderId
-          AND r.testCode = :testCode
-          AND r.sourceSendingApplication = :sendingApplication
-          AND r.sourceSendingFacility = :sendingFacility
-          AND r.released = false
-        ORDER BY r.resultDate DESC
-        """)
-    List<LabResult> findUnreleasedAnalyzerRows(
-        @Param("labOrderId") UUID labOrderId,
-        @Param("testCode") String testCode,
-        @Param("sendingApplication") String sendingApplication,
-        @Param("sendingFacility") String sendingFacility);
 
     /**
      * B14 — the release worklist: every row of the hospital nobody has

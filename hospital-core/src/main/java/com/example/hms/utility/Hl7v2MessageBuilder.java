@@ -106,8 +106,9 @@ public class Hl7v2MessageBuilder {
         return msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
-            "OBX|1|ST|" + testCode + "^" + testName + "||" + result.getResultValue() + "|" +
-            result.getResultUnit() + "||" + abnormalFlag + "|||" + resultStatus + "|||" + resultDate + SEG_TERM;
+            "OBX|1|ST|" + testCode + "^" + testName + "||" + blankIfNull(result.getResultValue()) + "|" +
+            blankIfNull(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
+            + "|||" + resultDate + SEG_TERM;
     }
 
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────
@@ -430,6 +431,16 @@ public class Hl7v2MessageBuilder {
         } catch (Exception e) {
             return LocalDateTime.now();
         }
+    }
+
+    /**
+     * An absent field is empty, never the four characters {@code null}.
+     * {@code resultUnit} is nullable on the entity and a concatenation would
+     * put the word into OBX-6 for any unitless result; the release ORU means
+     * every result is built twice, so it went out twice.
+     */
+    private static String blankIfNull(String value) {
+        return value == null ? "" : value;
     }
 
     /**

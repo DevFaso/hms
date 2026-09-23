@@ -19,6 +19,7 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
@@ -217,7 +218,17 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
-        if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
+        // A preliminary row the lab has since finalised and released is not
+        // work still outstanding — it is a record of what the analyzer said
+        // first. Left counted, it would hold the order open for ever, since
+        // nobody will ever release a superseded preliminary. Same rule, same
+        // class, as the patient view.
+        Set<SupersededLabResults.AnalyteKey> releasedAnalytes =
+            SupersededLabResults.releasedAnalytes(results);
+        boolean nothingOutstanding = results.stream()
+            .allMatch(result -> result.isReleased()
+                || SupersededLabResults.isSupersededByRelease(result, releasedAnalytes));
+        if (!results.isEmpty() && nothingOutstanding) {
             advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
     }
