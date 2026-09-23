@@ -75,6 +75,10 @@ public class Hl7InboundController {
         @RequestHeader("X-Assignment-Id")   UUID assignmentId,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
+        // The MSH line, for the replay guard. Parsed here because the
+        // observation records carry OBX/OBR only.
+        com.example.hms.hl7.mllp.Hl7MessageHeader header =
+            com.example.hms.hl7.mllp.Hl7MessageInspector.parseHeader(hl7Message);
         java.util.List<ParsedObservation> observations = hl7v2MessageBuilder.parseOruR01(hl7Message);
         if (observations == null || observations.isEmpty()) {
             throw new com.example.hms.exception.BusinessException(
@@ -90,6 +94,10 @@ public class Hl7InboundController {
             .assignmentId(assignmentId)
             .patientId(resolvePatientId(obs.patientId()))
             .testCode(obs.testCode())
+            // MSH-3/4/10: what makes a retransmission recognisable as one.
+            .sourceSendingApplication(header.sendingApplication())
+            .sourceSendingFacility(header.sendingFacility())
+            .sourceMessageControlId(header.messageControlId())
             .resultValue(obs.resultValue())
             .resultUnit(obs.resultUnit())
             .resultDate(obs.resultDate() != null ? obs.resultDate() : LocalDateTime.now())

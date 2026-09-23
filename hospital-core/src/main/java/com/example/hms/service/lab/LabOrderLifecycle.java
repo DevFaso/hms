@@ -41,8 +41,8 @@ public final class LabOrderLifecycle {
      * where it belongs.
      *
      * <p>CANCELLED is given the terminal rank: it is never a forward target
-     * (see {@link #advance}), and ranking it low would let a cancelled order
-     * be advanced.
+     * (see {@link #statusAfterForwardStep}), and ranking it low would let a
+     * cancelled order be advanced.
      */
     private static final java.util.Map<LabOrderStatus, Integer> RANK =
         new java.util.EnumMap<>(java.util.Map.of(

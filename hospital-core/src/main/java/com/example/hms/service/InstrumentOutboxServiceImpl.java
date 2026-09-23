@@ -99,20 +99,27 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     @Override
     @Transactional
     public void enqueueResultObservation(LabResult result) {
-        try {
-            String payload = hl7v2MessageBuilder.buildOruR01(result);
-            InstrumentOutbox message = InstrumentOutbox.builder()
-                .labOrder(result.getLabOrder())
-                .messageType(ORU_R01)
-                .payload(payload)
-                .status(InstrumentOutboxStatus.PENDING)
-                .build();
-            outboxRepository.save(message);
-            log.debug("Enqueued ORU^R01 for result {} / order {}",
-                result.getId(), result.getLabOrder().getId());
-        } catch (Exception ex) {
-            log.error("Failed to enqueue ORU^R01 for result {}: {}", result.getId(), ex.getMessage(), ex);
-        }
+        // NOT wrapped in a catch, deliberately. This runs in the caller's
+        // transaction — the outbox row and the result commit together or not
+        // at all, which is the whole point of an outbox — and a persistence
+        // failure in here marks that transaction rollback-only whatever this
+        // method does with the exception. Swallowing it therefore bought
+        // nothing and lied twice: the caller believed the write was contained
+        // and then got a 500 at commit anyway, with the cause logged as a
+        // warning instead of raised (the #553 lesson, in a new place).
+        // Failing loudly means the caller sees the real error and retries the
+        // whole clinical write, which is recoverable; a result on the chart
+        // with no ORU behind it is not.
+        String payload = hl7v2MessageBuilder.buildOruR01(result);
+        InstrumentOutbox message = InstrumentOutbox.builder()
+            .labOrder(result.getLabOrder())
+            .messageType(ORU_R01)
+            .payload(payload)
+            .status(InstrumentOutboxStatus.PENDING)
+            .build();
+        outboxRepository.save(message);
+        log.debug("Enqueued ORU^R01 for result {} / order {}",
+            result.getId(), result.getLabOrder().getId());
     }
 
     @Override

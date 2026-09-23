@@ -96,6 +96,16 @@ public class LabResultServiceImpl implements LabResultService {
     @Value("${hms.lab.auto-verification.enabled:false}")
     private boolean autoVerificationEnabled;
 
+    /**
+     * Whether an HL7 ingest caller with no resolvable hospital scope may skip
+     * the tenancy and author checks. Off by default — the condition cannot
+     * tell a service account from a person, so it waits for
+     * fix/hl7-inbound-tenancy to resolve the hospital from the sending
+     * facility.
+     */
+    @Value("${hms.lab.hl7-ingest.unscoped-exemption.enabled:false}")
+    private boolean unscopedIngestExemptionEnabled;
+
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
@@ -127,14 +137,16 @@ public class LabResultServiceImpl implements LabResultService {
         // it; exempting "no scope resolves" alone would let any unscoped
         // interactive caller do the same.
         //
-        // This is a narrow safety valve, not the fix, and it is nearly dead
-        // code by design: JwtTokenProvider.buildHospitalContext fills
-        // activeHospitalId from the primary/permitted-hospital claims even
-        // with no X-Hospital-Id, so almost every principal that can reach the
-        // endpoint DOES resolve a scope and is checked. The genuine fix is to
-        // resolve the hospital from the sending facility and check the ingest
-        // path rather than exempt it — fix/hl7-inbound-tenancy.
-        boolean interfacePrincipal = ingested && !hasResolvableHospitalScope();
+        // OFF BY DEFAULT, and that is the honest posture. "No resolvable
+        // scope" is not proof of a machine: a lab-role human with no active
+        // assignment, or with two and no X-Hospital-Id, satisfies it too, and
+        // for them this waives BOTH the tenancy comparison and the author
+        // check on an endpoint they can reach. Telling a service account from
+        // a person needs the sending facility resolved to a hospital, which
+        // is fix/hl7-inbound-tenancy; until that lands the exemption sits
+        // behind hms.lab.hl7-ingest.unscoped-exemption.enabled, and with it
+        // off an unscoped ingest caller is refused exactly as before #721.
+        boolean interfacePrincipal = ingested && unscopedIngestExemptionEnabled && !hasResolvableHospitalScope();
 
         // Same 404-not-403 tenancy comparison as every other single-row path
         // here (B11, on B1's ordering-or-performing predicate): a hospital on
@@ -193,7 +205,34 @@ public class LabResultServiceImpl implements LabResultService {
         // visible, correctable and moves the order to RESULTED, which the
         // compare-and-set below handles and a release corrects; a dropped
         // result is none of those things.
+        // Replay protection, ingest only. The interactive path stays
+        // dedup-free on purpose (its form cannot describe a result precisely
+        // enough to tell a retry from a second analyte), but the HL7 adapter
+        // is the one caller that genuinely retransmits, and a retransmission
+        // reuses MSH-3, MSH-4 and MSH-10 — the triple the MLLP path already
+        // recognises. Without this a resent message doubled the result, the
+        // critical alert, the SMS and the outbound message.
+        if (ingested) {
+            java.util.Optional<LabResult> alreadyRecorded = findRecordedMessage(request);
+            if (alreadyRecorded.isPresent()) {
+                LabResult existing = alreadyRecorded.get();
+                LOG.info("HL7 ORU control id {} from {}/{} was already recorded as result {}; not recorded twice",
+                    request.getSourceMessageControlId(), request.getSourceSendingApplication(),
+                    request.getSourceSendingFacility(), existing.getId());
+                initialiseTestDefinition(existing.getLabOrder());
+                return labResultMapper.toResponseDTO(existing);
+            }
+        }
+
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
+        if (!ingested) {
+            // Ingest-only fields: a hand-entered result is nobody's
+            // preliminary and arrived on no message, whatever a client sent.
+            result.setTestCode(null);
+            result.setSourceSendingApplication(null);
+            result.setSourceSendingFacility(null);
+            result.setSourceMessageControlId(null);
+        }
         LabResult saved = labResultRepository.save(result);
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
@@ -264,6 +303,26 @@ public class LabResultServiceImpl implements LabResultService {
      * an uninitialised one as absent — so anything mapping a result has to
      * touch it first while the session is open.
      */
+    /**
+     * The result this exact message already produced, if it has.
+     *
+     * <p>The composite is what HL7 v2 guarantees: MSH-10 is unique only
+     * within a sending system, so two analyzers may legitimately emit the
+     * same control id and those must stay separate rows. Same finder, same
+     * reasoning and same partial unique index (V98) as the MLLP path.
+     */
+    private java.util.Optional<LabResult> findRecordedMessage(LabResultRequestDTO request) {
+        if (request.getSourceMessageControlId() == null
+                || request.getSourceMessageControlId().isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return labResultRepository
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                request.getSourceSendingApplication(),
+                request.getSourceSendingFacility(),
+                request.getSourceMessageControlId());
+    }
+
     private void initialiseTestDefinition(LabOrder labOrder) {
         if (labOrder != null && labOrder.getLabTestDefinition() != null) {
             org.hibernate.Hibernate.initialize(labOrder.getLabTestDefinition());

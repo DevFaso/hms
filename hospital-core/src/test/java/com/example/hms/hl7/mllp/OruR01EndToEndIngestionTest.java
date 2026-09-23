@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -71,6 +72,7 @@ class OruR01EndToEndIngestionTest {
     @Mock private MllpInboundMergeService inboundMerge;
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private LabResultRepository labResultRepository;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
@@ -84,8 +86,17 @@ class OruR01EndToEndIngestionTest {
     void setUp() {
         // Real service, real parser; mocked I/O collaborators only.
         MllpInboundLabServiceImpl labService = new MllpInboundLabServiceImpl(
-            specimenRepository, labResultRepository, messageRecorder, auditEventLogService,
-            criticalValueNotificationService);
+            specimenRepository, labResultRepository, labOrderRepository, messageRecorder,
+            auditEventLogService, criticalValueNotificationService);
+        // The order's status is written by a compare-and-set statement, not
+        // through the entity; the stub applies it so assertions can read it.
+        lenient().when(labOrderRepository.findStatusById(any()))
+            .thenAnswer(inv -> labOrder.getStatus());
+        lenient().when(labOrderRepository.updateStatusFrom(any(), any(), any()))
+            .thenAnswer(inv -> {
+                labOrder.setStatus(inv.getArgument(2));
+                return 1;
+            });
         dispatcher = new Hl7MessageDispatcher(
             new Hl7v2MessageBuilder(), allowlist, labService, inboundAdt, inboundMerge, messageRecorder);
 

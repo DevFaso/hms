@@ -140,16 +140,24 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
-    void enqueueResultObservation_builderThrows_exceptionSwallowedNoSave() throws Exception {
+    void enqueueResultObservation_builderThrows_propagatesSoTheWriteIsNotSilentlyHalfDone() {
+        // It joins the caller's transaction, so a failure in here marks that
+        // transaction rollback-only whatever this method does with it:
+        // swallowing bought nothing and lied twice — the caller believed the
+        // enqueue was contained and got a 500 at commit anyway, with the
+        // cause logged as a warning rather than raised.
         LabResult result = LabResult.builder()
             .labOrder(labOrder)
+            .resultValue("5.2")
             .build();
+        result.setId(java.util.UUID.randomUUID());
 
         when(hl7v2MessageBuilder.buildOruR01(result))
             .thenThrow(new RuntimeException("HL7 build failed"));
 
-        assertThatCode(() -> service.enqueueResultObservation(result))
-            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.enqueueResultObservation(result))
+            .isInstanceOf(RuntimeException.class)
+            .hasMessageContaining("HL7 build failed");
 
         verify(outboxRepository, never()).save(any());
     }

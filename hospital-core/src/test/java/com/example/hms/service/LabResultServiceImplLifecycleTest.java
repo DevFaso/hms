@@ -671,7 +671,9 @@ class LabResultServiceImplLifecycleTest {
             });
         // an interface principal: a context IS bound (the filter chain always
         // binds one) but it carries no hospital, and there is no assignment
-        // and no super-admin claim behind it
+        // and no super-admin claim behind it — AND the operator has turned the
+        // exemption on, which it is not by default
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         bindHospitalContext(null);
         when(roleValidator.getCurrentHospitalId()).thenReturn(null);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
@@ -792,6 +794,82 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("with the exemption off — the default — an unscoped ingest caller is refused")
+    void anUnscopedIngestCallerIsRefusedWhileTheExemptionIsOff() {
+        // "No resolvable scope" cannot tell a service account from a lab-role
+        // person holding no assignment, and the exemption waives BOTH the
+        // tenancy comparison and the author check, so it stays off until the
+        // sending facility can be resolved to a hospital.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new BusinessException("Hospital context required."));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a retransmitted ORU is recognised by its control id and not recorded twice")
+    void aRetransmittedOruIsNotRecordedTwice() {
+        // The HL7 adapter is the one caller that genuinely retries, and a
+        // retransmission reuses MSH-3, MSH-4 and MSH-10. Without this guard it
+        // doubled the result, the critical alert, the SMS and the outbound
+        // message — the interactive path stays dedup-free, which is a
+        // different problem with a different answer.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        LabResultRequestDTO request = entryRequest();
+        request.setSourceSendingApplication("ANALYZER");
+        request.setSourceSendingFacility("LAB-A");
+        request.setSourceMessageControlId("MSG-42");
+        LabResult alreadyRecorded = resultOn(order, false);
+        LabResultResponseDTO recordedDto = LabResultResponseDTO.builder()
+            .id(alreadyRecorded.getId().toString()).build();
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultRepository
+                .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                    "ANALYZER", "LAB-A", "MSG-42"))
+            .thenReturn(Optional.of(alreadyRecorded));
+        when(labResultMapper.toResponseDTO(alreadyRecorded)).thenReturn(recordedDto);
+
+        LabResultResponseDTO response = service.createIngestedLabResult(request, Locale.ENGLISH);
+
+        assertThat(response).isSameAs(recordedDto);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("ingest-only fields a client sends on the interactive path are discarded")
+    void ingestOnlyFieldsAreDiscardedOnTheInteractivePath() {
+        // testCode is what the superseded-preliminary rule keys on: a client
+        // that could set it could mark its own result superseded and let the
+        // order complete carrying an unreleased, unreviewed value.
+        stubEntryPath();
+        LabResultRequestDTO request = entryRequest();
+        request.setTestCode("K");
+        request.setSourceMessageControlId("MSG-1");
+        request.setSourceSendingApplication("SPOOF");
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getTestCode()).isNull();
+        assertThat(saved.getValue().getSourceMessageControlId()).isNull();
+        assertThat(saved.getValue().getSourceSendingApplication()).isNull();
+    }
+
+    @Test
     @DisplayName("two results that look alike are both recorded — nothing is deduped away")
     void twoAnalytesOfOnePanelAreBothRecorded() {
         // Nothing on this path drops a result for looking like another one.
@@ -801,6 +879,7 @@ class LabResultServiceImplLifecycleTest {
         // results of one order entered in the same minute with the same value
         // collapsed, and the caller was answered 201 with somebody else's row.
         // A duplicate row is visible and correctable; a lost result is not.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         order.setStatus(LabOrderStatus.RESULTED);
         LabResultRequestDTO chloride = entryRequest();
         chloride.setTestCode("CL");

@@ -47,6 +47,9 @@ class MllpInboundLabServiceImplTest {
 
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private LabResultRepository labResultRepository;
+    // The order's status is written by a compare-and-set statement now, on
+    // every path including this one.
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
@@ -69,6 +72,20 @@ class MllpInboundLabServiceImplTest {
         specimen = new LabSpecimen();
         specimen.setId(UUID.randomUUID());
         specimen.setLabOrder(labOrder);
+
+        // The order's status is written by a compare-and-set statement, never
+        // through the entity: these stubs stand in for the row, so the
+        // assertions below still read the status off labOrder.
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(labOrder.getId()))
+            .thenAnswer(inv -> labOrder.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(labOrder.getId()),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> {
+                labOrder.setStatus(inv.getArgument(2));
+                return 1;
+            });
     }
 
     private ParsedObservation observation(String placer, String value) {

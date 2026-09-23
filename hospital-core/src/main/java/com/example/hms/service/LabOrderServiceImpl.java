@@ -329,20 +329,19 @@ public class LabOrderServiceImpl implements LabOrderService {
      * (role-checked per step) and the specimen and result events.
      */
     /**
-     * What a create may say about status.
+     * Where a new lab order may start: ORDERED or PENDING, and nothing else.
      *
-     * <p>The two START states, plus CANCELLED — which claims no laboratory
-     * work, records a decision somebody made, and is a shape existing callers
-     * do send (the super-admin endpoint validates status as non-blank and
-     * nothing more). Refused are exactly the states that assert work the
-     * laboratory has not done: COLLECTED, RECEIVED, IN_PROGRESS, RESULTED,
-     * VERIFIED and COMPLETED. That keeps the guard that matters — an order
-     * born mid-workflow with no specimen or result behind it, or born
-     * COMPLETED and landing on the review queue empty — without turning a
-     * request that used to work into a 400 for a caller claiming nothing.
+     * <p>Everything past PENDING asserts laboratory work with no specimen or
+     * result row behind it, and the two terminal states are worse than that.
+     * CANCELLED was briefly allowed here as "a decision, not a claim of work";
+     * that was wrong for the same reason COMPLETED is. An order created
+     * CANCELLED is frozen against every lifecycle event for ever — nothing
+     * re-opens a cancelled order, by design — so the row can never become
+     * anything else, and a caller that wants one records the order and then
+     * cancels it through the transition endpoint, which is role-checked.
      */
     private static final Set<LabOrderStatus> CREATABLE_STATUSES =
-        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.CANCELLED);
+        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
 
     private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
         LabOrderStatus requested;
@@ -355,18 +354,16 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (!CREATABLE_STATUSES.contains(requested)) {
                 // Intended contract, and a deliberate behaviour change for the
                 // super-admin endpoint, which validates status as mandatory
-                // but only checks it is non-blank: an order created at
-                // COLLECTED, IN_PROGRESS or RESULTED asserts laboratory work
-                // with no specimen or result row behind it, and one created at
-                // COMPLETED or CANCELLED is frozen against every lifecycle
-                // event thereafter. Refused rather than quietly coerced so the
-                // caller learns. (Checked: no seeded or scripted caller sends
-                // one — the seeder builds entities directly, and the only
-                // sample carrying IN_PROGRESS is a PUT, which is unaffected.)
+                // but only checks it is non-blank. Refused rather than quietly
+                // coerced, so the caller learns. (Checked: no seeded or
+                // scripted caller sends one — the seeder builds entities
+                // directly, and the only sample carrying IN_PROGRESS is a PUT,
+                // which is unaffected.)
                 throw new BusinessException(
                     "A new lab order cannot be created with status " + requested.name()
-                        + ", which claims laboratory work that has not happened. New orders start "
-                        + "at ORDERED or PENDING; the laboratory workflow moves them on from there.");
+                        + ". New orders start at ORDERED or PENDING; the laboratory workflow moves "
+                        + "them on from there, and a cancellation goes through the transition "
+                        + "endpoint so it is role-checked and cannot freeze a brand-new order.");
             }
             labOrder.setStatus(requested);
             return;
