@@ -352,10 +352,10 @@ class InstrumentOutboxServiceImplTest {
     @Test
     @DisplayName("hasTransmittedObservation asks whether an ORU^R01 has gone out for the order")
     void hasTransmittedObservationChecksTheOutbox() {
-        UUID labOrderId = UUID.randomUUID();
-        when(outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, "ORU^R01")).thenReturn(true);
+        UUID announcedOrderId = UUID.randomUUID();
+        when(outboxRepository.existsByLabOrder_IdAndMessageType(announcedOrderId, "ORU^R01")).thenReturn(true);
 
-        assertThat(service.hasTransmittedObservation(labOrderId)).isTrue();
+        assertThat(service.hasTransmittedObservation(announcedOrderId)).isTrue();
         assertThat(service.hasTransmittedObservation(null)).isFalse();
     }
 }
