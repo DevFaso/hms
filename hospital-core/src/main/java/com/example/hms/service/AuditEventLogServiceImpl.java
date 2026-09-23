@@ -113,6 +113,23 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         }
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs) {
+        if (requestDTOs == null || requestDTOs.isEmpty()) {
+            return;
+        }
+        for (AuditEventRequestDTO requestDTO : requestDTOs) {
+            try {
+                doLogEvent(requestDTO);
+            } catch (Exception e) {
+                log.error("[AUDIT] Failed to persist batched audit event (eventType={}, resourceId={}, userId={}): {}",
+                        requestDTO.getEventType(), requestDTO.getResourceId(), requestDTO.getUserId(),
+                        e.getMessage(), e);
+            }
+        }
+    }
+
     /**
      * Internal implementation that does the actual audit persistence.
      * Separated from {@link #logEvent} so the outer method can swallow exceptions.

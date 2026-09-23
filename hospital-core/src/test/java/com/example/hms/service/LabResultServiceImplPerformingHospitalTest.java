@@ -241,19 +241,25 @@ class LabResultServiceImplPerformingHospitalTest {
     }
 
     @Test
-    void theOrderingHospitalDoesNotSignWhatAnotherLaboratoryRan() {
-        // Signing is the laboratory attesting its own work; the ordering
-        // hospital reads the result but does not put its name to it.
+    void theOrderingHospitalsClinicianSignsTheResultIntoTheChart() {
+        // Signing is not releasing. /release admits lab roles only; this
+        // endpoint admits DOCTOR and MIDWIFE, calls itself a clinician
+        // signature and auto-acknowledges — the ordering clinician's act. For
+        // an outsourced order that clinician is the one who takes the result
+        // into the chart, so they sign it, judged by their roles at their own
+        // hospital.
+        UUID doctorId = UUID.randomUUID();
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
-        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(authService.getCurrentUserId()).thenReturn(doctorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
+        when(roleValidator.isDoctor(doctorId, ordering.getId())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
-        UUID id = result.getId();
-        assertThatThrownBy(() -> service.signLabResult(id, null, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("performing this order");
-        assertThat(result.getSignedAt()).isNull();
+        service.signLabResult(result.getId(), null, Locale.ENGLISH);
+
+        assertThat(result.getSignedByUserId()).isEqualTo(doctorId);
+        assertThat(result.isAcknowledged()).isTrue();
     }
 
     @Test

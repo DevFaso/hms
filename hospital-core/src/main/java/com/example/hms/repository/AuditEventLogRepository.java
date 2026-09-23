@@ -172,6 +172,25 @@ public interface AuditEventLogRepository
                                                   Pageable pageable);
 
     /**
+     * E8 accounting, recording side: which (patient, source hospital)
+     * disclosures this actor already has since {@code since}.
+     *
+     * <p>Returns {@code [patientId, details]} rows — the source hospital lives
+     * in the details JSON, so the caller reads it from there. One query for a
+     * whole worklist, which is what keeps a refresh from rewriting a
+     * disclosure per patient it already recorded.
+     */
+    @Query("SELECT a.patientId, a.details FROM AuditEventLog a "
+           + "WHERE a.eventType = :eventType "
+           + "AND a.user.id = :userId "
+           + "AND a.patientId IN :patientIds "
+           + "AND a.eventTimestamp >= :since")
+    List<Object[]> findDisclosureDetailsForActorSince(@Param("eventType") AuditEventType eventType,
+                                                      @Param("userId") UUID userId,
+                                                      @Param("patientIds") Collection<UUID> patientIds,
+                                                      @Param("since") LocalDateTime since);
+
+    /**
      * Per-category counts for one patient over the same window, so the
      * report can headline "2 emergency accesses, 1 release to another
      * hospital" without paging the whole history client-side. Grouped on

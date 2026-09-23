@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
 import java.util.Optional;
@@ -37,6 +38,9 @@ class CrossHospitalReachRecorderTest {
 
     @Mock
     private BreakGlassGate breakGlassGate;
+
+    @Mock
+    private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
 
     @InjectMocks
     private CrossHospitalReachRecorder recorder;
@@ -101,6 +105,88 @@ class CrossHospitalReachRecorderTest {
             .contains("actingHospitalId=" + acting)
             .contains("sourceHospitalId=" + source)
             .contains("rowsSurfaced=3");
+    }
+
+    @Test
+    @DisplayName("a batched reach writes every patient's disclosure in ONE audit transaction")
+    void batchedReachWritesOneBatch() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID sourceA = UUID.randomUUID();
+        UUID sourceB = UUID.randomUUID();
+        UUID patient1 = UUID.randomUUID();
+        UUID patient2 = UUID.randomUUID();
+        when(auditEventLogRepository.findDisclosureDetailsForActorSince(any(), any(), any(), any()))
+            .thenReturn(List.of());
+
+        recorder.recordBatchedReach(Map.of(
+            patient1, Map.of(sourceA.toString(), 2L),
+            patient2, Map.of(sourceB.toString(), 1L)), acting, actor, null, "Batched read");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(captor.capture());
+        verify(auditEventLogService, never()).logEvent(any());
+        assertThat(captor.getValue()).hasSize(2)
+            .extracting(AuditEventRequestDTO::getPatientId)
+            .containsExactlyInAnyOrder(patient1, patient2);
+    }
+
+    @Test
+    @DisplayName("a disclosure this actor already recorded today for that patient and source is not written again")
+    void batchedReachSkipsTodaysDuplicates() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID seen = UUID.randomUUID();
+        UUID fresh = UUID.randomUUID();
+        // A recorded row keeps its source hospital in the details JSON.
+        when(auditEventLogRepository.findDisclosureDetailsForActorSince(any(), any(), any(), any()))
+            .thenReturn(List.<Object[]>of(new Object[]{seen, "{\"sourceHospitalId\":\"" + source + "\"}"}));
+
+        recorder.recordBatchedReach(Map.of(
+            seen, Map.of(source.toString(), 5L),
+            fresh, Map.of(source.toString(), 1L)), acting, actor, null, "Batched read");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(captor.capture());
+        assertThat(captor.getValue()).singleElement()
+            .extracting(AuditEventRequestDTO::getPatientId).isEqualTo(fresh);
+        // A patient with nothing new to record costs no break-glass lookup.
+        verify(breakGlassGate, never()).liveSessionId(actor, seen, acting);
+    }
+
+    @Test
+    @DisplayName("a refresh that discloses nothing new writes nothing at all")
+    void batchedReachAllDuplicatesWritesNothing() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        when(auditEventLogRepository.findDisclosureDetailsForActorSince(any(), any(), any(), any()))
+            .thenReturn(List.<Object[]>of(new Object[]{patient, "{\"sourceHospitalId\":\"" + source + "\"}"}));
+
+        recorder.recordBatchedReach(Map.of(patient, Map.of(source.toString(), 9L)),
+            acting, actor, null, "Batched read");
+
+        verify(auditEventLogService, never()).logEvents(any());
+        verifyNoInteractions(breakGlassGate);
+    }
+
+    @Test
+    @DisplayName("a dedupe query that fails records everything rather than nothing")
+    void batchedReachRecordsWhenTheDedupeQueryFails() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        when(auditEventLogRepository.findDisclosureDetailsForActorSince(any(), any(), any(), any()))
+            .thenThrow(new IllegalStateException("db down"));
+
+        recorder.recordBatchedReach(Map.of(patient, Map.of(UUID.randomUUID().toString(), 1L)),
+            acting, actor, null, "Batched read");
+
+        verify(auditEventLogService).logEvents(any());
     }
 
     @Test

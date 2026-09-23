@@ -470,9 +470,10 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThat(service.getAllLabOrders(Locale.ENGLISH)).containsExactly(mapped);
 
         // The worklist is where this feature is used from, so it is where the
-        // disclosure has to be accounted.
-        verify(reachRecorder).recordReach(eq(patient.getId()), eq(performing.getId()), eq(requester),
-            any(), eq(java.util.Map.of(ordering.getId().toString(), 1L)), any());
+        // disclosure has to be accounted — once for the page, not per patient.
+        verify(reachRecorder).recordBatchedReach(
+            eq(java.util.Map.of(patient.getId(), java.util.Map.of(ordering.getId().toString(), 1L))),
+            eq(performing.getId()), eq(requester), any(), any());
     }
 
     @Test
@@ -485,8 +486,9 @@ class LabOrderServiceImplPerformingHospitalTest {
 
         service.getLabOrderById(order.getId(), Locale.ENGLISH);
 
-        verify(reachRecorder).recordReach(eq(patient.getId()), eq(performing.getId()), eq(requester),
-            any(), eq(java.util.Map.of(ordering.getId().toString(), 1L)), any());
+        verify(reachRecorder).recordBatchedReach(
+            eq(java.util.Map.of(patient.getId(), java.util.Map.of(ordering.getId().toString(), 1L))),
+            eq(performing.getId()), eq(requester), any(), any());
     }
 
     @Test

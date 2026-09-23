@@ -18,6 +18,15 @@ public interface AuditEventLogService {
 
     AuditEventLogResponseDTO logEvent(AuditEventRequestDTO requestDTO);
 
+    /**
+     * Record several events in ONE transaction, with the same per-event
+     * resolution {@link #logEvent} does. A list read that discloses across
+     * hospitals writes a row per patient; one committed transaction each
+     * turned a worklist into hundreds. Individual failures are swallowed
+     * exactly as they are for a single event.
+     */
+    void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs);
+
     Page<AuditEventLogResponseDTO> getAuditLogsByEventTypeAndStatus(AuditEventType parsedType, AuditStatus parsedStatus, Pageable pageable);
 
     Page<AuditEventLogResponseDTO> getAuditLogsByDateRange(LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable);

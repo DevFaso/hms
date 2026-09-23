@@ -539,14 +539,21 @@ public class LabResultServiceImpl implements LabResultService {
         requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        // B1: signing is the laboratory attesting its own work — the same act
-        // as releasing, judged the same way. Falling back to the ordering
-        // hospital let its lab scientist attest a result another laboratory
-        // produced, which is precisely what the release path refuses.
-        UUID hospitalId = runningHospitalId(labResult.getLabOrder(), hospital);
+        // B1: signing and releasing are different acts, and only releasing is
+        // the laboratory's. Three things say so: this endpoint admits DOCTOR
+        // and MIDWIFE where /release admits lab roles only, its own summary
+        // calls it "a clinician signature", and signing auto-acknowledges —
+        // and acknowledging is the ORDERING CLINICIAN confirming receipt (see
+        // below). Restricting it to the running laboratory removed the
+        // attending doctor's signature from every outsourced order, which is
+        // exactly the person who has to take that result into the chart. So
+        // the actor is judged at the hospital they act at, either side of the
+        // relationship; a third hospital never reaches here (404 above).
+        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital,
+            roleValidator.requireActiveHospitalId());
         UUID actorId = authService.getCurrentUserId();
 
-        validateSignPermissions(actorId, hospitalId, roleValidator.requireActiveHospitalId());
+        validateSignPermissions(actorId, hospitalId);
 
         String actorDisplay = resolveActorDisplay(actorId, hospitalId);
         LocalDateTime now = LocalDateTime.now();
@@ -638,22 +645,16 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    private void validateSignPermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
+    private void validateSignPermissions(UUID userId, UUID hospitalId) {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for sign operation.");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (runningHospitalId == null) {
+        if (hospitalId == null) {
             throw new BusinessException("Unable to determine hospital context for lab result sign-off.");
         }
-        // B1: the attestation belongs to the laboratory that ran the test.
-        if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
-            throw new BusinessException(
-                "Only the laboratory performing this order may sign off its results.");
-        }
-        UUID hospitalId = runningHospitalId;
 
         boolean allowed = roleValidator.isDoctor(userId, hospitalId)
             || roleValidator.isMidwife(userId, hospitalId)
