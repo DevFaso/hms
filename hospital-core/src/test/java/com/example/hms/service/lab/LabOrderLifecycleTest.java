@@ -1,7 +1,6 @@
 package com.example.hms.service.lab;
 
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.LabOrder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -12,12 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DisplayName("LabOrderLifecycle")
 class LabOrderLifecycleTest {
-
-    private static LabOrder orderAt(LabOrderStatus status) {
-        LabOrder order = new LabOrder();
-        order.setStatus(status);
-        return order;
-    }
 
     @Test
     @DisplayName("a forward step is the status to write; skipped states are not a blocker")

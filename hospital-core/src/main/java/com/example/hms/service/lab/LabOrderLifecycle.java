@@ -1,7 +1,6 @@
 package com.example.hms.service.lab;
 
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.LabOrder;
 
 import java.util.EnumSet;
 import java.util.Set;

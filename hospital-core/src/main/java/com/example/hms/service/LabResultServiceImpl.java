@@ -21,8 +21,6 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.utility.RoleValidator;
-// Used by the released-ORU enqueue that #720 added on develop; #721 removed
-// its own after-commit work, but this one is still here.
 import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,7 +107,7 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
-        return createLabResult(request, locale, false);
+        return createLabResult(request, false);
     }
 
     @Override
@@ -120,10 +118,10 @@ public class LabResultServiceImpl implements LabResultService {
         // assignment of its own. It is named explicitly rather than inferred
         // from "no scope resolves", which also fitted any ordinary staff user
         // holding two assignments who forgot the header.
-        return createLabResult(request, locale, true);
+        return createLabResult(request, true);
     }
 
-    private LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale, boolean ingested) {
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request, boolean ingested) {
         // Read first, lock later. The write lock on the order is needed only
         // for the status decision further down, and taking it here held it
         // across the permission checks and — before the side effects moved
@@ -216,9 +214,13 @@ public class LabResultServiceImpl implements LabResultService {
             java.util.Optional<LabResult> alreadyRecorded = findRecordedMessage(request);
             if (alreadyRecorded.isPresent()) {
                 LabResult existing = alreadyRecorded.get();
-                LOG.info("HL7 ORU control id {} from {}/{} was already recorded as result {}; not recorded twice",
-                    request.getSourceMessageControlId(), request.getSourceSendingApplication(),
-                    request.getSourceSendingFacility(), existing.getId());
+                // Ids and nothing else. The control id, the sending
+                // application and the sending facility all come off the
+                // message, so a caller could put newlines and control
+                // characters in them and forge log entries; the result id
+                // identifies the row just as well and cannot be authored.
+                LOG.info("An HL7 ORU that was already recorded as result {} arrived again; not recorded twice",
+                    existing.getId());
                 initialiseTestDefinition(existing.getLabOrder());
                 return labResultMapper.toResponseDTO(existing);
             }
@@ -298,12 +300,6 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * The mapper reads the order's test definition for the test name and code,
-     * the reference ranges and the severity it derives from them, and treats
-     * an uninitialised one as absent — so anything mapping a result has to
-     * touch it first while the session is open.
-     */
-    /**
      * The result this exact message already produced, if it has.
      *
      * <p>The composite is what HL7 v2 guarantees: MSH-10 is unique only
@@ -323,6 +319,12 @@ public class LabResultServiceImpl implements LabResultService {
                 request.getSourceMessageControlId());
     }
 
+    /**
+     * The mapper reads the order's test definition for the test name and code,
+     * the reference ranges and the severity it derives from them, and treats
+     * an uninitialised one as absent — so anything mapping a result has to
+     * touch it first while the session is open.
+     */
     private void initialiseTestDefinition(LabOrder labOrder) {
         if (labOrder != null && labOrder.getLabTestDefinition() != null) {
             org.hibernate.Hibernate.initialize(labOrder.getLabTestDefinition());

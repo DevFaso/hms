@@ -305,6 +305,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
+     * Where a new lab order may start: ORDERED or PENDING, and nothing else.
+     *
+     * <p>Everything past PENDING asserts laboratory work with no specimen or
+     * result row behind it, and the two terminal states are worse than that.
+     * CANCELLED was briefly allowed here as "a decision, not a claim of work";
+     * that was wrong for the same reason COMPLETED is. An order created
+     * CANCELLED is frozen against every lifecycle event for ever — nothing
+     * re-opens a cancelled order, by design — so the row can never become
+     * anything else, and a caller that wants one records the order and then
+     * cancels it through the transition endpoint, which is role-checked.
+     */
+    private static final Set<LabOrderStatus> CREATABLE_STATUSES =
+        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+
+    /**
      * Where a new order may start, and what an update may say about status.
      *
      * <p>A new order starts at a START state. Two callers legitimately choose
@@ -328,20 +343,6 @@ public class LabOrderServiceImpl implements LabOrderService {
      * the lifecycle moves only through {@link #transitionLabOrderStatus}
      * (role-checked per step) and the specimen and result events.
      */
-    /**
-     * Where a new lab order may start: ORDERED or PENDING, and nothing else.
-     *
-     * <p>Everything past PENDING asserts laboratory work with no specimen or
-     * result row behind it, and the two terminal states are worse than that.
-     * CANCELLED was briefly allowed here as "a decision, not a claim of work";
-     * that was wrong for the same reason COMPLETED is. An order created
-     * CANCELLED is frozen against every lifecycle event for ever — nothing
-     * re-opens a cancelled order, by design — so the row can never become
-     * anything else, and a caller that wants one records the order and then
-     * cancels it through the transition endpoint, which is role-checked.
-     */
-    private static final Set<LabOrderStatus> CREATABLE_STATUSES =
-        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
 
     private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
         LabOrderStatus requested;

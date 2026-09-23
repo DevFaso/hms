@@ -192,7 +192,7 @@ class CriticalValueNotificationServiceTest {
         // Already committed and already alerted in-app: a gateway that throws
         // must not propagate out of the callback.
         when(smsService.deliversRealSms()).thenReturn(true);
-        org.mockito.Mockito.doThrow(new IllegalStateException("gateway down"))
+        doThrow(new IllegalStateException("gateway down"))
             .when(smsService).send(anyString(), anyString());
 
         service.sendCriticalSms(result.getId(), "+22670707070", "Critical potassium");

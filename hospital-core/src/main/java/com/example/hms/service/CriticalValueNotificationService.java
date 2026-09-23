@@ -154,7 +154,7 @@ public class CriticalValueNotificationService {
                 com.example.hms.utility.TransactionCallbacks.afterCommit(
                     () -> sendCriticalSms(resultId, phoneNumber, message));
             }
-            result.setCriticalNotifiedAt(LocalDateTime.now());
+            result.setCriticalNotifiedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
             labResultRepository.save(result);
         } catch (RuntimeException ex) {
             log.warn("Critical-value notification failed for lab result {}: {}",
@@ -223,7 +223,7 @@ public class CriticalValueNotificationService {
     public Integer escalateOverdue() {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
-        LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime cutoff = LocalDateTime.now(java.time.ZoneId.systemDefault()).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (LabResult result : overdue) {
@@ -253,7 +253,7 @@ public class CriticalValueNotificationService {
         // Stamp even with no resolvable recipient, so the interval still
         // advances and the sweep does not reconsider the row every pass.
         result.setCriticalEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
-        result.setCriticalEscalatedAt(LocalDateTime.now());
+        result.setCriticalEscalatedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         labResultRepository.save(result);
 
         if (round >= TIER_TWO_ROUND) {
@@ -355,9 +355,9 @@ public class CriticalValueNotificationService {
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.
-        result.setCriticalReadBackAt(LocalDateTime.now());
+        result.setCriticalReadBackAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledged(true);
-        result.setAcknowledgedAt(LocalDateTime.now());
+        result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
         return labResultRepository.save(result);
