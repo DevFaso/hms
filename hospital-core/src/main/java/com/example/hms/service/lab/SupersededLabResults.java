@@ -102,21 +102,20 @@ public final class SupersededLabResults {
                                              Collection<LabResult> knownRows) {
         Set<UUID> superseded = new HashSet<>();
         for (LabResult row : rowsToJudge) {
-            if (row.getId() == null || !isAnalyzerPreliminary(row)) {
-                continue;
-            }
-            ObservationKey key = observationKey(row);
-            if (key == null) {
-                continue;
-            }
-            for (LabResult candidate : knownRows) {
-                if (replaces(candidate, row, key)) {
-                    superseded.add(row.getId());
-                    break;
-                }
+            if (hasBeenReplaced(row, knownRows)) {
+                superseded.add(row.getId());
             }
         }
         return superseded;
+    }
+
+    /** Whether some known row replaces this one, under every condition of the rule above. */
+    private static boolean hasBeenReplaced(LabResult row, Collection<LabResult> knownRows) {
+        if (row.getId() == null || !isAnalyzerPreliminary(row)) {
+            return false;
+        }
+        ObservationKey key = observationKey(row);
+        return key != null && knownRows.stream().anyMatch(candidate -> replaces(candidate, row, key));
     }
 
     /** Whether the analyzer marked this row preliminary. Nothing else writes the status. */
