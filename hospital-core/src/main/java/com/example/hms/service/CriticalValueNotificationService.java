@@ -107,8 +107,13 @@ public class CriticalValueNotificationService {
 
     /**
      * Notify the ordering provider when a freshly saved result is critical.
-     * Never propagates — a notification failure must not roll back the
-     * clinical write (same policy as PatientTrackerEventPublisher).
+     *
+     * <p>Propagates. It used to say the opposite, and that was false once the
+     * alert and its stamp joined the caller's transaction: a failure writing
+     * them marks that transaction rollback-only whatever is caught, so the
+     * only thing a catch achieved was to hide the cause and let the caller
+     * meet it again at commit. Callers that must not be rolled back by an
+     * alert failure have to make the alert independent, not silence it.
      */
     public void notifyIfCritical(LabResult result) {
         notifyIfCritical(result, null);
@@ -118,29 +123,94 @@ public class CriticalValueNotificationService {
      * Same as {@link #notifyIfCritical(LabResult)} with the severity the caller
      * already computed from the mapper, so the entry path and this check agree
      * on one value; {@code null} means compute it here.
+     *
+     * <p><b>Runs in the caller's transaction, deliberately.</b> The alert row
+     * and the {@code criticalNotifiedAt} stamp are ordinary local writes —
+     * they were never the reason to defer anything — so they commit with the
+     * result itself: if the result is on the chart, the provider has been
+     * told, and there is no window in which a restart loses the alert. Only
+     * the SMS is deferred, because it is the one blocking network hop, and it
+     * is the one thing that can be retried by hand if it is lost.
      */
     public void notifyIfCritical(LabResult result, String severityFlag) {
-        try {
-            if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
-                return;
-            }
-            String username = resolveOrderingUsername(result);
-            if (username == null) {
-                // SYSTEM-actor results can arrive on orders whose staff has no
-                // user account; stamp anyway so the sweep doesn't spin on them.
-                log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
-                    result.getId());
-            } else {
-                String message = buildMessage(result, false);
-                notificationService.createNotification(message, username, NOTIFICATION_TYPE);
-                sendSmsBestEffort(result, message);
-            }
-            result.setCriticalNotifiedAt(LocalDateTime.now());
-            labResultRepository.save(result);
-        } catch (RuntimeException ex) {
-            log.warn("Critical-value notification failed for lab result {}: {}",
-                result.getId(), ex.getMessage(), ex);
+        // NOT wrapped in a catch. This runs in the caller's transaction — the
+        // alert row and the stamp commit with the result, which is what
+        // guarantees no result reaches the chart un-alerted — and a
+        // persistence failure in here marks that transaction rollback-only
+        // whatever this method does with the exception. Catching it therefore
+        // bought nothing and lied: the caller believed the notification was
+        // contained, then got a 500 at commit with the cause logged as a
+        // warning (the #553 trap, and the same one the outbox enqueue had).
+        // Failing loudly means the clinical write is retried, which is
+        // recoverable; a critical result nobody was told about is not.
+        if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
+            return;
         }
+        String username = resolveOrderingUsername(result);
+        if (username == null) {
+            // SYSTEM-actor results can arrive on orders whose staff has no
+            // user account; stamp anyway so the escalation sweep does not
+            // spin on them.
+            log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
+                result.getId());
+        } else {
+            String message = buildMessage(result, false);
+            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            // The gateway call waits for the commit: a hung gateway must
+            // not hold the clinical transaction's row locks, and an SMS
+            // for a result that then rolled back would be worse than a
+            // late one. Everything it needs is read HERE, while the
+            // transaction is open — the number is three lazy hops away
+            // (order, ordering staff, user) and the callback must not go
+            // looking for them.
+            UUID resultId = result.getId();
+            String phoneNumber = resolveOrderingPhone(result);
+            com.example.hms.utility.TransactionCallbacks.afterCommit(
+                () -> sendCriticalSms(resultId, phoneNumber, message));
+        }
+        result.setCriticalNotifiedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        labResultRepository.save(result);
+    }
+
+    /**
+     * The deferred half: the SMS, sent once the caller's transaction has
+     * committed.
+     *
+     * <p>It is handed the number and the text rather than an id to re-read,
+     * and that is the point. The previous version reloaded the result "because
+     * the persistence context is gone", which was not true — {@code
+     * afterCommit} runs before Spring unbinds the EntityManager, so the reload
+     * was served from the first-level cache and re-attached nothing. The code
+     * worked for a reason its own comment denied, and had the comment been
+     * true the number — three lazy hops away, with open-in-view off — would
+     * have been unreachable and the SMS dropped as a caught warning. Reading
+     * it in the transaction removes the question.
+     *
+     * <p>Deliberately NOT annotated {@code @Transactional}: there is nothing
+     * transactional left here, and it is self-invoked from
+     * {@link #notifyIfCritical}, where an annotation would be inert anyway.
+     *
+     * <p>Never propagates: the in-app alert and the stamp are already
+     * committed, so a gateway failure must not surface as a 500 on a result
+     * that is safely on the chart.
+     */
+    public void sendCriticalSms(UUID resultId, String phoneNumber, String message) {
+        if (phoneNumber == null || phoneNumber.isBlank() || !smsService.deliversRealSms()) {
+            return;
+        }
+        try {
+            smsService.send(phoneNumber, message);
+        } catch (RuntimeException ex) {
+            log.warn("Critical-value SMS failed for lab result {}: {}", resultId, ex.getMessage(), ex);
+        }
+    }
+
+    /** The ordering provider's number, read while the session is open. */
+    private String resolveOrderingPhone(LabResult result) {
+        LabOrder order = result.getLabOrder();
+        Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
+        User user = orderingStaff != null ? orderingStaff.getUser() : null;
+        return user != null ? user.getPhoneNumber() : null;
     }
 
     /**
@@ -163,7 +233,7 @@ public class CriticalValueNotificationService {
     public Integer escalateOverdue() {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
-        LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime cutoff = LocalDateTime.now(java.time.ZoneId.systemDefault()).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (LabResult result : overdue) {
@@ -193,7 +263,7 @@ public class CriticalValueNotificationService {
         // Stamp even with no resolvable recipient, so the interval still
         // advances and the sweep does not reconsider the row every pass.
         result.setCriticalEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
-        result.setCriticalEscalatedAt(LocalDateTime.now());
+        result.setCriticalEscalatedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         labResultRepository.save(result);
 
         if (round >= TIER_TWO_ROUND) {
@@ -295,9 +365,9 @@ public class CriticalValueNotificationService {
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.
-        result.setCriticalReadBackAt(LocalDateTime.now());
+        result.setCriticalReadBackAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledged(true);
-        result.setAcknowledgedAt(LocalDateTime.now());
+        result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
         return labResultRepository.save(result);

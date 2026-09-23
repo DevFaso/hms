@@ -4369,7 +4369,10 @@
       "ABNORMAL": "Anormal",
       "NORMAL_RESULT": "Dans les limites normales",
       "ABNORMAL_RESULT": "Hors des limites normales — veuillez consulter votre médecin",
-      "NORMAL_PREFIX": "Normal :"
+      "NORMAL_PREFIX": "Normal :",
+      "PENDING_RESULT": "Résultat en attente",
+      "PENDING_BADGE": "En attente",
+      "PENDING_INTERPRETATION": "Analyse en cours — votre résultat s’affichera ici dès que le laboratoire l’aura validé."
     },
     "VISITS": {
       "TITLE": "Historique des visites",

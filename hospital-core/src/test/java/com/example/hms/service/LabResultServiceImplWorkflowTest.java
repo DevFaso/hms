@@ -33,9 +33,14 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +64,8 @@ class LabResultServiceImplWorkflowTest {
     private AuthService authService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private com.example.hms.service.InstrumentOutboxService instrumentOutboxService;
 
     // Declared even though this suite drives no reflex order: the service
     // notifies the performing laboratory from that path, and an undeclared
@@ -200,6 +207,106 @@ class LabResultServiceImplWorkflowTest {
         assertThat(labResult.getReleasedByUserId()).isEqualTo(actorId);
         assertThat(labResult.getReleasedByDisplay()).isEqualTo("Casey Clinician");
         verify(labResultRepository).save(labResult);
+    }
+
+    private void givenAReleasableResult(LabResult labResult) {
+        when(labResultRepository.findById(labResult.getId())).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.isLabScientist(any(), any())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+    }
+
+    /**
+     * The ORU enqueued when the result was created said OBX-11 = P, because
+     * that is what an unreleased result is. The release has to send the final
+     * form or the receiver holds a preliminary for ever.
+     *
+     * <p>By id and after commit: an enqueue inside the release transaction is
+     * inserted at commit, where its try/catch cannot catch anything, so an
+     * outbox failure would roll the release back.
+     */
+    @Test
+    void releaseLabResultEnqueuesTheFinalObservationByIdAfterCommit() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
+
+        // A real synchronization, or TransactionCallbacks runs the action inline
+        // and this test passes just as happily with the deferral deleted.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            labResultService.releaseLabResult(labResultId, Locale.US);
+
+            verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+            assertThat(labResult.isReleased())
+                .as("the row is released before the message is owed, so OBX-11 goes out as F")
+                .isTrue();
+
+            commitRegisteredCallbacks();
+            verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        // Never the entity overload — that one runs inside the caller's transaction.
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+    }
+
+    /**
+     * An outbox failure must not reach the caller. The enqueue runs after the
+     * release has committed, so an exception escaping the callback would answer
+     * 500 for a release that DID happen — and the retry would hit the
+     * already-released early return and never enqueue anything at all.
+     */
+    @Test
+    void aFailingEnqueueDoesNotFailTheRelease() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
+        doThrow(new IllegalStateException("outbox insert failed at commit"))
+            .when(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertDoesNotThrow(() -> labResultService.releaseLabResult(labResultId, Locale.US));
+            assertDoesNotThrow(this::commitRegisteredCallbacks);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+    }
+
+    /** Fires what the transaction manager fires on a successful commit. */
+    private void commitRegisteredCallbacks() {
+        List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+            .forEach(TransactionSynchronization::afterCommit);
+    }
+
+    /**
+     * A result INGESTED from an analyzer never had a first ORU from us, so a
+     * release must not transmit one: it would be unsolicited, and its OBR-2
+     * would carry our internal order UUID rather than the accession number the
+     * analyzer knows the order by. "We announced this order" is what the
+     * outbox records.
+     */
+    @Test
+    void releaseDoesNotTransmitForAnOrderWeNeverAnnounced() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(false);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
     }
 
     @Test

@@ -271,6 +271,36 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("a retried post records a second result and re-opens the order, by design")
+    void aRetryRecordsASecondResult() throws Exception {
+        // Detecting a retry meant comparing the fields a request carries, and
+        // the portal form carries too few to tell two results apart: no
+        // analyte code, a minute-precision date, usually blank notes. Two
+        // analytes of one order entered in the same minute with the same
+        // value collapsed, and the endpoint answered 201 with somebody else's
+        // row. A duplicate row is visible and correctable — a release of both
+        // completes the order — and a lost result is neither.
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
+        LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
+
+        String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.labTestName").value("Potassium"))
+            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
+            .andReturn().getResponse().getContentAsString();
+        String retry = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
+            .andExpect(status().isCreated())
+            // the second row describes itself as fully as the first
+            .andExpect(jsonPath("$.labTestName").value("Potassium"))
+            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
+            .andReturn().getResponse().getContentAsString();
+
+        assertThat(idOf(retry)).as("a retry is recorded, not swallowed").isNotEqualTo(idOf(first));
+        assertThat(labResultRepository.findAll()).hasSize(2);
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
     @DisplayName("B11 — a lab scientist of another hospital neither sees the order nor can attach a result to it")
     void foreignLaboratoryStaffSeeNothing() throws Exception {
         UUID orderId = placeOrder(LocalDateTime.now().minusHours(1));
@@ -357,13 +387,19 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     private org.springframework.test.web.servlet.ResultActions postResult(Actor actor, UUID orderId, String value) throws Exception {
+        return postResult(actor, orderId, value, LocalDateTime.now());
+    }
+
+    /** A retry resends the identical payload, result date included. */
+    private org.springframework.test.web.servlet.ResultActions postResult(
+            Actor actor, UUID orderId, String value, LocalDateTime resultDate) throws Exception {
         LabResultRequestDTO request = LabResultRequestDTO.builder()
             .labOrderId(orderId)
             .assignmentId(actor.assignmentId())
             .patientId(patient.getId())
             .resultValue(value)
             .resultUnit("mmol/L")
-            .resultDate(LocalDateTime.now())
+            .resultDate(resultDate)
             .build();
         return mockMvc.perform(post(LAB_RESULTS).contextPath(API)
             .contentType(MediaType.APPLICATION_JSON)

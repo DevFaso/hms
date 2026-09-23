@@ -24,6 +24,25 @@ public interface InstrumentOutboxService {
     void enqueueResultObservation(LabResult result);
 
     /**
+     * Whether an ORU^R01 has already gone out for this order, i.e. whether the
+     * instrument peers know it under the OBR-2 we send. Only then is a
+     * follow-up observation a continuation rather than an unsolicited message.
+     */
+    boolean hasTransmittedObservation(UUID labOrderId);
+
+    /**
+     * Enqueues the final form of a result that has just been released, by id
+     * and in its OWN transaction.
+     *
+     * <p>Ids only, and never from inside the caller's transaction: the row is
+     * inserted and validated at commit, so a "best-effort" try/catch around an
+     * in-transaction enqueue catches nothing and the failure takes the caller's
+     * write down with it. The release is the load-bearing operation; the
+     * message is not.
+     */
+    void enqueueReleasedObservation(UUID labResultId);
+
+    /**
      * All outbox messages for a lab order, whatever their status.
      *
      * <p>Until 2026-08-22 this returned PENDING rows only — which meant the one

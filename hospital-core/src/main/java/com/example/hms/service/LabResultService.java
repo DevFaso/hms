@@ -16,6 +16,18 @@ public interface LabResultService {
 
     LabResultResponseDTO createLabResult(LabResultRequestDTO requestDTO, Locale locale);
 
+    /**
+     * Entry point for the HL7 inbound adapter.
+     *
+     * <p>Identical to {@link #createLabResult} except that it does not compare
+     * the order against the caller's active hospital: the caller is an
+     * interface account posting an ORU with no {@code X-Hospital-Id} and
+     * possibly no assignment, addressed by the order id in the message. Named
+     * explicitly so that the exemption belongs to this one path rather than to
+     * every caller whose hospital scope happens not to resolve.
+     */
+    LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO requestDTO, Locale locale);
+
     LabResultResponseDTO getLabResultById(UUID id, Locale locale);
 
     List<LabResultResponseDTO> getAllLabResults(Locale locale);

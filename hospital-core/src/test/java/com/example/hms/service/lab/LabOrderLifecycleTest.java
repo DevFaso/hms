@@ -1,7 +1,6 @@
 package com.example.hms.service.lab;
 
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.LabOrder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,82 +12,89 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("LabOrderLifecycle")
 class LabOrderLifecycleTest {
 
-    private static LabOrder orderAt(LabOrderStatus status) {
-        LabOrder order = new LabOrder();
-        order.setStatus(status);
-        return order;
+    @Test
+    @DisplayName("a forward step is the status to write; skipped states are not a blocker")
+    void forwardStepVerdicts() {
+        // A verdict, not a mutation: nothing writes an order's status through
+        // the entity any more, on any path, so the specimen events ask what to
+        // write and issue the compare-and-set statement themselves.
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.RESULTED))
+            .isEqualTo(LabOrderStatus.RESULTED);
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.COLLECTED))
+            .isEqualTo(LabOrderStatus.COLLECTED);
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED))
+            .isEqualTo(LabOrderStatus.RECEIVED);
+        // a null current yields no move: the caller would write it with
+        // expected = null, which matches no row, and then log a concurrent
+        // move nobody made
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED)).isNull();
     }
 
     @Test
-    @DisplayName("an entered result moves ORDERED straight to RESULTED — skipped states are not a blocker")
-    void advancesForwardSkippingUnrecordedStates() {
-        LabOrder order = orderAt(LabOrderStatus.ORDERED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.RESULTED)).isTrue();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    @DisplayName("a specimen logged after the result never moves the order back, and the same state is a no-op")
+    void forwardStepNeverMovesBackwards() {
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.RESULTED, LabOrderStatus.COLLECTED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.RECEIVED, LabOrderStatus.RECEIVED))
+            .isNull();
     }
 
     @Test
-    @DisplayName("a specimen logged after the result never moves the order back")
-    void neverMovesBackwards() {
-        LabOrder order = orderAt(LabOrderStatus.RESULTED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.COLLECTED)).isFalse();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    @DisplayName("COMPLETED and CANCELLED orders are left alone, and CANCELLED is never a target")
+    void forwardStepLeavesTerminalOrdersAlone() {
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.CANCELLED, LabOrderStatus.RESULTED))
+            .isNull();
+        // cancellation is a decision, never a side effect of a specimen event
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.CANCELLED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, null)).isNull();
     }
 
     @Test
-    @DisplayName("the same state twice is a no-op, so callers do not re-save")
-    void sameStateIsNoop() {
-        LabOrder order = orderAt(LabOrderStatus.RECEIVED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.RECEIVED)).isFalse();
-    }
-
-    @Test
-    @DisplayName("COMPLETED and CANCELLED orders are left alone")
-    void terminalStatesAreFrozen() {
-        LabOrder completed = orderAt(LabOrderStatus.COMPLETED);
-        LabOrder cancelled = orderAt(LabOrderStatus.CANCELLED);
-
-        assertThat(LabOrderLifecycle.advance(completed, LabOrderStatus.CANCELLED)).isFalse();
-        assertThat(LabOrderLifecycle.advance(cancelled, LabOrderStatus.RESULTED)).isFalse();
-        assertThat(completed.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        assertThat(cancelled.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
-    }
-
-    @Test
-    @DisplayName("a result on a COMPLETED or VERIFIED order re-opens it to RESULTED; nothing else re-opens")
-    void reopenForResultIsTheOneSanctionedStepBack() {
-        LabOrder completed = orderAt(LabOrderStatus.COMPLETED);
-        assertThat(LabOrderLifecycle.reopenForResult(completed)).isTrue();
-        assertThat(completed.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-
+    @DisplayName("a new result re-opens a finished order and advances an unfinished one")
+    void statusAfterNewResultVerdicts() {
+        // The verdict only — the caller writes it with a compare-and-set
+        // statement, because writing it through the entity is how the
+        // re-open came to be silently swallowed by a stale snapshot.
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.COMPLETED))
+            .isEqualTo(LabOrderStatus.RESULTED);
         // VERIFIED is terminal for EncounterServiceImpl.LAB_TERMINAL, so a
         // result landing there would otherwise sit unreleased on an order
-        // nobody looks at again: advance() cannot move it (VERIFIED is past
-        // RESULTED) and only COMPLETED used to re-open.
-        LabOrder verified = orderAt(LabOrderStatus.VERIFIED);
-        assertThat(LabOrderLifecycle.reopenForResult(verified)).isTrue();
-        assertThat(verified.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-
-        LabOrder cancelled = orderAt(LabOrderStatus.CANCELLED);
-        assertThat(LabOrderLifecycle.reopenForResult(cancelled)).isFalse();
-        assertThat(cancelled.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
-
-        LabOrder open = orderAt(LabOrderStatus.RECEIVED);
-        assertThat(LabOrderLifecycle.reopenForResult(open)).isFalse();
-        assertThat(open.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
-        assertThat(LabOrderLifecycle.reopenForResult(null)).isFalse();
+        // nobody looks at again.
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.VERIFIED))
+            .isEqualTo(LabOrderStatus.RESULTED);
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.ORDERED))
+            .isEqualTo(LabOrderStatus.RESULTED);
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.RECEIVED))
+            .isEqualTo(LabOrderStatus.RESULTED);
     }
 
     @Test
-    @DisplayName("cancellation is a decision, never a side effect")
-    void cancelledIsNeverATarget() {
-        LabOrder order = orderAt(LabOrderStatus.ORDERED);
+    @DisplayName("a new result moves neither a cancelled order nor one already RESULTED")
+    void statusAfterNewResultLeavesSomeOrdersAlone() {
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.CANCELLED)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.RESULTED)).isNull();
+        // A null status would be written with expected = null, and
+        // "status = null" matches no row in SQL: the statement could only ever
+        // be a no-op that logged a move it had not made.
+        assertThat(LabOrderLifecycle.statusAfterNewResult(null)).isNull();
+    }
 
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.CANCELLED)).isFalse();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+    @Test
+    @DisplayName("releasing the last result completes an open order and moves no finished one")
+    void statusAfterAllResultsReleasedVerdicts() {
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.RESULTED))
+            .isEqualTo(LabOrderStatus.COMPLETED);
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.VERIFIED))
+            .isEqualTo(LabOrderStatus.COMPLETED);
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.ORDERED))
+            .isEqualTo(LabOrderStatus.COMPLETED);
+        // Terminal states, and a row that is not there, are left alone.
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.COMPLETED)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.CANCELLED)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(null)).isNull();
     }
 
     @Test
@@ -120,13 +126,12 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("a null order or target is ignored; an order with no status takes the target")
+    @DisplayName("no verdict method moves an order whose status is absent")
     void nullsAreTolerated() {
-        assertThat(LabOrderLifecycle.advance(null, LabOrderStatus.RESULTED)).isFalse();
-        assertThat(LabOrderLifecycle.advance(orderAt(LabOrderStatus.ORDERED), null)).isFalse();
-
-        LabOrder blank = new LabOrder();
-        assertThat(LabOrderLifecycle.advance(blank, LabOrderStatus.COLLECTED)).isTrue();
-        assertThat(blank.getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
+        // Consistent across all three: a status the database does not hold
+        // cannot be the `expected` side of a compare-and-set.
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterNewResult(null)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(null)).isNull();
     }
 }

@@ -141,4 +141,47 @@ describe('ProxyDataViewerComponent', () => {
     expect(records).not.toBeNull();
     expect(records.textContent).toContain('Penicillin');
   });
+
+  /**
+   * The Labs tab learned that an unreleased result carries no value, but the
+   * Summary card's "Recent labs" list kept printing `result unit` — so a
+   * pending row read as "Hemoglobin:" with nothing after it.
+   */
+  it('summary card shows a pending lab as pending, not as a blank value', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_RECORDS')]));
+    portal.getProxyRecords.and.returnValue(
+      of({
+        profile: {} as never,
+        recentLabResults: [
+          {
+            id: 'l1',
+            testName: 'Hemoglobin',
+            result: '',
+            referenceRange: '',
+            status: 'PENDING',
+            collectedDate: '2026-09-20T08:00:00',
+            released: false,
+            isPending: true,
+            isAbnormal: false,
+            unit: '',
+            orderedBy: '',
+            performedBy: '',
+            category: '',
+            notes: '',
+            resultedAt: '',
+          },
+        ],
+        currentMedications: [],
+        latestVitals: [],
+        immunizations: [],
+        allergies: [],
+        activeDiagnoses: [],
+      }),
+    );
+    fixture.detectChanges();
+
+    const records = fixture.nativeElement.querySelector('[data-testid="proxy-records"]');
+    expect(records.textContent).toContain('Hemoglobin');
+    expect(records.textContent).toContain('PORTAL.LAB_RESULTS.PENDING_RESULT');
+  });
 });
