@@ -81,6 +81,8 @@ class DispenseServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
     @Mock private CdsCheckService cdsCheckService;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
 
     // Real, not mocked: the guard is a pure rule with its own test.
     @org.mockito.Spy
@@ -265,6 +267,165 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).save(stockLot);
             verify(inventoryItemRepository).save(inventoryItem);
             verify(stockTransactionRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("G5: a prescription awaiting clarification is not dispensable")
+        void shouldRejectPendingClarification() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            DispenseRequestDTO dto = buildRequest();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a dispensable state");
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("G3: a back-ordered prescription is dispensable once stock lands, and the back order closes")
+        void shouldDispensePendingStockAndCloseTheBackOrder() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(prescription)
+                            .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.PENDING)
+                            .build();
+            backOrder.setId(UUID.randomUUID());
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(backOrder));
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(backOrder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.COMPLETED);
+            verify(routingDecisionRepository).save(backOrder);
+        }
+
+        @Test
+        @DisplayName("a back order filled over two dispenses closes when the second fill reaches DISPENSED")
+        void secondFillClosesTheBackOrder() {
+            prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(prescription)
+                            .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.PENDING)
+                            .build();
+            backOrder.setId(UUID.randomUUID());
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(6));
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescriptionId))
+                    .thenReturn(List.of(backOrder));
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(backOrder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("a PARTIAL fill against a back order leaves the back order pending — the remainder is still unavailable")
+        void partialFillKeepsTheBackOrderPending() {
+            prescription.setStatus(PrescriptionStatus.PENDING_STOCK);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(4));
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(4));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            verify(routingDecisionRepository, never()).findByPrescriptionIdOrderByDecidedAtDesc(any());
+            verify(routingDecisionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("G3: a partner-rejected prescription can be filled in-house")
+        void shouldDispensePartnerRejected() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+            dto.setQuantityDispensed(BigDecimal.valueOf(4));
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(4));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            // G6: a partial fill is reported to the prescriber too
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PARTIALLY_FILLED);
+            verify(routingDecisionRepository, never()).findByPrescriptionIdOrderByDecidedAtDesc(any());
+        }
+
+        @Test
+        @DisplayName("G3 round 4: an order a partner accepted is NOT fillable in-house — the no-show has to be recorded first")
+        void partnerAcceptedIsNotDispensable() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            DispenseRequestDTO dto = buildRequest();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not in a dispensable state");
+            verify(dispenseRepository, never()).save(any());
         }
 
         @Test
@@ -457,7 +618,9 @@ class DispenseServiceImplTest {
             service.createDispense(dto);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
-            verify(support).notifyReadyForPickup(patient, pharmacy, "Amoxicillin");
+            verify(support).notifyDispensed(patient, pharmacy, "Amoxicillin");
+            // G6: the prescriber is told the order was filled
+            verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.DISPENSED);
         }
 
         @Test
@@ -596,7 +759,7 @@ class DispenseServiceImplTest {
 
             service.createDispense(dto);
 
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
         }
     }
 
@@ -681,6 +844,48 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).save(stockLot);
             verify(inventoryItemRepository).save(inventoryItem);
             verify(stockTransactionRepository).save(any());
+            // Undoing a fill is bookkeeping, not a pharmacy outcome: nothing is announced.
+            verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        }
+
+        @Test
+        @DisplayName("cancelling an earlier partial on an order that is with a partner keeps SENT_TO_PARTNER")
+        void cancelKeepsPharmacyOwnedStates() {
+            for (PrescriptionStatus owned : List.of(PrescriptionStatus.SENT_TO_PARTNER,
+                    PrescriptionStatus.PENDING_STOCK, PrescriptionStatus.PARTNER_ACCEPTED)) {
+                prescription.setStatus(owned);
+                Dispense dispense = buildDispense(DispenseStatus.PARTIAL);
+                when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+                when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+                when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+                when(dispenseMapper.toResponseDTO(dispense))
+                        .thenReturn(DispenseResponseDTO.builder().id(dispenseId).status("CANCELLED").build());
+
+                service.cancelDispense(dispenseId);
+
+                assertThat(prescription.getStatus()).as(owned.name()).isEqualTo(owned);
+            }
+            verify(prescriptionRepository, never()).save(any());
+            verify(dispenseRepository, never()).sumQuantityDispensedForPrescription(any(), any());
+        }
+
+        @Test
+        @DisplayName("cancelling a dispense on an order awaiting clarification keeps PENDING_CLARIFICATION")
+        void cancelKeepsPendingClarification() {
+            prescription.setStatus(PrescriptionStatus.PENDING_CLARIFICATION);
+            Dispense dispense = buildDispense(DispenseStatus.PARTIAL);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(dispenseMapper.toResponseDTO(dispense))
+                    .thenReturn(DispenseResponseDTO.builder().id(dispenseId).status("CANCELLED").build());
+
+            service.cancelDispense(dispenseId);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            verify(prescriptionRepository, never()).save(any());
+            verify(dispenseRepository, never()).sumQuantityDispensedForPrescription(any(), any());
+            verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
         }
 
         @Test
@@ -872,6 +1077,174 @@ class DispenseServiceImplTest {
             assertThat(result.getContent()).hasSize(1);
             assertThat(result.getContent().get(0).getId()).isEqualTo(prescriptionId);
             assertThat(result.getContent().get(0).getPatient().getId()).isEqualTo(patientId);
+            assertThat(result.getContent().get(0).isNeedsAttention()).isFalse();
+            assertThat(result.getContent().get(0).getAttentionReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("G3/G13: the queue asks for the dead-end statuses and flags them as needing attention")
+        void getWorkQueueListsDeadEndStatusesWithNeedsAttention() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription backOrdered = new Prescription();
+            backOrdered.setId(UUID.randomUUID());
+            backOrdered.setStatus(PrescriptionStatus.PENDING_STOCK);
+            backOrdered.setMedicationName("Amoxicillin");
+            Prescription refused = new Prescription();
+            refused.setId(UUID.randomUUID());
+            refused.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            refused.setPharmacyName("Pharmacie du Marché");
+            Prescription answered = new Prescription();
+            answered.setId(UUID.randomUUID());
+            answered.setStatus(PrescriptionStatus.SIGNED);
+            answered.setClarificationResolvedAt(java.time.LocalDateTime.now(FIXED_CLOCK));
+
+            @SuppressWarnings("unchecked")
+            org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
+                    org.mockito.ArgumentCaptor.forClass(List.class);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+                    eq(hospitalId), asked.capture(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(backOrdered, refused, answered)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable).getContent();
+
+            // The queue lists more than it may dispense: an order sitting with
+            // a partner that accepted it is on the screen (flagged) but is
+            // not fillable until a no-show is recorded.
+            assertThat(asked.getValue()).contains(PrescriptionStatus.PENDING_STOCK,
+                    PrescriptionStatus.PARTNER_REJECTED, PrescriptionStatus.PARTNER_ACCEPTED)
+                    .doesNotContain(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(DispenseServiceImpl.DISPENSABLE_STATUSES)
+                    .doesNotContain(PrescriptionStatus.PARTNER_ACCEPTED);
+            assertThat(rows).extracting(
+                    com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO::isNeedsAttention)
+                    .containsExactly(true, true, true);
+            assertThat(rows).extracting(
+                    com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO::getAttentionReason)
+                    .containsExactly("PENDING_STOCK", "PARTNER_REJECTED", "CLARIFICATION_RESOLVED");
+            assertThat(rows.get(1).getPharmacyName()).isEqualTo("Pharmacie du Marché");
+        }
+
+        @Test
+        @DisplayName("a partial fill keeps the queue cue while the supplier order is still outstanding")
+        void outstandingBackOrderKeepsNeedsAttention() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription partiallyFilled = new Prescription();
+            partiallyFilled.setId(UUID.randomUUID());
+            partiallyFilled.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(partiallyFilled)
+                            .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.PENDING)
+                            .decidedAt(java.time.LocalDateTime.now(FIXED_CLOCK))
+                            .build();
+            backOrder.setId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(partiallyFilled)));
+            when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
+                    .thenReturn(List.of(backOrder));
+
+            com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO row =
+                    service.getWorkQueue(pageable).getContent().get(0);
+
+            assertThat(row.isNeedsAttention()).isTrue();
+            assertThat(row.getAttentionReason()).isEqualTo("BACK_ORDER_OUTSTANDING");
+        }
+
+        @Test
+        @DisplayName("a completed back order no longer flags the row")
+        void completedBackOrderClearsTheCue() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription filled = new Prescription();
+            filled.setId(UUID.randomUUID());
+            filled.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(filled)
+                            .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.COMPLETED)
+                            .decidedAt(java.time.LocalDateTime.now(FIXED_CLOCK))
+                            .build();
+            backOrder.setId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(filled)));
+            when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
+                    .thenReturn(List.of(backOrder));
+
+            com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO row =
+                    service.getWorkQueue(pageable).getContent().get(0);
+
+            assertThat(row.isNeedsAttention()).isFalse();
+        }
+
+        @Test
+        @DisplayName("CLARIFICATION_RESOLVED is flagged only until the pharmacy acts on the answer")
+        void clarificationResolvedFlagClearsAfterTheNextPharmacyAction() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime resolvedAt = java.time.LocalDateTime.now(FIXED_CLOCK);
+            Prescription justAnswered = new Prescription();
+            justAnswered.setId(UUID.randomUUID());
+            justAnswered.setStatus(PrescriptionStatus.SIGNED);
+            justAnswered.setClarificationResolvedAt(resolvedAt);
+            Prescription actedOn = new Prescription();
+            actedOn.setId(UUID.randomUUID());
+            actedOn.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            actedOn.setClarificationResolvedAt(resolvedAt);
+            Dispense later = buildDispense(DispenseStatus.PARTIAL);
+            later.setPrescription(actedOn);
+            later.setDispensedAt(resolvedAt.plusHours(1));
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(justAnswered, actedOn)));
+            when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
+                    any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable).getContent();
+
+            assertThat(rows.get(0).getAttentionReason()).isEqualTo("CLARIFICATION_RESOLVED");
+            assertThat(rows.get(1).isNeedsAttention()).isFalse();
+            assertThat(rows.get(1).getAttentionReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("a PARTNER_REJECTED row groups in-house and names the partner that refused it")
+        void partnerRejectedRowNamesTheRefusingPartner() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Prescription refused = new Prescription();
+            refused.setId(UUID.randomUUID());
+            refused.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            Pharmacy partner = Pharmacy.builder().hospital(hospital).name("Pharmacie du Marché").build();
+            partner.setId(UUID.randomUUID());
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision refusal =
+                    com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                            .prescription(refused)
+                            .targetPharmacy(partner)
+                            .routingType(com.example.hms.enums.RoutingType.PARTNER)
+                            .status(com.example.hms.enums.RoutingDecisionStatus.REJECTED)
+                            .decidedAt(java.time.LocalDateTime.now(FIXED_CLOCK))
+                            .build();
+            refusal.setId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(refused)));
+            when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
+                    .thenReturn(List.of(refusal));
+
+            com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO row =
+                    service.getWorkQueue(pageable).getContent().get(0);
+
+            assertThat(row.getPharmacyName()).isNull();
+            assertThat(row.getLastRefusedBy()).isEqualTo("Pharmacie du Marché");
+            assertThat(row.getAttentionReason()).isEqualTo("PARTNER_REJECTED");
         }
     }
 
@@ -917,7 +1290,7 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any());
             verify(prescriptionRepository, never()).save(any());
             verify(stockLotRepository, never()).save(any());
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 
@@ -1029,7 +1402,7 @@ class DispenseServiceImplTest {
             // tx (in production) would have rolled back. Mockito verifies
             // we never reached those code paths after the violation.
             verify(prescriptionRepository, never()).save(any(Prescription.class));
-            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 

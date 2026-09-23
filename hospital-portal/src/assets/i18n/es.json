@@ -5179,6 +5179,8 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqueado por el plan",
         "PLATFORM_REGISTRY_UPDATED": "Registro de la plataforma actualizado",
         "PRESCRIPTION_BACKORDER": "Receta en falta de stock",
+        "PRESCRIPTION_CLARIFICATION_REQUESTED": "Aclaración de receta solicitada",
+        "PRESCRIPTION_CLARIFICATION_RESOLVED": "Aclaración de receta resuelta",
         "PRESCRIPTION_CREATED": "Receta creada",
         "PRESCRIPTION_DISCONTINUED": "Receta suspendida",
         "PRESCRIPTION_PRINTED": "Receta impresa",

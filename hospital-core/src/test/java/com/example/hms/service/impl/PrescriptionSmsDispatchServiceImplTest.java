@@ -138,6 +138,21 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
+    @DisplayName("a prescription awaiting the prescriber's clarification cannot be dispatched")
+    void dispatch_refusesWhileAwaitingClarification() {
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("clarification");
+
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("inactive pharmacies are rejected")
     void dispatch_rejectsInactivePharmacy() {
         pharmacy.setActive(false);
