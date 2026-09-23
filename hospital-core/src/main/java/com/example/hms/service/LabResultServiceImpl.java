@@ -140,10 +140,15 @@ public class LabResultServiceImpl implements LabResultService {
         // here (B11, on B1's ordering-or-performing predicate): a hospital on
         // neither side must not learn the order exists, let alone attach a
         // result to it.
-        requireOrderInActiveHospital(labOrder);
+        if (!interfacePrincipal) {
+            requireOrderInActiveHospital(labOrder);
+        }
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
-        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        // requireActiveHospitalId THROWS when nothing resolves, which is an
+        // interface account's normal state; a null acting hospital then means
+        // "no scope to judge against", which the helpers below already handle.
+        UUID actingHospitalId = interfacePrincipal ? null : roleValidator.requireActiveHospitalId();
 
         // Who may record THIS test's result. Role alone cannot answer it: a
         // nurse recording a bedside glucose is doing their job, and the same
@@ -154,7 +159,14 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
-    validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
+    // Skipped for an interface account on the same narrow condition as the
+    // tenancy check: it holds no role at any hospital, which is the premise
+    // of the ingest path. HOSPITAL_ADMIN passes that endpoint's @PreAuthorize
+    // but is not in the author allow-list, and is a scoped principal, so it
+    // is still judged here.
+    if (!interfacePrincipal) {
+        validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
+    }
 
         UserRoleHospitalAssignment assignment =
             requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);

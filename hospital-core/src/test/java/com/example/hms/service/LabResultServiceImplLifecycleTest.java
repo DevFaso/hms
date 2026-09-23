@@ -316,6 +316,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId()))
             .thenReturn(List.of(preliminary, finalResult));
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
