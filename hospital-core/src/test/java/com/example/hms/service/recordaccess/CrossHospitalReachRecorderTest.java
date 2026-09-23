@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
 import java.util.Optional;
+import org.springframework.transaction.TransactionDefinition;
 
 @ExtendWith(MockitoExtension.class)
 class CrossHospitalReachRecorderTest {
@@ -39,6 +40,9 @@ class CrossHospitalReachRecorderTest {
 
     @Mock
     private BreakGlassGate breakGlassGate;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private CrossHospitalReachRecorder recorder;
@@ -158,6 +162,28 @@ class CrossHospitalReachRecorderTest {
             acting, actor, null, "Batched read");
 
         verify(auditEventLogService, never()).logEvents(any());
+    }
+
+    @Test
+    @DisplayName("the break-glass read runs in its own transaction, so a repository failure cannot poison the caller's")
+    void breakGlassLookupSuspendsTheCallersTransaction() {
+        // The lookup is a repository read and the caller is a read-only
+        // transaction serving a GET: a failure inside it would otherwise mark
+        // that transaction rollback-only, the catch would swallow the
+        // exception, and the read would still die at commit. Only a new
+        // transaction keeps the damage local — asserted structurally, because
+        // a mocked gate cannot mark anything rollback-only.
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(UUID.randomUUID(), Map.of(UUID.randomUUID().toString(), 1L)),
+            acting, actor, null, "Batched read");
+
+        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertThat(definition.getValue().getPropagationBehavior())
+            .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Test

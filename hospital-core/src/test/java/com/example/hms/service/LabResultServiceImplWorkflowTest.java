@@ -64,6 +64,7 @@ class LabResultServiceImplWorkflowTest {
     // notifies the performing laboratory from that path, and an undeclared
     // dependency is injected as null — a trap the next reflex test springs.
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;

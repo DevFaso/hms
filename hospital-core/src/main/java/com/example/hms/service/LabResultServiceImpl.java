@@ -74,6 +74,11 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabReflexRuleRepository labReflexRuleRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final CriticalValueNotificationService criticalValueNotificationService;
+    private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
+    /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
+    private static final String PERFORMED_HERE_REACH_DESCRIPTION =
+        "Cross-hospital lab result read at the performing laboratory";
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     /**
@@ -245,6 +250,7 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
+        recordPerformedHereReach(List.of(labResult));
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(buildTrendHistory(labResult));
@@ -277,7 +283,9 @@ public class LabResultServiceImpl implements LabResultService {
             return List.of();
         }
 
-        return labResultRepository.findHandledByHospitals(hospitalIds).stream()
+        List<LabResult> results = labResultRepository.findHandledByHospitals(hospitalIds);
+        recordPerformedHereReach(results);
+        return results.stream()
             .map(labResultMapper::toResponseDTO)
             .toList();
     }
@@ -291,8 +299,9 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        return labResultRepository.findHandledByHospital(hospitalId, pageable)
-            .map(labResultMapper::toResponseDTO);
+        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId, pageable);
+        recordPerformedHereReach(page.getContent());
+        return page.map(labResultMapper::toResponseDTO);
     }
 
     @Override
@@ -310,8 +319,9 @@ public class LabResultServiceImpl implements LabResultService {
         // result waits on the performing laboratory's queue alone, because
         // putting it on both invited the ordering hospital to sign off work
         // its laboratory never did.
-        return labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable)
-            .map(labResultMapper::toResponseDTO);
+        Page<LabResult> page = labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable);
+        recordPerformedHereReach(page.getContent());
+        return page.map(labResultMapper::toResponseDTO);
     }
 
     @Override
@@ -439,6 +449,48 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ResourceNotFoundException("assignment.notfound");
         }
         return assignment;
+    }
+
+    /**
+     * B1 + E8: a result of an order this hospital's laboratory performs
+     * belongs to the hospital that ordered it, so surfacing it here is a
+     * cross-hospital disclosure — the same conclusion the order reads reached,
+     * one layer down. The reads were widened by the same predicate change and
+     * accounted nothing, which left the result routes disclosing silently
+     * while the order routes recorded.
+     *
+     * <p>Never throws: accounting a read must not fail it.
+     */
+    private void recordPerformedHereReach(java.util.Collection<LabResult> results) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId == null || results.isEmpty()) {
+            return;
+        }
+        try {
+            java.util.Map<UUID, java.util.Map<String, Long>> perPatient = new java.util.HashMap<>();
+            for (LabResult result : results) {
+                LabOrder order = result.getLabOrder();
+                if (order == null || !order.isPerformedAt(actingHospitalId)) {
+                    continue;
+                }
+                UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                UUID source = com.example.hms.service.recordaccess.CrossHospitalReachRecorder
+                    .hospitalIdOf(order.getHospital());
+                if (patientId == null || source == null) {
+                    continue;
+                }
+                perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                    .merge(source.toString(), 1L, Long::sum);
+            }
+            if (perPatient.isEmpty()) {
+                return;
+            }
+            reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
+                authService.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            LOG.warn("Cross-hospital disclosure accounting failed for a performing-laboratory result read at {}: {}",
+                actingHospitalId, ex.getMessage());
+        }
     }
 
     /**
@@ -1031,6 +1083,7 @@ public class LabResultServiceImpl implements LabResultService {
         // it is the one that produced it. These two were the last lab-side
         // reads still asking only who ordered.
         List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        recordPerformedHereReach(results);
 
         return results.stream()
             .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
@@ -1046,6 +1099,7 @@ public class LabResultServiceImpl implements LabResultService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        recordPerformedHereReach(results);
 
         return results.stream()
             .filter(r -> !r.isAcknowledged())

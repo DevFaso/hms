@@ -46,6 +46,13 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private final StaffRepository staffRepository;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
+    /**
+     * Consecutive replay failures that mean "the database is down", not "one
+     * row is bad". Three is enough to tell them apart without abandoning a
+     * page for a single unlucky row.
+     */
+    private static final int REPLAY_FAILURE_LIMIT = 3;
+
     @Override
     @Transactional(readOnly = true)
     public Page<AuditEventLogResponseDTO> getAuditLogsByUser(UUID userId, Pageable pageable) {
@@ -153,12 +160,36 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         }
     }
 
+    /**
+     * Replay the batch one event at a time, and give up once it stops looking
+     * like a bad row.
+     *
+     * <p>A replay cannot tell one unpersistable row from a database that is
+     * down. Without a stop, an outage on a large page turns into hundreds of
+     * further failed transactions and stack traces, synchronously inside the
+     * request being audited — the cure costing more than the disease. A short
+     * run of consecutive failures is taken as the latter: the replay stops and
+     * says so once, rather than per row.
+     */
     private void replayIndividually(java.util.List<AuditEventRequestDTO> requestDTOs,
                                     TransactionTemplate ownTransaction) {
-        for (AuditEventRequestDTO requestDTO : requestDTOs) {
+        int consecutiveFailures = 0;
+        int recorded = 0;
+        for (int i = 0; i < requestDTOs.size(); i++) {
+            AuditEventRequestDTO requestDTO = requestDTOs.get(i);
             try {
                 ownTransaction.executeWithoutResult(status -> doLogEvent(requestDTO));
+                consecutiveFailures = 0;
+                recorded++;
             } catch (RuntimeException e) {
+                consecutiveFailures++;
+                if (consecutiveFailures >= REPLAY_FAILURE_LIMIT) {
+                    log.error("[AUDIT] Replay abandoned after {} consecutive failures; {} of {} event(s) "
+                            + "recorded, {} not attempted. Last error: {}",
+                            consecutiveFailures, recorded, requestDTOs.size(),
+                            requestDTOs.size() - i - 1, e.getMessage(), e);
+                    return;
+                }
                 log.error("[AUDIT] Failed to persist audit event on replay (eventType={}, resourceId={}, userId={}): {}",
                         requestDTO.getEventType(), requestDTO.getResourceId(), requestDTO.getUserId(),
                         e.getMessage(), e);

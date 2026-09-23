@@ -60,6 +60,17 @@ public class LabOrderServiceImpl implements LabOrderService {
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
+    /**
+     * Ceiling on a single worklist page.
+     *
+     * <p>{@code @PageableDefault(size = 20)} is a default, not a bound: a
+     * caller may ask for any size, and every outsourced row on the page costs
+     * a disclosure row. Capping the page caps the accounting with it, and
+     * keeps a refresh from writing an unbounded number of audit rows inside
+     * the GET. 500 is well clear of the portal's own request (200).
+     */
+    private static final int MAX_WORKLIST_PAGE_SIZE = 500;
+
     /** The one description every performing-laboratory disclosure carries (Sonar S1192). */
     private static final String PERFORMED_HERE_REACH_DESCRIPTION =
         "Cross-hospital lab order read at the performing laboratory";
@@ -193,6 +204,15 @@ public class LabOrderServiceImpl implements LabOrderService {
      * RECORD_SHARE per patient per source hospital; an in-house order, or a
      * caller with no hospital scope, records nothing.
      */
+    /** The requested page, never wider than {@link #MAX_WORKLIST_PAGE_SIZE}. */
+    private static Pageable boundedPage(Pageable pageable) {
+        if (pageable == null || pageable.getPageSize() <= MAX_WORKLIST_PAGE_SIZE) {
+            return pageable;
+        }
+        return org.springframework.data.domain.PageRequest.of(
+            pageable.getPageNumber(), MAX_WORKLIST_PAGE_SIZE, pageable.getSort());
+    }
+
     private void recordPerformedHereReach(java.util.Collection<LabOrder> orders, UUID actingHospitalId) {
         if (actingHospitalId == null || orders.isEmpty()) {
             return;
@@ -429,7 +449,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate, pageable);
+        Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
+            boundedPage(pageable));
         recordPerformedHereReach(page.getContent(), hospitalId);
         return page.map(labOrderMapper::toLabOrderResponseDTO);
     }

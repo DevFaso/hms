@@ -5,6 +5,8 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.service.AuditEventLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -45,6 +47,7 @@ public class CrossHospitalReachRecorder {
 
     private final AuditEventLogService auditEventLogService;
     private final BreakGlassGate breakGlassGate;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     /**
      * Count the source hospitals in {@code sourceHospitalIds} that are not
@@ -116,8 +119,7 @@ public class CrossHospitalReachRecorder {
             // down threw away the page's disclosures — worse than the
             // per-patient recorder it replaced, which lost only its own.
             try {
-                Optional<UUID> breakGlassSessionId =
-                    breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId);
+                Optional<UUID> breakGlassSessionId = liveBreakGlassSession(requesterUserId, patientId, actingHospitalId);
                 for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
                     Map<String, Object> details = new HashMap<>();
                     details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
@@ -150,6 +152,24 @@ public class CrossHospitalReachRecorder {
             log.warn("[record-access] batched cross-hospital disclosure audit failed for {} row(s): {}",
                 pending.size(), ex.getMessage());
         }
+    }
+
+    /**
+     * The break-glass session, read in a transaction of its own.
+     *
+     * <p>This is a repository read, and the caller is a read-only transaction
+     * serving a GET. A database failure inside it would mark that transaction
+     * rollback-only; the catch above would swallow the exception and the read
+     * would still die at commit, failing the request the accounting exists to
+     * account for — the rollback-only trap this project has been bitten by
+     * before, and the one {@code LabOrderRoutingNotifier} documents. Suspending
+     * the caller's transaction keeps the damage inside this one.
+     */
+    private Optional<UUID> liveBreakGlassSession(UUID requesterUserId, UUID patientId, UUID actingHospitalId) {
+        TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
+        ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return ownTransaction.execute(status ->
+            breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId));
     }
 
     /**

@@ -109,12 +109,12 @@ export class LabResultsComponent implements OnInit {
     'ROLE_LAB_SCIENTIST',
   ]);
   /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
-  readonly canRelease = this.roleContext.hasAnyActiveRole([
+  private static readonly RELEASE_ROLES = [
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_MANAGER',
     'ROLE_LAB_DIRECTOR',
     'ROLE_SUPER_ADMIN',
-  ]);
+  ];
   /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
   readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
@@ -319,7 +319,10 @@ export class LabResultsComponent implements OnInit {
    * shown to teaches them to distrust the screen.
    */
   canReleaseResult(r: LabResultResponse): boolean {
-    if (!this.canRelease || r.released) {
+    // Both halves read live. A role snapshot taken at construction goes stale
+    // the moment the scope changes in place, and pairing it with a live scope
+    // signal brought the button back for a user the endpoint refuses.
+    if (r.released || !this.roleContext.hasAnyActiveRole(LabResultsComponent.RELEASE_ROLES)) {
       return false;
     }
     const performing = r.performingHospitalId;
