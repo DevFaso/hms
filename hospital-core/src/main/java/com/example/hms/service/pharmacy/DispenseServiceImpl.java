@@ -6,6 +6,8 @@ import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
+import com.example.hms.enums.RoutingDecisionStatus;
+import com.example.hms.enums.RoutingType;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -18,6 +20,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.model.pharmacy.StockTransaction;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
@@ -31,6 +34,7 @@ import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
+import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.utility.RoleValidator;
@@ -82,6 +86,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final Clock clock;
     private final CdsCheckService cdsCheckService;
     private final ControlledSubstanceGuard controlledSubstanceGuard;
+    private final PrescriberPharmacyNotifier prescriberNotifier;
+    private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -110,10 +116,75 @@ public class DispenseServiceImpl implements DispenseService {
 
     private static final String AUDIT_ENTITY = "DISPENSE";
 
-    private static final Set<PrescriptionStatus> DISPENSABLE_STATUSES = Set.of(
+    /**
+     * What the pharmacist may hand medication over against, and therefore
+     * what the work queue lists.
+     *
+     * <p>PENDING_STOCK and PARTNER_REJECTED are here on purpose (gap G3). A
+     * back-ordered prescription is exactly the one that must be fillable the
+     * day the stock lands, and a partner's refusal returns the order to the
+     * hospital's own counter; both used to be terminal, vanishing from every
+     * screen with no way back to SIGNED. PENDING_CLARIFICATION is deliberately
+     * absent: the pharmacist asked a question, and nothing is dispensed until
+     * the prescriber answers and the order returns to SIGNED.
+     *
+     * <p>PARTNER_ACCEPTED is deliberately NOT here. It was, briefly, so that a
+     * partner who never delivered did not leave a dead end — but a partner
+     * that has accepted is on its way to handing the medication over, and a
+     * counter that can fill it meanwhile can double-dispense it by accident.
+     * The exit is an explicit statement instead: {@code POST
+     * /pharmacy/routing/partner-no-show/{decisionId}} cancels the acceptance
+     * and returns the order to SIGNED, after which it is dispensable like any
+     * other. The row still appears on the queue ({@link #WORK_QUEUE_STATUSES})
+     * flagged for attention, so the pharmacist can see that it is waiting on
+     * a partner and say so.
+     */
+    static final Set<PrescriptionStatus> DISPENSABLE_STATUSES = Set.of(
             PrescriptionStatus.SIGNED,
             PrescriptionStatus.TRANSMITTED,
-            PrescriptionStatus.PARTIALLY_FILLED
+            PrescriptionStatus.PARTIALLY_FILLED,
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.PARTNER_REJECTED
+    );
+
+    /**
+     * What the pharmacist's queue lists, which is not the same question as
+     * what may be handed over. An order sitting with a partner that accepted
+     * it belongs on the screen — that is the only way anybody notices it was
+     * never delivered — but it is not fillable until somebody says the
+     * partner did not deliver.
+     */
+    static final Set<PrescriptionStatus> WORK_QUEUE_STATUSES = java.util.stream.Stream.concat(
+            DISPENSABLE_STATUSES.stream(), java.util.stream.Stream.of(PrescriptionStatus.PARTNER_ACCEPTED))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+    /**
+     * Queue rows that are not a plain first fill: something happened to them
+     * and the pharmacist should look before dispensing. The UI groups on it.
+     */
+    static final Set<PrescriptionStatus> NEEDS_ATTENTION_STATUSES = Set.of(
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.PARTNER_ACCEPTED
+    );
+
+    static final String ATTENTION_CLARIFICATION_RESOLVED = "CLARIFICATION_RESOLVED";
+
+    /**
+     * A fill has moved the row off PENDING_STOCK, but the supplier order it
+     * was waiting for is still open: the queue must keep saying so, or the
+     * outstanding back order loses its only cue.
+     */
+    static final String ATTENTION_BACK_ORDER_OUTSTANDING = "BACK_ORDER_OUTSTANDING";
+
+    /**
+     * The fill states a cancellation may recompute from. Every other status
+     * belongs to a routing or clarification workflow that owns the exit.
+     */
+    static final Set<PrescriptionStatus> RECOMPUTABLE_AFTER_CANCEL = Set.of(
+            PrescriptionStatus.SIGNED,
+            PrescriptionStatus.PARTIALLY_FILLED,
+            PrescriptionStatus.DISPENSED
     );
 
     /**
@@ -251,11 +322,18 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense saved = dispenseRepository.save(dispense);
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
-        updatePrescriptionStatusFromHistory(prescription);
-
-        // T-38: Ready-for-pickup SMS (French) — only when the Rx is now fully DISPENSED
+        updatePrescriptionStatusFromHistory(prescription, true);
+        // A partial fill against a back order leaves the remainder unavailable,
+        // so the BACKORDER decision stays PENDING until the order is fully
+        // filled — whether that happens in one dispense or over several
+        // (PENDING_STOCK → PARTIALLY_FILLED → DISPENSED).
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
-            support.notifyReadyForPickup(patient, pharmacy, dto.getMedicationName());
+            closeOutBackOrder(prescription);
+        }
+
+        // T-38 / G15: the dispensed receipt SMS — only when the Rx is now fully DISPENSED
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            support.notifyDispensed(patient, pharmacy, dto.getMedicationName());
         }
 
         logAudit(AuditEventType.DISPENSE_CREATED,
@@ -595,8 +673,18 @@ public class DispenseServiceImpl implements DispenseService {
 
         Dispense saved = dispenseRepository.save(dispense);
 
-        // Recompute the prescription status from remaining non-cancelled dispenses
-        updatePrescriptionStatusFromHistory(dispense.getPrescription());
+        // Recompute the prescription status from remaining non-cancelled
+        // dispenses — but only from a fill state. A cancellation never
+        // leaves a pharmacy-owned state: an order awaiting clarification
+        // must not return to the queue as SIGNED with the question open,
+        // and an order with a partner or on back order must not drop to
+        // SIGNED while its PARTNER / BACKORDER decision is still PENDING.
+        // Nothing is announced to the prescriber either: undoing a fill is
+        // the pharmacy's own bookkeeping, not a pharmacy outcome.
+        Prescription prescription = dispense.getPrescription();
+        if (RECOMPUTABLE_AFTER_CANCEL.contains(prescription.getStatus())) {
+            updatePrescriptionStatusFromHistory(prescription, false);
+        }
 
         logAudit(AuditEventType.DISPENSE_CANCELLED,
                 "Cancelled dispense of " + dispense.getQuantityDispensed() + " "
@@ -612,9 +700,80 @@ public class DispenseServiceImpl implements DispenseService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         Page<Prescription> page = prescriptionRepository
                 .findByHospital_IdAndStatusIn(hospitalId,
-                        List.copyOf(DISPENSABLE_STATUSES), pageable);
-        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(page.getContent());
-        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId())));
+                        List.copyOf(WORK_QUEUE_STATUSES), pageable);
+        List<Prescription> rows = page.getContent();
+        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(rows);
+        Map<UUID, PrescriptionRoutingDecision> latestDecisions = latestDecisionsFor(rows);
+        Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
+        Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
+        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId()),
+                latestDecisions.get(p.getId()), lastActions.get(p.getId()),
+                outstandingBackOrders.contains(p.getId())));
+    }
+
+    /** Newest routing decision per prescription on the page, one query. */
+    private Map<UUID, PrescriptionRoutingDecision> latestDecisionsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, PrescriptionRoutingDecision> latest = new HashMap<>();
+        for (PrescriptionRoutingDecision d : routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(ids)) {
+            if (d.getPrescription() != null) {
+                latest.putIfAbsent(d.getPrescription().getId(), d);
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * Prescriptions on the page that still have a supplier order outstanding.
+     * A partial fill moves the row off PENDING_STOCK, so the status alone
+     * stops saying that stock is still owed; the decision is what knows.
+     * Reuses the decision page already fetched.
+     */
+    private Set<UUID> outstandingBackOrdersFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Set.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Set<UUID> outstanding = new java.util.HashSet<>();
+        for (PrescriptionRoutingDecision d : routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(ids)) {
+            if (d.getPrescription() != null
+                    && d.getRoutingType() == RoutingType.BACKORDER
+                    && d.getStatus() == RoutingDecisionStatus.PENDING) {
+                outstanding.add(d.getPrescription().getId());
+            }
+        }
+        return outstanding;
+    }
+
+    /**
+     * When the pharmacy last acted on each prescription — the newer of its
+     * latest live dispense and its latest routing decision. Null when the
+     * pharmacy has never touched it. One query for the dispenses; the
+     * decisions were already fetched.
+     */
+    private Map<UUID, LocalDateTime> lastPharmacyActionsFor(List<Prescription> prescriptions,
+                                                            Map<UUID, PrescriptionRoutingDecision> latestDecisions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, LocalDateTime> last = new HashMap<>();
+        for (Dispense d : dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
+                ids, DispenseStatus.CANCELLED)) {
+            if (d.getPrescription() != null && d.getDispensedAt() != null) {
+                last.putIfAbsent(d.getPrescription().getId(), d.getDispensedAt());
+            }
+        }
+        latestDecisions.forEach((id, decision) -> {
+            LocalDateTime decidedAt = decision.getDecidedAt();
+            if (decidedAt != null) {
+                last.merge(id, decidedAt, (a, b) -> a.isAfter(b) ? a : b);
+            }
+        });
+        return last;
     }
 
     /**
@@ -665,7 +824,12 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
-    private void updatePrescriptionStatusFromHistory(Prescription prescription) {
+    /**
+     * @param announce whether a status change is a pharmacy outcome the
+     *                 prescriber should hear about (a fill), as opposed to
+     *                 bookkeeping after a cancellation
+     */
+    private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
@@ -686,11 +850,43 @@ public class DispenseServiceImpl implements DispenseService {
         if (prescription.getStatus() != nextStatus) {
             prescription.setStatus(nextStatus);
             prescriptionRepository.save(prescription);
+            // G6: the prescriber hears about a fill or a partial fill; the
+            // return to SIGNED after a cancellation is the pharmacy's own
+            // bookkeeping and is not announced.
+            if (announce) {
+                prescriberNotifier.notifyPrescriber(prescription, nextStatus);
+            }
         }
 
         if (nextStatus == PrescriptionStatus.DISPENSED) {
             closeOutApprovedRefill(prescription);
         }
+    }
+
+    /**
+     * A fill against a back-ordered prescription is the restock the BACKORDER
+     * decision was waiting for: close it, so the routing history does not
+     * show a back order still pending for medication already in the patient's
+     * hands. Best-effort for the same reason as {@link #closeOutApprovedRefill}.
+     */
+    private void closeOutBackOrder(Prescription prescription) {
+        try {
+            routingDecisionRepository.findByPrescriptionIdOrderByDecidedAtDesc(prescription.getId())
+                    .stream()
+                    .filter(d -> d.getRoutingType() == RoutingType.BACKORDER
+                            && d.getStatus() == RoutingDecisionStatus.PENDING)
+                    .findFirst()
+                    .ifPresent(this::completeBackOrder);
+        } catch (RuntimeException ex) {
+            log.warn("Could not close out the back order for prescription {}: {}",
+                    prescription.getId(), ex.getMessage());
+        }
+    }
+
+    private void completeBackOrder(PrescriptionRoutingDecision decision) {
+        decision.setStatus(RoutingDecisionStatus.COMPLETED);
+        routingDecisionRepository.save(decision);
+        log.info("Back order {} completed by an in-house dispense", decision.getId());
     }
 
     /**
@@ -705,10 +901,9 @@ public class DispenseServiceImpl implements DispenseService {
      * second fill would have reported as fully DISPENSED.
      */
     private BigDecimal expectedLifetimeQuantity(Prescription prescription) {
-        BigDecimal perFill = prescription.getQuantity() != null
-                ? prescription.getQuantity() : BigDecimal.ZERO;
-        int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
-        return perFill.multiply(BigDecimal.valueOf(1L + refillsUsed));
+        // One owner for the arithmetic: the routing service needs the same
+        // sum to tell a partner what is still owed (FillAccounting).
+        return FillAccounting.expectedLifetimeQuantity(prescription);
     }
 
     /**
@@ -737,7 +932,10 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
-    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p, RefillRequest latestRefill) {
+    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p, RefillRequest latestRefill,
+                                                    PrescriptionRoutingDecision latestDecision,
+                                                    LocalDateTime lastPharmacyAction,
+                                                    boolean backOrderOutstanding) {
         WorkQueuePrescriptionDTO.Patient patient = null;
         if (p.getPatient() != null) {
             patient = WorkQueuePrescriptionDTO.Patient.builder()
@@ -761,6 +959,7 @@ public class DispenseServiceImpl implements DispenseService {
                     .user(staffUser)
                     .build();
         }
+        String attentionReason = attentionReason(p, lastPharmacyAction, backOrderOutstanding);
         return WorkQueuePrescriptionDTO.builder()
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
@@ -773,7 +972,57 @@ public class DispenseServiceImpl implements DispenseService {
                 .patient(patient)
                 .staff(staff)
                 .refill(toRefillContext(p, latestRefill))
+                .pharmacyName(p.getPharmacyName())
+                .lastRefusedBy(lastRefusedBy(p, latestDecision))
+                .needsAttention(attentionReason != null)
+                .attentionReason(attentionReason)
                 .build();
+    }
+
+    /**
+     * Why a queue row needs a second look before dispensing, or null for a
+     * plain fill. The five values the portal switches on, in the order this
+     * method decides them: PENDING_STOCK (a back order — the stock may or may
+     * not have arrived), PARTNER_REJECTED (re-route or fill in-house),
+     * PARTNER_ACCEPTED (with a partner, not fillable here until somebody
+     * records a no-show), BACK_ORDER_OUTSTANDING (a partial fill moved the
+     * row off PENDING_STOCK but the supplier order is still open) and
+     * CLARIFICATION_RESOLVED (the prescriber has just answered — read the
+     * answer first). The last one
+     * holds only until the pharmacy acts on the answer — a dispense or a
+     * routing decision after the resolution clears it; without that the row
+     * would be flagged for the rest of its life.
+     */
+    private static String attentionReason(Prescription p, LocalDateTime lastPharmacyAction,
+                                          boolean backOrderOutstanding) {
+        if (p.getStatus() != null && NEEDS_ATTENTION_STATUSES.contains(p.getStatus())) {
+            return p.getStatus().name();
+        }
+        if (backOrderOutstanding) {
+            return ATTENTION_BACK_ORDER_OUTSTANDING;
+        }
+        LocalDateTime resolvedAt = p.getClarificationResolvedAt();
+        if (resolvedAt != null && (lastPharmacyAction == null || resolvedAt.isAfter(lastPharmacyAction))) {
+            return ATTENTION_CLARIFICATION_RESOLVED;
+        }
+        return null;
+    }
+
+    /**
+     * The partner that refused a PARTNER_REJECTED row. The prescription's own
+     * pharmacy columns are cleared on refusal so the row groups under the
+     * in-house dispensary; the refusing partner is still worth showing.
+     */
+    private static String lastRefusedBy(Prescription p, PrescriptionRoutingDecision latestDecision) {
+        if (p.getStatus() != PrescriptionStatus.PARTNER_REJECTED || latestDecision == null) {
+            return null;
+        }
+        if (latestDecision.getRoutingType() != RoutingType.PARTNER
+                || latestDecision.getStatus() != RoutingDecisionStatus.REJECTED
+                || latestDecision.getTargetPharmacy() == null) {
+            return null;
+        }
+        return latestDecision.getTargetPharmacy().getName();
     }
 
     /**

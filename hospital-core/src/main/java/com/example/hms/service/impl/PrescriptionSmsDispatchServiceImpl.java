@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PharmacyType;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
@@ -53,6 +54,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
 
+        refuseWhileAwaitingClarification(rx);
         validateScope(rx, pharmacy);
         String phone = requirePharmacyPhone(pharmacy);
         String body = buildSmsBody(rx, request.getNote());
@@ -72,6 +74,23 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 .status(transmission.getStatus())
                 .dispatchedAt(transmission.getLastAttemptedAt())
                 .build();
+    }
+
+    /**
+     * The clarification hold applies to every external-fill exit, and this is
+     * the third one (the other two are the partner route and the printed
+     * copy, both refused by {@code StockOutRoutingServiceImpl}). Without it a
+     * pharmacist could ask the prescriber a question and then SMS the order
+     * to a community pharmacy anyway.
+     *
+     * <p>Deliberately the only status rule added here: this file's broader
+     * dispatchable-status question belongs to the community-dispatch PR.
+     */
+    private void refuseWhileAwaitingClarification(Prescription rx) {
+        if (rx.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new BusinessException("This prescription is awaiting the prescriber's clarification "
+                + "and cannot be dispatched until it is resolved.");
+        }
     }
 
     private void validateScope(Prescription rx, Pharmacy pharmacy) {

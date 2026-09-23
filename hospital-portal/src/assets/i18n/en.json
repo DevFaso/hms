@@ -5182,6 +5182,8 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Blocked by Plan",
         "PLATFORM_REGISTRY_UPDATED": "Platform Registry Updated",
         "PRESCRIPTION_BACKORDER": "Prescription on Backorder",
+        "PRESCRIPTION_CLARIFICATION_REQUESTED": "Prescription Clarification Requested",
+        "PRESCRIPTION_CLARIFICATION_RESOLVED": "Prescription Clarification Resolved",
         "PRESCRIPTION_CREATED": "Prescription Created",
         "PRESCRIPTION_DISCONTINUED": "Prescription Discontinued",
         "PRESCRIPTION_PRINTED": "Prescription Printed",

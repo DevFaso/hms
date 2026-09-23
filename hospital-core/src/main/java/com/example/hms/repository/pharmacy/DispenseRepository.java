@@ -31,6 +31,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     Page<Dispense> findByPatientId(UUID patientId, Pageable pageable);
 
+    /** Live dispenses of a page of prescriptions, newest first — the work queue's last-action lookup. */
+    List<Dispense> findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
+            List<UUID> prescriptionIds, DispenseStatus excludedStatus);
+
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
 
     /**

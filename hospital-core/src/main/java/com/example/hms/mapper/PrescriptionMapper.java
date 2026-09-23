@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -22,6 +23,24 @@ public class PrescriptionMapper {
 
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Prescription";
+
+    /**
+     * Statuses the pharmacy writes (gap G7). While the row is in one of these
+     * the status IS the latest pharmacy event; DRAFT, SIGNED, CANCELLED and
+     * the like are the prescriber's, and report no pharmacy event.
+     */
+    static final java.util.Set<PrescriptionStatus> PHARMACY_OWNED_STATUSES = java.util.EnumSet.of(
+        PrescriptionStatus.TRANSMITTED,
+        PrescriptionStatus.PENDING_CLARIFICATION,
+        PrescriptionStatus.DISPENSED,
+        PrescriptionStatus.PARTIALLY_FILLED,
+        PrescriptionStatus.PENDING_STOCK,
+        PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
+        PrescriptionStatus.SENT_TO_PARTNER,
+        PrescriptionStatus.PARTNER_ACCEPTED,
+        PrescriptionStatus.PARTNER_REJECTED,
+        PrescriptionStatus.PARTNER_DISPENSED,
+        PrescriptionStatus.PRINTED_FOR_PATIENT);
 
     /* ============================
        Response mapping
@@ -85,9 +104,42 @@ public class PrescriptionMapper {
             .signedAt(p.getSignedAt())
             .signedByStaffId(p.getSignedBy() != null ? p.getSignedBy().getId() : null)
 
+            .pharmacyId(p.getPharmacyId())
+            .pharmacyName(p.getPharmacyName())
+            .pharmacyContact(p.getPharmacyContact())
+            .dispatchChannel(p.getDispatchChannel())
+            .dispatchStatus(p.getDispatchStatus())
+            .dispatchedAt(p.getDispatchedAt())
+            .lastPharmacyEvent(lastPharmacyEvent(p))
+            .lastPharmacyEventAt(lastPharmacyEventAt(p))
+
+            .clarificationReason(p.getClarificationReason())
+            .clarificationRequestedAt(p.getClarificationRequestedAt())
+            .clarificationResponse(p.getClarificationResponse())
+            .clarificationResolvedAt(p.getClarificationResolvedAt())
+
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())
             .build();
+    }
+
+    private static String lastPharmacyEvent(Prescription p) {
+        PrescriptionStatus status = p.getStatus();
+        return status != null && PHARMACY_OWNED_STATUSES.contains(status) ? status.name() : null;
+    }
+
+    private static java.time.LocalDateTime lastPharmacyEventAt(Prescription p) {
+        PrescriptionStatus status = p.getStatus();
+        if (status == null || !PHARMACY_OWNED_STATUSES.contains(status)) {
+            return null;
+        }
+        if (status == PrescriptionStatus.PENDING_CLARIFICATION && p.getClarificationRequestedAt() != null) {
+            return p.getClarificationRequestedAt();
+        }
+        if (status == PrescriptionStatus.TRANSMITTED && p.getDispatchedAt() != null) {
+            return p.getDispatchedAt();
+        }
+        return p.getUpdatedAt();
     }
 
     /* ============================

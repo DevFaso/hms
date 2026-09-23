@@ -107,6 +107,10 @@ public enum AuditEventType {
     PRESCRIPTION_SENT_TO_PARTNER,
     PRESCRIPTION_PRINTED,
     PRESCRIPTION_BACKORDER,
+    /** A pharmacist sent a SIGNED order back to its prescriber with a question (G5). */
+    PRESCRIPTION_CLARIFICATION_REQUESTED,
+    /** The prescriber answered and the order returned to SIGNED (G5). */
+    PRESCRIPTION_CLARIFICATION_RESOLVED,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

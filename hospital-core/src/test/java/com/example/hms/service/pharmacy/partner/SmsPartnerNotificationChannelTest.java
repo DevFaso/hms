@@ -4,7 +4,9 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
+import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -40,6 +44,9 @@ class SmsPartnerNotificationChannelTest {
     @Mock
     private SmsService smsService;
 
+    @Mock
+    private PatientLocaleResolver patientLocaleResolver;
+
     private SmsPartnerNotificationChannel channel;
 
     private PrescriptionRoutingDecision decision;
@@ -50,7 +57,10 @@ class SmsPartnerNotificationChannelTest {
 
     @BeforeEach
     void setUp() {
-        channel = new SmsPartnerNotificationChannel(smsServiceProvider);
+        channel = new SmsPartnerNotificationChannel(smsServiceProvider,
+                new PartnerSmsTemplates(TestMessageSources.bundles()), patientLocaleResolver);
+        lenient().when(patientLocaleResolver.resolve(any(), any()))
+                .thenAnswer(inv -> inv.getArgument(1));
 
         decisionId = UUID.randomUUID();
         decision = PrescriptionRoutingDecision.builder().build();
@@ -145,6 +155,54 @@ class SmsPartnerNotificationChannelTest {
     void sendPrescriptionOfferNullPrescription() {
         channel.sendPrescriptionOffer(decision, null, partner);
         verifyNoInteractions(smsServiceProvider, smsService);
+    }
+
+    @Test
+    @DisplayName("an offer for the remainder of a partially filled order names the amount still owed")
+    void sendPrescriptionOfferNamesTheRemainder() {
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        prescription.setQuantityUnit("comprimés");
+        decision.setRemainingQuantity(new java.math.BigDecimal("6.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).contains("reste 6 comprim");
+        assertThat(msg.getValue()).doesNotContain("10");
+    }
+
+    @Test
+    @DisplayName("an untouched prescription with a released refill is offered in full, not as a remainder")
+    void releasedRefillIsNotAnnouncedAsARemainder() {
+        // Lifetime entitlement is quantity × (1 + refillsUsed): comparing the
+        // remainder with the per-fill quantity announced "(reste 20)" on an
+        // order nothing had been dispensed against.
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        prescription.setRefillsUsed(1);
+        decision.setRemainingQuantity(new java.math.BigDecimal("20.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).doesNotContain("reste");
+    }
+
+    @Test
+    @DisplayName("an offer for the full prescribed amount carries no remainder clause")
+    void sendPrescriptionOfferForTheFullAmountHasNoRemainder() {
+        prescription.setQuantity(new java.math.BigDecimal("10.00"));
+        decision.setRemainingQuantity(new java.math.BigDecimal("10.00"));
+        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+
+        ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(anyString(), msg.capture());
+        assertThat(msg.getValue()).doesNotContain("reste");
     }
 
     @Test
