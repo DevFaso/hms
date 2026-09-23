@@ -43,7 +43,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.example.hms.enums.AbnormalFlag;
-import com.example.hms.enums.ActorType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabReflexRule;
 import com.example.hms.model.LabTestDefinition;

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -296,16 +297,6 @@ class SupersededLabResultsTest {
     }
 
     @Test
-    @DisplayName("the older rule never reaches backwards — an earlier released row does not hide a later pending one")
-    void theOlderRuleOnlyLooksForward() {
-        LabOrder order = order();
-        LabResult latePending = row(order, "HGB", null, LATER, false);
-        LabResult earlyReleased = row(order, "HGB", null, EARLIER, true);
-
-        assertThat(superseded(latePending, earlyReleased)).isEmpty();
-    }
-
-    @Test
     @DisplayName("a row the analyzer DID describe is never judged by the older rule")
     void aDescribedRowNeverFallsBack() {
         // Final, not preliminary: the analyzer rule keeps it, and the older
@@ -351,6 +342,64 @@ class SupersededLabResultsTest {
         otherLab.setSourceSendingFacility("LAB_B");
 
         assertThat(superseded(preliminary, otherLab)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the survivor named is the one nothing else replaces, not whichever matched first")
+    void theReplacementIsTheRowThatSurvives() {
+        // Preliminary, a second preliminary, then the final — all one draw. If
+        // the first preliminary's replacement were "whichever matched first"
+        // it could name the second preliminary, and a caller folding that
+        // survivor into a page would put a superseded pending row in front of
+        // the patient.
+        LabOrder order = order();
+        LabResult firstPreliminary = row(order, "HGB", "P", EARLIER, false);
+        firstPreliminary.setCreatedAt(EARLIER);
+        LabResult secondPreliminary = row(order, "HGB", "P", EARLIER, false);
+        secondPreliminary.setCreatedAt(EARLIER.plusMinutes(1));
+        LabResult finalResult = row(order, "HGB", "F", EARLIER, true);
+        finalResult.setCreatedAt(LATER);
+
+        List<LabResult> all = List.of(firstPreliminary, secondPreliminary, finalResult);
+        Map<UUID, LabResult> replacements = SupersededLabResults.replacements(all, all);
+
+        assertThat(replacements.keySet())
+            .containsExactlyInAnyOrder(firstPreliminary.getId(), secondPreliminary.getId());
+        assertThat(replacements.values())
+            .as("both name the row that survives")
+            .allMatch(winner -> winner.getId().equals(finalResult.getId()));
+    }
+
+    @Test
+    @DisplayName("an analyzer that sends no observation time still has its pair resolved")
+    void aPairWithNoAnalyzerObservationTimeStillResolves() {
+        // The ingest gives such rows the ORDER's datetime rather than the
+        // instant each message landed, so the two reports of one observation
+        // share it. Substituting per-message left the pair unmatched for ever:
+        // the order stuck in RESULTED and a duplicate pending row on the
+        // patient's page, with the pre-V164 fallback unreachable because the
+        // row does carry a status.
+        LabOrder order = order();
+        LocalDateTime orderedAt = EARLIER;
+        LabResult preliminary = row(order, "HGB", "P", orderedAt, false);
+        preliminary.setCreatedAt(orderedAt);
+        LabResult finalResult = row(order, "HGB", "F", orderedAt, true);
+        finalResult.setCreatedAt(LATER);
+
+        assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
+    }
+
+    @Test
+    @DisplayName("the pre-V164 fallback does NOT require the released row to be newer — that is develop's rule")
+    void theFallbackHasNoRecencyTest() {
+        // A legacy pair whose released final happens to carry the earlier
+        // result date is still superseded: requiring recency here would
+        // regress exactly the live data this path exists to protect.
+        LabOrder order = order();
+        LabResult pending = row(order, "HGB", null, LATER, false);
+        LabResult releasedEarlier = row(order, "HGB", null, EARLIER, true);
+
+        assertThat(superseded(pending, releasedEarlier)).containsExactly(pending.getId());
     }
 
     @Test

@@ -166,8 +166,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         if (!redactUnreleased) {
             return results.stream().limit(limit).toList();
         }
-        Map<UUID, LabResult> replacements =
-            SupersededLabResults.replacements(results, withSiblingsOfSupersedableRows(results));
+        List<LabResult> known = withSiblingsOfSupersedableRows(results);
+        // Judge everything we know, not just the page: a winner that is itself
+        // superseded must be recognisable as such before it is folded in.
+        Map<UUID, LabResult> replacements = SupersededLabResults.replacements(known, known);
         if (replacements.isEmpty()) {
             return results.stream().limit(limit).toList();
         }
@@ -179,13 +181,22 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                 survivors.add(result);
             }
         }
+        // Only the rows on this page can pull a survivor in with them; a
+        // sibling fetched purely to judge them is not something the patient
+        // asked for.
+        List<LabResult> pageWinners = results.stream()
+            .map(result -> replacements.get(result.getId()))
+            .filter(java.util.Objects::nonNull)
+            .toList();
         // Removing a superseded row is only half of it: the row that replaced
         // it may be off the page — an observation time shared by the pair puts
         // them adjacent, so a tie can fall either side of the edge — and
         // dropping one without adding the other would take the test out of the
         // patient's view altogether.
-        for (LabResult winner : replacements.values()) {
-            if (winner.getId() != null && present.add(winner.getId())) {
+        for (LabResult winner : pageWinners) {
+            if (winner.getId() != null
+                && !replacements.containsKey(winner.getId())
+                && present.add(winner.getId())) {
                 survivors.add(winner);
             }
         }

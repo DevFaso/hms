@@ -197,7 +197,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .actorLabel(buildActorLabel(sendingApplication, sendingFacility))
                 .resultValue(observation.resultValue().trim())
                 .resultUnit(trimToNull(observation.resultUnit(), 50))
-                .resultDate(observation.resultDate() != null ? observation.resultDate() : nowHere())
+                .resultDate(observedAt(observation, order))
                 .abnormalFlag(toAbnormalFlag(observation.abnormalFlag()))
                 .sourceSendingApplication(senderApp)
                 .sourceSendingFacility(senderFac)
@@ -261,6 +261,25 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         result.setReleased(true);
         result.setReleasedAt(nowHere());
         result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
+    }
+
+    /**
+     * OBX-14, or the order's own datetime when the analyzer sent none.
+     *
+     * <p>Not the instant this message landed. Two messages about one
+     * observation — the preliminary and its final — would then carry two
+     * different timestamps and read as two separate draws, so they would never
+     * be paired on the way out: the order would sit in RESULTED for ever and
+     * the patient would keep a duplicate pending row. The order's datetime is
+     * the same for every message about that order, so the pair still matches.
+     * The consequence is stated in {@code SupersededLabResults}: an analyzer
+     * that does not timestamp its observations cannot express a timed series.
+     */
+    private static LocalDateTime observedAt(ParsedObservation observation, LabOrder order) {
+        if (observation.resultDate() != null) {
+            return observation.resultDate();
+        }
+        return order != null && order.getOrderDatetime() != null ? order.getOrderDatetime() : nowHere();
     }
 
     /**

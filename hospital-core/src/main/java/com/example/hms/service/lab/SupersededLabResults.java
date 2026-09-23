@@ -6,6 +6,7 @@ import com.example.hms.model.LabResult;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -70,7 +71,9 @@ import java.util.UUID;
  *       whereas a timed series is several draws of the same analyte at
  *       different times; without it the series collapsed as soon as any draw
  *       carried a preliminary status, which is the patient-safety case this
- *       class exists for.</li>
+ *       class exists for. An analyzer that sends no OBX-14 gets the ORDER's
+ *       datetime from the ingest rather than the instant the message landed,
+ *       so two reports of one observation still share it; see below.</li>
  *   <li>That row is strictly newer — the pair share an observation time by
  *       construction, so this is write order, and finally row id, and the
  *       outcome is decided by the data rather than by the order a query
@@ -79,6 +82,24 @@ import java.util.UUID;
  *       patient has already been given is never taken away and replaced with
  *       nothing.</li>
  * </ol>
+ *
+ * <h2>When the analyzer sends no observation time</h2>
+ *
+ * <p>OBX-14 is optional, and the ingest has to put something in a non-null
+ * column. Substituting the instant the message arrived gave the two messages
+ * of one observation two different timestamps, so they read as two draws and
+ * never paired: the order sat in RESULTED for ever and the patient kept a
+ * duplicate pending row — and because the row DOES carry a status, the
+ * pre-V164 fallback below was not reached either. The ingest therefore
+ * substitutes the ORDER's datetime, which is the same for every message about
+ * that order.
+ *
+ * <p>What that decides, said plainly: an analyzer that does not timestamp its
+ * observations cannot express a timed series, so repeated reports of one
+ * analyte on one of its orders are treated as reports of one observation. That
+ * is safe because of what the rule can hide — only a row the analyzer marked
+ * PRELIMINARY. A series is reported as finals, and a final is never
+ * superseded, so no draw of a real series can be hidden this way.
  *
  * <h2>And for an ANALYZER row written before V164</h2>
  *
@@ -185,7 +206,12 @@ public final class SupersededLabResults {
         ObservationKey key = observationKey(row);
         return key == null
             ? Optional.empty()
-            : knownRows.stream().filter(candidate -> replaces(candidate, row, key)).findFirst();
+            // The LAST of them, not the first: with a preliminary, a second
+            // preliminary and a final all replacing this row, taking whichever
+            // turned up first could name a row that is itself superseded — and
+            // a caller folding that survivor back into a page would put a
+            // superseded pending row in front of the patient.
+            : knownRows.stream().filter(candidate -> replaces(candidate, row, key)).max(BY_RECENCY);
     }
 
     /**
@@ -194,10 +220,17 @@ public final class SupersededLabResults {
      * unreleased row for the same order and test code, replaced by a LATER
      * RELEASED one.
      *
-     * <p>Deliberately not tightened to the sender or the observation time:
-     * this is the behaviour these rows already have in production, and the
-     * point of keeping it is that they keep working exactly as they do now.
-     * It is reached only for rows that came from an analyzer, so nothing new
+     * <p>Deliberately not tightened in any respect — not to the sender, not to
+     * the observation time, and NOT to recency. This is the behaviour these
+     * rows already have in production and the whole point of keeping it is
+     * that they keep working exactly as they do now; requiring the released
+     * row to be strictly newer quietly stopped superseding a legacy pair whose
+     * final happens to carry the earlier result date, which is a regression on
+     * precisely the data this path exists to protect. Recency is still used to
+     * choose BETWEEN several qualifying released rows, which changes no
+     * verdict, only which row is named as the survivor.
+     *
+     * <p>Reached only for rows that came from an analyzer, so nothing new
      * lands here.
      */
     private static Optional<LabResult> replacementUnderTheRuleForAnalyzerRowsWrittenBeforeV164(
@@ -214,9 +247,8 @@ public final class SupersededLabResults {
                 && candidate.getId() != null
                 && !candidate.getId().equals(row.getId())
                 && candidate.isReleased()
-                && key.equals(analyteKey(candidate))
-                && isStrictlyNewer(candidate, row))
-            .findFirst();
+                && key.equals(analyteKey(candidate)))
+            .max(BY_RECENCY);
     }
 
     /**
@@ -279,16 +311,13 @@ public final class SupersededLabResults {
      * analyzer stamped identically still resolve the same way on every read,
      * rather than following whatever order a query returned.
      */
+    private static final Comparator<LabResult> BY_RECENCY =
+        Comparator.comparing(LabResult::getResultDate, SupersededLabResults::compare)
+            .thenComparing(LabResult::getCreatedAt, SupersededLabResults::compare)
+            .thenComparing(LabResult::getId);
+
     private static boolean isStrictlyNewer(LabResult candidate, LabResult incumbent) {
-        int byObservationTime = compare(candidate.getResultDate(), incumbent.getResultDate());
-        if (byObservationTime != 0) {
-            return byObservationTime > 0;
-        }
-        int byWriteOrder = compare(candidate.getCreatedAt(), incumbent.getCreatedAt());
-        if (byWriteOrder != 0) {
-            return byWriteOrder > 0;
-        }
-        return candidate.getId().compareTo(incumbent.getId()) > 0;
+        return BY_RECENCY.compare(candidate, incumbent) > 0;
     }
 
     /** An absent timestamp sorts earliest, so a row that carries one always wins. */
