@@ -128,6 +128,27 @@ class SmsPartnerNotificationChannelTest {
     }
 
     @Test
+    @DisplayName("prescriptionOfferBody frames the caller's summary with token, initials and reply codes")
+    void prescriptionOfferBodyFramesSummary() {
+        String body = channel.prescriptionOfferBody(decision, prescription, "Amoxicilline 500mg PO BID x 7 j");
+
+        assertThat(body)
+                .startsWith("HMS Rx " + decisionId.toString().substring(0, 8).toUpperCase())
+                .contains("Amoxicilline 500mg PO BID x 7 j")
+                .contains("pour AB")
+                .endsWith("« 2 " + decisionId.toString().substring(0, 8).toUpperCase() + " » pour refuser.");
+        verifyNoInteractions(smsServiceProvider);
+    }
+
+    @Test
+    @DisplayName("prescriptionOfferBody falls back to the generic medication word and em-dash initials")
+    void prescriptionOfferBodyFallbacks() {
+        String body = channel.prescriptionOfferBody(decision, null, " ");
+
+        assertThat(body).contains("m\u00e9dicament").contains("pour \u2014");
+    }
+
+    @Test
     @DisplayName("sendPrescriptionOffer is a no-op when partner is null")
     void sendPrescriptionOfferNullPartner() {
         channel.sendPrescriptionOffer(decision, prescription, null);
@@ -170,7 +191,11 @@ class SmsPartnerNotificationChannelTest {
         ArgumentCaptor<String> msg = ArgumentCaptor.forClass(String.class);
         verify(smsService).send(anyString(), msg.capture());
         assertThat(msg.getValue()).contains("reste 6 comprim");
-        assertThat(msg.getValue()).doesNotContain("10");
+        // The full prescribed amount must not appear in place of the remainder.
+        // Checked as the quantity it would be printed as, not as a bare "10":
+        // the reply instructions now quote the reference, which can itself
+        // contain those digits (e.g. 6AF10D29).
+        assertThat(msg.getValue()).doesNotContain("10 comprim").doesNotContain("reste 10");
     }
 
     @Test

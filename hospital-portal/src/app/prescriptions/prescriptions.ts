@@ -345,6 +345,24 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
+   * SMS dispatch hands a prescription to an outside pharmacy and moves it to
+   * SENT_TO_PARTNER; the backend refuses any other state (400), so the button
+   * is only offered where the call can succeed. The list mirrors the backend's
+   * DISPATCHABLE_STATUSES exactly: a refusal, a back order, and a pharmacy that
+   * has gone quiet on an offer must all leave the clinician free to send the
+   * prescription somewhere else. Re-sending supersedes the previous offer.
+   */
+  canDispatchSms(p: PrescriptionResponse): boolean {
+    return (
+      p.status === 'SIGNED' ||
+      p.status === 'TRANSMITTED' ||
+      p.status === 'PARTNER_REJECTED' ||
+      p.status === 'PENDING_STOCK' ||
+      p.status === 'SENT_TO_PARTNER'
+    );
+  }
+
+  /**
    * A co-sign is offered while the prescription is still signable and the
    * declared requirement is unmet. Whether the CALLER may co-sign (a second
    * prescriber, not the prescription's own) is the backend's check — the row
@@ -557,6 +575,11 @@ export class PrescriptionsComponent implements OnInit {
               pharmacy: result.pharmacyName,
             }),
           );
+          // The dispatch moved the prescription to SENT_TO_PARTNER. Without a
+          // reload the row keeps its old status AND its SMS button, and a
+          // second click supersedes the decision just made — a second SMS, and
+          // the token the first pharmacy is holding stops working.
+          this.load();
           this.closeDispatchModal();
         },
         error: (err) => {

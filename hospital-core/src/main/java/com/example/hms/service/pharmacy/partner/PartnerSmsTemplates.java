@@ -19,8 +19,11 @@ import java.util.Locale;
  *   <li>{@code 3} = confirm dispensed</li>
  *   <li>{@code 0} = cancel / unsubscribe (not auto-handled)</li>
  * </ul>
- * The Rx reference token is appended so the partner's reply can be parsed
- * unambiguously when multiple prescriptions are active.
+ * Every outbound message carries the Rx reference token AND shows it inside
+ * the reply it asks for ({@code « 1 ABC12 »}, in the bundle text): the
+ * inbound parser requires a token, so an offer that only said
+ * "Répondez 1 pour accepter" produced bare replies that were parsed and then
+ * discarded — the decision stayed PENDING and auto-rejected four hours later.
  * <p>
  * Partner-facing bodies render in {@link NotificationLocales#PARTNER_PHARMACY};
  * patient-facing bodies take the patient's resolved locale from the caller.
@@ -55,6 +58,16 @@ public class PartnerSmsTemplates {
     /** Outbound: auto-rejection notice after timeout expiry. */
     public String autoRejected(String refToken) {
         return partner("sms.partner.autoRejected", refToken);
+    }
+
+    /**
+     * Outbound: the offer has been handed to another pharmacy. Deliberately not
+     * {@link #autoRejected}: nothing timed out, and telling a pharmacy its
+     * deadline passed when the prescriber simply chose elsewhere is a lie the
+     * pharmacy would act on.
+     */
+    public String superseded(String refToken) {
+        return partner("sms.partner.superseded", refToken);
     }
 
     /** Outbound to patient: partner accepted the prescription. */

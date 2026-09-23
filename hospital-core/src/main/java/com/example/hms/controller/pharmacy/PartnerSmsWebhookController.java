@@ -53,8 +53,11 @@ public class PartnerSmsWebhookController {
             log.warn("Rejected partner-SMS webhook: bad signature");
             return ResponseEntity.status(401).body(Map.of(STATUS_KEY, "unauthorized"));
         }
+        String from = payload != null ? payload.from() : null;
         String body = payload != null ? payload.body() : null;
-        Optional<PrescriptionRoutingDecision> result = exchangeService.handleInboundReply(body);
+        // G8: the sender number is part of the match — a token alone must not
+        // select a decision when one shared secret covers every gateway.
+        Optional<PrescriptionRoutingDecision> result = exchangeService.handleInboundReply(from, body);
         return result
                 .<ResponseEntity<Map<String, Object>>>map(d -> ResponseEntity.ok(Map.of(
                         STATUS_KEY, "applied",

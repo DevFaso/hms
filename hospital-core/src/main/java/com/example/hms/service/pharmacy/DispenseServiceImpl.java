@@ -3,6 +3,7 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
@@ -281,6 +282,7 @@ public class DispenseServiceImpl implements DispenseService {
         Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         enforceHospitalScope(pharmacy);
+        requireDispensary(pharmacy);
 
         // P-08: prospective CDS check before any state mutates. CRITICAL severity
         // blocks the dispense unless the pharmacist supplied an override reason.
@@ -1050,6 +1052,23 @@ public class DispenseServiceImpl implements DispenseService {
 
     private void enforceHospitalScope(Pharmacy pharmacy) {
         enforceHospitalScope(pharmacy, roleValidator.requireActiveHospitalId());
+    }
+
+    /**
+     * G12: an in-house dispense is a stock movement at one of the hospital's
+     * own dispensaries. Partner and community pharmacies are reached by
+     * stock-out routing / SMS dispatch and confirm their own dispense through
+     * the partner exchange, so a dispense row booked against one of them would
+     * record a fill nobody made. Mirror image of the check in
+     * PrescriptionSmsDispatchServiceImpl, which refuses a dispensary.
+     */
+    private static void requireDispensary(Pharmacy pharmacy) {
+        if (pharmacy.getPharmacyType() != PharmacyType.HOSPITAL_DISPENSARY) {
+            throw new BusinessException(
+                    "In-house dispenses can only be recorded against a HOSPITAL_DISPENSARY pharmacy; a "
+                            + pharmacy.getPharmacyType()
+                            + " pharmacy is served by partner routing or SMS dispatch.");
+        }
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy, UUID hospitalId) {

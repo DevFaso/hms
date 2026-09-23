@@ -260,10 +260,21 @@ public class PrescriptionController {
 
     @PostMapping("/{id}/dispatch-sms")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
-    @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
-        description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
-            + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "
-            + "of type HOSPITAL_DISPENSARY.")
+    @Operation(summary = "Hand a prescription to a community or partner pharmacy by SMS",
+        description = """
+            Sends the pharmacy the prescription summary together with a reference token and the \
+            reply to send back ("« 1 <REF> » pour accepter, « 2 <REF> » pour refuser"), records a \
+            PrescriptionTransmission, creates a PENDING PARTNER PrescriptionRoutingDecision and \
+            moves the prescription to SENT_TO_PARTNER — so it leaves the in-house dispense queue \
+            and cannot be filled twice. The pharmacy's reply arrives on POST /webhooks/partner-sms \
+            and is matched on the reference AND the sending number; the 2 h reminder and 4 h \
+            auto-reject sweep then apply.
+
+            The pharmacy must be active, at the prescription's hospital, have a phone number on \
+            file and not be of type HOSPITAL_DISPENSARY. The prescription must be SIGNED, \
+            TRANSMITTED, PARTNER_REJECTED or PENDING_STOCK: a refusal or a back order can be sent \
+            to another pharmacy, and doing so supersedes the offer the previous pharmacy held \
+            (its reference stops working and it is told).""")
     public ResponseEntity<ApiResponseWrapper<PrescriptionSmsDispatchResponseDTO>> dispatchSms(
         Authentication auth,
         @PathVariable UUID id,

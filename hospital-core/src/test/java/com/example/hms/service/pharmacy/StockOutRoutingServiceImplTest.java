@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -150,8 +151,9 @@ class StockOutRoutingServiceImplTest {
                 .thenReturn(Optional.of(catalogItem));
         when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
                 hospitalId, medicationId)).thenReturn(List.of(dispensaryInventory, partnerInventory));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of(partnerPharmacy));
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES))
+                .thenReturn(List.of(partnerPharmacy));
         when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(partnerId, medicationId))
                 .thenReturn(Optional.of(partnerInventory));
 
@@ -287,6 +289,115 @@ class StockOutRoutingServiceImplTest {
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not in a routable state");
+    }
+
+    @Test
+    @DisplayName("G4: REQUIRES_EXTERNAL_FILL has no writer and is not a routable state")
+    void routeToPartnerShouldRejectDeadRequiresExternalFillStatus() {
+        prescription.setStatus(PrescriptionStatus.REQUIRES_EXTERNAL_FILL);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("REQUIRES_EXTERNAL_FILL");
+        verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("round 3: a target with no phone number is refused — the offer is an SMS")
+    void routeToPartnerShouldRejectTargetWithoutPhone() {
+        Pharmacy noPhone = Pharmacy.builder()
+                .hospital(hospital)
+                .name("Pharmacie sans t\u00e9l\u00e9phone")
+                .pharmacyType(PharmacyType.COMMUNITY_PHARMACY)
+                .build();
+        UUID noPhoneId = UUID.randomUUID();
+        noPhone.setId(noPhoneId);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(noPhoneId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(noPhoneId)).thenReturn(Optional.of(noPhone));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no phone number");
+
+        // Nothing moved: the prescription is still dispensable in-house.
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(routingDecisionRepository, never()).save(any());
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(partnerChannel);
+    }
+
+    @Test
+    @DisplayName("round 3: a blank phone number counts as none")
+    void routeToPartnerShouldRejectTargetWithBlankPhone() {
+        partnerPharmacy.setPhoneNumber("   ");
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no phone number");
+    }
+
+    @Test
+    @DisplayName("G2: a COMMUNITY_PHARMACY is an accepted routing target")
+    void routeToPartnerShouldAcceptCommunityPharmacy() {
+        Pharmacy community = Pharmacy.builder()
+                .hospital(hospital)
+                .name("Pharmacie du Quartier")
+                .phoneNumber("+22670000002")
+                .pharmacyType(PharmacyType.COMMUNITY_PHARMACY)
+                .build();
+        UUID communityId = UUID.randomUUID();
+        community.setId(communityId);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(communityId)
+                .build();
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(community)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        decision.setId(UUID.randomUUID());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(communityId)).thenReturn(Optional.of(community));
+        when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
+        when(routingDecisionRepository.save(decision)).thenReturn(decision);
+        when(routingMapper.toResponseDTO(decision)).thenReturn(
+                RoutingDecisionResponseDTO.builder().id(decision.getId()).status("PENDING").build());
+
+        RoutingDecisionResponseDTO result = service.routeToPartner(prescriptionId, request);
+
+        assertThat(result.getStatus()).isEqualTo("PENDING");
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(prescription.getPharmacyId()).isEqualTo(communityId);
+        verify(partnerChannel).sendPrescriptionOffer(decision, prescription, community);
     }
 
     @Test
