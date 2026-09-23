@@ -34,6 +34,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -261,6 +262,7 @@ class MllpInboundLabServiceImplTest {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
+        // The helper sends OBX-11 = F: only a final observation can auto-release.
         service.processOruR01(List.of(
                 observation("ACC-1", "5.4", "1", "GLU", "N"),
                 observation("ACC-1", "9.9", "2", "GLU2", "H"),
@@ -328,6 +330,33 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.get(2).isReleased()).isFalse();
         // Only an explicit N (trimmed, any case) is the analyzer saying normal.
         assertThat(saved.get(3).isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("B14 — auto-release on: a PRELIMINARY observation flagged N is stored unreleased, not published as final")
+    void preliminaryNormalObservationIsNeverAutoReleased() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        labOrder.setStatus(LabOrderStatus.IN_PROGRESS);
+
+        // N on OBX-8, P on OBX-11: the analyzer says "normal so far", not "normal".
+        service.processOruR01(
+            List.of(observation("ACC-1", "5.4", "1", "GLU", "N", "P"),
+                    observation("ACC-1", "5.5", "2", "GLU", "N", "I"),
+                    observation("ACC-1", "5.6", "3", "GLU", "N", "S"),
+                    observation("ACC-1", "5.7", "4", "GLU", "N", "")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(4)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabResult::isReleased).containsOnly(false);
+        // The order stayed where the bench has it, and no release audit was written.
+        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.IN_PROGRESS);
+        verify(auditEventLogService, times(4)).logEvent(argThat(
+            a -> a.getEventType() == AuditEventType.LAB_RESULT_UPDATED));
+        verify(auditEventLogService, never()).logEvent(argThat(
+            a -> a.getEventType() == AuditEventType.LAB_RESULT_RELEASED));
     }
 
     @Test

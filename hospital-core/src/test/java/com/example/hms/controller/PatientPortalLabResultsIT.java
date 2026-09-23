@@ -34,6 +34,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.service.LabResultService;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,8 +52,11 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -74,6 +79,8 @@ class PatientPortalLabResultsIT extends BaseIT {
     private static final String STAFF_LAB_RESULTS = "/api/patients/{id}/lab-results";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
+    // #716 narrowed release to the laboratory: a doctor may read a result but not release it.
+    private static final String ROLE_LAB_SCIENTIST = "ROLE_LAB_SCIENTIST";
     private static final String PRELIMINARY_VALUE = "13.7";
     private static final String PRELIMINARY_NOTES = "preliminary - repeat requested";
 
@@ -94,13 +101,17 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private LabResultService labResultService;
 
     private Hospital hospital;
     private User patientUser;
     private User doctorUser;
+    private User labScientistUser;
     private Patient patient;
     private LabTestDefinition hemoglobin;
+    private LabOrder order;
     private LabResult result;
+    private UserRoleHospitalAssignment assignment;
 
     @BeforeEach
     void seedAnUnreleasedAnalyzerResult() {
@@ -142,7 +153,7 @@ class PatientPortalLabResultsIT extends BaseIT {
         Role doctorRole = roleRepository.save(Role.builder()
             .name("Doctor").code(ROLE_DOCTOR).description("Physician role").build());
         doctorUser = userRepository.save(buildUser("doctor"));
-        UserRoleHospitalAssignment assignment = assignmentRepository.save(UserRoleHospitalAssignment.builder()
+        assignment = assignmentRepository.save(UserRoleHospitalAssignment.builder()
             .assignmentCode("ASSIGN-" + nextId())
             .description("Ordering doctor")
             .user(doctorUser)
@@ -160,6 +171,20 @@ class PatientPortalLabResultsIT extends BaseIT {
             .employmentType(EmploymentType.FULL_TIME)
             .licenseNumber("LIC-" + nextId())
             .name("Dr. " + doctorUser.getFirstName())
+            .active(true)
+            .build());
+
+        Role labScientistRole = roleRepository.save(Role.builder()
+            .name("Lab Scientist").code(ROLE_LAB_SCIENTIST).description("Releases lab results").build());
+        labScientistUser = userRepository.save(buildUser("labsci"));
+        assignmentRepository.save(UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-" + nextId())
+            .description("Releasing lab scientist")
+            .user(labScientistUser)
+            .hospital(hospital)
+            .role(labScientistRole)
+            .startDate(LocalDate.now())
+            .assignedAt(LocalDateTime.now())
             .active(true)
             .build());
 
@@ -197,7 +222,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .hospital(hospital)
             .assignment(assignment)
             .build());
-        LabOrder order = labOrderRepository.save(LabOrder.builder()
+        order = labOrderRepository.save(LabOrder.builder()
             .patient(patient)
             .orderingStaff(doctor)
             .labTestDefinition(hemoglobin)
@@ -218,6 +243,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
             .notes(PRELIMINARY_NOTES)
             .referenceRange("12.0-15.5")
+            .testCode("HGB")
             .build());
     }
 
@@ -301,6 +327,74 @@ class PatientPortalLabResultsIT extends BaseIT {
         mockMvc.perform(get(MY_LAB_RESULTS).contextPath(API).with(patient()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].status").value("CRITICAL"));
+    }
+
+    /** The final the analyzer sent after its preliminary: a second stored row, as the ingest writes it. */
+    private LabResult ingestFinal(String value, boolean released) {
+        LabResult finalRow = LabResult.builder()
+            .labOrder(order)
+            .actorType(ActorType.SYSTEM)
+            .actorLabel("MLLP:SYSMEX/LAB_A")
+            .resultValue(value)
+            .resultUnit("g/dL")
+            .resultDate(result.getResultDate())
+            .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
+            .referenceRange("12.0-15.5")
+            .testCode("HGB")
+            .build();
+        finalRow.setReleased(released);
+        if (released) {
+            finalRow.setReleasedAt(LocalDateTime.now());
+            finalRow.setReleasedByDisplay("Lab supervisor");
+        }
+        return labResultRepository.save(finalRow);
+    }
+
+    @Test
+    @DisplayName("the patient sees the released final alone, not a pending row beside it")
+    void aReleasedFinalHidesItsPreliminaryFromThePatient() throws Exception {
+        LabResult released = ingestFinal("14.2", true);
+        // Both rows really are in the database — the record keeps them.
+        assertThat(labResultRepository.findByLabOrder_Id(order.getId())).hasSize(2);
+
+        mockMvc.perform(get(MY_LAB_RESULTS).contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(1)))
+            .andExpect(jsonPath("$.data[0].id").value(released.getId().toString()))
+            .andExpect(jsonPath("$.data[0].released").value(true))
+            .andExpect(jsonPath("$.data[0].value").value("14.2"));
+    }
+
+    @Test
+    @DisplayName("releasing the final completes the order even though the preliminary stays unreleased")
+    void aSupersededPreliminaryDoesNotBlockOrderCompletion() {
+        LabResult pendingFinal = ingestFinal("14.2", false);
+        asLabScientistInTheirHospital();
+
+        labResultService.releaseLabResult(pendingFinal.getId(), Locale.ENGLISH);
+
+        assertThat(labOrderRepository.findById(order.getId()))
+            .get()
+            .extracting(LabOrder::getStatus)
+            .isEqualTo(LabOrderStatus.COMPLETED);
+        // The preliminary is untouched: only the reading changed, not the record.
+        assertThat(labResultRepository.findById(result.getId())).get()
+            .extracting(LabResult::isReleased).isEqualTo(false);
+    }
+
+    /** The release path reads both the security context and the tenant scope. */
+    private void asLabScientistInTheirHospital() {
+        CustomUserDetails principal = new CustomUserDetails(
+            labScientistUser.getId(), labScientistUser.getUsername(), "n/a", true,
+            List.of(new SimpleGrantedAuthority(ROLE_LAB_SCIENTIST)));
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(labScientistUser.getId())
+            .principalUsername(labScientistUser.getUsername())
+            .activeHospitalId(hospital.getId())
+            .permittedHospitalIds(Set.of(hospital.getId()))
+            .build());
     }
 
     @Test

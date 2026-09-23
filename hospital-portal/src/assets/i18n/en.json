@@ -4369,7 +4369,10 @@
       "ABNORMAL": "Abnormal",
       "NORMAL_RESULT": "Within normal limits",
       "ABNORMAL_RESULT": "Outside normal range — please consult your provider",
-      "NORMAL_PREFIX": "Normal:"
+      "NORMAL_PREFIX": "Normal:",
+      "PENDING_RESULT": "Result pending",
+      "PENDING_BADGE": "Pending",
+      "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
       "TITLE": "Visit History",

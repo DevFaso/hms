@@ -2958,19 +2958,31 @@
           } @else {
             @for (lab of myLabResults().slice(0, 4); track lab.id) {
               <div class="patient-lab-row">
-                <div class="lab-icon-wrap" [class.lab-abnormal]="lab.isAbnormal">
+                <div
+                  class="lab-icon-wrap"
+                  [class.lab-abnormal]="lab.isAbnormal"
+                  [class.lab-pending]="lab.isPending"
+                >
                   <span class="material-symbols-outlined" style="font-size: 18px">
-                    {{ lab.isAbnormal ? 'warning' : 'check_circle' }}
+                    {{
+                      lab.isPending ? 'hourglass_top' : lab.isAbnormal ? 'warning' : 'check_circle'
+                    }}
                   </span>
                 </div>
                 <div class="lab-info">
                   <span class="lab-name">{{ lab.testName }}</span>
-                  <span class="lab-value"
-                    >{{ lab.result }}
-                    @if (lab.referenceRange) {
-                      <span class="lab-range">({{ lab.referenceRange }})</span>
-                    }
-                  </span>
+                  @if (lab.isPending) {
+                    <span class="lab-value">{{
+                      'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate
+                    }}</span>
+                  } @else {
+                    <span class="lab-value"
+                      >{{ lab.result }}
+                      @if (lab.referenceRange) {
+                        <span class="lab-range">({{ lab.referenceRange }})</span>
+                      }
+                    </span>
+                  }
                 </div>
                 <span class="lab-date">{{ lab.collectedDate | date: 'MMM d' }}</span>
               </div>

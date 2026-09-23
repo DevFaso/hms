@@ -19,7 +19,9 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -218,7 +220,17 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
-        if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
+        // A preliminary row the lab has since finalised and released is not
+        // work still outstanding — it is a record of what the analyzer said
+        // first. Left counted, it would hold the order open for ever, since
+        // nobody will ever release a superseded preliminary. Same rule, same
+        // class, as the patient view.
+        Set<SupersededLabResults.AnalyteKey> releasedAnalytes =
+            SupersededLabResults.releasedAnalytes(results);
+        boolean nothingOutstanding = results.stream()
+            .allMatch(result -> result.isReleased()
+                || SupersededLabResults.isSupersededByRelease(result, releasedAnalytes));
+        if (!results.isEmpty() && nothingOutstanding) {
             advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
     }
@@ -526,8 +538,61 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
 
         labResultRepository.save(labResult);
+        // Both halves of this line's history: #716 closes the order once every
+        // result on it is released, and the release then transmits its final
+        // form. Domain write first — the message is the consequence, and it is
+        // registered for after this transaction commits.
         completeOrderIfAllReleased(labResult.getLabOrder());
+        enqueueReleasedObservationAfterCommit(labResult);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * The ORU enqueued at creation went out as preliminary (OBX-11 P), because
+     * that is what an unreleased result is; without a second message a receiver
+     * would hold that preliminary for ever.
+     *
+     * <p>Two conditions, both learned the hard way:
+     *
+     * <p>Only for an order we have already transmitted an ORU^R01 for. A result
+     * INGESTED from an analyzer (MLLP ORU^R01) never had a first message from
+     * us, so enqueuing one on release would transmit an unsolicited result back
+     * to the instrument peers — carrying OBR-2 = our internal order UUID, which
+     * is not the accession number the analyzer knows the order by. The outbox
+     * row records the order rather than the result, which is exactly the right
+     * granularity here: the question is whether the peers already know this
+     * order under the identifier we send.
+     *
+     * <p>And after commit, in its own transaction, with the id only. An enqueue
+     * inside this transaction is inserted and validated at commit, so its
+     * try/catch catches nothing and an outbox failure would roll back the
+     * release — the clinical write — for the sake of a message.
+     */
+    private void enqueueReleasedObservationAfterCommit(LabResult labResult) {
+        LabOrder labOrder = labResult.getLabOrder();
+        UUID labOrderId = labOrder != null ? labOrder.getId() : null;
+        if (!instrumentOutboxService.hasTransmittedObservation(labOrderId)) {
+            LOG.debug("Release of result {} not transmitted — no ORU^R01 has gone out for order {}",
+                labResult.getId(), labOrderId);
+            return;
+        }
+        UUID labResultId = labResult.getId();
+        // The catch belongs HERE, outside the REQUIRES_NEW proxy: the enqueue's
+        // INSERT is validated and written when that inner transaction commits,
+        // so a catch inside the service method never sees the failure. And an
+        // exception escaping an afterCommit callback propagates to whoever
+        // committed — the endpoint would answer 500 for a release that DID
+        // happen, and the retry would hit the already-released early return and
+        // never enqueue anything. The release is the clinical write; the
+        // message is not.
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                instrumentOutboxService.enqueueReleasedObservation(labResultId);
+            } catch (RuntimeException ex) {
+                LOG.error("Released ORU^R01 not enqueued for result {}: {}",
+                    labResultId, ex.getMessage(), ex);
+            }
+        });
     }
 
     @Override

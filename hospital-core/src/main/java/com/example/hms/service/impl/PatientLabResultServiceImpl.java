@@ -16,6 +16,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
 import java.util.List;
@@ -112,7 +113,17 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                 .toList();
         }
 
+        // An analyzer reporting preliminary then final stores two rows — it
+        // must, because the message control id is the replay key and the set
+        // id keeps a timed series distinct. The patient should see the
+        // finished value alone, not a "pending" lingering beside it, so the
+        // superseded row is dropped from their view rather than from the
+        // record. Order completion applies the same rule, from the same class.
+        Set<SupersededLabResults.AnalyteKey> releasedAnalytes = redactUnreleased
+            ? SupersededLabResults.releasedAnalytes(results)
+            : Set.of();
         return results.stream()
+            .filter(result -> !SupersededLabResults.isSupersededByRelease(result, releasedAnalytes))
             .map(result -> toResponse(result, redactUnreleased))
             .toList();
     }
