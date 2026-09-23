@@ -99,11 +99,43 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     @Override
     @Transactional
     public void enqueueResultObservation(LabResult result) {
+        // NOT wrapped in a catch, deliberately. This runs in the caller's
+        // transaction — the outbox row and the result commit together or not
+        // at all, which is the whole point of an outbox — and a persistence
+        // failure in here marks that transaction rollback-only whatever this
+        // method does with the exception. Swallowing it therefore bought
+        // nothing and lied twice: the caller believed the write was contained
+        // and then got a 500 at commit anyway, with the cause logged as a
+        // warning instead of raised (the #553 lesson, in a new place).
+        // Failing loudly means the caller sees the real error and retries the
+        // whole clinical write, which is recoverable; a result on the chart
+        // with no ORU behind it is not.
+        // Building the message is pure formatting, and it dereferences the
+        // order's patient and test definition: a null one is an interface
+        // defect, not a reason to refuse the clinician's result. Uncontaining
+        // the SAVE is what the rollback-only argument justifies — a failed
+        // INSERT poisons this transaction whatever anyone catches — and that
+        // argument says nothing about the formatting, which fails on its own
+        // and leaves the transaction untouched. So the build is contained and
+        // the save is not: a formatting bug costs this one outbound message,
+        // logged loudly, instead of blocking every result entry on the order.
+        String payload;
         try {
-            saveResultObservation(result);
-        } catch (Exception ex) {
-            log.error("Failed to enqueue ORU^R01 for result {}: {}", result.getId(), ex.getMessage(), ex);
+            payload = hl7v2MessageBuilder.buildOruR01(result);
+        } catch (RuntimeException cannotFormat) {
+            log.error("ORU^R01 could not be built for result {}; the result stands, the message is not queued: {}",
+                result.getId(), cannotFormat.getMessage(), cannotFormat);
+            return;
         }
+        InstrumentOutbox message = InstrumentOutbox.builder()
+            .labOrder(result.getLabOrder())
+            .messageType(ORU_R01)
+            .payload(payload)
+            .status(InstrumentOutboxStatus.PENDING)
+            .build();
+        outboxRepository.save(message);
+        log.debug("Enqueued ORU^R01 for result {} / order {}",
+            result.getId(), result.getLabOrder().getId());
     }
 
     /**

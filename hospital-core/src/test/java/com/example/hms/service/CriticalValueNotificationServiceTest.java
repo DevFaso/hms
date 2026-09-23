@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -138,17 +137,25 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
-    void notificationFailureNeverPropagates() {
+    void notificationFailurePropagatesRatherThanPoisoningTheTransaction() {
+        // This runs in the caller's transaction, so a persistence failure
+        // marks it rollback-only whatever this method does with the
+        // exception: swallowing it left the caller believing the alert was
+        // contained and then handed them a 500 at commit with the cause
+        // logged as a warning. Failing here means the clinical write is
+        // retried — recoverable — where a critical result nobody was told
+        // about is not.
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         when(notificationService.createNotification(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("broker down"));
 
-        assertThatCode(() -> service.notifyIfCritical(result)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.notifyIfCritical(result))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("broker down");
 
-        // The swallow must be around a real attempt: without this, an
-        // implementation that stopped notifying altogether would also "never
-        // propagate" and the test would still pass.
-        verify(notificationService).createNotification(anyString(), anyString(), anyString());
+        // and the stamp is NOT written, so the escalation sweep still sees it
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(labResultRepository, never()).save(result);
     }
 
     @Test
@@ -164,11 +171,40 @@ class CriticalValueNotificationServiceTest {
     @Test
     void smsSentOverRealTransport() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        // The alert row and the stamp are local writes that commit with the
+        // result; only the gateway hop waits for the commit, and it is handed
+        // the number read while the transaction was open.
         when(smsService.deliversRealSms()).thenReturn(true);
 
         service.notifyIfCritical(result);
 
         verify(smsService).send(eq("+22670707070"), contains("Potassium"));
+    }
+
+    @Test
+    void sendCriticalSmsNeedsNothingButWhatItWasHanded() {
+        // The callback runs after the commit and must touch no association:
+        // the number is three lazy hops from the result, and with
+        // open-in-view off it would be unreachable there. It is read in the
+        // transaction and passed in, so this needs no repository at all.
+        service.sendCriticalSms(result.getId(), null, "unused");
+        service.sendCriticalSms(result.getId(), "   ", "unused");
+
+        verify(smsService, never()).send(anyString(), anyString());
+        verify(labResultRepository, never()).findById(any());
+    }
+
+    @Test
+    void sendCriticalSmsSwallowsAGatewayFailure() {
+        // Already committed and already alerted in-app: a gateway that throws
+        // must not propagate out of the callback.
+        when(smsService.deliversRealSms()).thenReturn(true);
+        doThrow(new IllegalStateException("gateway down"))
+            .when(smsService).send(anyString(), anyString());
+
+        service.sendCriticalSms(result.getId(), "+22670707070", "Critical potassium");
+
+        verify(smsService).send(anyString(), anyString());
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.example.hms.service.lab;
 
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.LabOrder;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -41,8 +40,8 @@ public final class LabOrderLifecycle {
      * where it belongs.
      *
      * <p>CANCELLED is given the terminal rank: it is never a forward target
-     * (see {@link #advance}), and ranking it low would let a cancelled order
-     * be advanced.
+     * (see {@link #statusAfterForwardStep}), and ranking it low would let a
+     * cancelled order be advanced.
      */
     private static final java.util.Map<LabOrderStatus, Integer> RANK =
         new java.util.EnumMap<>(java.util.Map.of(
@@ -68,6 +67,12 @@ public final class LabOrderLifecycle {
      * States a NEW result re-opens: the order was finished with, and something
      * has come back anyway.
      *
+     * <p>Read only by {@link #statusAfterNewResult}. There is deliberately no
+     * method that re-opens an order by mutating it: the entry path writes the
+     * status through a compare-and-set statement, and an entity-mutating
+     * sibling is exactly how that write came to be swallowed by a stale
+     * snapshot.
+     *
      * <p>VERIFIED belongs here with COMPLETED. It is not merely a stage on the
      * way: {@code EncounterServiceImpl.LAB_TERMINAL} counts VERIFIED as done,
      * so an encounter can be closed over it. A result entered on a VERIFIED
@@ -81,43 +86,86 @@ public final class LabOrderLifecycle {
         EnumSet.of(LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
 
     /**
-     * The one sanctioned move backwards: a result arriving on an order that
-     * was already finished (a correction, a late analyte) re-opens it to
-     * RESULTED so the ordering doctor sees it as having something new to
-     * review and the normal release → COMPLETED path runs again.
+     * What a newly entered result should move {@code current} to, or
+     * {@code null} when it should not move at all.
      *
-     * @return true when the order was VERIFIED or COMPLETED and is now RESULTED
+     * <p>The decision, separated from the writing of it: the entry path writes
+     * the status with a compare-and-set statement rather than through the
+     * entity (see {@code LabOrderRepository.updateStatusFrom}), so it needs
+     * the verdict before it has anything to mutate.
+     *
+     * <p>A {@code null} current status yields no move. The caller would write
+     * it with {@code expected = null}, and {@code status = null} matches no
+     * row in SQL, so the statement is a guaranteed no-op — a branch that could
+     * only ever log that it had moved an order it had not. A lab order always
+     * has a status ({@code @PrePersist} defaults it to ORDERED); a null here
+     * means the row is gone, which is not this path's business to repair.
      */
-    public static boolean reopenForResult(LabOrder order) {
-        if (order == null || !REOPENABLE.contains(order.getStatus())) {
-            return false;
+    public static LabOrderStatus statusAfterNewResult(LabOrderStatus current) {
+        if (current == null || current == LabOrderStatus.CANCELLED) {
+            return null;
         }
-        order.setStatus(LabOrderStatus.RESULTED);
-        return true;
+        if (REOPENABLE.contains(current)) {
+            return LabOrderStatus.RESULTED;
+        }
+        Integer currentRank = RANK.get(current);
+        Integer resultedRank = RANK.get(LabOrderStatus.RESULTED);
+        return (currentRank != null && currentRank < resultedRank) ? LabOrderStatus.RESULTED : null;
     }
 
     /**
-     * Move {@code order} to {@code target} when that is a forward step.
+     * What the release of the LAST outstanding result should move
+     * {@code current} to, or {@code null} when it should not move.
      *
-     * @return true when the status changed; false when the order is null,
-     *         already at or past {@code target}, terminal, or {@code target}
-     *         is CANCELLED (cancellation is a decision, never a side effect)
+     * <p>Decided from the status committed in the database, read under the
+     * order's write lock — not from an instance loaded before it. A
+     * concurrent re-open (an amendment landing while this release runs) is
+     * therefore visible: the order completes from RESULTED as it should,
+     * rather than being advanced from a stale value and stranded with every
+     * result released and nothing left to move it.
      */
-    public static boolean advance(LabOrder order, LabOrderStatus target) {
-        if (order == null || target == null || target == LabOrderStatus.CANCELLED) {
-            return false;
+    public static LabOrderStatus statusAfterAllResultsReleased(LabOrderStatus current) {
+        if (current == null || TERMINAL.contains(current)) {
+            return null;
         }
-        LabOrderStatus current = order.getStatus();
         Integer currentRank = RANK.get(current);
+        Integer completedRank = RANK.get(LabOrderStatus.COMPLETED);
+        return (currentRank != null && currentRank < completedRank) ? LabOrderStatus.COMPLETED : null;
+    }
+
+    /**
+     * Whether {@code target} is a forward step from {@code current}, and so
+     * the status to write — or {@code null} when the order should not move.
+     *
+     * <p>A verdict, like its siblings, because nothing writes a lab order's
+     * status through the entity any more: every path issues the compare-and-set
+     * statement instead. The mutating {@code advance(order, target)} this
+     * replaces is what let a pre-lock snapshot decide, and then quietly
+     * swallow or over-write the decision.
+     *
+     * @return {@code target} when the move is forward and legal; {@code null}
+     *         when the order is already at or past it, is terminal, or
+     *         {@code target} is CANCELLED (cancellation is a decision, never a
+     *         side effect of a specimen or a result)
+     */
+    public static LabOrderStatus statusAfterForwardStep(LabOrderStatus current, LabOrderStatus target) {
+        if (target == null || target == LabOrderStatus.CANCELLED) {
+            return null;
+        }
         Integer targetRank = RANK.get(target);
-        if (targetRank == null) {
-            return false;
+        if (targetRank == null || current == null) {
+            // A null current yields no move, like statusAfterNewResult: the
+            // caller writes the verdict with an absent expected value, and a
+            // comparison against an absent status matches no row in SQL, so
+            // the statement could only ever be a no-op that then logged a
+            // concurrent move nobody made. A lab order always has a status
+            // (@PrePersist defaults it); absent here means the row is gone.
+            return null;
         }
-        if (current != null && (TERMINAL.contains(current)
-                || (currentRank != null && currentRank >= targetRank))) {
-            return false;
+        Integer currentRank = RANK.get(current);
+        if (TERMINAL.contains(current) || (currentRank != null && currentRank >= targetRank)) {
+            return null;
         }
-        order.setStatus(target);
-        return true;
+        return target;
     }
 }

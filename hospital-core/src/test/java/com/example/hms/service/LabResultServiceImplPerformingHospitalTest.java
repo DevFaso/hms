@@ -22,6 +22,7 @@ import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,6 +65,8 @@ class LabResultServiceImplPerformingHospitalTest {
     @Mock private LabReflexRuleRepository labReflexRuleRepository;
     @Mock private LabTestDefinitionRepository labTestDefinitionRepository;
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -110,7 +114,20 @@ class LabResultServiceImplPerformingHospitalTest {
 
     @Test
     void performingLaboratoryEntersAResultJudgedByItsRolesThere() {
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // #721: the order is read unlocked for the permission checks and the
+        // write lock is taken only for the status decision, which is written
+        // by a compare-and-set statement rather than through the entity.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(authService.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -134,7 +151,20 @@ class LabResultServiceImplPerformingHospitalTest {
         UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(ordering);
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // #721: the order is read unlocked for the permission checks and the
+        // write lock is taken only for the status decision, which is written
+        // by a compare-and-set statement rather than through the entity.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(authService.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -154,7 +184,20 @@ class LabResultServiceImplPerformingHospitalTest {
 
     @Test
     void thirdHospitalCannotEnterAResult() {
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // #721: the order is read unlocked for the permission checks and the
+        // write lock is taken only for the status decision, which is written
+        // by a compare-and-set statement rather than through the entity.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(third.getId());
 
         LabResultRequestDTO request = request();
@@ -166,7 +209,20 @@ class LabResultServiceImplPerformingHospitalTest {
     @Test
     void orderingHospitalActorIsStillJudgedByTheOrderingHospitalRoles() {
         UUID doctorId = UUID.randomUUID();
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // #721: the order is read unlocked for the permission checks and the
+        // write lock is taken only for the status decision, which is written
+        // by a compare-and-set statement rather than through the entity.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
         when(authService.getCurrentUserId()).thenReturn(doctorId);
         when(roleValidator.hasRole(doctorId, ordering.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(false);
@@ -235,6 +291,79 @@ class LabResultServiceImplPerformingHospitalTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("performing this order");
         assertThat(result.isReleased()).isFalse();
+    }
+
+    @Test
+    void theOrderingHospitalsClinicianSignsTheResultIntoTheChart() {
+        // Signing is not releasing. /release admits lab roles only; this
+        // endpoint admits DOCTOR and MIDWIFE, calls itself a clinician
+        // signature and auto-acknowledges — the ordering clinician's act. For
+        // an outsourced order that clinician is the one who takes the result
+        // into the chart, so they sign it, judged by their roles at their own
+        // hospital.
+        UUID doctorId = UUID.randomUUID();
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(authService.getCurrentUserId()).thenReturn(doctorId);
+        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
+        when(roleValidator.isDoctor(doctorId, ordering.getId())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        service.signLabResult(result.getId(), null, Locale.ENGLISH);
+
+        assertThat(result.getSignedByUserId()).isEqualTo(doctorId);
+        assertThat(result.isAcknowledged()).isTrue();
+    }
+
+    @Test
+    void aReflexChildRoutedToTheSameLaboratoryIsAnnouncedToIt() {
+        // The child inherits the parent's performing laboratory, so it lands
+        // on another hospital's worklist — it must arrive announced.
+        com.example.hms.model.LabReflexRule rule = new com.example.hms.model.LabReflexRule();
+        rule.setId(UUID.randomUUID());
+        rule.setCondition("{\"severityFlag\":\"NORMAL\"}");
+        LabTestDefinition reflexDef = new LabTestDefinition();
+        reflexDef.setId(UUID.randomUUID());
+        reflexDef.setTestCode("FT4");
+        rule.setReflexTestDefinition(reflexDef);
+
+        // #721: the order is read unlocked for the permission checks and the
+        // write lock is taken only for the status decision, which is written
+        // by a compare-and-set statement rather than through the entity.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(labAssignment.getId())).thenReturn(Optional.of(labAssignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenReturn(result);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(any())).thenReturn(List.of(rule));
+        when(labTestDefinitionRepository.findById(reflexDef.getId())).thenReturn(Optional.of(reflexDef));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        service.createLabResult(request(), Locale.ENGLISH);
+
+        // #716 saves the parent as it advances too; the child is the other one.
+        ArgumentCaptor<LabOrder> saved = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, atLeastOnce()).save(saved.capture());
+        LabOrder child = saved.getAllValues().stream()
+            .filter(candidate -> candidate != order)
+            .findFirst()
+            .orElseThrow();
+        assertThat(child.getPerformingHospital()).isSameAs(performing);
+        assertThat(child.getLabTestDefinition().getTestCode()).isEqualTo("FT4");
+        verify(routingNotifier).notifyPerformingLab(child);
     }
 
     @Test

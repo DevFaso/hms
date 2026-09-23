@@ -55,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -237,6 +238,11 @@ class DoctorWorklistServiceImplTest {
                 "every state still with the lab must be counted");
         assertFalse(statuses.getValue().contains(LabOrderStatus.COMPLETED), "completed orders are not pending");
         assertFalse(statuses.getValue().contains(LabOrderStatus.CANCELLED), "cancelled orders are not pending");
+        // No recency floor here, unlike the critical-labs tile: an order the
+        // laboratory never collected is outstanding work however old, and the
+        // oldest are the ones most needing a look. The finder the service
+        // calls takes statuses only — there is no date argument to pass.
+        verify(labOrderRepository).countByOrderingStaff_IdAndStatusIn(eq(staffId), any());
     }
 
     @Test

@@ -48,6 +48,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     private final LabSpecimenRepository specimenRepository;
     private final LabResultRepository labResultRepository;
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
     private final IntegrationMessageRecorder messageRecorder;
     private final AuditEventLogService auditEventLogService;
     // Last so existing positional constructor calls in tests only append.
@@ -228,9 +229,19 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 emitAutoReleaseAudit(savedResult, hospitalId, integrationId, controlId);
             }
             // P0 #5 — analyzer-reported criticals (HL7 abnormal flag) notify
-            // the ordering provider; never rolls back the ingest. Per row:
-            // a critical hemoglobin on OBX-2 of a CBC must fire even though
-            // OBX-1 was normal.
+            // the ordering provider. Per row: a critical hemoglobin on OBX-2
+            // of a CBC must fire even though OBX-1 was normal.
+            //
+            // This DOES roll the ingest back if it fails, and the comment
+            // that used to promise otherwise was wrong twice over. The alert
+            // row and the criticalNotifiedAt stamp are written in this
+            // transaction, so a failure writing them marks it rollback-only
+            // whatever anyone catches — a catch here would restore the
+            // promise's wording without restoring its truth. And rolling back
+            // is the right answer for this transport: nothing is left half
+            // recorded, the analyzer gets an AR and retransmits, and the
+            // replay guard recognises the retransmission rather than
+            // doubling the batch.
             criticalValueNotificationService.notifyIfCritical(savedResult);
         }
         return MllpInboundOutcome.ACCEPTED;
@@ -319,19 +330,36 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * person's manual step, and an analyzer answering an order IS the
      * event that makes it resulted whatever bench step was skipped. PR
      * #716 ships the same rule for the manual path as
-     * {@code service/lab/LabOrderLifecycle.advance(order, target)}; once
+     * {@code service/lab/LabOrderLifecycle.statusAfterForwardStep}; once
      * both merge this private method becomes a call to it.
      * No state yet (never persisted) counts as pre-result. The order is
      * the managed entity off the specimen, so the change flushes with
      * the surrounding transaction.
      */
-    private static void advanceToResulted(LabOrder order) {
-        LabOrderStatus status = order.getStatus();
-        if (status != null
-            && (status == LabOrderStatus.CANCELLED || status.compareTo(LabOrderStatus.RESULTED) >= 0)) {
+    private void advanceToResulted(LabOrder order) {
+        if (order == null || order.getId() == null) {
             return;
         }
-        order.setStatus(LabOrderStatus.RESULTED);
+        // By statement, like every other path: the order instance here comes
+        // off the specimen and carries whatever snapshot that load saw, so
+        // writing status through it either flushes nothing or flushes the
+        // whole row back over another transaction's column. Under the row
+        // lock, for the same reason the result-entry path holds it: an
+        // unlocked read leaves a window where a concurrent move makes the
+        // compare-and-set match nothing and the order is left short of
+        // RESULTED with only a debug line to show for it.
+        labOrderRepository.findWithLockById(order.getId());
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(order.getId());
+        LabOrderStatus target =
+            com.example.hms.service.lab.LabOrderLifecycle.statusAfterForwardStep(
+                committedStatus, LabOrderStatus.RESULTED);
+        if (target == null) {
+            return;
+        }
+        if (labOrderRepository.updateStatusFrom(order.getId(), committedStatus, target) == 0) {
+            log.debug("Lab order {} moved from {} while an ORU was being recorded; status left alone",
+                order.getId(), committedStatus);
+        }
     }
 
     /**

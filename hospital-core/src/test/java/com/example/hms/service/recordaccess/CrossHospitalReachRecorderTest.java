@@ -21,10 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
 import java.util.Optional;
+import org.springframework.transaction.TransactionDefinition;
 
 @ExtendWith(MockitoExtension.class)
 class CrossHospitalReachRecorderTest {
@@ -37,6 +39,9 @@ class CrossHospitalReachRecorderTest {
 
     @Mock
     private BreakGlassGate breakGlassGate;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private CrossHospitalReachRecorder recorder;
@@ -101,6 +106,138 @@ class CrossHospitalReachRecorderTest {
             .contains("actingHospitalId=" + acting)
             .contains("sourceHospitalId=" + source)
             .contains("rowsSurfaced=3");
+    }
+
+    @Test
+    @DisplayName("a batched reach writes every patient's disclosure in ONE audit transaction")
+    void batchedReachWritesOneBatch() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID sourceA = UUID.randomUUID();
+        UUID sourceB = UUID.randomUUID();
+        UUID patient1 = UUID.randomUUID();
+        UUID patient2 = UUID.randomUUID();
+
+        recorder.recordBatchedReach(Map.of(
+            patient1, Map.of(sourceA.toString(), 2L),
+            patient2, Map.of(sourceB.toString(), 1L)), acting, actor, null, "Batched read");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(captor.capture());
+        verify(auditEventLogService, never()).logEvent(any());
+        assertThat(captor.getValue()).hasSize(2)
+            .extracting(AuditEventRequestDTO::getPatientId)
+            .containsExactlyInAnyOrder(patient1, patient2);
+    }
+
+    @Test
+    @DisplayName("every read is recorded — the same page read twice records it twice")
+    void batchedReachRecordsEveryRead() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        Map<UUID, Map<String, Long>> page = Map.of(patient, Map.of(source.toString(), 3L));
+
+        recorder.recordBatchedReach(page, acting, actor, null, "Batched read");
+        recorder.recordBatchedReach(page, acting, actor, null, "Batched read");
+
+        // Nothing here suppresses a repeat: the accounting has no notion of
+        // one, and every way of inventing a window under-reported something.
+        verify(auditEventLogService, times(2)).logEvents(any());
+    }
+
+    @Test
+    @DisplayName("an audit failure never reaches the read it was accounting for")
+    void batchedReachNeverThrows() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(any(), any(), any()))
+            .thenThrow(new IllegalStateException("break-glass lookup down"));
+
+        recorder.recordBatchedReach(Map.of(patient, Map.of(UUID.randomUUID().toString(), 1L)),
+            acting, actor, null, "Batched read");
+
+        verify(auditEventLogService, never()).logEvents(any());
+    }
+
+    @Test
+    @DisplayName("the break-glass read runs in its own transaction, so a repository failure cannot poison the caller's")
+    void breakGlassLookupSuspendsTheCallersTransaction() {
+        // The lookup is a repository read and the caller is a read-only
+        // transaction serving a GET: a failure inside it would otherwise mark
+        // that transaction rollback-only, the catch would swallow the
+        // exception, and the read would still die at commit. Only a new
+        // transaction keeps the damage local — asserted structurally, because
+        // a mocked gate cannot mark anything rollback-only.
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(UUID.randomUUID(), Map.of(UUID.randomUUID().toString(), 1L)),
+            acting, actor, null, "Batched read");
+
+        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertThat(definition.getValue().getPropagationBehavior())
+            .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    @Test
+    @DisplayName("a page's break-glass reads share ONE transaction, however many patients it holds")
+    void breakGlassLookupsShareOneTransaction() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(
+            UUID.randomUUID(), Map.of(source.toString(), 1L),
+            UUID.randomUUID(), Map.of(source.toString(), 1L),
+            UUID.randomUUID(), Map.of(source.toString(), 1L)), acting, actor, null, "Batched read");
+
+        // A transaction per patient was the cost the batching exists to remove.
+        verify(transactionManager, times(1)).getTransaction(any());
+        verify(breakGlassGate, times(3)).liveSessionId(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("one patient failing costs that patient's row, not the page's")
+    void batchedReachLosesOnlyTheFailingPatient() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        UUID broken = UUID.randomUUID();
+        UUID healthy = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(actor, broken, acting))
+            .thenThrow(new IllegalStateException("break-glass lookup down"));
+        when(breakGlassGate.liveSessionId(actor, healthy, acting)).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(
+            broken, Map.of(source.toString(), 1L),
+            healthy, Map.of(source.toString(), 2L)), acting, actor, null, "Batched read");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(captor.capture());
+        assertThat(captor.getValue()).singleElement()
+            .extracting(AuditEventRequestDTO::getPatientId).isEqualTo(healthy);
+    }
+
+    @Test
+    @DisplayName("a failing audit write never reaches the read either")
+    void batchedReachSwallowsAWriteFailure() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID patient = UUID.randomUUID();
+        doThrow(new IllegalStateException("audit down")).when(auditEventLogService).logEvents(any());
+
+        recorder.recordBatchedReach(Map.of(patient, Map.of(UUID.randomUUID().toString(), 1L)),
+            acting, actor, null, "Batched read");
+
+        verify(auditEventLogService).logEvents(any());
     }
 
     @Test

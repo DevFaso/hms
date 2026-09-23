@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -68,6 +69,8 @@ class LabResultServiceImplLifecycleTest {
     @Mock private LabReflexRuleRepository labReflexRuleRepository;
     @Mock private LabTestDefinitionRepository labTestDefinitionRepository;
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -78,6 +81,26 @@ class LabResultServiceImplLifecycleTest {
     private LabOrder order;
     private LabTestDefinition testDefinition;
     private UserRoleHospitalAssignment assignment;
+
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    /**
+     * Bind the tenancy context the filter chain would have built.
+     *
+     * <p>hasResolvableHospitalScope reads HospitalContextHolder first, so a
+     * test that binds nothing proves nothing about it: it passes because the
+     * holder is empty, not because the principal has no scope.
+     */
+    private void bindHospitalContext(java.util.UUID activeHospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorId)
+                .activeHospitalId(activeHospitalId)
+                .build());
+    }
 
     @BeforeEach
     void setUp() {
@@ -131,9 +154,22 @@ class LabResultServiceImplLifecycleTest {
 
     /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     private void stubEntryPath() {
-        // Entry loads the order under the write lock (round 2): the
-        // reopen/advance decision must see a concurrent release's COMPLETED.
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        // Entry reads the order unlocked and takes the write lock only for the
+        // status decision (follow-up 2), so both finders are exercised.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        // the committed status the locked row is decided on
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        // the status is written by a compare-and-set statement, never through
+        // the entity: the stub applies it so assertions still read the order
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -157,10 +193,14 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository).save(order);
-        // the status decision was made on the locked row, never on a plain read
+        // written as a statement, never through the entity
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.ORDERED, LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+        // the order is read unlocked; the write lock is taken only for the
+        // status decision, so it is never held across the permission checks
+        verify(labOrderRepository).findById(order.getId());
         verify(labOrderRepository).findWithLockById(order.getId());
-        verify(labOrderRepository, never()).findById(any());
     }
 
     @Test
@@ -175,7 +215,8 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, atLeastOnce()).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
     }
 
     @Test
@@ -190,7 +231,8 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, atLeastOnce()).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.VERIFIED, LabOrderStatus.RESULTED);
     }
 
     @Test
@@ -209,6 +251,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -217,7 +265,8 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
         inOrder.verify(labResultRepository).findByLabOrder_Id(order.getId());
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
     }
 
     @Test
@@ -231,6 +280,13 @@ class LabResultServiceImplLifecycleTest {
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(first, last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -238,7 +294,9 @@ class LabResultServiceImplLifecycleTest {
 
         assertThat(last.isReleased()).isTrue();
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        verify(labOrderRepository).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test
@@ -272,6 +330,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId()))
             .thenReturn(List.of(preliminary, finalResult));
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
@@ -325,6 +389,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released, pending));
         when(labResultMapper.toResponseDTO(released)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -358,6 +428,12 @@ class LabResultServiceImplLifecycleTest {
         stubEntryPath();
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId()))
             .thenAnswer(inv -> List.of(resultOn(order, true)));
 
@@ -386,6 +462,7 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository).save(saved.capture());
         assertThat(saved.getValue().isReleased()).isFalse();
         assertThat(saved.getValue().getAbnormalFlag()).isNull();
+        // the alert is raised in this transaction, with the severity computed once
         verify(criticalValueNotificationService).notifyIfCritical(saved.getValue(), "HIGH");
         // not released, so no completion pass: the only locked load is the entry one
         verify(labOrderRepository, times(1)).findWithLockById(order.getId());
@@ -417,7 +494,17 @@ class LabResultServiceImplLifecycleTest {
         // SecurityConfig admits ROLE_SUPER_ADMIN to POST /lab-results, but
         // validateLabResultAuthor had no bypass, so a super-admin with no
         // per-hospital assignment got a 400 from their own endpoint.
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
@@ -451,13 +538,21 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyReleased));
         when(labResultMapper.toResponseDTO(alreadyReleased)).thenReturn(LabResultResponseDTO.builder().build());
 
         service.releaseLabResult(alreadyReleased.getId(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        verify(labOrderRepository).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         // the result itself is untouched: its original release stands
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
@@ -483,8 +578,10 @@ class LabResultServiceImplLifecycleTest {
         service.releaseLabResult(last.getId(), Locale.ENGLISH);
 
         assertThat(last.isReleased()).isTrue();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
-        verify(labOrderRepository, never()).save(order);
+        // the instance is never mutated — the committed CANCELLED is what
+        // decided, and nothing was written over it
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         verify(labResultRepository, never()).findByLabOrder_Id(order.getId());
     }
 
@@ -524,6 +621,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -566,9 +669,374 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("the HL7 ingest entry point skips the hospital comparison; the ordinary one never does")
+    void onlyTheIngestEntryPointIsExemptFromTheHospitalCheck() {
+        // Hl7InboundController posts ORU results with no X-Hospital-Id under
+        // an interface account, and requireActiveHospitalId() THROWS when
+        // nothing resolves — so ingestion needs the exemption. It is named
+        // (createIngestedLabResult), not inferred from "no scope resolves",
+        // which also covered any staff user with two assignments and no
+        // header.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        // an interface principal: a context IS bound (the filter chain always
+        // binds one) but it carries no hospital, and there is no assignment
+        // and no super-admin claim behind it — AND the operator has turned the
+        // exemption on, which it is not by default
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createIngestedLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        // the throwing resolver is never reached on the ingest path
+        verify(roleValidator, never()).requireActiveHospitalId();
+        // and no per-hospital role is demanded of an account that has none —
+        // this test stubs no role, which is the real interface-account case
+        verify(roleValidator, never()).hasRole(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a lab user WITH a hospital scope is checked even on the ingest endpoint")
+    void aScopedHumanIsCheckedOnTheIngestPathToo() {
+        // /lab/hl7/adapter/inbound is open to LAB_TECHNICIAN, LAB_SCIENTIST,
+        // LAB_MANAGER and HOSPITAL_ADMIN humans. Exempting the endpoint let a
+        // multi-hospital lab user write into another tenant's order through
+        // it; the exemption is for a principal with no scope at all.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        // JwtTokenProvider.buildHospitalContext fills activeHospitalId from the
+        // primary/permitted-hospital claims even with no X-Hospital-Id, so a
+        // human on this endpoint resolves a scope and must be checked. That is
+        // also why the exemption is nearly dead code and why the real fix is
+        // fix/hl7-inbound-tenancy.
+        bindHospitalContext(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("an ordinary caller whose hospital scope does not resolve is refused, not exempted")
+    void anUnscopedInteractiveCallerIsStillChecked() {
+        // The hole the "no resolvable scope" exemption left: a staff user with
+        // two active assignments and no X-Hospital-Id took the same branch the
+        // HL7 interface account did, and skipped the tenancy comparison.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new BusinessException("Hospital context required."));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("the re-open is written as a statement, so a stale snapshot cannot swallow it")
+    void theReopenIsWrittenEvenWhenItMatchesTheSnapshot() {
+        // The race this closes: the order is loaded UNLOCKED (snapshot
+        // RESULTED, from before a concurrent release), the release commits
+        // COMPLETED, we take the lock and read COMPLETED, and the target is
+        // RESULTED again. Writing that through the entity is a no-op — the
+        // dirty check compares against the snapshot, sees RESULTED == RESULTED
+        // and flushes nothing — so the re-open vanished and the amendment
+        // never reached the doctor's queue. The compare-and-set statement
+        // cannot be swallowed that way.
+        order.setStatus(LabOrderStatus.RESULTED);          // the stale snapshot
+        stubEntryPath();
+        when(labOrderRepository.findStatusById(order.getId()))
+            .thenReturn(LabOrderStatus.COMPLETED);          // what is actually committed
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    @Test
+    @DisplayName("a status another transaction moved under us is left alone")
+    void aLostCompareAndSetLeavesTheStatusAlone() {
+        // The compare-and-set is guarded by the status read under the lock: if
+        // it matches nothing, somebody else moved the row and this insert does
+        // not overwrite their decision.
+        stubEntryPath();
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RECEIVED);
+        when(labOrderRepository.updateStatusFrom(
+            order.getId(), LabOrderStatus.RECEIVED, LabOrderStatus.RESULTED)).thenReturn(0);
+        // set last: stubbing the compare-and-set above invokes the mock, and
+        // the shared answer would otherwise move the order while arranging it
+        order.setStatus(LabOrderStatus.RECEIVED);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    @DisplayName("the order row is locked before the result is recorded")
+    void theOrderIsLockedBeforeTheResultIsRecorded() {
+        // The lock serialises two entries on one order, so it has to be held
+        // before anything is written — the status decision below reads the
+        // committed value under it.
+        stubEntryPath();
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
+        inOrder.verify(labOrderRepository).findWithLockById(order.getId());
+        inOrder.verify(labResultRepository).save(any(LabResult.class));
+        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.ORDERED,
+            LabOrderStatus.RESULTED);
+    }
+
+    @Test
+    @DisplayName("with the exemption off — the default — an unscoped ingest caller is refused")
+    void anUnscopedIngestCallerIsRefusedWhileTheExemptionIsOff() {
+        // "No resolvable scope" cannot tell a service account from a lab-role
+        // person holding no assignment, and the exemption waives BOTH the
+        // tenancy comparison and the author check, so it stays off until the
+        // sending facility can be resolved to a hospital.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new BusinessException("Hospital context required."));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("an ingest caller cannot attribute a result to another tenant's assignment")
+    void ingestCannotBorrowAnotherTenantsAssignment() {
+        // The exemption leaves no acting hospital, so the acting-hospital
+        // comparison waves anything through; the order is the anchor instead,
+        // or a staff member of another tenant ends up named as the author of
+        // this result and returned in the response.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(elsewhere);
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        LabResultRequestDTO request = entryRequest();
+        request.setAssignmentId(foreign.getId());
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a replay can only match a message recorded against the SAME order")
+    void theReplayLookupIsScopedToTheOrder() {
+        // The three message values come off the request body on this path, so
+        // an unscoped lookup let a caller write an MSH copying another
+        // hospital's analyzer, facility and control id, match that hospital's
+        // row, and be handed it back in full — patient name and result value
+        // included. The order id is what makes that impossible.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        LabResultRequestDTO request = entryRequest();
+        request.setSourceSendingApplication("SOMEONE-ELSES-ANALYZER");
+        request.setSourceSendingFacility("HOSPITAL-B");
+        request.setSourceMessageControlId("MSG-B-1");
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createIngestedLabResult(request, Locale.ENGLISH);
+
+        // the lookup asked about THIS order, and the unscoped finder is never
+        // reached from here at all
+        verify(labResultRepository)
+            .findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                order.getId(), "SOMEONE-ELSES-ANALYZER", "HOSPITAL-B", "MSG-B-1");
+        verify(labResultRepository, never())
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a retransmitted ORU is recognised by its control id and not recorded twice")
+    void aRetransmittedOruIsNotRecordedTwice() {
+        // The HL7 adapter is the one caller that genuinely retries, and a
+        // retransmission reuses MSH-3, MSH-4 and MSH-10. Without this guard it
+        // doubled the result, the critical alert, the SMS and the outbound
+        // message — the interactive path stays dedup-free, which is a
+        // different problem with a different answer.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        LabResultRequestDTO request = entryRequest();
+        request.setSourceSendingApplication("ANALYZER");
+        request.setSourceSendingFacility("LAB-A");
+        request.setSourceMessageControlId("MSG-42");
+        LabResult alreadyRecorded = resultOn(order, false);
+        LabResultResponseDTO recordedDto = LabResultResponseDTO.builder()
+            .id(alreadyRecorded.getId().toString()).build();
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultRepository
+                .findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                    order.getId(), "ANALYZER", "LAB-A", "MSG-42"))
+            .thenReturn(Optional.of(alreadyRecorded));
+        when(labResultMapper.toResponseDTO(alreadyRecorded)).thenReturn(recordedDto);
+
+        LabResultResponseDTO response = service.createIngestedLabResult(request, Locale.ENGLISH);
+
+        assertThat(response).isSameAs(recordedDto);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("ingest-only fields a client sends on the interactive path are discarded")
+    void ingestOnlyFieldsAreDiscardedOnTheInteractivePath() {
+        // testCode is what the superseded-preliminary rule keys on: a client
+        // that could set it could mark its own result superseded and let the
+        // order complete carrying an unreleased, unreviewed value.
+        stubEntryPath();
+        LabResultRequestDTO request = entryRequest();
+        request.setTestCode("K");
+        request.setSourceMessageControlId("MSG-1");
+        request.setSourceSendingApplication("SPOOF");
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getTestCode()).isNull();
+        assertThat(saved.getValue().getSourceMessageControlId()).isNull();
+        assertThat(saved.getValue().getSourceSendingApplication()).isNull();
+    }
+
+    @Test
+    @DisplayName("two results that look alike are both recorded — nothing is deduped away")
+    void twoAnalytesOfOnePanelAreBothRecorded() {
+        // Nothing on this path drops a result for looking like another one.
+        // Detecting a retry meant comparing the fields a request carries, and
+        // the portal form carries too few to tell two analytes apart: no
+        // analyte code, a minute-precision date, usually blank notes. Two
+        // results of one order entered in the same minute with the same value
+        // collapsed, and the caller was answered 201 with somebody else's row.
+        // A duplicate row is visible and correctable; a lost result is not.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResultRequestDTO chloride = entryRequest();
+        chloride.setTestCode("CL");
+        LabResult sodium = resultOn(order, true);
+        sodium.setResultValue(chloride.getResultValue());
+        sodium.setResultUnit(chloride.getResultUnit());
+        sodium.setResultDate(chloride.getResultDate());
+        sodium.setNotes(chloride.getNotes());
+        sodium.setTestCode("NA");
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(labResultRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(sodium));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createIngestedLabResult(chloride, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("the alert and the outbound message both commit with the result")
+    void theAlertAndTheOutboundMessageCommitWithTheResult() {
+        // Both are local writes. Deferring the alert meant a restart between
+        // commit and callback lost it; deferring the outbound message meant
+        // the same crash lost an ORU the dispatcher can never re-derive, since
+        // it only sends rows that exist. Inside the transaction, each commits
+        // with the result or not at all. The SMS is the one thing that still
+        // waits for the commit, and the notification service owns that.
+        stubEntryPath();
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        verify(criticalValueNotificationService).notifyIfCritical(any(LabResult.class), eq("NORMAL"));
+        verify(instrumentOutboxService).enqueueResultObservation(any(LabResult.class));
+    }
+
+    @Test
     @DisplayName("B11 — entering a result on another hospital's order reads as 404")
     void entryOnAnotherHospitalsOrderReadsAsNotFound() {
-        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         LabResultRequestDTO request = entryRequest();

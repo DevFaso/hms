@@ -55,6 +55,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -460,11 +461,57 @@ class LabOrderServiceImplPerformingHospitalTest {
 
     @Test
     void listReadsOrdersHandledByTheActiveHospital() {
+        UUID requester = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(requester);
         when(labOrderRepository.findHandledBy(performing.getId())).thenReturn(List.of(order));
         when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
 
         assertThat(service.getAllLabOrders(Locale.ENGLISH)).containsExactly(mapped);
+
+        // The worklist is where this feature is used from, so it is where the
+        // disclosure has to be accounted — once for the page, not per patient.
+        verify(reachRecorder).recordBatchedReach(
+            eq(java.util.Map.of(patient.getId(), java.util.Map.of(ordering.getId().toString(), 1L))),
+            eq(performing.getId()), eq(requester), any(), any());
+    }
+
+    @Test
+    void readingOneOutsourcedOrderIsAccountedAsADisclosure() {
+        UUID requester = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(requester);
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        service.getLabOrderById(order.getId(), Locale.ENGLISH);
+
+        verify(reachRecorder).recordBatchedReach(
+            eq(java.util.Map.of(patient.getId(), java.util.Map.of(ordering.getId().toString(), 1L))),
+            eq(performing.getId()), eq(requester), any(), any());
+    }
+
+    @Test
+    void anAuditFailureDoesNotFailTheRead() {
+        // Accounting a read must never fail it: the worklist still answers
+        // when the disclosure side is down.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(roleValidator.getCurrentUserId()).thenThrow(new IllegalStateException("audit side down"));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH)).isSameAs(mapped);
+    }
+
+    @Test
+    void theOrderingHospitalsOwnReadIsNotADisclosure() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        service.getLabOrderById(order.getId(), Locale.ENGLISH);
+
+        verifyNoInteractions(reachRecorder);
     }
 
     @Test

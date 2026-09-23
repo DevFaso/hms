@@ -145,7 +145,12 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         long unsignedNotes = digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING);
 
         // Orders still with the laboratory, in every state the lifecycle
-        // actually produces (see AWAITING_LAB).
+        // actually produces (see AWAITING_LAB), with NO recency floor: the
+        // reason the critical-labs tile has one — an old critical value is a
+        // chart fact, not a live alert — does not apply here. An order the
+        // laboratory never collected is outstanding work however long it has
+        // been waiting, and the longest-waiting ones are exactly the ones a
+        // doctor needs to see.
         long pendingOrderReview = labOrderRepository.countByOrderingStaff_IdAndStatusIn(staffId, AWAITING_LAB);
 
         return CriticalStripDTO.builder()
