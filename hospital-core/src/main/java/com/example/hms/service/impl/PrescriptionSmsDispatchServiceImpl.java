@@ -98,7 +98,11 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                                                         PrescriptionSmsDispatchRequestDTO request) {
         authUtils.requireAuth(auth);
 
-        Prescription rx = prescriptionRepository.findById(prescriptionId)
+        // Locked for the duration: two dispatches racing here would each see
+        // no open decision to supersede and leave two live offers, either of
+        // which a pharmacy could accept — the double fill SENT_TO_PARTNER
+        // exists to prevent.
+        Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
         requireCallerHospital(auth, rx);
         Pharmacy pharmacy = pharmacyRepository.findById(request.getPharmacyId())
@@ -214,6 +218,14 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 .filter(d -> OPEN_DECISION_STATUSES.contains(d.getStatus()))
                 .toList();
         for (PrescriptionRoutingDecision d : open) {
+            if (isSameTarget(d, newTarget)) {
+                // Re-sending to the same pharmacy replaces its offer; it has
+                // not lost anything and must not be told to stop preparing
+                // moments after being asked again.
+                log.info("Routing decision {} re-sent to the same pharmacy for prescription {}",
+                        d.getId(), rx.getId());
+                continue;
+            }
             d.setStatus(RoutingDecisionStatus.CANCELLED);
             d.setReason(appendReason(d.getReason(),
                     "Superseded: re-dispatched by SMS to " + newTarget.getName()));
@@ -221,6 +233,11 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
             log.info("Routing decision {} superseded by re-dispatch of prescription {}", d.getId(), rx.getId());
             notifySuperseded(d);
         }
+    }
+
+    private static boolean isSameTarget(PrescriptionRoutingDecision decision, Pharmacy newTarget) {
+        Pharmacy current = decision.getTargetPharmacy();
+        return current != null && current.getId() != null && current.getId().equals(newTarget.getId());
     }
 
     /**

@@ -140,7 +140,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("G1: dispatch records a PENDING PARTNER routing decision and sends the tokenised offer")
     void dispatch_happyPath() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -189,7 +189,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("G1: the reply instructions survive truncation — the prescribing detail is what gets cut")
     void dispatch_truncatesDetailsNotTheOfferFrame() {
         rx.setInstructions("x".repeat(600));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -222,7 +222,7 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .build();
         stale.setId(UUID.randomUUID());
         when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -248,7 +248,7 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .build();
         stale.setId(UUID.randomUUID());
         when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -263,6 +263,34 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
+    @DisplayName("round 6: re-sending to the SAME pharmacy replaces its offer without cancelling or scolding it")
+    void dispatch_toSamePharmacyKeepsItsOfferAndSaysNothing() {
+        rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        PrescriptionRoutingDecision itsOwnOffer = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .targetPharmacy(pharmacy)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        itsOwnOffer.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(itsOwnOffer));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(itsOwnOffer.getStatus())
+                .as("its own offer is replaced, not superseded")
+                .isEqualTo(RoutingDecisionStatus.PENDING);
+        verify(routingDecisionRepository, never()).save(itsOwnOffer);
+        verify(partnerChannel, never()).sendSuperseded(any(), any());
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+    }
+
+    @Test
     @DisplayName("round 5: a superseded pharmacy with no number on file is simply not called")
     void dispatch_supersededWithoutPhoneIsNotNotified() {
         rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
@@ -274,7 +302,7 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .build();
         stale.setId(UUID.randomUUID());
         when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(stale));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -291,7 +319,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     void dispatch_acceptsSentToPartner() {
         rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
         when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of());
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -306,7 +334,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("round 4: a caller with no active hospital is refused unless they are a super-admin")
     void dispatch_rejectsCallerWithNoActiveHospital() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(authUtils.currentHospitalId(auth)).thenReturn(null);
         when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
@@ -321,7 +349,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("round 4: a super-admin in global view is still unscoped")
     void dispatch_allowsSuperAdminInGlobalView() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(authUtils.currentHospitalId(auth)).thenReturn(null);
         when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(true);
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
@@ -362,7 +390,7 @@ class PrescriptionSmsDispatchServiceImplTest {
         backOrder.setId(UUID.randomUUID());
         when(routingDecisionRepository.findByPrescriptionId(prescriptionId))
                 .thenReturn(List.of(stale, closed, backOrder));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -387,7 +415,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("round 2: PENDING_STOCK is dispatchable too")
     void dispatch_acceptsPendingStock() {
         rx.setStatus(PrescriptionStatus.PENDING_STOCK);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         when(transmissionRepository.save(any(PrescriptionTransmission.class)))
@@ -402,7 +430,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("G1: a prescription that is not SIGNED/TRANSMITTED cannot be dispatched")
     void dispatch_rejectsNonDispatchableStatus() {
         rx.setStatus(PrescriptionStatus.DISPENSED);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -419,7 +447,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("hospital-dispensary pharmacies are rejected (must dispense in-house)")
     void dispatch_rejectsHospitalDispensary() {
         pharmacy.setPharmacyType(PharmacyType.HOSPITAL_DISPENSARY);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -434,7 +462,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("inactive pharmacies are rejected")
     void dispatch_rejectsInactivePharmacy() {
         pharmacy.setActive(false);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -451,7 +479,7 @@ class PrescriptionSmsDispatchServiceImplTest {
         Hospital otherHospital = new Hospital();
         otherHospital.setId(UUID.randomUUID());
         pharmacy.setHospital(otherHospital);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -464,7 +492,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("a caller scoped to another hospital gets 404, before the pharmacy is even looked at")
     void dispatch_rejectsCallerFromOtherHospital() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(authUtils.currentHospitalId(auth)).thenReturn(UUID.randomUUID());
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -479,7 +507,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("a caller scoped to the prescription's own hospital passes the tenant check")
     void dispatch_acceptsCallerFromSameHospital() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(authUtils.currentHospitalId(auth)).thenReturn(hospitalId);
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
@@ -495,7 +523,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @DisplayName("pharmacies without a phone number are rejected with a friendly error")
     void dispatch_requiresPharmacyPhone() {
         pharmacy.setPhoneNumber(null);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
@@ -507,7 +535,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("an unresolvable caller cannot own the routing decision")
     void dispatch_requiresResolvableUser() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.empty());
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
@@ -522,7 +550,7 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Test
     @DisplayName("provider failures persist a FAILED transmission and re-raise as BusinessException")
     void dispatch_persistsFailedOnProviderError() {
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
         doThrow(new RuntimeException("twilio offline")).when(smsService).send(anyString(), anyString());

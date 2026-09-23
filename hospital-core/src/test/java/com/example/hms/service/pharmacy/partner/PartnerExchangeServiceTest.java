@@ -27,6 +27,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -213,6 +214,74 @@ class PartnerExchangeServiceTest {
         service.handleInboundReply(PARTNER_PHONE, "1 ZZZZZZZZ");
 
         verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("round 6: a free-text reply is not interpreted — it is named to staff with its prescription")
+    void freeTextReplyReachesAHuman() {
+        // The unreadable path tries every reference-shaped word in the message,
+        // so every other prefix must resolve to nothing.
+        when(routingDecisionRepository.findOpenByIdPrefix(any(), any(), anyString()))
+                .thenReturn(List.of());
+        stubPrefixLookup(decision);
+
+        Optional<PrescriptionRoutingDecision> result =
+                service.handleInboundReply(PARTNER_PHONE, "oui d'accord pour " + token);
+
+        assertThat(result).isEmpty();
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        verify(routingDecisionRepository, never()).save(any());
+        verifyNoInteractions(channel);
+
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        AuditEventRequestDTO event = captor.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+        assertThat(event.getEventDescription())
+                .contains(prescription.getId().toString())
+                .contains("person must action it")
+                // The body may quote the offer back, medication and initials included.
+                .doesNotContain("d'accord");
+    }
+
+    @Test
+    @DisplayName("round 6: an unreadable reply whose prescription cannot be identified still reaches staff")
+    void unreadableReplyWithoutAReferenceStillReachesStaff() {
+        Optional<PrescriptionRoutingDecision> result =
+                service.handleInboundReply(PARTNER_PHONE, "bonjour, c'est not\u00e9, merci");
+
+        assertThat(result).isEmpty();
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        assertThat(captor.getValue().getEventDescription()).contains("not identified");
+    }
+
+    @Test
+    @DisplayName("round 6: a reply from the pharmacy's second number is accepted, with no security alert")
+    void secondNumberInTheFieldIsTheSamePharmacy() {
+        partner.setPhoneNumber("70000000 / 70111222");
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        Optional<PrescriptionRoutingDecision> updated =
+                service.handleInboundReply("+22670111222", "1 " + token);
+
+        assertThat(updated).isPresent();
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+        // The accept itself is audited; what must NOT appear is a security alert.
+        verify(auditEventLogService, never()).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> e != null && e.getEventType() == AuditEventType.SECURITY_ALERT_TRIGGERED));
+    }
+
+    @Test
+    @DisplayName("round 6: a reply from a number with an extension on file is accepted too")
+    void extensionOnFileStillMatches() {
+        partner.setPhoneNumber("+226 70 00 00 00 poste 12");
+        stubPrefixLookup(decision);
+        stubSaves();
+
+        assertThat(service.handleInboundReply("+22670000000", "1 " + token)).isPresent();
     }
 
     @Test

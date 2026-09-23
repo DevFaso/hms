@@ -32,4 +32,50 @@ class PhoneNumbersTest {
         assertThat(PhoneNumbers.toInternationalDigits("  ", BF)).isEmpty();
         assertThat(PhoneNumbers.toInternationalDigits("abc", BF)).isEmpty();
     }
+
+    @Test
+    @DisplayName("round 6: every spelling of one number is the same subscriber")
+    void sameSubscriberAcrossSpellings() {
+        assertThat(PhoneNumbers.isSameSubscriber("70 70 70 70", "+22670707070", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("+226 70 70 70 70", "22670707070", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("0022670707070", "+22670707070", BF)).isTrue();
+    }
+
+    @Test
+    @DisplayName("round 6: a field holding two numbers matches either of them")
+    void multiNumberFieldMatchesEither() {
+        assertThat(PhoneNumbers.isSameSubscriber("70707070 / 70111222", "+22670707070", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070 / 70111222", "+22670111222", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("+22670707070, +22670111222", "+22670111222", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070 ou 70111222", "+22670111222", BF)).isTrue();
+        // Two numbers with nothing but a space between them.
+        assertThat(PhoneNumbers.isSameSubscriber("70707070 70111222", "+22670111222", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070 70111222", "+22670707070", BF)).isTrue();
+    }
+
+    @Test
+    @DisplayName("round 6: an extension after the number does not hide the subscriber")
+    void extensionDoesNotHideTheSubscriber() {
+        assertThat(PhoneNumbers.isSameSubscriber("+22670707070 poste 12", "+22670707070", BF)).isTrue();
+        assertThat(PhoneNumbers.isSameSubscriber("70 70 70 70 ext. 3", "22670707070", BF)).isTrue();
+    }
+
+    @Test
+    @DisplayName("round 6: a different subscriber is still a different subscriber")
+    void differentNumbersDoNotMatch() {
+        assertThat(PhoneNumbers.isSameSubscriber("70707070", "+22670111222", BF)).isFalse();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070", "+22670707079", BF)).isFalse();
+        assertThat(PhoneNumbers.isSameSubscriber(null, "+22670707070", BF)).isFalse();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070", null, BF)).isFalse();
+        assertThat(PhoneNumbers.isSameSubscriber("70707070", "  ", BF)).isFalse();
+    }
+
+    @Test
+    @DisplayName("round 6: candidates lists every number a field holds, in wire form")
+    void candidatesListsEveryNumber() {
+        assertThat(PhoneNumbers.candidates("70707070 / 70111222", BF))
+                .contains("22670707070", "22670111222");
+        assertThat(PhoneNumbers.candidates(null, BF)).isEmpty();
+        assertThat(PhoneNumbers.candidates("  ", BF)).isEmpty();
+    }
 }

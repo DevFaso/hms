@@ -7,252 +7,138 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * The parser understands the instructed reply and refuses to guess at anything
+ * else. Everything it does not understand is reported to staff by
+ * {@link PartnerExchangeService}, so "empty" here means "a person reads it",
+ * not "silently dropped".
+ */
 class PartnerSmsReplyParserTest {
+
+    private static final String REF = "3F2A9B1C";
 
     private final PartnerSmsReplyParser parser = new PartnerSmsReplyParser();
 
-    @Test
-    @DisplayName("parses numeric accept code with reference token")
-    void parsesNumericAccept() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse("1 ABC12");
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parsed.get().refToken()).isEqualTo("ABC12");
+    /** The real offer a handset quotes back, built by the templates. */
+    private static String offer() {
+        return PartnerSmsTemplates.prescriptionOffer(REF, "Amoxicilline 500mg", "AB");
     }
 
+    // ── the instructed reply ────────────────────────────────────────────
+
     @Test
-    @DisplayName("parses numeric reject code")
-    void parsesNumericReject() {
-        assertThat(parser.parse("2 xyz99").orElseThrow().action())
+    @DisplayName("the instructed reply: a code and the reference, as the whole message")
+    void instructedReplyAsTheWholeMessage() {
+        assertThat(parser.parse("1 " + REF).orElseThrow())
+                .isEqualTo(new PartnerSmsReplyParser.ParsedReply(PartnerSmsReplyParser.Action.ACCEPT, REF));
+        assertThat(parser.parse("2 " + REF).orElseThrow().action())
                 .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-    }
-
-    @Test
-    @DisplayName("parses numeric dispense confirmation")
-    void parsesConfirmDispense() {
-        assertThat(parser.parse("3 abc123").orElseThrow().action())
+        assertThat(parser.parse("3 " + REF).orElseThrow().action())
                 .isEqualTo(PartnerSmsReplyParser.Action.CONFIRM_DISPENSE);
     }
 
     @Test
-    @DisplayName("parses French fuzzy accept")
-    void parsesFrenchOui() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse("OUI abc12");
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parsed.get().refToken()).isEqualTo("ABC12");
+    @DisplayName("handsets wrap replies: guillemets, quotes, spacing and a trailing stop are tolerated")
+    void wrappingIsTolerated() {
+        assertThat(parser.parse("« 1 " + REF + " »").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("\"1 " + REF + "\"").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("  1   " + REF + " .").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+        assertThat(parser.parse("1-" + REF).orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
     }
 
     @Test
-    @DisplayName("parses French fuzzy reject")
-    void parsesFrenchNon() {
-        assertThat(parser.parse("non ABC99").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
+    @DisplayName("the reference is returned upper-cased, whatever case it arrives in")
+    void referenceIsUpperCased() {
+        assertThat(parser.parse("1 abcxyz").orElseThrow().refToken()).isEqualTo("ABCXYZ");
     }
 
     @Test
-    @DisplayName("returns empty on blank message")
-    void emptyOnBlank() {
+    @DisplayName("the instructed form inside a short message of the pharmacy's own")
+    void instructedFormInsideAMessage() {
+        assertThat(parser.parse("bonjour, « 1 " + REF + " », merci").orElseThrow().action())
+                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
+    }
+
+    // ── everything else goes to a human ─────────────────────────────────
+
+    @Test
+    @DisplayName("a code with no reference is not a reply we can route")
+    void codeWithoutReferenceIsNotUnderstood() {
+        assertThat(parser.parse("1")).isEmpty();
+        assertThat(parser.parse("1 a")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("free text is never interpreted, however clear it looks")
+    void freeTextIsNeverInterpreted() {
+        // Each of these used to be acted on by the keyword scan.
+        assertThat(parser.parse("oui " + REF)).isEmpty();
+        assertThat(parser.parse("non " + REF)).isEmpty();
+        assertThat(parser.parse("ok " + REF)).isEmpty();
+        assertThat(parser.parse("refus " + REF)).isEmpty();
+        assertThat(parser.parse("délivré " + REF)).isEmpty();
+        assertThat(parser.parse("Non " + REF + ", rupture de stock")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the misreadings that drove this rewrite are all simply not understood")
+    void theMisreadingsAreGone() {
+        // A clinician's note quoted back, whose line begins with a digit: read
+        // as the pharmacy's "3", and the patient was told "délivré".
+        assertThat(parser.parse(offer() + "\n3 boîtes si possible")).isEmpty();
+        // The offer's own clinical text made an acceptance "ambiguous".
+        assertThat(parser.parse(offer() + "\nà délivrer en une seule fois. oui")).isEmpty();
+        // A note containing "non" turned an acceptance into a refusal.
+        assertThat(parser.parse("oui, mais pas avant lundi (non urgent) " + REF)).isEmpty();
+        // "il reste 1 boîte" mid-sentence.
+        assertThat(parser.parse("refus " + REF + ", il reste 1 boîte")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a quoted-back offer decides nothing: it carries both codes, and neither is the pharmacy's")
+    void quotedOfferDecidesNothing() {
+        assertThat(parser.parse(offer())).isEmpty();
+        assertThat(parser.parse(offer() + " oui")).isEmpty();
+        // Even with the instructed reply appended: our own « 1 » and « 2 » are
+        // in the quote, so nothing here is unambiguously the pharmacy's word.
+        assertThat(parser.parse(offer() + "\n« 1 " + REF + " »")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("blank and null decide nothing")
+    void blankDecidesNothing() {
         assertThat(parser.parse("   ")).isEmpty();
         assertThat(parser.parse(null)).isEmpty();
     }
 
+    // ── candidate references, for naming the prescription to a human ────
+
     @Test
-    @DisplayName("returns empty when no token can be extracted")
-    void emptyWhenNoToken() {
-        assertThat(parser.parse("1")).isEmpty();
+    @DisplayName("candidate references come from the instructed form, the offer's prefix, and reference-shaped words")
+    void candidateReferencesFromStructure() {
+        assertThat(parser.candidateReferences(offer() + " oui")).contains(REF);
+        assertThat(parser.candidateReferences("« 1 " + REF + " » et merci")).contains(REF);
+        assertThat(parser.candidateReferences("oui " + REF)).contains(REF);
     }
 
     @Test
-    @DisplayName("uppercases token and trims whitespace")
-    void uppercasesToken() {
-        assertThat(parser.parse("  1   abcXYZ ").orElseThrow().refToken())
-                .isEqualTo("ABCXYZ");
+    @DisplayName("candidate references are bounded, and empty for an empty message")
+    void candidateReferencesAreBounded() {
+        assertThat(parser.candidateReferences(null)).isEmpty();
+        assertThat(parser.candidateReferences("  ")).isEmpty();
+        assertThat(parser.candidateReferences("aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk"))
+                .hasSizeLessThanOrEqualTo(8);
     }
 
     @Test
-    @DisplayName("G17: a digit inside the text is not an action code — the keyword decides")
-    void digitInsideTextDoesNotOverrideKeyword() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed =
-                parser.parse("refus ABC12, il reste 1 bo\u00eete");
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parsed.get().refToken()).isEqualTo("ABC12");
-    }
-
-    @Test
-    @DisplayName("G17: a trailing digit is not an action code either")
-    void trailingDigitIsNotAnActionCode() {
-        assertThat(parser.parse("non ABC12 2").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("ABC12 1")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("G17: the leading code still wins over a keyword later in the body")
-    void leadingCodeWinsOverLaterKeyword() {
-        assertThat(parser.parse("2 ABC12 ok").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-    }
-
-    @Test
-    @DisplayName("round 2: 'rupture de stock' is a refusal — 'stock' is not 'ok'")
-    void ruptureDeStockIsARefusal() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed =
-                parser.parse("Non 3F2A9B1C, rupture de stock");
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 2: keywords are whole words")
-    void keywordsAreWholeWords() {
-        assertThat(parser.parse("ok 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parser.parse("oui 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parser.parse("non 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("refus 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("livr\u00e9 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.CONFIRM_DISPENSE);
-        assertThat(parser.parse("stock 3F2A9B1C")).isEmpty();
-        assertThat(parser.parse("nonante 3F2A9B1C")).isEmpty();
-    }
-
-    @Test
-    @DisplayName("round 2: 'livr\u00e9' is the dispense word, not the token")
-    void livreIsNotTheToken() {
-        assertThat(parser.parse("livr\u00e9 3F2A9B1C").orElseThrow().refToken()).isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 3: a refusal decides on its own — a refusal word beats an accept or dispense word")
-    void refusalWinsOverOtherFamilies() {
-        // The words a pharmacy refuses with name what it cannot do; the round-2
-        // ambiguity guard turned these into silence, where the original parser
-        // (and the pharmacy) meant REJECT.
-        assertThat(parser.parse("Non 3F2A9B1C, on ne peut pas livrer").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("oui non 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("ok 3F2A9B1C mais refus\u00e9").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-    }
-
-    @Test
-    @DisplayName("round 3: the reference is still read out of a refusal in free text")
-    void refusalKeepsTheReference() {
-        assertThat(parser.parse("Non 3F2A9B1C, on ne peut pas livrer").orElseThrow().refToken())
-                .isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 3: an acceptance next to a dispense claim, with no refusal, stays ambiguous and ignored")
-    void acceptPlusDispenseStillAmbiguous() {
-        assertThat(parser.parse("oui 3F2A9B1C livr\u00e9")).isEmpty();
-        assertThat(parser.parse("ok 3F2A9B1C d\u00e9j\u00e0 dispens\u00e9")).isEmpty();
-    }
-
-    /** The real message a pharmacy's handset quotes back, built by the templates. */
-    private static String offer() {
-        return PartnerSmsTemplates.prescriptionOffer("3F2A9B1C", "Amoxicilline 500mg", "AB");
-    }
-
-    @Test
-    @DisplayName("round 4: quoting the whole offer and answering 'oui' accepts — the quoted 'refuser' is not the pharmacy's word")
-    void quotedOfferThenOuiAccepts() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse(offer() + " oui");
-
-        assertThat(parsed)
-                .as("the offer ends in 'pour refuser', so a quoted copy used to read as a refusal")
-                .isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 4: quoting the whole offer and answering 'non' still refuses")
-    void quotedOfferThenNonRefuses() {
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse(offer() + " non");
-
-        assertThat(parsed).isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 4: a quoted offer with no answer of its own decides nothing")
-    void quotedOfferAloneIsNotAnAnswer() {
-        assertThat(parser.parse(offer())).isEmpty();
-    }
-
-    @Test
-    @DisplayName("round 4: the instructed reply is parsed with its guillemets, exactly as the offer prints it")
-    void instructedReplyWithGuillemetsIsAccepted() {
-        assertThat(parser.parse("\u00ab 1 3F2A9B1C \u00bb").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parser.parse("\u00ab 1 3F2A9B1C \u00bb").orElseThrow().refToken())
-                .isEqualTo("3F2A9B1C");
-        assertThat(parser.parse("\u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse("\"1 3F2A9B1C\"").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-    }
-
-    @Test
-    @DisplayName("round 4: a quoted offer whose leading code is 1 accepts, whatever follows")
-    void quotedReplyStartingWithTheCodeWins() {
-        assertThat(parser.parse("1 3F2A9B1C " + offer()).orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-    }
-
-    @Test
-    @DisplayName("round 5: the offer quoted ABOVE the instructed reply — the reply the offer asks for")
-    void quotedOfferAboveTheInstructedCode() {
-        // Exactly what a handset that quotes sends back: our message, then the
-        // line the pharmacy actually typed.
-        Optional<PartnerSmsReplyParser.ParsedReply> parsed =
-                parser.parse(offer() + "\n\u00ab 1 3F2A9B1C \u00bb");
-
-        assertThat(parsed)
-                .as("the instructed reply must not be dropped just because the quote sits above it")
-                .isPresent();
-        assertThat(parsed.get().action()).isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parsed.get().refToken()).isEqualTo("3F2A9B1C");
-    }
-
-    @Test
-    @DisplayName("round 5: the same, refusing, and on one line")
-    void quotedOfferThenInstructedRefusal() {
-        assertThat(parser.parse(offer() + "\n\u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse(offer() + " \u00ab 2 3F2A9B1C \u00bb").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-        assertThat(parser.parse(offer() + "\n2 3F2A9B1C").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-    }
-
-    @Test
-    @DisplayName("round 5: a quote truncated mid-instruction does not answer for the pharmacy")
-    void truncatedQuoteIsNotAnAnswer() {
-        // The handset cut our own "« 1 ... »" out of the instructions; it is
-        // still our text, not theirs.
-        String truncated = "hms rx 3F2A9B1C : amoxicilline 500mg pour ab."
-                + " r\u00e9pondez \u00ab 1 3F2A9B1C \u00bb pour acc\u2026";
-
-        assertThat(parser.parse(truncated)).isEmpty();
-        assertThat(parser.parse(truncated + "\noui").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.ACCEPT);
-        assertThat(parser.parse(truncated + "\nnon").orElseThrow().action())
-                .isEqualTo(PartnerSmsReplyParser.Action.REJECT);
-    }
-
-    @Test
-    @DisplayName("round 5: a digit inside prose still decides nothing, even on a quoted body")
-    void digitInProseIsStillNotAnAnswer() {
-        assertThat(parser.parse(offer() + "\nil nous reste 1 bo\u00eete seulement")).isEmpty();
+    @DisplayName("a reference only in the offer's prefix is still offered as a candidate")
+    void candidateFromOfferPrefix() {
+        Optional<PartnerSmsReplyParser.ParsedReply> parsed = parser.parse(offer());
+        assertThat(parsed).isEmpty();
+        assertThat(parser.candidateReferences(offer())).contains(REF);
     }
 }

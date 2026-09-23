@@ -100,7 +100,10 @@ public class PartnerExchangeService {
     public Optional<PrescriptionRoutingDecision> handleInboundReply(String senderPhone, String rawBody) {
         Optional<PartnerSmsReplyParser.ParsedReply> parsed = replyParser.parse(rawBody);
         if (parsed.isEmpty()) {
-            log.info("Partner SMS reply unparseable: {}", safeTruncate(rawBody));
+            // Not guessed at. The parser understands the instructed reply and
+            // nothing else, so anything a pharmacy phrased its own way reaches
+            // a person instead of being interpreted into a clinical decision.
+            reportUnreadableReply(senderPhone, rawBody);
             return Optional.empty();
         }
         PartnerSmsReplyParser.ParsedReply reply = parsed.get();
@@ -156,14 +159,29 @@ public class PartnerExchangeService {
         return PhoneNumbers.toInternationalDigits(raw, countryNumberCode);
     }
 
+    /**
+     * Whether the number on file for the pharmacy and the number that replied
+     * are the same subscriber. A stored field holding two numbers, or a number
+     * with an extension, is still that pharmacy — refusing those replies (and
+     * raising a security alert for each) was a bug in the comparison, not an
+     * intruder.
+     */
+    boolean isSameSubscriber(String storedField, String senderPhone) {
+        return PhoneNumbers.isSameSubscriber(storedField, senderPhone, countryNumberCode);
+    }
+
     // ---------- internals ----------
 
     private Optional<PrescriptionRoutingDecision> findOpenByRef(String refToken, String senderPhone) {
+        return findOpenByRef(refToken, senderPhone, true);
+    }
+
+    private Optional<PrescriptionRoutingDecision> findOpenByRef(String refToken, String senderPhone,
+                                                                boolean reportMismatch) {
         if (refToken == null || refToken.isBlank()) {
             return Optional.empty();
         }
-        String sender = canonicalPhone(senderPhone);
-        if (sender.isEmpty()) {
+        if (canonicalPhone(senderPhone).isEmpty()) {
             log.info("Partner SMS reply for token {} carried no sender number; ignored", refToken);
             return Optional.empty();
         }
@@ -171,12 +189,12 @@ public class PartnerExchangeService {
         List<PrescriptionRoutingDecision> byToken = routingDecisionRepository
                 .findOpenByIdPrefix(RoutingType.PARTNER, OPEN_STATUSES, prefix);
         List<PrescriptionRoutingDecision> matches = byToken.stream()
-                .filter(d -> sender.equals(canonicalPhone(targetPhone(d))))
+                .filter(d -> isSameSubscriber(targetPhone(d), senderPhone))
                 .toList();
         if (matches.isEmpty()) {
             if (byToken.isEmpty()) {
                 log.info("Partner SMS reply referenced unknown/closed token {}; ignored", refToken);
-            } else {
+            } else if (reportMismatch) {
                 // The token is live but the handset is not the one we offered
                 // it to. Staying fail-closed is right — one shared webhook
                 // secret is not authorisation to answer for a pharmacy — but
@@ -193,6 +211,29 @@ public class PartnerExchangeService {
             return Optional.empty();
         }
         return Optional.of(matches.get(0));
+    }
+
+    /**
+     * A reply that is not the instructed form. Surfaced exactly like an
+     * unmatched sender: a person has to read the message in the gateway and
+     * act, because nothing here will. The message body is deliberately absent
+     * from the audit row — a quoted-back offer carries the medication and the
+     * patient's initials.
+     */
+    private void reportUnreadableReply(String senderPhone, String rawBody) {
+        String masked = SmsPartnerNotificationChannel.maskPhone(senderPhone);
+        Optional<PrescriptionRoutingDecision> about = replyParser.candidateReferences(rawBody).stream()
+                .map(ref -> findOpenByRef(ref, senderPhone, false))
+                .flatMap(Optional::stream)
+                .findFirst();
+        String prescription = about
+                .map(d -> d.getPrescription() != null ? String.valueOf(d.getPrescription().getId()) : "unknown")
+                .orElse("not identified");
+        log.warn("Partner SMS reply from {} is not the instructed reply; ignored and left for staff. "
+                + "Prescription: {}", masked, prescription);
+        auditUnmatched("Partner SMS reply from " + masked + " could not be read as an accept/refuse/dispense "
+                + "reply and was not applied; a person must action it. Prescription: " + prescription,
+                about.map(d -> d.getId().toString()).orElse(null));
     }
 
     /**
@@ -310,11 +351,6 @@ public class PartnerExchangeService {
         } catch (Exception e) {
             log.warn("Failed to log partner-exchange audit event {}: {}", type, e.getMessage());
         }
-    }
-
-    private static String safeTruncate(String s) {
-        if (s == null) return "";
-        return s.length() > 80 ? s.substring(0, 80) + "…" : s;
     }
 
     /** Result of {@link #sweepTimeouts()}. */
