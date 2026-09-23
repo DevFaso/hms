@@ -425,8 +425,7 @@ public class LabResultServiceImpl implements LabResultService {
         // released is not work still outstanding — it is a record of what the
         // analyzer said first. Left counted, it would hold the order open for
         // ever, since nobody will ever release a superseded preliminary.
-        Set<SupersededLabResults.AnalyteKey> releasedAnalytes =
-            SupersededLabResults.releasedAnalytes(results);
+        Set<UUID> superseded = SupersededLabResults.supersededRowIds(results, results);
         boolean nothingOutstanding = results.stream()
             .allMatch(result -> result.isReleased() || superseded.contains(result.getId()));
         if (!results.isEmpty() && nothingOutstanding) {

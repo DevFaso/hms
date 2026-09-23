@@ -20,6 +20,7 @@ import org.springframework.core.env.MapPropertySource;
  * JDBC URL is omitted in the service configuration but Render still exposes a consolidated
  * connection string.
  */
+@SuppressWarnings("removal")
 public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final Log log = LogFactory.getLog(RenderDatabaseEnvironmentPostProcessor.class);

@@ -259,42 +259,34 @@ public class Patient extends BaseEntity implements TenantScoped {
         foreignKey = @ForeignKey(name = "fk_patient_user"))
     private User user;
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PatientHospitalRegistration> hospitalRegistrations = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Appointment> appointments = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Encounter> encounters = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<BillingInvoice> billingInvoices = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PatientInsurance> patientInsurances = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<LabOrder> labOrders = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PatientAllergy> allergyEntries = new HashSet<>();
 
-    @EqualsAndHashCode.Exclude
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PatientVitalSign> vitalSignCaptures = new HashSet<>();
