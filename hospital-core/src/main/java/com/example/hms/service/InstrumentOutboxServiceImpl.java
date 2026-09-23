@@ -79,7 +79,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     public List<InstrumentOutboxResponseDTO> getMessagesByLabOrder(UUID labOrderId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         return outboxRepository.findByLabOrder_Id(labOrderId).stream()
-            .filter(m -> hospitalId == null || hospitalId.equals(m.getLabOrder().getHospital().getId()))
+            .filter(m -> m.getLabOrder().isHandledBy(hospitalId))
             .map(this::toResponseDTO)
             .toList();
     }
@@ -168,7 +168,8 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         InstrumentOutbox message = outboxRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Outbox message not found with ID: " + id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && !hospitalId.equals(message.getLabOrder().getHospital().getId())) {
+        // B1: the performing laboratory's own result messages are its to see and retry.
+        if (!message.getLabOrder().isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException("Outbox message not found with ID: " + id);
         }
         return message;

@@ -38,5 +38,8 @@ public interface LabOrderService {
      * role-based transition rules.
      */
     LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale);
+
+    /** B1: the laboratories the caller may route an order to — every active hospital but the acting one. */
+    List<com.example.hms.payload.dto.PerformingLabOptionDTO> listPerformingLabs();
 }
 

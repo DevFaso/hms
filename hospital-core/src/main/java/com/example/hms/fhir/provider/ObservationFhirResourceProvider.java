@@ -86,9 +86,12 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
         if (idPart.startsWith("labresult-")) {
             UUID uuid = FhirIds.tryParse(idPart.substring("labresult-".length()));
             if (uuid == null) throw new ResourceNotFoundException(id);
+            // B1: the same predicate the write path uses — the ordering
+            // hospital and the laboratory performing the order both read it.
+            // Anything narrower lets a SMART client at the performing lab PUT
+            // an Observation it then gets 404 on.
             return labResultRepository.findById(uuid)
-                .filter(r -> r.getLabOrder() != null && r.getLabOrder().getHospital() != null
-                    && hospitalId.equals(r.getLabOrder().getHospital().getId()))
+                .filter(r -> r.getLabOrder() != null && r.getLabOrder().isHandledBy(hospitalId))
                 .map(mapper::toFhir)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }

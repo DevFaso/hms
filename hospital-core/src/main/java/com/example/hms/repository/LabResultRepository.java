@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -143,6 +145,55 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment.user"
     })
     List<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds);
+
+    /**
+     * B1: results of orders the hospitals order OR perform (V161
+     * performing_hospital_id).
+     *
+     * <p>Carries the same entity graph as the {@code _IdIn} finder it stands
+     * in for. Without it every row costs the mapper about six extra selects,
+     * and worse: {@code LabResultMapper}'s {@code Hibernate.isInitialized}
+     * guards return null for an uninitialised proxy, so the HOSPITAL / ORDER
+     * CODE / PATIENT NAME / TEST columns come back empty rather than slow.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id IN :hospitalIds
+           OR r.labOrder.performingHospital.id IN :hospitalIds
+    """)
+    List<LabResult> findHandledByHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
+
+    /** B1: paged results of orders the hospital orders OR performs. Same graph, same reason. */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """)
+    Page<LabResult> findHandledByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -307,6 +358,15 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "labOrder.patient",
         "labOrder.labTestDefinition"
     })
-    Page<LabResult> findByLabOrder_Hospital_IdAndReleasedFalse(UUID hospitalId, Pageable pageable);
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE r.released = false
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE r.released = false
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+    """)
+    Page<LabResult> findPendingReleaseHandledBy(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 }
 

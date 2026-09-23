@@ -108,6 +108,39 @@ class LabResultSystemActorTest {
 
             assertThrows(IllegalStateException.class, () -> invokeValidate(r));
         }
+
+        @Test
+        @DisplayName("B1: assignment at the performing laboratory of a routed order — passes")
+        void performingLaboratoryAssignmentPasses() {
+            Hospital orderHospital = hospital(UUID.randomUUID());
+            Hospital performingLab = hospital(UUID.randomUUID());
+            LabOrder order = labOrder(orderHospital);
+            order.setPerformingHospital(performingLab);
+            LabResult r = LabResult.builder()
+                .labOrder(order)
+                .assignment(assignment(performingLab))
+                .resultValue("4.5")
+                .build();
+
+            assertDoesNotThrow(() -> invokeValidate(r));
+        }
+
+        @Test
+        @DisplayName("B1: assignment at a third hospital of a routed order — throws")
+        void thirdHospitalAssignmentOnRoutedOrderFails() {
+            Hospital orderHospital = hospital(UUID.randomUUID());
+            Hospital performingLab = hospital(UUID.randomUUID());
+            LabOrder order = labOrder(orderHospital);
+            order.setPerformingHospital(performingLab);
+            LabResult r = LabResult.builder()
+                .labOrder(order)
+                .assignment(assignment(hospital(UUID.randomUUID())))
+                .resultValue("4.5")
+                .build();
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeValidate(r));
+            assertTrue(ex.getMessage().contains("performing hospital"), ex.getMessage());
+        }
     }
 
     @Nested

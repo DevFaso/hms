@@ -27,7 +27,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -60,7 +59,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * a no-op): when on, an observation the analyzer explicitly flagged
      * normal is released at once; when off (the default) it waits on
      * the lab worklist
-     * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
+     * ({@code LabResultRepository.findPendingReleaseHandledBy})
      * like every other unreleased row. Field-injected so the positional
      * constructor the tests use stays as it is.
      */
@@ -161,7 +160,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "specimen without hospital-scoped order");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
-            if (!Objects.equals(order.getHospital().getId(), hospitalId)) {
+            if (!order.isHandledBy(hospitalId)) {
                 // B13 — cross-tenant: the analyzer's allowlisted hospital
                 // does not own this order. Internally (log + integration
                 // message row) this is kept apart from "unknown accession"
@@ -170,6 +169,11 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 // as for an unknown placer. Answering AR here and AE there
                 // let any allowlisted sender probe whether an accession
                 // number exists in another hospital.
+                //
+                // B1: "own" means the ordering hospital OR the laboratory the
+                // order was routed to — the performing lab's analyser is a
+                // legitimate sender, and comparing on the ordering hospital
+                // alone meant an outsourced order could never be resulted.
                 log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
                     order.getHospital().getId(), hospitalId,
                     sendingApplication, sendingFacility, placer);

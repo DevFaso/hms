@@ -114,7 +114,22 @@
                 <div class="cell-primary">{{ order.labTestName || '—' }}</div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
-              <td>{{ order.hospitalName || '—' }}</td>
+              <td>
+                @if (isIncomingExternal(order) || isSentOut(order)) {
+                  <div class="cell-primary">{{ actingHospitalName(order) }}</div>
+                  <div
+                    class="cell-secondary routing-hint"
+                    [attr.data-testid]="
+                      isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
+                    "
+                  >
+                    {{ counterpartLabelKey(order) | translate }}:
+                    {{ counterpartHospitalName(order) }}
+                  </div>
+                } @else {
+                  {{ order.hospitalName || '—' }}
+                }
+              </td>
               <td class="date-cell">
                 {{ order.orderDatetime ? (order.orderDatetime | date: 'medium') : '—' }}
               </td>
@@ -132,13 +147,15 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link edit-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(order)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!isIncomingExternal(order)) {
+                    <button
+                      class="action-link edit-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(order)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                   @if (canManageSpecimens) {
                     <button
                       class="action-link specimen-link"
@@ -148,13 +165,15 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
-                  <button
-                    class="action-link delete-link"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(order)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (!isIncomingExternal(order)) {
+                    <button
+                      class="action-link delete-link"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(order)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -199,8 +218,14 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ o.hospitalName || '—' }}</span>
+              ><span class="field-value">{{ actingHospitalName(o) }}</span>
             </div>
+            @if (o.performingHospitalId) {
+              <div class="detail-field" data-testid="detail-performing-lab">
+                <span class="field-label">{{ counterpartLabelKey(o) | translate }}</span
+                ><span class="field-value">{{ counterpartHospitalName(o) }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.TEST' | translate }}</span
               ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
@@ -337,6 +362,22 @@
                 }
               </select>
             }
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="lab-performingLab">{{ 'LAB.PERFORMING_LAB' | translate }}</label>
+            <select
+              id="lab-performingLab"
+              [(ngModel)]="form.performingHospitalId"
+              name="performingHospitalId"
+            >
+              <option value="">{{ 'LAB.PERFORMING_LAB_OWN' | translate }}</option>
+              @for (lab of performingLabs(); track lab.id) {
+                <option [value]="lab.id">{{ lab.name }}</option>
+              }
+            </select>
+            <small class="field-hint">{{ 'LAB.PERFORMING_LAB_HINT' | translate }}</small>
           </div>
         </div>
         <div class="form-row">

@@ -189,6 +189,26 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("ACCEPTED — B1: the sender is the laboratory the order was routed to, not the ordering hospital")
+    void acceptedWhenSenderIsThePerformingLaboratory() {
+        Hospital orderingHospital = new Hospital();
+        orderingHospital.setId(UUID.randomUUID());
+        labOrder.setHospital(orderingHospital);
+        labOrder.setPerformingHospital(hospital);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "ROCHE_COBAS", "LAB_B",
+            "MSG-CTRL-B1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getLabOrder()).isSameAs(labOrder);
+    }
+
+    @Test
     @DisplayName("B13 — an order of another hospital is rejected exactly like an unknown accession; only the internal row says why")
     void rejectedWhenCrossTenant() {
         Hospital otherHospital = new Hospital();
