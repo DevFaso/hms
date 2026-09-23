@@ -2446,4 +2446,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V164 — the observation result status the analyzer sends (OBX-11).
+         Which row of a preliminary/final pair may be hidden on the way
+         out was inferred three times (set id, release state, recency) and
+         each inference had a hole. The analyzer states it outright; this
+         stores it. One nullable column, additive, no backfill — a row
+         that never said it is preliminary is never superseded.
+         ================================================================= -->
+    <changeSet id="V164-lab-result-observation-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V164__lab_result_observation_status.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

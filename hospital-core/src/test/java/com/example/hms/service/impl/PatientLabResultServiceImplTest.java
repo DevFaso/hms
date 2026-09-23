@@ -19,6 +19,7 @@ import com.example.hms.service.support.PatientChartAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -220,9 +221,16 @@ class PatientLabResultServiceImplTest {
         LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
         preliminary.setLabOrder(order);
         preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
+        preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
         finalResult.setLabOrder(order);
         finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
+        finalResult.setResultDate(preliminary.getResultDate());
+        finalResult.setCreatedAt(LocalDateTime.now());
         lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(new LabResultResponseDTO());
 
@@ -239,6 +247,59 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(0).getStatus()).isNotEqualTo("PENDING");
     }
 
+    /**
+     * The pairing has to be resolved BEFORE the limit. Filtering afterwards cut
+     * rows out of an already-short page — asking for two results returned one —
+     * and a preliminary could sit inside the page while the final that
+     * supersedes it sat just outside it, leaving a permanent "Result pending"
+     * for a test that is released.
+     */
+    @Test void portalView_limitIsHonouredAfterTheSupersededRowIsRemoved() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(new LabTestDefinition());
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
+        preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
+        finalResult.setResultDate(preliminary.getResultDate());
+        finalResult.setCreatedAt(LocalDateTime.now());
+        LabResult another = buildLabResult("4.1", "mmol/L", true, false);
+        another.setLabOrder(order);
+        another.setTestCode("K");
+        another.setSourceObservationSetId("2");
+        when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        // Honour the page size, or the mock hands back every row whatever was
+        // asked for and the short-page path this test exists for never runs.
+        List<LabResult> newestFirst = List.of(finalResult, preliminary, another);
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), pageCaptor.capture()))
+            .thenAnswer(invocation -> {
+                Pageable requested = invocation.getArgument(2);
+                return newestFirst.subList(0, Math.min(requested.getPageSize(), newestFirst.size()));
+            });
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 2);
+
+        assertThat(results).as("two asked for, two returned — not one short of the page").hasSize(2);
+        assertThat(pageCaptor.getAllValues()).extracting(Pageable::getPageSize)
+            .as("the caller's limit first; the cap only because the pairing removed a row — "
+                + "never a hundred-row page on every call, and never a fixed +1 that a second "
+                + "pair on the page would defeat")
+            .containsExactly(2, 100);
+    }
+
     /** The staff record is the record: both rows stay, each labelled. */
     @Test void staffView_keepsBothRowsOfAPreliminaryFinalPair() {
         LabOrder order = new LabOrder();
@@ -248,9 +309,13 @@ class PatientLabResultServiceImplTest {
         LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
         preliminary.setLabOrder(order);
         preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
         LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
         finalResult.setLabOrder(order);
         finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);

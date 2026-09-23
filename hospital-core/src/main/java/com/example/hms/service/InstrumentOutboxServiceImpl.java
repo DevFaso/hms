@@ -61,13 +61,6 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public boolean hasTransmittedObservation(UUID labOrderId) {
-        return labOrderId != null
-            && outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, ORU_R01);
-    }
-
     /**
      * Runs in its own transaction, after the release has committed, so a
      * failure here cannot roll the release back — and cannot be rolled back BY
@@ -93,7 +86,14 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             log.warn("Released ORU^R01 not enqueued — labResult {} no longer exists", labResultId);
             return;
         }
-        enqueueResultObservation(result);
+        // The shared writer, not the sibling public method: calling that
+        // through `this` bypasses the proxy, which would leave ITS
+        // @Transactional inert. Nothing about the behaviour here depended on
+        // that annotation — this method already holds the REQUIRES_NEW
+        // transaction the release needs, and it holds it for real, because the
+        // release calls in through the injected interface — but an annotation
+        // that silently does nothing is a trap for whoever edits it next.
+        saveResultObservation(result);
     }
 
     @Override
@@ -127,6 +127,26 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
                 result.getId(), cannotFormat.getMessage(), cannotFormat);
             return;
         }
+        InstrumentOutbox message = InstrumentOutbox.builder()
+            .labOrder(result.getLabOrder())
+            .messageType(ORU_R01)
+            .payload(payload)
+            .status(InstrumentOutboxStatus.PENDING)
+            .build();
+        outboxRepository.save(message);
+        log.debug("Enqueued ORU^R01 for result {} / order {}",
+            result.getId(), result.getLabOrder().getId());
+    }
+
+    /**
+     * Builds and stores the outbound observation. Deliberately unannotated: it
+     * runs in whatever transaction its caller already holds, and both callers
+     * hold one. The released path does NOT wrap this in a catch — a failure
+     * there belongs to the handler outside that proxy, which is the only place
+     * that can see the commit.
+     */
+    private void saveResultObservation(LabResult result) {
+        String payload = hl7v2MessageBuilder.buildOruR01(result);
         InstrumentOutbox message = InstrumentOutbox.builder()
             .labOrder(result.getLabOrder())
             .messageType(ORU_R01)

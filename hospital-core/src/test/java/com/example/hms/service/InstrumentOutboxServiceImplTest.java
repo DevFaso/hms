@@ -397,13 +397,43 @@ class InstrumentOutboxServiceImplTest {
         verify(outboxRepository, never()).save(any());
     }
 
+    /**
+     * Item 4 of #720's last round: the javadoc promises this method does not
+     * swallow its own failures, because only the caller — outside the
+     * REQUIRES_NEW proxy — can see the commit. It used to delegate to a method
+     * whose whole body was a catch-all, so a pre-commit failure was swallowed,
+     * the new transaction committed empty, the caller's handler never fired and
+     * the final outbound message was lost without a trace.
+     */
     @Test
-    @DisplayName("hasTransmittedObservation asks whether an ORU^R01 has gone out for the order")
-    void hasTransmittedObservationChecksTheOutbox() {
-        UUID labOrderId = UUID.randomUUID();
-        when(outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, "ORU^R01")).thenReturn(true);
+    @DisplayName("enqueueReleasedObservation lets a failure reach the caller, rather than committing empty")
+    void enqueueReleasedObservationDoesNotSwallow() {
+        UUID labResultId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult released = LabResult.builder().labOrder(order).build();
+        released.setId(labResultId);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(released));
+        when(hl7v2MessageBuilder.buildOruR01(released))
+            .thenThrow(new IllegalStateException("cannot build the message"));
 
-        assertThat(service.hasTransmittedObservation(labOrderId)).isTrue();
-        assertThat(service.hasTransmittedObservation(null)).isFalse();
+        assertThatThrownBy(() -> service.enqueueReleasedObservation(labResultId))
+            .isInstanceOf(IllegalStateException.class);
+        verify(outboxRepository, never()).save(any());
+    }
+
+    /** The best-effort entry path keeps its own catch: a failed message must not fail the result write. */
+    @Test
+    @DisplayName("enqueueResultObservation still swallows, as its own contract says")
+    void enqueueResultObservationStillSwallows() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult result = LabResult.builder().labOrder(order).build();
+        result.setId(UUID.randomUUID());
+        when(hl7v2MessageBuilder.buildOruR01(result))
+            .thenThrow(new IllegalStateException("cannot build the message"));
+
+        assertThatCode(() -> service.enqueueResultObservation(result)).doesNotThrowAnyException();
+        verify(outboxRepository, never()).save(any());
     }
 }

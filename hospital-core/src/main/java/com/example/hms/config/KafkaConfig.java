@@ -27,6 +27,7 @@ import java.util.Map;
 
 @Configuration
 @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
+@SuppressWarnings("removal")
 public class KafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers}")

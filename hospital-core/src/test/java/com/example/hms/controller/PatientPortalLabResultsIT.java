@@ -22,6 +22,7 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
@@ -100,8 +101,11 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
+    @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private LabResultService labResultService;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private Hospital hospital;
     private User patientUser;
@@ -117,6 +121,9 @@ class PatientPortalLabResultsIT extends BaseIT {
     void seedAnUnreleasedAnalyzerResult() {
         auditEventLogRepository.deleteAllInBatch();
         labResultRepository.deleteAll();
+        // Releasing a result we created enqueues an outbound message that
+        // references the order, so it has to go before the orders do.
+        instrumentOutboxRepository.deleteAll();
         labOrderRepository.deleteAll();
         labTestDefinitionRepository.deleteAll();
         registrationRepository.deleteAll();
@@ -244,6 +251,11 @@ class PatientPortalLabResultsIT extends BaseIT {
             .notes(PRELIMINARY_NOTES)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
+            .sourceSendingApplication("SYSMEX")
+            .sourceSendingFacility("LAB_A")
+            .sourceMessageControlId("MSG-PRELIM-1")
+            .sourceObservationSetId("1")
+            .observationResultStatus("P")
             .build());
     }
 
@@ -337,17 +349,50 @@ class PatientPortalLabResultsIT extends BaseIT {
             .actorLabel("MLLP:SYSMEX/LAB_A")
             .resultValue(value)
             .resultUnit("g/dL")
+            // One draw, reported twice: the pair MUST share its observation
+            // time, or they are two draws of a timed series and neither
+            // supersedes the other. Write order decides between them, and it
+            // is stated below rather than left to @PrePersist's clock — which
+            // stamps both rows within the same instant here, leaving the
+            // winner to the random row id.
             .resultDate(result.getResultDate())
             .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
+            // The same observation, in the same position, from the same
+            // analyzer — a second message, so a second control id.
+            .sourceSendingApplication("SYSMEX")
+            .sourceSendingFacility("LAB_A")
+            .sourceMessageControlId("MSG-FINAL-1")
+            .sourceObservationSetId("1")
+            .observationResultStatus("F")
             .build();
         finalRow.setReleased(released);
         if (released) {
             finalRow.setReleasedAt(LocalDateTime.now());
             finalRow.setReleasedByDisplay("Lab supervisor");
         }
-        return labResultRepository.save(finalRow);
+        LabResult saved = labResultRepository.save(finalRow);
+        markWrittenAfterThePreliminary(saved);
+        return saved;
+    }
+
+    /**
+     * Say, in the fixture, which of the two messages arrived second.
+     *
+     * <p>{@code BaseEntity.@PrePersist} sets {@code createdAt} from the clock
+     * and the column is not updatable, so two rows saved milliseconds apart can
+     * carry the same instant — and the pairing would then fall through to the
+     * random row id and decide this test by luck. A direct update makes the
+     * ordering explicit and the assertion honest.
+     */
+    private void markWrittenAfterThePreliminary(LabResult finalRow) {
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+            .executeWithoutResult(status -> entityManager.createNativeQuery(
+                    "UPDATE lab.lab_results SET created_at = ? WHERE id = ?")
+                .setParameter(1, result.getCreatedAt().plusMinutes(5))
+                .setParameter(2, finalRow.getId())
+                .executeUpdate());
     }
 
     @Test

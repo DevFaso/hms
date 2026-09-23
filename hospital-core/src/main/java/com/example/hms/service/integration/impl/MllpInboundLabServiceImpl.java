@@ -21,6 +21,7 @@ import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -197,12 +198,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .actorLabel(buildActorLabel(sendingApplication, sendingFacility))
                 .resultValue(observation.resultValue().trim())
                 .resultUnit(trimToNull(observation.resultUnit(), 50))
-                .resultDate(observation.resultDate() != null ? observation.resultDate() : LocalDateTime.now())
+                .resultDate(observedAt(observation, order))
                 .abnormalFlag(toAbnormalFlag(observation.abnormalFlag()))
                 .sourceSendingApplication(senderApp)
                 .sourceSendingFacility(senderFac)
                 .sourceMessageControlId(controlId)
                 .sourceObservationSetId(setIds.get(i))
+                // OBX-11 verbatim: what the analyzer says this result IS.
+                // The read paths hide a preliminary behind its final, and
+                // that decision belongs to the sender, not to a guess.
+                .observationResultStatus(trimToNull(observation.resultStatus(), 16))
                 .testCode(trimToNull(observation.testCode(), 255))
                 .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();
@@ -265,8 +270,35 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             return;
         }
         result.setReleased(true);
-        result.setReleasedAt(LocalDateTime.now());
+        result.setReleasedAt(nowHere());
         result.setReleasedByDisplay(AUTO_RELEASE_DISPLAY);
+    }
+
+    /**
+     * OBX-14, or the order's own datetime when the analyzer sent none.
+     *
+     * <p>Not the instant this message landed. Two messages about one
+     * observation — the preliminary and its final — would then carry two
+     * different timestamps and read as two separate draws, so they would never
+     * be paired on the way out: the order would sit in RESULTED for ever and
+     * the patient would keep a duplicate pending row. The order's datetime is
+     * the same for every message about that order, so the pair still matches.
+     * The consequence is stated in {@code SupersededLabResults}: an analyzer
+     * that does not timestamp its observations cannot express a timed series.
+     */
+    private static LocalDateTime observedAt(ParsedObservation observation, LabOrder order) {
+        if (observation.resultDate() != null) {
+            return observation.resultDate();
+        }
+        return order != null && order.getOrderDatetime() != null ? order.getOrderDatetime() : nowHere();
+    }
+
+    /**
+     * The hospital's own clock, stated rather than assumed: an observation time
+     * and a release time are read by people standing in the laboratory.
+     */
+    private static LocalDateTime nowHere() {
+        return LocalDateTime.now(ZoneId.systemDefault());
     }
 
     private static boolean isExplicitlyNormal(String hl7Flag) {

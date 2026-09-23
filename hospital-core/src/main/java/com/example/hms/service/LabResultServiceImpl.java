@@ -425,11 +425,9 @@ public class LabResultServiceImpl implements LabResultService {
         // released is not work still outstanding — it is a record of what the
         // analyzer said first. Left counted, it would hold the order open for
         // ever, since nobody will ever release a superseded preliminary.
-        Set<SupersededLabResults.AnalyteKey> releasedAnalytes =
-            SupersededLabResults.releasedAnalytes(results);
+        Set<UUID> superseded = SupersededLabResults.supersededRowIds(results, results);
         boolean nothingOutstanding = results.stream()
-            .allMatch(result -> result.isReleased()
-                || SupersededLabResults.isSupersededByRelease(result, releasedAnalytes));
+            .allMatch(result -> result.isReleased() || superseded.contains(result.getId()));
         if (!results.isEmpty() && nothingOutstanding) {
             // ...and #721's writer: the status is written by the compare-and-set
             // statement, decided on the value committed under the lock.
@@ -468,6 +466,20 @@ public class LabResultServiceImpl implements LabResultService {
         if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
+    }
+
+    /**
+     * Whether this row reached us from an external analyzer, and so must not
+     * be transmitted back to one.
+     *
+     * <p>Shares {@link SupersededLabResults#cameFromAnAnalyzer}, which asks the
+     * same question for a different purpose — which rows the pre-V164 pairing
+     * fallback may govern. One predicate, so a sender that identifies itself
+     * in an unusual way cannot be an analyzer to one of them and ours to the
+     * other.
+     */
+    private static boolean wasIngestedFromAnAnalyzer(LabResult labResult) {
+        return SupersededLabResults.cameFromAnAnalyzer(labResult);
     }
 
     @Override
@@ -844,14 +856,19 @@ public class LabResultServiceImpl implements LabResultService {
      *
      * <p>Two conditions, both learned the hard way:
      *
-     * <p>Only for an order we have already transmitted an ORU^R01 for. A result
-     * INGESTED from an analyzer (MLLP ORU^R01) never had a first message from
-     * us, so enqueuing one on release would transmit an unsolicited result back
-     * to the instrument peers — carrying OBR-2 = our internal order UUID, which
-     * is not the accession number the analyzer knows the order by. The outbox
-     * row records the order rather than the result, which is exactly the right
-     * granularity here: the question is whether the peers already know this
-     * order under the identifier we send.
+     * <p>Only for a result WE created. A result INGESTED from an analyzer
+     * (MLLP ORU^R01) never had a first message from us, so enqueuing one on
+     * release would transmit an unsolicited result back to the instrument
+     * peers — carrying OBR-2 = our internal order UUID, which is not the
+     * accession number the analyzer knows the order by.
+     *
+     * <p>The signal is the row's own provenance, not the order's. Asking
+     * whether an ORU had ever gone out for the ORDER was too coarse: an order
+     * holding both a hand-entered result and an ingested one answered yes, and
+     * releasing the ingested one then sent exactly the unsolicited message with
+     * the internal identifier that this guard exists to prevent. An ingested
+     * row carries the sending system's message control id; a row we created
+     * carries none.
      *
      * <p>And after commit, in its own transaction, with the id only. An enqueue
      * inside this transaction is inserted and validated at commit, so its
@@ -859,11 +876,9 @@ public class LabResultServiceImpl implements LabResultService {
      * release — the clinical write — for the sake of a message.
      */
     private void enqueueReleasedObservationAfterCommit(LabResult labResult) {
-        LabOrder labOrder = labResult.getLabOrder();
-        UUID labOrderId = labOrder != null ? labOrder.getId() : null;
-        if (!instrumentOutboxService.hasTransmittedObservation(labOrderId)) {
-            LOG.debug("Release of result {} not transmitted — no ORU^R01 has gone out for order {}",
-                labResult.getId(), labOrderId);
+        if (wasIngestedFromAnAnalyzer(labResult)) {
+            LOG.debug("Release of result {} not transmitted — it was ingested from {}, not sent by us",
+                labResult.getId(), labResult.getSourceSendingApplication());
             return;
         }
         UUID labResultId = labResult.getId();

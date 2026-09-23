@@ -125,6 +125,7 @@ public class LabTestDefinition extends BaseEntity {
      * question.
      */
     @Column(name = "point_of_care", nullable = false)
+    @Builder.Default
     private boolean pointOfCare = false;
 
     @Convert(converter = LabTestReferenceRangeConverter.class)
