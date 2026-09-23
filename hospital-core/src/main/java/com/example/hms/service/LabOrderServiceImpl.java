@@ -120,16 +120,6 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
-     * 404-not-403 for every read and every lab-side write: the ordering
-     * hospital and the performing hospital handle the order, nobody else.
-     */
-    private void requireHandledByActiveHospital(LabOrder labOrder) {
-        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
-        }
-    }
-
-    /**
      * B1: the laboratory that performs the test.
      *
      * <p>Three request states, and they are not the same thing on an update:
@@ -189,6 +179,40 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new com.example.hms.exception.ConflictException(
                 "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
         }
+    }
+
+    /**
+     * B1 + E8: an order this hospital's laboratory performs belongs to the
+     * hospital that ordered it, so surfacing it here is a cross-hospital
+     * disclosure — the same conclusion round 4 reached for the patient's
+     * list, applied to the routes the feature is actually used from. One
+     * RECORD_SHARE per patient per source hospital; an in-house order, or a
+     * caller with no hospital scope, records nothing.
+     */
+    private void recordPerformedHereReach(java.util.Collection<LabOrder> orders, UUID actingHospitalId,
+                                          String description) {
+        if (actingHospitalId == null || orders.isEmpty()) {
+            return;
+        }
+        Map<UUID, Map<String, Long>> perPatient = new java.util.HashMap<>();
+        for (LabOrder order : orders) {
+            if (!order.isPerformedAt(actingHospitalId)) {
+                continue;
+            }
+            UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+            UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
+            if (patientId == null || source == null) {
+                continue;
+            }
+            perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                .merge(source.toString(), 1L, Long::sum);
+        }
+        if (perPatient.isEmpty()) {
+            return;
+        }
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        perPatient.forEach((patientId, perSource) ->
+            reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null, perSource, description));
     }
 
     private static boolean isRoutableLab(Hospital hospital) {
@@ -346,7 +370,12 @@ public class LabOrderServiceImpl implements LabOrderService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         // ── Hospital scope enforcement (ordering OR performing hospital) ──
-        requireHandledByActiveHospital(labOrder);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (!labOrder.isHandledBy(hospitalId)) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+        recordPerformedHereReach(List.of(labOrder), hospitalId,
+            "Cross-hospital lab order read at the performing laboratory");
 
         return labOrderMapper.toLabOrderResponseDTO(labOrder);
     }
@@ -357,7 +386,10 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement: scope to hospital when non-superadmin ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findHandledBy(hospitalId).stream()
+            List<LabOrder> orders = labOrderRepository.findHandledBy(hospitalId);
+            recordPerformedHereReach(orders, hospitalId,
+                "Cross-hospital lab order read at the performing laboratory");
+            return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
@@ -382,8 +414,10 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.search(hospitalId, patientId, fromDate, toDate, pageable)
-            .map(labOrderMapper::toLabOrderResponseDTO);
+        Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate, pageable);
+        recordPerformedHereReach(page.getContent(), hospitalId,
+            "Cross-hospital lab order read at the performing laboratory");
+        return page.map(labOrderMapper::toLabOrderResponseDTO);
     }
 
     @Override
@@ -450,6 +484,8 @@ public class LabOrderServiceImpl implements LabOrderService {
             orders = orders.stream()
                 .filter(lo -> lo.isHandledBy(hospitalId))
                 .toList();
+            recordPerformedHereReach(orders, hospitalId,
+                "Cross-hospital lab order read at the performing laboratory");
         }
         return orders.stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
@@ -462,7 +498,10 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findByStatusHandledBy(status, hospitalId).stream()
+            List<LabOrder> orders = labOrderRepository.findByStatusHandledBy(status, hospitalId);
+            recordPerformedHereReach(orders, hospitalId,
+                "Cross-hospital lab order read at the performing laboratory");
+            return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }

@@ -60,6 +60,11 @@ class LabResultServiceImplWorkflowTest {
     @Mock
     private UserRepository userRepository;
 
+    // Declared even though this suite drives no reflex order: the service
+    // notifies the performing laboratory from that path, and an undeclared
+    // dependency is injected as null — a trap the next reflex test springs.
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+
     @InjectMocks
     private LabResultServiceImpl labResultService;
 
