@@ -42,7 +42,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -61,11 +60,13 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private InventoryItemRepository inventoryItemRepository;
     @Mock private MedicationCatalogItemRepository medicationCatalogItemRepository;
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private UserRepository userRepository;
     @Mock private PrescriptionRoutingMapper routingMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
     @Mock private PartnerNotificationChannel partnerChannel;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -117,8 +118,9 @@ class StockOutRoutingServiceImplBranchesTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of(partnerPharmacy));
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES))
+                .thenReturn(List.of(partnerPharmacy));
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 
@@ -135,8 +137,8 @@ class StockOutRoutingServiceImplBranchesTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of());
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES)).thenReturn(List.of());
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 
@@ -179,8 +181,8 @@ class StockOutRoutingServiceImplBranchesTest {
                 .thenReturn(Optional.of(catalogItem));
         when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
                 hospitalId, medicationId)).thenReturn(List.of(nullQty, nullPharmacy));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of());
+        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeInAndActiveTrue(
+                hospitalId, StockOutRoutingServiceImpl.EXTERNAL_PHARMACY_TYPES)).thenReturn(List.of());
 
         StockCheckResultDTO result = service.checkStock(prescriptionId);
 
@@ -240,8 +242,8 @@ class StockOutRoutingServiceImplBranchesTest {
         service.backOrder(prescriptionId, null);
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
-        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
-                contains("disponibilit"));
+        verify(support).notifyOutOfStock(patient, prescription.getMedicationName(),
+                PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
     }
 
     @Test

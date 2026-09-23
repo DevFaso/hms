@@ -23,7 +23,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.example.hms.payload.dto.PharmacistVerificationRequestDTO;
+import com.example.hms.payload.dto.PrescriptionClarificationRequestDTO;
+import com.example.hms.payload.dto.PrescriptionClarificationResolutionDTO;
 import com.example.hms.service.pharmacy.PharmacistVerificationService;
+import com.example.hms.service.pharmacy.PrescriptionClarificationService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,6 +49,7 @@ public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
     private final PharmacistVerificationService pharmacistVerificationService;
+    private final PrescriptionClarificationService clarificationService;
     private final PrescriptionSmsDispatchService smsDispatchService;
     private final MessageSource messageSource;
 
@@ -128,13 +132,92 @@ public class PrescriptionController {
         return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 
+    /**
+     * Gap G5 — the pharmacist sends an order back with a question.
+     *
+     * <p>Pharmacist roles, mirroring {@link #pharmacistVerify}. No
+     * {@code SecurityConfig} matcher covers {@code /prescriptions/**}: the
+     * path rides {@code anyRequest().authenticated()} and this annotation is
+     * the gate, so the two cannot disagree (PrescriptionControllerTest pins
+     * the absence of a matcher).
+     */
+    @PostMapping("/{id}/request-clarification")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Send a prescription back to its prescriber for clarification",
+        description = "Moves a prescription awaiting a fill to PENDING_CLARIFICATION with the "
+            + "pharmacist's reason, takes it off the work queue, and notifies the prescriber. "
+            + "Only a SIGNED, TRANSMITTED, PARTIALLY_FILLED, PENDING_STOCK or PARTNER_REJECTED "
+            + "prescription can be sent back.")
+    public ResponseEntity<PrescriptionResponseDTO> requestClarification(
+        @PathVariable UUID id,
+        @Valid @RequestBody PrescriptionClarificationRequestDTO request,
+        Locale locale) {
+        clarificationService.requestClarification(id, request.getReason());
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+    }
+
+    /**
+     * Gap G5 — a doctor at the prescribing hospital answers and the order
+     * returns to SIGNED. Doctors only, as for sign and co-sign; the service
+     * additionally requires a staff profile at the prescription's hospital.
+     */
+    @PostMapping("/{id}/resolve-clarification")
+    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Resolve a pharmacist's clarification request",
+        description = "Records the prescriber's answer and returns a PENDING_CLARIFICATION "
+            + "prescription to SIGNED so the pharmacy can fill or route it. Any doctor with a "
+            + "staff profile at the prescribing hospital may answer; the answer is optional when "
+            + "the order itself was edited.")
+    public ResponseEntity<PrescriptionResponseDTO> resolveClarification(
+        @PathVariable UUID id,
+        @Valid @RequestBody(required = false) PrescriptionClarificationResolutionDTO request,
+        Locale locale) {
+        clarificationService.resolveClarification(id, request != null ? request.getResponse() : null);
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+    }
+
+    /** The reader roles of {@link #getById} that see the clarification exchange. */
+    static final java.util.Set<String> CLINICAL_READER_ROLES = java.util.Set.of(
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_PATIENT')")
-    @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID.")
+    @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID. A patient "
+        + "receives their copy without the pharmacist-to-prescriber clarification exchange.")
     public ResponseEntity<PrescriptionResponseDTO> getById(
         @PathVariable UUID id,
+        Authentication auth,
         Locale locale) {
-        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+        PrescriptionResponseDTO dto = prescriptionService.getPrescriptionById(id, locale);
+        if (isPatientOnly(auth)) {
+            dto = dto.withoutClarificationExchange();
+        }
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * The same patient-copy rule as {@code /me/patient/prescriptions} (gap
+     * G7): a principal that holds ROLE_PATIENT and no clinical reader role
+     * gets the copy without the clarification exchange.
+     */
+    static boolean isPatientOnly(Authentication auth) {
+        // Only the null check: Authentication.getAuthorities() never returns
+        // null by contract, and the handler is behind @PreAuthorize on five
+        // roles, so an unauthenticated call cannot reach it either way.
+        if (auth == null) {
+            return false;
+        }
+        boolean patient = false;
+        for (org.springframework.security.core.GrantedAuthority authority : auth.getAuthorities()) {
+            String name = authority.getAuthority();
+            if (CLINICAL_READER_ROLES.contains(name)) {
+                return false;
+            }
+            if ("ROLE_PATIENT".equals(name)) {
+                patient = true;
+            }
+        }
+        return patient;
     }
 
     @GetMapping
@@ -177,10 +260,21 @@ public class PrescriptionController {
 
     @PostMapping("/{id}/dispatch-sms")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
-    @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
-        description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
-            + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "
-            + "of type HOSPITAL_DISPENSARY.")
+    @Operation(summary = "Hand a prescription to a community or partner pharmacy by SMS",
+        description = """
+            Sends the pharmacy the prescription summary together with a reference token and the \
+            reply to send back ("« 1 <REF> » pour accepter, « 2 <REF> » pour refuser"), records a \
+            PrescriptionTransmission, creates a PENDING PARTNER PrescriptionRoutingDecision and \
+            moves the prescription to SENT_TO_PARTNER — so it leaves the in-house dispense queue \
+            and cannot be filled twice. The pharmacy's reply arrives on POST /webhooks/partner-sms \
+            and is matched on the reference AND the sending number; the 2 h reminder and 4 h \
+            auto-reject sweep then apply.
+
+            The pharmacy must be active, at the prescription's hospital, have a phone number on \
+            file and not be of type HOSPITAL_DISPENSARY. The prescription must be SIGNED, \
+            TRANSMITTED, PARTNER_REJECTED or PENDING_STOCK: a refusal or a back order can be sent \
+            to another pharmacy, and doing so supersedes the offer the previous pharmacy held \
+            (its reference stops working and it is told).""")
     public ResponseEntity<ApiResponseWrapper<PrescriptionSmsDispatchResponseDTO>> dispatchSms(
         Authentication auth,
         @PathVariable UUID id,

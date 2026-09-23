@@ -41,12 +41,13 @@ import java.util.UUID;
         @Index(name = "idx_lab_order_patient", columnList = "patient_id"),
         @Index(name = "idx_lab_order_staff", columnList = "ordering_staff_id"),
         @Index(name = "idx_lab_order_hospital", columnList = "hospital_id"),
+        @Index(name = "idx_lab_order_performing_hospital", columnList = "performing_hospital_id"),
         @Index(name = "idx_lab_order_status", columnList = "status"),
         @Index(name = "idx_lab_order_datetime", columnList = "order_datetime")
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-@ToString(exclude = {"patient", "orderingStaff", "encounter", "labTestDefinition", "assignment", "hospital"})
+@ToString(exclude = {"patient", "orderingStaff", "encounter", "labTestDefinition", "assignment", "hospital", "performingHospital"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class LabOrder extends BaseEntity {
 
@@ -159,6 +160,50 @@ public class LabOrder extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_laborder_hospital"))
     private Hospital hospital;
 
+    /**
+     * The laboratory that performs the test when it is not the ordering
+     * hospital's own (audit gap B1). NULL = the ordering hospital performs it.
+     * The performing hospital is always a different hospital: "performed by
+     * ourselves" is normalised to NULL so the two states never diverge.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "performing_hospital_id",
+        foreignKey = @ForeignKey(name = "fk_laborder_performing_hospital"))
+    private Hospital performingHospital;
+
+    /** The hospital whose laboratory performs the test: the performing hospital, else the ordering one. */
+    public UUID resolvePerformingHospitalId() {
+        if (performingHospital != null && performingHospital.getId() != null) {
+            return performingHospital.getId();
+        }
+        return hospital != null ? hospital.getId() : null;
+    }
+
+    /** True when the order was sent to a laboratory at another hospital. */
+    public boolean isPerformedExternally() {
+        return performingHospital != null && performingHospital.getId() != null
+            && (hospital == null || !Objects.equals(performingHospital.getId(), hospital.getId()));
+    }
+
+    /** True when {@code hospitalId} is the performing hospital (only ever true for an external order). */
+    public boolean isPerformedAt(UUID hospitalId) {
+        return hospitalId != null && isPerformedExternally()
+            && Objects.equals(performingHospital.getId(), hospitalId);
+    }
+
+    /**
+     * The tenant predicate for every read of the order and every lab-side write
+     * on it: the ordering hospital and the performing hospital both handle the
+     * order; any third hospital gets 404. A null scope (super-admin in global
+     * view) handles everything.
+     */
+    public boolean isHandledBy(UUID hospitalId) {
+        if (hospitalId == null) {
+            return true;
+        }
+        return (hospital != null && Objects.equals(hospital.getId(), hospitalId)) || isPerformedAt(hospitalId);
+    }
+
     @PrePersist
     @PreUpdate
     private void validate() {
@@ -196,9 +241,15 @@ public class LabOrder extends BaseEntity {
         if (labTestDefinition == null) {
             throw new IllegalStateException("Lab test definition must be provided");
         }
+        if (performingHospital != null && Objects.equals(performingHospital.getId(), hospital.getId())) {
+            performingHospital = null;
+        }
+        // A hospital-owned definition must belong to the ordering hospital or,
+        // for an order sent out, to the laboratory that performs it.
         if (labTestDefinition.getHospital() != null
-            && !Objects.equals(labTestDefinition.getHospital().getId(), hospital.getId())) {
-            throw new IllegalStateException("Lab test definition must belong to LabOrder.hospital");
+            && !Objects.equals(labTestDefinition.getHospital().getId(), hospital.getId())
+            && !Objects.equals(labTestDefinition.getHospital().getId(), resolvePerformingHospitalId())) {
+            throw new IllegalStateException("Lab test definition must belong to LabOrder.hospital or its performing hospital");
         }
     }
 

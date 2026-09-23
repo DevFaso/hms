@@ -44,6 +44,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -71,13 +72,19 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+    private final com.example.hms.repository.LabResultRepository labResultRepository;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
     @Transactional
     public LabOrderResponseDTO createLabOrder(LabOrderRequestDTO request, Locale locale) {
         LabOrder newLabOrder = buildLabOrder(null, request, true);
-        return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(newLabOrder));
+        LabOrder saved = labOrderRepository.save(newLabOrder);
+        // B1: the performing laboratory learns about the order (after commit, best-effort).
+        routingNotifier.notifyPerformingLab(saved);
+        return labOrderMapper.toLabOrderResponseDTO(saved);
     }
 
     @Override
@@ -86,8 +93,123 @@ public class LabOrderServiceImpl implements LabOrderService {
         LabOrder existing = labOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
+        // The clinical order belongs to the hospital that placed it: the
+        // performing laboratory reads and results it but never rewrites it.
+        requireOrderingHospital(existing);
+
+        Hospital previousPerformer = existing.getPerformingHospital();
         LabOrder updated = buildLabOrder(existing, request, false);
-        return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(updated));
+        LabOrder saved = labOrderRepository.save(updated);
+        // A legitimate re-route is a new order for the new laboratory.
+        if (saved.isPerformedExternally()
+                && (previousPerformer == null
+                    || !Objects.equals(previousPerformer.getId(), saved.getPerformingHospital().getId()))) {
+            routingNotifier.notifyPerformingLab(saved);
+        }
+        return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    /** 404-not-403: an ordering-side write from any other hospital does not exist. */
+    private void requireOrderingHospital(LabOrder labOrder) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+                && labOrder.getHospital() != null
+                && !labOrder.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 404-not-403 for every read and every lab-side write: the ordering
+     * hospital and the performing hospital handle the order, nobody else.
+     */
+    private void requireHandledByActiveHospital(LabOrder labOrder) {
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+    }
+
+    /**
+     * B1: the laboratory that performs the test.
+     *
+     * <p>Three request states, and they are not the same thing on an update:
+     * an <em>omitted</em> field leaves the routing untouched (what every
+     * client that knows nothing of B1 sends), an <em>explicit null</em> — or
+     * the ordering hospital's own id — brings the test back in-house, and any
+     * other id routes it there. Both changes are subject to the
+     * no-specimen/no-result guard below. On a create there is nothing to keep,
+     * so absent and null both mean "our own laboratory".
+     *
+     * <p>A target must be an active hospital: the platform has no notion of
+     * partner or affiliated hospitals to narrow it to. That check applies to a
+     * laboratory the caller is choosing — re-sending the one already on the
+     * order is not a choice, so editing the notes of an order whose laboratory
+     * has since been suspended must not fail.
+     */
+    private Hospital resolvePerformingHospital(LabOrderRequestDTO request, Hospital orderingHospital, LabOrder base) {
+        if (base != null && !request.hasPerformingHospitalId()) {
+            return base.getPerformingHospital();
+        }
+        UUID requested = request.getPerformingHospitalId();
+        Hospital current = base != null ? base.getPerformingHospital() : null;
+        Hospital performing;
+        if (requested == null || requested.equals(orderingHospital.getId())) {
+            performing = null;
+        } else if (current != null && requested.equals(current.getId())) {
+            // Unchanged: keep the row as it is, routability unexamined.
+            performing = current;
+        } else {
+            performing = hospitalRepository.findById(requested)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            if (!isRoutableLab(performing)) {
+                throw new BusinessException("The performing laboratory must be an active hospital.");
+            }
+        }
+        requirePerformerChangeAllowed(base, performing);
+        return performing;
+    }
+
+    /**
+     * The performing laboratory may change only while nobody has worked the
+     * order: once a specimen or a result exists there, moving the order (or
+     * bringing it in-house) would orphan that laboratory's rows —
+     * {@code LabResult.validate()} would refuse every later release or sign.
+     */
+    private void requirePerformerChangeAllowed(LabOrder base, Hospital performing) {
+        if (base == null || base.getId() == null) {
+            return;
+        }
+        UUID current = base.getPerformingHospital() != null ? base.getPerformingHospital().getId() : null;
+        UUID next = performing != null ? performing.getId() : null;
+        if (Objects.equals(current, next)) {
+            return;
+        }
+        if (!labSpecimenRepository.findByLabOrder_Id(base.getId()).isEmpty()
+                || !labResultRepository.findByLabOrder_Id(base.getId()).isEmpty()) {
+            throw new com.example.hms.exception.ConflictException(
+                "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
+        }
+    }
+
+    private static boolean isRoutableLab(Hospital hospital) {
+        return hospital.isActive()
+            && hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.PerformingLabOptionDTO> listPerformingLabs() {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        return hospitalRepository
+            .findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState.ACTIVE)
+            .stream()
+            .filter(h -> !h.getId().equals(actingHospitalId))
+            .map(h -> com.example.hms.payload.dto.PerformingLabOptionDTO.builder()
+                .id(h.getId())
+                .name(h.getName())
+                .code(h.getCode())
+                .build())
+            .toList();
     }
 
     private LabOrder buildLabOrder(LabOrder base, LabOrderRequestDTO request, boolean isNew) {
@@ -156,6 +278,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setOrderingStaff(staff);
         labOrder.setEncounter(encounter);
         labOrder.setHospital(hospital);
+        labOrder.setPerformingHospital(resolvePerformingHospital(request, hospital, base));
         labOrder.setLabTestDefinition(testDefinition);
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
@@ -247,13 +370,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         LabOrder labOrder = labOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
-        // ── Hospital scope enforcement ──
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null
-                && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
-        }
+        // ── Hospital scope enforcement (ordering OR performing hospital) ──
+        requireHandledByActiveHospital(labOrder);
 
         return labOrderMapper.toLabOrderResponseDTO(labOrder);
     }
@@ -264,7 +382,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement: scope to hospital when non-superadmin ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findByHospital_Id(hospitalId).stream()
+            return labOrderRepository.findHandledBy(hospitalId).stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
@@ -279,13 +397,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         LabOrder labOrder = labOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
-        // ── Hospital scope enforcement ──
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null
-                && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
-        }
+        // ── Hospital scope enforcement: deletion stays with the ordering hospital ──
+        requireOrderingHospital(labOrder);
 
         labOrderRepository.deleteById(id);
     }
@@ -310,9 +423,23 @@ public class LabOrderServiceImpl implements LabOrderService {
             // travels; each one surfaced is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-            List<LabOrder> orders = labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            // B1: plus the orders this hospital's laboratory performs for others.
+            List<LabOrder> orders = labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, readable, hospitalId);
+            // Every row is accounted against the hospital it belongs to — the
+            // ordering one — including the orders this laboratory performs.
+            // The accounting asks whose record was surfaced where, not whether
+            // the reader was entitled to it: RECORD_SHARE pairs a source
+            // hospital with an acting hospital, and permitted reads are exactly
+            // what it exists to account for (the treatment-relationship reads
+            // E8 records are all permitted too). An order placed at A for a
+            // patient registered at A, read at the laboratory B that runs it,
+            // is A's record surfaced at B. Rewriting those rows to B's own id
+            // made reachOf skip them, so the one disclosure this feature
+            // introduces was the one disclosure nobody could see.
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), hospitalId),
+                CrossHospitalReachRecorder.reachOf(orders.stream()
+                    .map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital()))
+                    .toList(), hospitalId),
                 "Cross-hospital lab order read on the treatment relationship");
             return orders.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
@@ -346,7 +473,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         List<LabOrder> orders = labOrderRepository.findByLabTestDefinition_Id(labTestDefinitionId);
         if (hospitalId != null) {
             orders = orders.stream()
-                .filter(lo -> lo.getHospital() != null && lo.getHospital().getId().equals(hospitalId))
+                .filter(lo -> lo.isHandledBy(hospitalId))
                 .toList();
         }
         return orders.stream()
@@ -360,7 +487,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
-            return labOrderRepository.findByStatusAndHospital_Id(status, hospitalId).stream()
+            return labOrderRepository.findByStatusHandledBy(status, hospitalId).stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
@@ -389,19 +516,23 @@ public class LabOrderServiceImpl implements LabOrderService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
+        if (!labOrder.isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
         LabOrderStatus current = labOrder.getStatus();
-        UUID labHospitalId = labOrder.getHospital().getId();
-        validateStatusTransition(current, toStatus, labHospitalId);
+        UUID orderingHospitalId = labOrder.getHospital().getId();
+        // B1: lab-side steps are authorised at the hospital the actor works in
+        // (the ordering hospital or the performing laboratory); cancelling is
+        // an ordering-side decision and stays with the ordering hospital.
+        UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
+        validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
         labOrder.setStatus(toStatus);
         return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(labOrder));
     }
 
-    private void validateStatusTransition(LabOrderStatus from, LabOrderStatus to, UUID hospitalId) {
+    private void validateStatusTransition(LabOrderStatus from, LabOrderStatus to,
+                                          UUID hospitalId, UUID orderingHospitalId) {
         Set<LabOrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(from, Set.of());
         if (!allowed.contains(to)) {
             throw new BusinessException(
@@ -411,8 +542,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         if (to == LabOrderStatus.CANCELLED) {
-            if (!roleValidator.isLabManager(currentUserId, hospitalId)
-                    && !roleValidator.isHospitalAdmin(currentUserId, hospitalId)
+            if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
+                    && !roleValidator.isHospitalAdmin(currentUserId, orderingHospitalId)
                     && !roleValidator.isSuperAdminFromAuth()) {
                 throw new BusinessException("Only lab managers or admins may cancel a lab order.");
             }

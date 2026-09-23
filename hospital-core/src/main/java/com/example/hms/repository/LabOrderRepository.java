@@ -68,6 +68,40 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
 
     // Hospital-scoped queries for tenant isolation
     List<LabOrder> findByHospital_Id(UUID hospitalId);
+
+    // ── Audit gap B1: an order is handled by its ordering hospital AND by the
+    // laboratory that performs it (performing_hospital_id, V161). The lab-side
+    // worklists read "ordered here OR sent to us". ──────────────────────────
+
+    /** Every order the hospital orders or performs. */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+           OR o.performingHospital.id = :hospitalId
+    """)
+    List<LabOrder> findHandledBy(@Param("hospitalId") UUID hospitalId);
+
+    /** Orders in a status that the hospital orders or performs. */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.status = :status
+          AND (o.hospital.id = :hospitalId OR o.performingHospital.id = :hospitalId)
+    """)
+    List<LabOrder> findByStatusHandledBy(@Param("status") LabOrderStatus status,
+                                         @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * E9 #59b widened by B1: the patient's orders across the readable hospitals,
+     * plus the orders sent to the acting hospital's laboratory to perform.
+     */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.patient.id = :patientId
+          AND (o.hospital.id IN :hospitalIds OR o.performingHospital.id = :performingHospitalId)
+    """)
+    List<LabOrder> findByPatientIdReadableOrPerformedAt(@Param("patientId") UUID patientId,
+                                                        @Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+                                                        @Param("performingHospitalId") UUID performingHospitalId);
     List<LabOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
     /** E9 #59b — lab orders across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
     List<LabOrder> findByPatient_IdAndHospital_IdIn(UUID patientId, java.util.Collection<UUID> hospitalIds);

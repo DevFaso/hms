@@ -17,6 +17,7 @@ import {
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
+  PerformingLab,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -81,6 +82,8 @@ export class LabComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   labTestDefs = signal<LabTestDefinition[]>([]);
+  /** Laboratories an order can be sent to (B1); empty until a provider opens the page. */
+  performingLabs = signal<PerformingLab[]>([]);
   private activeAssignmentId = '';
 
   // Patient picker
@@ -143,6 +146,12 @@ export class LabComponent implements OnInit {
     this.loadAssignedHospitals();
     this.initPatientSearch();
     this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+    if (this.canCreateOrder()) {
+      this.labService.listPerformingLabs().subscribe({
+        next: (labs) => this.performingLabs.set(labs ?? []),
+        error: () => this.performingLabs.set([]),
+      });
+    }
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a) => a.active);
@@ -167,7 +176,48 @@ export class LabComponent implements OnInit {
       orderChannel: 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: '',
     };
+  }
+
+  /**
+   * B1: an order is "incoming" when another hospital sent it to this
+   * laboratory, and "outgoing" when this hospital sent it out.
+   *
+   * Read through effectiveHospitalIdForRequest, the id the API is actually
+   * called with — not activeHospitalId, which for a super-admin is the
+   * primary hospital rather than the one the chip is pinned to. Reading the
+   * wrong one inverted every label for a chip-scoped super-admin and offered
+   * them Edit and Delete on incoming orders that the backend then 404s.
+   */
+  isIncomingExternal(o: LabOrderResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    return !!o.performingHospitalId && !!active && o.performingHospitalId === active;
+  }
+
+  isSentOut(o: LabOrderResponse): boolean {
+    return !!o.performingHospitalId && !this.isIncomingExternal(o);
+  }
+
+  /**
+   * The hospital on this side of the relationship — the one whose worklist
+   * this is. For an order another hospital sent here that is the performing
+   * laboratory (us), not the hospital that ordered it.
+   */
+  actingHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.performingHospitalName : o.hospitalName;
+    return name || '—';
+  }
+
+  /** The hospital on the other side: who ordered it, or where it was sent. */
+  counterpartHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.hospitalName : o.performingHospitalName;
+    return name || '—';
+  }
+
+  /** The label that side carries: "Ordered by" when it came to us, "Sent to" when it left us. */
+  counterpartLabelKey(o: LabOrderResponse): string {
+    return this.isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO';
   }
 
   onTestDefChange(defId: string): void {
@@ -290,6 +340,7 @@ export class LabComponent implements OnInit {
       orderChannel: o.orderChannel ?? 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: o.performingHospitalId ?? '',
     };
     this.selectedPatient.set({
       id: '',
@@ -308,9 +359,17 @@ export class LabComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    // The select is always sent, and "" is an explicit null rather than an
+    // absent field: absent tells the API to leave the routing as it is, so
+    // omitting it would make "this hospital's laboratory" unreachable on an
+    // order that had been sent out.
+    const payload: LabOrderRequest = {
+      ...this.form,
+      performingHospitalId: this.form.performingHospitalId || null,
+    };
     const op = this.editing()
-      ? this.labService.updateOrder(this.editingId()!, this.form)
-      : this.labService.createOrder(this.form);
+      ? this.labService.updateOrder(this.editingId()!, payload)
+      : this.labService.createOrder(payload);
     op.subscribe({
       next: () => {
         this.toast.success(

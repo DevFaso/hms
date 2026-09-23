@@ -14,6 +14,10 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -122,6 +126,55 @@ class MigrationRegistrationTest {
                     + "splitStatements=\"false\" if the file contains a DO $$ block.",
                 unregistered)
             .isEmpty();
+    }
+
+    /**
+     * The regex scans above read the file as text and are satisfied by a
+     * changeSet spliced into the middle of a comment. Liquibase is not: it
+     * parses the XML, and a document that does not parse takes the deploy
+     * down at startup. A changeSet id registered twice fails the same way.
+     * PR #717 did both — its V162 block was anchored on a
+     * {@code </databaseChangeLog>} string that lives inside the V121 comment.
+     */
+    @Test
+    void changelogIsWellFormedXmlWithUniqueChangeSetIds() throws Exception {
+        Path migrationDir = migrationDirectory();
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setNamespaceAware(true);
+
+        org.w3c.dom.Document document = factory.newDocumentBuilder()
+            .parse(migrationDir.resolve("changelog.xml").toFile());
+
+        NodeList changeSets = document.getDocumentElement().getElementsByTagNameNS("*", "changeSet");
+        Set<String> ids = new TreeSet<>();
+        Set<String> duplicates = new TreeSet<>();
+        for (int i = 0; i < changeSets.getLength(); i++) {
+            String id = ((Element) changeSets.item(i)).getAttribute("id");
+            if (!ids.add(id)) {
+                duplicates.add(id);
+            }
+        }
+        assertThat(changeSets.getLength()).isPositive();
+        assertThat(duplicates)
+            .withFailMessage("changeSet ids registered more than once: %s", duplicates)
+            .isEmpty();
+
+        // The parsed registrations and the text scan must agree: a changeSet
+        // the parser does not see is one Liquibase will not run.
+        String changelog = Files.readString(migrationDir.resolve("changelog.xml"), StandardCharsets.UTF_8);
+        Set<String> scanned = new TreeSet<>();
+        Matcher matcher = SQL_FILE_PATH.matcher(changelog);
+        while (matcher.find()) {
+            scanned.add(matcher.group(1));
+        }
+        NodeList sqlFiles = document.getDocumentElement().getElementsByTagNameNS("*", "sqlFile");
+        Set<String> parsed = new TreeSet<>();
+        for (int i = 0; i < sqlFiles.getLength(); i++) {
+            parsed.add(((Element) sqlFiles.item(i)).getAttribute("path"));
+        }
+        assertThat(parsed).isEqualTo(scanned);
     }
 
     @Test

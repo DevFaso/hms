@@ -19,6 +19,7 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
@@ -134,12 +135,13 @@ public class LabResultServiceImpl implements LabResultService {
         boolean interfacePrincipal = ingested && !hasResolvableHospitalScope();
 
         // Same 404-not-403 tenancy comparison as every other single-row path
-        // here (B11).
-        if (!interfacePrincipal) {
-            requireOrderInActiveHospital(labOrder);
-        }
+        // here (B11, on B1's ordering-or-performing predicate): a hospital on
+        // neither side must not learn the order exists, let alone attach a
+        // result to it.
+        requireOrderInActiveHospital(labOrder);
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
 
         // Who may record THIS test's result. Role alone cannot answer it: a
         // nurse recording a bedside glucose is doing their job, and the same
@@ -150,18 +152,10 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
-    // The author check reads the caller's role AT THIS HOSPITAL, which an
-    // interface account does not have — that is the premise of the ingest
-    // path — so it would 400 every ORU. Skipped on the SAME narrow condition
-    // as the tenancy check above, never on the endpoint alone: HOSPITAL_ADMIN
-    // passes that endpoint's @PreAuthorize but is not in the author
-    // allow-list, and must not become a lab-result author by posting an ORU.
-    if (!interfacePrincipal) {
-        validateLabResultAuthor(currentUserId, hospital.getId());
-    }
+    validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UserRoleHospitalAssignment assignment =
+            requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
 
         // From here to the status write the order row is LOCKED. The
         // duplicate check belongs inside it: run before the lock, two
@@ -343,83 +337,33 @@ public class LabResultServiceImpl implements LabResultService {
                 orderId);
             return;
         }
-        List<LabResult> results = labResultRepository.findByLabOrder_Id(orderId);
-        if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
-            moveStatus(orderId, committedStatus,
-                LabOrderLifecycle.statusAfterAllResultsReleased(committedStatus));
-        }
-    }
-
-    /**
-     * Can a hospital scope be resolved for this caller at all?
-     *
-     * <p>Mirrors the branches {@code requireActiveHospitalId} takes before it
-     * gives up and throws: a real super-admin, an explicit {@code
-     * X-Hospital-Id} context, or a single active assignment. False means an
-     * interface principal — nothing to compare an order against. It is one
-     * half of the ingest exemption, never the whole of it.
-     */
-    private boolean hasResolvableHospitalScope() {
-        com.example.hms.security.context.HospitalContext ctx =
-            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
-        return ctx.isSuperAdmin()
-            || ctx.getActiveHospitalId() != null
-            || roleValidator.isSuperAdminFromAuth()
-            || roleValidator.getCurrentHospitalId() != null;
-    }
-
-    /**
-     * Does this order already hold the value being posted?
-     *
-     * <p>A retried {@code POST /lab-results} carries the same order, value,
-     * unit, result date AND notes as the row it is retrying. The HL7 path
-     * dedups on sender + MSH-10; the REST path has nothing, so this is what
-     * keeps a retry from re-opening a finished order.
-     *
-     * <p>The notes are part of the comparison because an AMENDMENT can carry
-     * the same number: a laboratory correcting an interpretation, adding a
-     * comment or re-filing a value against a changed reference is saying
-     * something new about the result, and that must re-open the order like
-     * any other new result. Only a byte-for-byte repeat of what is already
-     * recorded is treated as a retry.
-     *
-     * <p>The test code is part of it, and the ingest path now carries one
-     * (OBX-3, from the message), because without it two analytes of one panel
-     * sharing a value, unit, date and the adapter's fixed comment collapsed
-     * into one and the second was dropped silently behind a 201. The abnormal
-     * flag likewise: a row the analyser flagged is not the same result as an
-     * unflagged one with the same number.
-     *
-     * <p>Retries are not deduped on the ingest path at all — see the caller.
-     * An ORU that repeats is a transport concern, dealt with on the MLLP path
-     * by the (sender, MSH-10) check; here a duplicate row is recoverable and
-     * a dropped result is not.
-     */
-    private java.util.Optional<LabResult> findIdenticalResult(LabOrder labOrder, LabResultRequestDTO request) {
-        if (labOrder == null || labOrder.getId() == null) {
-            return java.util.Optional.empty();
-        }
-        return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .filter(existing -> existing.getAbnormalFlag() == null
-                && sameValue(existing.getTestCode(), request.getTestCode())
-                && sameValue(existing.getResultValue(), request.getResultValue())
-                && sameValue(existing.getResultUnit(), request.getResultUnit())
-                && sameValue(existing.getNotes(), request.getNotes())
-                && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()))
-            .findFirst();
-    }
-
-    private boolean sameValue(String left, String right) {
-        if (left == null || right == null) {
-            return left == null && right == null;
+        List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
+        // A preliminary row the lab has since finalised and released is not
+        // work still outstanding — it is a record of what the analyzer said
+        // first. Left counted, it would hold the order open for ever, since
+        // nobody will ever release a superseded preliminary. Same rule, same
+        // class, as the patient view.
+        Set<SupersededLabResults.AnalyteKey> releasedAnalytes =
+            SupersededLabResults.releasedAnalytes(results);
+        boolean nothingOutstanding = results.stream()
+            .allMatch(result -> result.isReleased()
+                || SupersededLabResults.isSupersededByRelease(result, releasedAnalytes));
+        if (!results.isEmpty() && nothingOutstanding) {
+            advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
         return left.trim().equalsIgnoreCase(right.trim());
     }
 
+    /**
+     * The 404-not-403 tenancy comparison for the order a result hangs off
+     * (B11), on B1's predicate: the ordering hospital and the laboratory
+     * performing the order both handle it. Comparing on the ordering hospital
+     * alone would refuse the performing laboratory the very result paths B1
+     * exists to open. A third hospital must not learn the order exists, let
+     * alone attach a result to it.
+     */
     private void requireOrderInActiveHospital(LabOrder labOrder) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && labOrder.getHospital() != null
-                && !activeHospitalId.equals(labOrder.getHospital().getId())) {
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
@@ -430,12 +374,7 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && labResult.getLabOrder() != null
-                && labResult.getLabOrder().getHospital() != null
-                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
-            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
-        }
+        requireResultInActiveHospital(labResult);
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(buildTrendHistory(labResult));
@@ -468,7 +407,7 @@ public class LabResultServiceImpl implements LabResultService {
             return List.of();
         }
 
-        return labResultRepository.findByLabOrder_Hospital_IdIn(hospitalIds).stream()
+        return labResultRepository.findHandledByHospitals(hospitalIds).stream()
             .map(labResultMapper::toResponseDTO)
             .toList();
     }
@@ -482,7 +421,7 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        return labResultRepository.findByLabOrder_Hospital_IdIn(Set.of(hospitalId), pageable)
+        return labResultRepository.findHandledByHospital(hospitalId, pageable)
             .map(labResultMapper::toResponseDTO);
     }
 
@@ -494,7 +433,14 @@ public class LabResultServiceImpl implements LabResultService {
             // A release worklist is one hospital's queue; the global view has none.
             throw new BusinessException("A hospital scope is required for the release worklist.");
         }
-        return labResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse(hospitalId, pageable)
+        // B1: a laboratory releases what it ran, so an order another hospital
+        // sent here belongs on this queue — releasing it is exactly what the
+        // performing laboratory is for. Unlike every other lab-side read this
+        // one is NOT the ordering-OR-performing predicate: an outsourced
+        // result waits on the performing laboratory's queue alone, because
+        // putting it on both invited the ordering hospital to sign off work
+        // its laboratory never did.
+        return labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable)
             .map(labResultMapper::toResponseDTO);
     }
 
@@ -506,11 +452,7 @@ public class LabResultServiceImpl implements LabResultService {
 
         // Hospital scope enforcement
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && labResult.getLabOrder() != null
-                && labResult.getLabOrder().getHospital() != null
-                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
-            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
-        }
+        requireResultInActiveHospital(labResult);
 
         // Amending a result is entering one. Same gate — otherwise a bedside
         // role blocked from creating a lab-performed result could simply
@@ -522,11 +464,14 @@ public class LabResultServiceImpl implements LabResultService {
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
+        if (!labOrder.isHandledBy(activeHospitalId)) {
+            throw new ResourceNotFoundException("laborder.notfound");
+        }
     UUID currentUserId = authService.getCurrentUserId();
-    validateLabResultAuthor(currentUserId, hospital.getId());
+    validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UserRoleHospitalAssignment assignment =
+            requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
@@ -544,12 +489,7 @@ public class LabResultServiceImpl implements LabResultService {
     public void deleteLabResult(UUID id, Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && labResult.getLabOrder() != null
-                && labResult.getLabOrder().getHospital() != null
-                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
-            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
-        }
+        requireResultInActiveHospital(labResult);
         labResultRepository.deleteById(id);
     }
 
@@ -598,11 +538,65 @@ public class LabResultServiceImpl implements LabResultService {
      */
     private void requireResultInActiveHospital(LabResult labResult) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // B1: the order is handled by its ordering hospital and by the
+        // laboratory performing it (LabOrder.isHandledBy); a third hospital
+        // gets the same 404 as before.
         if (activeHospitalId != null && labResult.getLabOrder() != null
-                && labResult.getLabOrder().getHospital() != null
-                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
+                && !labResult.getLabOrder().isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
+    }
+
+    /**
+     * The assignment a result is attributed to must belong to the hospital
+     * the author is acting at.
+     *
+     * <p>Nothing checked this: the id came straight off the request and
+     * {@code LabResult.validate()} was the only gate, which asks merely that
+     * the assignment's hospital handles the order — and B1 widened "handles"
+     * to two hospitals. A scientist at the performing laboratory could
+     * therefore attribute a result to a named staff member at the ordering
+     * hospital and read that person's name back out of the response. 404
+     * rather than 403: another hospital's assignment is not this caller's to
+     * learn about.
+     */
+    private UserRoleHospitalAssignment requireAssignmentAtActingHospital(UUID assignmentId, UUID actingHospitalId) {
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        if (actingHospitalId != null
+                && (assignment.getHospital() == null
+                    || !actingHospitalId.equals(assignment.getHospital().getId()))) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        return assignment;
+    }
+
+    /**
+     * B1: the hospital whose laboratory runs the order — the one it was sent
+     * to, else the one that ordered it. Releasing a result is that
+     * laboratory's sign-off on its own work, so it is the running hospital's
+     * roles that authorise it and the running hospital's queue the result
+     * waits on.
+     */
+    private static UUID runningHospitalId(LabOrder labOrder, Hospital orderingHospital) {
+        UUID running = labOrder != null ? labOrder.resolvePerformingHospitalId() : null;
+        if (running != null) {
+            return running;
+        }
+        return orderingHospital != null ? orderingHospital.getId() : null;
+    }
+
+    /**
+     * B1: the hospital whose roles authorise a lab-side write. An actor working
+     * at the performing laboratory is judged by their roles THERE; everybody
+     * else (the ordering hospital, a super-admin in global view) by the
+     * ordering hospital's, exactly as before.
+     */
+    private static UUID authorityHospitalId(LabOrder labOrder, Hospital orderingHospital, UUID actingHospitalId) {
+        if (actingHospitalId != null && labOrder != null && labOrder.isPerformedAt(actingHospitalId)) {
+            return actingHospitalId;
+        }
+        return orderingHospital != null ? orderingHospital.getId() : null;
     }
 
     /**
@@ -639,10 +633,14 @@ public class LabResultServiceImpl implements LabResultService {
         requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        UUID hospitalId = hospital != null ? hospital.getId() : null;
+        // B1: releasing is the running laboratory's sign-off. For an order
+        // sent out, the ordering hospital reads the result and acts on it but
+        // does not release it — its lab staff were being offered the sign-off
+        // on work their laboratory never did.
+        UUID hospitalId = runningHospitalId(labResult.getLabOrder(), hospital);
         UUID actorId = authService.getCurrentUserId();
 
-        validateReleasePermissions(actorId, hospitalId);
+        validateReleasePermissions(actorId, hospitalId, roleValidator.requireActiveHospitalId());
 
         if (labResult.isReleased()) {
             // Not a no-op: a result released by a path that does not touch the
@@ -659,8 +657,61 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
 
         labResultRepository.save(labResult);
+        // Both halves of this line's history: #716 closes the order once every
+        // result on it is released, and the release then transmits its final
+        // form. Domain write first — the message is the consequence, and it is
+        // registered for after this transaction commits.
         completeOrderIfAllReleased(labResult.getLabOrder());
+        enqueueReleasedObservationAfterCommit(labResult);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * The ORU enqueued at creation went out as preliminary (OBX-11 P), because
+     * that is what an unreleased result is; without a second message a receiver
+     * would hold that preliminary for ever.
+     *
+     * <p>Two conditions, both learned the hard way:
+     *
+     * <p>Only for an order we have already transmitted an ORU^R01 for. A result
+     * INGESTED from an analyzer (MLLP ORU^R01) never had a first message from
+     * us, so enqueuing one on release would transmit an unsolicited result back
+     * to the instrument peers — carrying OBR-2 = our internal order UUID, which
+     * is not the accession number the analyzer knows the order by. The outbox
+     * row records the order rather than the result, which is exactly the right
+     * granularity here: the question is whether the peers already know this
+     * order under the identifier we send.
+     *
+     * <p>And after commit, in its own transaction, with the id only. An enqueue
+     * inside this transaction is inserted and validated at commit, so its
+     * try/catch catches nothing and an outbox failure would roll back the
+     * release — the clinical write — for the sake of a message.
+     */
+    private void enqueueReleasedObservationAfterCommit(LabResult labResult) {
+        LabOrder labOrder = labResult.getLabOrder();
+        UUID labOrderId = labOrder != null ? labOrder.getId() : null;
+        if (!instrumentOutboxService.hasTransmittedObservation(labOrderId)) {
+            LOG.debug("Release of result {} not transmitted — no ORU^R01 has gone out for order {}",
+                labResult.getId(), labOrderId);
+            return;
+        }
+        UUID labResultId = labResult.getId();
+        // The catch belongs HERE, outside the REQUIRES_NEW proxy: the enqueue's
+        // INSERT is validated and written when that inner transaction commits,
+        // so a catch inside the service method never sees the failure. And an
+        // exception escaping an afterCommit callback propagates to whoever
+        // committed — the endpoint would answer 500 for a release that DID
+        // happen, and the retry would hit the already-released early return and
+        // never enqueue anything. The release is the clinical write; the
+        // message is not.
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                instrumentOutboxService.enqueueReleasedObservation(labResultId);
+            } catch (RuntimeException ex) {
+                LOG.error("Released ORU^R01 not enqueued for result {}: {}",
+                    labResultId, ex.getMessage(), ex);
+            }
+        });
     }
 
     @Override
@@ -668,9 +719,10 @@ public class LabResultServiceImpl implements LabResultService {
     public LabResultResponseDTO signLabResult(UUID id, LabResultSignatureRequestDTO request, Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        UUID hospitalId = hospital != null ? hospital.getId() : null;
+        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital, roleValidator.requireActiveHospitalId());
         UUID actorId = authService.getCurrentUserId();
 
         validateSignPermissions(actorId, hospitalId);
@@ -732,16 +784,24 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    private void validateReleasePermissions(UUID userId, UUID hospitalId) {
+    private void validateReleasePermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for release operation.");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (hospitalId == null) {
+        if (runningHospitalId == null) {
             throw new BusinessException("Unable to determine hospital context for lab result release.");
         }
+        // B1: an order sent to another laboratory is released there. The
+        // ordering hospital still reads the result — this is not a 404 — but
+        // it does not sign off work it did not do.
+        if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
+            throw new BusinessException(
+                "Only the laboratory performing this order may release its results.");
+        }
+        UUID hospitalId = runningHospitalId;
 
         // LabResultAuthority.RELEASE_ROLES, checked against the caller's
         // assignment at THIS hospital (B10). This list used to admit doctors,
@@ -918,6 +978,7 @@ public class LabResultServiceImpl implements LabResultService {
             .encounter(parent.getEncounter())
             .labTestDefinition(reflexDef)
             .hospital(parent.getHospital())
+            .performingHospital(parent.getPerformingHospital())
             .assignment(parent.getAssignment())
             .orderDatetime(LocalDateTime.now())
             .status(LabOrderStatus.ORDERED)
@@ -1047,8 +1108,7 @@ public class LabResultServiceImpl implements LabResultService {
         // Hospital scope enforcement
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && current.getLabOrder() != null
-                && current.getLabOrder().getHospital() != null
-                && !activeHospitalId.equals(current.getLabOrder().getHospital().getId())) {
+                && !current.getLabOrder().isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
 
@@ -1132,7 +1192,10 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
+        // B1: a critical value is the running laboratory's to see and chase —
+        // it is the one that produced it. These two were the last lab-side
+        // reads still asking only who ordered.
+        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
@@ -1147,7 +1210,7 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
+        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> !r.isAcknowledged())

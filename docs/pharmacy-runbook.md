@@ -40,23 +40,59 @@
 | Prêt pour retrait | Patient | Dispense créée |
 | Rupture de stock | Patient | Routage externe ou back-order |
 | Rappel de renouvellement | Patient | Programmé selon jours-de-stock |
-| Offre d'ordonnance | Pharmacie partenaire | `routeToPartner` |
+| Offre d'ordonnance | Pharmacie partenaire ou communautaire | `routeToPartner` **ou** `POST /prescriptions/{id}/dispatch-sms` |
 | Rappel (2h) | Pharmacie partenaire | Planificateur (pas de réponse) |
 | Refus auto (4h) | Pharmacie partenaire | Planificateur |
+| Offre reprise | Pharmacie précédente | Nouveau dispatch SMS de la même ordonnance |
 | Accepté par partenaire | Patient | Réponse `1` du partenaire |
-| Délivré par partenaire | Patient | Réponse `3` du partenaire |
+| Délivré par partenaire | Patient | Réponse `3` du partenaire (après acceptation) |
 
 ## 4. Canal SMS partenaire (Phase 7a)
 
 - Endpoint inbound : `POST /webhooks/partner-sms`
 - En-tête requis : `X-HMS-Partner-Signature: <shared-secret>` (fail-closed si non configuré)
 - Corps accepté : `{ "from": "+226...", "body": "1 ABC12" }`
+- **`from` est obligatoire.** Le secret partagé est commun à toutes les pharmacies : il autorise
+  la passerelle, pas la pharmacie. Une réponse n'est appliquée que si le numéro expéditeur
+  correspond au `phoneNumber` de la pharmacie destinataire **et** qu'une seule décision ouverte
+  porte la référence citée. La comparaison porte sur les 8 derniers chiffres (le numéro national) :
+  `70 70 70 70` ≡ `+22670707070` ≡ `0022670707070`, un champ contenant deux numéros
+  (`70707070 / 70111222`) accepte l'un ou l'autre, et un poste (`+22670707070 poste 12`) est
+  ignoré. Ces écritures faisaient auparavant refuser toutes les réponses de la pharmacie, avec une
+  alerte de sécurité à chaque fois.
+  Sinon : réponse ignorée, `WARN` applicatif et événement d'audit `SECURITY_ALERT_TRIGGERED`
+  (l'offre reste ouverte et sera auto-refusée à 4h — à surveiller).
+- **Seule la réponse structurée est interprétée.** Le message d'offre indique la réponse exacte
+  à envoyer (`« 1 ABC12 » pour accepter, « 2 ABC12 » pour refuser`) ; seules ces formes sont
+  comprises :
+  - le message entier est un code + la référence : `1 ABC12`, `« 1 ABC12 »`, `"1 ABC12"`,
+    `1-ABC12` (guillemets, apostrophes, espaces et point final tolérés) ;
+  - ou la forme instruite `« 1 ABC12 »` à l'intérieur d'un message, **à condition qu'elle ne
+    soit pas contredite** — une offre citée intégralement contient à la fois `« 1 ABC12 »` et
+    `« 2 ABC12 »` (nos mots, pas ceux de la pharmacie) et ne décide donc rien.
+- **Aucune interprétation du texte libre.** `oui`, `non`, `refus`, `délivré`, un code en début de
+  ligne dans une citation : plus rien de tout cela n'est deviné. Le texte lu appartenait souvent à
+  notre propre message renvoyé par le téléphone (la posologie, la note du prescripteur, notre
+  « pour refuser »), ce qui produisait de vraies erreurs cliniques — une note commençant par
+  « 3 boîtes si possible » annonçait au patient une délivrance qui n'avait pas eu lieu.
+- **Une réponse non structurée n'est pas perdue : elle remonte à un humain.** `WARN` applicatif et
+  événement d'audit `SECURITY_ALERT_TRIGGERED` nommant l'ordonnance (si la référence est
+  identifiable) et le numéro masqué — comme pour un expéditeur non reconnu. Quelqu'un doit lire le
+  SMS dans la passerelle et agir (répondre à la pharmacie, ou utiliser `partner-respond` /
+  `partner-dispense-confirm` dans l'application). Le corps du message n'est **pas** copié dans
+  l'audit : il peut contenir le médicament et les initiales du patient.
 - Codes de réponse :
-  - `1 <ref>` → accepter
-  - `2 <ref>` → refuser
-  - `3 <ref>` → confirmer délivrance
-  - Fallback flou FR : `oui` / `non` / `délivré`
+  - `1 <ref>` → accepter (décision `PENDING` uniquement)
+  - `2 <ref>` → refuser (décision `PENDING` uniquement)
+  - `3 <ref>` → confirmer la délivrance — **uniquement après un `1`** (décision `ACCEPTED`),
+    comme l'endpoint personnel `partner-dispense-confirm`. Un `3` sur une offre non acceptée
+    est ignoré : le patient ne doit pas être averti d'une délivrance que personne n'a acceptée.
 - Planificateur : relance à 2h, refus auto à 4h (configurable via `pharmacy.partner.scheduler.*`).
+- Envoi SMS vers une pharmacie communautaire : `POST /prescriptions/{id}/dispatch-sms`. L'ordonnance
+  doit être `SIGNED`, `TRANSMITTED`, `PARTNER_REJECTED` ou `PENDING_STOCK` ; elle passe à
+  `SENT_TO_PARTNER` (donc hors file de dispensation interne). Un nouveau dispatch reprend l'offre
+  précédente (statut `CANCELLED`, ancienne référence inopérante, pharmacie précédente prévenue) ;
+  une décision de type `BACKORDER` n'est pas reprise, la date de réapprovisionnement est conservée.
 
 ## 5. Claims AMU (Phase 6)
 

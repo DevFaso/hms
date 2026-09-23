@@ -109,6 +109,26 @@ class ObservationFhirResourceProviderScopingTest {
     }
 
     @Test
+    void readLabResultOfAnOrderThisHospitalPerformsMaps() {
+        // B1: the write path accepts the performing laboratory, so the read
+        // must too — a SMART client that can PUT an Observation and then 404s
+        // reading it back has no workable contract.
+        UUID rowId = UUID.randomUUID();
+        LabResult routed = labResultInHospital(rowId, UUID.randomUUID());
+        Hospital performing = new Hospital();
+        performing.setId(activeHospitalId);
+        routed.getLabOrder().setPerformingHospital(performing);
+        Observation mapped = new Observation();
+        mapped.setId("labresult-" + rowId);
+        when(labResultRepository.findById(rowId)).thenReturn(Optional.of(routed));
+        when(mapper.toFhir(routed)).thenReturn(mapped);
+
+        Observation out = provider.read(new IdType("Observation", "labresult-" + rowId));
+
+        assertThat(out).isSameAs(mapped);
+    }
+
+    @Test
     void readVitalFromAnotherHospitalReadsAsNotFound() {
         UUID rowId = UUID.randomUUID();
         PatientVitalSign vital = new PatientVitalSign();

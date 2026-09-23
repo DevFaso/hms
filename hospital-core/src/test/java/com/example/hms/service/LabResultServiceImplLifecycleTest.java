@@ -304,6 +304,60 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("a preliminary the final has superseded no longer holds the order open")
+    void aSupersededPreliminaryDoesNotBlockCompletion() {
+        // What an analyzer leaves behind: two rows for one analyte, the
+        // preliminary unreleased for ever because nobody releases a value the
+        // bench has already replaced. Counted as outstanding work it would
+        // hold the order open for ever.
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult preliminary = resultOn(order, false);
+        preliminary.setTestCode("K");
+        LabResult finalResult = resultOn(order, false);
+        finalResult.setTestCode("K");
+        when(labResultRepository.findById(finalResult.getId())).thenReturn(Optional.of(finalResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labResultRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(preliminary, finalResult));
+        when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        service.releaseLabResult(finalResult.getId(), Locale.ENGLISH);
+
+        assertThat(finalResult.isReleased()).isTrue();
+        assertThat(preliminary.isReleased()).as("the record is untouched — only the reading changes").isFalse();
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("a pending result for a DIFFERENT analyte still holds the order open")
+    void aPendingSiblingAnalyteStillBlocksCompletion() {
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult pendingOtherAnalyte = resultOn(order, false);
+        pendingOtherAnalyte.setTestCode("NA");
+        LabResult finalResult = resultOn(order, false);
+        finalResult.setTestCode("K");
+        when(labResultRepository.findById(finalResult.getId())).thenReturn(Optional.of(finalResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labResultRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(pendingOtherAnalyte, finalResult));
+        when(labResultMapper.toResponseDTO(finalResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        service.releaseLabResult(finalResult.getId(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    }
+
+    @Test
     @DisplayName("B2 — one unreleased result of a panel keeps the order open")
     void anUnreleasedSiblingKeepsTheOrderOpen() {
         order.setStatus(LabOrderStatus.RESULTED);

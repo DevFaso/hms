@@ -65,6 +65,19 @@ public class LabOrderController {
     }
 
     /**
+     * B1: the laboratories the caller may route an order to. Declared before
+     * {@code /{id}} in reading order only; Spring matches the literal path first.
+     */
+    @GetMapping("/performing-labs")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @Operation(summary = "List performing laboratories",
+               description = "Active hospitals other than the caller's own whose laboratory can perform an order")
+    @ApiResponse(responseCode = "200", description = "Candidate laboratories retrieved successfully")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.PerformingLabOptionDTO>>> listPerformingLabs() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(labOrderService.listPerformingLabs()));
+    }
+
+    /**
      * Get a lab order by ID.
      * Doctors, Nurses, Lab staff, Staff, and Admins can view.
      */
