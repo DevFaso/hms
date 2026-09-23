@@ -20,6 +20,7 @@ import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -95,7 +96,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit);
         List<LabResult> visible = resolvePairs(results, redactUnreleased, effectiveLimit);
-        if (visible.size() < effectiveLimit && results.size() >= effectiveLimit) {
+        // Only worth reading again if there are rows we have not seen AND the
+        // wider read would actually be wider — at the cap it would repeat the
+        // identical query, and on the unscoped path that means loading the
+        // patient's whole result set a second time for nothing.
+        if (visible.size() < effectiveLimit
+            && results.size() >= effectiveLimit
+            && effectiveLimit < MAX_LIMIT) {
             results = fetchRows(patient, hospitalId, MAX_LIMIT);
             visible = resolvePairs(results, redactUnreleased, effectiveLimit);
         }
@@ -156,14 +163,40 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * the same class. The staff path resolves nothing: both rows are the record.
      */
     private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased, int limit) {
-        Set<UUID> superseded = redactUnreleased
-            ? SupersededLabResults.supersededRowIds(results, withSiblingsOfSupersedableRows(results))
-            : Set.of();
-        return results.stream()
-            .filter(result -> !superseded.contains(result.getId()))
-            .limit(limit)
-            .toList();
+        if (!redactUnreleased) {
+            return results.stream().limit(limit).toList();
+        }
+        Map<UUID, LabResult> replacements =
+            SupersededLabResults.replacements(results, withSiblingsOfSupersedableRows(results));
+        if (replacements.isEmpty()) {
+            return results.stream().limit(limit).toList();
+        }
+
+        List<LabResult> survivors = new java.util.ArrayList<>(results.size());
+        Set<UUID> present = new java.util.HashSet<>();
+        for (LabResult result : results) {
+            if (!replacements.containsKey(result.getId()) && present.add(result.getId())) {
+                survivors.add(result);
+            }
+        }
+        // Removing a superseded row is only half of it: the row that replaced
+        // it may be off the page — an observation time shared by the pair puts
+        // them adjacent, so a tie can fall either side of the edge — and
+        // dropping one without adding the other would take the test out of the
+        // patient's view altogether.
+        for (LabResult winner : replacements.values()) {
+            if (winner.getId() != null && present.add(winner.getId())) {
+                survivors.add(winner);
+            }
+        }
+        survivors.sort(NEWEST_FIRST);
+        return survivors.stream().limit(limit).toList();
     }
+
+    /** The order the page is read in, applied again once a survivor is folded in. */
+    private static final java.util.Comparator<LabResult> NEWEST_FIRST =
+        java.util.Comparator.comparing(LabResult::getResultDate,
+            java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
 
     private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased) {
         LabOrder labOrder = result.getLabOrder();

@@ -1,12 +1,15 @@
 package com.example.hms.service.lab;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -57,33 +60,51 @@ import java.util.UUID;
  *
  * <ol>
  *   <li>The analyzer marked it preliminary ({@code OBX-11 = P}).</li>
- *   <li>Another row exists for the same order, the same test code and the
- *       same sender — the analyzer's own identification of the observation,
- *       not our positional numbering. "Sender" is the sending application,
- *       or the sending facility when the application is absent, matching the
- *       guard that decides whether a result came from an analyzer at all.</li>
- *   <li>That row is strictly newer, by observation time, then by write order,
- *       and finally by row id, so the outcome is decided by the data and never
- *       by the order a query returned.</li>
+ *   <li>Another row exists for the same order, test code, sender AND
+ *       observation time — the analyzer's own identification of the
+ *       observation, not our positional numbering. "Sender" is the sending
+ *       application, or the sending facility when the application is absent,
+ *       matching the guard that decides whether a result came from an
+ *       analyzer at all. The observation time is part of it because a
+ *       preliminary and its final describe ONE draw and carry ONE OBX-14,
+ *       whereas a timed series is several draws of the same analyte at
+ *       different times; without it the series collapsed as soon as any draw
+ *       carried a preliminary status, which is the patient-safety case this
+ *       class exists for.</li>
+ *   <li>That row is strictly newer — the pair share an observation time by
+ *       construction, so this is write order, and finally row id, and the
+ *       outcome is decided by the data rather than by the order a query
+ *       returned.</li>
  *   <li>It does not hide a released row behind an unreleased one. A value the
  *       patient has already been given is never taken away and replaced with
  *       nothing.</li>
  * </ol>
  *
- * <h2>And for a row written before V164</h2>
+ * <h2>And for an ANALYZER row written before V164</h2>
  *
  * <p>V164 backfills nothing, so every analyzer row already in the database has
  * no status. Judging those by the rule above would supersede none of them —
  * and their preliminary/final pairs are real: the order would sit in RESULTED
  * for ever and the patient would keep a duplicate pending row, which is worse
- * than the behaviour they have today. So a row whose status is absent is
- * judged by the older rule instead, unchanged from what shipped in #720: the
- * same order and test code, with a LATER RELEASED row winning.
+ * than the behaviour they have today. So such a row is judged by the older
+ * rule instead, unchanged from what shipped in #720: the same order and test
+ * code, with a LATER RELEASED row winning.
  *
- * <p>Two rules, chosen by whether the analyzer told us, and nothing
- * reconstructed. New data gets the exact behaviour; old data keeps the
- * behaviour it already has; no row is guessed at. The fallback retires by
- * itself as pre-V164 rows age out of what anyone reads.
+ * <p><strong>Which rows those are is decided by provenance, not by the absence
+ * of a status.</strong> "No status" is not "old data" — it is also every
+ * hand-entered and REST-written result, for ever, and selecting the fallback
+ * that way handed those rows a rule they were never meant to have: a released
+ * row could hide an unreleased correction and close the order over it, exactly
+ * the behaviour this class was changed to stop. The fallback therefore applies
+ * only to a row that CAME FROM AN ANALYZER ({@link #cameFromAnAnalyzer}) and
+ * carries no status. A result a person entered is judged by neither rule and
+ * is never hidden.
+ *
+ * <p>Two rules, chosen by what the row is and what the analyzer said, and
+ * nothing reconstructed. New analyzer data gets the exact behaviour; older
+ * analyzer data keeps the behaviour it already has; a human's result is left
+ * alone. Because nothing new lands in the fallback, it genuinely retires as
+ * pre-V164 rows age out of what anyone reads.
  *
  * <p>Point 4 is a deliberate reversal of an earlier reading of this class,
  * which hid a released value as soon as an unreleased correction arrived.
@@ -101,8 +122,9 @@ public final class SupersededLabResults {
     private SupersededLabResults() {
     }
 
-    /** One observation, as the analyzer identifies it. */
-    private record ObservationKey(UUID labOrderId, String testCode, String sender) {
+    /** One observation, as the analyzer identifies it: one analyte, one sender, one draw. */
+    private record ObservationKey(UUID labOrderId, String testCode, String sender,
+                                  LocalDateTime observedAt) {
     }
 
     /** One analyte on one order — the older rule's key, for rows written before V164. */
@@ -121,56 +143,95 @@ public final class SupersededLabResults {
      */
     public static Set<UUID> supersededRowIds(Collection<LabResult> rowsToJudge,
                                              Collection<LabResult> knownRows) {
-        Set<UUID> superseded = new HashSet<>();
-        for (LabResult row : rowsToJudge) {
-            if (hasBeenReplaced(row, knownRows)) {
-                superseded.add(row.getId());
-            }
-        }
-        return superseded;
-    }
-
-    /** Whether some known row replaces this one, under whichever rule applies to it. */
-    private static boolean hasBeenReplaced(LabResult row, Collection<LabResult> knownRows) {
-        if (row.getId() == null) {
-            return false;
-        }
-        return hasAnalyzerStatus(row)
-            ? replacedUnderTheAnalyzerRule(row, knownRows)
-            : replacedUnderTheRuleForRowsWrittenBeforeV164(row, knownRows);
-    }
-
-    /** The analyzer described this row, so the precise rule applies. */
-    private static boolean replacedUnderTheAnalyzerRule(LabResult row, Collection<LabResult> knownRows) {
-        if (!isAnalyzerPreliminary(row)) {
-            return false;
-        }
-        ObservationKey key = observationKey(row);
-        return key != null && knownRows.stream().anyMatch(candidate -> replaces(candidate, row, key));
+        return replacements(rowsToJudge, knownRows).keySet();
     }
 
     /**
-     * No status, so the row predates V164 (or came from an analyzer that sent
-     * no OBX-11). Judged by what shipped in #720: an unreleased row for the
-     * same order and test code, replaced by a LATER RELEASED one.
+     * Each superseded row's id, mapped to the row that replaced it.
      *
-     * <p>Deliberately not tightened to the sender: this is the behaviour these
-     * rows already have in production, and the point of keeping it is that they
-     * keep working exactly as they do now.
+     * <p>The replacement matters as much as the removal: a caller rendering a
+     * page must be able to put the surviving row in front of the reader, or
+     * removing a superseded row at the page edge would make the test disappear
+     * from the patient's view altogether.
      */
-    private static boolean replacedUnderTheRuleForRowsWrittenBeforeV164(
+    public static Map<UUID, LabResult> replacements(Collection<LabResult> rowsToJudge,
+                                                    Collection<LabResult> knownRows) {
+        Map<UUID, LabResult> replacedBy = new LinkedHashMap<>();
+        for (LabResult row : rowsToJudge) {
+            replacementFor(row, knownRows).ifPresent(winner -> replacedBy.put(row.getId(), winner));
+        }
+        return replacedBy;
+    }
+
+    /** The row that replaces this one, under whichever rule applies to it. */
+    private static Optional<LabResult> replacementFor(LabResult row, Collection<LabResult> knownRows) {
+        if (row.getId() == null) {
+            return Optional.empty();
+        }
+        if (hasAnalyzerStatus(row)) {
+            return replacementUnderTheAnalyzerRule(row, knownRows);
+        }
+        return cameFromAnAnalyzer(row)
+            ? replacementUnderTheRuleForAnalyzerRowsWrittenBeforeV164(row, knownRows)
+            : Optional.empty();
+    }
+
+    /** The analyzer described this row, so the precise rule applies. */
+    private static Optional<LabResult> replacementUnderTheAnalyzerRule(
+        LabResult row, Collection<LabResult> knownRows) {
+        if (!isAnalyzerPreliminary(row)) {
+            return Optional.empty();
+        }
+        ObservationKey key = observationKey(row);
+        return key == null
+            ? Optional.empty()
+            : knownRows.stream().filter(candidate -> replaces(candidate, row, key)).findFirst();
+    }
+
+    /**
+     * An analyzer row with no status: it predates V164, or came from an
+     * analyzer that sent no OBX-11. Judged by what shipped in #720 — an
+     * unreleased row for the same order and test code, replaced by a LATER
+     * RELEASED one.
+     *
+     * <p>Deliberately not tightened to the sender or the observation time:
+     * this is the behaviour these rows already have in production, and the
+     * point of keeping it is that they keep working exactly as they do now.
+     * It is reached only for rows that came from an analyzer, so nothing new
+     * lands here.
+     */
+    private static Optional<LabResult> replacementUnderTheRuleForAnalyzerRowsWrittenBeforeV164(
         LabResult row, Collection<LabResult> knownRows) {
         if (row.isReleased()) {
-            return false;
+            return Optional.empty();
         }
         AnalyteKey key = analyteKey(row);
-        return key != null && knownRows.stream().anyMatch(candidate ->
-            candidate != null
+        if (key == null) {
+            return Optional.empty();
+        }
+        return knownRows.stream()
+            .filter(candidate -> candidate != null
                 && candidate.getId() != null
                 && !candidate.getId().equals(row.getId())
                 && candidate.isReleased()
                 && key.equals(analyteKey(candidate))
-                && isStrictlyNewer(candidate, row));
+                && isStrictlyNewer(candidate, row))
+            .findFirst();
+    }
+
+    /**
+     * Whether this row reached us from an analyzer rather than from a person.
+     *
+     * <p>Every mark the MLLP ingest leaves: the actor type it always sets, and
+     * the three source columns, each of which a given sender may omit. Shared
+     * with the transmit guard, which asks the same question — whether we sent
+     * this result or received it — so the two cannot drift apart.
+     */
+    public static boolean cameFromAnAnalyzer(LabResult row) {
+        return row.getActorType() == ActorType.SYSTEM
+            || row.getSourceMessageControlId() != null
+            || row.getSourceSendingApplication() != null
+            || row.getSourceSendingFacility() != null;
     }
 
     /** Whether the analyzer told us what this row is at all. */
@@ -186,11 +247,16 @@ public final class SupersededLabResults {
     }
 
     /**
-     * A row that may be hidden: the analyzer called it preliminary, or it
-     * predates V164 and is unreleased. Used by the read paths to decide which
-     * orders they need the siblings of.
+     * A row that may be hidden: an analyzer row the analyzer called
+     * preliminary, or an analyzer row with no status that is unreleased. Used
+     * by the read paths to decide which orders they need the siblings of, so
+     * it must be as narrow as the rules themselves — a hand-entered pending
+     * result is not a candidate and must not provoke the sibling query.
      */
     public static boolean mayBeSuperseded(LabResult row) {
+        if (!cameFromAnAnalyzer(row)) {
+            return false;
+        }
         return hasAnalyzerStatus(row) ? isAnalyzerPreliminary(row) : !row.isReleased();
     }
 
@@ -242,9 +308,10 @@ public final class SupersededLabResults {
     private static ObservationKey observationKey(LabResult row) {
         AnalyteKey analyte = analyteKey(row);
         String sender = senderOf(row);
-        return analyte == null || sender == null
+        LocalDateTime observedAt = row.getResultDate();
+        return analyte == null || sender == null || observedAt == null
             ? null
-            : new ObservationKey(analyte.labOrderId(), analyte.testCode(), sender);
+            : new ObservationKey(analyte.labOrderId(), analyte.testCode(), sender, observedAt);
     }
 
     private static AnalyteKey analyteKey(LabResult row) {

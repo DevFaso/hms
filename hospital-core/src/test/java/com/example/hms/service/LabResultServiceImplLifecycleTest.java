@@ -250,14 +250,21 @@ class LabResultServiceImplLifecycleTest {
         // hold the order open for ever.
         order.setStatus(LabOrderStatus.RESULTED);
         LabResult preliminary = resultOn(order, false);
+        // One draw reported twice: the pair shares its observation time, and
+        // the write order — stated here rather than left to the clock — says
+        // which message arrived second.
+        LocalDateTime drawnAt = LocalDateTime.now().minusMinutes(10);
         preliminary.setTestCode("K");
         preliminary.setSourceSendingApplication("SYSMEX");
         preliminary.setObservationResultStatus("P");
-        preliminary.setResultDate(LocalDateTime.now().minusMinutes(10));
+        preliminary.setResultDate(drawnAt);
+        preliminary.setCreatedAt(drawnAt);
         LabResult finalResult = resultOn(order, false);
         finalResult.setTestCode("K");
         finalResult.setSourceSendingApplication("SYSMEX");
         finalResult.setObservationResultStatus("F");
+        finalResult.setResultDate(drawnAt);
+        finalResult.setCreatedAt(drawnAt.plusMinutes(5));
         when(labResultRepository.findById(finalResult.getId())).thenReturn(Optional.of(finalResult));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
@@ -284,6 +291,7 @@ class LabResultServiceImplLifecycleTest {
         pendingOtherAnalyte.setTestCode("NA");
         pendingOtherAnalyte.setSourceSendingApplication("SYSMEX");
         pendingOtherAnalyte.setObservationResultStatus("P");
+        pendingOtherAnalyte.setActorType(com.example.hms.enums.ActorType.SYSTEM);
         LabResult finalResult = resultOn(order, false);
         finalResult.setTestCode("K");
         finalResult.setSourceSendingApplication("SYSMEX");

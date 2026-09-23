@@ -318,23 +318,36 @@ class LabResultServiceImplWorkflowTest {
     }
 
     /**
-     * The defect the order-granular guard had: one order, one hand-entered
-     * result and one ingested one. Releasing the ingested row must stay silent
-     * even though we did transmit for that order.
+     * The defect the order-granular guard had, with the sibling that caused it
+     * actually present: one order carrying a hand-entered result WE announced
+     * and an ingested one we did not. Releasing the ingested row must stay
+     * silent. Without building the sibling this test was a copy of the one
+     * above and could not have caught a return to asking about the order.
      */
     @Test
     void releasingAnIngestedRowOnAnOrderWeAlsoTransmittedForStaysSilent() {
-        UUID labResultId = UUID.randomUUID();
-        LabResult ingested = buildLabResult(labResultId);
+        UUID ingestedId = UUID.randomUUID();
+        LabResult ingested = buildLabResult(ingestedId);
         ingested.setReleased(false);
         ingested.setSourceSendingApplication("SYSMEX");
         ingested.setSourceMessageControlId("MSG-2");
-        // A sibling result we created and announced sits on the same order.
+
+        // The sibling: ours, already transmitted, sitting on the same order —
+        // which is exactly what made an order-granular guard answer "yes".
+        LabResult oursAlreadyTransmitted = buildLabResult(UUID.randomUUID());
+        oursAlreadyTransmitted.setReleased(true);
+        assertThat(oursAlreadyTransmitted.getSourceSendingApplication())
+            .as("the sibling is ours: no analyzer marks at all")
+            .isNull();
+        when(labResultRepository.findByLabOrder_Id(labOrder.getId()))
+            .thenReturn(List.of(oursAlreadyTransmitted, ingested));
+
         givenAReleasableResult(ingested);
 
-        labResultService.releaseLabResult(labResultId, Locale.US);
+        labResultService.releaseLabResult(ingestedId, Locale.US);
 
         verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
     }
 
     @Test

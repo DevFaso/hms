@@ -248,22 +248,17 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * Whether this row reached us from an external analyzer.
+     * Whether this row reached us from an external analyzer, and so must not
+     * be transmitted back to one.
      *
-     * <p>Every mark the ingest leaves, not just two of them. The actor type is
-     * the one it always sets; the three source columns are each optional in
-     * practice, since an analyzer may omit MSH-10 and a sender may identify
-     * itself by facility alone. Checking only the control id and the
-     * application left a row that carried neither looking like one of ours,
-     * and releasing it transmitted the unsolicited message — carrying our
-     * internal order UUID rather than the accession the analyzer knows — that
-     * this guard exists to prevent.
+     * <p>Shares {@link SupersededLabResults#cameFromAnAnalyzer}, which asks the
+     * same question for a different purpose — which rows the pre-V164 pairing
+     * fallback may govern. One predicate, so a sender that identifies itself
+     * in an unusual way cannot be an analyzer to one of them and ours to the
+     * other.
      */
     private static boolean wasIngestedFromAnAnalyzer(LabResult labResult) {
-        return labResult.getActorType() == ActorType.SYSTEM
-            || labResult.getSourceMessageControlId() != null
-            || labResult.getSourceSendingApplication() != null
-            || labResult.getSourceSendingFacility() != null;
+        return SupersededLabResults.cameFromAnAnalyzer(labResult);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.example.hms.service.lab;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import org.junit.jupiter.api.DisplayName;
@@ -32,14 +33,23 @@ class SupersededLabResultsTest {
         return order;
     }
 
+    /** A row as the MLLP ingest writes it: SYSTEM actor, a sender, and whatever OBX-11 said. */
     private static LabResult row(LabOrder order, String testCode, String obx11,
                                  LocalDateTime observedAt, boolean released) {
+        LabResult result = handEntered(order, testCode, observedAt, released);
+        result.setActorType(ActorType.SYSTEM);
+        result.setSourceSendingApplication(SENDER);
+        result.setObservationResultStatus(obx11);
+        return result;
+    }
+
+    /** A row as a person writes it: no sender, no status, no analyzer marks at all. */
+    private static LabResult handEntered(LabOrder order, String testCode,
+                                         LocalDateTime observedAt, boolean released) {
         LabResult result = new LabResult();
         result.setId(UUID.randomUUID());
         result.setLabOrder(order);
         result.setTestCode(testCode);
-        result.setSourceSendingApplication(SENDER);
-        result.setObservationResultStatus(obx11);
         result.setResultDate(observedAt);
         result.setCreatedAt(observedAt);
         result.setReleased(released);
@@ -52,13 +62,27 @@ class SupersededLabResultsTest {
     }
 
     @Test
-    @DisplayName("the preliminary is superseded by its final")
+    @DisplayName("the preliminary is superseded by its final — one draw, one observation time, two messages")
     void theFinalSupersedesItsPreliminary() {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
-        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        LabResult finalResult = row(order, "HGB", "F", EARLIER, true);
+        finalResult.setCreatedAt(LATER);
 
         assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
+    }
+
+    @Test
+    @DisplayName("PATIENT SAFETY: a timed series is never collapsed, even when a draw is marked preliminary")
+    void aTimedSeriesSurvivesAPreliminaryStatus() {
+        // Glucose at 0 and 30 minutes. Without the observation time in the key
+        // this collapsed the moment any draw carried a preliminary status, and
+        // the earlier draw — which may be the abnormal one — disappeared.
+        LabOrder order = order();
+        LabResult firstDraw = row(order, "GLU", "P", EARLIER, false);
+        LabResult secondDraw = row(order, "GLU", "F", LATER, true);
+
+        assertThat(superseded(firstDraw, secondDraw)).isEmpty();
     }
 
     @Test
@@ -71,7 +95,8 @@ class SupersededLabResultsTest {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
         preliminary.setSourceObservationSetId("3");
-        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        LabResult finalResult = row(order, "HGB", "F", EARLIER, true);
+        finalResult.setCreatedAt(LATER);
         finalResult.setSourceObservationSetId("1");
 
         assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
@@ -99,7 +124,8 @@ class SupersededLabResultsTest {
     void aReleasedRowIsNeverHiddenBehindAnUnreleasedOne() {
         LabOrder order = order();
         LabResult releasedPreliminary = row(order, "K", "P", EARLIER, true);
-        LabResult pendingCorrection = row(order, "K", "C", LATER, false);
+        LabResult pendingCorrection = row(order, "K", "C", EARLIER, false);
+        pendingCorrection.setCreatedAt(LATER);
 
         assertThat(superseded(releasedPreliminary, pendingCorrection)).isEmpty();
     }
@@ -109,22 +135,50 @@ class SupersededLabResultsTest {
     void aCorrectionIsNeverHidden() {
         LabOrder order = order();
         LabResult corrected = row(order, "K", "C", EARLIER, false);
-        LabResult later = row(order, "K", "F", LATER, false);
+        LabResult later = row(order, "K", "F", EARLIER, false);
+        later.setCreatedAt(LATER);
 
         assertThat(superseded(corrected, later)).isEmpty();
     }
 
     @Test
-    @DisplayName("a hand-entered result names no analyte and is never hidden")
+    @DisplayName("a hand-entered result is judged by NEITHER rule, test code and all")
     void aHandEnteredRowIsNeverHidden() {
-        // The manual entry path sets no test code, so such a row has no key
-        // under either rule. (A row that HAS a test code but no status is
-        // pre-V164 analyzer data and is judged by the older rule — see below.)
+        // The mapper does copy the test code, so "no test code" was never what
+        // protected these rows. What protects them is provenance: no analyzer
+        // marks, so neither rule applies. Selecting the fallback on a missing
+        // status instead handed a person's results a rule meant for pre-V164
+        // analyzer data — and under it a released row could hide an unreleased
+        // correction and close the order over it.
         LabOrder order = order();
-        LabResult handEntered = row(order, null, null, EARLIER, false);
-        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        LabResult handEntered = handEntered(order, "HGB", EARLIER, false);
+        LabResult releasedLater = handEntered(order, "HGB", LATER, true);
 
-        assertThat(superseded(handEntered, finalResult)).isEmpty();
+        assertThat(superseded(handEntered, releasedLater)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a person's correction is never hidden behind the released value it corrects")
+    void aHandEnteredCorrectionSurvives() {
+        LabOrder order = order();
+        LabResult released = handEntered(order, "K", EARLIER, true);
+        LabResult correction = handEntered(order, "K", LATER, false);
+
+        assertThat(superseded(released, correction)).isEmpty();
+        assertThat(superseded(correction, released)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("only an analyzer row reaches the pre-V164 fallback")
+    void theFallbackIsSelectedByProvenance() {
+        LabOrder order = order();
+        LabResult analyzerRow = handEntered(order, "HGB", EARLIER, false);
+        analyzerRow.setActorType(ActorType.SYSTEM);
+        LabResult released = handEntered(order, "HGB", LATER, true);
+        released.setActorType(ActorType.SYSTEM);
+
+        assertThat(SupersededLabResults.cameFromAnAnalyzer(analyzerRow)).isTrue();
+        assertThat(superseded(analyzerRow, released)).containsExactly(analyzerRow.getId());
     }
 
     @Test
@@ -132,7 +186,8 @@ class SupersededLabResultsTest {
     void aPreliminaryWithNothingNewerIsKept() {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
-        LabResult abnormalFinal = row(order, "HGB", "F", LATER, false);
+        LabResult abnormalFinal = row(order, "HGB", "F", EARLIER, false);
+        abnormalFinal.setCreatedAt(LATER);
 
         // The final is unreleased (abnormal, so not auto-releasable) and still
         // supersedes: the pairing does not ask about release, only about which
@@ -145,7 +200,8 @@ class SupersededLabResultsTest {
     void anotherSenderNeverSupersedes() {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
-        LabResult otherAnalyzer = row(order, "HGB", "F", LATER, true);
+        LabResult otherAnalyzer = row(order, "HGB", "F", EARLIER, true);
+        otherAnalyzer.setCreatedAt(LATER);
         otherAnalyzer.setSourceSendingApplication("MINDRAY");
 
         assertThat(superseded(preliminary, otherAnalyzer)).isEmpty();
@@ -156,11 +212,11 @@ class SupersededLabResultsTest {
     void differentAnalyteOrOrderIsUntouched() {
         LabOrder order = order();
         LabResult pendingPlatelets = row(order, "PLT", "P", EARLIER, false);
-        LabResult releasedHaemoglobin = row(order, "HGB", "F", LATER, true);
+        LabResult releasedHaemoglobin = row(order, "HGB", "F", EARLIER, true);
         assertThat(superseded(pendingPlatelets, releasedHaemoglobin)).isEmpty();
 
         LabResult onItsOwnOrder = row(order(), "HGB", "P", EARLIER, false);
-        LabResult elsewhere = row(order(), "HGB", "F", LATER, true);
+        LabResult elsewhere = row(order(), "HGB", "F", EARLIER, true);
         assertThat(superseded(onItsOwnOrder, elsewhere)).isEmpty();
     }
 
@@ -168,8 +224,10 @@ class SupersededLabResultsTest {
     @DisplayName("an earlier row never supersedes a later one, whichever order they are iterated in")
     void onlyANewerRowSupersedes() {
         LabOrder order = order();
-        LabResult latePreliminary = row(order, "HGB", "P", LATER, false);
+        LabResult latePreliminary = row(order, "HGB", "P", EARLIER, false);
+        latePreliminary.setCreatedAt(LATER);
         LabResult earlyFinal = row(order, "HGB", "F", EARLIER, true);
+        earlyFinal.setCreatedAt(EARLIER);
 
         assertThat(superseded(latePreliminary, earlyFinal)).isEmpty();
         assertThat(superseded(earlyFinal, latePreliminary)).isEmpty();
@@ -181,6 +239,7 @@ class SupersededLabResultsTest {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
         LabResult twin = row(order, "HGB", "F", EARLIER, false);
+        // Same observation time and same write time: only the id separates them.
         // Same observation time and same write time: only the id separates them.
         boolean twinIsGreater = twin.getId().compareTo(preliminary.getId()) > 0;
 
@@ -196,7 +255,8 @@ class SupersededLabResultsTest {
     void theStatusIsNormalised() {
         LabOrder order = order();
         LabResult preliminary = row(order, "HGB", " p ", EARLIER, false);
-        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        LabResult finalResult = row(order, "HGB", "F", EARLIER, true);
+        finalResult.setCreatedAt(LATER);
 
         assertThat(SupersededLabResults.isAnalyzerPreliminary(preliminary)).isTrue();
         assertThat(SupersededLabResults.isAnalyzerPreliminary(finalResult)).isFalse();
@@ -270,7 +330,8 @@ class SupersededLabResultsTest {
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
         preliminary.setSourceSendingApplication(null);
         preliminary.setSourceSendingFacility("LAB_A");
-        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        LabResult finalResult = row(order, "HGB", "F", EARLIER, true);
+        finalResult.setCreatedAt(LATER);
         finalResult.setSourceSendingApplication(null);
         finalResult.setSourceSendingFacility("LAB_A");
 
@@ -284,7 +345,8 @@ class SupersededLabResultsTest {
         LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
         preliminary.setSourceSendingApplication(null);
         preliminary.setSourceSendingFacility("LAB_A");
-        LabResult otherLab = row(order, "HGB", "F", LATER, true);
+        LabResult otherLab = row(order, "HGB", "F", EARLIER, true);
+        otherLab.setCreatedAt(LATER);
         otherLab.setSourceSendingApplication(null);
         otherLab.setSourceSendingFacility("LAB_B");
 

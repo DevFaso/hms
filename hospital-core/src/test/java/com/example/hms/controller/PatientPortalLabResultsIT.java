@@ -104,6 +104,8 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private LabResultService labResultService;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private Hospital hospital;
     private User patientUser;
@@ -347,14 +349,13 @@ class PatientPortalLabResultsIT extends BaseIT {
             .actorLabel("MLLP:SYSMEX/LAB_A")
             .resultValue(value)
             .resultUnit("g/dL")
-            // The final carries its own, later observation time. Giving it the
-            // preliminary's would leave both rows stamped identically, and the
-            // winner would fall to BaseEntity's @PrePersist createdAt — which
-            // both rows get within the same instant here — and then to the
-            // random row id, so this assertion would pass or fail by luck.
-            // That exact tie is covered deterministically in
-            // SupersededLabResultsTest; this test asserts the ordinary case.
-            .resultDate(result.getResultDate().plusMinutes(30))
+            // One draw, reported twice: the pair MUST share its observation
+            // time, or they are two draws of a timed series and neither
+            // supersedes the other. Write order decides between them, and it
+            // is stated below rather than left to @PrePersist's clock — which
+            // stamps both rows within the same instant here, leaving the
+            // winner to the random row id.
+            .resultDate(result.getResultDate())
             .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
@@ -371,7 +372,27 @@ class PatientPortalLabResultsIT extends BaseIT {
             finalRow.setReleasedAt(LocalDateTime.now());
             finalRow.setReleasedByDisplay("Lab supervisor");
         }
-        return labResultRepository.save(finalRow);
+        LabResult saved = labResultRepository.save(finalRow);
+        markWrittenAfterThePreliminary(saved);
+        return saved;
+    }
+
+    /**
+     * Say, in the fixture, which of the two messages arrived second.
+     *
+     * <p>{@code BaseEntity.@PrePersist} sets {@code createdAt} from the clock
+     * and the column is not updatable, so two rows saved milliseconds apart can
+     * carry the same instant — and the pairing would then fall through to the
+     * random row id and decide this test by luck. A direct update makes the
+     * ordering explicit and the assertion honest.
+     */
+    private void markWrittenAfterThePreliminary(LabResult finalRow) {
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+            .executeWithoutResult(status -> entityManager.createNativeQuery(
+                    "UPDATE lab.lab_results SET created_at = ? WHERE id = ?")
+                .setParameter(1, result.getCreatedAt().plusMinutes(5))
+                .setParameter(2, finalRow.getId())
+                .executeUpdate());
     }
 
     @Test
