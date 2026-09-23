@@ -281,16 +281,23 @@ class PatientLabResultServiceImplTest {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        // Honour the page size, or the mock hands back every row whatever was
+        // asked for and the short-page path this test exists for never runs.
+        List<LabResult> newestFirst = List.of(finalResult, preliminary, another);
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), pageCaptor.capture()))
-            .thenReturn(List.of(finalResult, preliminary, another));
+            .thenAnswer(invocation -> {
+                Pageable requested = invocation.getArgument(2);
+                return newestFirst.subList(0, Math.min(requested.getPageSize(), newestFirst.size()));
+            });
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 2);
 
         assertThat(results).as("two asked for, two returned — not one short of the page").hasSize(2);
-        assertThat(pageCaptor.getValue().getPageSize())
-            .as("one row over the limit, so removing a superseded row still fills the page — "
-                + "not the hundred-row page that made every call read the cap")
-            .isEqualTo(3);
+        assertThat(pageCaptor.getAllValues()).extracting(Pageable::getPageSize)
+            .as("the caller's limit first; the cap only because the pairing removed a row — "
+                + "never a hundred-row page on every call, and never a fixed +1 that a second "
+                + "pair on the page would defeat")
+            .containsExactly(2, 100);
     }
 
     /** The staff record is the record: both rows stay, each labelled. */

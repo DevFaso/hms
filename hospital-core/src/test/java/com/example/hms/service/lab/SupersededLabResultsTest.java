@@ -115,10 +115,13 @@ class SupersededLabResultsTest {
     }
 
     @Test
-    @DisplayName("a row the analyzer never described is never hidden — a hand-entered result is nobody's preliminary")
-    void aRowWithoutAnAnalyzerStatusIsNeverHidden() {
+    @DisplayName("a hand-entered result names no analyte and is never hidden")
+    void aHandEnteredRowIsNeverHidden() {
+        // The manual entry path sets no test code, so such a row has no key
+        // under either rule. (A row that HAS a test code but no status is
+        // pre-V164 analyzer data and is judged by the older rule — see below.)
         LabOrder order = order();
-        LabResult handEntered = row(order, "HGB", null, EARLIER, false);
+        LabResult handEntered = row(order, null, null, EARLIER, false);
         LabResult finalResult = row(order, "HGB", "F", LATER, true);
 
         assertThat(superseded(handEntered, finalResult)).isEmpty();
@@ -198,6 +201,94 @@ class SupersededLabResultsTest {
         assertThat(SupersededLabResults.isAnalyzerPreliminary(preliminary)).isTrue();
         assertThat(SupersededLabResults.isAnalyzerPreliminary(finalResult)).isFalse();
         assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
+    }
+
+    // ── rows written before V164, which carry no status at all ──────────
+
+    @Test
+    @DisplayName("a pre-V164 pair is still resolved, by the older rule — otherwise this release regresses live data")
+    void aRowWithoutAStatusFallsBackToTheOlderRule() {
+        // V164 backfills nothing, so every analyzer row already in the
+        // database has no status. Judged by the analyzer rule alone they would
+        // be superseded by nothing, their orders would sit in RESULTED for
+        // ever and the patient would keep a duplicate pending row — worse than
+        // the behaviour that data has today.
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", null, EARLIER, false);
+        LabResult releasedFinal = row(order, "HGB", null, LATER, true);
+
+        assertThat(superseded(preliminary, releasedFinal)).containsExactly(preliminary.getId());
+    }
+
+    @Test
+    @DisplayName("the older rule needs the later row RELEASED, and never hides a released row")
+    void theOlderRuleKeepsItsGuards() {
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", null, EARLIER, false);
+        LabResult unreleasedLater = row(order, "HGB", null, LATER, false);
+        assertThat(superseded(preliminary, unreleasedLater)).isEmpty();
+
+        LabResult releasedEarlier = row(order, "K", null, EARLIER, true);
+        LabResult releasedLater = row(order, "K", null, LATER, true);
+        assertThat(superseded(releasedEarlier, releasedLater))
+            .as("a released row is never taken away")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the older rule never reaches backwards — an earlier released row does not hide a later pending one")
+    void theOlderRuleOnlyLooksForward() {
+        LabOrder order = order();
+        LabResult latePending = row(order, "HGB", null, LATER, false);
+        LabResult earlyReleased = row(order, "HGB", null, EARLIER, true);
+
+        assertThat(superseded(latePending, earlyReleased)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a row the analyzer DID describe is never judged by the older rule")
+    void aDescribedRowNeverFallsBack() {
+        // Final, not preliminary: the analyzer rule keeps it, and the older
+        // rule — which would have hidden it behind the released row — does not
+        // get a say.
+        LabOrder order = order();
+        LabResult analyzerFinal = row(order, "HGB", "F", EARLIER, false);
+        LabResult releasedLater = row(order, "HGB", "F", LATER, true);
+
+        assertThat(superseded(analyzerFinal, releasedLater)).isEmpty();
+    }
+
+    // ── the sender: application, or facility when there is no application ─
+
+    @Test
+    @DisplayName("a sender identified by facility alone still has its pairs resolved")
+    void theFacilityStandsInForAnAbsentApplication() {
+        // The ingest stores both trimmed-to-null, and the transmit guard was
+        // widened for exactly this sender. Demanding the application here left
+        // its pairs never collapsing and its orders never completing.
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        preliminary.setSourceSendingApplication(null);
+        preliminary.setSourceSendingFacility("LAB_A");
+        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        finalResult.setSourceSendingApplication(null);
+        finalResult.setSourceSendingFacility("LAB_A");
+
+        assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
+    }
+
+    @Test
+    @DisplayName("two facilities are two senders")
+    void adifferentFacilityNeverSupersedes() {
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        preliminary.setSourceSendingApplication(null);
+        preliminary.setSourceSendingFacility("LAB_A");
+        LabResult otherLab = row(order, "HGB", "F", LATER, true);
+        otherLab.setSourceSendingApplication(null);
+        otherLab.setSourceSendingFacility("LAB_B");
+
+        assertThat(superseded(preliminary, otherLab)).isEmpty();
     }
 
     @Test

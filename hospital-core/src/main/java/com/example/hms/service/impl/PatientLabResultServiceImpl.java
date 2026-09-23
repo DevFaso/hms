@@ -84,15 +84,43 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
-        // One row over the caller's limit, so that removing a superseded row
-        // still fills the page: asking for five and getting four was the
-        // symptom of filtering after the limit. Widening the page to MAX_LIMIT
-        // instead was worse — every call, staff path included, read a hundred
-        // rows to return one, and the pair could still straddle row 100. What
-        // the pairing needs is not a bigger page but the siblings of the
-        // preliminaries ON the page, which are fetched by order below.
-        Pageable pageable = PageRequest.of(0, effectiveLimit + 1, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // Read the caller's limit first. If the pairing then removes rows —
+        // and only the patient path can remove any — read again at the cap and
+        // resolve once more, so the caller gets the count it asked for rather
+        // than a page one short for every pair it happened to contain. Two
+        // queries at most, and the second only when a pair was actually found:
+        // widening every call to MAX_LIMIT made the staff path read a hundred
+        // rows to return one, and a fixed +1 still came up short whenever a
+        // page held more than one pair.
 
+        List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit);
+        List<LabResult> visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+        if (visible.size() < effectiveLimit && results.size() >= effectiveLimit) {
+            results = fetchRows(patient, hospitalId, MAX_LIMIT);
+            visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+        }
+
+        if (hospitalId != null) {
+            // Accounted on what the patient is actually shown, not on the wider
+            // window the pairing needed.
+            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                "Cross-hospital lab result read on the treatment relationship");
+        }
+
+        return visible.stream()
+            .map(result -> toResponse(result, redactUnreleased))
+            .toList();
+    }
+
+    /**
+     * The newest {@code window} rows for this patient, within the readable
+     * hospitals when a hospital scope is in play.
+     */
+    private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window) {
+        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
         List<LabResult> results;
         if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findById(hospitalId)
@@ -113,36 +141,27 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                     if (b.getResultDate() == null) return -1;
                     return b.getResultDate().compareTo(a.getResultDate());
                 })
-                .limit(effectiveLimit + 1L)
+                .limit(window)
                 .toList();
         }
+        return results;
+    }
 
-        // An analyzer reporting preliminary then final stores two rows — it
-        // must, because the message control id is the replay key and a
-        // critical value is notified against the row it was raised on. The
-        // patient sees the row the analyzer has not superseded; the one it
-        // replaced is dropped from their view, never from the record. Order
-        // completion applies the same rule, from the same class.
+    /**
+     * An analyzer reporting preliminary then final stores two rows — it must,
+     * because the message control id is the replay key and a critical value is
+     * notified against the row it was raised on. The patient sees the row the
+     * analyzer has not superseded; the one it replaced is dropped from their
+     * view, never from the record. Order completion applies the same rule, from
+     * the same class. The staff path resolves nothing: both rows are the record.
+     */
+    private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased, int limit) {
         Set<UUID> superseded = redactUnreleased
-            ? SupersededLabResults.supersededRowIds(results, withSiblingsOfPreliminaries(results))
+            ? SupersededLabResults.supersededRowIds(results, withSiblingsOfSupersedableRows(results))
             : Set.of();
-        List<LabResult> visible = results.stream()
+        return results.stream()
             .filter(result -> !superseded.contains(result.getId()))
-            .limit(effectiveLimit)
-            .toList();
-
-        if (hospitalId != null) {
-            // Accounted on what the patient is actually shown, not on the wider
-            // window the pairing needed.
-            UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
-            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
-                CrossHospitalReachRecorder.reachOf(
-                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
-                "Cross-hospital lab result read on the treatment relationship");
-        }
-
-        return visible.stream()
-            .map(result -> toResponse(result, redactUnreleased))
+            .limit(limit)
             .toList();
     }
 
@@ -189,23 +208,28 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * carry a preliminary on this page are fetched, so a patient with no
      * analyzer results costs no query at all.
      */
-    private List<LabResult> withSiblingsOfPreliminaries(List<LabResult> page) {
-        Set<UUID> ordersWithPreliminaries = page.stream()
-            .filter(SupersededLabResults::isAnalyzerPreliminary)
-            .map(result -> hospitalIdOfOrder(result.getLabOrder()))
+    private List<LabResult> withSiblingsOfSupersedableRows(List<LabResult> page) {
+        Set<UUID> ordersToInspect = page.stream()
+            .filter(SupersededLabResults::mayBeSuperseded)
+            .map(result -> orderIdOf(result.getLabOrder()))
             .filter(java.util.Objects::nonNull)
             .collect(java.util.stream.Collectors.toSet());
-        if (ordersWithPreliminaries.isEmpty()) {
+        if (ordersToInspect.isEmpty()) {
             return page;
         }
-        List<LabResult> siblings = labResultRepository.findByLabOrder_IdIn(ordersWithPreliminaries);
+        List<LabResult> siblings = labResultRepository.findByLabOrder_IdIn(ordersToInspect);
         List<LabResult> known = new java.util.ArrayList<>(page.size() + siblings.size());
         known.addAll(page);
         known.addAll(siblings);
         return known;
     }
 
-    private static UUID hospitalIdOfOrder(LabOrder order) {
+    /**
+     * The ORDER's id — named apart from {@link #hospitalIdOf}, which takes the
+     * same argument and returns a hospital id. A reader who mistook one for
+     * the other would empty the sibling lookup without failing a test.
+     */
+    private static UUID orderIdOf(LabOrder order) {
         return order == null ? null : order.getId();
     }
 

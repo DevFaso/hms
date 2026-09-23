@@ -30,13 +30,24 @@
 -- C corrected, I pending, S partial, X cannot obtain, U/W ...), so 16
 -- characters is ample; the ingest truncates to the same length.
 --
--- Strictly additive: one nullable column, IF NOT EXISTS, no index, no
--- backfill. Rows written before this release keep NULL, which reads as
--- "the analyzer did not say" — and a row that did not say it is
--- preliminary is never superseded, so old rows behave exactly as they do
--- today. No automated Liquibase rollback is declared; an operator
--- reverting must drop the column and ship a JPA mapping without the
--- field in the same release.
+-- Strictly additive: one nullable column, IF NOT EXISTS, no index, and
+-- deliberately NO BACKFILL. There is nothing to backfill from — which row
+-- of an existing pair was preliminary is exactly the thing we could not
+-- reconstruct, and inventing it is what this column exists to stop.
+--
+-- So the read paths keep TWO rules side by side (see SupersededLabResults):
+-- a row that carries a status is judged by the analyzer's own word, and a
+-- row written before this migration is judged by the older rule that
+-- shipped in #720 — same order and test code, later released row wins.
+-- Without that fallback these rows would be superseded by nothing at all,
+-- leaving their orders stuck in RESULTED and the patient a permanent
+-- duplicate pending row: a regression, on data already in production,
+-- against the behaviour they have today. The fallback retires by itself
+-- as pre-V164 rows age out of what anyone reads.
+--
+-- No automated Liquibase rollback is declared; an operator reverting must
+-- drop the column and ship a JPA mapping without the field in the same
+-- release.
 -- =====================================================================
 
 ALTER TABLE lab.lab_results
