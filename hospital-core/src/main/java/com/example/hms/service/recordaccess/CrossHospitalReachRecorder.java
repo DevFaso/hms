@@ -124,10 +124,10 @@ public class CrossHospitalReachRecorder {
             // A patient whose lookup failed is skipped rather than recorded
             // without its session stamp: one patient's failure costs that
             // patient, never the page.
-            Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
-            if (breakGlassSessionId == null) {
+            if (!breakGlassByPatient.containsKey(patientId)) {
                 continue;
             }
+            Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
             for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
                 Map<String, Object> details = new HashMap<>();
                 details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
