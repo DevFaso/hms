@@ -20,6 +20,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
@@ -332,11 +333,42 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
 
         labResultRepository.save(labResult);
-        // The ORU enqueued at creation went out as preliminary (OBX-11 P),
-        // because that is what an unreleased result is. Without this second
-        // message a receiver would hold that preliminary for ever.
-        instrumentOutboxService.enqueueResultObservation(labResult);
+        enqueueReleasedObservationAfterCommit(labResult);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * The ORU enqueued at creation went out as preliminary (OBX-11 P), because
+     * that is what an unreleased result is; without a second message a receiver
+     * would hold that preliminary for ever.
+     *
+     * <p>Two conditions, both learned the hard way:
+     *
+     * <p>Only for an order we have already transmitted an ORU^R01 for. A result
+     * INGESTED from an analyzer (MLLP ORU^R01) never had a first message from
+     * us, so enqueuing one on release would transmit an unsolicited result back
+     * to the instrument peers — carrying OBR-2 = our internal order UUID, which
+     * is not the accession number the analyzer knows the order by. The outbox
+     * row records the order rather than the result, which is exactly the right
+     * granularity here: the question is whether the peers already know this
+     * order under the identifier we send.
+     *
+     * <p>And after commit, in its own transaction, with the id only. An enqueue
+     * inside this transaction is inserted and validated at commit, so its
+     * try/catch catches nothing and an outbox failure would roll back the
+     * release — the clinical write — for the sake of a message.
+     */
+    private void enqueueReleasedObservationAfterCommit(LabResult labResult) {
+        LabOrder labOrder = labResult.getLabOrder();
+        UUID labOrderId = labOrder != null ? labOrder.getId() : null;
+        if (!instrumentOutboxService.hasTransmittedObservation(labOrderId)) {
+            LOG.debug("Release of result {} not transmitted — no ORU^R01 has gone out for order {}",
+                labResult.getId(), labOrderId);
+            return;
+        }
+        UUID labResultId = labResult.getId();
+        TransactionCallbacks.afterCommit(
+            () -> instrumentOutboxService.enqueueReleasedObservation(labResultId));
     }
 
     @Override

@@ -16,6 +16,7 @@ import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,7 @@ class InstrumentOutboxServiceImplTest {
     @Mock private InstrumentOutboxRepository outboxRepository;
     @Mock private Hl7v2MessageBuilder hl7v2MessageBuilder;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     // Real properties, not a mock: the transport endpoint must report the
     // actual defaults, and a mock would pass with all-zero nonsense.
@@ -312,5 +314,48 @@ class InstrumentOutboxServiceImplTest {
         assertThat(dto.getMaxAttempts()).isEqualTo(5);
         assertThat(dto.getRetryAfterSeconds()).isEqualTo(60);
         assertThat(dto.getBatchSize()).isEqualTo(50);
+    }
+
+    // ── the released ORU, enqueued by id in its own transaction ──────────
+
+    @Test
+    @DisplayName("enqueueReleasedObservation loads the row by id and enqueues its final form")
+    void enqueueReleasedObservationLoadsById() {
+        UUID labResultId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult released = LabResult.builder().labOrder(order).build();
+        released.setId(labResultId);
+        released.setReleased(true);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(released));
+        when(hl7v2MessageBuilder.buildOruR01(released)).thenReturn("MSH|...|ORU^R01|...");
+
+        service.enqueueReleasedObservation(labResultId);
+
+        ArgumentCaptor<InstrumentOutbox> captor = ArgumentCaptor.forClass(InstrumentOutbox.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getMessageType()).isEqualTo("ORU^R01");
+        assertThat(captor.getValue().getLabOrder()).isSameAs(order);
+    }
+
+    @Test
+    @DisplayName("enqueueReleasedObservation swallows a vanished row rather than failing the caller")
+    void enqueueReleasedObservationToleratesAMissingRow() {
+        UUID labResultId = UUID.randomUUID();
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.empty());
+
+        service.enqueueReleasedObservation(labResultId);
+
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("hasTransmittedObservation asks whether an ORU^R01 has gone out for the order")
+    void hasTransmittedObservationChecksTheOutbox() {
+        UUID labOrderId = UUID.randomUUID();
+        when(outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, "ORU^R01")).thenReturn(true);
+
+        assertThat(service.hasTransmittedObservation(labOrderId)).isTrue();
+        assertThat(service.hasTransmittedObservation(null)).isFalse();
     }
 }

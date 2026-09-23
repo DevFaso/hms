@@ -11,6 +11,7 @@ import com.example.hms.payload.dto.InstrumentOutboxPageDTO;
 import com.example.hms.payload.dto.InstrumentOutboxResponseDTO;
 import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
 import com.example.hms.repository.InstrumentOutboxRepository;
+import com.example.hms.repository.LabResultRepository;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -35,6 +37,10 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     private final Hl7v2MessageBuilder hl7v2MessageBuilder;
     private final RoleValidator roleValidator;
     private final MllpOutboundProperties outboundProperties;
+    /** Last, so an existing positional constructor call in a test only appends. */
+    private final LabResultRepository labResultRepository;
+
+    private static final String ORU_R01 = "ORU^R01";
 
     @Override
     @Transactional
@@ -56,13 +62,46 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean hasTransmittedObservation(UUID labOrderId) {
+        return labOrderId != null
+            && outboxRepository.existsByLabOrder_IdAndMessageType(labOrderId, ORU_R01);
+    }
+
+    /**
+     * Runs in its own transaction, after the release has committed, so a
+     * failure here cannot roll the release back — and cannot be rolled back BY
+     * it either: the result really is released, and the message really is
+     * owed. Takes the id rather than the entity because the caller's
+     * persistence context is gone by the time this runs.
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void enqueueReleasedObservation(UUID labResultId) {
+        if (labResultId == null) {
+            return;
+        }
+        try {
+            LabResult result = labResultRepository.findById(labResultId).orElse(null);
+            if (result == null) {
+                log.warn("Released ORU^R01 not enqueued — labResult {} no longer exists", labResultId);
+                return;
+            }
+            enqueueResultObservation(result);
+        } catch (Exception ex) {
+            log.error("Failed to enqueue the released ORU^R01 for result {}: {}",
+                labResultId, ex.getMessage(), ex);
+        }
+    }
+
+    @Override
     @Transactional
     public void enqueueResultObservation(LabResult result) {
         try {
             String payload = hl7v2MessageBuilder.buildOruR01(result);
             InstrumentOutbox message = InstrumentOutbox.builder()
                 .labOrder(result.getLabOrder())
-                .messageType("ORU^R01")
+                .messageType(ORU_R01)
                 .payload(payload)
                 .status(InstrumentOutboxStatus.PENDING)
                 .build();

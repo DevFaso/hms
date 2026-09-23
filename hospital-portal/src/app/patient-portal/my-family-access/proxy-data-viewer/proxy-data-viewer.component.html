@@ -265,7 +265,14 @@
               } @else {
                 <ul>
                   @for (l of summary.recentLabResults; track l.id) {
-                    <li>{{ l.testName }}: {{ l.result }} {{ l.unit }}</li>
+                    <li>
+                      {{ l.testName }}:
+                      @if (l.isPending) {
+                        {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
+                      } @else {
+                        {{ l.result }} {{ l.unit }}
+                      }
+                    </li>
                   }
                 </ul>
               }

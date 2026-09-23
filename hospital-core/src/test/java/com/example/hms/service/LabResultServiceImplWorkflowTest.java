@@ -200,28 +200,60 @@ class LabResultServiceImplWorkflowTest {
         verify(labResultRepository).save(labResult);
     }
 
+    private void givenAReleasableResult(LabResult labResult) {
+        when(labResultRepository.findById(labResult.getId())).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.isLabScientist(any(), any())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+    }
+
     /**
      * The ORU enqueued when the result was created said OBX-11 = P, because
      * that is what an unreleased result is. The release has to send the final
      * form or the receiver holds a preliminary for ever.
+     *
+     * <p>By id and after commit: an enqueue inside the release transaction is
+     * inserted at commit, where its try/catch cannot catch anything, so an
+     * outbox failure would roll the release back.
      */
     @Test
-    void releaseLabResultEnqueuesTheFinalObservation() {
+    void releaseLabResultEnqueuesTheFinalObservationByIdAfterCommit() {
         UUID labResultId = UUID.randomUUID();
         LabResult labResult = buildLabResult(labResultId);
         labResult.setReleased(false);
-        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
-        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
-        when(roleValidator.isLabScientist(any(), any())).thenReturn(true);
-        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
 
         labResultService.releaseLabResult(labResultId, Locale.US);
 
-        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
-        verify(instrumentOutboxService).enqueueResultObservation(captor.capture());
-        assertThat(captor.getValue().isReleased())
-            .as("the enqueued row must already be released, so OBX-11 goes out as F")
+        verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+        // Never the entity from inside the caller's transaction.
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+        assertThat(labResult.isReleased())
+            .as("the row is released before the message is owed, so OBX-11 goes out as F")
             .isTrue();
+    }
+
+    /**
+     * A result INGESTED from an analyzer never had a first ORU from us, so a
+     * release must not transmit one: it would be unsolicited, and its OBR-2
+     * would carry our internal order UUID rather than the accession number the
+     * analyzer knows the order by. "We announced this order" is what the
+     * outbox records.
+     */
+    @Test
+    void releaseDoesNotTransmitForAnOrderWeNeverAnnounced() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(false);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
     }
 
     @Test
