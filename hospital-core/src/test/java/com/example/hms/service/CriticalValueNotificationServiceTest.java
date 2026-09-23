@@ -154,10 +154,6 @@ class CriticalValueNotificationServiceTest {
     @Test
     void smsStaysOffWhileTransportIsMock() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        // The SMS waits for the commit and re-loads by id; the transport
-        // still says no.
-        org.mockito.Mockito.lenient().when(labResultRepository.findById(result.getId()))
-            .thenReturn(java.util.Optional.of(result));
         when(smsService.deliversRealSms()).thenReturn(false);
 
         service.notifyIfCritical(result);
@@ -169,9 +165,8 @@ class CriticalValueNotificationServiceTest {
     void smsSentOverRealTransport() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         // The alert row and the stamp are local writes that commit with the
-        // result; only the gateway hop waits for the commit, and it re-loads
-        // by id because the caller's persistence context is gone by then.
-        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+        // result; only the gateway hop waits for the commit, and it is handed
+        // the number read while the transaction was open.
         when(smsService.deliversRealSms()).thenReturn(true);
 
         service.notifyIfCritical(result);
@@ -180,43 +175,27 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
-    void sendCriticalSmsByIdIgnoresNothingToSendTo() {
-        // The deferred half runs from an after-commit callback, where the
-        // only thing it is handed is an id: a null one (nothing was saved)
-        // and an id whose row has since gone are both no-ops, never throws —
-        // it must not turn a committed result into a failed request.
-        service.sendCriticalSmsById(null, "unused");
-
-        java.util.UUID vanished = java.util.UUID.randomUUID();
-        when(labResultRepository.findById(vanished)).thenReturn(java.util.Optional.empty());
-        service.sendCriticalSmsById(vanished, "unused");
+    void sendCriticalSmsNeedsNothingButWhatItWasHanded() {
+        // The callback runs after the commit and must touch no association:
+        // the number is three lazy hops from the result, and with
+        // open-in-view off it would be unreachable there. It is read in the
+        // transaction and passed in, so this needs no repository at all.
+        service.sendCriticalSms(result.getId(), null, "unused");
+        service.sendCriticalSms(result.getId(), "   ", "unused");
 
         verify(smsService, never()).send(anyString(), anyString());
+        verify(labResultRepository, never()).findById(any());
     }
 
     @Test
-    void sendCriticalSmsByIdSwallowsAFailedLoad() {
-        // The callback fires after the commit, on a result already on the
-        // chart and already alerted in-app. Nothing it can hit — a database
-        // that has gone away included — may propagate out of it.
-        when(labResultRepository.findById(result.getId()))
-            .thenThrow(new org.springframework.dao.QueryTimeoutException("database gone"));
-
-        service.sendCriticalSmsById(result.getId(), "Critical potassium");
-
-        verify(smsService, never()).send(anyString(), anyString());
-    }
-
-    @Test
-    void sendCriticalSmsByIdSwallowsAGatewayFailure() {
-        // The gateway's own failure is caught deeper, in sendSmsBestEffort;
-        // this pins that the callback still returns normally.
-        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+    void sendCriticalSmsSwallowsAGatewayFailure() {
+        // Already committed and already alerted in-app: a gateway that throws
+        // must not propagate out of the callback.
         when(smsService.deliversRealSms()).thenReturn(true);
         org.mockito.Mockito.doThrow(new IllegalStateException("gateway down"))
             .when(smsService).send(anyString(), anyString());
 
-        service.sendCriticalSmsById(result.getId(), "Critical potassium");
+        service.sendCriticalSms(result.getId(), "+22670707070", "Critical potassium");
 
         verify(smsService).send(anyString(), anyString());
     }

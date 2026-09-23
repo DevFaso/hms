@@ -160,12 +160,6 @@ class LabResultServiceImplLifecycleTest {
         // the committed status the locked row is decided on
         org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
             .thenAnswer(inv -> order.getStatus());
-        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
-                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
-            .thenAnswer(inv -> {
-                order.setStatus(inv.getArgument(2));
-                return 1;
-            });
         // the status is written by a compare-and-set statement, never through
         // the entity: the stub applies it so assertions still read the order
         org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
@@ -721,98 +715,32 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("the duplicate check runs under the order lock, not before it")
-    void theDuplicateCheckRunsUnderTheLock() {
-        // Run before the lock, two concurrent retries both saw no existing row
-        // and both inserted — the double record the check exists to prevent.
+    @DisplayName("the order row is locked before the result is recorded")
+    void theOrderIsLockedBeforeTheResultIsRecorded() {
+        // The lock serialises two entries on one order, so it has to be held
+        // before anything is written — the status decision below reads the
+        // committed value under it.
         stubEntryPath();
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
-        inOrder.verify(labResultRepository).findByLabOrder_Id(order.getId());
+        inOrder.verify(labResultRepository).save(any(LabResult.class));
+        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.ORDERED,
+            LabOrderStatus.RESULTED);
     }
 
     @Test
-    @DisplayName("an amendment carrying the same number DOES re-open a finished order")
-    void anAmendmentIsNotTreatedAsARetry() {
-        // Same value, different notes: a laboratory correcting an
-        // interpretation is saying something new, and keying the repeat check
-        // on value/unit/date alone silently swallowed it.
-        order.setStatus(LabOrderStatus.COMPLETED);
-        LabResultRequestDTO amendment = entryRequest();
-        amendment.setNotes("Amended: re-run on a fresh draw, interpretation corrected.");
-        LabResult alreadyThere = resultOn(order, true);
-        alreadyThere.setResultValue(amendment.getResultValue());
-        alreadyThere.setResultUnit(amendment.getResultUnit());
-        alreadyThere.setResultDate(amendment.getResultDate());
-        alreadyThere.setNotes(null);
-
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
-            .thenReturn(Optional.of(order));
-        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
-            .thenAnswer(inv -> order.getStatus());
-        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
-                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
-            .thenAnswer(inv -> {
-                order.setStatus(inv.getArgument(2));
-                return 1;
-            });
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(authService.getCurrentUserId()).thenReturn(actorId);
-        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
-        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyThere));
-        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
-        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
-            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
-        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
-            .thenReturn(List.of());
-
-        service.createLabResult(amendment, Locale.ENGLISH);
-
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-    }
-
-    @Test
-    @DisplayName("a row naming a different analyte is not a repeat, whatever its value")
-    void aDifferentAnalyteIsNotARepeat() {
-        // An HL7 ORU names its analyte (OBX-3) and may carry an abnormal flag;
-        // this entry DTO can express neither, so a row that has one came from
-        // elsewhere. Two analytes of a panel sharing a value, unit, date and
-        // comment are not the same result, and answering 201 with the other
-        // one would lose this one silently.
-        order.setStatus(LabOrderStatus.RESULTED);
-        LabResultRequestDTO request = entryRequest();
-        LabResult otherAnalyte = resultOn(order, true);
-        otherAnalyte.setResultValue(request.getResultValue());
-        otherAnalyte.setResultUnit(request.getResultUnit());
-        otherAnalyte.setResultDate(request.getResultDate());
-        otherAnalyte.setNotes(request.getNotes());
-        otherAnalyte.setTestCode("NA");
-
-        stubEntryPath();
-        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(otherAnalyte));
-
-        service.createLabResult(request, Locale.ENGLISH);
-
-        verify(labResultRepository).save(any(LabResult.class));
-    }
-
-    @Test
-    @DisplayName("two analytes of one panel are both recorded, even sharing a value and a timestamp")
+    @DisplayName("two results that look alike are both recorded — nothing is deduped away")
     void twoAnalytesOfOnePanelAreBothRecorded() {
-        // The ingest path posts one OBX at a time against the same order, with
-        // the adapter's fixed comment; two analytes reading the same number at
-        // the same moment (140 mmol/L sodium and chloride, say) differ only by
-        // OBX-3. Before that identifier travelled with the request they
-        // collapsed into one and the second was dropped behind a 201 — and
-        // the ingest path does not dedupe at all now, because an ORU retry is
-        // a transport concern the MLLP path handles on (sender, MSH-10),
-        // while a dropped result is unrecoverable.
+        // Nothing on this path drops a result for looking like another one.
+        // Detecting a retry meant comparing the fields a request carries, and
+        // the portal form carries too few to tell two analytes apart: no
+        // analyte code, a minute-precision date, usually blank notes. Two
+        // results of one order entered in the same minute with the same value
+        // collapsed, and the caller was answered 201 with somebody else's row.
+        // A duplicate row is visible and correctable; a lost result is not.
         order.setStatus(LabOrderStatus.RESULTED);
         LabResultRequestDTO chloride = entryRequest();
         chloride.setTestCode("CL");
@@ -851,44 +779,6 @@ class LabResultServiceImplLifecycleTest {
         service.createIngestedLabResult(chloride, Locale.ENGLISH);
 
         verify(labResultRepository).save(any(LabResult.class));
-    }
-
-    @Test
-    @DisplayName("a retried post of a value the order already holds records nothing and returns the row it has")
-    void aRepeatedResultIsNotRecordedTwice() {
-        // Persisting the retry and merely not re-opening moved the stranding
-        // rather than removing it: the duplicate can never be released, and
-        // completeOrderIfAllReleased needs every result released, so a later
-        // genuine amendment could never complete the order.
-        order.setStatus(LabOrderStatus.COMPLETED);
-        LabResultRequestDTO request = entryRequest();
-        LabResult alreadyThere = resultOn(order, true);
-        alreadyThere.setResultValue(request.getResultValue());
-        alreadyThere.setResultUnit(request.getResultUnit());
-        alreadyThere.setResultDate(request.getResultDate());
-        alreadyThere.setNotes(request.getNotes());
-        alreadyThere.setTestCode(null);
-        alreadyThere.setAbnormalFlag(null);
-        LabResultResponseDTO existingDto = LabResultResponseDTO.builder()
-            .id(alreadyThere.getId().toString()).build();
-
-        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(authService.getCurrentUserId()).thenReturn(actorId);
-        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
-        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyThere));
-        when(labResultMapper.toResponseDTO(alreadyThere)).thenReturn(existingDto);
-
-        LabResultResponseDTO response = service.createLabResult(request, Locale.ENGLISH);
-
-        assertThat(response).isSameAs(existingDto);
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        // nothing recorded, nothing re-opened, and none of the side effects fire
-        verify(labResultRepository, never()).save(any(LabResult.class));
-        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
-        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
-        verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
     }
 
     @Test

@@ -46,7 +46,16 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
      * @return the number of rows updated: 1, or 0 if the status is no longer
      *         {@code expected}
      */
-    @org.springframework.data.jpa.repository.Modifying
+    // flushAutomatically: anything pending in the context is written before
+    // this statement, so it cannot be overwritten by a later flush.
+    // clearAutomatically is deliberately NOT set: it detaches every entity in
+    // the context — including the result just saved, whose LAZY test
+    // definition the severity and notification steps still read — which would
+    // trade a staleness nothing reads (no caller reads an order's status from
+    // the entity after this) for a LazyInitializationException. The managed
+    // order is never mutated on these paths, so it generates no UPDATE of its
+    // own to flush over this one.
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
     @Query("UPDATE LabOrder o SET o.status = :target, o.updatedAt = CURRENT_TIMESTAMP "
         + "WHERE o.id = :id AND o.status = :expected")
     int updateStatusFrom(@Param("id") UUID id,

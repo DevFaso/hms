@@ -20,7 +20,6 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
-import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -175,33 +174,16 @@ public class LabResultServiceImpl implements LabResultService {
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
 
-        // A retry of a result this order already holds is not recorded twice.
-        //
-        // The alternative — persist it and exclude it from the all-released
-        // test — keeps a row nobody can release (the entry API has no release
-        // path for a duplicate) and leaves the order's history claiming two
-        // identical results where the laboratory produced one. Returning the
-        // existing row makes the endpoint idempotent, which is what a retrying
-        // client is asking for, and removes the stranding rather than moving
-        // it: no new row, no re-open, no second notification, no second
-        // outbound message. "Exact" means every field an amendment could
-        // change (see findIdenticalResult), so a correction still lands as a
-        // new result.
-        java.util.Optional<LabResult> existingIdentical = ingested
-            ? java.util.Optional.empty()
-            : findIdenticalResult(labOrder, request);
-        if (existingIdentical.isPresent()) {
-            LabResult existing = existingIdentical.get();
-            LOG.info("Lab result for order {} repeats result {}; returning the recorded row unchanged",
-                labOrder.getId(), existing.getId());
-            // The same initialise severityOf needs: the mapper reads the test
-            // definition for the name, code, reference ranges and severity,
-            // and it is LAZY, so without this a retry answers 201 with a null
-            // test name and no severity where the first call said CRITICAL.
-            initialiseTestDefinition(existing.getLabOrder());
-            return labResultMapper.toResponseDTO(existing);
-        }
-
+        // A retried post records a second result, deliberately. Detecting the
+        // retry meant comparing the fields a request carries, and the portal's
+        // entry form carries too few to tell two results apart: no analyte
+        // code, a minute-precision result date, usually blank notes. Two
+        // analytes of one order entered in the same minute with the same value
+        // and unit therefore collapsed, and the endpoint answered 201 with
+        // somebody else's row — a result silently lost. A duplicate row is
+        // visible, correctable and moves the order to RESULTED, which the
+        // compare-and-set below handles and a release corrects; a dropped
+        // result is none of those things.
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
 
@@ -366,54 +348,6 @@ public class LabResultServiceImpl implements LabResultService {
             || ctx.getActiveHospitalId() != null
             || roleValidator.isSuperAdminFromAuth()
             || roleValidator.getCurrentHospitalId() != null;
-    }
-
-    /**
-     * Does this order already hold the value being posted?
-     *
-     * <p>A retried {@code POST /lab-results} carries the same order, value,
-     * unit, result date AND notes as the row it is retrying. The HL7 path
-     * dedups on sender + MSH-10; the REST path has nothing, so this is what
-     * keeps a retry from re-opening a finished order.
-     *
-     * <p>The notes are part of the comparison because an AMENDMENT can carry
-     * the same number: a laboratory correcting an interpretation, adding a
-     * comment or re-filing a value against a changed reference is saying
-     * something new about the result, and that must re-open the order like
-     * any other new result. Only a byte-for-byte repeat of what is already
-     * recorded is treated as a retry.
-     *
-     * <p>The test code is part of it, and the ingest path now carries one
-     * (OBX-3, from the message), because without it two analytes of one panel
-     * sharing a value, unit, date and the adapter's fixed comment collapsed
-     * into one and the second was dropped silently behind a 201. The abnormal
-     * flag likewise: a row the analyser flagged is not the same result as an
-     * unflagged one with the same number.
-     *
-     * <p>Retries are not deduped on the ingest path at all — see the caller.
-     * An ORU that repeats is a transport concern, dealt with on the MLLP path
-     * by the (sender, MSH-10) check; here a duplicate row is recoverable and
-     * a dropped result is not.
-     */
-    private java.util.Optional<LabResult> findIdenticalResult(LabOrder labOrder, LabResultRequestDTO request) {
-        if (labOrder == null || labOrder.getId() == null) {
-            return java.util.Optional.empty();
-        }
-        return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .filter(existing -> existing.getAbnormalFlag() == null
-                && sameValue(existing.getTestCode(), request.getTestCode())
-                && sameValue(existing.getResultValue(), request.getResultValue())
-                && sameValue(existing.getResultUnit(), request.getResultUnit())
-                && sameValue(existing.getNotes(), request.getNotes())
-                && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()))
-            .findFirst();
-    }
-
-    private boolean sameValue(String left, String right) {
-        if (left == null || right == null) {
-            return left == null && right == null;
-        }
-        return left.trim().equalsIgnoreCase(right.trim());
     }
 
     private void requireOrderInActiveHospital(LabOrder labOrder) {

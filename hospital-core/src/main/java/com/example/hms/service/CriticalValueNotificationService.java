@@ -145,10 +145,14 @@ public class CriticalValueNotificationService {
                 // The gateway call waits for the commit: a hung gateway must
                 // not hold the clinical transaction's row locks, and an SMS
                 // for a result that then rolled back would be worse than a
-                // late one.
+                // late one. Everything it needs is read HERE, while the
+                // transaction is open — the number is three lazy hops away
+                // (order, ordering staff, user) and the callback must not go
+                // looking for them.
                 UUID resultId = result.getId();
+                String phoneNumber = resolveOrderingPhone(result);
                 com.example.hms.utility.TransactionCallbacks.afterCommit(
-                    () -> sendCriticalSmsById(resultId, message));
+                    () -> sendCriticalSms(resultId, phoneNumber, message));
             }
             result.setCriticalNotifiedAt(LocalDateTime.now());
             labResultRepository.save(result);
@@ -160,29 +164,43 @@ public class CriticalValueNotificationService {
 
     /**
      * The deferred half: the SMS, sent once the caller's transaction has
-     * committed and its persistence context is closed, which is why it takes
-     * an id and re-loads.
+     * committed.
      *
-     * <p>Deliberately NOT annotated {@code @Transactional}: it is invoked from
-     * {@link #notifyIfCritical} on this same bean, so an annotation here would
-     * be inert anyway (self-invocation does not go through the proxy), and
-     * nothing here needs a transaction — the one read is a repository call,
-     * which opens its own, and the gateway hop must not sit inside one.
+     * <p>It is handed the number and the text rather than an id to re-read,
+     * and that is the point. The previous version reloaded the result "because
+     * the persistence context is gone", which was not true — {@code
+     * afterCommit} runs before Spring unbinds the EntityManager, so the reload
+     * was served from the first-level cache and re-attached nothing. The code
+     * worked for a reason its own comment denied, and had the comment been
+     * true the number — three lazy hops away, with open-in-view off — would
+     * have been unreachable and the SMS dropped as a caught warning. Reading
+     * it in the transaction removes the question.
+     *
+     * <p>Deliberately NOT annotated {@code @Transactional}: there is nothing
+     * transactional left here, and it is self-invoked from
+     * {@link #notifyIfCritical}, where an annotation would be inert anyway.
      *
      * <p>Never propagates: the in-app alert and the stamp are already
      * committed, so a gateway failure must not surface as a 500 on a result
      * that is safely on the chart.
      */
-    public void sendCriticalSmsById(UUID resultId, String message) {
-        if (resultId == null) {
+    public void sendCriticalSms(UUID resultId, String phoneNumber, String message) {
+        if (phoneNumber == null || phoneNumber.isBlank() || !smsService.deliversRealSms()) {
             return;
         }
         try {
-            labResultRepository.findById(resultId)
-                .ifPresent(result -> sendSmsBestEffort(result, message));
+            smsService.send(phoneNumber, message);
         } catch (RuntimeException ex) {
             log.warn("Critical-value SMS failed for lab result {}: {}", resultId, ex.getMessage(), ex);
         }
+    }
+
+    /** The ordering provider's number, read while the session is open. */
+    private String resolveOrderingPhone(LabResult result) {
+        LabOrder order = result.getLabOrder();
+        Staff orderingStaff = order != null ? order.getOrderingStaff() : null;
+        User user = orderingStaff != null ? orderingStaff.getUser() : null;
+        return user != null ? user.getPhoneNumber() : null;
     }
 
     /**

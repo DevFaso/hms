@@ -23,7 +23,6 @@ public interface InstrumentOutboxService {
      */
     void enqueueResultObservation(LabResult result);
 
-
     /**
      * All outbox messages for a lab order, whatever their status.
      *

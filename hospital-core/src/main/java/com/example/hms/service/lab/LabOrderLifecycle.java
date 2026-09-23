@@ -135,27 +135,35 @@ public final class LabOrderLifecycle {
     }
 
     /**
-     * Move {@code order} to {@code target} when that is a forward step.
+     * Whether {@code target} is a forward step from {@code current}, and so
+     * the status to write — or {@code null} when the order should not move.
      *
-     * @return true when the status changed; false when the order is null,
-     *         already at or past {@code target}, terminal, or {@code target}
-     *         is CANCELLED (cancellation is a decision, never a side effect)
+     * <p>A verdict, like its siblings, because nothing writes a lab order's
+     * status through the entity any more: every path issues the compare-and-set
+     * statement instead. The mutating {@code advance(order, target)} this
+     * replaces is what let a pre-lock snapshot decide, and then quietly
+     * swallow or over-write the decision.
+     *
+     * @return {@code target} when the move is forward and legal; {@code null}
+     *         when the order is already at or past it, is terminal, or
+     *         {@code target} is CANCELLED (cancellation is a decision, never a
+     *         side effect of a specimen or a result)
      */
-    public static boolean advance(LabOrder order, LabOrderStatus target) {
-        if (order == null || target == null || target == LabOrderStatus.CANCELLED) {
-            return false;
+    public static LabOrderStatus statusAfterForwardStep(LabOrderStatus current, LabOrderStatus target) {
+        if (target == null || target == LabOrderStatus.CANCELLED) {
+            return null;
         }
-        LabOrderStatus current = order.getStatus();
-        Integer currentRank = RANK.get(current);
         Integer targetRank = RANK.get(target);
         if (targetRank == null) {
-            return false;
+            return null;
         }
-        if (current != null && (TERMINAL.contains(current)
-                || (currentRank != null && currentRank >= targetRank))) {
-            return false;
+        if (current == null) {
+            return target;
         }
-        order.setStatus(target);
-        return true;
+        Integer currentRank = RANK.get(current);
+        if (TERMINAL.contains(current) || (currentRank != null && currentRank >= targetRank)) {
+            return null;
+        }
+        return target;
     }
 }

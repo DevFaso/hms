@@ -271,34 +271,33 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a retried post answers with the recorded row, test metadata and all")
-    void aRetryAnswersWithTheSameTestMetadata() throws Exception {
-        // The retry returns the row already on file rather than recording a
-        // second one — and it must describe it as fully as the first call did.
-        // The order's test definition is LAZY, so mapping the existing row
-        // without touching it answered 201 with a null test name, no
-        // reference ranges and a null severity where the first call said HIGH.
-        // The unit test cannot catch that: it mocks the mapper.
+    @DisplayName("a retried post records a second result and re-opens the order, by design")
+    void aRetryRecordsASecondResult() throws Exception {
+        // Detecting a retry meant comparing the fields a request carries, and
+        // the portal form carries too few to tell two results apart: no
+        // analyte code, a minute-precision date, usually blank notes. Two
+        // analytes of one order entered in the same minute with the same
+        // value collapsed, and the endpoint answered 201 with somebody else's
+        // row. A duplicate row is visible and correctable — a release of both
+        // completes the order — and a lost result is neither.
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
-
         LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
+
         String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
             .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.labTestName").value("Potassium"))
+            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
             .andReturn().getResponse().getContentAsString();
         String retry = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
             .andExpect(status().isCreated())
+            // the second row describes itself as fully as the first
+            .andExpect(jsonPath("$.labTestName").value("Potassium"))
+            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
             .andReturn().getResponse().getContentAsString();
 
-        assertThat(idOf(retry)).as("a retry records nothing new").isEqualTo(idOf(first));
-        assertThat(labResultRepository.findAll()).hasSize(1);
-        for (String field : List.of("labTestName", "labTestCode", "severityFlag", "patientFullName")) {
-            String firstValue = objectMapper.readTree(first).path(field).asText();
-            assertThat(objectMapper.readTree(retry).path(field).asText())
-                .as("retry must describe %s as the first call did", field)
-                .isEqualTo(firstValue);
-        }
-        assertThat(objectMapper.readTree(retry).path("severityFlag").asText()).isEqualTo("HIGH");
-        assertThat(objectMapper.readTree(retry).path("labTestName").asText()).isEqualTo("Potassium");
+        assertThat(idOf(retry)).as("a retry is recorded, not swallowed").isNotEqualTo(idOf(first));
+        assertThat(labResultRepository.findAll()).hasSize(2);
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.RESULTED);
     }
 
     @Test

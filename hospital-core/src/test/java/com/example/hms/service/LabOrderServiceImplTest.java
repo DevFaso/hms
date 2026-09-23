@@ -239,6 +239,25 @@ class LabOrderServiceImplTest {
     }
 
     @Test
+    void createLabOrderAcceptsCancelledWhichClaimsNoWork() {
+        // A caller recording an order that was cancelled before the laboratory
+        // touched it is asserting nothing about laboratory work, and the
+        // super-admin endpoint validates status only as non-blank — refusing
+        // this broke an existing client for no safety gain.
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        labOrderService.createLabOrder(
+            baseRequestBuilder().status(LabOrderStatus.CANCELLED.name()).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+    }
+
+    @Test
     void createLabOrderKeepsAStartStatusTheCallerChose() {
         // SuperAdminLabOrderServiceImpl validates status as a mandatory field
         // and passes it through, and OrderSetItemDispatcher places order-set
@@ -266,8 +285,11 @@ class LabOrderServiceImplTest {
         // one reaches the review queue with no results behind it.
         mockCommonLookups();
 
-        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
-                LabOrderStatus.RESULTED, LabOrderStatus.COLLECTED)) {
+        // CANCELLED is NOT here: it claims no laboratory work, it records a
+        // decision, and callers do create orders in that state.
+        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.VERIFIED,
+                LabOrderStatus.RESULTED, LabOrderStatus.IN_PROGRESS, LabOrderStatus.RECEIVED,
+                LabOrderStatus.COLLECTED)) {
             LabOrderRequestDTO request = baseRequestBuilder().status(requested.name()).build();
             assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
                 .isInstanceOf(BusinessException.class)

@@ -205,8 +205,21 @@ public class LabOrderServiceImpl implements LabOrderService {
      * the lifecycle moves only through {@link #transitionLabOrderStatus}
      * (role-checked per step) and the specimen and result events.
      */
-    private static final Set<LabOrderStatus> START_STATUSES =
-        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+    /**
+     * What a create may say about status.
+     *
+     * <p>The two START states, plus CANCELLED — which claims no laboratory
+     * work, records a decision somebody made, and is a shape existing callers
+     * do send (the super-admin endpoint validates status as non-blank and
+     * nothing more). Refused are exactly the states that assert work the
+     * laboratory has not done: COLLECTED, RECEIVED, IN_PROGRESS, RESULTED,
+     * VERIFIED and COMPLETED. That keeps the guard that matters — an order
+     * born mid-workflow with no specimen or result behind it, or born
+     * COMPLETED and landing on the review queue empty — without turning a
+     * request that used to work into a 400 for a caller claiming nothing.
+     */
+    private static final Set<LabOrderStatus> CREATABLE_STATUSES =
+        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING, LabOrderStatus.CANCELLED);
 
     private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
         LabOrderStatus requested;
@@ -216,7 +229,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("Unknown lab order status: " + requestedStatus);
         }
         if (isNew) {
-            if (!START_STATUSES.contains(requested)) {
+            if (!CREATABLE_STATUSES.contains(requested)) {
                 // Intended contract, and a deliberate behaviour change for the
                 // super-admin endpoint, which validates status as mandatory
                 // but only checks it is non-blank: an order created at
@@ -229,8 +242,8 @@ public class LabOrderServiceImpl implements LabOrderService {
                 // sample carrying IN_PROGRESS is a PUT, which is unaffected.)
                 throw new BusinessException(
                     "A new lab order cannot be created with status " + requested.name()
-                        + ". New orders start at ORDERED or PENDING; the laboratory workflow "
-                        + "moves them on from there.");
+                        + ", which claims laboratory work that has not happened. New orders start "
+                        + "at ORDERED or PENDING; the laboratory workflow moves them on from there.");
             }
             labOrder.setStatus(requested);
             return;

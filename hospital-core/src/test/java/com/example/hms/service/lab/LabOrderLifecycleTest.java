@@ -20,41 +20,42 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("an entered result moves ORDERED straight to RESULTED — skipped states are not a blocker")
-    void advancesForwardSkippingUnrecordedStates() {
-        LabOrder order = orderAt(LabOrderStatus.ORDERED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.RESULTED)).isTrue();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    @DisplayName("a forward step is the status to write; skipped states are not a blocker")
+    void forwardStepVerdicts() {
+        // A verdict, not a mutation: nothing writes an order's status through
+        // the entity any more, on any path, so the specimen events ask what to
+        // write and issue the compare-and-set statement themselves.
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.RESULTED))
+            .isEqualTo(LabOrderStatus.RESULTED);
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.COLLECTED))
+            .isEqualTo(LabOrderStatus.COLLECTED);
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED))
+            .isEqualTo(LabOrderStatus.RECEIVED);
+        // an order whose status is somehow absent still takes the step
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED))
+            .isEqualTo(LabOrderStatus.COLLECTED);
     }
 
     @Test
-    @DisplayName("a specimen logged after the result never moves the order back")
-    void neverMovesBackwards() {
-        LabOrder order = orderAt(LabOrderStatus.RESULTED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.COLLECTED)).isFalse();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+    @DisplayName("a specimen logged after the result never moves the order back, and the same state is a no-op")
+    void forwardStepNeverMovesBackwards() {
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.RESULTED, LabOrderStatus.COLLECTED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.RECEIVED, LabOrderStatus.RECEIVED))
+            .isNull();
     }
 
     @Test
-    @DisplayName("the same state twice is a no-op, so callers do not re-save")
-    void sameStateIsNoop() {
-        LabOrder order = orderAt(LabOrderStatus.RECEIVED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.RECEIVED)).isFalse();
-    }
-
-    @Test
-    @DisplayName("COMPLETED and CANCELLED orders are left alone")
-    void terminalStatesAreFrozen() {
-        LabOrder completed = orderAt(LabOrderStatus.COMPLETED);
-        LabOrder cancelled = orderAt(LabOrderStatus.CANCELLED);
-
-        assertThat(LabOrderLifecycle.advance(completed, LabOrderStatus.CANCELLED)).isFalse();
-        assertThat(LabOrderLifecycle.advance(cancelled, LabOrderStatus.RESULTED)).isFalse();
-        assertThat(completed.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        assertThat(cancelled.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+    @DisplayName("COMPLETED and CANCELLED orders are left alone, and CANCELLED is never a target")
+    void forwardStepLeavesTerminalOrdersAlone() {
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.CANCELLED, LabOrderStatus.RESULTED))
+            .isNull();
+        // cancellation is a decision, never a side effect of a specimen event
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, LabOrderStatus.CANCELLED))
+            .isNull();
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ORDERED, null)).isNull();
     }
 
     @Test
@@ -103,15 +104,6 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("cancellation is a decision, never a side effect")
-    void cancelledIsNeverATarget() {
-        LabOrder order = orderAt(LabOrderStatus.ORDERED);
-
-        assertThat(LabOrderLifecycle.advance(order, LabOrderStatus.CANCELLED)).isFalse();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
-    }
-
-    @Test
     @DisplayName("every LabOrderStatus has a declared workflow rank")
     void everyStatusHasARank() {
         // Workflow order is declared, not inherited from enum ordinals: adding
@@ -140,13 +132,12 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("a null order or target is ignored; an order with no status takes the target")
+    @DisplayName("an order with no status still takes its first step")
     void nullsAreTolerated() {
-        assertThat(LabOrderLifecycle.advance(null, LabOrderStatus.RESULTED)).isFalse();
-        assertThat(LabOrderLifecycle.advance(orderAt(LabOrderStatus.ORDERED), null)).isFalse();
-
-        LabOrder blank = new LabOrder();
-        assertThat(LabOrderLifecycle.advance(blank, LabOrderStatus.COLLECTED)).isTrue();
-        assertThat(blank.getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
+        // Every other null case belongs to the verdict methods above; this is
+        // the one a lab order can legitimately be in before @PrePersist
+        // defaults it.
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED))
+            .isEqualTo(LabOrderStatus.COLLECTED);
     }
 }

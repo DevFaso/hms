@@ -51,6 +51,11 @@ class LabSpecimenServiceImplTest {
     private LabOrder labOrder;
     private LabSpecimenResponseDTO responseDTO;
 
+    /** The committed status the statement writer compares against. */
+    private void givenCommittedOrderStatus(LabOrderStatus status) {
+        when(labOrderRepository.findStatusById(labOrderId)).thenReturn(status);
+    }
+
     @BeforeEach
     void setUp() {
         hospitalId  = UUID.randomUUID();
@@ -80,6 +85,7 @@ class LabSpecimenServiceImplTest {
         when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        givenCommittedOrderStatus(LabOrderStatus.ORDERED);
         when(labSpecimenRepository.existsByAccessionNumber(any())).thenReturn(false);
         when(labSpecimenRepository.save(any())).thenReturn(saved);
         when(labSpecimenMapper.toResponseDTO(saved)).thenReturn(responseDTO);
@@ -88,9 +94,11 @@ class LabSpecimenServiceImplTest {
 
         assertThat(result).isEqualTo(responseDTO);
         verify(labSpecimenRepository).save(any(LabSpecimen.class));
-        // B2: a collected specimen IS the order's COLLECTED state.
-        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
-        verify(labOrderRepository).save(labOrder);
+        // B2: a collected specimen IS the order's COLLECTED state, written
+        // by the same compare-and-set statement the result path uses.
+        verify(labOrderRepository).updateStatusFrom(
+            labOrderId, LabOrderStatus.ORDERED, LabOrderStatus.COLLECTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test
@@ -230,20 +238,23 @@ class LabSpecimenServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
         when(labSpecimenMapper.toResponseDTO(specimen)).thenReturn(responseDTO);
+        givenCommittedOrderStatus(LabOrderStatus.COLLECTED);
 
         LabSpecimenResponseDTO result = service.receiveSpecimen(specimenId, Locale.ENGLISH);
 
         assertThat(result).isEqualTo(responseDTO);
         assertThat(specimen.getStatus()).isEqualTo(LabSpecimenStatus.RECEIVED);
         // B2: receipt at the lab IS the order's RECEIVED state.
-        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
-        verify(labOrderRepository).save(labOrder);
+        verify(labOrderRepository).updateStatusFrom(
+            labOrderId, LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         verify(instrumentOutboxService).enqueueSpecimenReceived(specimen);
     }
 
     @Test
     void receiveSpecimen_neverMovesAResultedOrderBack() {
         labOrder.setStatus(LabOrderStatus.RESULTED);
+        givenCommittedOrderStatus(LabOrderStatus.RESULTED);
         LabSpecimen specimen = LabSpecimen.builder()
             .labOrder(labOrder)
             .status(LabSpecimenStatus.COLLECTED)
@@ -257,7 +268,8 @@ class LabSpecimenServiceImplTest {
 
         service.receiveSpecimen(specimenId, Locale.ENGLISH);
 
-        assertThat(labOrder.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
+        // the committed status is past RECEIVED, so nothing is written
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
         verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
