@@ -282,6 +282,29 @@ describe('LabComponent — performing laboratory', () => {
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
 
+  it('labels the worklist by the hospital the chip is pinned to, not the primary one', async () => {
+    // A super-admin whose primary hospital is A, scoped to laboratory B: the
+    // order is incoming from B's point of view. Reading activeHospitalId
+    // instead of the effective id called it outgoing, put hospital A on the
+    // primary line and offered Edit and Delete the backend refuses.
+    const incoming = order({
+      performingHospitalId: LAB_B,
+      performingHospitalName: 'Central Laboratory B',
+    });
+    await setup(['ROLE_SUPER_ADMIN'], [incoming], HOSPITAL_A);
+    scope.superAdmin = true;
+    TestBed.inject(RoleContextService).scopeToHospital(LAB_B);
+    fixture.detectChanges();
+
+    expect(component.isIncomingExternal(incoming)).toBeTrue();
+    expect(component.isSentOut(incoming)).toBeFalse();
+    expect(component.actingHospitalName(incoming)).toBe('Central Laboratory B');
+    expect(component.counterpartLabelKey(incoming)).toBe('LAB.ORDERED_BY');
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-incoming"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
   it('shows no routing hint for an in-house order', async () => {
     await setup(['ROLE_DOCTOR'], [order({})]);
 

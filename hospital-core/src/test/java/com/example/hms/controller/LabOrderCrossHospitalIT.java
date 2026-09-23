@@ -8,6 +8,7 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Notification;
 import com.example.hms.model.Organization;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -258,6 +260,14 @@ class LabOrderCrossHospitalIT extends BaseIT {
             .andReturn().getResponse().getContentAsString();
         // LabResultController returns the bare DTO, not the ApiResponseWrapper.
         UUID resultId = UUID.fromString(objectMapper.readTree(resultJson).get("id").asText());
+
+        // B1: the release queue is the running laboratory's alone. Asked of a
+        // real database because the predicate COALESCEs a nullable
+        // association, which no mock can vouch for.
+        assertThat(labResultRepository.findPendingReleaseHandledBy(hospitalB.getId(), PageRequest.of(0, 20)))
+            .extracting(LabResult::getId).containsExactly(resultId);
+        assertThat(labResultRepository.findPendingReleaseHandledBy(hospitalA.getId(), PageRequest.of(0, 20)))
+            .isEmpty();
 
         // 7. B releases it (a normal value may already be auto-verified; the
         //    call must succeed at B and be refused at C either way).

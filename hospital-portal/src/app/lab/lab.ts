@@ -182,11 +182,16 @@ export class LabComponent implements OnInit {
 
   /**
    * B1: an order is "incoming" when another hospital sent it to this
-   * laboratory, and "outgoing" when this hospital sent it out. Both read the
-   * active hospital, so a scope switch relabels the worklist.
+   * laboratory, and "outgoing" when this hospital sent it out.
+   *
+   * Read through effectiveHospitalIdForRequest, the id the API is actually
+   * called with — not activeHospitalId, which for a super-admin is the
+   * primary hospital rather than the one the chip is pinned to. Reading the
+   * wrong one inverted every label for a chip-scoped super-admin and offered
+   * them Edit and Delete on incoming orders that the backend then 404s.
    */
   isIncomingExternal(o: LabOrderResponse): boolean {
-    const active = this.roleContext.activeHospitalId;
+    const active = this.roleContext.effectiveHospitalIdForRequest();
     return !!o.performingHospitalId && !!active && o.performingHospitalId === active;
   }
 

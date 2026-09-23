@@ -127,6 +127,32 @@ class LabResultServiceImplPerformingHospitalTest {
     }
 
     @Test
+    void aResultCannotBeAttributedToAnAssignmentAtTheOtherHospital() {
+        // The name on a result is the author's: a scientist at the performing
+        // laboratory must not be able to sign it over to somebody at the
+        // ordering hospital and read their name back out.
+        UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(ordering);
+        when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(roleValidator.hasRole(labUserId, performing.getId(), "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        LabResultRequestDTO request = LabResultRequestDTO.builder()
+            .labOrderId(order.getId())
+            .assignmentId(foreign.getId())
+            .patientId(order.getPatient().getId())
+            .resultValue("12.1")
+            .resultDate(LocalDateTime.now())
+            .build();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
     void thirdHospitalCannotEnterAResult() {
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(third.getId());
@@ -193,6 +219,22 @@ class LabResultServiceImplPerformingHospitalTest {
         assertThat(result.isReleased()).isTrue();
         assertThat(result.getReleasedByUserId()).isEqualTo(labUserId);
         verify(roleValidator, never()).isLabScientist(labUserId, ordering.getId());
+    }
+
+    @Test
+    void theOrderingHospitalDoesNotReleaseWhatAnotherLaboratoryRan() {
+        // It reads the result — not a 404 — but the sign-off is the running
+        // laboratory's, and its queue is where the result waits.
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(authService.getCurrentUserId()).thenReturn(labUserId);
+        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
+
+        UUID id = result.getId();
+        assertThatThrownBy(() -> service.releaseLabResult(id, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("performing this order");
+        assertThat(result.isReleased()).isFalse();
     }
 
     @Test

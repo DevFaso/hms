@@ -361,13 +361,11 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     @Query(value = """
         SELECT r FROM LabResult r
         WHERE r.released = false
-          AND (r.labOrder.hospital.id = :hospitalId
-               OR r.labOrder.performingHospital.id = :hospitalId)
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE r.released = false
-          AND (r.labOrder.hospital.id = :hospitalId
-               OR r.labOrder.performingHospital.id = :hospitalId)
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
     """)
     Page<LabResult> findPendingReleaseHandledBy(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 }

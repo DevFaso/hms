@@ -125,8 +125,8 @@ public class LabResultServiceImpl implements LabResultService {
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UserRoleHospitalAssignment assignment =
+            requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
 
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
@@ -304,10 +304,11 @@ public class LabResultServiceImpl implements LabResultService {
         }
         // B1: a laboratory releases what it ran, so an order another hospital
         // sent here belongs on this queue — releasing it is exactly what the
-        // performing laboratory is for. Every other lab-side read was widened
-        // to the ordering-OR-performing predicate; this queue was the one that
-        // still asked only who ordered, leaving outsourced results unreleasable
-        // by the only people who can release them.
+        // performing laboratory is for. Unlike every other lab-side read this
+        // one is NOT the ordering-OR-performing predicate: an outsourced
+        // result waits on the performing laboratory's queue alone, because
+        // putting it on both invited the ordering hospital to sign off work
+        // its laboratory never did.
         return labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable)
             .map(labResultMapper::toResponseDTO);
     }
@@ -338,8 +339,8 @@ public class LabResultServiceImpl implements LabResultService {
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UserRoleHospitalAssignment assignment =
+            requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
@@ -416,6 +417,45 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
+     * The assignment a result is attributed to must belong to the hospital
+     * the author is acting at.
+     *
+     * <p>Nothing checked this: the id came straight off the request and
+     * {@code LabResult.validate()} was the only gate, which asks merely that
+     * the assignment's hospital handles the order — and B1 widened "handles"
+     * to two hospitals. A scientist at the performing laboratory could
+     * therefore attribute a result to a named staff member at the ordering
+     * hospital and read that person's name back out of the response. 404
+     * rather than 403: another hospital's assignment is not this caller's to
+     * learn about.
+     */
+    private UserRoleHospitalAssignment requireAssignmentAtActingHospital(UUID assignmentId, UUID actingHospitalId) {
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        if (actingHospitalId != null
+                && (assignment.getHospital() == null
+                    || !actingHospitalId.equals(assignment.getHospital().getId()))) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        return assignment;
+    }
+
+    /**
+     * B1: the hospital whose laboratory runs the order — the one it was sent
+     * to, else the one that ordered it. Releasing a result is that
+     * laboratory's sign-off on its own work, so it is the running hospital's
+     * roles that authorise it and the running hospital's queue the result
+     * waits on.
+     */
+    private static UUID runningHospitalId(LabOrder labOrder, Hospital orderingHospital) {
+        UUID running = labOrder != null ? labOrder.resolvePerformingHospitalId() : null;
+        if (running != null) {
+            return running;
+        }
+        return orderingHospital != null ? orderingHospital.getId() : null;
+    }
+
+    /**
      * B1: the hospital whose roles authorise a lab-side write. An actor working
      * at the performing laboratory is judged by their roles THERE; everybody
      * else (the ordering hospital, a super-admin in global view) by the
@@ -462,10 +502,14 @@ public class LabResultServiceImpl implements LabResultService {
         requireResultInActiveHospital(labResult);
 
         Hospital hospital = extractHospitalFromLabOrder(labResult.getLabOrder());
-        UUID hospitalId = authorityHospitalId(labResult.getLabOrder(), hospital, roleValidator.requireActiveHospitalId());
+        // B1: releasing is the running laboratory's sign-off. For an order
+        // sent out, the ordering hospital reads the result and acts on it but
+        // does not release it — its lab staff were being offered the sign-off
+        // on work their laboratory never did.
+        UUID hospitalId = runningHospitalId(labResult.getLabOrder(), hospital);
         UUID actorId = authService.getCurrentUserId();
 
-        validateReleasePermissions(actorId, hospitalId);
+        validateReleasePermissions(actorId, hospitalId, roleValidator.requireActiveHospitalId());
 
         if (labResult.isReleased()) {
             // Not a no-op: a result released by a path that does not touch the
@@ -556,16 +600,24 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    private void validateReleasePermissions(UUID userId, UUID hospitalId) {
+    private void validateReleasePermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for release operation.");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (hospitalId == null) {
+        if (runningHospitalId == null) {
             throw new BusinessException("Unable to determine hospital context for lab result release.");
         }
+        // B1: an order sent to another laboratory is released there. The
+        // ordering hospital still reads the result — this is not a 404 — but
+        // it does not sign off work it did not do.
+        if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
+            throw new BusinessException(
+                "Only the laboratory performing this order may release its results.");
+        }
+        UUID hospitalId = runningHospitalId;
 
         // LabResultAuthority.RELEASE_ROLES, checked against the caller's
         // assignment at THIS hospital (B10). This list used to admit doctors,
