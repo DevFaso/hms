@@ -128,7 +128,17 @@ public class CriticalValueNotificationService {
      * is the one thing that can be retried by hand if it is lost.
      */
     public void notifyIfCritical(LabResult result, String severityFlag) {
-        try {
+        // NOT wrapped in a catch. This runs in the caller's transaction — the
+        // alert row and the stamp commit with the result, which is what
+        // guarantees no result reaches the chart un-alerted — and a
+        // persistence failure in here marks that transaction rollback-only
+        // whatever this method does with the exception. Catching it therefore
+        // bought nothing and lied: the caller believed the notification was
+        // contained, then got a 500 at commit with the cause logged as a
+        // warning (the #553 trap, and the same one the outbox enqueue had).
+        // Failing loudly means the clinical write is retried, which is
+        // recoverable; a critical result nobody was told about is not.
+        {
             if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
                 return;
             }
@@ -156,9 +166,6 @@ public class CriticalValueNotificationService {
             }
             result.setCriticalNotifiedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
             labResultRepository.save(result);
-        } catch (RuntimeException ex) {
-            log.warn("Critical-value notification failed for lab result {}: {}",
-                result.getId(), ex.getMessage(), ex);
         }
     }
 

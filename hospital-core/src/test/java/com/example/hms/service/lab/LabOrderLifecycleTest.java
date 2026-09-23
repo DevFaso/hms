@@ -24,9 +24,10 @@ class LabOrderLifecycleTest {
             .isEqualTo(LabOrderStatus.COLLECTED);
         assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED))
             .isEqualTo(LabOrderStatus.RECEIVED);
-        // an order whose status is somehow absent still takes the step
-        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED))
-            .isEqualTo(LabOrderStatus.COLLECTED);
+        // a null current yields no move: the caller would write it with
+        // expected = null, which matches no row, and then log a concurrent
+        // move nobody made
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED)).isNull();
     }
 
     @Test
@@ -125,12 +126,12 @@ class LabOrderLifecycleTest {
     }
 
     @Test
-    @DisplayName("an order with no status still takes its first step")
+    @DisplayName("no verdict method moves an order whose status is absent")
     void nullsAreTolerated() {
-        // Every other null case belongs to the verdict methods above; this is
-        // the one a lab order can legitimately be in before @PrePersist
-        // defaults it.
-        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED))
-            .isEqualTo(LabOrderStatus.COLLECTED);
+        // Consistent across all three: a status the database does not hold
+        // cannot be the `expected` side of a compare-and-set.
+        assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterNewResult(null)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(null)).isNull();
     }
 }

@@ -107,6 +107,12 @@ class OruR01EndToEndIngestionTest {
         labOrder = new LabOrder();
         labOrder.setId(UUID.randomUUID());
         labOrder.setHospital(hospital);
+        // A specimen has reached the analyzer, so the order is RECEIVED. It
+        // matters that this is set: the status column is NOT NULL and
+        // @PrePersist defaults it, so an order with a null status is a shape
+        // the database cannot hold — and the verdict methods now decline to
+        // move one, because the compare-and-set would match no row.
+        labOrder.setStatus(com.example.hms.enums.LabOrderStatus.RECEIVED);
 
         specimen = new LabSpecimen();
         specimen.setId(UUID.randomUUID());

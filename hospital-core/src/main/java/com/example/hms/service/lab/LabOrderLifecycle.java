@@ -153,11 +153,14 @@ public final class LabOrderLifecycle {
             return null;
         }
         Integer targetRank = RANK.get(target);
-        if (targetRank == null) {
+        if (targetRank == null || current == null) {
+            // A null current yields no move, like statusAfterNewResult: the
+            // caller writes the verdict with expected = null, and
+            // "status = null" matches no row in SQL, so the statement could
+            // only ever be a no-op that then logged a concurrent move nobody
+            // made. A lab order always has a status (@PrePersist defaults it);
+            // null here means the row is gone.
             return null;
-        }
-        if (current == null) {
-            return target;
         }
         Integer currentRank = RANK.get(current);
         if (TERMINAL.contains(current) || (currentRank != null && currentRank >= targetRank)) {

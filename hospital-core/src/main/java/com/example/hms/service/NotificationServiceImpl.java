@@ -52,6 +52,23 @@ public class NotificationServiceImpl implements NotificationService {
         return createNotification(message, recipientUsername, null);
     }
 
+    /**
+     * Writes the notification row in the CALLER's transaction and pushes it
+     * over STOMP once that transaction commits.
+     *
+     * <p>The row belongs with whatever prompted it — a critical lab result
+     * commits its alert and its {@code criticalNotifiedAt} stamp together, so
+     * there is no window where the result is on the chart and the alert is
+     * not. The push is different: it is a network hop, and doing it inline
+     * held it inside the caller's transaction, which for the lab path means
+     * while an order row is pessimistically locked. It also meant a
+     * transaction that later rolled back had already told somebody about a
+     * result that no longer exists. After the commit, neither is true.
+     *
+     * <p>With no transaction on the thread {@code TransactionCallbacks} runs
+     * the push inline, which is the old behaviour and right for a caller that
+     * has nothing to wait for.
+     */
     @Override
     public Notification createNotification(String message, String recipientUsername, String type) {
         Notification notification = Notification.builder()
@@ -62,7 +79,8 @@ public class NotificationServiceImpl implements NotificationService {
                 .read(false)
                 .build();
         Notification saved = notificationRepository.save(notification);
-        notificationWebSocketController.sendNotification(saved);
+        com.example.hms.utility.TransactionCallbacks.afterCommit(
+            () -> notificationWebSocketController.sendNotification(saved));
         return saved;
     }
 

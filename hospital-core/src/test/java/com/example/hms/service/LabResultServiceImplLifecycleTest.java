@@ -812,6 +812,34 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("an ingest caller cannot attribute a result to another tenant's assignment")
+    void ingestCannotBorrowAnotherTenantsAssignment() {
+        // The exemption leaves no acting hospital, so the acting-hospital
+        // comparison waves anything through; the order is the anchor instead,
+        // or a staff member of another tenant ends up named as the author of
+        // this result and returned in the response.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(elsewhere);
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        LabResultRequestDTO request = entryRequest();
+        request.setAssignmentId(foreign.getId());
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
     @DisplayName("a retransmitted ORU is recognised by its control id and not recorded twice")
     void aRetransmittedOruIsNotRecordedTwice() {
         // The HL7 adapter is the one caller that genuinely retries, and a

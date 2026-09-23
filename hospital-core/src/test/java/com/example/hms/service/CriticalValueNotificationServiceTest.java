@@ -138,17 +138,25 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
-    void notificationFailureNeverPropagates() {
+    void notificationFailurePropagatesRatherThanPoisoningTheTransaction() {
+        // This runs in the caller's transaction, so a persistence failure
+        // marks it rollback-only whatever this method does with the
+        // exception: swallowing it left the caller believing the alert was
+        // contained and then handed them a 500 at commit with the cause
+        // logged as a warning. Failing here means the clinical write is
+        // retried — recoverable — where a critical result nobody was told
+        // about is not.
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         when(notificationService.createNotification(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("broker down"));
 
-        assertThatCode(() -> service.notifyIfCritical(result)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.notifyIfCritical(result))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("broker down");
 
-        // The swallow must be around a real attempt: without this, an
-        // implementation that stopped notifying altogether would also "never
-        // propagate" and the test would still pass.
-        verify(notificationService).createNotification(anyString(), anyString(), anyString());
+        // and the stamp is NOT written, so the escalation sweep still sees it
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(labResultRepository, never()).save(result);
     }
 
     @Test

@@ -178,8 +178,14 @@ public class LabResultServiceImpl implements LabResultService {
         validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
     }
 
-        UserRoleHospitalAssignment assignment =
-            requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
+        // An interface principal has no acting hospital, so the acting-hospital
+        // comparison below would wave any tenant's assignment through and put
+        // that staff member's name on the result and in the response. The
+        // order is the anchor instead: the assignment must belong to a
+        // hospital that handles it (ordering or performing, B1's predicate).
+        UserRoleHospitalAssignment assignment = interfacePrincipal
+            ? requireAssignmentHandlingOrder(request.getAssignmentId(), labOrder)
+            : requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
 
         // From here to the status write the order row is LOCKED. The
         // duplicate check belongs inside it: run before the lock, two
@@ -637,6 +643,26 @@ public class LabResultServiceImpl implements LabResultService {
      * rather than 403: another hospital's assignment is not this caller's to
      * learn about.
      */
+    /**
+     * The ingest path's assignment check: no acting hospital to compare
+     * against, so the order supplies the anchor.
+     *
+     * <p>Without this, an ingest caller could name an assignment at any
+     * tenant and that staff member's name would be recorded as the author of
+     * the result and returned in the response. 404 rather than 403, like
+     * every other tenancy answer here.
+     */
+    private UserRoleHospitalAssignment requireAssignmentHandlingOrder(UUID assignmentId, LabOrder labOrder) {
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        UUID assignmentHospitalId = assignment.getHospital() != null
+            ? assignment.getHospital().getId() : null;
+        if (assignmentHospitalId == null || !labOrder.isHandledBy(assignmentHospitalId)) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        return assignment;
+    }
+
     private UserRoleHospitalAssignment requireAssignmentAtActingHospital(UUID assignmentId, UUID actingHospitalId) {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
