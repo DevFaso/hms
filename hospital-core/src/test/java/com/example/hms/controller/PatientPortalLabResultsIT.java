@@ -253,6 +253,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .sourceSendingFacility("LAB_A")
             .sourceMessageControlId("MSG-PRELIM-1")
             .sourceObservationSetId("1")
+            .observationResultStatus("P")
             .build());
     }
 
@@ -346,7 +347,14 @@ class PatientPortalLabResultsIT extends BaseIT {
             .actorLabel("MLLP:SYSMEX/LAB_A")
             .resultValue(value)
             .resultUnit("g/dL")
-            .resultDate(result.getResultDate())
+            // The final carries its own, later observation time. Giving it the
+            // preliminary's would leave both rows stamped identically, and the
+            // winner would fall to BaseEntity's @PrePersist createdAt — which
+            // both rows get within the same instant here — and then to the
+            // random row id, so this assertion would pass or fail by luck.
+            // That exact tie is covered deterministically in
+            // SupersededLabResultsTest; this test asserts the ordinary case.
+            .resultDate(result.getResultDate().plusMinutes(30))
             .abnormalFlag(AbnormalFlag.ABNORMAL_HIGH)
             .referenceRange("12.0-15.5")
             .testCode("HGB")
@@ -356,6 +364,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .sourceSendingFacility("LAB_A")
             .sourceMessageControlId("MSG-FINAL-1")
             .sourceObservationSetId("1")
+            .observationResultStatus("F")
             .build();
         finalRow.setReleased(released);
         if (released) {

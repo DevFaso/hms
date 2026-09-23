@@ -43,6 +43,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.enums.ActorType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabReflexRule;
 import com.example.hms.model.LabTestDefinition;
@@ -224,9 +225,9 @@ public class LabResultServiceImpl implements LabResultService {
         // — it is a record of what the analyzer said first. Left counted, it
         // would hold the order open for ever, since nobody will ever release a
         // superseded row. Same rule, same class, as the patient view.
-        Set<LabResult> superseded = SupersededLabResults.superseded(results);
+        Set<UUID> superseded = SupersededLabResults.supersededRowIds(results, results);
         boolean nothingOutstanding = results.stream()
-            .allMatch(result -> result.isReleased() || superseded.contains(result));
+            .allMatch(result -> result.isReleased() || superseded.contains(result.getId()));
         if (!results.isEmpty() && nothingOutstanding) {
             advanceOrder(locked, LabOrderStatus.COMPLETED);
         }
@@ -247,14 +248,22 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * Whether this row reached us from an external analyzer. The message
-     * control id is the precise signal; the sending application is kept
-     * alongside it for the analyzers that omit MSH-10, which would otherwise
-     * leave an ingested row looking like one of ours.
+     * Whether this row reached us from an external analyzer.
+     *
+     * <p>Every mark the ingest leaves, not just two of them. The actor type is
+     * the one it always sets; the three source columns are each optional in
+     * practice, since an analyzer may omit MSH-10 and a sender may identify
+     * itself by facility alone. Checking only the control id and the
+     * application left a row that carried neither looking like one of ours,
+     * and releasing it transmitted the unsolicited message — carrying our
+     * internal order UUID rather than the accession the analyzer knows — that
+     * this guard exists to prevent.
      */
     private static boolean wasIngestedFromAnAnalyzer(LabResult labResult) {
-        return labResult.getSourceMessageControlId() != null
-            || labResult.getSourceSendingApplication() != null;
+        return labResult.getActorType() == ActorType.SYSTEM
+            || labResult.getSourceMessageControlId() != null
+            || labResult.getSourceSendingApplication() != null
+            || labResult.getSourceSendingFacility() != null;
     }
 
     @Override

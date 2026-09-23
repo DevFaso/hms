@@ -203,6 +203,10 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .sourceSendingFacility(senderFac)
                 .sourceMessageControlId(controlId)
                 .sourceObservationSetId(setIds.get(i))
+                // OBX-11 verbatim: what the analyzer says this result IS.
+                // The read paths hide a preliminary behind its final, and
+                // that decision belongs to the sender, not to a guess.
+                .observationResultStatus(trimToNull(observation.resultStatus(), 16))
                 .testCode(trimToNull(observation.testCode(), 255))
                 .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();

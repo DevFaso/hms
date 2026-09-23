@@ -5,102 +5,146 @@ import com.example.hms.model.LabResult;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Which stored lab results a later one has left behind.
+ * Which stored lab results the analyzer has told us it replaced.
  *
  * <p>An analyzer commonly reports one observation twice — preliminary, then
- * final — in two HL7 messages with two different MSH-10s. Both are stored, and
- * they have to be: the message control id is the only key the replay guard and
- * the partial unique index have, the set id keeps a timed series distinct, and
- * a critical value is notified against the row it was raised on. Collapsing
- * them at ingest costs records; a record is the thing we cannot reconstruct.
+ * final — in two HL7 messages with two different MSH-10s. Both rows are kept,
+ * and have to be: the message control id is the only key the replay guard and
+ * the partial unique index have, and a critical value is notified against the
+ * row it was raised on. Collapsing them at ingest costs records, and a record
+ * is the thing we cannot reconstruct. So the pair is resolved on the way out,
+ * where being wrong costs a rendering: the patient sees one row per
+ * observation, and order completion does not wait on a value the laboratory
+ * has already replaced.
  *
- * <p>So the pair is resolved where being wrong costs a rendering instead: the
- * patient is shown one row per observation, and order completion stops waiting
- * on a row the laboratory has already moved past. Both read paths ask this
- * class the same question, so they cannot drift into disagreeing — a patient
- * seeing a finished result while the order it belongs to never completes is
- * exactly the split this prevents.
+ * <h2>Why this asks the analyzer instead of guessing</h2>
  *
- * <h2>What counts as the same observation</h2>
+ * <p>Deciding which row to hide was attempted three times by inference, and
+ * each inference had a hole:
  *
- * <p>The same analyte, in the same position, on the same order:
- * {@code (labOrderId, testCode, observationSetId)}. The set id is load-bearing
- * and leaving it out was a patient-safety bug — without it a timed series of
- * one analyte (glucose at 0, 30 and 60 minutes, which is precisely what the
- * set id exists to keep distinct) read as one observation reported repeatedly,
- * so an abnormal later draw was hidden behind the normal first one that had
- * been auto-released. A row missing any part of the key names no observation
- * and stands alone: a hand-entered result is nobody's preliminary.
+ * <ul>
+ *   <li><strong>The observation set id.</strong> HL7 guarantees it only
+ *       WITHIN a message, and our ingest falls back to positional numbering,
+ *       so a final that re-sends a subset of the preliminary's panel carries a
+ *       different set id for the same analyte — nothing superseded anything
+ *       and the patient kept a permanent "pending". One message per draw gives
+ *       every draw set id 1, so a timed series collided on a single key and an
+ *       abnormal earlier draw could be hidden by a later normal one.</li>
+ *   <li><strong>Release state.</strong> It cannot tell a preliminary from a
+ *       correction, so a corrected result could hide the released value it
+ *       corrects, or be hidden by it.</li>
+ *   <li><strong>Recency alone.</strong> Same problem from the other side, and
+ *       with both timestamps equal — the ordinary case, since a preliminary
+ *       and its final carry the same observation time — the winner fell to
+ *       whatever order the repository happened to return.</li>
+ * </ul>
  *
- * <h2>Which row of a group survives</h2>
+ * <p>OBX-11 says outright what a result is, and since V164 we store it. A row
+ * is a preliminary only if the analyzer said {@code P}. Everything else is
+ * shown, which is what this system did before any of this existed and is the
+ * behaviour that cannot lose data.
  *
- * <p>The latest, and only ever the latest — by observation time, then by the
- * order the rows were written, then preferring the released one. Recency
- * decides rather than release, for two reasons. An earlier row must never
- * supersede a later one, or a correction issued after a release would vanish
- * behind the value it corrects. And an abnormal final following a normal
- * preliminary is often NOT auto-releasable, so if release decided the pairing
- * nothing would be superseded and the patient would see the same test pending
- * twice.
+ * <h2>The rule</h2>
  *
- * <p>The consequence worth stating: when a correction arrives and has not been
- * released yet, the patient stops seeing the released value it supersedes and
- * sees the pending correction instead. That is the honest reading — the
- * laboratory is revising that result — and it is the safer of the two, because
- * the alternative is showing a value that has been withdrawn.
+ * <p>A row is superseded when ALL of the following hold. Anything short of
+ * them shows both rows.
+ *
+ * <ol>
+ *   <li>The analyzer marked it preliminary ({@code OBX-11 = P}).</li>
+ *   <li>Another row exists for the same order, the same test code and the
+ *       same sending application — the analyzer's own identification of the
+ *       observation, not our positional numbering.</li>
+ *   <li>That row is strictly newer, by observation time, then by write order,
+ *       and finally by row id, so the outcome is decided by the data and never
+ *       by the order a query returned.</li>
+ *   <li>It does not hide a released row behind an unreleased one. A value the
+ *       patient has already been given is never taken away and replaced with
+ *       nothing.</li>
+ * </ol>
+ *
+ * <p>Point 4 is a deliberate reversal of an earlier reading of this class,
+ * which hid a released value as soon as an unreleased correction arrived.
+ * Leaving the patient a bare "pending" where a number used to be is worse than
+ * briefly showing the value the laboratory has not yet withdrawn. The better
+ * answer is to show both — the released value AND "corrected result pending" —
+ * and that belongs here as soon as the portal can express it; until then the
+ * released value stands.
  */
 public final class SupersededLabResults {
+
+    /** HL7 table 0085: the analyzer says this observation is not finished. */
+    private static final String PRELIMINARY = "P";
 
     private SupersededLabResults() {
     }
 
-    /** One observation: the analyte, in its position, on its order. */
-    public record AnalyteKey(UUID labOrderId, String testCode, String observationSetId) {
+    /** One observation, as the analyzer identifies it. */
+    private record ObservationKey(UUID labOrderId, String testCode, String sendingApplication) {
     }
 
     /**
-     * The rows that a later row for the same observation has left behind.
+     * The ids of the rows in {@code rowsToJudge} that a later row in
+     * {@code knownRows} has replaced.
      *
-     * <p>Identity-based, so it answers for exactly the row objects passed in
-     * and needs no persisted id. Rows that name no observation are never
-     * included. The argument is required; the rows are a repository result and
-     * its elements are entities.
+     * <p>{@code knownRows} is every row that could do the replacing — for a
+     * page of results, the page plus the siblings of the analytes on it; for
+     * order completion, every result on the order. Returning ids rather than
+     * instances keeps the answer usable across two queries, which may hand
+     * back different objects for the same row.
      */
-    public static Set<LabResult> superseded(Collection<LabResult> rows) {
-        Map<AnalyteKey, LabResult> latestPerObservation = new HashMap<>();
-        Set<LabResult> superseded = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (LabResult row : rows) {
-            AnalyteKey key = analyteKey(row);
+    public static Set<UUID> supersededRowIds(Collection<LabResult> rowsToJudge,
+                                             Collection<LabResult> knownRows) {
+        Set<UUID> superseded = new HashSet<>();
+        for (LabResult row : rowsToJudge) {
+            if (row.getId() == null || !isAnalyzerPreliminary(row)) {
+                continue;
+            }
+            ObservationKey key = observationKey(row);
             if (key == null) {
                 continue;
             }
-            LabResult incumbent = latestPerObservation.get(key);
-            if (incumbent == null) {
-                latestPerObservation.put(key, row);
-            } else if (supersedes(row, incumbent)) {
-                superseded.add(incumbent);
-                latestPerObservation.put(key, row);
-            } else {
-                superseded.add(row);
+            for (LabResult candidate : knownRows) {
+                if (replaces(candidate, row, key)) {
+                    superseded.add(row.getId());
+                    break;
+                }
             }
         }
         return superseded;
     }
 
+    /** Whether the analyzer marked this row preliminary. Nothing else writes the status. */
+    public static boolean isAnalyzerPreliminary(LabResult row) {
+        String status = row.getObservationResultStatus();
+        return status != null && PRELIMINARY.equals(status.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private static boolean replaces(LabResult candidate, LabResult preliminary, ObservationKey key) {
+        if (candidate == null || candidate.getId() == null
+            || candidate.getId().equals(preliminary.getId())
+            || !key.equals(observationKey(candidate))) {
+            return false;
+        }
+        // Never take away a value the patient already has and leave nothing.
+        if (preliminary.isReleased() && !candidate.isReleased()) {
+            return false;
+        }
+        return isStrictlyNewer(candidate, preliminary);
+    }
+
     /**
-     * Whether this row replaces the one we are holding: later observation
-     * time, or the same time and written afterwards, or — the analyzer having
-     * given us nothing to separate them — the released one over the pending.
+     * Observation time first, then the order the rows were written, then the
+     * row id. The id carries no meaning; it is there so that two rows the
+     * analyzer stamped identically still resolve the same way on every read,
+     * rather than following whatever order a query returned.
      */
-    private static boolean supersedes(LabResult candidate, LabResult incumbent) {
+    private static boolean isStrictlyNewer(LabResult candidate, LabResult incumbent) {
         int byObservationTime = compare(candidate.getResultDate(), incumbent.getResultDate());
         if (byObservationTime != 0) {
             return byObservationTime > 0;
@@ -109,7 +153,7 @@ public final class SupersededLabResults {
         if (byWriteOrder != 0) {
             return byWriteOrder > 0;
         }
-        return candidate.isReleased() && !incumbent.isReleased();
+        return candidate.getId().compareTo(incumbent.getId()) > 0;
     }
 
     /** An absent timestamp sorts earliest, so a row that carries one always wins. */
@@ -126,15 +170,15 @@ public final class SupersededLabResults {
         return left.compareTo(right);
     }
 
-    private static AnalyteKey analyteKey(LabResult row) {
+    private static ObservationKey observationKey(LabResult row) {
         LabOrder order = row.getLabOrder();
         String testCode = row.getTestCode();
-        String setId = row.getSourceObservationSetId();
+        String sendingApplication = row.getSourceSendingApplication();
         if (order == null || order.getId() == null
             || testCode == null || testCode.isBlank()
-            || setId == null || setId.isBlank()) {
+            || sendingApplication == null || sendingApplication.isBlank()) {
             return null;
         }
-        return new AnalyteKey(order.getId(), testCode, setId);
+        return new ObservationKey(order.getId(), testCode, sendingApplication);
     }
 }

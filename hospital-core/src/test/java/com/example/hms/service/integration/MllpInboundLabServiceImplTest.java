@@ -360,6 +360,26 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("OBX-11 is stored on the row verbatim — the read paths must not have to guess what a result is")
+    void observationResultStatusIsStamped() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(
+                observation("ACC-1", "5.4", "1", "GLU", "N", "P"),
+                observation("ACC-1", "5.5", "2", "GLU", "N", "F"),
+                observation("ACC-1", "5.6", "3", "GLU", "N", "C"),
+                observation("ACC-1", "5.7", "4", "GLU", "N", "")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(4)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabResult::getObservationResultStatus)
+            .as("what the analyzer said, including nothing at all")
+            .containsExactly("P", "F", "C", null);
+    }
+
+    @Test
     @DisplayName("OBX-11 — a preliminary, pending, partial or unstated observation is stored but leaves the order alone")
     void nonFinalObservationDoesNotResultTheOrder() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));

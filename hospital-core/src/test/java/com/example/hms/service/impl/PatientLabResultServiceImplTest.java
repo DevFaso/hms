@@ -221,12 +221,14 @@ class PatientLabResultServiceImplTest {
         LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
         preliminary.setLabOrder(order);
         preliminary.setTestCode("HGB");
-        preliminary.setSourceObservationSetId("1");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
         preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
         finalResult.setLabOrder(order);
         finalResult.setTestCode("HGB");
-        finalResult.setSourceObservationSetId("1");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
         finalResult.setResultDate(preliminary.getResultDate());
         finalResult.setCreatedAt(LocalDateTime.now());
         lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
@@ -260,12 +262,14 @@ class PatientLabResultServiceImplTest {
         LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
         preliminary.setLabOrder(order);
         preliminary.setTestCode("HGB");
-        preliminary.setSourceObservationSetId("1");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
         preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
         finalResult.setLabOrder(order);
         finalResult.setTestCode("HGB");
-        finalResult.setSourceObservationSetId("1");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
         finalResult.setResultDate(preliminary.getResultDate());
         finalResult.setCreatedAt(LocalDateTime.now());
         LabResult another = buildLabResult("4.1", "mmol/L", true, false);
@@ -284,8 +288,9 @@ class PatientLabResultServiceImplTest {
 
         assertThat(results).as("two asked for, two returned — not one short of the page").hasSize(2);
         assertThat(pageCaptor.getValue().getPageSize())
-            .as("the query reads a full page so a pair cannot straddle its edge")
-            .isEqualTo(100);
+            .as("one row over the limit, so removing a superseded row still fills the page — "
+                + "not the hundred-row page that made every call read the cap")
+            .isEqualTo(3);
     }
 
     /** The staff record is the record: both rows stay, each labelled. */
@@ -297,11 +302,13 @@ class PatientLabResultServiceImplTest {
         LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
         preliminary.setLabOrder(order);
         preliminary.setTestCode("HGB");
-        preliminary.setSourceObservationSetId("1");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
         LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
         finalResult.setLabOrder(order);
         finalResult.setTestCode("HGB");
-        finalResult.setSourceObservationSetId("1");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);

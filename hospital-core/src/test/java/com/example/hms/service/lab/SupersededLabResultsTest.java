@@ -12,19 +12,19 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The rule both read paths share. An analyzer's preliminary and its final are
- * two stored rows on purpose — the ingest keeps both — so the pair is resolved
- * on the way out, and these cases pin exactly which row that hides.
+ * The rule both read paths share.
  *
- * <p>The first version keyed on (order, analyte) alone and let a RELEASED row
- * supersede an unreleased one. Two of these cases are the patient-safety bugs
- * that followed: a timed series collapsed into one observation, and a
- * correction issued after a release disappeared behind the value it corrected.
+ * <p>Which row of a preliminary/final pair may be hidden was inferred three
+ * times — from the observation set id, from release state, from recency — and
+ * each attempt had a hole. Several of these cases ARE those holes, kept as
+ * cases so the next person can see why the rule asks the analyzer (OBX-11)
+ * rather than guessing.
  */
 class SupersededLabResultsTest {
 
     private static final LocalDateTime EARLIER = LocalDateTime.of(2026, 9, 20, 8, 0);
     private static final LocalDateTime LATER = LocalDateTime.of(2026, 9, 20, 9, 0);
+    private static final String SENDER = "SYSMEX";
 
     private static LabOrder order() {
         LabOrder order = new LabOrder();
@@ -32,128 +32,178 @@ class SupersededLabResultsTest {
         return order;
     }
 
-    private static LabResult row(LabOrder order, String testCode, String setId,
+    private static LabResult row(LabOrder order, String testCode, String obx11,
                                  LocalDateTime observedAt, boolean released) {
         LabResult result = new LabResult();
         result.setId(UUID.randomUUID());
         result.setLabOrder(order);
         result.setTestCode(testCode);
-        result.setSourceObservationSetId(setId);
+        result.setSourceSendingApplication(SENDER);
+        result.setObservationResultStatus(obx11);
         result.setResultDate(observedAt);
+        result.setCreatedAt(observedAt);
         result.setReleased(released);
         return result;
     }
 
+    private static List<UUID> superseded(LabResult... rows) {
+        List<LabResult> all = List.of(rows);
+        return List.copyOf(SupersededLabResults.supersededRowIds(all, all));
+    }
+
     @Test
-    @DisplayName("the preliminary is superseded by its final, even when both carry the same observation time")
+    @DisplayName("the preliminary is superseded by its final")
     void theFinalSupersedesItsPreliminary() {
         LabOrder order = order();
-        LabResult preliminary = row(order, "HGB", "1", EARLIER, false);
-        preliminary.setCreatedAt(EARLIER);
-        LabResult finalResult = row(order, "HGB", "1", EARLIER, true);
-        finalResult.setCreatedAt(LATER);
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        LabResult finalResult = row(order, "HGB", "F", LATER, true);
 
-        assertThat(SupersededLabResults.superseded(List.of(preliminary, finalResult)))
-            .containsExactly(preliminary);
+        assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
     }
 
     @Test
-    @DisplayName("PATIENT SAFETY: a timed series of one analyte is not one observation reported twice")
+    @DisplayName("a final re-sending a subset of the panel still supersedes — the set id is not part of the key")
+    void aSubsetResendStillSupersedes() {
+        // The set id is unique only WITHIN a message and falls back to
+        // positional numbering, so the same analyte can arrive as OBX-3 in the
+        // preliminary and OBX-1 in the final. Keyed on it, nothing superseded
+        // anything and the patient kept a permanent "pending".
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        preliminary.setSourceObservationSetId("3");
+        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+        finalResult.setSourceObservationSetId("1");
+
+        assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
+    }
+
+    @Test
+    @DisplayName("PATIENT SAFETY: a timed series is not collapsed — no draw is a preliminary")
     void aTimedSeriesIsNotCollapsed() {
-        // Glucose at 0 and 30 minutes, in one order. The first was normal and
-        // auto-released; the second is abnormal and waiting on a person. Keyed
-        // without the set id, the abnormal draw vanished from the patient's
-        // view and order completion closed the order over it.
+        // One message per draw gives every draw set id 1, so the old key put a
+        // whole series on one key. With an ABNORMAL earlier draw and a normal
+        // later one that auto-released, the abnormal row was hidden and dropped
+        // from order completion. Neither draw is marked preliminary, so
+        // neither can be hidden now, whichever way round they fall.
         LabOrder order = order();
-        LabResult firstDraw = row(order, "GLU", "1", EARLIER, true);
-        LabResult secondDraw = row(order, "GLU", "2", LATER, false);
+        LabResult abnormalFirstDraw = row(order, "GLU", "F", EARLIER, false);
+        abnormalFirstDraw.setSourceObservationSetId("1");
+        LabResult normalSecondDraw = row(order, "GLU", "F", LATER, true);
+        normalSecondDraw.setSourceObservationSetId("1");
 
-        assertThat(SupersededLabResults.superseded(List.of(firstDraw, secondDraw))).isEmpty();
+        assertThat(superseded(abnormalFirstDraw, normalSecondDraw)).isEmpty();
     }
 
     @Test
-    @DisplayName("PATIENT SAFETY: a correction arriving after a release is not hidden by the value it corrects")
-    void aCorrectionIsNeverSupersededByTheReleasedRowItReplaces() {
+    @DisplayName("PATIENT SAFETY: a released value is never taken away and replaced with nothing")
+    void aReleasedRowIsNeverHiddenBehindAnUnreleasedOne() {
         LabOrder order = order();
-        LabResult released = row(order, "K", "1", EARLIER, true);
-        LabResult correction = row(order, "K", "1", LATER, false);
+        LabResult releasedPreliminary = row(order, "K", "P", EARLIER, true);
+        LabResult pendingCorrection = row(order, "K", "C", LATER, false);
 
-        // Only the earlier row is left behind; the correction survives.
-        assertThat(SupersededLabResults.superseded(List.of(released, correction)))
-            .containsExactly(released);
+        assertThat(superseded(releasedPreliminary, pendingCorrection)).isEmpty();
     }
 
     @Test
-    @DisplayName("the pairing does not depend on release: an abnormal final that could not auto-release still supersedes")
-    void anUnreleasedFinalStillSupersedesItsPreliminary() {
-        // An abnormal final is not auto-releasable, so neither row is released.
-        // Keyed on release, nothing was superseded and the portal listed the
-        // same test as pending twice.
+    @DisplayName("a corrected result is not a preliminary, so a later row never hides it")
+    void aCorrectionIsNeverHidden() {
         LabOrder order = order();
-        LabResult preliminary = row(order, "HGB", "1", EARLIER, false);
-        LabResult abnormalFinal = row(order, "HGB", "1", LATER, false);
+        LabResult corrected = row(order, "K", "C", EARLIER, false);
+        LabResult later = row(order, "K", "F", LATER, false);
 
-        assertThat(SupersededLabResults.superseded(List.of(preliminary, abnormalFinal)))
-            .containsExactly(preliminary);
+        assertThat(superseded(corrected, later)).isEmpty();
     }
 
     @Test
-    @DisplayName("order of arrival does not matter — the latest wins either way round")
-    void theLatestWinsRegardlessOfIterationOrder() {
+    @DisplayName("a row the analyzer never described is never hidden — a hand-entered result is nobody's preliminary")
+    void aRowWithoutAnAnalyzerStatusIsNeverHidden() {
         LabOrder order = order();
-        LabResult earlier = row(order, "HGB", "1", EARLIER, false);
-        LabResult later = row(order, "HGB", "1", LATER, false);
+        LabResult handEntered = row(order, "HGB", null, EARLIER, false);
+        LabResult finalResult = row(order, "HGB", "F", LATER, true);
 
-        assertThat(SupersededLabResults.superseded(List.of(later, earlier))).containsExactly(earlier);
-        assertThat(SupersededLabResults.superseded(List.of(earlier, later))).containsExactly(earlier);
+        assertThat(superseded(handEntered, finalResult)).isEmpty();
     }
 
     @Test
-    @DisplayName("a different analyte on the same order is untouched — a panel keeps its pending members")
-    void anotherAnalyteIsNotSuperseded() {
+    @DisplayName("a preliminary with no later row stands: an abnormal final that could not auto-release is still shown")
+    void aPreliminaryWithNothingNewerIsKept() {
         LabOrder order = order();
-        LabResult pendingPlatelets = row(order, "PLT", "1", LATER, false);
-        LabResult releasedHaemoglobin = row(order, "HGB", "1", LATER, true);
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        LabResult abnormalFinal = row(order, "HGB", "F", LATER, false);
 
-        assertThat(SupersededLabResults.superseded(List.of(pendingPlatelets, releasedHaemoglobin))).isEmpty();
+        // The final is unreleased (abnormal, so not auto-releasable) and still
+        // supersedes: the pairing does not ask about release, only about which
+        // row the analyzer replaced.
+        assertThat(superseded(preliminary, abnormalFinal)).containsExactly(preliminary.getId());
     }
 
     @Test
-    @DisplayName("the same analyte on a DIFFERENT order is untouched")
-    void anotherOrderIsNotSuperseded() {
-        LabResult onItsOwnOrder = row(order(), "HGB", "1", EARLIER, false);
-        LabResult elsewhere = row(order(), "HGB", "1", LATER, true);
+    @DisplayName("another sending application never supersedes, even for the same analyte on the same order")
+    void anotherSenderNeverSupersedes() {
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        LabResult otherAnalyzer = row(order, "HGB", "F", LATER, true);
+        otherAnalyzer.setSourceSendingApplication("MINDRAY");
 
-        assertThat(SupersededLabResults.superseded(List.of(onItsOwnOrder, elsewhere))).isEmpty();
+        assertThat(superseded(preliminary, otherAnalyzer)).isEmpty();
     }
 
     @Test
-    @DisplayName("a row missing any part of the key names no observation — a hand-entered result stands alone")
-    void anUnkeyedRowIsNeverSuperseded() {
+    @DisplayName("a different analyte, and a different order, are left alone")
+    void differentAnalyteOrOrderIsUntouched() {
         LabOrder order = order();
-        LabResult noTestCode = row(order, null, "1", EARLIER, false);
-        LabResult noSetId = row(order, "HGB", null, EARLIER, false);
-        LabResult blankSetId = row(order, "HGB", "  ", EARLIER, false);
-        LabResult released = row(order, "HGB", "1", LATER, true);
+        LabResult pendingPlatelets = row(order, "PLT", "P", EARLIER, false);
+        LabResult releasedHaemoglobin = row(order, "HGB", "F", LATER, true);
+        assertThat(superseded(pendingPlatelets, releasedHaemoglobin)).isEmpty();
 
-        assertThat(SupersededLabResults.superseded(List.of(noTestCode, noSetId, blankSetId, released)))
-            .isEmpty();
+        LabResult onItsOwnOrder = row(order(), "HGB", "P", EARLIER, false);
+        LabResult elsewhere = row(order(), "HGB", "F", LATER, true);
+        assertThat(superseded(onItsOwnOrder, elsewhere)).isEmpty();
     }
 
     @Test
-    @DisplayName("with nothing to compare, the released row is preferred over the pending one")
-    void releaseBreaksAnOtherwiseExactTie() {
+    @DisplayName("an earlier row never supersedes a later one, whichever order they are iterated in")
+    void onlyANewerRowSupersedes() {
         LabOrder order = order();
-        LabResult pending = row(order, "HGB", "1", EARLIER, false);
-        LabResult released = row(order, "HGB", "1", EARLIER, true);
+        LabResult latePreliminary = row(order, "HGB", "P", LATER, false);
+        LabResult earlyFinal = row(order, "HGB", "F", EARLIER, true);
 
-        assertThat(SupersededLabResults.superseded(List.of(pending, released))).containsExactly(pending);
+        assertThat(superseded(latePreliminary, earlyFinal)).isEmpty();
+        assertThat(superseded(earlyFinal, latePreliminary)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("two rows stamped identically resolve the same way every time, not by repository order")
+    void anExactTieIsBrokenDeterministicallyByRowId() {
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", "P", EARLIER, false);
+        LabResult twin = row(order, "HGB", "F", EARLIER, false);
+        // Same observation time and same write time: only the id separates them.
+        boolean twinIsGreater = twin.getId().compareTo(preliminary.getId()) > 0;
+
+        assertThat(superseded(preliminary, twin))
+            .isEqualTo(twinIsGreater ? List.of(preliminary.getId()) : List.of());
+        // The answer does not depend on the order the rows arrived in.
+        assertThat(superseded(twin, preliminary))
+            .isEqualTo(twinIsGreater ? List.of(preliminary.getId()) : List.of());
+    }
+
+    @Test
+    @DisplayName("the status is read case- and whitespace-insensitively, as the wire sends it")
+    void theStatusIsNormalised() {
+        LabOrder order = order();
+        LabResult preliminary = row(order, "HGB", " p ", EARLIER, false);
+        LabResult finalResult = row(order, "HGB", "F", LATER, true);
+
+        assertThat(SupersededLabResults.isAnalyzerPreliminary(preliminary)).isTrue();
+        assertThat(SupersededLabResults.isAnalyzerPreliminary(finalResult)).isFalse();
+        assertThat(superseded(preliminary, finalResult)).containsExactly(preliminary.getId());
     }
 
     @Test
     @DisplayName("no rows, one row: nothing is superseded")
     void trivialInputs() {
-        assertThat(SupersededLabResults.superseded(List.of())).isEmpty();
-        assertThat(SupersededLabResults.superseded(List.of(row(order(), "HGB", "1", EARLIER, false)))).isEmpty();
+        assertThat(SupersededLabResults.supersededRowIds(List.of(), List.of())).isEmpty();
+        assertThat(superseded(row(order(), "HGB", "P", EARLIER, false))).isEmpty();
     }
 }

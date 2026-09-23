@@ -1,0 +1,43 @@
+-- =====================================================================
+-- V164: store the observation result status the analyzer sends (OBX-11)
+--
+-- An analyzer commonly reports one observation twice — preliminary, then
+-- final — as two messages with two MSH-10s. Both rows are kept, and must
+-- be: the message control id is the only key the replay guard and the
+-- partial unique index have, and a critical value is notified against the
+-- row it was raised on. The pair is instead resolved on the way out, so
+-- the patient sees one row and the order is not held open by a value the
+-- laboratory has already replaced.
+--
+-- Deciding WHICH row that is was attempted three times by inference —
+-- from the observation set id, from release state, from recency — and
+-- each attempt had a hole, because all three infer something the
+-- analyzer states outright in OBX-11 and we were throwing away:
+--
+--   * the set id is guaranteed unique only WITHIN a message and falls
+--     back to positional numbering, so a final re-sending a subset of a
+--     panel carries a different set id for the same analyte (nothing
+--     supersedes, a permanent "pending"), while one message per draw
+--     gives every draw set id 1 (a timed series collides on one key, and
+--     an abnormal earlier draw could be hidden by a later normal one);
+--   * release state cannot tell a preliminary from a correction, so a
+--     corrected result could hide the released value it corrects.
+--
+-- With OBX-11 on the row, a result is a preliminary only if the analyzer
+-- said so, and nothing else is ever hidden.
+--
+-- HL7 table 0085 values are short codes (F final, P preliminary,
+-- C corrected, I pending, S partial, X cannot obtain, U/W ...), so 16
+-- characters is ample; the ingest truncates to the same length.
+--
+-- Strictly additive: one nullable column, IF NOT EXISTS, no index, no
+-- backfill. Rows written before this release keep NULL, which reads as
+-- "the analyzer did not say" — and a row that did not say it is
+-- preliminary is never superseded, so old rows behave exactly as they do
+-- today. No automated Liquibase rollback is declared; an operator
+-- reverting must drop the column and ship a JPA mapping without the
+-- field in the same release.
+-- =====================================================================
+
+ALTER TABLE lab.lab_results
+    ADD COLUMN IF NOT EXISTS observation_result_status VARCHAR(16) NULL;

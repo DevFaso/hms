@@ -84,15 +84,14 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
-        // Read a full page and cut it to the caller's limit AFTER the pairing,
-        // never before. Limiting first was wrong twice: the filter then removed
-        // rows from an already-short page, so asking for five results returned
-        // four; and a preliminary could sit inside the page while the final that
-        // supersedes it sat just outside — the two carry the same observation
-        // time, so the ordering ties exactly at the boundary — leaving the
-        // patient a permanent "Result pending" for a test that is released.
-        int pairingWindow = Math.max(effectiveLimit, MAX_LIMIT);
-        Pageable pageable = PageRequest.of(0, pairingWindow, Sort.by(Sort.Direction.DESC, "resultDate"));
+        // One row over the caller's limit, so that removing a superseded row
+        // still fills the page: asking for five and getting four was the
+        // symptom of filtering after the limit. Widening the page to MAX_LIMIT
+        // instead was worse — every call, staff path included, read a hundred
+        // rows to return one, and the pair could still straddle row 100. What
+        // the pairing needs is not a bigger page but the siblings of the
+        // preliminaries ON the page, which are fetched by order below.
+        Pageable pageable = PageRequest.of(0, effectiveLimit + 1, Sort.by(Sort.Direction.DESC, "resultDate"));
 
         List<LabResult> results;
         if (hospitalId != null) {
@@ -114,21 +113,21 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                     if (b.getResultDate() == null) return -1;
                     return b.getResultDate().compareTo(a.getResultDate());
                 })
-                .limit(pairingWindow)
+                .limit(effectiveLimit + 1L)
                 .toList();
         }
 
         // An analyzer reporting preliminary then final stores two rows — it
-        // must, because the message control id is the replay key and the set
-        // id keeps a timed series distinct. The patient sees one row per
-        // observation, the latest; the row it replaced is dropped from their
-        // view rather than from the record. Order completion applies the same
-        // rule, from the same class.
-        Set<LabResult> superseded = redactUnreleased
-            ? SupersededLabResults.superseded(results)
+        // must, because the message control id is the replay key and a
+        // critical value is notified against the row it was raised on. The
+        // patient sees the row the analyzer has not superseded; the one it
+        // replaced is dropped from their view, never from the record. Order
+        // completion applies the same rule, from the same class.
+        Set<UUID> superseded = redactUnreleased
+            ? SupersededLabResults.supersededRowIds(results, withSiblingsOfPreliminaries(results))
             : Set.of();
         List<LabResult> visible = results.stream()
-            .filter(result -> !superseded.contains(result))
+            .filter(result -> !superseded.contains(result.getId()))
             .limit(effectiveLimit)
             .toList();
 
@@ -176,6 +175,38 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
             .build();
+    }
+
+    /**
+     * The page, plus every result on the orders whose page rows the analyzer
+     * marked preliminary.
+     *
+     * <p>A row that supersedes a preliminary is newer, and the page is newest
+     * first, so it is almost always on the page already — but two rows for one
+     * observation usually carry the SAME observation time, and a tie can fall
+     * either side of the page edge. Rather than page wider and hope, ask for
+     * the handful of siblings that could matter. Only orders that actually
+     * carry a preliminary on this page are fetched, so a patient with no
+     * analyzer results costs no query at all.
+     */
+    private List<LabResult> withSiblingsOfPreliminaries(List<LabResult> page) {
+        Set<UUID> ordersWithPreliminaries = page.stream()
+            .filter(SupersededLabResults::isAnalyzerPreliminary)
+            .map(result -> hospitalIdOfOrder(result.getLabOrder()))
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (ordersWithPreliminaries.isEmpty()) {
+            return page;
+        }
+        List<LabResult> siblings = labResultRepository.findByLabOrder_IdIn(ordersWithPreliminaries);
+        List<LabResult> known = new java.util.ArrayList<>(page.size() + siblings.size());
+        known.addAll(page);
+        known.addAll(siblings);
+        return known;
+    }
+
+    private static UUID hospitalIdOfOrder(LabOrder order) {
+        return order == null ? null : order.getId();
     }
 
     /** Provenance (E9): the hospital that resulted the row, off the order that owns it. */
