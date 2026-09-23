@@ -255,6 +255,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -263,7 +269,8 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
         inOrder.verify(labResultRepository).findByLabOrder_Id(order.getId());
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
     }
 
     @Test
@@ -277,6 +284,13 @@ class LabResultServiceImplLifecycleTest {
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(first, last));
         when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -284,7 +298,9 @@ class LabResultServiceImplLifecycleTest {
 
         assertThat(last.isReleased()).isTrue();
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        verify(labOrderRepository).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test
@@ -300,6 +316,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released, pending));
         when(labResultMapper.toResponseDTO(released)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -333,6 +355,12 @@ class LabResultServiceImplLifecycleTest {
         stubEntryPath();
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId()))
             .thenAnswer(inv -> List.of(resultOn(order, true)));
 
@@ -437,13 +465,21 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(alreadyReleased));
         when(labResultMapper.toResponseDTO(alreadyReleased)).thenReturn(LabResultResponseDTO.builder().build());
 
         service.releaseLabResult(alreadyReleased.getId(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
-        verify(labOrderRepository).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         // the result itself is untouched: its original release stands
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
@@ -469,8 +505,10 @@ class LabResultServiceImplLifecycleTest {
         service.releaseLabResult(last.getId(), Locale.ENGLISH);
 
         assertThat(last.isReleased()).isTrue();
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
-        verify(labOrderRepository, never()).save(order);
+        // the instance is never mutated — the committed CANCELLED is what
+        // decided, and nothing was written over it
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         verify(labResultRepository, never()).findByLabOrder_Id(order.getId());
     }
 
@@ -510,6 +548,12 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
         when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(LabResultResponseDTO.builder().build());
 
@@ -754,6 +798,57 @@ class LabResultServiceImplLifecycleTest {
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(otherAnalyte));
 
         service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("two analytes of one panel are both recorded, even sharing a value and a timestamp")
+    void twoAnalytesOfOnePanelAreBothRecorded() {
+        // The ingest path posts one OBX at a time against the same order, with
+        // the adapter's fixed comment; two analytes reading the same number at
+        // the same moment (140 mmol/L sodium and chloride, say) differ only by
+        // OBX-3. Before that identifier travelled with the request they
+        // collapsed into one and the second was dropped behind a 201 — and
+        // the ingest path does not dedupe at all now, because an ORU retry is
+        // a transport concern the MLLP path handles on (sender, MSH-10),
+        // while a dropped result is unrecoverable.
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResultRequestDTO chloride = entryRequest();
+        chloride.setTestCode("CL");
+        LabResult sodium = resultOn(order, true);
+        sodium.setResultValue(chloride.getResultValue());
+        sodium.setResultUnit(chloride.getResultUnit());
+        sodium.setResultDate(chloride.getResultDate());
+        sodium.setNotes(chloride.getNotes());
+        sodium.setTestCode("NA");
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(labResultRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(sodium));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createIngestedLabResult(chloride, Locale.ENGLISH);
 
         verify(labResultRepository).save(any(LabResult.class));
     }

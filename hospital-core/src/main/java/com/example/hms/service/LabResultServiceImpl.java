@@ -187,11 +187,18 @@ public class LabResultServiceImpl implements LabResultService {
         // outbound message. "Exact" means every field an amendment could
         // change (see findIdenticalResult), so a correction still lands as a
         // new result.
-        java.util.Optional<LabResult> existingIdentical = findIdenticalResult(labOrder, request);
+        java.util.Optional<LabResult> existingIdentical = ingested
+            ? java.util.Optional.empty()
+            : findIdenticalResult(labOrder, request);
         if (existingIdentical.isPresent()) {
             LabResult existing = existingIdentical.get();
             LOG.info("Lab result for order {} repeats result {}; returning the recorded row unchanged",
                 labOrder.getId(), existing.getId());
+            // The same initialise severityOf needs: the mapper reads the test
+            // definition for the name, code, reference ranges and severity,
+            // and it is LAZY, so without this a retry answers 201 with a null
+            // test name and no severity where the first call said CRITICAL.
+            initialiseTestDefinition(existing.getLabOrder());
             return labResultMapper.toResponseDTO(existing);
         }
 
@@ -209,28 +216,15 @@ public class LabResultServiceImpl implements LabResultService {
         // that snapshot value (snapshot RESULTED, database COMPLETED, target
         // RESULTED) the dirty check sees no change and flushes nothing — the
         // re-open vanished and the order stayed COMPLETED.
-        LabOrder labOrderForStatus = lockedOrder;
-        LabOrderStatus targetStatus = LabOrderLifecycle.statusAfterNewResult(committedStatus);
-        if (targetStatus != null && targetStatus != committedStatus) {
-            int moved = labOrderRepository.updateStatusFrom(
-                labOrderForStatus.getId(), committedStatus, targetStatus);
-            if (moved == 0) {
-                LOG.info("Lab order {} moved from {} while its result was being recorded; status left alone",
-                    labOrderForStatus.getId(), committedStatus);
-            } else {
-                // Keep the in-memory instance agreeing with the row it
-                // describes, so anything downstream in this transaction reads
-                // the status the database now holds.
-                labOrderForStatus.setStatus(targetStatus);
-            }
-        }
+        moveStatus(lockedOrder.getId(), committedStatus,
+            LabOrderLifecycle.statusAfterNewResult(committedStatus));
         // One severity for both decisions below. The REST path never sets
         // abnormalFlag (no DTO field; only MLLP populates it), so gating
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
         if (saved.isReleased()) {
-            completeOrderIfAllReleased(labOrderForStatus);
+            completeOrderIfAllReleased(lockedOrder);
         }
         triggerReflexOrders(saved);
 
@@ -268,16 +262,43 @@ public class LabResultServiceImpl implements LabResultService {
      * potassium of 50 read as "unspecified" here and as HIGH in the response.
      */
     private String severityOf(LabResult result) {
-        if (result.getLabOrder() != null && result.getLabOrder().getLabTestDefinition() != null) {
-            org.hibernate.Hibernate.initialize(result.getLabOrder().getLabTestDefinition());
-        }
+        initialiseTestDefinition(result.getLabOrder());
         LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
         return dto != null ? dto.getSeverityFlag() : null;
     }
 
-    private void advanceOrder(LabOrder labOrder, LabOrderStatus target) {
-        if (LabOrderLifecycle.advance(labOrder, target)) {
-            labOrderRepository.save(labOrder);
+    /**
+     * The mapper reads the order's test definition for the test name and code,
+     * the reference ranges and the severity it derives from them, and treats
+     * an uninitialised one as absent — so anything mapping a result has to
+     * touch it first while the session is open.
+     */
+    private void initialiseTestDefinition(LabOrder labOrder) {
+        if (labOrder != null && labOrder.getLabTestDefinition() != null) {
+            org.hibernate.Hibernate.initialize(labOrder.getLabTestDefinition());
+        }
+    }
+
+    /**
+     * The ONLY writer of a lab order's status on this service's paths.
+     *
+     * <p>A compare-and-set statement, never a field on a managed entity. Two
+     * reasons, both learned the hard way in this PR. The instance these paths
+     * hold was loaded before the row was locked, so its snapshot predates the
+     * lock: writing through it silently flushes nothing when the target
+     * happens to equal the snapshot value, and flushes a full-row UPDATE
+     * otherwise — reverting whatever another transaction changed in any other
+     * column meanwhile. {@code expected} is the status read under the lock, so
+     * a row somebody else moved is reported, not overwritten.
+     */
+    private void moveStatus(UUID orderId, LabOrderStatus expected, LabOrderStatus target) {
+        if (orderId == null || target == null || target == expected) {
+            return;
+        }
+        int moved = labOrderRepository.updateStatusFrom(orderId, expected, target);
+        if (moved == 0) {
+            LOG.info("Lab order {} moved from {} while its result was being recorded; status left alone",
+                orderId, expected);
         }
     }
 
@@ -309,17 +330,23 @@ public class LabResultServiceImpl implements LabResultService {
         if (labOrder == null || labOrder.getId() == null) {
             return;
         }
-        LabOrder locked = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
-        LabOrderStatus committedStatus = labOrderRepository.findStatusById(locked.getId());
+        labOrderRepository.findWithLockById(labOrder.getId());
+        UUID orderId = labOrder.getId();
+        // Everything below decides from the status the DATABASE holds, read
+        // under that lock. Deciding from the loaded instance meant a
+        // concurrent re-open was invisible: the order was advanced from a
+        // stale value and stranded with every result released and nothing
+        // left to move it.
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(orderId);
         if (committedStatus == LabOrderStatus.CANCELLED) {
-            locked.setStatus(LabOrderStatus.CANCELLED);
             LOG.debug("Lab order {} was cancelled while its result was being released; not completing",
-                locked.getId());
+                orderId);
             return;
         }
-        List<LabResult> results = labResultRepository.findByLabOrder_Id(locked.getId());
+        List<LabResult> results = labResultRepository.findByLabOrder_Id(orderId);
         if (!results.isEmpty() && results.stream().allMatch(LabResult::isReleased)) {
-            advanceOrder(locked, LabOrderStatus.COMPLETED);
+            moveStatus(orderId, committedStatus,
+                LabOrderLifecycle.statusAfterAllResultsReleased(committedStatus));
         }
     }
 
@@ -356,21 +383,25 @@ public class LabResultServiceImpl implements LabResultService {
      * any other new result. Only a byte-for-byte repeat of what is already
      * recorded is treated as a retry.
      *
-     * <p>A row carrying a test code or an abnormal flag can never be the
-     * match. This request cannot express either — the entry DTO has no such
-     * field, and the mapper leaves both null — so an existing row that has
-     * one came from somewhere else, most likely an HL7 ORU naming a specific
-     * analyte. Two analytes of one panel sharing a value, unit, date and
-     * comment are not the same result, and discarding the second while
-     * answering 201 with the first would lose it silently.
+     * <p>The test code is part of it, and the ingest path now carries one
+     * (OBX-3, from the message), because without it two analytes of one panel
+     * sharing a value, unit, date and the adapter's fixed comment collapsed
+     * into one and the second was dropped silently behind a 201. The abnormal
+     * flag likewise: a row the analyser flagged is not the same result as an
+     * unflagged one with the same number.
+     *
+     * <p>Retries are not deduped on the ingest path at all — see the caller.
+     * An ORU that repeats is a transport concern, dealt with on the MLLP path
+     * by the (sender, MSH-10) check; here a duplicate row is recoverable and
+     * a dropped result is not.
      */
     private java.util.Optional<LabResult> findIdenticalResult(LabOrder labOrder, LabResultRequestDTO request) {
         if (labOrder == null || labOrder.getId() == null) {
             return java.util.Optional.empty();
         }
         return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .filter(existing -> existing.getTestCode() == null
-                && existing.getAbnormalFlag() == null
+            .filter(existing -> existing.getAbnormalFlag() == null
+                && sameValue(existing.getTestCode(), request.getTestCode())
                 && sameValue(existing.getResultValue(), request.getResultValue())
                 && sameValue(existing.getResultUnit(), request.getResultUnit())
                 && sameValue(existing.getNotes(), request.getNotes())

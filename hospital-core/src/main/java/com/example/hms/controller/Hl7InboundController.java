@@ -89,6 +89,7 @@ public class Hl7InboundController {
             .labOrderId(labOrderId)
             .assignmentId(assignmentId)
             .patientId(resolvePatientId(obs.patientId()))
+            .testCode(obs.testCode())
             .resultValue(obs.resultValue())
             .resultUnit(obs.resultUnit())
             .resultDate(obs.resultDate() != null ? obs.resultDate() : LocalDateTime.now())

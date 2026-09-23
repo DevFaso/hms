@@ -271,6 +271,37 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("a retried post answers with the recorded row, test metadata and all")
+    void aRetryAnswersWithTheSameTestMetadata() throws Exception {
+        // The retry returns the row already on file rather than recording a
+        // second one — and it must describe it as fully as the first call did.
+        // The order's test definition is LAZY, so mapping the existing row
+        // without touching it answered 201 with a null test name, no
+        // reference ranges and a null severity where the first call said HIGH.
+        // The unit test cannot catch that: it mocks the mapper.
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
+
+        LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
+        String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        String retry = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+
+        assertThat(idOf(retry)).as("a retry records nothing new").isEqualTo(idOf(first));
+        assertThat(labResultRepository.findAll()).hasSize(1);
+        for (String field : List.of("labTestName", "labTestCode", "severityFlag", "patientFullName")) {
+            String firstValue = objectMapper.readTree(first).path(field).asText();
+            assertThat(objectMapper.readTree(retry).path(field).asText())
+                .as("retry must describe %s as the first call did", field)
+                .isEqualTo(firstValue);
+        }
+        assertThat(objectMapper.readTree(retry).path("severityFlag").asText()).isEqualTo("HIGH");
+        assertThat(objectMapper.readTree(retry).path("labTestName").asText()).isEqualTo("Potassium");
+    }
+
+    @Test
     @DisplayName("B11 — a lab scientist of another hospital neither sees the order nor can attach a result to it")
     void foreignLaboratoryStaffSeeNothing() throws Exception {
         UUID orderId = placeOrder(LocalDateTime.now().minusHours(1));
@@ -357,13 +388,19 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     private org.springframework.test.web.servlet.ResultActions postResult(Actor actor, UUID orderId, String value) throws Exception {
+        return postResult(actor, orderId, value, LocalDateTime.now());
+    }
+
+    /** A retry resends the identical payload, result date included. */
+    private org.springframework.test.web.servlet.ResultActions postResult(
+            Actor actor, UUID orderId, String value, LocalDateTime resultDate) throws Exception {
         LabResultRequestDTO request = LabResultRequestDTO.builder()
             .labOrderId(orderId)
             .assignmentId(actor.assignmentId())
             .patientId(patient.getId())
             .resultValue(value)
             .resultUnit("mmol/L")
-            .resultDate(LocalDateTime.now())
+            .resultDate(resultDate)
             .build();
         return mockMvc.perform(post(LAB_RESULTS).contextPath(API)
             .contentType(MediaType.APPLICATION_JSON)

@@ -195,9 +195,22 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void sendCriticalSmsByIdSwallowsAFailedLoad() {
+        // The callback fires after the commit, on a result already on the
+        // chart and already alerted in-app. Nothing it can hit — a database
+        // that has gone away included — may propagate out of it.
+        when(labResultRepository.findById(result.getId()))
+            .thenThrow(new org.springframework.dao.QueryTimeoutException("database gone"));
+
+        service.sendCriticalSmsById(result.getId(), "Critical potassium");
+
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
     void sendCriticalSmsByIdSwallowsAGatewayFailure() {
-        // Already committed and already alerted in-app: a gateway that throws
-        // must not propagate out of the callback.
+        // The gateway's own failure is caught deeper, in sendSmsBestEffort;
+        // this pins that the callback still returns normally.
         when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
         when(smsService.deliversRealSms()).thenReturn(true);
         org.mockito.Mockito.doThrow(new IllegalStateException("gateway down"))

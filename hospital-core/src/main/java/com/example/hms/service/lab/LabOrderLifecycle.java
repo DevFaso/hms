@@ -68,6 +68,12 @@ public final class LabOrderLifecycle {
      * States a NEW result re-opens: the order was finished with, and something
      * has come back anyway.
      *
+     * <p>Read only by {@link #statusAfterNewResult}. There is deliberately no
+     * method that re-opens an order by mutating it: the entry path writes the
+     * status through a compare-and-set statement, and an entity-mutating
+     * sibling is exactly how that write came to be swallowed by a stale
+     * snapshot.
+     *
      * <p>VERIFIED belongs here with COMPLETED. It is not merely a stage on the
      * way: {@code EncounterServiceImpl.LAB_TERMINAL} counts VERIFIED as done,
      * so an encounter can be closed over it. A result entered on a VERIFIED
@@ -88,12 +94,16 @@ public final class LabOrderLifecycle {
      * the status with a compare-and-set statement rather than through the
      * entity (see {@code LabOrderRepository.updateStatusFrom}), so it needs
      * the verdict before it has anything to mutate.
+     *
+     * <p>A {@code null} current status yields no move. The caller would write
+     * it with {@code expected = null}, and {@code status = null} matches no
+     * row in SQL, so the statement is a guaranteed no-op — a branch that could
+     * only ever log that it had moved an order it had not. A lab order always
+     * has a status ({@code @PrePersist} defaults it to ORDERED); a null here
+     * means the row is gone, which is not this path's business to repair.
      */
     public static LabOrderStatus statusAfterNewResult(LabOrderStatus current) {
-        if (current == null) {
-            return LabOrderStatus.RESULTED;
-        }
-        if (current == LabOrderStatus.CANCELLED) {
+        if (current == null || current == LabOrderStatus.CANCELLED) {
             return null;
         }
         if (REOPENABLE.contains(current)) {
@@ -105,26 +115,23 @@ public final class LabOrderLifecycle {
     }
 
     /**
-     * The one sanctioned move backwards: a result arriving on an order that
-     * was already finished (a correction, a late analyte) re-opens it to
-     * RESULTED so the ordering doctor sees it as having something new to
-     * review and the normal release → COMPLETED path runs again.
+     * What the release of the LAST outstanding result should move
+     * {@code current} to, or {@code null} when it should not move.
      *
-     * <p>Only a result that is genuinely new may do this. The REST entry path
-     * has no duplicate detection (the HL7 path dedups on sender + MSH-10), so
-     * a retried {@code POST /lab-results} would otherwise un-complete a
-     * finished order — and with auto-verification off by default nothing would
-     * release the duplicate, stranding the order at RESULTED for good. The
-     * caller decides what "new" means and passes the verdict in.
-     *
-     * @return true when the order was VERIFIED or COMPLETED and is now RESULTED
+     * <p>Decided from the status committed in the database, read under the
+     * order's write lock — not from an instance loaded before it. A
+     * concurrent re-open (an amendment landing while this release runs) is
+     * therefore visible: the order completes from RESULTED as it should,
+     * rather than being advanced from a stale value and stranded with every
+     * result released and nothing left to move it.
      */
-    public static boolean reopenForResult(LabOrder order) {
-        if (order == null || !REOPENABLE.contains(order.getStatus())) {
-            return false;
+    public static LabOrderStatus statusAfterAllResultsReleased(LabOrderStatus current) {
+        if (current == null || TERMINAL.contains(current)) {
+            return null;
         }
-        order.setStatus(LabOrderStatus.RESULTED);
-        return true;
+        Integer currentRank = RANK.get(current);
+        Integer completedRank = RANK.get(LabOrderStatus.COMPLETED);
+        return (currentRank != null && currentRank < completedRank) ? LabOrderStatus.COMPLETED : null;
     }
 
     /**

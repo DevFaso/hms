@@ -57,7 +57,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
      *
      * <p>COMPLETED alone was wrong once orders could move again: a late or
      * corrected result re-opens a COMPLETED order to RESULTED
-     * ({@code LabOrderLifecycle.reopenForResult}), and every result of that
+     * ({@code LabOrderLifecycle.statusAfterNewResult}), and every result of that
      * order — including the ones released days ago — dropped out of the queue
      * until the new one was released. An order with at least one released
      * result is reviewable whatever stage it is at; the released-only filter

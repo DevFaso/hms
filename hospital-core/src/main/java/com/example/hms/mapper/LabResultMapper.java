@@ -115,6 +115,7 @@ public class LabResultMapper {
 
         return LabResult.builder()
                 .labOrder(labOrder)
+                .testCode(dto.getTestCode())
                 .resultValue(dto.getResultValue())
                 .resultUnit(dto.getResultUnit())
                 .resultDate(dto.getResultDate())
