@@ -719,17 +719,15 @@ public class LabResultServiceImpl implements LabResultService {
             java.util.Map<UUID, java.util.Map<String, Long>> perPatient = new java.util.HashMap<>();
             for (LabResult result : results) {
                 LabOrder order = result.getLabOrder();
-                if (order == null || !order.isPerformedAt(actingHospitalId)) {
-                    continue;
+                if (order != null && order.isPerformedAt(actingHospitalId)) {
+                    UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                    UUID source = com.example.hms.service.recordaccess.CrossHospitalReachRecorder
+                        .hospitalIdOf(order.getHospital());
+                    if (patientId != null && source != null) {
+                        perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                            .merge(source.toString(), 1L, Long::sum);
+                    }
                 }
-                UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
-                UUID source = com.example.hms.service.recordaccess.CrossHospitalReachRecorder
-                    .hospitalIdOf(order.getHospital());
-                if (patientId == null || source == null) {
-                    continue;
-                }
-                perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
-                    .merge(source.toString(), 1L, Long::sum);
             }
             if (perPatient.isEmpty()) {
                 return;
@@ -1413,15 +1411,13 @@ public class LabResultServiceImpl implements LabResultService {
         List<LabResult> surfaced = new ArrayList<>();
         List<LabResultResponseDTO> answer = new ArrayList<>();
         for (LabResult result : candidates) {
-            if (!queueFilter.test(result)) {
-                continue;
+            if (queueFilter.test(result)) {
+                LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
+                if (dto != null && isCriticalSeverity(dto)) {
+                    surfaced.add(result);
+                    answer.add(dto);
+                }
             }
-            LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-            if (dto == null || !isCriticalSeverity(dto)) {
-                continue;
-            }
-            surfaced.add(result);
-            answer.add(dto);
         }
         recordPerformedHereReach(surfaced);
         return answer.stream()

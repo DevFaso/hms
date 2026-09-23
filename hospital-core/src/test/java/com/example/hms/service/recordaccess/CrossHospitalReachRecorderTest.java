@@ -23,7 +23,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.example.hms.model.Hospital;
 import java.util.Optional;
@@ -220,8 +219,6 @@ class CrossHospitalReachRecorderTest {
             broken, Map.of(source.toString(), 1L),
             healthy, Map.of(source.toString(), 2L)), acting, actor, null, "Batched read");
 
-        // The per-patient recorder this replaced lost only its own patient;
-        // wrapping the whole loop was a regression on that.
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<AuditEventRequestDTO>> captor = ArgumentCaptor.forClass(List.class);
         verify(auditEventLogService).logEvents(captor.capture());
@@ -239,6 +236,8 @@ class CrossHospitalReachRecorderTest {
 
         recorder.recordBatchedReach(Map.of(patient, Map.of(UUID.randomUUID().toString(), 1L)),
             acting, actor, null, "Batched read");
+
+        verify(auditEventLogService).logEvents(any());
     }
 
     @Test

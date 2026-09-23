@@ -180,8 +180,9 @@ public class LabOrder extends BaseEntity {
         return com.example.hms.persistence.JpaProxyUtils.idOf(hospital);
     }
 
-    /** True when the order was sent to a laboratory at another hospital. */
     /**
+     * True when the order was sent to a laboratory at another hospital.
+     *
      * Compared by identifier, never by loading the row: these run once per
      * order on every list read and every scope check, and going through
      * {@code getId()} on a lazy association would cost a query each.

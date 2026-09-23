@@ -36,23 +36,6 @@ public final class JpaProxyUtils {
     }
 
     /**
-     * Force-initialise a Hibernate lazy proxy. Returns {@code null} when the
-     * referenced row was hard-deleted; otherwise returns the now-initialised
-     * proxy (or the entity, if it was already a managed instance).
-     *
-     * <p>The {@code parentEntity}, {@code parentId}, and {@code association}
-     * arguments are used only to shape the warn log line so operators can
-     * locate the dangling FK in the database. They never appear in the
-     * returned value, so they may be opaque identifiers — the caller does
-     * not need to redact PII.
-     *
-     * @param proxyOrEntity   the lazy proxy (or already-initialised entity)
-     * @param parentEntity    simple class name of the owning entity, e.g. {@code "LabOrder"}
-     * @param parentId        identifier of the owning row (UUID, Long, …)
-     * @param association     name of the field carrying the FK, e.g. {@code "patient"}
-     * @return {@code proxyOrEntity} on success, {@code null} when the FK is dangling
-     */
-    /**
      * The identifier of an association without initialising it.
      *
      * <p>{@code entity.getId()} is not the free read it looks like:
@@ -75,6 +58,23 @@ public final class JpaProxyUtils {
         return entity.getId();
     }
 
+    /**
+     * Force-initialise a Hibernate lazy proxy. Returns {@code null} when the
+     * referenced row was hard-deleted; otherwise returns the now-initialised
+     * proxy (or the entity, if it was already a managed instance).
+     *
+     * <p>The {@code parentEntity}, {@code parentId}, and {@code association}
+     * arguments are used only to shape the warn log line so operators can
+     * locate the dangling FK in the database. They never appear in the
+     * returned value, so they may be opaque identifiers — the caller does
+     * not need to redact PII.
+     *
+     * @param proxyOrEntity   the lazy proxy (or already-initialised entity)
+     * @param parentEntity    simple class name of the owning entity, e.g. {@code "LabOrder"}
+     * @param parentId        identifier of the owning row (UUID, Long, …)
+     * @param association     name of the field carrying the FK, e.g. {@code "patient"}
+     * @return {@code proxyOrEntity} on success, {@code null} when the FK is dangling
+     */
     public static <T> T safeInit(T proxyOrEntity, String parentEntity, Object parentId, String association) {
         if (proxyOrEntity == null) return null;
         try {

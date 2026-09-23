@@ -118,33 +118,29 @@ public class CrossHospitalReachRecorder {
         List<AuditEventRequestDTO> pending = new ArrayList<>();
         for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
             UUID patientId = patient.getKey();
-            if (patientId == null) {
-                continue;
-            }
             // A patient whose lookup failed is skipped rather than recorded
             // without its session stamp: one patient's failure costs that
             // patient, never the page.
-            if (!breakGlassByPatient.containsKey(patientId)) {
-                continue;
-            }
-            Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
-            for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
-                Map<String, Object> details = new HashMap<>();
-                details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
-                details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
-                details.put(DETAIL_ROWS_SURFACED, reach.getValue());
-                breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
-                pending.add(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.RECORD_SHARE)
-                    .status(AuditStatus.SUCCESS)
-                    .userId(requesterUserId)
-                    .assignmentId(assignmentId)
-                    .patientId(patientId)
-                    .entityType(ENTITY_TYPE_PATIENT)
-                    .resourceId(patientId.toString())
-                    .eventDescription(description)
-                    .details(details)
-                    .build());
+            if (patientId != null && breakGlassByPatient.containsKey(patientId)) {
+                Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
+                for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
+                    Map<String, Object> details = new HashMap<>();
+                    details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
+                    details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
+                    details.put(DETAIL_ROWS_SURFACED, reach.getValue());
+                    breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
+                    pending.add(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.RECORD_SHARE)
+                        .status(AuditStatus.SUCCESS)
+                        .userId(requesterUserId)
+                        .assignmentId(assignmentId)
+                        .patientId(patientId)
+                        .entityType(ENTITY_TYPE_PATIENT)
+                        .resourceId(patientId.toString())
+                        .eventDescription(description)
+                        .details(details)
+                        .build());
+                }
             }
         }
         if (pending.isEmpty()) {

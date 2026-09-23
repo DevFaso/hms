@@ -213,16 +213,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         try {
             Map<UUID, Map<String, Long>> perPatient = new java.util.HashMap<>();
             for (LabOrder order : orders) {
-                if (!order.isPerformedAt(actingHospitalId)) {
-                    continue;
+                if (order.isPerformedAt(actingHospitalId)) {
+                    UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                    UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
+                    if (patientId != null && source != null) {
+                        perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                            .merge(source.toString(), 1L, Long::sum);
+                    }
                 }
-                UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
-                UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
-                if (patientId == null || source == null) {
-                    continue;
-                }
-                perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
-                    .merge(source.toString(), 1L, Long::sum);
             }
             if (perPatient.isEmpty()) {
                 return;

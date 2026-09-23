@@ -12,9 +12,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultTrendPointDTO;
 import lombok.RequiredArgsConstructor;
-import com.example.hms.model.Hospital;
 import org.hibernate.Hibernate;
-import org.hibernate.proxy.HibernateProxy;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
