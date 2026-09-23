@@ -840,6 +840,55 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("a replay can only match a message recorded against the SAME order")
+    void theReplayLookupIsScopedToTheOrder() {
+        // The three message values come off the request body on this path, so
+        // an unscoped lookup let a caller write an MSH copying another
+        // hospital's analyzer, facility and control id, match that hospital's
+        // row, and be handed it back in full — patient name and result value
+        // included. The order id is what makes that impossible.
+        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
+        LabResultRequestDTO request = entryRequest();
+        request.setSourceSendingApplication("SOMEONE-ELSES-ANALYZER");
+        request.setSourceSendingFacility("HOSPITAL-B");
+        request.setSourceMessageControlId("MSG-B-1");
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        service.createIngestedLabResult(request, Locale.ENGLISH);
+
+        // the lookup asked about THIS order, and the unscoped finder is never
+        // reached from here at all
+        verify(labResultRepository)
+            .findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                order.getId(), "SOMEONE-ELSES-ANALYZER", "HOSPITAL-B", "MSG-B-1");
+        verify(labResultRepository, never())
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                any(), any(), any());
+    }
+
+    @Test
     @DisplayName("a retransmitted ORU is recognised by its control id and not recorded twice")
     void aRetransmittedOruIsNotRecordedTwice() {
         // The HL7 adapter is the one caller that genuinely retries, and a
@@ -863,8 +912,8 @@ class LabResultServiceImplLifecycleTest {
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         when(labResultRepository
-                .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
-                    "ANALYZER", "LAB-A", "MSG-42"))
+                .findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                    order.getId(), "ANALYZER", "LAB-A", "MSG-42"))
             .thenReturn(Optional.of(alreadyRecorded));
         when(labResultMapper.toResponseDTO(alreadyRecorded)).thenReturn(recordedDto);
 

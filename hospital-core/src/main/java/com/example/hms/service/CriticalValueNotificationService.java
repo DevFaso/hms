@@ -138,35 +138,33 @@ public class CriticalValueNotificationService {
         // warning (the #553 trap, and the same one the outbox enqueue had).
         // Failing loudly means the clinical write is retried, which is
         // recoverable; a critical result nobody was told about is not.
-        {
-            if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
-                return;
-            }
-            String username = resolveOrderingUsername(result);
-            if (username == null) {
-                // SYSTEM-actor results can arrive on orders whose staff has no
-                // user account; stamp anyway so the escalation sweep does not
-                // spin on them.
-                log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
-                    result.getId());
-            } else {
-                String message = buildMessage(result, false);
-                notificationService.createNotification(message, username, NOTIFICATION_TYPE);
-                // The gateway call waits for the commit: a hung gateway must
-                // not hold the clinical transaction's row locks, and an SMS
-                // for a result that then rolled back would be worse than a
-                // late one. Everything it needs is read HERE, while the
-                // transaction is open — the number is three lazy hops away
-                // (order, ordering staff, user) and the callback must not go
-                // looking for them.
-                UUID resultId = result.getId();
-                String phoneNumber = resolveOrderingPhone(result);
-                com.example.hms.utility.TransactionCallbacks.afterCommit(
-                    () -> sendCriticalSms(resultId, phoneNumber, message));
-            }
-            result.setCriticalNotifiedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
-            labResultRepository.save(result);
+        if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
+            return;
         }
+        String username = resolveOrderingUsername(result);
+        if (username == null) {
+            // SYSTEM-actor results can arrive on orders whose staff has no
+            // user account; stamp anyway so the escalation sweep does not
+            // spin on them.
+            log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
+                result.getId());
+        } else {
+            String message = buildMessage(result, false);
+            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            // The gateway call waits for the commit: a hung gateway must
+            // not hold the clinical transaction's row locks, and an SMS
+            // for a result that then rolled back would be worse than a
+            // late one. Everything it needs is read HERE, while the
+            // transaction is open — the number is three lazy hops away
+            // (order, ordering staff, user) and the callback must not go
+            // looking for them.
+            UUID resultId = result.getId();
+            String phoneNumber = resolveOrderingPhone(result);
+            com.example.hms.utility.TransactionCallbacks.afterCommit(
+                () -> sendCriticalSms(resultId, phoneNumber, message));
+        }
+        result.setCriticalNotifiedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        labResultRepository.save(result);
     }
 
     /**

@@ -308,10 +308,19 @@ public class LabResultServiceImpl implements LabResultService {
     /**
      * The result this exact message already produced, if it has.
      *
-     * <p>The composite is what HL7 v2 guarantees: MSH-10 is unique only
-     * within a sending system, so two analyzers may legitimately emit the
-     * same control id and those must stay separate rows. Same finder, same
-     * reasoning and same partial unique index (V98) as the MLLP path.
+     * <p>Scoped to the order in the request, and that scope is the whole
+     * security of it. The three message values come off the request body
+     * here — unlike the MLLP path, which has resolved the sending analyzer
+     * to a hospital before it asks — so an unscoped lookup let a caller
+     * write an MSH copying another hospital's analyzer, facility and control
+     * id, match that hospital's row, and be handed it back in full, patient
+     * name and value included. Inside one order there is nothing to leak:
+     * the caller's own tenancy check already covers it.
+     *
+     * <p>The composite is still what HL7 v2 guarantees — MSH-10 is unique
+     * only within a sending system, so two analyzers may legitimately emit
+     * the same control id — and the partial unique index from V98 still
+     * backs it.
      */
     private java.util.Optional<LabResult> findRecordedMessage(LabResultRequestDTO request) {
         if (request.getSourceMessageControlId() == null
@@ -319,7 +328,8 @@ public class LabResultServiceImpl implements LabResultService {
             return java.util.Optional.empty();
         }
         return labResultRepository
-            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+            .findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                request.getLabOrderId(),
                 request.getSourceSendingApplication(),
                 request.getSourceSendingFacility(),
                 request.getSourceMessageControlId());
@@ -631,19 +641,6 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * The assignment a result is attributed to must belong to the hospital
-     * the author is acting at.
-     *
-     * <p>Nothing checked this: the id came straight off the request and
-     * {@code LabResult.validate()} was the only gate, which asks merely that
-     * the assignment's hospital handles the order — and B1 widened "handles"
-     * to two hospitals. A scientist at the performing laboratory could
-     * therefore attribute a result to a named staff member at the ordering
-     * hospital and read that person's name back out of the response. 404
-     * rather than 403: another hospital's assignment is not this caller's to
-     * learn about.
-     */
-    /**
      * The ingest path's assignment check: no acting hospital to compare
      * against, so the order supplies the anchor.
      *
@@ -663,6 +660,19 @@ public class LabResultServiceImpl implements LabResultService {
         return assignment;
     }
 
+    /**
+     * The assignment a result is attributed to must belong to the hospital
+     * the author is acting at.
+     *
+     * <p>Nothing checked this: the id came straight off the request and
+     * {@code LabResult.validate()} was the only gate, which asks merely that
+     * the assignment's hospital handles the order — and B1 widened "handles"
+     * to two hospitals. A scientist at the performing laboratory could
+     * therefore attribute a result to a named staff member at the ordering
+     * hospital and read that person's name back out of the response. 404
+     * rather than 403: another hospital's assignment is not this caller's to
+     * learn about.
+     */
     private UserRoleHospitalAssignment requireAssignmentAtActingHospital(UUID assignmentId, UUID actingHospitalId) {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));

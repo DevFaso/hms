@@ -306,6 +306,26 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * emit the same control id and those must stay as separate rows.
      * Paired with the partial unique index from V98.
      */
+    /**
+     * The REST ingest adapter's replay lookup: the same message triple, but
+     * ONLY within the order it was posted against.
+     *
+     * <p>The unscoped sibling below is safe where it is used — the MLLP path
+     * has already resolved the sending analyzer to a hospital before it asks
+     * — but the REST adapter takes all three values from the request body. A
+     * caller who wrote an MSH copying another hospital's analyzer, facility
+     * and control id would match that hospital's row and be handed it back
+     * in full, patient name and result value included. Scoped to the order
+     * id, a replay can only ever match a message already recorded against
+     * the very order the caller named, which is the order their own tenancy
+     * check already covered.
+     */
+    Optional<LabResult> findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+        UUID labOrderId,
+        String sourceSendingApplication,
+        String sourceSendingFacility,
+        String sourceMessageControlId);
+
     Optional<LabResult> findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
         String sourceSendingApplication,
         String sourceSendingFacility,
