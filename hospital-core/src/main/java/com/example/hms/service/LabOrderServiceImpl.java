@@ -305,19 +305,45 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     /**
-     * The status a lab order gets from a create or an update request: none.
+     * Where a new lab order may start: ORDERED or PENDING, and nothing else.
      *
-     * <p>A NEW order always starts at ORDERED. Honouring the request here was
-     * the other half of B9: an order created at COMPLETED or CANCELLED is
-     * frozen against every specimen and result event the lifecycle sends
-     * ({@code LabOrderLifecycle} refuses to move a terminal order), and a
-     * COMPLETED one lands on the ordering doctor's review queue with no
-     * results behind it. On UPDATE the value is echoed back by every edit
-     * form, so a matching one is tolerated silently and a differing one is
-     * ignored with a warning. Either way the lifecycle moves only through
-     * {@link #transitionLabOrderStatus} (role-checked per step) and the
-     * specimen and result events.
+     * <p>Everything past PENDING asserts laboratory work with no specimen or
+     * result row behind it, and the two terminal states are worse than that.
+     * CANCELLED was briefly allowed here as "a decision, not a claim of work";
+     * that was wrong for the same reason COMPLETED is. An order created
+     * CANCELLED is frozen against every lifecycle event for ever — nothing
+     * re-opens a cancelled order, by design — so the row can never become
+     * anything else, and a caller that wants one records the order and then
+     * cancels it through the transition endpoint, which is role-checked.
      */
+    private static final Set<LabOrderStatus> CREATABLE_STATUSES =
+        EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+
+    /**
+     * Where a new order may start, and what an update may say about status.
+     *
+     * <p>A new order starts at a START state. Two callers legitimately choose
+     * which one — {@code SuperAdminLabOrderServiceImpl}, where the status is a
+     * mandatory field of the super-admin request, and
+     * {@code OrderSetItemDispatcher}, which places order-set items as PENDING
+     * — so forcing every create to ORDERED discarded a value one caller
+     * validated and made the other log a warning for every order it placed.
+     *
+     * <p>What a create may NOT do is claim work the laboratory has not done:
+     * an order born COMPLETED or CANCELLED is frozen against every specimen
+     * and result event ({@code LabOrderLifecycle} will not move a terminal
+     * order) and a COMPLETED one reaches the ordering doctor's review queue
+     * with no results behind it. Those are refused. The states in between
+     * (COLLECTED … VERIFIED) describe laboratory progress with no specimen or
+     * result row to back it, so a create is held to the start states and told
+     * why.
+     *
+     * <p>On UPDATE the value is echoed back by every edit form, so a matching
+     * one is tolerated silently and a differing one is ignored with a warning:
+     * the lifecycle moves only through {@link #transitionLabOrderStatus}
+     * (role-checked per step) and the specimen and result events.
+     */
+
     private void applyRequestedStatus(LabOrder labOrder, String requestedStatus, boolean isNew) {
         LabOrderStatus requested;
         try {
@@ -326,11 +352,21 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("Unknown lab order status: " + requestedStatus);
         }
         if (isNew) {
-            if (requested != LabOrderStatus.ORDERED) {
-                log.warn("Ignoring status {} on creation of a lab order: new orders start at ORDERED",
-                    requested);
+            if (!CREATABLE_STATUSES.contains(requested)) {
+                // Intended contract, and a deliberate behaviour change for the
+                // super-admin endpoint, which validates status as mandatory
+                // but only checks it is non-blank. Refused rather than quietly
+                // coerced, so the caller learns. (Checked: no seeded or
+                // scripted caller sends one — the seeder builds entities
+                // directly, and the only sample carrying IN_PROGRESS is a PUT,
+                // which is unaffected.)
+                throw new BusinessException(
+                    "A new lab order cannot be created with status " + requested.name()
+                        + ". New orders start at ORDERED or PENDING; the laboratory workflow moves "
+                        + "them on from there, and a cancellation goes through the transition "
+                        + "endpoint so it is role-checked and cannot freeze a brand-new order.");
             }
-            labOrder.setStatus(LabOrderStatus.ORDERED);
+            labOrder.setStatus(requested);
             return;
         }
         if (labOrder.getStatus() != requested) {

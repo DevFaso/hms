@@ -140,16 +140,40 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
-    void enqueueResultObservation_builderThrows_exceptionSwallowedNoSave() throws Exception {
+    void enqueueResultObservation_saveThrows_propagatesBecauseTheTransactionIsAlreadyPoisoned() {
+        // The rollback-only argument is about the INSERT: it marks the
+        // caller's transaction whatever anyone catches, so containing it
+        // would hide the cause and hand the caller a 500 at commit anyway.
+        LabResult result = LabResult.builder().labOrder(labOrder).resultValue("5.2").build();
+        result.setId(java.util.UUID.randomUUID());
+        when(hl7v2MessageBuilder.buildOruR01(result)).thenReturn("MSH|built-message");
+        when(outboxRepository.save(any())).thenThrow(new RuntimeException("insert failed"));
+
+        assertThatThrownBy(() -> service.enqueueResultObservation(result))
+            .isInstanceOf(RuntimeException.class)
+            .hasMessageContaining("insert failed");
+    }
+
+    @Test
+    void enqueueResultObservation_builderThrows_costsTheMessageNotTheResult() {
+        // It joins the caller's transaction, so a failure in here marks that
+        // transaction rollback-only whatever this method does with it:
+        // swallowing bought nothing and lied twice — the caller believed the
+        // enqueue was contained and got a 500 at commit anyway, with the
+        // cause logged as a warning rather than raised.
         LabResult result = LabResult.builder()
             .labOrder(labOrder)
+            .resultValue("5.2")
             .build();
+        result.setId(java.util.UUID.randomUUID());
 
         when(hl7v2MessageBuilder.buildOruR01(result))
             .thenThrow(new RuntimeException("HL7 build failed"));
 
-        assertThatCode(() -> service.enqueueResultObservation(result))
-            .doesNotThrowAnyException();
+        // Building the message is pure formatting and dereferences the
+        // order's patient: an interface defect there must not block every
+        // result entry on the order. It costs this one outbound message.
+        assertThatCode(() -> service.enqueueResultObservation(result)).doesNotThrowAnyException();
 
         verify(outboxRepository, never()).save(any());
     }
