@@ -2406,6 +2406,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V162 — pharmacy flow gap G5: the pharmacist's clarification
+         request. Reason / requested-at / requested-by and the prescriber's
+         response / resolved-at / resolved-by on clinical.prescriptions,
+         plus remaining_quantity on clinical.prescription_routing_decisions.
+         PENDING_CLARIFICATION had no writer and no payload. Additive DDL.
+         ================================================================= -->
+    <changeSet id="V162-prescription-clarification" author="hms-team" runOnChange="false">
+        <sqlFile path="V162__prescription_clarification.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V163 — lab orders the old auto-verification left behind.
          Nothing advanced lab_orders.status before #716, so orders whose
          results were all auto-released still sit at ORDERED and have

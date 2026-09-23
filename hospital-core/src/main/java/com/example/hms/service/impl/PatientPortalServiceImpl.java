@@ -351,7 +351,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PrescriptionResponseDTO> getMyPrescriptions(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return prescriptionService.getPrescriptionsByPatientId(patientId, locale);
+        // Same DTO as the clinician surface; the pharmacist-to-prescriber
+        // clarification exchange comes off the patient's copy (gap G7).
+        return prescriptionService.getPrescriptionsByPatientId(patientId, locale).stream()
+                .map(PrescriptionResponseDTO::withoutClarificationExchange)
+                .toList();
     }
 
     // ── Vital signs ──────────────────────────────────────────────────────

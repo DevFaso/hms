@@ -80,8 +80,65 @@ public class PrescriptionResponseDTO {
     private String pharmacistVerifiedByName;
     private String pharmacistVerificationNote;
 
+    /* ── Pharmacy and dispatch state (gap G7) ────────────────────────────── */
+
+    /**
+     * Where the prescription went: the partner pharmacy it was routed to or
+     * the community pharmacy it was dispatched to by SMS. Null for an order
+     * still at, or filled by, the hospital's own dispensary. Contact details
+     * are the pharmacy's, so they are fine on the patient-facing copy too.
+     */
+    private UUID pharmacyId;
+    private String pharmacyName;
+    private String pharmacyContact;
+
+    /** Community-pharmacy dispatch (PrescriptionSmsDispatchService): SMS / SENT / when. */
+    private String dispatchChannel;
+    private String dispatchStatus;
+    private LocalDateTime dispatchedAt;
+
+    /**
+     * The latest pharmacy outcome, when the current status is one the
+     * pharmacy owns (DISPENSED, PARTIALLY_FILLED, PENDING_STOCK, the partner
+     * states, PRINTED_FOR_PATIENT, PENDING_CLARIFICATION); null while the
+     * order is still the prescriber's. {@code lastPharmacyEventAt} is the
+     * exact instant where one is recorded (clarification requested, dispatch)
+     * and otherwise the row's last update, which for a pharmacy status is the
+     * transition into it.
+     */
+    private String lastPharmacyEvent;
+    private LocalDateTime lastPharmacyEventAt;
+
+    /* ── Pharmacist clarification (gap G5) — not on the patient-facing copy ── */
+
+    private String clarificationReason;
+    private LocalDateTime clarificationRequestedAt;
+    private String clarificationResponse;
+    private LocalDateTime clarificationResolvedAt;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * The copy a patient may read (gap G7): where to go stays, the
+     * pharmacist-to-prescriber clarification exchange — a professional
+     * consultation about the order — comes off. Mutates and returns this.
+     */
+    public PrescriptionResponseDTO withoutClarificationExchange() {
+        this.clarificationReason = null;
+        this.clarificationRequestedAt = null;
+        this.clarificationResponse = null;
+        this.clarificationResolvedAt = null;
+        // The pharmacy-event pair restates the exchange when the exchange is
+        // what the pharmacy last did: lastPharmacyEventAt IS the instant the
+        // pharmacist asked. Stripping the narrative while leaving its
+        // timestamp behind would be a leak by another name.
+        if ("PENDING_CLARIFICATION".equals(this.lastPharmacyEvent)) {
+            this.lastPharmacyEvent = null;
+            this.lastPharmacyEventAt = null;
+        }
+        return this;
+    }
 
     /**
      * CDS rule-engine cards produced when the prescription was last

@@ -1,7 +1,15 @@
 package com.example.hms.service.pharmacy.partner;
 
+import com.example.hms.service.i18n.NotificationLocales;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.MessageSource;
+import org.springframework.stereotype.Component;
+
+import java.util.Locale;
+
 /**
- * T-60 — French SMS templates for partner pharmacy exchange.
+ * T-60 — SMS templates for partner pharmacy exchange, read from the message
+ * bundle (gap G14) instead of French literals.
  * <p>
  * All messages are intentionally short to fit a single SMS (160 GSM-7 chars)
  * whenever possible. Reply codes keep parsing simple on partners' basic phones:
@@ -12,44 +20,44 @@ package com.example.hms.service.pharmacy.partner;
  *   <li>{@code 0} = cancel / unsubscribe (not auto-handled)</li>
  * </ul>
  * Every outbound message carries the Rx reference token AND shows it inside
- * the reply it asks for ({@code « 1 ABC12 »}): the inbound parser requires a
- * token, so an offer that only said "Répondez 1 pour accepter" produced bare
- * replies that were parsed and then discarded — the decision stayed PENDING
- * and auto-rejected four hours later.
+ * the reply it asks for ({@code « 1 ABC12 »}, in the bundle text): the
+ * inbound parser requires a token, so an offer that only said
+ * "Répondez 1 pour accepter" produced bare replies that were parsed and then
+ * discarded — the decision stayed PENDING and auto-rejected four hours later.
+ * <p>
+ * Partner-facing bodies render in {@link NotificationLocales#PARTNER_PHARMACY};
+ * patient-facing bodies take the patient's resolved locale from the caller.
  */
-public final class PartnerSmsTemplates {
+@Component
+@RequiredArgsConstructor
+public class PartnerSmsTemplates {
 
-    private static final String RX_PREFIX = "HMS Rx ";
+    private final MessageSource messageSource;
 
-    private PartnerSmsTemplates() {
-    }
-
-    /** Outbound: new prescription offered to a partner pharmacy. */
-    public static String prescriptionOffer(String refToken, String medicationName, String patientInitials) {
-        return RX_PREFIX + refToken + " : " + medicationName
-                + " pour " + patientInitials
-                + ". " + replyInstructions(refToken);
-    }
-
-    /** Outbound: reminder if no reply received in 2 hours. */
-    public static String reminder(String refToken) {
-        return RX_PREFIX + refToken + " : rappel, aucune réponse reçue."
-                + " " + replyInstructions(refToken);
+    /** Outbound: new prescription offered to a partner pharmacy, in full. */
+    public String prescriptionOffer(String refToken, String medicationName, String patientInitials) {
+        return partner("sms.partner.offer", refToken, medicationName, patientInitials);
     }
 
     /**
-     * The reply the parser can actually act on: the code AND the reference,
-     * spelled out. Quoting the reference is not decoration — a reply without
-     * it cannot be matched to a prescription and is dropped.
+     * Outbound: the REMAINDER of a partially filled prescription offered to a
+     * partner. A separate template rather than an optional clause, because an
+     * empty clause leaves a partner reading a stray bracket — and this is the
+     * number that stops a second full course being handed over.
      */
-    static String replyInstructions(String refToken) {
-        return "Répondez « 1 " + refToken + " » pour accepter, « 2 " + refToken + " » pour refuser.";
+    public String prescriptionOfferPartial(String refToken, String medicationName,
+                                           String remainingLabel, String patientInitials) {
+        return partner("sms.partner.offer.partial", refToken, medicationName, remainingLabel, patientInitials);
+    }
+
+    /** Outbound: reminder if no reply received in 2 hours. */
+    public String reminder(String refToken) {
+        return partner("sms.partner.reminder", refToken);
     }
 
     /** Outbound: auto-rejection notice after timeout expiry. */
-    public static String autoRejected(String refToken) {
-        return RX_PREFIX + refToken + " : délai dépassé, ordonnance refermée."
-                + " Merci.";
+    public String autoRejected(String refToken) {
+        return partner("sms.partner.autoRejected", refToken);
     }
 
     /**
@@ -58,20 +66,33 @@ public final class PartnerSmsTemplates {
      * deadline passed when the prescriber simply chose elsewhere is a lie the
      * pharmacy would act on.
      */
-    public static String superseded(String refToken) {
-        return RX_PREFIX + refToken + " : ordonnance confiée à une autre pharmacie."
-                + " Inutile de préparer. Merci.";
+    public String superseded(String refToken) {
+        return partner("sms.partner.superseded", refToken);
     }
 
     /** Outbound to patient: partner accepted the prescription. */
-    public static String patientAccepted(String pharmacyName) {
-        return "Bonjour, votre ordonnance a été acceptée par " + pharmacyName
-                + ". Vous pouvez vous y rendre.";
+    public String patientAccepted(String pharmacyName, Locale patientLocale) {
+        return messageSource.getMessage("sms.partner.patientAccepted",
+                new Object[]{pharmacyName}, patientLocale);
     }
 
     /** Outbound to patient: partner dispensed the medication. */
-    public static String patientDispensed(String pharmacyName) {
-        return "Bonjour, votre médicament a été délivré par " + pharmacyName
-                + ". Bonne santé.";
+    public String patientDispensed(String pharmacyName, Locale patientLocale) {
+        return messageSource.getMessage("sms.partner.patientDispensed",
+                new Object[]{pharmacyName}, patientLocale);
+    }
+
+    /** Placeholder for a prescription with no medication name, in the partner's language. */
+    public String medicationFallback() {
+        return partner("sms.partner.medicationFallback");
+    }
+
+    /** Placeholder for a partner pharmacy with no name, in the patient's language. */
+    public String pharmacyFallback(Locale patientLocale) {
+        return messageSource.getMessage("sms.partner.pharmacyFallback", null, patientLocale);
+    }
+
+    private String partner(String key, Object... args) {
+        return messageSource.getMessage(key, args, NotificationLocales.PARTNER_PHARMACY);
     }
 }

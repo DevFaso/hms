@@ -1,6 +1,7 @@
 package com.example.hms.controller.pharmacy;
 
 import com.example.hms.payload.dto.ApiResponseWrapper;
+import com.example.hms.payload.dto.pharmacy.PartnerNoShowRequestDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionRequestDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionResponseDTO;
 import com.example.hms.payload.dto.pharmacy.StockCheckResultDTO;
@@ -102,6 +103,28 @@ public class StockOutRoutingController {
             @PathVariable UUID routingDecisionId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 stockOutRoutingService.confirmPartnerDispense(routingDecisionId)));
+    }
+
+    /**
+     * The in-house exit from a partner acceptance that never turned into a
+     * delivery. Pharmacist roles only, and narrower than the endpoints around
+     * it on purpose: this cancels a partner's claim on a prescription, which
+     * is a dispensing judgment rather than an administrative one. No
+     * {@code SecurityConfig} matcher covers {@code /pharmacy/**}, so the path
+     * rides {@code anyRequest().authenticated()} and this annotation is the
+     * gate (StockOutRoutingControllerTest pins the absence of a matcher).
+     */
+    @PostMapping("/partner-no-show/{routingDecisionId}")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER')")
+    @Operation(summary = "Record that a partner never delivered",
+            description = "Cancels an ACCEPTED partner routing decision with a reason and returns the "
+                    + "prescription to SIGNED, where the hospital pharmacy can fill or re-route it.")
+    @ApiResponse(responseCode = "200", description = "No-show recorded")
+    public ResponseEntity<ApiResponseWrapper<RoutingDecisionResponseDTO>> partnerNoShow(
+            @PathVariable UUID routingDecisionId,
+            @Valid @RequestBody PartnerNoShowRequestDTO request) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                stockOutRoutingService.partnerNoShow(routingDecisionId, request.getReason())));
     }
 
     @GetMapping("/decisions/prescription/{prescriptionId}")

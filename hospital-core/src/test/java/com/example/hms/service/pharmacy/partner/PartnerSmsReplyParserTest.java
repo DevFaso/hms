@@ -19,9 +19,10 @@ class PartnerSmsReplyParserTest {
 
     private final PartnerSmsReplyParser parser = new PartnerSmsReplyParser();
 
-    /** The real offer a handset quotes back, built by the templates. */
+    /** The real offer a handset quotes back, built from the bundle text. */
     private static String offer() {
-        return PartnerSmsTemplates.prescriptionOffer(REF, "Amoxicilline 500mg", "AB");
+        return new PartnerSmsTemplates(com.example.hms.i18n.TestMessageSources.bundles())
+                .prescriptionOffer(REF, "Amoxicilline 500mg", "AB");
     }
 
     // ── the instructed reply ────────────────────────────────────────────

@@ -22,6 +22,9 @@ public interface PrescriptionRoutingDecisionRepository extends JpaRepository<Pre
 
     List<PrescriptionRoutingDecision> findByPrescriptionIdOrderByDecidedAtDesc(UUID prescriptionId);
 
+    /** Decisions of a page of prescriptions, newest first — the work queue's last-action lookup. */
+    List<PrescriptionRoutingDecision> findByPrescription_IdInOrderByDecidedAtDesc(List<UUID> prescriptionIds);
+
     List<PrescriptionRoutingDecision> findByDecidedForPatientIdOrderByDecidedAtDesc(UUID patientId);
 
     Page<PrescriptionRoutingDecision> findByPrescriptionId(UUID prescriptionId, Pageable pageable);

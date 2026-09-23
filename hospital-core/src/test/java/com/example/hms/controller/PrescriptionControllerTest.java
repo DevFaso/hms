@@ -30,6 +30,37 @@ class PrescriptionControllerTest {
         return roles;
     }
 
+    /**
+     * G5: the two clarification endpoints are gated by their annotations
+     * alone. SecurityConfig declares no matcher for /prescriptions, so the
+     * path rides anyRequest().authenticated() — and a matcher added later
+     * that forgot the pharmacist roles would 403 the pharmacist before the
+     * annotation ran (first-match-wins, terminal).
+     */
+    @Test
+    void requestClarification_preAuthorize_isPharmacistOnly() throws Exception {
+        List<String> roles = extractRolesFromMethod("requestClarification",
+                UUID.class, com.example.hms.payload.dto.PrescriptionClarificationRequestDTO.class, Locale.class);
+        assertThat(roles).containsExactlyInAnyOrder("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN");
+    }
+
+    @Test
+    void resolveClarification_preAuthorize_isDoctorOnly() throws Exception {
+        List<String> roles = extractRolesFromMethod("resolveClarification",
+                UUID.class, com.example.hms.payload.dto.PrescriptionClarificationResolutionDTO.class, Locale.class);
+        assertThat(roles).containsExactly("DOCTOR");
+    }
+
+    @Test
+    void securityConfig_declaresNoPrescriptionsMatcher_soTheAnnotationsAreTheGate() throws Exception {
+        String source = java.nio.file.Files.readString(
+                java.nio.file.Paths.get("src/main/java/com/example/hms/config/SecurityConfig.java"),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(source)
+                .as("a /prescriptions matcher must admit every role the controller annotations admit")
+                .doesNotContain("\"/prescriptions");
+    }
+
     @Test
     void list_preAuthorize_includesSuperAdmin() throws Exception {
         List<String> roles = extractRolesFromMethod("list",

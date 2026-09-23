@@ -56,6 +56,10 @@ class PrescriptionSmsDispatchServiceImplTest {
 
     private static final String REF_TOKEN = "0A1B2C3D";
 
+    /** The offer wording now lives in the bundles (#717), so read it from there. */
+    private static final PartnerSmsTemplates TEMPLATES =
+            new PartnerSmsTemplates(com.example.hms.i18n.TestMessageSources.bundles());
+
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PharmacyRepository pharmacyRepository;
     @Mock private PrescriptionTransmissionRepository transmissionRepository;
@@ -134,7 +138,7 @@ class PrescriptionSmsDispatchServiceImplTest {
                     return d;
                 });
         when(partnerChannel.prescriptionOfferBody(any(), eq(rx), anyString()))
-                .thenAnswer(inv -> PartnerSmsTemplates.prescriptionOffer(REF_TOKEN, inv.getArgument(2), "AD"));
+                .thenAnswer(inv -> TEMPLATES.prescriptionOffer(REF_TOKEN, inv.getArgument(2), "AD"));
     }
 
     @Test
@@ -454,6 +458,21 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("dispensary");
+
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("a prescription awaiting the prescriber's clarification cannot be dispatched")
+    void dispatch_refusesWhileAwaitingClarification() {
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("clarification");
 
         verify(smsService, never()).send(anyString(), anyString());
     }
