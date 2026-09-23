@@ -81,6 +81,30 @@ public final class LabOrderLifecycle {
         EnumSet.of(LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
 
     /**
+     * What a newly entered result should move {@code current} to, or
+     * {@code null} when it should not move at all.
+     *
+     * <p>The decision, separated from the writing of it: the entry path writes
+     * the status with a compare-and-set statement rather than through the
+     * entity (see {@code LabOrderRepository.updateStatusFrom}), so it needs
+     * the verdict before it has anything to mutate.
+     */
+    public static LabOrderStatus statusAfterNewResult(LabOrderStatus current) {
+        if (current == null) {
+            return LabOrderStatus.RESULTED;
+        }
+        if (current == LabOrderStatus.CANCELLED) {
+            return null;
+        }
+        if (REOPENABLE.contains(current)) {
+            return LabOrderStatus.RESULTED;
+        }
+        Integer currentRank = RANK.get(current);
+        Integer resultedRank = RANK.get(LabOrderStatus.RESULTED);
+        return (currentRank != null && currentRank < resultedRank) ? LabOrderStatus.RESULTED : null;
+    }
+
+    /**
      * The one sanctioned move backwards: a result arriving on an order that
      * was already finished (a correction, a late analyte) re-opens it to
      * RESULTED so the ordering doctor sees it as having something new to

@@ -23,11 +23,6 @@ public interface InstrumentOutboxService {
      */
     void enqueueResultObservation(LabResult result);
 
-    /**
-     * Id-only twin for callers that enqueue after their own commit, when the
-     * entity they held is detached. Runs in a transaction of its own.
-     */
-    void enqueueResultObservation(java.util.UUID resultId);
 
     /**
      * All outbox messages for a lab order, whatever their status.

@@ -217,6 +217,16 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (isNew) {
             if (!START_STATUSES.contains(requested)) {
+                // Intended contract, and a deliberate behaviour change for the
+                // super-admin endpoint, which validates status as mandatory
+                // but only checks it is non-blank: an order created at
+                // COLLECTED, IN_PROGRESS or RESULTED asserts laboratory work
+                // with no specimen or result row behind it, and one created at
+                // COMPLETED or CANCELLED is frozen against every lifecycle
+                // event thereafter. Refused rather than quietly coerced so the
+                // caller learns. (Checked: no seeded or scripted caller sends
+                // one — the seeder builds entities directly, and the only
+                // sample carrying IN_PROGRESS is a PUT, which is unaffected.)
                 throw new BusinessException(
                     "A new lab order cannot be created with status " + requested.name()
                         + ". New orders start at ORDERED or PENDING; the laboratory workflow "

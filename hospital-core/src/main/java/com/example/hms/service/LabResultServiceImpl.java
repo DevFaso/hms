@@ -117,18 +117,25 @@ public class LabResultServiceImpl implements LabResultService {
         // after the commit — across a blocking SMS gateway call.
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        // An interface principal: the ingest door AND no hospital scope of its
+        // own. Both halves are needed. Exempting the ENDPOINT would let a
+        // multi-hospital lab user — or a HOSPITAL_ADMIN, who passes that
+        // endpoint's @PreAuthorize — write into another tenant's order through
+        // it; exempting "no scope resolves" alone would let any unscoped
+        // interactive caller do the same.
+        //
+        // This is a narrow safety valve, not the fix, and it is nearly dead
+        // code by design: JwtTokenProvider.buildHospitalContext fills
+        // activeHospitalId from the primary/permitted-hospital claims even
+        // with no X-Hospital-Id, so almost every principal that can reach the
+        // endpoint DOES resolve a scope and is checked. The genuine fix is to
+        // resolve the hospital from the sending facility and check the ingest
+        // path rather than exempt it — fix/hl7-inbound-tenancy.
+        boolean interfacePrincipal = ingested && !hasResolvableHospitalScope();
+
         // Same 404-not-403 tenancy comparison as every other single-row path
-        // here (B11). The exemption needs BOTH halves: the ingest door AND a
-        // caller with no resolvable hospital scope, i.e. an interface
-        // principal. /lab/hl7/adapter/inbound is open to LAB_TECHNICIAN,
-        // LAB_SCIENTIST, LAB_MANAGER and HOSPITAL_ADMIN humans, so exempting
-        // the ENDPOINT would let a multi-hospital lab user write into another
-        // tenant's order through it; exempting "no scope resolves" alone
-        // would let any unscoped interactive caller do the same. Resolving
-        // the hospital from the sending facility, so the ingest path is
-        // checked rather than exempted, is its own slice
-        // (fix/hl7-inbound-tenancy) — this is the narrower guard until then.
-        if (!(ingested && !hasResolvableHospitalScope())) {
+        // here (B11).
+        if (!interfacePrincipal) {
             requireOrderInActiveHospital(labOrder);
         }
 
@@ -145,15 +152,28 @@ public class LabResultServiceImpl implements LabResultService {
     UUID currentUserId = authService.getCurrentUserId();
     // The author check reads the caller's role AT THIS HOSPITAL, which an
     // interface account does not have — that is the premise of the ingest
-    // path — so it would 400 every ORU. What authorises ingestion is the
-    // endpoint's own @PreAuthorize (lab roles only) plus, once
-    // fix/hl7-inbound-tenancy lands, the allowlisted sending facility.
-    if (!ingested) {
+    // path — so it would 400 every ORU. Skipped on the SAME narrow condition
+    // as the tenancy check above, never on the endpoint alone: HOSPITAL_ADMIN
+    // passes that endpoint's @PreAuthorize but is not in the author
+    // allow-list, and must not become a lab-result author by posting an ORU.
+    if (!interfacePrincipal) {
         validateLabResultAuthor(currentUserId, hospital.getId());
     }
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+
+        // From here to the status write the order row is LOCKED. The
+        // duplicate check belongs inside it: run before the lock, two
+        // concurrent retries both saw no existing row and both inserted —
+        // precisely the double record this check exists to prevent.
+        LabOrder lockedOrder = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
+        // The locking finder hands back the instance this persistence context
+        // loaded above, unlocked, and Hibernate does not refresh its fields,
+        // so the entity's status can predate the lock. The committed value
+        // comes from a scalar projection, which is not served from the
+        // first-level cache.
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
 
         // A retry of a result this order already holds is not recorded twice.
         //
@@ -165,8 +185,8 @@ public class LabResultServiceImpl implements LabResultService {
         // client is asking for, and removes the stranding rather than moving
         // it: no new row, no re-open, no second notification, no second
         // outbound message. "Exact" means every field an amendment could
-        // change (see isRepeatOfExistingResult), so a correction still lands
-        // as a new result.
+        // change (see findIdenticalResult), so a correction still lands as a
+        // new result.
         java.util.Optional<LabResult> existingIdentical = findIdenticalResult(labOrder, request);
         if (existingIdentical.isPresent()) {
             LabResult existing = existingIdentical.get();
@@ -178,33 +198,32 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
 
-        // The status decision needs the order row locked: a concurrent release
-        // of the last result may be committing COMPLETED right now, and this
-        // insert must see it rather than decide on a stale status.
-        LabOrder lockedOrder = labOrderRepository.findWithLockById(labOrder.getId()).orElse(labOrder);
-        // The locking finder hands back the instance this persistence context
-        // loaded a few lines above, unlocked, and Hibernate does not refresh
-        // its fields — so the lock is held but the status can predate it, and
-        // deciding on it would flush RESULTED over a COMPLETED that committed
-        // meanwhile. The committed value comes from a scalar projection, which
-        // is not served from the first-level cache (same workaround, and same
-        // reason, as completeOrderIfAllReleased).
-        LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
-        if (committedStatus != null) {
-            lockedOrder.setStatus(committedStatus);
-        }
-
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
         // doctor's review queue, which keys on COMPLETED. A result landing on
         // a COMPLETED order (a correction, a late analyte) re-opens it: the
-        // doctor must see the order as having something new to review. A
-        // retry never reaches here — it returned above.
-        if (LabOrderLifecycle.reopenForResult(lockedOrder)) {
-            labOrderRepository.save(lockedOrder);
-        }
+        // doctor must see the order as having something new to review.
+        //
+        // Written as a compare-and-set STATEMENT, not through the entity: the
+        // instance's snapshot predates the lock, and when the target equals
+        // that snapshot value (snapshot RESULTED, database COMPLETED, target
+        // RESULTED) the dirty check sees no change and flushes nothing — the
+        // re-open vanished and the order stayed COMPLETED.
         LabOrder labOrderForStatus = lockedOrder;
-        advanceOrder(labOrderForStatus, LabOrderStatus.RESULTED);
+        LabOrderStatus targetStatus = LabOrderLifecycle.statusAfterNewResult(committedStatus);
+        if (targetStatus != null && targetStatus != committedStatus) {
+            int moved = labOrderRepository.updateStatusFrom(
+                labOrderForStatus.getId(), committedStatus, targetStatus);
+            if (moved == 0) {
+                LOG.info("Lab order {} moved from {} while its result was being recorded; status left alone",
+                    labOrderForStatus.getId(), committedStatus);
+            } else {
+                // Keep the in-memory instance agreeing with the row it
+                // describes, so anything downstream in this transaction reads
+                // the status the database now holds.
+                labOrderForStatus.setStatus(targetStatus);
+            }
+        }
         // One severity for both decisions below. The REST path never sets
         // abnormalFlag (no DTO field; only MLLP populates it), so gating
         // auto-release on the flag alone released critical manual results.
@@ -222,21 +241,18 @@ public class LabResultServiceImpl implements LabResultService {
         // network hop.
         criticalValueNotificationService.notifyIfCritical(saved, severity);
 
-        // The outbound HL7 message is a different story: building and queuing
-        // it is work for the instrument interface, not for this clinician's
-        // request, and it runs after the commit in its own transaction. Its
-        // own callback, and guarded: a failure here must not surface as a 500
-        // on a result that is already on the chart, and must not take any
-        // other after-commit work down with it.
-        UUID savedId = saved.getId();
-        TransactionCallbacks.afterCommit(() -> {
-            try {
-                instrumentOutboxService.enqueueResultObservation(savedId);
-            } catch (RuntimeException ex) {
-                LOG.warn("Outbound instrument message could not be queued for lab result {}: {}",
-                    savedId, ex.getMessage(), ex);
-            }
-        });
+        // The outbound message is queued IN this transaction too. It was
+        // deferred to after the commit for a moment, which quietly made it
+        // losable: a crash or a failed REQUIRES_NEW between commit and
+        // callback drops it for good, because the dispatcher only sends rows
+        // that exist and nothing re-derives them from the result. Enqueuing
+        // here is the outbox pattern as intended — row and result commit
+        // together or not at all — and it costs nothing to hold: building an
+        // ORU message is local work, not a network hop. (The SMS is the
+        // network hop, and that is what waits for the commit.) Reconciliation
+        // was the alternative; a periodic job that re-derives missing rows is
+        // more moving parts for a guarantee one transaction already gives.
+        instrumentOutboxService.enqueueResultObservation(saved);
 
         return labResultMapper.toResponseDTO(saved);
     }
@@ -339,13 +355,23 @@ public class LabResultServiceImpl implements LabResultService {
      * something new about the result, and that must re-open the order like
      * any other new result. Only a byte-for-byte repeat of what is already
      * recorded is treated as a retry.
+     *
+     * <p>A row carrying a test code or an abnormal flag can never be the
+     * match. This request cannot express either — the entry DTO has no such
+     * field, and the mapper leaves both null — so an existing row that has
+     * one came from somewhere else, most likely an HL7 ORU naming a specific
+     * analyte. Two analytes of one panel sharing a value, unit, date and
+     * comment are not the same result, and discarding the second while
+     * answering 201 with the first would lose it silently.
      */
     private java.util.Optional<LabResult> findIdenticalResult(LabOrder labOrder, LabResultRequestDTO request) {
         if (labOrder == null || labOrder.getId() == null) {
             return java.util.Optional.empty();
         }
         return labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .filter(existing -> sameValue(existing.getResultValue(), request.getResultValue())
+            .filter(existing -> existing.getTestCode() == null
+                && existing.getAbnormalFlag() == null
+                && sameValue(existing.getResultValue(), request.getResultValue())
                 && sameValue(existing.getResultUnit(), request.getResultUnit())
                 && sameValue(existing.getNotes(), request.getNotes())
                 && java.util.Objects.equals(existing.getResultDate(), request.getResultDate()))

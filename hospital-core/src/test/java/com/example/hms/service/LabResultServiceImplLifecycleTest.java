@@ -80,6 +80,26 @@ class LabResultServiceImplLifecycleTest {
     private LabTestDefinition testDefinition;
     private UserRoleHospitalAssignment assignment;
 
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    /**
+     * Bind the tenancy context the filter chain would have built.
+     *
+     * <p>hasResolvableHospitalScope reads HospitalContextHolder first, so a
+     * test that binds nothing proves nothing about it: it passes because the
+     * holder is empty, not because the principal has no scope.
+     */
+    private void bindHospitalContext(java.util.UUID activeHospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorId)
+                .activeHospitalId(activeHospitalId)
+                .build());
+    }
+
     @BeforeEach
     void setUp() {
         hospitalId = UUID.randomUUID();
@@ -140,6 +160,20 @@ class LabResultServiceImplLifecycleTest {
         // the committed status the locked row is decided on
         org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
             .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        // the status is written by a compare-and-set statement, never through
+        // the entity: the stub applies it so assertions still read the order
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -163,7 +197,10 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository).save(order);
+        // written as a statement, never through the entity
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.ORDERED, LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         // the order is read unlocked; the write lock is taken only for the
         // status decision, so it is never held across the permission checks
         verify(labOrderRepository).findById(order.getId());
@@ -182,7 +219,8 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, atLeastOnce()).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
     }
 
     @Test
@@ -197,7 +235,8 @@ class LabResultServiceImplLifecycleTest {
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, atLeastOnce()).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.VERIFIED, LabOrderStatus.RESULTED);
     }
 
     @Test
@@ -357,6 +396,14 @@ class LabResultServiceImplLifecycleTest {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
             .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
@@ -518,7 +565,16 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
             .thenAnswer(inv -> order.getStatus());
-        // an interface principal: no context, no assignment, no super-admin
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        // an interface principal: a context IS bound (the filter chain always
+        // binds one) but it carries no hospital, and there is no assignment
+        // and no super-admin claim behind it
+        bindHospitalContext(null);
         when(roleValidator.getCurrentHospitalId()).thenReturn(null);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
@@ -548,7 +604,12 @@ class LabResultServiceImplLifecycleTest {
         // multi-hospital lab user write into another tenant's order through
         // it; the exemption is for a principal with no scope at all.
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
-        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        // JwtTokenProvider.buildHospitalContext fills activeHospitalId from the
+        // primary/permitted-hospital claims even with no X-Hospital-Id, so a
+        // human on this endpoint resolves a scope and must be checked. That is
+        // also why the exemption is nearly dead code and why the real fix is
+        // fix/hl7-inbound-tenancy.
+        bindHospitalContext(UUID.randomUUID());
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         LabResultRequestDTO request = entryRequest();
@@ -574,21 +635,59 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("the locked status decision reads the COMMITTED status, not the instance loaded before the lock")
-    void theStatusDecisionUsesTheCommittedStatus() {
-        // findWithLockById returns the instance loaded unlocked a few lines
-        // earlier; Hibernate does not refresh it, so a COMPLETED committed by
-        // a concurrent release is invisible and RESULTED would be flushed over
-        // it. The scalar projection is what sees it.
-        order.setStatus(LabOrderStatus.RECEIVED);
+    @DisplayName("the re-open is written as a statement, so a stale snapshot cannot swallow it")
+    void theReopenIsWrittenEvenWhenItMatchesTheSnapshot() {
+        // The race this closes: the order is loaded UNLOCKED (snapshot
+        // RESULTED, from before a concurrent release), the release commits
+        // COMPLETED, we take the lock and read COMPLETED, and the target is
+        // RESULTED again. Writing that through the entity is a no-op — the
+        // dirty check compares against the snapshot, sees RESULTED == RESULTED
+        // and flushes nothing — so the re-open vanished and the amendment
+        // never reached the doctor's queue. The compare-and-set statement
+        // cannot be swallowed that way.
+        order.setStatus(LabOrderStatus.RESULTED);          // the stale snapshot
         stubEntryPath();
-        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.COMPLETED);
+        when(labOrderRepository.findStatusById(order.getId()))
+            .thenReturn(LabOrderStatus.COMPLETED);          // what is actually committed
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
-        // COMPLETED was seen, so this is a re-open rather than a blind advance
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
-        verify(labOrderRepository, atLeastOnce()).save(order);
+        verify(labOrderRepository).updateStatusFrom(
+            order.getId(), LabOrderStatus.COMPLETED, LabOrderStatus.RESULTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    @Test
+    @DisplayName("a status another transaction moved under us is left alone")
+    void aLostCompareAndSetLeavesTheStatusAlone() {
+        // The compare-and-set is guarded by the status read under the lock: if
+        // it matches nothing, somebody else moved the row and this insert does
+        // not overwrite their decision.
+        stubEntryPath();
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RECEIVED);
+        when(labOrderRepository.updateStatusFrom(
+            order.getId(), LabOrderStatus.RECEIVED, LabOrderStatus.RESULTED)).thenReturn(0);
+        // set last: stubbing the compare-and-set above invokes the mock, and
+        // the shared answer would otherwise move the order while arranging it
+        order.setStatus(LabOrderStatus.RECEIVED);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    @DisplayName("the duplicate check runs under the order lock, not before it")
+    void theDuplicateCheckRunsUnderTheLock() {
+        // Run before the lock, two concurrent retries both saw no existing row
+        // and both inserted — the double record the check exists to prevent.
+        stubEntryPath();
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
+        inOrder.verify(labOrderRepository).findWithLockById(order.getId());
+        inOrder.verify(labResultRepository).findByLabOrder_Id(order.getId());
     }
 
     @Test
@@ -611,6 +710,12 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
             .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
@@ -629,6 +734,31 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("a row naming a different analyte is not a repeat, whatever its value")
+    void aDifferentAnalyteIsNotARepeat() {
+        // An HL7 ORU names its analyte (OBX-3) and may carry an abnormal flag;
+        // this entry DTO can express neither, so a row that has one came from
+        // elsewhere. Two analytes of a panel sharing a value, unit, date and
+        // comment are not the same result, and answering 201 with the other
+        // one would lose this one silently.
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResultRequestDTO request = entryRequest();
+        LabResult otherAnalyte = resultOn(order, true);
+        otherAnalyte.setResultValue(request.getResultValue());
+        otherAnalyte.setResultUnit(request.getResultUnit());
+        otherAnalyte.setResultDate(request.getResultDate());
+        otherAnalyte.setNotes(request.getNotes());
+        otherAnalyte.setTestCode("NA");
+
+        stubEntryPath();
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(otherAnalyte));
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    @Test
     @DisplayName("a retried post of a value the order already holds records nothing and returns the row it has")
     void aRepeatedResultIsNotRecordedTwice() {
         // Persisting the retry and merely not re-opening moved the stranding
@@ -642,6 +772,8 @@ class LabResultServiceImplLifecycleTest {
         alreadyThere.setResultUnit(request.getResultUnit());
         alreadyThere.setResultDate(request.getResultDate());
         alreadyThere.setNotes(request.getNotes());
+        alreadyThere.setTestCode(null);
+        alreadyThere.setAbnormalFlag(null);
         LabResultResponseDTO existingDto = LabResultResponseDTO.builder()
             .id(alreadyThere.getId().toString()).build();
 
@@ -659,42 +791,26 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
         // nothing recorded, nothing re-opened, and none of the side effects fire
         verify(labResultRepository, never()).save(any(LabResult.class));
-        verify(labOrderRepository, never()).save(any(LabOrder.class));
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
         verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
-        verify(instrumentOutboxService, never()).enqueueResultObservation(any(UUID.class));
-    }
-
-    @Test
-    @DisplayName("the alert is raised in the clinical transaction; only the outbox is deferred")
-    void theAlertCommitsWithTheResultAndOnlyTheOutboxIsDeferred() {
-        // The alert row and the criticalNotifiedAt stamp are local writes, so
-        // they belong to the same transaction as the result: deferring them
-        // meant a restart between commit and callback lost the alert with
-        // nothing able to recover it. The notification service defers its own
-        // SMS, which is the only blocking hop. The outbox is work for the
-        // instrument interface and stays deferred, by id.
-        stubEntryPath();
-
-        service.createLabResult(entryRequest(), Locale.ENGLISH);
-
-        verify(criticalValueNotificationService).notifyIfCritical(any(LabResult.class), eq("NORMAL"));
-        // no transaction is active in a unit test, so the callback runs inline
-        verify(instrumentOutboxService).enqueueResultObservation(any(UUID.class));
         verify(instrumentOutboxService, never()).enqueueResultObservation(any(LabResult.class));
     }
 
     @Test
-    @DisplayName("a failed outbox enqueue does not fail the request or the alert")
-    void aFailedOutboxEnqueueIsContained() {
-        // It runs after the commit, on a result that is already on the chart:
-        // surfacing as a 500 would tell the clinician their result was lost.
+    @DisplayName("the alert and the outbound message both commit with the result")
+    void theAlertAndTheOutboundMessageCommitWithTheResult() {
+        // Both are local writes. Deferring the alert meant a restart between
+        // commit and callback lost it; deferring the outbound message meant
+        // the same crash lost an ORU the dispatcher can never re-derive, since
+        // it only sends rows that exist. Inside the transaction, each commits
+        // with the result or not at all. The SMS is the one thing that still
+        // waits for the commit, and the notification service owns that.
         stubEntryPath();
-        org.mockito.Mockito.doThrow(new IllegalStateException("outbox down"))
-            .when(instrumentOutboxService).enqueueResultObservation(any(UUID.class));
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);
 
         verify(criticalValueNotificationService).notifyIfCritical(any(LabResult.class), eq("NORMAL"));
+        verify(instrumentOutboxService).enqueueResultObservation(any(LabResult.class));
     }
 
     @Test

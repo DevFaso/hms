@@ -32,7 +32,6 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final InstrumentOutboxRepository outboxRepository;
-    private final com.example.hms.repository.LabResultRepository labResultRepository;
     private final Hl7v2MessageBuilder hl7v2MessageBuilder;
     private final RoleValidator roleValidator;
     private final MllpOutboundProperties outboundProperties;
@@ -54,15 +53,6 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         } catch (Exception ex) {
             log.error("Failed to enqueue OML^O21 for specimen {}: {}", specimen.getId(), ex.getMessage(), ex);
         }
-    }
-
-    @Override
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void enqueueResultObservation(java.util.UUID resultId) {
-        if (resultId == null) {
-            return;
-        }
-        labResultRepository.findById(resultId).ifPresent(this::enqueueResultObservation);
     }
 
     @Override
