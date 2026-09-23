@@ -293,11 +293,12 @@ class LabResultServiceImplWorkflowTest {
 
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
         when(authService.getCurrentUserId()).thenReturn(actorId);
+        // B10: release is LabResultAuthority.RELEASE_ROLES at this hospital —
+        // scientist, manager, director. Doctors, nurses, midwives and hospital
+        // admins are no longer consulted at all.
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isDoctor(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isNurse(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isMidwife(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.isLabManager(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(false);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> labResultService.releaseLabResult(labResultId, Locale.US));
