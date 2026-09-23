@@ -444,9 +444,11 @@ public class LabResultServiceImpl implements LabResultService {
     /**
      * B1: the hospital whose laboratory runs the order — the one it was sent
      * to, else the one that ordered it. Releasing a result is that
-     * laboratory's sign-off on its own work, so it is the running hospital's
-     * roles that authorise it and the running hospital's queue the result
-     * waits on.
+     * laboratory's attestation of its own work, so it is the running
+     * hospital's roles that authorise a release and the running hospital's
+     * queue the result waits on. Signing is not a release: it is the
+     * receiving clinician taking the result into the chart, and either
+     * hospital's clinicians may do it (see {@code signLabResult}).
      */
     private static UUID runningHospitalId(LabOrder labOrder, Hospital orderingHospital) {
         UUID running = labOrder != null ? labOrder.resolvePerformingHospitalId() : null;
@@ -564,8 +566,8 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setSignatureValue(normalizeSignatureValue(request));
         labResult.setSignatureNotes(normalizeSignatureNotes(request));
 
-        // Signing is the LAB attesting its own result; acknowledging is the
-        // ORDERING CLINICIAN confirming receipt. Conflating them is mostly a
+        // Signing and acknowledging are both the receiving clinician's, and
+        // this endpoint does the two together. Folding them is mostly a
         // harmless convenience — except on a critical result, where the
         // auto-acknowledge would silence the escalation sweep with no read-back
         // ever recorded, bypassing the guard on the acknowledge path. A signed

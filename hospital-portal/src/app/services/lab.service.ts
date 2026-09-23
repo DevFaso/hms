@@ -35,6 +35,12 @@ export interface LabResultResponse {
   patientFullName: string;
   patientEmail: string;
   hospitalName: string;
+  /**
+   * The laboratory that ran the order, when it was not this hospital's own
+   * (B1); null for an in-house order. Releasing belongs to that laboratory,
+   * so the release control reads this to know whether it is ours to offer.
+   */
+  performingHospitalId?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;

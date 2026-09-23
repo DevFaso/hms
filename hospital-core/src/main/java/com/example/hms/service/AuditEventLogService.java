@@ -22,8 +22,15 @@ public interface AuditEventLogService {
      * Record several events in ONE transaction, with the same per-event
      * resolution {@link #logEvent} does. A list read that discloses across
      * hospitals writes a row per patient; one committed transaction each
-     * turned a worklist into hundreds. Individual failures are swallowed
-     * exactly as they are for a single event.
+     * turned a worklist into hundreds.
+     *
+     * <p><strong>All or nothing.</strong> The rows share a transaction and
+     * Hibernate flushes them at commit, so a row that fails to persist takes
+     * the whole batch with it — this method cannot offer {@link #logEvent}'s
+     * per-event independence, and does not pretend to. It never throws: a
+     * lost batch is logged. A caller that needs each event to stand or fall
+     * on its own must call {@link #logEvent} per event and pay a transaction
+     * for each.
      */
     void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs);
 

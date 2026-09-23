@@ -37,6 +37,7 @@ public class LabResultMapper {
         null,
         null,
         null,
+        null,
         Collections.emptyList()
     );
 
@@ -61,6 +62,7 @@ public class LabResultMapper {
             .patientEmail(context.patientEmail())
             .hospitalId(context.hospitalId())
             .hospitalName(context.hospitalName())
+            .performingHospitalId(context.performingHospitalId())
             .orderedByName(context.orderedByName())
             .labTestName(context.labTestName())
             .resultValue(result.getResultValue())
@@ -131,6 +133,7 @@ public class LabResultMapper {
         PatientInfo patientInfo = resolvePatientInfo(order);
         String hospitalId = resolveHospitalId(order);
         String hospitalName = resolveHospitalName(order);
+        String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
         String labOrderCode = order.getId() != null ? order.getId().toString() : null;
         String orderedByName = resolveOrderingStaffName(order);
@@ -140,6 +143,7 @@ public class LabResultMapper {
             patientInfo.email(),
             hospitalId,
             hospitalName,
+            performingHospitalId,
             labTestMetadata.name(),
             labTestMetadata.testCode(),
             labOrderCode,
@@ -153,6 +157,7 @@ public class LabResultMapper {
             String patientEmail,
             String hospitalId,
             String hospitalName,
+            String performingHospitalId,
             String labTestName,
             String labTestCode,
             String labOrderCode,
@@ -184,6 +189,20 @@ public class LabResultMapper {
             return null;
         }
         return order.getHospital().getId() != null ? order.getHospital().getId().toString() : null;
+    }
+
+    /**
+     * B1: the laboratory the order was routed to, null when the ordering
+     * hospital ran it. Guarded like every other association here — a
+     * uninitialised proxy answers null rather than throwing mid-list.
+     */
+    private String resolvePerformingHospitalId(LabOrder order) {
+        if (order.getPerformingHospital() == null || !Hibernate.isInitialized(order.getPerformingHospital())) {
+            return null;
+        }
+        return order.getPerformingHospital().getId() != null
+            ? order.getPerformingHospital().getId().toString()
+            : null;
     }
 
     private String resolveHospitalName(LabOrder order) {

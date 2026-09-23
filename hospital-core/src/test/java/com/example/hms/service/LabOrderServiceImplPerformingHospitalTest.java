@@ -492,6 +492,18 @@ class LabOrderServiceImplPerformingHospitalTest {
     }
 
     @Test
+    void anAuditFailureDoesNotFailTheRead() {
+        // Accounting a read must never fail it: the worklist still answers
+        // when the disclosure side is down.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(roleValidator.getCurrentUserId()).thenThrow(new IllegalStateException("audit side down"));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH)).isSameAs(mapped);
+    }
+
+    @Test
     void theOrderingHospitalsOwnReadIsNotADisclosure() {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());

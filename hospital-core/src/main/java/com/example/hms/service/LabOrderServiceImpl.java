@@ -197,27 +197,38 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (actingHospitalId == null || orders.isEmpty()) {
             return;
         }
-        Map<UUID, Map<String, Long>> perPatient = new java.util.HashMap<>();
-        for (LabOrder order : orders) {
-            if (!order.isPerformedAt(actingHospitalId)) {
-                continue;
+        // Accounting a read must never fail it. Everything here — resolving
+        // the patients, the actor, the break-glass session inside the
+        // recorder — is wrapped, so a worklist still answers when the audit
+        // side is down. The reach itself is best-effort by the same contract
+        // the notifier and the critical-value service follow.
+        try {
+            Map<UUID, Map<String, Long>> perPatient = new java.util.HashMap<>();
+            for (LabOrder order : orders) {
+                if (!order.isPerformedAt(actingHospitalId)) {
+                    continue;
+                }
+                UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+                UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
+                if (patientId == null || source == null) {
+                    continue;
+                }
+                perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
+                    .merge(source.toString(), 1L, Long::sum);
             }
-            UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
-            UUID source = CrossHospitalReachRecorder.hospitalIdOf(order.getHospital());
-            if (patientId == null || source == null) {
-                continue;
+            if (perPatient.isEmpty()) {
+                return;
             }
-            perPatient.computeIfAbsent(patientId, key -> new java.util.HashMap<>())
-                .merge(source.toString(), 1L, Long::sum);
+            // Batched purely for cost: the page's patients are resolved once
+            // and written in one pass, where recording per patient cost a
+            // break-glass query and a committed transaction each. Nothing is
+            // suppressed — every read is recorded.
+            reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
+                roleValidator.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            log.warn("Cross-hospital disclosure accounting failed for a performing-laboratory read at {}: {}",
+                actingHospitalId, ex.getMessage());
         }
-        if (perPatient.isEmpty()) {
-            return;
-        }
-        // One dedupe query and one transaction for the whole page: recording
-        // per patient cost a break-glass query and a committed transaction
-        // each, on every refresh of a worklist that can hold hundreds.
-        reachRecorder.recordBatchedReach(perPatient, actingHospitalId,
-            roleValidator.getCurrentUserId(), null, PERFORMED_HERE_REACH_DESCRIPTION);
     }
 
     private static boolean isRoutableLab(Hospital hospital) {

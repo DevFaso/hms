@@ -113,20 +113,26 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         }
     }
 
+    /**
+     * One transaction for the whole batch, and therefore all-or-nothing: the
+     * rows flush together at commit, so catching per row here would only look
+     * like independence — the failure surfaces when the transaction commits,
+     * long after any per-row catch could have contained it. The batch is
+     * wrapped instead, and what is lost is said out loud.
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs) {
         if (requestDTOs == null || requestDTOs.isEmpty()) {
             return;
         }
-        for (AuditEventRequestDTO requestDTO : requestDTOs) {
-            try {
+        try {
+            for (AuditEventRequestDTO requestDTO : requestDTOs) {
                 doLogEvent(requestDTO);
-            } catch (Exception e) {
-                log.error("[AUDIT] Failed to persist batched audit event (eventType={}, resourceId={}, userId={}): {}",
-                        requestDTO.getEventType(), requestDTO.getResourceId(), requestDTO.getUserId(),
-                        e.getMessage(), e);
             }
+        } catch (Exception e) {
+            log.error("[AUDIT] Failed to persist a batch of {} audit event(s); the whole batch is lost: {}",
+                    requestDTOs.size(), e.getMessage(), e);
         }
     }
 

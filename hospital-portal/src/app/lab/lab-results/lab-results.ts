@@ -108,6 +108,13 @@ export class LabResultsComponent implements OnInit {
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
   ]);
+  /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
+  readonly canRelease = this.roleContext.hasAnyActiveRole([
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_SUPER_ADMIN',
+  ]);
   /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
   readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
@@ -302,6 +309,24 @@ export class LabResultsComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /**
+   * B1: releasing is the running laboratory's attestation of its own work, so
+   * an order sent to another hospital is released there, not here. The button
+   * was offered to everyone on an unreleased row and answered 400 for the
+   * ordering hospital's lab staff — a control that refuses the person it is
+   * shown to teaches them to distrust the screen.
+   */
+  canReleaseResult(r: LabResultResponse): boolean {
+    if (!this.canRelease || r.released) {
+      return false;
+    }
+    const performing = r.performingHospitalId;
+    if (!performing) {
+      return true;
+    }
+    return performing === this.roleContext.effectiveHospitalIdForRequest();
   }
 
   releaseResult(r: LabResultResponse): void {

@@ -46,11 +46,6 @@ public class CrossHospitalReachRecorder {
 
     private final AuditEventLogService auditEventLogService;
     private final BreakGlassGate breakGlassGate;
-    private final com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
-
-    /** Reads {@code sourceHospitalId} back out of a recorded row's details JSON. */
-    private static final java.util.regex.Pattern SOURCE_HOSPITAL_IN_DETAILS =
-        java.util.regex.Pattern.compile("\"" + DETAIL_SOURCE_HOSPITAL_ID + "\"\\s*:\\s*\"([^\"]+)\"");
 
     /**
      * Count the source hospitals in {@code sourceHospitalIds} that are not
@@ -83,20 +78,22 @@ public class CrossHospitalReachRecorder {
 
     /**
      * Batched sibling of {@link #recordReach} for a list read: the disclosures
-     * of a whole page in one dedupe query and one transaction, where the
+     * of a whole page resolved once and written in one pass, where a
      * per-patient loop cost a break-glass query and a committed transaction
-     * each — a few hundred patients on a worklist meant a few hundred of both,
-     * on every refresh.
+     * each — a few hundred patients on a worklist meant a few hundred of both.
      *
-     * <p>A disclosure the same actor already has for that patient and source
-     * hospital <strong>today</strong> is not written again. The accounting
-     * defines no repeat of its own — {@code DisclosureAccountingServiceImpl}
-     * counts and lists every row over whatever window the reader asks for — so
-     * without a bound here a clinician refreshing a worklist would fill the
-     * patient's own disclosure report with the same line. The calendar day is
-     * the narrowest bound that still reads as one disclosure episode to the
-     * patient; the first row of the day carries its {@code rowsSurfaced} and
-     * later identical reads add nothing.
+     * <p>Efficiency only: <strong>every read is recorded</strong>, exactly as
+     * {@code getLabOrdersByPatientId} records one. Nothing here suppresses a
+     * repeat. An earlier calendar-day dedupe was removed because the
+     * accounting has no notion of a repeat anywhere else, and every way of
+     * inventing one here under-reported: it matched any RECORD_SHARE for the
+     * actor and patient — so an unrelated chart read earlier in the day
+     * silenced the worklist disclosure — it left the acting hospital out of
+     * the key, so an actor working at two performing hospitals never recorded
+     * the second, and it froze {@code rowsSurfaced} at the day's first read.
+     *
+     * <p>Never throws: an audit failure must not fail the read it accounts
+     * for.
      *
      * @param perPatient patient id -> (source hospital id -> rows surfaced)
      */
@@ -105,87 +102,43 @@ public class CrossHospitalReachRecorder {
         if (perPatient == null || perPatient.isEmpty()) {
             return;
         }
-        Set<String> alreadyToday = disclosuresAlreadyRecordedToday(requesterUserId, perPatient.keySet());
-        Map<UUID, Optional<UUID>> breakGlassByPatient = new HashMap<>();
-        List<AuditEventRequestDTO> pending = new ArrayList<>();
+        try {
+            Map<UUID, Optional<UUID>> breakGlassByPatient = new HashMap<>();
+            List<AuditEventRequestDTO> pending = new ArrayList<>();
 
-        for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
-            UUID patientId = patient.getKey();
-            if (patientId == null) {
-                continue;
-            }
-            for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
-                if (alreadyToday.contains(dedupeKey(patientId, reach.getKey()))) {
+            for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
+                UUID patientId = patient.getKey();
+                if (patientId == null) {
                     continue;
                 }
-                Optional<UUID> breakGlassSessionId = breakGlassByPatient.computeIfAbsent(patientId,
-                    id -> breakGlassGate.liveSessionId(requesterUserId, id, actingHospitalId));
-                Map<String, Object> details = new HashMap<>();
-                details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
-                details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
-                details.put(DETAIL_ROWS_SURFACED, reach.getValue());
-                breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
-                pending.add(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.RECORD_SHARE)
-                    .status(AuditStatus.SUCCESS)
-                    .userId(requesterUserId)
-                    .assignmentId(assignmentId)
-                    .patientId(patientId)
-                    .entityType(ENTITY_TYPE_PATIENT)
-                    .resourceId(patientId.toString())
-                    .eventDescription(description)
-                    .details(details)
-                    .build());
-            }
-        }
-        if (pending.isEmpty()) {
-            return;
-        }
-        try {
-            auditEventLogService.logEvents(pending);
-        } catch (RuntimeException ex) {
-            log.warn("[record-access] batched cross-hospital disclosure audit failed for {} row(s): {}",
-                pending.size(), ex.getMessage());
-        }
-    }
-
-    private static String dedupeKey(UUID patientId, String sourceHospitalId) {
-        return patientId + "|" + sourceHospitalId;
-    }
-
-    /**
-     * The (patient, source hospital) disclosures this actor already recorded
-     * since midnight. A missing actor cannot be matched against anything, so
-     * nothing is suppressed for one.
-     */
-    private Set<String> disclosuresAlreadyRecordedToday(UUID requesterUserId, java.util.Collection<UUID> patientIds) {
-        if (requesterUserId == null || patientIds.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> recorded = new java.util.HashSet<>();
-        try {
-            List<Object[]> rows = auditEventLogRepository.findDisclosureDetailsForActorSince(
-                AuditEventType.RECORD_SHARE, requesterUserId, patientIds,
-                java.time.LocalDate.now().atStartOfDay());
-            for (Object[] row : rows) {
-                UUID patientId = (UUID) row[0];
-                String details = (String) row[1];
-                if (patientId == null || details == null) {
-                    continue;
-                }
-                java.util.regex.Matcher matcher = SOURCE_HOSPITAL_IN_DETAILS.matcher(details);
-                if (matcher.find()) {
-                    recorded.add(dedupeKey(patientId, matcher.group(1)));
+                for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
+                    Optional<UUID> breakGlassSessionId = breakGlassByPatient.computeIfAbsent(patientId,
+                        id -> breakGlassGate.liveSessionId(requesterUserId, id, actingHospitalId));
+                    Map<String, Object> details = new HashMap<>();
+                    details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
+                    details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
+                    details.put(DETAIL_ROWS_SURFACED, reach.getValue());
+                    breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
+                    pending.add(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.RECORD_SHARE)
+                        .status(AuditStatus.SUCCESS)
+                        .userId(requesterUserId)
+                        .assignmentId(assignmentId)
+                        .patientId(patientId)
+                        .entityType(ENTITY_TYPE_PATIENT)
+                        .resourceId(patientId.toString())
+                        .eventDescription(description)
+                        .details(details)
+                        .build());
                 }
             }
+            if (!pending.isEmpty()) {
+                auditEventLogService.logEvents(pending);
+            }
         } catch (RuntimeException ex) {
-            // A dedupe that cannot read the past records everything rather
-            // than nothing: a duplicate line is a nuisance, a missing
-            // disclosure is a defect.
-            log.warn("[record-access] could not read today's disclosures for actor {}: {}",
-                requesterUserId, ex.getMessage());
+            log.warn("[record-access] batched cross-hospital disclosure audit failed for {} patient(s): {}",
+                perPatient.size(), ex.getMessage());
         }
-        return recorded;
     }
 
     /**
