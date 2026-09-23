@@ -504,8 +504,22 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         UUID labResultId = labResult.getId();
-        TransactionCallbacks.afterCommit(
-            () -> instrumentOutboxService.enqueueReleasedObservation(labResultId));
+        // The catch belongs HERE, outside the REQUIRES_NEW proxy: the enqueue's
+        // INSERT is validated and written when that inner transaction commits,
+        // so a catch inside the service method never sees the failure. And an
+        // exception escaping an afterCommit callback propagates to whoever
+        // committed — the endpoint would answer 500 for a release that DID
+        // happen, and the retry would hit the already-released early return and
+        // never enqueue anything. The release is the clinical write; the
+        // message is not.
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                instrumentOutboxService.enqueueReleasedObservation(labResultId);
+            } catch (RuntimeException ex) {
+                LOG.error("Released ORU^R01 not enqueued for result {}: {}",
+                    labResultId, ex.getMessage(), ex);
+            }
+        });
     }
 
     @Override

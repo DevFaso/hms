@@ -74,6 +74,13 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
      * it either: the result really is released, and the message really is
      * owed. Takes the id rather than the entity because the caller's
      * persistence context is gone by the time this runs.
+     *
+     * <p><strong>This method does not catch its own failures, and must not.</strong>
+     * The INSERT and its bean validation happen when this transaction commits,
+     * which is after any {@code catch} inside the method body has gone out of
+     * scope — the same commit-time blind spot that made the in-caller enqueue
+     * a rollback trap. The only place that can see a commit failure here is the
+     * caller, outside this proxy, which is where the handler lives.
      */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -81,17 +88,12 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         if (labResultId == null) {
             return;
         }
-        try {
-            LabResult result = labResultRepository.findById(labResultId).orElse(null);
-            if (result == null) {
-                log.warn("Released ORU^R01 not enqueued — labResult {} no longer exists", labResultId);
-                return;
-            }
-            enqueueResultObservation(result);
-        } catch (Exception ex) {
-            log.error("Failed to enqueue the released ORU^R01 for result {}: {}",
-                labResultId, ex.getMessage(), ex);
+        LabResult result = labResultRepository.findById(labResultId).orElse(null);
+        if (result == null) {
+            log.warn("Released ORU^R01 not enqueued — labResult {} no longer exists", labResultId);
+            return;
         }
+        enqueueResultObservation(result);
     }
 
     @Override

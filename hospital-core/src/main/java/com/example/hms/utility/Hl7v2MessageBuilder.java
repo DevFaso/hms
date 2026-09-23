@@ -30,6 +30,10 @@ public class Hl7v2MessageBuilder {
     private static final String RECEIVING_APP = "LAB_ANALYZER";
     private static final String RECEIVING_FAC = "LAB";
     private static final char SEG_TERM = '\r';
+    /** OBX-11 (HL7 table 0085): the laboratory has released this result. */
+    private static final String OBX_STATUS_FINAL = "F";
+    /** OBX-11: recorded but not released — the bench is not finished with it. */
+    private static final String OBX_STATUS_PRELIMINARY = "P";
 
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
 
@@ -37,11 +41,6 @@ public class Hl7v2MessageBuilder {
      * Builds an OML^O21 (laboratory order) message for the given specimen.
      * Triggered when a specimen is received at the lab.
      */
-    /** OBX-11 (HL7 table 0085): the laboratory has released this result. */
-    private static final String OBX_STATUS_FINAL = "F";
-    /** OBX-11: recorded but not released — the bench is not finished with it. */
-    private static final String OBX_STATUS_PRELIMINARY = "P";
-
     public String buildOml021(LabSpecimen specimen) {
         LabOrder order = specimen.getLabOrder();
         String now = LocalDateTime.now().format(HL7_DT);

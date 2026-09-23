@@ -33,11 +33,14 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -224,14 +227,58 @@ class LabResultServiceImplWorkflowTest {
         givenAReleasableResult(labResult);
         when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
 
-        labResultService.releaseLabResult(labResultId, Locale.US);
+        // A real synchronization, or TransactionCallbacks runs the action inline
+        // and this test passes just as happily with the deferral deleted.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            labResultService.releaseLabResult(labResultId, Locale.US);
 
-        verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
-        // Never the entity from inside the caller's transaction.
+            verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+            assertThat(labResult.isReleased())
+                .as("the row is released before the message is owed, so OBX-11 goes out as F")
+                .isTrue();
+
+            commitRegisteredCallbacks();
+            verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        // Never the entity overload — that one runs inside the caller's transaction.
         verify(instrumentOutboxService, never()).enqueueResultObservation(any());
-        assertThat(labResult.isReleased())
-            .as("the row is released before the message is owed, so OBX-11 goes out as F")
-            .isTrue();
+    }
+
+    /**
+     * An outbox failure must not reach the caller. The enqueue runs after the
+     * release has committed, so an exception escaping the callback would answer
+     * 500 for a release that DID happen — and the retry would hit the
+     * already-released early return and never enqueue anything at all.
+     */
+    @Test
+    void aFailingEnqueueDoesNotFailTheRelease() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        when(instrumentOutboxService.hasTransmittedObservation(labOrder.getId())).thenReturn(true);
+        doThrow(new IllegalStateException("outbox insert failed at commit"))
+            .when(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertDoesNotThrow(() -> labResultService.releaseLabResult(labResultId, Locale.US));
+            assertDoesNotThrow(this::commitRegisteredCallbacks);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+    }
+
+    /** Fires what the transaction manager fires on a successful commit. */
+    private void commitRegisteredCallbacks() {
+        List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+            .forEach(TransactionSynchronization::afterCommit);
     }
 
     /**
