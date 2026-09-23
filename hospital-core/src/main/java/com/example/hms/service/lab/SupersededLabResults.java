@@ -41,14 +41,19 @@ public final class SupersededLabResults {
     /**
      * The analytes among these rows that already have a released result.
      * Computed once per read and passed to {@link #isSupersededByRelease}.
+     *
+     * <p>Both methods here require their arguments. An earlier version accepted
+     * null for each, which was not defensiveness but a false statement about
+     * the contract — the rows are a repository result and its elements are
+     * entities. Sonar read it exactly as written: because this method handled a
+     * null collection, the caller's list could be null, so dereferencing it on
+     * the next line would throw. The guard invented the bug it was guarding
+     * against.
      */
     public static Set<AnalyteKey> releasedAnalytes(Collection<LabResult> rows) {
         Set<AnalyteKey> released = new HashSet<>();
-        if (rows == null) {
-            return released;
-        }
         for (LabResult row : rows) {
-            if (row != null && row.isReleased()) {
+            if (row.isReleased()) {
                 AnalyteKey key = analyteKey(row);
                 if (key != null) {
                     released.add(key);
@@ -64,7 +69,7 @@ public final class SupersededLabResults {
      * row is never superseded, and neither is a row without an analyte.
      */
     public static boolean isSupersededByRelease(LabResult row, Set<AnalyteKey> releasedAnalytes) {
-        if (row == null || row.isReleased() || releasedAnalytes == null || releasedAnalytes.isEmpty()) {
+        if (releasedAnalytes.isEmpty() || row.isReleased()) {
             return false;
         }
         AnalyteKey key = analyteKey(row);

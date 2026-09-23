@@ -102,10 +102,12 @@ class SupersededLabResultsTest {
     }
 
     @Test
-    @DisplayName("nulls and empties are answered, not thrown at")
-    void nullsAreTolerated() {
-        assertThat(SupersededLabResults.releasedAnalytes(null)).isEmpty();
-        assertThat(SupersededLabResults.isSupersededByRelease(null, Set.of())).isFalse();
-        assertThat(SupersededLabResults.isSupersededByRelease(row(order(), "HGB", false), null)).isFalse();
+    @DisplayName("no released rows at all: nothing is superseded, and the set is not consulted per row")
+    void withNothingReleasedNothingIsSuperseded() {
+        LabOrder order = order();
+        LabResult pending = row(order, "HGB", false);
+
+        assertThat(SupersededLabResults.releasedAnalytes(List.of(pending))).isEmpty();
+        assertThat(SupersededLabResults.isSupersededByRelease(pending, Set.of())).isFalse();
     }
 }
