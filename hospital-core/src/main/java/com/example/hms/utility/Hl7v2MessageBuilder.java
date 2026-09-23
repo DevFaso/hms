@@ -1,5 +1,6 @@
 package com.example.hms.utility;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
@@ -29,6 +30,10 @@ public class Hl7v2MessageBuilder {
     private static final String RECEIVING_APP = "LAB_ANALYZER";
     private static final String RECEIVING_FAC = "LAB";
     private static final char SEG_TERM = '\r';
+    /** OBX-11 (HL7 table 0085): the laboratory has released this result. */
+    private static final String OBX_STATUS_FINAL = "F";
+    /** OBX-11: recorded but not released — the bench is not finished with it. */
+    private static final String OBX_STATUS_PRELIMINARY = "P";
 
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
 
@@ -62,6 +67,25 @@ public class Hl7v2MessageBuilder {
 
     /**
      * Builds an ORU^R01 (unsolicited observation result) for the given lab result.
+     *
+     * <p>OBX field numbering is the HL7 v2.5 one, the same
+     * {@link #parseOruR01} reads: OBX-7 reference range, OBX-8 abnormal
+     * flags, OBX-11 observation result status, OBX-14 date/time of the
+     * observation. Until this was fixed the flag went out at OBX-10, the
+     * status at OBX-13 and the date at OBX-16 — two fields late each —
+     * so a receiver (our own parser included) read no flag at all and
+     * graded every result normal.
+     *
+     * <p>OBX-11 reports what this result actually is: {@code F} once the
+     * laboratory has released it, {@code P} (preliminary) before that.
+     * {@code LabResultServiceImpl.createLabResult} enqueues an outbound
+     * ORU for every result, released or not, so a hard-coded {@code F}
+     * published unverified values as final — the outbound mirror of the
+     * ingest bug fixed alongside it. {@code C} (corrected) is not emitted
+     * because the model has no correction concept: nothing on
+     * {@code LabResult} distinguishes an amended result from a first one.
+     * A release enqueues a second ORU, so a receiver that saw the {@code P}
+     * gets the {@code F}.
      */
     public String buildOruR01(LabResult result) {
         LabOrder order = result.getLabOrder();
@@ -75,14 +99,16 @@ public class Hl7v2MessageBuilder {
         String testCode = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : "";
         String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : "";
         String resultDate = result.getResultDate() != null ? result.getResultDate().format(HL7_DT) : now;
-        String abnormalFlag = result.getAbnormalFlag() != null ? toHl7AbnormalFlag(result.getAbnormalFlag().name()) : "N";
+        String abnormalFlag = toHl7AbnormalFlag(result.getAbnormalFlag());
+        String resultStatus = result.isReleased() ? OBX_STATUS_FINAL : OBX_STATUS_PRELIMINARY;
         String orderId = order.getId() != null ? order.getId().toString() : "";
 
         return msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
-            "OBX|1|ST|" + testCode + "^" + testName + "||" + result.getResultValue() + "|" +
-            result.getResultUnit() + "||||" + abnormalFlag + "|||F|||" + resultDate + SEG_TERM;
+            "OBX|1|ST|" + testCode + "^" + testName + "||" + blankIfNull(result.getResultValue()) + "|" +
+            blankIfNull(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
+            + "|||" + resultDate + SEG_TERM;
     }
 
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────
@@ -101,6 +127,12 @@ public class Hl7v2MessageBuilder {
      * <p>{@code setId} (OBX-1) discriminates sibling observations of one
      * message — every OBX shares the MSH-level dedup triple, so this is
      * what keeps them distinct rows under the V131 unique index.
+     *
+     * <p>{@code resultStatus} (OBX-11, HL7 table 0085) says whether the
+     * value is final ({@code F}), corrected ({@code C}), preliminary
+     * ({@code P}), pending ({@code I}), partial ({@code S}) ...; the
+     * ingest stores every one but only a final or corrected result moves
+     * the order on.
      */
     public record ParsedObservation(
         String patientId,
@@ -112,7 +144,8 @@ public class Hl7v2MessageBuilder {
         String resultUnit,
         String referenceRange,
         String abnormalFlag,
-        LocalDateTime resultDate
+        LocalDateTime resultDate,
+        String resultStatus
     ) {}
 
     /**
@@ -156,9 +189,10 @@ public class Hl7v2MessageBuilder {
         String unit     = f.length > 6  ? f[6]                 : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
+        String status   = f.length > 11 ? f[11].trim()         : "";
         String datePart = f.length > 14 ? f[14]                : "";
         return new ParsedObservation(patientId, placer, filler, setId, testCode,
-            value, unit, refRange, abnFlag, parseHl7DateTime(datePart));
+            value, unit, refRange, abnFlag, parseHl7DateTime(datePart), status);
     }
 
     // ── Inbound ADT parser ────────────────────────────────────────────────────
@@ -399,13 +433,44 @@ public class Hl7v2MessageBuilder {
         }
     }
 
-    /** Maps internal AbnormalFlag name to single-char HL7v2 abnormal flag. */
-    private String toHl7AbnormalFlag(String flagName) {
-        return switch (flagName) {
-            case "NORMAL"   -> "N";
-            case "ABNORMAL" -> "A";
-            case "CRITICAL" -> "HH";
-            default         -> "N";
+    /**
+     * An absent field is empty, never the four characters {@code null}.
+     * {@code resultUnit} is nullable on the entity and a concatenation would
+     * put the word into OBX-6 for any unitless result; the release ORU means
+     * every result is built twice, so it went out twice.
+     */
+    private static String blankIfNull(String value) {
+        return value == null ? "" : value;
+    }
+
+    /**
+     * Maps the internal flag to the HL7 v2 OBX-8 code, and an absent flag
+     * to an ABSENT field.
+     *
+     * <p>A blank OBX-8 and an {@code N} are different statements — "nobody
+     * graded this" against "the analyzer says it is normal" — and our own
+     * ingest depends on the difference: {@code isExplicitlyNormal} releases
+     * on {@code N} and holds a blank back for a person to read. Sending
+     * {@code N} for an ungraded value (which this did for a null flag, and
+     * for any unrecognised name through its {@code default}) would have a
+     * peer HMS with auto-verification on publish an ungraded value to a
+     * patient — the very thing the receiving half of this PR prevents. So
+     * the distinction has to survive egress too.
+     *
+     * <p>The switch is exhaustive over the enum on purpose: a new
+     * {@link AbnormalFlag} constant becomes a compile error here rather
+     * than silently going out as normal.
+     */
+    private String toHl7AbnormalFlag(AbnormalFlag flag) {
+        if (flag == null) {
+            return "";
+        }
+        return switch (flag) {
+            case NORMAL -> "N";
+            case ABNORMAL -> "A";
+            case ABNORMAL_LOW -> "L";
+            case ABNORMAL_HIGH -> "H";
+            case CRITICAL -> "HH";
         };
     }
 }

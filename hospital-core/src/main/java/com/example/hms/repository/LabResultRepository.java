@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -144,6 +146,55 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     List<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds);
 
+    /**
+     * B1: results of orders the hospitals order OR perform (V161
+     * performing_hospital_id).
+     *
+     * <p>Carries the same entity graph as the {@code _IdIn} finder it stands
+     * in for. Without it every row costs the mapper about six extra selects,
+     * and worse: {@code LabResultMapper}'s {@code Hibernate.isInitialized}
+     * guards return null for an uninitialised proxy, so the HOSPITAL / ORDER
+     * CODE / PATIENT NAME / TEST columns come back empty rather than slow.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id IN :hospitalIds
+           OR r.labOrder.performingHospital.id IN :hospitalIds
+    """)
+    List<LabResult> findHandledByHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
+
+    /** B1: paged results of orders the hospital orders OR performs. Same graph, same reason. */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId
+    """)
+    Page<LabResult> findHandledByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -243,8 +294,25 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         Pageable pageable
     );
 
-    /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
+    /**
+     * The REST ingest adapter's replay lookup: the same message triple, but
+     * ONLY within the order it was posted against.
+     *
+     * <p>The unscoped sibling below is safe where it is used — the MLLP path
+     * has already resolved the sending analyzer to a hospital before it asks
+     * — but the REST adapter takes all three values from the request body. A
+     * caller who wrote an MSH copying another hospital's analyzer, facility
+     * and control id would match that hospital's row and be handed it back
+     * in full, patient name and result value included. Scoped to the order
+     * id, a replay can only ever match a message already recorded against
+     * the very order the caller named, which is the order their own tenancy
+     * check already covered.
+     */
+    Optional<LabResult> findFirstByLabOrder_IdAndSourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+        UUID labOrderId,
+        String sourceSendingApplication,
+        String sourceSendingFacility,
+        String sourceMessageControlId);
 
     /**
      * Look up an existing result by the composite
@@ -282,11 +350,43 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
 
     /**
+     * The doctor's critical strip (B15): critical results of this provider's
+     * orders that nobody has acknowledged yet, no older than the floor. The
+     * strip used to count every CRITICAL result ever filed for the staff and
+     * show it as the live safety-alert count.
+     */
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
+        UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
+
+    /**
      * Hospital-scoped tile count for the super-admin dashboard. LabResult
      * has no direct hospital_id column — the scope flows through the
      * parent LabOrder.hospital. Derived via Spring Data's nested-property
      * naming.
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
+
+    /**
+     * B14 — the release worklist: every row of the hospital nobody has
+     * released yet, hand-entered or analyzer-ingested alike. With
+     * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
+     * observation lands here and stays "pending" for the patient until a
+     * lab user releases it, so a worklist MUST be able to find it.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.labTestDefinition"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE r.released = false
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE r.released = false
+          AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+    """)
+    Page<LabResult> findPendingReleaseHandledBy(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 }
 

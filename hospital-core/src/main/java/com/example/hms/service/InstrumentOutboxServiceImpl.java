@@ -11,6 +11,7 @@ import com.example.hms.payload.dto.InstrumentOutboxPageDTO;
 import com.example.hms.payload.dto.InstrumentOutboxResponseDTO;
 import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
 import com.example.hms.repository.InstrumentOutboxRepository;
+import com.example.hms.repository.LabResultRepository;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -35,6 +37,10 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     private final Hl7v2MessageBuilder hl7v2MessageBuilder;
     private final RoleValidator roleValidator;
     private final MllpOutboundProperties outboundProperties;
+    /** Last, so an existing positional constructor call in a test only appends. */
+    private final LabResultRepository labResultRepository;
+
+    private static final String ORU_R01 = "ORU^R01";
 
     @Override
     @Transactional
@@ -55,23 +61,101 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         }
     }
 
+    /**
+     * Runs in its own transaction, after the release has committed, so a
+     * failure here cannot roll the release back — and cannot be rolled back BY
+     * it either: the result really is released, and the message really is
+     * owed. Takes the id rather than the entity because the caller's
+     * persistence context is gone by the time this runs.
+     *
+     * <p><strong>This method does not catch its own failures, and must not.</strong>
+     * The INSERT and its bean validation happen when this transaction commits,
+     * which is after any {@code catch} inside the method body has gone out of
+     * scope — the same commit-time blind spot that made the in-caller enqueue
+     * a rollback trap. The only place that can see a commit failure here is the
+     * caller, outside this proxy, which is where the handler lives.
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void enqueueReleasedObservation(UUID labResultId) {
+        if (labResultId == null) {
+            return;
+        }
+        LabResult result = labResultRepository.findById(labResultId).orElse(null);
+        if (result == null) {
+            log.warn("Released ORU^R01 not enqueued — labResult {} no longer exists", labResultId);
+            return;
+        }
+        // The shared writer, not the sibling public method: calling that
+        // through `this` bypasses the proxy, which would leave ITS
+        // @Transactional inert. Nothing about the behaviour here depended on
+        // that annotation — this method already holds the REQUIRES_NEW
+        // transaction the release needs, and it holds it for real, because the
+        // release calls in through the injected interface — but an annotation
+        // that silently does nothing is a trap for whoever edits it next.
+        saveResultObservation(result);
+    }
+
     @Override
     @Transactional
     public void enqueueResultObservation(LabResult result) {
+        // NOT wrapped in a catch, deliberately. This runs in the caller's
+        // transaction — the outbox row and the result commit together or not
+        // at all, which is the whole point of an outbox — and a persistence
+        // failure in here marks that transaction rollback-only whatever this
+        // method does with the exception. Swallowing it therefore bought
+        // nothing and lied twice: the caller believed the write was contained
+        // and then got a 500 at commit anyway, with the cause logged as a
+        // warning instead of raised (the #553 lesson, in a new place).
+        // Failing loudly means the caller sees the real error and retries the
+        // whole clinical write, which is recoverable; a result on the chart
+        // with no ORU behind it is not.
+        // Building the message is pure formatting, and it dereferences the
+        // order's patient and test definition: a null one is an interface
+        // defect, not a reason to refuse the clinician's result. Uncontaining
+        // the SAVE is what the rollback-only argument justifies — a failed
+        // INSERT poisons this transaction whatever anyone catches — and that
+        // argument says nothing about the formatting, which fails on its own
+        // and leaves the transaction untouched. So the build is contained and
+        // the save is not: a formatting bug costs this one outbound message,
+        // logged loudly, instead of blocking every result entry on the order.
+        String payload;
         try {
-            String payload = hl7v2MessageBuilder.buildOruR01(result);
-            InstrumentOutbox message = InstrumentOutbox.builder()
-                .labOrder(result.getLabOrder())
-                .messageType("ORU^R01")
-                .payload(payload)
-                .status(InstrumentOutboxStatus.PENDING)
-                .build();
-            outboxRepository.save(message);
-            log.debug("Enqueued ORU^R01 for result {} / order {}",
-                result.getId(), result.getLabOrder().getId());
-        } catch (Exception ex) {
-            log.error("Failed to enqueue ORU^R01 for result {}: {}", result.getId(), ex.getMessage(), ex);
+            payload = hl7v2MessageBuilder.buildOruR01(result);
+        } catch (RuntimeException cannotFormat) {
+            log.error("ORU^R01 could not be built for result {}; the result stands, the message is not queued: {}",
+                result.getId(), cannotFormat.getMessage(), cannotFormat);
+            return;
         }
+        InstrumentOutbox message = InstrumentOutbox.builder()
+            .labOrder(result.getLabOrder())
+            .messageType(ORU_R01)
+            .payload(payload)
+            .status(InstrumentOutboxStatus.PENDING)
+            .build();
+        outboxRepository.save(message);
+        log.debug("Enqueued ORU^R01 for result {} / order {}",
+            result.getId(), result.getLabOrder().getId());
+    }
+
+    /**
+     * Builds and stores the outbound observation. Deliberately unannotated: it
+     * runs in whatever transaction its caller already holds, and both callers
+     * hold one. The released path does NOT wrap this in a catch — a failure
+     * there belongs to the handler outside that proxy, which is the only place
+     * that can see the commit.
+     */
+    private void saveResultObservation(LabResult result) {
+        String payload = hl7v2MessageBuilder.buildOruR01(result);
+        InstrumentOutbox message = InstrumentOutbox.builder()
+            .labOrder(result.getLabOrder())
+            .messageType(ORU_R01)
+            .payload(payload)
+            .status(InstrumentOutboxStatus.PENDING)
+            .build();
+        outboxRepository.save(message);
+        log.debug("Enqueued ORU^R01 for result {} / order {}",
+            result.getId(), result.getLabOrder().getId());
     }
 
     @Override
@@ -79,7 +163,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     public List<InstrumentOutboxResponseDTO> getMessagesByLabOrder(UUID labOrderId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         return outboxRepository.findByLabOrder_Id(labOrderId).stream()
-            .filter(m -> hospitalId == null || hospitalId.equals(m.getLabOrder().getHospital().getId()))
+            .filter(m -> m.getLabOrder().isHandledBy(hospitalId))
             .map(this::toResponseDTO)
             .toList();
     }
@@ -168,7 +252,8 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         InstrumentOutbox message = outboxRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Outbox message not found with ID: " + id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && !hospitalId.equals(message.getLabOrder().getHospital().getId())) {
+        // B1: the performing laboratory's own result messages are its to see and retry.
+        if (!message.getLabOrder().isHandledBy(hospitalId)) {
             throw new ResourceNotFoundException("Outbox message not found with ID: " + id);
         }
         return message;

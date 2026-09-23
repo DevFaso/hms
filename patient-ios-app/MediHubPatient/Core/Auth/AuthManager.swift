@@ -25,6 +25,16 @@ final class AuthManager: ObservableObject {
             || KeychainHelper.shared.oidcAccessToken != nil
     }
 
+    /// The signed-in user's id, surviving a relaunch.
+    ///
+    /// `currentUser` is only ever assigned by `login(...)`, so on a restored
+    /// session it is nil while `isAuthenticated` is true. Anything that keyed
+    /// off `currentUser?.id` — the chat screens especially — therefore behaved
+    /// as if the patient were signed out every time the app was reopened.
+    var currentUserId: String? {
+        currentUser?.id ?? KeychainHelper.shared.savedUserId
+    }
+
     // MARK: - Login
 
     func login(username: String, password: String) async throws {
@@ -48,6 +58,7 @@ final class AuthManager: ObservableObject {
         KeychainHelper.shared.savedUsername = username
         KeychainHelper.shared.savedPassword = password
         currentUser = response.user
+        KeychainHelper.shared.savedUserId = response.user.id
         isAuthenticated = true
     }
 
@@ -66,12 +77,35 @@ final class AuthManager: ObservableObject {
 
     // MARK: - Logout
 
+    /// Guards against re-entry. `refreshTokens()` calls `logout()` when it has
+    /// no refresh token, and the old logout fired an authenticated request
+    /// after the keychain was already emptied — 401, refresh, logout, repeat,
+    /// for the lifetime of the process.
+    private var isLoggingOut = false
+
     func logout() {
+        guard !isLoggingOut else { return }
+        isLoggingOut = true
+        defer { isLoggingOut = false }
+
+        // `requiresAuth: false` so a 401 on the way out cannot re-enter the
+        // refresh path. NOTE: that also means this request carries no bearer,
+        // so it does NOT revoke the session server side — /auth/logout is
+        // `.authenticated()`. Local sign-out is complete either way; proper
+        // revocation needs APIClient to accept an explicit token and is
+        // tracked in tasklist.md. It was equally unrevoked before this change,
+        // since the keychain was cleared before the request ran.
         Task {
-            try? await APIClient.shared.post(APIEndpoints.logout, body: EmptyBody()) as EmptyResponse
+            try? await APIClient.shared.post(
+                APIEndpoints.logout, body: EmptyBody(), requiresAuth: false
+            ) as EmptyResponse
         }
-        KeychainHelper.shared.accessToken = nil
-        KeychainHelper.shared.refreshToken = nil
+        // clearSession(), not clearAll(): the user id must not outlive
+        // sign-out (an SSO session never sets `currentUser`, so a stale id
+        // would resolve to the PREVIOUS patient and load their conversations
+        // — /chat/** is gated on isAuthenticated() with no participant check),
+        // but the saved username must survive or Face ID is disabled for good.
+        KeychainHelper.shared.clearSession()
         // `KeycloakAuthService.clear()` also clears the OIDC keychain entries;
         // keep logout delegating through the service so the two paths cannot drift.
         KeycloakAuthService.shared.clear()

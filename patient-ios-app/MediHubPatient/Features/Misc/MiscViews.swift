@@ -17,18 +17,45 @@ struct NotificationsView: View {
     private var content: some View {
         Group {
             if vm.isLoading, vm.notifications.isEmpty { ProgressView("loading".localized) }
-            else if vm.notifications.isEmpty {
+            else if let error = vm.errorMessage, vm.notifications.isEmpty {
+                ContentUnavailableView {
+                    Label("notifications_load_failed".localized, systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("retry".localized) { Task { await vm.load() } }
+                }
+            } else if vm.notifications.isEmpty {
                 ContentUnavailableView("no_notifications".localized, systemImage: "bell.slash.fill",
                                        description: Text("no_notifications_desc".localized))
             } else {
                 List(vm.notifications) { notif in
-                    NotificationRow(notification: notif)
+                    Button {
+                        Task { await vm.markRead(notif) }
+                    } label: {
+                        NotificationRow(notification: notif)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .listStyle(.insetGrouped)
             }
         }
         .navigationTitle("notifications".localized)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("mark_all_read".localized) { Task { await vm.markAllRead() } }
+                    .disabled(vm.unreadCount == 0)
+            }
+        }
         .refreshable { await vm.load() }
+        .alert("notification_action_failed".localized, isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {
+            Button("ok".localized, role: .cancel) {}
+        } message: {
+            Text(vm.actionError ?? "")
+        }
     }
 }
 
@@ -57,75 +84,48 @@ struct NotificationRow: View {
 final class NotificationsViewModel: ObservableObject {
     @Published var notifications: [NotificationDTO] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
+    /// A failed mark-read is a one-shot alert; `errorMessage` is the list's own state.
+    @Published var actionError: String?
+
+    var unreadCount: Int { notifications.filter { !$0.isRead }.count }
 
     func load() async {
         isLoading = true
-        let page: PageDTO<NotificationDTO>? = try? await APIClient.shared.get(
-            APIEndpoints.notifications,
-            queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-        )
-        notifications = page?.content ?? []
-        isLoading = false
-    }
-}
-
-// MARK: - Documents
-
-struct DocumentsView: View {
-    var embeddedInNav: Bool = true
-    @StateObject private var vm = DocumentsViewModel()
-
-    var body: some View {
-        if embeddedInNav {
-            NavigationStack { content }
-                .task { await vm.load() }
-        } else {
-            content
-                .task { await vm.load() }
-        }
-    }
-
-    private var content: some View {
-        Group {
-            if vm.isLoading, vm.documents.isEmpty { ProgressView("loading".localized) }
-            else if vm.documents.isEmpty {
-                ContentUnavailableView("no_documents".localized, systemImage: "doc.fill",
-                                       description: Text("no_documents_desc".localized))
-            } else {
-                List(vm.documents) { doc in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(doc.fileName ?? "Document").font(.headline)
-                        if let cat = doc.category { Text(cat).font(.caption).foregroundColor(.secondary) }
-                        if let date = doc.uploadedAt { Text(date).font(.caption2).foregroundColor(.secondary) }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .listStyle(.insetGrouped)
-            }
-        }
-        .navigationTitle("documents".localized)
-        .refreshable { await vm.load() }
-    }
-}
-
-@MainActor
-final class DocumentsViewModel: ObservableObject {
-    @Published var documents: [DocumentDTO] = []
-    @Published var isLoading = false
-
-    func load() async {
-        isLoading = true
-        let page: PageDTO<DocumentDTO>? = try? await APIClient.shared.get(
-            APIEndpoints.documents,
-            queryItems: [URLQueryItem(name: "page", value: "0"),
-                         URLQueryItem(name: "size", value: "50")]
-        )
-        if let content = page?.content {
-            documents = content
-        } else {
-            documents = await (try? APIClient.shared.get(APIEndpoints.documents)) ?? []
+        errorMessage = nil
+        do {
+            let page: PageDTO<NotificationDTO> = try await APIClient.shared.get(
+                APIEndpoints.notifications,
+                queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
+            )
+            notifications = page.content
+        } catch {
+            // A failed load is an error, not an inbox with nothing in it.
+            errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Marks one notification read. The endpoints have been declared in
+    /// APIEndpoints since the scaffold; nothing called them, so an iOS
+    /// notification could never be marked read.
+    func markRead(_ notification: NotificationDTO) async {
+        guard let id = notification.id, !notification.isRead else { return }
+        do {
+            let _: NotificationDTO? = try await APIClient.shared.put(APIEndpoints.markNotificationRead(id: id))
+            await load()
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
+    func markAllRead() async {
+        do {
+            let _: [String: Int]? = try await APIClient.shared.put(APIEndpoints.markAllNotificationsRead)
+            await load()
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 }
 
@@ -447,7 +447,10 @@ private struct SourceLine: View {
     let parts: [String?]
 
     var body: some View {
-        let text = parts.compactMap { part in
+        // The closure needs an explicit signature: it is multi-statement and
+        // its only other `return` is a bare `nil`, so the compiler has nothing
+        // to infer ElementOfResult from and the build fails outright.
+        let text = parts.compactMap { (part: String?) -> String? in
             guard let value = part?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty, value != "—" else {
                 return nil
             }
@@ -544,169 +547,5 @@ final class HealthRecordsViewModel: ObservableObject {
             }
         }
         isLoading = false
-    }
-}
-
-// MARK: - Sharing & Privacy (matches Angular my-sharing.ts)
-
-struct SharingPrivacyView: View {
-    var embeddedInNav: Bool = true
-    @StateObject private var vm = SharingPrivacyViewModel()
-    @State private var selectedTab = 0
-
-    var body: some View {
-        if embeddedInNav {
-            NavigationStack { content }
-                .task { await vm.load() }
-        } else {
-            content
-                .task { await vm.load() }
-        }
-    }
-
-    private var content: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
-                Text("Consents").tag(0)
-                Text("Access Log").tag(1)
-            }
-            .pickerStyle(.segmented)
-            .padding()
-
-            if vm.isLoading {
-                ProgressView("Loading…").padding()
-            } else if selectedTab == 0 {
-                consentsList
-            } else {
-                accessLogList
-            }
-        }
-        .navigationTitle("sharing_privacy".localized)
-        .refreshable { await vm.load() }
-    }
-
-    private var consentsList: some View {
-        Group {
-            if vm.consents.isEmpty {
-                ContentUnavailableView("No Consents", systemImage: "lock.shield",
-                                       description: Text("No active sharing consents."))
-            } else {
-                List {
-                    ForEach(vm.consents) { consent in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(consent.toHospitalName ?? "Hospital").font(.headline)
-                                    if let purpose = consent.purpose {
-                                        Text(purpose).font(.caption).foregroundColor(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                StatusBadge(text: consent.status?.capitalized ?? "Active",
-                                            color: consent.status?.uppercased() == "ACTIVE" ? "green" : "gray")
-                            }
-                            if let granted = consent.grantedAt {
-                                Text("Granted: \(granted)").font(.caption2).foregroundColor(.secondary)
-                            }
-                            if let expires = consent.expiresAt {
-                                Text("Expires: \(expires)").font(.caption2).foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                Task {
-                                    await vm.revokeConsent(
-                                        fromHospitalId: consent.fromHospitalId ?? "",
-                                        toHospitalId: consent.toHospitalId ?? ""
-                                    )
-                                }
-                            } label: {
-                                Label("Revoke", systemImage: "xmark.circle")
-                            }
-                        }
-                    }
-                }
-                .listStyle(.insetGrouped)
-            }
-        }
-    }
-
-    private var accessLogList: some View {
-        Group {
-            if vm.accessLog.isEmpty {
-                ContentUnavailableView("No Access Records", systemImage: "eye.slash",
-                                       description: Text("No one has viewed your records."))
-            } else {
-                List(vm.accessLog) { log in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(log.accessedBy ?? "Unknown").font(.subheadline).bold()
-                            Spacer()
-                            if let role = log.accessedByRole {
-                                Text(role).font(.caption).foregroundColor(.secondary)
-                            }
-                        }
-                        if let resource = log.resourceAccessed {
-                            Text(resource).font(.caption).foregroundColor(.secondary)
-                        }
-                        if let type = log.accessType {
-                            Text(type.capitalized).font(.caption2).foregroundColor(.accentColor)
-                        }
-                        if let date = log.accessedAt {
-                            Text(date).font(.caption2).foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .listStyle(.insetGrouped)
-            }
-        }
-    }
-}
-
-@MainActor
-final class SharingPrivacyViewModel: ObservableObject {
-    @Published var consents: [ConsentDTO] = []
-    @Published var accessLog: [AccessLogDTO] = []
-    @Published var isLoading = false
-
-    func load() async {
-        isLoading = true
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                let page: PageDTO<ConsentDTO>? = try? await APIClient.shared.get(
-                    APIEndpoints.consents,
-                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-                )
-                self.consents = page?.content ?? []
-                // Fallback: try direct array
-                if self.consents.isEmpty {
-                    self.consents = await (try? APIClient.shared.get(APIEndpoints.consents)) ?? []
-                }
-            }
-            group.addTask { @MainActor in
-                let page: PageDTO<AccessLogDTO>? = try? await APIClient.shared.get(
-                    APIEndpoints.accessLog,
-                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-                )
-                self.accessLog = page?.content ?? []
-                if self.accessLog.isEmpty {
-                    self.accessLog = await (try? APIClient.shared.get(APIEndpoints.accessLog)) ?? []
-                }
-            }
-        }
-        isLoading = false
-    }
-
-    func revokeConsent(fromHospitalId: String, toHospitalId: String) async {
-        let _: String? = try? await APIClient.shared.delete(
-            APIEndpoints.consents,
-            queryItems: [
-                URLQueryItem(name: "fromHospitalId", value: fromHospitalId),
-                URLQueryItem(name: "toHospitalId", value: toHospitalId),
-            ]
-        )
-        await load()
     }
 }

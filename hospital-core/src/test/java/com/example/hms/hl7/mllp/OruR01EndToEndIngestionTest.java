@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -71,6 +72,7 @@ class OruR01EndToEndIngestionTest {
     @Mock private MllpInboundMergeService inboundMerge;
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private LabResultRepository labResultRepository;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
@@ -84,8 +86,17 @@ class OruR01EndToEndIngestionTest {
     void setUp() {
         // Real service, real parser; mocked I/O collaborators only.
         MllpInboundLabServiceImpl labService = new MllpInboundLabServiceImpl(
-            specimenRepository, labResultRepository, messageRecorder, auditEventLogService,
-            criticalValueNotificationService);
+            specimenRepository, labResultRepository, labOrderRepository, messageRecorder,
+            auditEventLogService, criticalValueNotificationService);
+        // The order's status is written by a compare-and-set statement, not
+        // through the entity; the stub applies it so assertions can read it.
+        lenient().when(labOrderRepository.findStatusById(any()))
+            .thenAnswer(inv -> labOrder.getStatus());
+        lenient().when(labOrderRepository.updateStatusFrom(any(), any(), any()))
+            .thenAnswer(inv -> {
+                labOrder.setStatus(inv.getArgument(2));
+                return 1;
+            });
         dispatcher = new Hl7MessageDispatcher(
             new Hl7v2MessageBuilder(), allowlist, labService, inboundAdt, inboundMerge, messageRecorder);
 
@@ -96,6 +107,12 @@ class OruR01EndToEndIngestionTest {
         labOrder = new LabOrder();
         labOrder.setId(UUID.randomUUID());
         labOrder.setHospital(hospital);
+        // A specimen has reached the analyzer, so the order is RECEIVED. It
+        // matters that this is set: the status column is NOT NULL and
+        // @PrePersist defaults it, so an order with a null status is a shape
+        // the database cannot hold — and the verdict methods now decline to
+        // move one, because the compare-and-set would match no row.
+        labOrder.setStatus(com.example.hms.enums.LabOrderStatus.RECEIVED);
 
         specimen = new LabSpecimen();
         specimen.setId(UUID.randomUUID());
@@ -147,8 +164,10 @@ class OruR01EndToEndIngestionTest {
         assertThat(saved.getSourceObservationSetId()).isEqualTo("1");
         assertThat(saved.getTestCode()).isEqualTo("15074-8");
         assertThat(saved.getReferenceRange()).isEqualTo("3.9-5.6");
-        // OBX-8 "H" → AbnormalFlag.ABNORMAL (high but not critical)
-        assertThat(saved.getAbnormalFlag().name()).isEqualTo("ABNORMAL");
+        // OBX-8 "H" → AbnormalFlag.ABNORMAL_HIGH (B18: high, not critical, direction kept)
+        assertThat(saved.getAbnormalFlag().name()).isEqualTo("ABNORMAL_HIGH");
+        // B14 — the order the analyzer answered is now RESULTED.
+        assertThat(labOrder.getStatus()).isEqualTo(com.example.hms.enums.LabOrderStatus.RESULTED);
 
         // Recorder RECEIVED + audit emitted exactly once.
         verify(messageRecorder).recordMessage(
@@ -160,6 +179,38 @@ class OruR01EndToEndIngestionTest {
         verify(auditEventLogService).logEvent(auditCap.capture());
         assertThat(auditCap.getValue().getEventType()).isEqualTo(AuditEventType.LAB_RESULT_UPDATED);
         assertThat(auditCap.getValue().getEntityType()).isEqualTo("LabResult");
+    }
+
+    @Test
+    @DisplayName("B13 — the ACK for an accession owned by another hospital is byte-for-byte the ACK for an unknown one")
+    void crossTenantAckIsIndistinguishableFromNotFound() {
+        String template = String.join("\r",
+            "MSH|^~\\&|MINDRAY^BS-240^L|LAB-A^FACILITY-1^L|HMS|HOSP-OUAGA|"
+                + "20260515101545||ORU^R01|PROBE|P|2.5.1",
+            "PID|1||MRN-0042",
+            "OBR|1|%s||15074-8^GLUCOSE^LN|||20260515101200",
+            "OBX|1|NM|15074-8^GLUCOSE^LN||5.7|mmol/L|3.9-5.6|H",
+            "") + "\r";
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        labOrder.setHospital(otherHospital);
+
+        when(allowlist.resolveHospital("MINDRAY^BS-240^L", "LAB-A^FACILITY-1^L"))
+            .thenReturn(Optional.of(hospital));
+        when(specimenRepository.findByAccessionNumber("ACC-ELSEWHERE")).thenReturn(Optional.of(specimen));
+        when(specimenRepository.findByAccessionNumber("ACC-NOWHERE")).thenReturn(Optional.empty());
+
+        String elsewhere = dispatcher.dispatch(template.formatted("ACC-ELSEWHERE"), "10.20.30.40:5012");
+        String nowhere = dispatcher.dispatch(template.formatted("ACC-NOWHERE"), "10.20.30.40:5012");
+
+        assertThat(stripMshTimestamp(elsewhere)).isEqualTo(stripMshTimestamp(nowhere));
+        assertThat(elsewhere).contains("MSA|AE|PROBE").doesNotContain("not authorised");
+        verify(labResultRepository, never()).save(any());
+    }
+
+    /** The ACK's own MSH-7 is "now"; everything after it is what the sender reads. */
+    private static String stripMshTimestamp(String ack) {
+        return ack.substring(ack.indexOf("MSA|"));
     }
 
     @Test

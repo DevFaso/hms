@@ -2,10 +2,12 @@ import SwiftUI
 
 struct DashboardView: View {
     @Binding var showMenu: Bool
+    /// Driven by the side menu in `MainTabView`. Appending a destination here
+    /// pushes that screen, which is how the drawer entries navigate.
+    @Binding var path: [DashboardDestination]
     @StateObject private var vm = DashboardViewModel()
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var localization: LocalizationManager
-    @State private var navigateTo: DashboardDestination?
     @State private var selectedLabResult: LabResultDTO?
 
     enum DashboardDestination: Hashable {
@@ -33,7 +35,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     // MARK: Quick links grid
@@ -76,7 +78,9 @@ struct DashboardView: View {
                     if !vm.upcomingAppointments.isEmpty {
                         SectionCard(title: "upcoming_appointments".localized, icon: "calendar") {
                             ForEach(vm.upcomingAppointments) { appt in
-                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt, onPreCheckedIn: {
+                                    Task { await vm.loadAll() }
+                                })) {
                                     AppointmentRowView(appointment: appt)
                                 }
                                 .buttonStyle(.plain)
@@ -161,7 +165,7 @@ struct DashboardView: View {
                 case .notifications: NotificationsView(embeddedInNav: false)
                 case .healthRecords: HealthRecordsView(embeddedInNav: false)
                 case .familyAccess: FamilyAccessView(embeddedInNav: false)
-                case .sharingPrivacy: SharingPrivacyView(embeddedInNav: false)
+                case .sharingPrivacy: SharingPrivacyView()
                 }
             }
             .overlay {
@@ -296,7 +300,7 @@ struct StatusBadge: View {
 }
 
 #Preview {
-    DashboardView(showMenu: .constant(false))
+    DashboardView(showMenu: .constant(false), path: .constant([]))
         .environmentObject(AuthManager.shared)
         .environmentObject(LocalizationManager.shared)
 }

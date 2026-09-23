@@ -94,10 +94,9 @@ public class WristbandPdfService {
         PdfLabels t = PdfLabels.ofRequest(messageSource);
         LabSpecimen specimen = specimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("Specimen not found with ID: " + specimenId));
-        UUID orderHospitalId = specimen.getLabOrder() != null && specimen.getLabOrder().getHospital() != null
-            ? specimen.getLabOrder().getHospital().getId()
-            : null;
-        if (hospitalId != null && !Objects.equals(orderHospitalId, hospitalId)) {
+        // B1: the laboratory that collected the specimen prints its label too.
+        if (hospitalId != null
+                && (specimen.getLabOrder() == null || !specimen.getLabOrder().isHandledBy(hospitalId))) {
             throw new ResourceNotFoundException("Specimen not found with ID: " + specimenId);
         }
         Patient patient = specimen.getLabOrder() != null ? specimen.getLabOrder().getPatient() : null;

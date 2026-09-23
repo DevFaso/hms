@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Documents downloaded through the authenticated client land in
+     cache/documents and are handed to a viewer via FileProvider. -->
+<paths>
+    <cache-path name="documents" path="documents/" />
+</paths>

@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -82,6 +83,7 @@ class LabOrderServiceImplTest {
     private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
@@ -235,6 +237,111 @@ class LabOrderServiceImplTest {
         assertThat(saved.getProviderSignatureDigest()).isEqualTo(existingDigest);
         assertThat(saved.getSignedAt()).isEqualTo(existingSignedAt);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void createLabOrderKeepsAStartStatusTheCallerChose() {
+        // SuperAdminLabOrderServiceImpl validates status as a mandatory field
+        // and passes it through, and OrderSetItemDispatcher places order-set
+        // items as PENDING. Forcing every create to ORDERED discarded the
+        // first and made the second log a warning for every order it placed.
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        for (LabOrderStatus requested : List.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING)) {
+            labOrderService.createLabOrder(baseRequestBuilder().status(requested.name()).build(), Locale.ENGLISH);
+        }
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabOrder::getStatus)
+            .containsExactly(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+    }
+
+    @Test
+    void createLabOrderRefusesAStatusThatClaimsWorkTheLabHasNotDone() {
+        // The B9 half that still matters: an order born COMPLETED or CANCELLED
+        // is frozen against every specimen and result event, and a COMPLETED
+        // one reaches the review queue with no results behind it.
+        mockCommonLookups();
+
+        // CANCELLED belongs here too: an order created cancelled is frozen
+        // against every lifecycle event for ever, because nothing re-opens a
+        // cancelled order. A caller that wants one records the order and
+        // cancels it through the role-checked transition endpoint.
+        for (LabOrderStatus requested : List.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED,
+                LabOrderStatus.VERIFIED,
+                LabOrderStatus.RESULTED, LabOrderStatus.IN_PROGRESS, LabOrderStatus.RECEIVED,
+                LabOrderStatus.COLLECTED)) {
+            LabOrderRequestDTO request = baseRequestBuilder().status(requested.name()).build();
+            assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining(requested.name());
+        }
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    @Test
+    void updateLabOrderIgnoresARequestedStatusJump() {
+        // B9: the edit form echoes `status` back, and a doctor could point it at
+        // COMPLETED. On update the current status wins; the lifecycle moves
+        // through the transition endpoint and the specimen/result events only.
+        mockCommonLookups();
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        existing.setStatus(LabOrderStatus.COLLECTED);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().id(labOrderId.toString()).build());
+
+        LabOrderRequestDTO request = baseRequestBuilder()
+            .id(labOrderId)
+            .status(LabOrderStatus.COMPLETED.name())
+            .documentationSharedWithLab(true)
+            .build();
+
+        labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.COLLECTED);
+    }
+
+    @Test
+    void updateLabOrderToleratesTheCurrentStatusEchoedBack() {
+        mockCommonLookups();
+        UUID labOrderId = UUID.randomUUID();
+        LabOrder existing = existingLabOrder(labOrderId);
+        existing.setStatus(LabOrderStatus.RECEIVED);
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(existing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().id(labOrderId.toString()).build());
+
+        LabOrderRequestDTO request = baseRequestBuilder()
+            .id(labOrderId)
+            .status("received")
+            .documentationSharedWithLab(true)
+            .build();
+
+        labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    void createLabOrderRejectsAnUnknownStatus() {
+        mockCommonLookups();
+        LabOrderRequestDTO request = baseRequestBuilder().status("FINISHED").build();
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("FINISHED");
     }
 
     @Test
@@ -397,7 +504,7 @@ class LabOrderServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(orderingUserId);
         when(recordAccessPolicy.readableHospitalIds(orderingUserId, patientId, hospitalId))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
-        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
+        when(labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, Set.of(hospitalId, otherHospitalId), hospitalId))
             .thenReturn(List.of(local, foreign));
         when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
             .thenAnswer(inv -> LabOrderResponseDTO.builder().id(((LabOrder) inv.getArgument(0)).getId().toString()).build());

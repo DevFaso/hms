@@ -24,7 +24,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.MedicationDto
 import com.bitnesttechs.hms.patient.core.models.PrescriptionDto
 import com.bitnesttechs.hms.patient.core.models.RefillDto
+import androidx.compose.ui.res.stringResource
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,11 +42,20 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     var selectedMed by remember { mutableStateOf<MedicationDto?>(null) }
     var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
     var refillTarget by remember { mutableStateOf<PrescriptionDto?>(null) }
+    var cancelRefillTarget by remember { mutableStateOf<RefillDto?>(null) }
     val snackbarMessage by viewModel.snackbar.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSnackbar() }
+    }
+    val outcome by viewModel.outcome.collectAsState()
+    val outcomeText = outcome?.let { o ->
+        val base = stringResource(o.resId)
+        o.detail?.let { "$base ($it)" } ?: base
+    }
+    LaunchedEffect(outcome) {
+        outcomeText?.let { snackbarHostState.showSnackbar(it); viewModel.clearOutcome() }
     }
 
     Scaffold(
@@ -236,6 +248,14 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
+                                // REQUESTED and PAUSED are the two states the backend
+                                // (cancelMyRefill) and the web let the patient withdraw.
+                                if (refill.status.uppercase() in listOf("REQUESTED", "PAUSED")) {
+                                    TextButton(
+                                        onClick = { cancelRefillTarget = refill },
+                                        colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
+                                    ) { Text(stringResource(R.string.cancel_refill_request)) }
+                                }
                                 refill.updatedAt?.takeIf { it != refill.requestedAt }?.let {
                                     Text("Updated: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -264,6 +284,23 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     // Prescription Detail Dialog
     selectedRx?.let { rx ->
         PrescriptionDetailDialog(rx = rx, onDismiss = { selectedRx = null })
+    }
+
+    cancelRefillTarget?.let { refill ->
+        AlertDialog(
+            onDismissRequest = { cancelRefillTarget = null },
+            title = { Text(stringResource(R.string.cancel_refill_request), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.cancel_refill_confirm, refill.medicationName ?: "")) },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.cancelRefill(refill.id); cancelRefillTarget = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                ) { Text(stringResource(R.string.cancel_refill_request)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { cancelRefillTarget = null }) { Text(stringResource(R.string.keep)) }
+            }
+        )
     }
 
     // Refill Request Dialog

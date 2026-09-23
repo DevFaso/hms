@@ -23,6 +23,19 @@ public interface InstrumentOutboxService {
      */
     void enqueueResultObservation(LabResult result);
 
+
+    /**
+     * Enqueues the final form of a result that has just been released, by id
+     * and in its OWN transaction.
+     *
+     * <p>Ids only, and never from inside the caller's transaction: the row is
+     * inserted and validated at commit, so a "best-effort" try/catch around an
+     * in-transaction enqueue catches nothing and the failure takes the caller's
+     * write down with it. The release is the load-bearing operation; the
+     * message is not.
+     */
+    void enqueueReleasedObservation(UUID labResultId);
+
     /**
      * All outbox messages for a lab order, whatever their status.
      *

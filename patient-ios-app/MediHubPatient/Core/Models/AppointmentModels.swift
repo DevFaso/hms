@@ -9,6 +9,11 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
     let patientEmail: String?
     let patientPhone: String?
     let staffId: String?
+    /// The clinician's USER id — what /chat/send needs as a recipient.
+    /// `staffId` is a Staff row id and is not interchangeable with it.
+    /// Android has always decoded this; iOS did not, which is why the
+    /// composer had no way to address anyone.
+    let staffUserId: String?
     let staffName: String?
     let staffEmail: String?
     let hospitalId: String?
@@ -28,6 +33,9 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
     let status: String?
     let createdAt: String?
     let updatedAt: String?
+    // Pre-check-in state, set by POST /me/patient/appointments/{id}/pre-checkin.
+    let preCheckedIn: Bool?
+    let preCheckinTimestamp: String?
 
     /// Convenience: display name of the doctor/staff
     var doctorName: String? {
@@ -71,21 +79,46 @@ struct RescheduleAppointmentRequest: Encodable {
     let reason: String?
 }
 
-// MARK: - Book Appointment request (POST /appointments)
+// MARK: - Book Appointment request (POST /me/patient/appointments)
 
+/// PortalBookAppointmentRequestDTO. The backend checks the registration,
+/// that the department belongs to the hospital, and assigns the first
+/// available provider when staffId is nil; endTime defaults to
+/// startTime + 30 min. reason <= 500, notes <= 1000.
 struct BookAppointmentRequest: Encodable {
-    let patientUsername: String?
-    let hospitalName: String?
-    let hospitalId: String?
+    let hospitalId: String
+    let departmentId: String
     let staffId: String?
-    let staffEmail: String?
-    let staffUsername: String?
-    let departmentId: String?
-    let departmentName: String?
-    let appointmentDate: String // yyyy-MM-dd
-    let startTime: String // HH:mm:ss
-    let endTime: String // HH:mm:ss
-    let status: String // "SCHEDULED"
+    let date: String // yyyy-MM-dd
+    let startTime: String // HH:mm
+    let endTime: String? // HH:mm, nil = server default
     let reason: String?
     let notes: String?
+}
+
+// MARK: - Booking wizard lists (GET /me/patient/booking/…)
+
+/// Where the patient holds an active registration.
+struct BookingHospitalDTO: Decodable, Identifiable {
+    let id: String
+    let name: String?
+    let address: String?
+}
+
+struct BookingDepartmentDTO: Decodable, Identifiable {
+    let id: String
+    let name: String?
+}
+
+struct BookingProviderDTO: Decodable, Identifiable {
+    let id: String
+    let name: String?
+    let fullName: String?
+    /// A raw ROLE_* constant with no translation; the sheet shows the name only, as the web does.
+    let role: String?
+
+    var displayName: String {
+        if let fullName, !fullName.trimmingCharacters(in: .whitespaces).isEmpty { return fullName }
+        return name ?? id
+    }
 }

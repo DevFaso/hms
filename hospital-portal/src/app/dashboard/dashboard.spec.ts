@@ -1209,3 +1209,40 @@ describe('Dashboard live tracker refresh', () => {
     c.ngOnDestroy();
   });
 });
+
+/**
+ * The patient lab tile binds `[class.lab-pending]`, and for a while nothing
+ * defined that class: `.lab-icon-wrap` overrode its colours on `.lab-abnormal`
+ * only, so a result awaiting release was drawn as an hourglass inside the
+ * green all-clear circle — the same "your test was normal" reading the rest of
+ * this change removes.
+ *
+ * Read off the compiled component definition rather than the document: the
+ * defect is a missing CSS rule, and Angular ref-counts style injection, so
+ * scanning `<style>` elements passes alone and fails in a full run depending
+ * on which suite last destroyed a dashboard. The definition is the same in
+ * both.
+ */
+describe('Dashboard patient lab tile styling', () => {
+  function dashboardStyles(): string {
+    const styles = (DashboardComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles;
+    // Whitespace-stripped: rules are self-delimited, so no separator is needed.
+    return (styles ?? []).join('').replace(/\s+/g, '');
+  }
+
+  it('paints a pending lab icon amber, not the all-clear green', () => {
+    const styles = dashboardStyles();
+    expect(styles).withContext('component styles were not compiled in').toContain('lab-icon-wrap');
+
+    // Emulated encapsulation rewrites the selector with an _ngcontent attribute,
+    // so match up to the declaration block rather than assuming the bare selector.
+    const rule = /\.lab-icon-wrap\.lab-pending[^{]*\{([^}]*)\}/.exec(styles);
+
+    expect(rule)
+      .withContext('.lab-icon-wrap.lab-pending rule missing — the bound class does nothing')
+      .not.toBeNull();
+    expect(rule?.[1]).toContain('#fef3c7');
+    expect(rule?.[1]).toContain('#b45309');
+    expect(rule?.[1]).not.toContain('#d1fae5');
+  });
+});

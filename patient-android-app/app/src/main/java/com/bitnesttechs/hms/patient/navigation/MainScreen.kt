@@ -22,8 +22,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.features.appointments.AppointmentsViewModel
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
+import com.bitnesttechs.hms.patient.features.appointments.PreCheckInScreen
+import com.bitnesttechs.hms.patient.features.screenings.ScreeningsScreen
+import com.bitnesttechs.hms.patient.features.education.EducationScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
 import com.bitnesttechs.hms.patient.features.careteam.CareTeamScreen
 import com.bitnesttechs.hms.patient.features.dashboard.DashboardScreen
@@ -31,6 +36,7 @@ import com.bitnesttechs.hms.patient.features.documents.DocumentsScreen
 import com.bitnesttechs.hms.patient.features.familyaccess.FamilyAccessScreen
 import com.bitnesttechs.hms.patient.features.healthrecords.HealthRecordsScreen
 import com.bitnesttechs.hms.patient.features.labresults.LabResultsScreen
+import com.bitnesttechs.hms.patient.features.medicalhistory.MedicalHistoryScreen
 import com.bitnesttechs.hms.patient.features.medications.MedicationsScreen
 import com.bitnesttechs.hms.patient.features.messages.MessagesScreen
 import com.bitnesttechs.hms.patient.features.messages.MessageThreadScreen
@@ -68,7 +74,10 @@ val drawerItems = listOf(
     DrawerItem(R.string.visit_history, Icons.Default.History, "visits"),
     DrawerItem(R.string.after_visit_summaries, Icons.Default.Description, "visit_summaries"),
     DrawerItem(R.string.documents, Icons.Default.Description, "documents"),
+    DrawerItem(R.string.screenings, Icons.Default.Psychology, "screenings"),
+    DrawerItem(R.string.education, Icons.Default.MenuBook, "education"),
     DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
+    DrawerItem(R.string.medical_history_title, Icons.Default.MedicalInformation, "medical_history"),
     DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
     DrawerItem(R.string.messages, Icons.Default.Message, "tab_messages"),
     DrawerItem(R.string.privacy, Icons.Default.Security, "sharing_privacy"),
@@ -85,11 +94,17 @@ fun MainScreen(onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // Show bottom bar on tab routes AND drawer sub-screens
-    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail")
+    // Full-screen routes: no bottom bar and no drawer swipe, so a tab tap cannot
+    // pop a form with a request in flight (see pre_checkin in #703).
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail", "pre_checkin", "screenings")
     val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        // The full-screen routes have a back arrow, not a menu; an edge swipe
+        // there could pull the drawer over a pre-check-in mid-submit and a
+        // drawer item would then destroy the only observer of that request.
+        gesturesEnabled = drawerState.isOpen || showBottomBar,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -138,12 +153,12 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records",
+                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records", "medical_history", "screenings", "education",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
                             in dashboardSubRoutes -> Tab.Dashboard.route
-                            "appointment_detail" -> Tab.Appointments.route
+                            "appointment_detail", "pre_checkin" -> Tab.Appointments.route
                             "thread/{threadId}" -> Tab.Messages.route
                             else -> currentRoute
                         }
@@ -211,7 +226,10 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("visit_summaries") { VisitSummariesScreen(onBack = { navController.popBackStack() }) }
                 composable("notifications") { NotificationsScreen(onBack = { navController.popBackStack() }) }
                 composable("documents") { DocumentsScreen(onBack = { navController.popBackStack() }) }
+                composable("screenings") { ScreeningsScreen(onBack = { navController.popBackStack() }) }
+                composable("education") { EducationScreen(onBack = { navController.popBackStack() }) }
                 composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }
+                composable("medical_history") { MedicalHistoryScreen(onBack = { navController.popBackStack() }) }
                 composable("sharing_privacy") {
                     SharingPrivacyScreen(onBack = { navController.popBackStack() })
                 }
@@ -234,16 +252,74 @@ fun MainScreen(onLogout: () -> Unit) {
                 }
 
                 // ── Appointment detail ────────────────────────────────────────────
-                composable("appointment_detail") {
+                composable("appointment_detail") { backStackEntry ->
                     val appointment = navController.previousBackStackEntry
                         ?.savedStateHandle
                         ?.get<com.bitnesttechs.hms.patient.core.models.AppointmentDto>("appointment")
                     if (appointment != null) {
+                        // Scope the view model to the Appointments tab entry so the
+                        // cancel below refreshes the list the user pops back to.
+                        // Without the shared scope a fresh instance would call the
+                        // API and reload ITS OWN state, leaving the visible list
+                        // still showing the appointment as scheduled.
+                        val listEntry = remember(backStackEntry) {
+                            runCatching {
+                                navController.getBackStackEntry(Tab.Appointments.route)
+                            }.getOrNull()
+                        }
+                        val appointmentsViewModel: AppointmentsViewModel =
+                            if (listEntry != null) hiltViewModel(listEntry) else hiltViewModel()
                         AppointmentDetailScreen(
                             appointment = appointment,
                             onBack = { navController.popBackStack() },
                             onCancel = { reason ->
+                                // Previously this only popped the back stack: the
+                                // patient confirmed the dialog, the screen closed,
+                                // and the appointment was never cancelled server
+                                // side — so they stopped attending an appointment
+                                // the hospital still expected them at.
+                                appointmentsViewModel.cancelAppointment(
+                                    appointmentId = appointment.id,
+                                    reason = reason.ifBlank { null }
+                                )
                                 navController.popBackStack()
+                            },
+                            onReschedule = { id, newDate, newStartTime, newEndTime ->
+                                // Was never passed, so the view model's reschedule
+                                // call was unreachable and the detail screen had
+                                // no way to move an appointment.
+                                appointmentsViewModel.rescheduleAppointment(id, newDate, newStartTime, newEndTime)
+                                navController.popBackStack()
+                            },
+                            onPreCheckIn = {
+                                navController.currentBackStackEntry?.savedStateHandle?.set("appointment", appointment)
+                                navController.navigate("pre_checkin")
+                            }
+                        )
+                    }
+                }
+
+                composable("pre_checkin") { backStackEntry ->
+                    val appointment = navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.get<com.bitnesttechs.hms.patient.core.models.AppointmentDto>("appointment")
+                    if (appointment != null) {
+                        val listEntry = remember(backStackEntry) {
+                            runCatching {
+                                navController.getBackStackEntry(Tab.Appointments.route)
+                            }.getOrNull()
+                        }
+                        val appointmentsViewModel: AppointmentsViewModel =
+                            if (listEntry != null) hiltViewModel(listEntry) else hiltViewModel()
+                        PreCheckInScreen(
+                            appointment = appointment,
+                            onBack = { navController.popBackStack() },
+                            onCompleted = {
+                                // The detail's copy of the appointment is stale now; the
+                                // list is reloaded and is where the patient lands.
+                                appointmentsViewModel.announce(R.string.pre_checkin_done)
+                                appointmentsViewModel.load()
+                                navController.popBackStack(Tab.Appointments.route, inclusive = false)
                             }
                         )
                     }

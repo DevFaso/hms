@@ -12,7 +12,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class TokenStorage @Inject constructor(
-    @ApplicationContext context: Context
+    @ApplicationContext private val context: Context
 ) {
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -71,6 +71,9 @@ class TokenStorage @Inject constructor(
     val isLoggedIn: Boolean get() = accessToken != null || oidcAccessToken != null
 
     fun clearAll() {
+        // Downloaded documents are PHI and outlive the session otherwise;
+        // every path that ends a session goes through here.
+        java.io.File(context.cacheDir, "documents").deleteRecursively()
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)

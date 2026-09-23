@@ -26,6 +26,15 @@ public final class NotificationLocales {
     /** Locale for a patient who stated no language the bundles can render. */
     public static final Locale PATIENT_FALLBACK = Locale.FRENCH;
 
+    /**
+     * Locale for SMS read by a partner pharmacy. Pharmacies have no stated
+     * language anywhere in the schema and the reply codes (1 / 2 / 3) are
+     * parsed language-independently, so the wording follows the product's
+     * French-first default. The one place to replace with a lookup when a
+     * pharmacy-level preference exists.
+     */
+    public static final Locale PARTNER_PHARMACY = Locale.FRENCH;
+
     private NotificationLocales() {
     }
 }

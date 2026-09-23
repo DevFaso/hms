@@ -25,6 +25,13 @@ public class LabResultResponseDTO {
     private String patientEmail;
     private String hospitalId;
     private String hospitalName;
+    /**
+     * B1: the laboratory that ran the order, when it was not the ordering
+     * hospital's own. Null for an in-house order. Releasing is that
+     * laboratory's act, so a reader needs this to know whether the release
+     * control belongs to them.
+     */
+    private String performingHospitalId;
     private String orderedByName;
     private String labTestName;
     private String resultValue;

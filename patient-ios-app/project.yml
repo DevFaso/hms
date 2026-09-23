@@ -11,7 +11,13 @@ options:
 # Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/Prod
 # layer xcconfig files (Config/{Dev,Prod}.xcconfig) on top of the
 # Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
-configurations:
+# XcodeGen reads this mapping from `configs`. It was spelled
+# `configurations`, which XcodeGen ignores entirely — the project fell
+# back to the default Debug/Release pair, so the `configFiles` entries
+# below referenced configurations that did not exist and
+# `xcodegen generate` failed outright. Never caught because the repo had
+# no iOS CI and the original setup used a hand-made .xcodeproj.
+configs:
   Debug: debug
   Release: release
   Release-Dev: release
@@ -21,10 +27,6 @@ packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
     from: "1.7.5"
-
-configFiles:
-  Release-Dev: Config/Dev.xcconfig
-  Release-Prod: Config/Prod.xcconfig
 
 settings:
   base:
@@ -37,6 +39,7 @@ settings:
     # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
     # Debug/Release builds. Per-env xcconfigs override these for
     # Release-{Dev,Prod}. See Config/README.md.
+    MEDIHUB_API_BASE_URL: ""
     MEDIHUB_KEYCLOAK_ISSUER: ""
     MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
     MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
@@ -51,6 +54,14 @@ targets:
       - path: MediHubPatient
         excludes:
           - "**/.DS_Store"
+    # Layered on the TARGET, not the project. Xcode resolves target settings
+    # over target xcconfig over project settings over project xcconfig, so a
+    # project-level xcconfig loses to the `settings.base` defaults below and
+    # every per-env value silently resolved to the empty default — which is
+    # how Release-Prod would have shipped pointing at the dev server.
+    configFiles:
+      Release-Dev: Config/Dev.xcconfig
+      Release-Prod: Config/Prod.xcconfig
     dependencies:
       - package: AppAuth
         product: AppAuth
@@ -68,6 +79,51 @@ targets:
     info:
       path: MediHubPatient/Resources/Info.plist
       properties:
+        # Every key here is declared in THIS block and not by hand in
+        # Info.plist, because `xcodegen generate` rewrites that file from
+        # here on every CI run and would silently drop a hand-added one.
+        # ITSAppUsesNonExemptEncryption below was found the expensive way —
+        # build 202609201928 uploaded, processed, and landed in Missing
+        # Compliance — so the build job now asserts every key in this block
+        # is present in the generated plist, on every PR.
+
+        # User-facing name under the icon.
+        CFBundleDisplayName: e-Keneya
+
+        # Required before LocalAuthentication may evaluate
+        # .deviceOwnerAuthenticationWithBiometrics: iOS TERMINATES an app
+        # that reaches Face ID without a purpose string, and App Review
+        # rejects for its absence.
+        NSFaceIDUsageDescription: Utiliser Face ID pour vous connecter à e-Keneya sans saisir votre mot de passe.
+
+        # Without this, every upload lands in TestFlight as "Missing
+        # Compliance" and reaches nobody until a human answers the export
+        # question by hand — verified on build 202609201928, whose
+        # usesNonExemptEncryption came back null from the App Store Connect
+        # API.
+        #
+        # false is the accurate answer, not a convenience, and the basis is
+        # narrower than "no crypto in the binary": AppAuth is linked and its
+        # PKCE support calls CommonCrypto's CC_SHA256 and SecRandomCopyBytes,
+        # so the shipped binary DOES contain crypto symbols. What the
+        # exemption turns on is that none of it is the app's own
+        # cryptography: HTTPS through URLSession, the Keychain,
+        # LocalAuthentication, and a SHA-256 digest used for authentication
+        # are all platform or standards-track primitives. The app implements
+        # no algorithm and bundles no crypto library of its own.
+        #
+        # The build job fails the PR if any first-party source imports
+        # CryptoKit or CommonCrypto while this stays false, so the claim is
+        # checked rather than remembered.
+        ITSAppUsesNonExemptEncryption: false
+
+        # Derived from the build settings, not literals. XcodeGen writes
+        # this plist from here, and a literal CFBundleVersion outranks
+        # CURRENT_PROJECT_VERSION — so the CI build number was inert and
+        # every TestFlight upload after the first would be rejected as a
+        # duplicate build.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # KC-3: AppAuth callback scheme. Must match the redirect URI on
         # the Keycloak `hms-patient-ios` client and `MEDIHUB_KEYCLOAK_REDIRECT_URI`.
         # Declared here (not just in Info.plist) so `xcodegen generate`
@@ -83,6 +139,7 @@ targets:
         # fallback when ProcessInfo doesn't have a value (i.e. archive
         # builds, where scheme env vars don't apply). Default values
         # come from `settings.base`; per-env xcconfigs override.
+        MEDIHUB_API_BASE_URL: $(MEDIHUB_API_BASE_URL)
         MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
         MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
         MEDIHUB_KEYCLOAK_CLIENT_ID: $(MEDIHUB_KEYCLOAK_CLIENT_ID)

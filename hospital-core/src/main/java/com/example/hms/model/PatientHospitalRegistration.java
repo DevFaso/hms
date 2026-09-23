@@ -53,7 +53,6 @@ public class PatientHospitalRegistration extends BaseEntity {
     @Column(name = "mrn", nullable = false, length = 50)
     private String mrn;
 
-    @EqualsAndHashCode.Exclude
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_phr_patient"))
@@ -66,7 +65,6 @@ public class PatientHospitalRegistration extends BaseEntity {
     @Column(name = "patient_name", length = 255)
     private String patientFullName;
 
-    @EqualsAndHashCode.Exclude
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "hospital_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_phr_hospital"))

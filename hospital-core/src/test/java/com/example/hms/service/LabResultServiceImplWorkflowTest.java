@@ -33,9 +33,14 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +64,14 @@ class LabResultServiceImplWorkflowTest {
     private AuthService authService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private com.example.hms.service.InstrumentOutboxService instrumentOutboxService;
+
+    // Declared even though this suite drives no reflex order: the service
+    // notifies the performing laboratory from that path, and an undeclared
+    // dependency is injected as null — a trap the next reflex test springs.
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;
@@ -97,6 +110,30 @@ class LabResultServiceImplWorkflowTest {
         resultAssignment = new UserRoleHospitalAssignment();
         resultAssignment.setId(UUID.randomUUID());
         resultAssignment.setHospital(hospital);
+    }
+
+    @Test
+    void pendingReleaseIsTheActiveHospitalsUnreleasedRows() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        LabResult unreleased = buildLabResult(UUID.randomUUID());
+        unreleased.setReleased(false);
+        LabResultResponseDTO mapped = LabResultResponseDTO.builder().id(unreleased.getId().toString()).build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(unreleased)));
+        when(labResultMapper.toResponseDTO(unreleased)).thenReturn(mapped);
+
+        assertThat(labResultService.getPendingRelease(pageable, Locale.US).getContent()).containsExactly(mapped);
+    }
+
+    @Test
+    void pendingReleaseNeedsAHospitalScope() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> labResultService.getPendingRelease(pageable, Locale.US));
+        verify(labResultRepository, never()).findPendingReleaseHandledBy(any(), any());
     }
 
     @Test
@@ -172,6 +209,153 @@ class LabResultServiceImplWorkflowTest {
         verify(labResultRepository).save(labResult);
     }
 
+    private void givenAReleasableResult(LabResult labResult) {
+        when(labResultRepository.findById(labResult.getId())).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.isLabScientist(any(), any())).thenReturn(true);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+    }
+
+    /**
+     * The ORU enqueued when the result was created said OBX-11 = P, because
+     * that is what an unreleased result is. The release has to send the final
+     * form or the receiver holds a preliminary for ever.
+     *
+     * <p>By id and after commit: an enqueue inside the release transaction is
+     * inserted at commit, where its try/catch cannot catch anything, so an
+     * outbox failure would roll the release back.
+     */
+    @Test
+    void releaseLabResultEnqueuesTheFinalObservationByIdAfterCommit() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+
+        // A real synchronization, or TransactionCallbacks runs the action inline
+        // and this test passes just as happily with the deferral deleted.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            labResultService.releaseLabResult(labResultId, Locale.US);
+
+            verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+            assertThat(labResult.isReleased())
+                .as("the row is released before the message is owed, so OBX-11 goes out as F")
+                .isTrue();
+
+            commitRegisteredCallbacks();
+            verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        // Never the entity overload — that one runs inside the caller's transaction.
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+    }
+
+    /**
+     * An outbox failure must not reach the caller. The enqueue runs after the
+     * release has committed, so an exception escaping the callback would answer
+     * 500 for a release that DID happen — and the retry would hit the
+     * already-released early return and never enqueue anything at all.
+     */
+    @Test
+    void aFailingEnqueueDoesNotFailTheRelease() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        givenAReleasableResult(labResult);
+        doThrow(new IllegalStateException("outbox insert failed at commit"))
+            .when(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertDoesNotThrow(() -> labResultService.releaseLabResult(labResultId, Locale.US));
+            assertDoesNotThrow(this::commitRegisteredCallbacks);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService).enqueueReleasedObservation(labResultId);
+    }
+
+    /** Fires what the transaction manager fires on a successful commit. */
+    private void commitRegisteredCallbacks() {
+        List.copyOf(TransactionSynchronizationManager.getSynchronizations())
+            .forEach(TransactionSynchronization::afterCommit);
+    }
+
+    /**
+     * A result INGESTED from an analyzer never had a first ORU from us, so a
+     * release must not transmit one: it would be unsolicited, and its OBR-2
+     * would carry our internal order UUID rather than the accession number the
+     * analyzer knows the order by. The signal is the ROW's provenance — asking
+     * whether an ORU had gone out for the ORDER answered yes for an order that
+     * also held a hand-entered result, and sent exactly that message.
+     */
+    @Test
+    void releaseDoesNotTransmitForAResultIngestedFromAnAnalyzer() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        labResult.setSourceSendingApplication("SYSMEX");
+        labResult.setSourceMessageControlId("MSG-1");
+        givenAReleasableResult(labResult);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+    }
+
+    /** An analyzer that omits MSH-10 still leaves its sending application on the row. */
+    @Test
+    void releaseDoesNotTransmitForAnIngestedResultWithNoMessageControlId() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(false);
+        labResult.setSourceSendingApplication("SYSMEX");
+        givenAReleasableResult(labResult);
+
+        labResultService.releaseLabResult(labResultId, Locale.US);
+
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+    }
+
+    /**
+     * The defect the order-granular guard had, with the sibling that caused it
+     * actually present: one order carrying a hand-entered result WE announced
+     * and an ingested one we did not. Releasing the ingested row must stay
+     * silent. Without building the sibling this test was a copy of the one
+     * above and could not have caught a return to asking about the order.
+     */
+    @Test
+    void releasingAnIngestedRowOnAnOrderWeAlsoTransmittedForStaysSilent() {
+        UUID ingestedId = UUID.randomUUID();
+        LabResult ingested = buildLabResult(ingestedId);
+        ingested.setReleased(false);
+        ingested.setSourceSendingApplication("SYSMEX");
+        ingested.setSourceMessageControlId("MSG-2");
+
+        // The sibling: ours, already transmitted, sitting on the same order —
+        // which is exactly what made an order-granular guard answer "yes".
+        LabResult oursAlreadyTransmitted = buildLabResult(UUID.randomUUID());
+        oursAlreadyTransmitted.setReleased(true);
+        assertThat(oursAlreadyTransmitted.getSourceSendingApplication())
+            .as("the sibling is ours: no analyzer marks at all")
+            .isNull();
+        when(labResultRepository.findByLabOrder_Id(labOrder.getId()))
+            .thenReturn(List.of(oursAlreadyTransmitted, ingested));
+
+        givenAReleasableResult(ingested);
+
+        labResultService.releaseLabResult(ingestedId, Locale.US);
+
+        verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
+        verify(instrumentOutboxService, never()).enqueueResultObservation(any());
+    }
+
     @Test
     void releaseLabResultSkipsUpdateWhenAlreadyReleased() {
         UUID labResultId = UUID.randomUUID();
@@ -209,11 +393,12 @@ class LabResultServiceImplWorkflowTest {
 
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
         when(authService.getCurrentUserId()).thenReturn(actorId);
+        // B10: release is LabResultAuthority.RELEASE_ROLES at this hospital —
+        // scientist, manager, director. Doctors, nurses, midwives and hospital
+        // admins are no longer consulted at all.
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isDoctor(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isNurse(actorId, hospitalId)).thenReturn(false);
-        when(roleValidator.isMidwife(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.isLabManager(actorId, hospitalId)).thenReturn(false);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(false);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> labResultService.releaseLabResult(labResultId, Locale.US));

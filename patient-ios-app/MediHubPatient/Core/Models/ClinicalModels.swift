@@ -214,6 +214,16 @@ struct CareTeamMemberDTO: Codable, Identifiable {
 
 struct DocumentDTO: Codable, Identifiable {
     let id: String?
+    // What PatientDocumentResponseDTO actually serialises.
+    let displayName: String?
+    let mimeType: String?
+    let documentType: String?
+    let fileSizeBytes: Int?
+    let collectionDate: String?
+    let createdAt: String?
+    let notes: String?
+    let uploadedByDisplayName: String?
+    // Scaffold-era names, kept optional so an older payload still decodes.
     let fileName: String?
     let fileType: String?
     let fileSize: Int?
@@ -222,6 +232,10 @@ struct DocumentDTO: Codable, Identifiable {
     let category: String?
     let uploadedBy: String?
     let downloadUrl: String?
+
+    var title: String { displayName ?? fileName ?? "Document" }
+    var kind: String? { documentType ?? category }
+    var date: String? { (createdAt ?? uploadedAt).map { String($0.prefix(10)) } }
 }
 
 // MARK: - Notification Models
@@ -242,28 +256,39 @@ struct NotificationDTO: Codable, Identifiable {
 
 // MARK: - Chat / Message Models
 
-struct ChatThreadDTO: Codable, Identifiable, Hashable {
-    let id: String?
-    let recipientName: String?
-    let recipientRole: String?
-    let lastMessage: String?
-    let lastMessageAt: String?
+/// Mirrors the backend `ChatConversationSummaryDTO` field for field, and the
+/// Android `ChatConversationDto`. A conversation is identified by the OTHER
+/// participant's user id — there is no separate thread entity.
+struct ChatConversationDTO: Codable, Identifiable, Hashable {
+    let conversationUserId: String
+    let conversationUserName: String?
+    let lastMessageContent: String?
+    let lastMessageTimestamp: String?
+    let hospitalId: String?
+    let lastMessageRead: Bool?
     let unreadCount: Int?
+
+    var id: String { conversationUserId }
 }
 
-struct ChatMessageDTO: Codable, Identifiable {
+/// Mirrors the backend `ChatMessageResponseDTO`. Note `timestamp`, not
+/// `sentAt`: the old name decoded to nil on every message.
+struct ChatMessageDTO: Codable, Identifiable, Hashable {
     let id: String?
+    let timestamp: String?
     let senderId: String?
     let senderName: String?
+    let senderRole: String?
+    let recipientId: String?
+    let recipientName: String?
     let content: String?
-    let sentAt: String?
     let read: Bool?
-    let attachmentUrl: String?
 }
 
-struct SendMessageRequest: Encodable {
+/// Mirrors the backend `ChatMessageRequestDTO` / Android `SendChatMessageRequest`.
+struct SendChatMessageRequest: Encodable {
+    let recipientId: String
     let content: String
-    let attachmentUrl: String?
 }
 
 // MARK: - Referral Models
@@ -293,40 +318,6 @@ struct TreatmentPlanDTO: Codable, Identifiable {
     let interventions: String?
     let doctorName: String?
     let notes: String?
-}
-
-// MARK: - Consent Models
-
-struct ConsentDTO: Codable, Identifiable {
-    let id: String?
-    let fromHospitalId: String?
-    let fromHospitalName: String?
-    let toHospitalId: String?
-    let toHospitalName: String?
-    let consentType: String?
-    let purpose: String?
-    let grantedAt: String?
-    let expiresAt: String?
-    let status: String?
-}
-
-struct GrantConsentRequest: Encodable {
-    let fromHospitalId: String
-    let toHospitalId: String
-    let purpose: String?
-    let consentExpiration: String?
-}
-
-// MARK: - Access Log Models
-
-struct AccessLogDTO: Codable, Identifiable {
-    let id: String?
-    let accessedBy: String?
-    let accessedByRole: String?
-    let accessType: String?
-    let resourceAccessed: String?
-    let accessedAt: String?
-    let ipAddress: String?
 }
 
 // MARK: - Immunization Models

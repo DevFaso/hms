@@ -2,6 +2,8 @@ package com.bitnesttechs.hms.patient.core.network
 
 import com.bitnesttechs.hms.patient.core.models.*
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -34,6 +36,49 @@ interface ApiService {
     @GET("me/patient/health-summary")
     suspend fun getHealthSummary(): Response<ApiResponse<HealthSummaryDto>>
 
+    // ── Medical & family history (read-only for the patient, like the web) ──
+    @GET("me/patient/medical-history")
+    suspend fun getMyMedicalHistory(): Response<ApiResponse<List<PatientDiagnosisSummary>>>
+
+    @GET("me/patient/surgical-history")
+    suspend fun getMySurgicalHistory(): Response<ApiResponse<List<SurgicalHistoryEntry>>>
+
+    @GET("me/patient/family-history")
+    suspend fun getMyFamilyHistory(): Response<ApiResponse<List<FamilyHistoryEntry>>>
+
+    /** `data` is null when no active social history is on record. */
+    @GET("me/patient/social-history")
+    suspend fun getMySocialHistory(): Response<ApiResponse<SocialHistory>>
+
+    // ── Patient education, the web's My Education ────────────────────────────
+    @GET("me/patient/education")
+    suspend fun getMyEducation(): Response<ApiResponse<List<EducationItemDto>>>
+
+    @PUT("me/patient/education/{resourceId}/progress")
+    suspend fun updateEducationProgress(
+        @Path("resourceId") resourceId: String,
+        @Body update: EducationProgressUpdate
+    ): Response<ApiResponse<EducationItemDto>>
+
+    @GET("me/patient/education/questions")
+    suspend fun getEducationQuestions(): Response<ApiResponse<List<EducationQuestionDto>>>
+
+    @POST("me/patient/education/questions")
+    suspend fun submitEducationQuestion(@Body request: EducationQuestionSubmit): Response<ApiResponse<EducationQuestionDto>>
+
+    // ── PRO self-screenings (unwrapped DTOs, like the web's ProScreeningService) ──
+    @GET("me/patient/pro-screenings")
+    suspend fun getMyScreenings(): Response<ProSelfReport>
+
+    @GET("me/patient/pro-instruments/{code}")
+    suspend fun getScreeningInstrument(
+        @Path("code") code: String,
+        @Query("language") language: String?
+    ): Response<ProInstrumentView>
+
+    @POST("me/patient/pro-screenings")
+    suspend fun submitScreening(@Body request: ProResponseCreate): Response<ProScreeningEntry>
+
     // ── Appointments ──────────────────────────────────────────────────────────
     /** Patient appointments — API returns list, not paginated */
     @GET("me/patient/appointments")
@@ -42,9 +87,40 @@ interface ApiService {
         @Query("size") size: Int = 50
     ): Response<ApiResponse<List<AppointmentDto>>>
 
-    /** Book appointment — POST /appointments returns flat AppointmentDto (201) */
-    @POST("appointments")
-    suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<AppointmentDto>
+    /**
+     * Self-scheduling goes through the patient portal endpoint, which verifies
+     * the registration and the hospital/department pairing; the staff endpoint
+     * (POST /appointments) skips both.
+     */
+    @POST("me/patient/appointments")
+    suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<ApiResponse<AppointmentDto>>
+
+    // The booking wizard's three lists, same as the web's.
+    @GET("me/patient/booking/hospitals")
+    suspend fun getBookingHospitals(): Response<ApiResponse<List<BookingHospitalDto>>>
+
+    @GET("me/patient/booking/hospitals/{hospitalId}/departments")
+    suspend fun getBookingDepartments(
+        @Path("hospitalId") hospitalId: String
+    ): Response<ApiResponse<List<BookingDepartmentDto>>>
+
+    @GET("me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/providers")
+    suspend fun getBookingProviders(
+        @Path("hospitalId") hospitalId: String,
+        @Path("departmentId") departmentId: String
+    ): Response<ApiResponse<List<BookingProviderDto>>>
+
+    // Pre-check-in, same two calls as the web's form.
+    @GET("me/patient/appointments/{appointmentId}/questionnaires")
+    suspend fun getAppointmentQuestionnaires(
+        @Path("appointmentId") appointmentId: String
+    ): Response<ApiResponse<List<QuestionnaireDto>>>
+
+    @POST("me/patient/appointments/{appointmentId}/pre-checkin")
+    suspend fun submitPreCheckIn(
+        @Path("appointmentId") appointmentId: String,
+        @Body request: PreCheckInRequest
+    ): Response<ApiResponse<PreCheckInResponse>>
 
     @PUT("me/patient/appointments/cancel")
     suspend fun cancelAppointment(
@@ -87,6 +163,9 @@ interface ApiService {
         @Query("size") size: Int = 50
     ): Response<ApiResponse<PageDto<RefillDto>>>
 
+    @PUT("me/patient/refills/{refillId}/cancel")
+    suspend fun cancelRefill(@Path("refillId") refillId: String): Response<ApiResponse<RefillDto>>
+
     // ── Billing ───────────────────────────────────────────────────────────────
     @GET("me/patient/billing/invoices")
     suspend fun getInvoices(
@@ -96,6 +175,12 @@ interface ApiService {
 
     @GET("me/patient/billing/invoices/{id}")
     suspend fun getInvoice(@Path("id") id: String): Response<ApiResponse<InvoiceDto>>
+
+    @POST("me/patient/billing/invoices/{invoiceId}/pay")
+    suspend fun payInvoice(
+        @Path("invoiceId") invoiceId: String,
+        @Body request: PatientPaymentRequest
+    ): Response<ApiResponse<InvoiceDto>>
 
     @GET("me/patient/pharmacy/payments")
     suspend fun getPharmacyPayments(
@@ -134,11 +219,39 @@ interface ApiService {
     ): Response<ApiResponse<List<DischargeSummaryDto>>>
 
     // ── Documents ─────────────────────────────────────────────────────────────
+    /** The backend returns a Spring Page (an object with `content`), never a bare list. */
     @GET("me/patient/documents")
     suspend fun getDocuments(
         @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<List<DocumentDto>>>
+        @Query("size") size: Int = 50,
+        @Query("sort") sort: String = "createdAt,desc"
+    ): Response<ApiResponse<PageDto<DocumentDto>>>
+
+    /**
+     * Multipart like the web's FormData: `file` + `documentType` are required
+     * parts, `collectionDate` (ISO date) and `notes` are sent only when set.
+     */
+    @Multipart
+    @POST("me/patient/documents")
+    suspend fun uploadDocument(
+        @Part file: MultipartBody.Part,
+        @Part("documentType") documentType: RequestBody,
+        @Part("collectionDate") collectionDate: RequestBody?,
+        @Part("notes") notes: RequestBody?
+    ): Response<ApiResponse<DocumentDto>>
+
+    /** Soft delete; the backend only checks that the document belongs to the caller. */
+    @DELETE("me/patient/documents/{documentId}")
+    suspend fun deleteDocument(@Path("documentId") documentId: String): Response<ApiResponse<Unit>>
+
+    /**
+     * Document bytes have no public URL: the backend streams them only to
+     * their owner, so the download goes through the authenticated client
+     * and is handed to a viewer from the app's cache.
+     */
+    @Streaming
+    @GET("me/patient/documents/{documentId}/download")
+    suspend fun downloadDocument(@Path("documentId") documentId: String): Response<ResponseBody>
 
     // ── Health Records ────────────────────────────────────────────────────────
     @GET("me/patient/immunizations")
@@ -194,30 +307,27 @@ interface ApiService {
         @Body request: SendChatMessageRequest
     ): Response<ChatMessageDto>
 
-    // ── Consents / Privacy ────────────────────────────────────────────────────
-    @GET("me/patient/consents")
-    suspend fun getConsents(
+    // ── Sharing & privacy (web: my-sharing) ──────────────────────────────────
+    /** Accounting of disclosures: per-category counts over the whole window plus one page of events, newest first. */
+    @GET("me/patient/disclosures")
+    suspend fun getMyDisclosures(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
-    ): Response<ApiResponse<PageDto<ConsentDto>>>
+    ): Response<ApiResponse<DisclosureAccountingDto>>
 
-    @POST("me/patient/consents/{id}/grant")
-    suspend fun grantConsent(
-        @Path("id") id: String,
-        @Body request: GrantConsentRequest
-    ): Response<ApiResponse<ConsentDto>>
+    /** Bare DTO, not wrapped. A patient may only read their own (403 otherwise). */
+    @GET("patients/{patientId}/record-sharing/opt-out")
+    suspend fun getRecordSharingOptOut(@Path("patientId") patientId: String): Response<RecordSharingOptOutDto>
 
-    @DELETE("me/patient/consents")
-    suspend fun revokeConsent(
-        @Query("fromHospitalId") fromHospitalId: String,
-        @Query("toHospitalId") toHospitalId: String
-    ): Response<ApiResponse<Unit>>
+    /** Idempotent by refusal: a second opt-out is 409 with the server's message. */
+    @POST("patients/{patientId}/record-sharing/opt-out")
+    suspend fun optOutOfRecordSharing(
+        @Path("patientId") patientId: String,
+        @Body request: OptOutRequest
+    ): Response<RecordSharingOptOutDto>
 
-    @GET("me/patient/access-log")
-    suspend fun getAccessLog(
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<AccessLogDto>>>
+    @DELETE("patients/{patientId}/record-sharing/opt-out")
+    suspend fun revokeRecordSharingOptOut(@Path("patientId") patientId: String): Response<RecordSharingOptOutDto>
 
     // ── Proxy / Family Access ─────────────────────────────────────────────────
     @GET("me/patient/proxies")

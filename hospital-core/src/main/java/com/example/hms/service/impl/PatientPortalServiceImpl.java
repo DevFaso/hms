@@ -332,7 +332,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit) {
         Patient patient = findPatient(auth);
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return labResultService.getLabResultsForPatient(patient.getId(), hospitalId, limit);
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -351,7 +351,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PrescriptionResponseDTO> getMyPrescriptions(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return prescriptionService.getPrescriptionsByPatientId(patientId, locale);
+        // Same DTO as the clinician surface; the pharmacist-to-prescriber
+        // clarification exchange comes off the patient's copy (gap G7).
+        return prescriptionService.getPrescriptionsByPatientId(patientId, locale).stream()
+                .map(PrescriptionResponseDTO::withoutClarificationExchange)
+                .toList();
     }
 
     // ── Vital signs ──────────────────────────────────────────────────────
@@ -532,6 +536,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setStartTime(dto.getStartTime());
         appointment.setEndTime(endTime);
         appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setReason(dto.getReason());
         appointment.setNotes(dto.getNotes());
         appointment.setCreatedBy(patientEntity.getUser());
         appointment.setAssignment(assignment);
@@ -944,7 +949,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** Safe delegates — return empty list if service call fails (partial availability). */
     private List<PatientLabResultResponseDTO> safeLabResults(UUID patientId, UUID hospitalId) {
         try {
-            return labResultService.getLabResultsForPatient(patientId, hospitalId, 5);
+            return labResultService.getLabResultsForPatientPortal(patientId, hospitalId, 5);
         } catch (Exception e) {
             log.warn("Failed to fetch lab results for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -1340,7 +1345,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
         UUID hospitalId = resolvePatientHospitalId(patient);
-        return labResultService.getLabResultsForPatient(patient.getId(), hospitalId, limit);
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
     }
 
     @Override

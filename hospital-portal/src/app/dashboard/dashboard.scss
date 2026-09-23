@@ -2792,6 +2792,14 @@ $shadow-md:
     background: #fee2e2;
     color: #dc2626;
   }
+
+  /* Awaiting release: amber, matching the my-lab-results treatment. Without
+     this rule the bound .lab-pending class did nothing and the hourglass was
+     drawn inside the green all-clear circle. */
+  &.lab-pending {
+    background: #fef3c7;
+    color: #b45309;
+  }
 }
 
 .lab-info {

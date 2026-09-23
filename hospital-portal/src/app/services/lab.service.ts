@@ -8,7 +8,11 @@ export interface LabOrderResponse {
   patientId: string;
   patientFullName: string;
   patientEmail: string;
+  hospitalId?: string;
   hospitalName: string;
+  /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
+  performingHospitalId?: string | null;
+  performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
   orderDatetime: string;
@@ -31,6 +35,12 @@ export interface LabResultResponse {
   patientFullName: string;
   patientEmail: string;
   hospitalName: string;
+  /**
+   * The laboratory that ran the order, when it was not this hospital's own
+   * (B1); null for an in-house order. Releasing belongs to that laboratory,
+   * so the release control reads this to know whether it is ours to offer.
+   */
+  performingHospitalId?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;
@@ -214,6 +224,20 @@ export interface LabOrderRequest {
   orderChannel: string;
   providerSignature: string;
   documentationSharedWithLab?: boolean | null;
+  /**
+   * The laboratory (hospital) that performs the test. Three states on the
+   * wire and they are not the same on an update: absent leaves the routing
+   * alone, an explicit null brings the test back in-house, an id routes it
+   * there. The order form always sends it explicitly.
+   */
+  performingHospitalId?: string | null;
+}
+
+/** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */
+export interface PerformingLab {
+  id: string;
+  name: string;
+  code?: string;
 }
 
 export interface LabResultRequest {
@@ -369,6 +393,13 @@ export class LabService {
     return this.http
       .get<ApiWrapper<LabResultResponse>>(`/lab-results/${id}`)
       .pipe(map((res) => res.data));
+  }
+
+  /** Active hospitals other than the caller's own whose laboratory can perform an order. */
+  listPerformingLabs(): Observable<PerformingLab[]> {
+    return this.http
+      .get<ApiWrapper<PerformingLab[]>>('/lab-orders/performing-labs')
+      .pipe(map((res) => res?.data ?? []));
   }
 
   createOrder(req: LabOrderRequest): Observable<LabOrderResponse> {

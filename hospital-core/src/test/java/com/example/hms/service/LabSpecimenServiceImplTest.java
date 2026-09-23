@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +50,11 @@ class LabSpecimenServiceImplTest {
     private Hospital hospital;
     private LabOrder labOrder;
     private LabSpecimenResponseDTO responseDTO;
+
+    /** The committed status the statement writer compares against. */
+    private void givenCommittedOrderStatus(LabOrderStatus status) {
+        when(labOrderRepository.findStatusById(labOrderId)).thenReturn(status);
+    }
 
     @BeforeEach
     void setUp() {
@@ -78,6 +85,7 @@ class LabSpecimenServiceImplTest {
         when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        givenCommittedOrderStatus(LabOrderStatus.ORDERED);
         when(labSpecimenRepository.existsByAccessionNumber(any())).thenReturn(false);
         when(labSpecimenRepository.save(any())).thenReturn(saved);
         when(labSpecimenMapper.toResponseDTO(saved)).thenReturn(responseDTO);
@@ -86,6 +94,11 @@ class LabSpecimenServiceImplTest {
 
         assertThat(result).isEqualTo(responseDTO);
         verify(labSpecimenRepository).save(any(LabSpecimen.class));
+        // B2: a collected specimen IS the order's COLLECTED state, written
+        // by the same compare-and-set statement the result path uses.
+        verify(labOrderRepository).updateStatusFrom(
+            labOrderId, LabOrderStatus.ORDERED, LabOrderStatus.COLLECTED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test
@@ -225,12 +238,39 @@ class LabSpecimenServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
         when(labSpecimenMapper.toResponseDTO(specimen)).thenReturn(responseDTO);
+        givenCommittedOrderStatus(LabOrderStatus.COLLECTED);
 
         LabSpecimenResponseDTO result = service.receiveSpecimen(specimenId, Locale.ENGLISH);
 
         assertThat(result).isEqualTo(responseDTO);
         assertThat(specimen.getStatus()).isEqualTo(LabSpecimenStatus.RECEIVED);
+        // B2: receipt at the lab IS the order's RECEIVED state.
+        verify(labOrderRepository).updateStatusFrom(
+            labOrderId, LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
         verify(instrumentOutboxService).enqueueSpecimenReceived(specimen);
+    }
+
+    @Test
+    void receiveSpecimen_neverMovesAResultedOrderBack() {
+        labOrder.setStatus(LabOrderStatus.RESULTED);
+        givenCommittedOrderStatus(LabOrderStatus.RESULTED);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
+        when(labSpecimenMapper.toResponseDTO(specimen)).thenReturn(responseDTO);
+
+        service.receiveSpecimen(specimenId, Locale.ENGLISH);
+
+        // the committed status is past RECEIVED, so nothing is written
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test

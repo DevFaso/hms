@@ -2405,4 +2405,59 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V161 — lab order routed to a performing laboratory (audit gap B1).
+         lab.lab_orders.performing_hospital_id (nullable FK to
+         hospital.hospitals, indexed): NULL = the ordering hospital performs
+         the test itself, so nothing is backfilled. Additive DDL; the FK is
+         added inside a DO block, hence splitStatements="false".
+         ================================================================= -->
+    <changeSet id="V161-lab-order-performing-hospital" author="hms-team" runOnChange="false">
+        <sqlFile path="V161__lab_order_performing_hospital.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V162 — pharmacy flow gap G5: the pharmacist's clarification
+         request. Reason / requested-at / requested-by and the prescriber's
+         response / resolved-at / resolved-by on clinical.prescriptions,
+         plus remaining_quantity on clinical.prescription_routing_decisions.
+         PENDING_CLARIFICATION had no writer and no payload. Additive DDL.
+         ================================================================= -->
+    <changeSet id="V162-prescription-clarification" author="hms-team" runOnChange="false">
+        <sqlFile path="V162__prescription_clarification.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V163 — lab orders the old auto-verification left behind.
+         Nothing advanced lab_orders.status before #716, so orders whose
+         results were all auto-released still sit at ORDERED and have
+         never appeared on the ordering doctor's review queue. One-off
+         catch-up; the service keeps the status current from here.
+         Plain DML (UPDATE only), idempotent, CANCELLED/VERIFIED untouched.
+         ================================================================= -->
+    <changeSet id="V163-lab-order-status-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V163__lab_order_status_backfill.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V164 — the observation result status the analyzer sends (OBX-11).
+         Which row of a preliminary/final pair may be hidden on the way
+         out was inferred three times (set id, release state, recency) and
+         each inference had a hole. The analyzer states it outright; this
+         stores it. One nullable column, additive, no backfill — a row
+         that never said it is preliminary is never superseded.
+         ================================================================= -->
+    <changeSet id="V164-lab-result-observation-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V164__lab_result_observation_status.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

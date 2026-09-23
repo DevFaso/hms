@@ -1,0 +1,54 @@
+-- =====================================================================
+-- V164: store the observation result status the analyzer sends (OBX-11)
+--
+-- An analyzer commonly reports one observation twice — preliminary, then
+-- final — as two messages with two MSH-10s. Both rows are kept, and must
+-- be: the message control id is the only key the replay guard and the
+-- partial unique index have, and a critical value is notified against the
+-- row it was raised on. The pair is instead resolved on the way out, so
+-- the patient sees one row and the order is not held open by a value the
+-- laboratory has already replaced.
+--
+-- Deciding WHICH row that is was attempted three times by inference —
+-- from the observation set id, from release state, from recency — and
+-- each attempt had a hole, because all three infer something the
+-- analyzer states outright in OBX-11 and we were throwing away:
+--
+--   * the set id is guaranteed unique only WITHIN a message and falls
+--     back to positional numbering, so a final re-sending a subset of a
+--     panel carries a different set id for the same analyte (nothing
+--     supersedes, a permanent "pending"), while one message per draw
+--     gives every draw set id 1 (a timed series collides on one key, and
+--     an abnormal earlier draw could be hidden by a later normal one);
+--   * release state cannot tell a preliminary from a correction, so a
+--     corrected result could hide the released value it corrects.
+--
+-- With OBX-11 on the row, a result is a preliminary only if the analyzer
+-- said so, and nothing else is ever hidden.
+--
+-- HL7 table 0085 values are short codes (F final, P preliminary,
+-- C corrected, I pending, S partial, X cannot obtain, U/W ...), so 16
+-- characters is ample; the ingest truncates to the same length.
+--
+-- Strictly additive: one nullable column, IF NOT EXISTS, no index, and
+-- deliberately NO BACKFILL. There is nothing to backfill from — which row
+-- of an existing pair was preliminary is exactly the thing we could not
+-- reconstruct, and inventing it is what this column exists to stop.
+--
+-- So the read paths keep TWO rules side by side (see SupersededLabResults):
+-- a row that carries a status is judged by the analyzer's own word, and a
+-- row written before this migration is judged by the older rule that
+-- shipped in #720 — same order and test code, later released row wins.
+-- Without that fallback these rows would be superseded by nothing at all,
+-- leaving their orders stuck in RESULTED and the patient a permanent
+-- duplicate pending row: a regression, on data already in production,
+-- against the behaviour they have today. The fallback retires by itself
+-- as pre-V164 rows age out of what anyone reads.
+--
+-- No automated Liquibase rollback is declared; an operator reverting must
+-- drop the column and ship a JPA mapping without the field in the same
+-- release.
+-- =====================================================================
+
+ALTER TABLE lab.lab_results
+    ADD COLUMN IF NOT EXISTS observation_result_status VARCHAR(16) NULL;

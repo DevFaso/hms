@@ -34,6 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link AuditEventLogServiceImpl} proving that audit logging is
@@ -49,6 +52,7 @@ class AuditEventLogServiceImplTest {
     @Mock private ObjectMapper objectMapper;
     @Mock private PatientRepository patientRepository;
     @Mock private StaffRepository staffRepository;
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private AuditEventLogServiceImpl auditService;
@@ -331,5 +335,31 @@ class AuditEventLogServiceImplTest {
 
         assertThat(result).isNotNull();
         verify(auditRepository).findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable);
+    }
+
+    @Test
+    @DisplayName("a batch that fails is replayed one event at a time, so a bad row costs one row")
+    void logEventsReplaysIndividuallyWhenTheBatchFails() {
+        // The template runs its callback inline against a mocked manager, so
+        // the batch attempt and each replay attempt are observable here.
+        AuditEventRequestDTO good = AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.RECORD_SHARE)
+            .entityType("PATIENT")
+            .resourceId(UUID.randomUUID().toString())
+            .build();
+        AuditEventRequestDTO alsoGood = AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.RECORD_SHARE)
+            .entityType("PATIENT")
+            .resourceId(UUID.randomUUID().toString())
+            .build();
+        // First call is the batch; make its commit fail, then let the replays run.
+        doThrow(new IllegalStateException("batch commit failed"))
+            .doNothing()
+            .when(transactionManager).commit(any());
+
+        auditService.logEvents(List.of(good, alsoGood));
+
+        // One batch attempt plus one attempt per event on the replay.
+        verify(transactionManager, times(3)).getTransaction(any());
     }
 }

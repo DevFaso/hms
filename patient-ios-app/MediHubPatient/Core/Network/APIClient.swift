@@ -5,20 +5,54 @@ import Foundation
 enum AppEnvironment {
     /// Available environments
     enum Environment: String, CaseIterable {
-        case dev = "https://api.dev.e-keneya.com/api"
+        // `api.dev.e-keneya.com` has no DNS record. The dev API is served
+        // same-origin by the portal host, which is what the Angular dev
+        // environment already targets.
+        case dev = "https://dev.e-keneya.com/api"
         case prod = "https://api.e-keneya.com/api"
         case local = "http://localhost:8081/api"
     }
 
-    /// Current active environment — change here for quick switching
+    /// Fallback when neither the scheme nor Info.plist supplies a base URL.
+    ///
+    /// Only `Release-Dev` and `Release-Prod` carry an xcconfig, so the plain
+    /// `Release` configuration — what Product > Archive uses from Xcode — has
+    /// no base URL at all. Defaulting that to dev would ship a
+    /// distribution-signed build talking to the dev server, so the fallback
+    /// follows the build type instead of being pinned to one environment.
+    #if DEBUG
     static let current: Environment = .dev
+    #else
+    static let current: Environment = .prod
+    #endif
 
     static var baseURL: String {
-        // Override via Xcode scheme environment variable
-        if let url = ProcessInfo.processInfo.environment["MEDIHUB_API_BASE_URL"] {
+        // Scheme environment variable — local development only. It is empty
+        // in an archive, which is why the Info.plist fallback below exists:
+        // without it every TestFlight build silently used `current`.
+        if let url = ProcessInfo.processInfo.environment["MEDIHUB_API_BASE_URL"],
+           !url.isEmpty {
+            return url
+        }
+        // Baked in per configuration by Config/{Dev,Prod}.xcconfig, the same
+        // mechanism the MEDIHUB_KEYCLOAK_* settings already use.
+        if let url = Bundle.main.object(forInfoDictionaryKey: "MEDIHUB_API_BASE_URL") as? String,
+           !url.isEmpty {
             return url
         }
         return current.rawValue
+    }
+}
+
+/// The origin behind the API base URL, for assets served outside `/api`.
+///
+/// Must strip only a TRAILING `/api`: `replacingOccurrences(of: "/api")`
+/// also matched the `/api` inside `https://api.e-keneya.com`, turning the
+/// production base URL into `https:/.e-keneya.com` and breaking every avatar.
+extension AppEnvironment {
+    static var assetOrigin: String {
+        let base = baseURL
+        return base.hasSuffix("/api") ? String(base.dropLast(4)) : base
     }
 }
 
@@ -237,14 +271,20 @@ final class APIClient {
 
     // MARK: - Multipart upload
 
+    /// One file part plus optional text parts (`fields`), in that order. The
+    /// text parts are what a Spring `@RequestPart("documentType")` /
+    /// `@RequestParam` reads from a multipart body. Same bearer selection
+    /// and one refresh on 401 as `request()`: a document upload that hits an
+    /// expired token must retry with a fresh one, not surface as an error.
     func uploadMultipart<T: Decodable>(
         _ path: String,
         fileData: Data,
         fileName: String,
         mimeType: String,
-        fieldName: String = "file"
+        fieldName: String = "file",
+        fields: [String: String] = [:]
     ) async throws -> T {
-        var components = URLComponents(string: AppEnvironment.baseURL + path)
+        let components = URLComponents(string: AppEnvironment.baseURL + path)
         guard let url = components?.url else { throw APIError.invalidURL }
 
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -253,21 +293,116 @@ final class APIClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if let token = KeychainHelper.shared.accessToken {
+        // Same preference as request(): the OIDC token when a Keycloak
+        // session is active, else the legacy one. Sending only the legacy
+        // token made every avatar upload 401 under SSO.
+        let usingOidc = KeychainHelper.shared.oidcAccessToken != nil
+        if let token = KeychainHelper.shared.oidcAccessToken ?? KeychainHelper.shared.accessToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        // The file name goes into a quoted header: quotes and CR/LF from a
+        // user-chosen name would end the part early.
+        let safeName = fileName
+            .replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(safeName)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+        for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: text/plain; charset=utf-8\r\n\r\n".data(using: .utf8)!)
+            body.append(value.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         request.httpBody = body
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
+        var (data, response) = try await session.data(for: request)
+        guard var http = response as? HTTPURLResponse else { throw APIError.unknown }
+
+        if http.statusCode == 401 {
+            if usingOidc {
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                guard let fresh = refreshed else {
+                    await AuthManager.shared.logout()
+                    throw APIError.unauthorized
+                }
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            } else {
+                try await AuthManager.shared.refreshTokens()
+                if let token = KeychainHelper.shared.accessToken {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+            }
+            (data, response) = try await session.data(for: request)
+            guard let retry = response as? HTTPURLResponse else { throw APIError.unknown }
+            http = retry
+            if http.statusCode == 401 {
+                await AuthManager.shared.logout()
+                throw APIError.unauthorized
+            }
+        }
         return try decodeResponse(data, statusCode: http.statusCode)
+    }
+}
+
+// MARK: - File download
+
+extension APIClient {
+    /// Fetches raw bytes with the same bearer selection and one refresh on
+    /// 401 as `request()`. Returns the bytes and the server's media type,
+    /// which is what a previewer needs and what `request<Data>` discards.
+    func downloadFile(_ path: String) async throws -> (data: Data, mimeType: String?) {
+        guard let url = URL(string: AppEnvironment.baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let usingOidc = KeychainHelper.shared.oidcAccessToken != nil
+        if let token = KeychainHelper.shared.oidcAccessToken ?? KeychainHelper.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var (data, response) = try await session.data(for: request)
+        guard var http = response as? HTTPURLResponse else { throw APIError.unknown }
+
+        if http.statusCode == 401 {
+            if usingOidc {
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                guard let fresh = refreshed else {
+                    await AuthManager.shared.logout()
+                    throw APIError.unauthorized
+                }
+                request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+            } else {
+                try await AuthManager.shared.refreshTokens()
+                if let token = KeychainHelper.shared.accessToken {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+            }
+            (data, response) = try await session.data(for: request)
+            guard let retry = response as? HTTPURLResponse else { throw APIError.unknown }
+            http = retry
+            if http.statusCode == 401 {
+                await AuthManager.shared.logout()
+                throw APIError.unauthorized
+            }
+        }
+
+        guard (200 ..< 300).contains(http.statusCode) else {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
+            throw APIError.httpError(statusCode: http.statusCode, message: msg)
+        }
+        // type/subtype only; parameters such as charset are not a media type.
+        let mime = http.value(forHTTPHeaderField: "Content-Type")?
+            .split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces) }
+        return (data, mime)
     }
 }
 

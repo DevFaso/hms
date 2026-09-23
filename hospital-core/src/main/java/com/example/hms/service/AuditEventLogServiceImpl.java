@@ -24,7 +24,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.example.hms.enums.AuditStatus;
 
 import java.time.LocalDateTime;
@@ -42,6 +44,14 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private final ObjectMapper objectMapper;
     private final PatientRepository patientRepository;
     private final StaffRepository staffRepository;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    /**
+     * Consecutive replay failures that mean "the database is down", not "one
+     * row is bad". Three is enough to tell them apart without abandoning a
+     * page for a single unlucky row.
+     */
+    private static final int REPLAY_FAILURE_LIMIT = 3;
 
     @Override
     @Transactional(readOnly = true)
@@ -110,6 +120,80 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                     requestDTO.getUserName(),
                     e.getMessage(), e);
             return null;
+        }
+    }
+
+    /**
+     * One transaction for the batch, and a per-event replay when it fails.
+     *
+     * <p>The rows flush together at commit, so catching per row inside the
+     * transaction would only look like independence — the failure surfaces at
+     * commit, after the body has returned. (That is also why this method is
+     * not annotated: a {@code REQUIRES_NEW} annotation put the commit outside
+     * the catch, so "never throws" was false and held only because the single
+     * caller wrapped it. The template puts the boundary where the catch can
+     * see it.)
+     *
+     * <p>Losing the page because one row is unpersistable is too high a price
+     * for a compliance record, so a failed batch is replayed one event at a
+     * time, each in its own transaction. The happy path still costs one
+     * commit; the unhappy one costs N and loses only the row that deserved
+     * it.
+     */
+    @Override
+    public void logEvents(java.util.List<AuditEventRequestDTO> requestDTOs) {
+        if (requestDTOs == null || requestDTOs.isEmpty()) {
+            return;
+        }
+        TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
+        ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        try {
+            ownTransaction.executeWithoutResult(status -> {
+                for (AuditEventRequestDTO requestDTO : requestDTOs) {
+                    doLogEvent(requestDTO);
+                }
+            });
+        } catch (RuntimeException e) {
+            log.warn("[AUDIT] Batch of {} audit event(s) failed ({}); replaying one at a time so a bad row "
+                    + "costs one row rather than the page", requestDTOs.size(), e.getMessage());
+            replayIndividually(requestDTOs, ownTransaction);
+        }
+    }
+
+    /**
+     * Replay the batch one event at a time, and give up once it stops looking
+     * like a bad row.
+     *
+     * <p>A replay cannot tell one unpersistable row from a database that is
+     * down. Without a stop, an outage on a large page turns into hundreds of
+     * further failed transactions and stack traces, synchronously inside the
+     * request being audited — the cure costing more than the disease. A short
+     * run of consecutive failures is taken as the latter: the replay stops and
+     * says so once, rather than per row.
+     */
+    private void replayIndividually(java.util.List<AuditEventRequestDTO> requestDTOs,
+                                    TransactionTemplate ownTransaction) {
+        int consecutiveFailures = 0;
+        int recorded = 0;
+        for (int i = 0; i < requestDTOs.size(); i++) {
+            AuditEventRequestDTO requestDTO = requestDTOs.get(i);
+            try {
+                ownTransaction.executeWithoutResult(status -> doLogEvent(requestDTO));
+                consecutiveFailures = 0;
+                recorded++;
+            } catch (RuntimeException e) {
+                consecutiveFailures++;
+                if (consecutiveFailures >= REPLAY_FAILURE_LIMIT) {
+                    log.error("[AUDIT] Replay abandoned after {} consecutive failures; {} of {} event(s) "
+                            + "recorded, {} not attempted. Last error: {}",
+                            consecutiveFailures, recorded, requestDTOs.size(),
+                            requestDTOs.size() - i - 1, e.getMessage(), e);
+                    return;
+                }
+                log.error("[AUDIT] Failed to persist audit event on replay (eventType={}, resourceId={}, userId={}): {}",
+                        requestDTO.getEventType(), requestDTO.getResourceId(), requestDTO.getUserId(),
+                        e.getMessage(), e);
+            }
         }
     }
 

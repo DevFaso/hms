@@ -1,0 +1,361 @@
+name: Mobile — iOS (patient)
+
+# The Xcode project is NOT committed: patient-ios-app/project.yml is the
+# source of truth and XcodeGen regenerates MediHubPatient.xcodeproj here.
+# That keeps the project file out of merge conflicts and means CI is the
+# only place a build is reproducible from a clean checkout.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'patient-ios-app/**'
+      - '.github/workflows/mobile-ios.yml'
+  pull_request:
+    paths:
+      - 'patient-ios-app/**'
+      - '.github/workflows/mobile-ios.yml'
+  workflow_dispatch:
+    inputs:
+      release_action:
+        # A choice, not a boolean, for the reason the Android sibling spells
+        # out: a boolean dispatch input is a real boolean from the
+        # Run-workflow dialog but a STRING over the API, and GitHub casts
+        # every non-empty string to true — so `if: inputs.publish` was TRUE
+        # for a dispatch that passed publish=false. On this side that means
+        # uploading to TestFlight against the operator's instruction, which
+        # burns a build number and notifies testers, and cannot be undone.
+        # build_only is the PR build and nothing further: the archive job
+        # is skipped, so no signing credential reaches the runner.
+        description: 'What this dispatch does with the archive'
+        type: choice
+        options:
+          - build_only
+          - upload_to_testflight
+        default: build_only
+      configuration:
+        description: 'Archive configuration'
+        type: choice
+        options: [Release-Dev, Release-Prod]
+        default: Release-Dev
+
+permissions:
+  contents: read
+
+concurrency:
+  # See the Android workflow: a dispatched TestFlight upload must not be
+  # cancelled by an unrelated push to the same ref.
+  group: mobile-ios-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+defaults:
+  run:
+    working-directory: patient-ios-app
+
+jobs:
+  build:
+    name: Generate, build, test
+    # macos-26, not macos-15. Apple rejects any upload built with an SDK
+    # older than iOS 26, and macos-15 ships Xcode 16.4 / iOS 18.5:
+    #   error: exportArchive Validation failed. SDK version issue. This app
+    #   was built with the iOS 18.5 SDK. All iOS and iPadOS apps must be
+    #   built with the iOS 26 SDK or later, included in Xcode 26 or later.
+    # Seen on run 35531289830. macos-26 has been generally available since
+    # 2026-02-26 and carries Xcode 26. Both jobs move together so the tests
+    # and the archive are built by the same toolchain.
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the dispatch asks for something this workflow knows
+        # The Android sibling's reasoning, and the same placement: in build,
+        # so a bad value costs a checkout rather than a macOS archive.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_ACTION: ${{ inputs.release_action }}
+        run: |
+          # Without this an unrecognised value — a typo, or the Android
+          # vocabulary "stage_on_internal" — would skip the upload and report
+          # a green run having shipped nothing. An exact alternation, not a
+          # substring test against a joined list, and the value is not echoed
+          # back before it has been validated; see the Android sibling.
+          case "$RELEASE_ACTION" in
+            build_only|upload_to_testflight) ;;
+            *)
+              # Named where it is safe to name it: $GITHUB_STEP_SUMMARY is a
+              # file, not a stream the runner scans for ::workflow commands,
+              # so the rejected value can go there even though it must not
+              # go into the ::error:: line above.
+              echo "Rejected dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::unknown release_action — expected build_only or upload_to_testflight"
+              exit 1
+              ;;
+          esac
+          echo "This dispatch: release_action=$RELEASE_ACTION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show the selected Xcode
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Check the generated Info.plist carries the keys the app needs
+        run: |
+          # xcodegen rewrites Info.plist from project.yml's info.properties,
+          # so a key dropped or renamed there is free to catch here and
+          # costs an archive, an upload and Apple's processing queue to
+          # catch anywhere else. That is how ITSAppUsesNonExemptEncryption
+          # was found: build 202609201928 landed in Missing Compliance.
+          PLIST=MediHubPatient/Resources/Info.plist
+          # xml1, not raw: raw cannot render an array, and CFBundleURLTypes
+          # is one — it carries the OAuth redirect scheme every Keycloak
+          # sign-in depends on, and losing it breaks login silently.
+          # plutil's own diagnostic is kept and shown: swallowing it reports
+          # a malformed plist as a missing key and sends the reader hunting
+          # in project.yml for something that is right there.
+          for key in CFBundleDisplayName NSFaceIDUsageDescription \
+                     ITSAppUsesNonExemptEncryption CFBundleURLTypes \
+                     CFBundleShortVersionString CFBundleVersion \
+                     MEDIHUB_API_BASE_URL MEDIHUB_KEYCLOAK_ISSUER \
+                     MEDIHUB_KEYCLOAK_CLIENT_ID MEDIHUB_KEYCLOAK_REDIRECT_URI \
+                     MEDIHUB_KEYCLOAK_SSO_ENABLED; do
+            if ! out=$(plutil -extract "$key" xml1 -o - "$PLIST" 2>&1); then
+              echo "::error::$key not readable from the generated $PLIST: $out"
+              exit 1
+            fi
+          done
+          # The declaration has to be a real Boolean. Quote it in
+          # project.yml and XcodeGen writes <string>false</string>, which
+          # Apple ignores — the build goes back to Missing Compliance with
+          # this gate green.
+          #
+          # So this matches the TAG, not the rendered value: `plutil
+          # -extract ... raw` prints `false` for BOTH <false/> and
+          # <string>false</string>, which is how the first version of this
+          # check passed the quoted case. Verified against both plists.
+          # tr -d '[:space:]' rather than an escape list: a backslash
+          # escape written through a shell heredoc has landed in this
+          # file as a literal newline more than once.
+          enc=$(plutil -extract ITSAppUsesNonExemptEncryption xml1 -o - "$PLIST" | tr -d '[:space:]')
+          case "$enc" in
+            *"<false/>"*)
+              # Scans FIRST-PARTY sources for a crypto import. Linked
+              # packages are out of scope on purpose: AppAuth's PKCE digest
+              # is a standards-track primitive, not this app's algorithm.
+              #
+              # This catches an import, not every route to cryptography.
+              # Security.framework is already imported for the Keychain, so
+              # key-wrapping added in KeychainHelper would not trip it.
+              # metadata.md states that limit rather than overclaiming.
+              #
+              # The app target's sources only: MediHubPatientTests is not
+              # distributed, so a crypto import in a test says nothing about
+              # the app's export classification and must not fail the PR.
+              test -d MediHubPatient || {
+                echo "::error::MediHubPatient/ is not here, so this scan would have checked nothing"
+                exit 1
+              }
+              # grep's status is captured rather than used as a condition:
+              # inside `if`, bash -e is suspended and exit 2 (unreadable
+              # path, bad regex) is indistinguishable from exit 1 (no
+              # match), so the gate would go green having scanned nothing.
+              set +e
+              grep -rnE '(^|[[:space:]])import +(CryptoKit|CommonCrypto|Crypto)([[:space:]]|$)' \
+                MediHubPatient --include='*.swift'
+              found=$?
+              set -e
+              case "$found" in
+                0)
+                  echo "::error::ITSAppUsesNonExemptEncryption is false but the app target imports a crypto framework — re-check the export classification before shipping"
+                  exit 1
+                  ;;
+                1)
+                  echo "export declaration false, and no crypto import in the app target"
+                  ;;
+                *)
+                  echo "::error::the crypto scan could not run (grep exited $found) — not treating that as a pass"
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *"<true/>"*)
+              echo "::warning::ITSAppUsesNonExemptEncryption is true — this app now claims non-exempt encryption, and the first-party crypto scan no longer applies"
+              ;;
+            *)
+              echo "::error::ITSAppUsesNonExemptEncryption is not a boolean but $enc — a quoted value in project.yml becomes a <string> that Apple ignores"
+              exit 1
+              ;;
+          esac
+          echo "Info.plist: every declared key present"
+
+      - name: Build for the simulator
+        # Ad-hoc signing ("-"), not CODE_SIGNING_ALLOWED=NO. The gate still
+        # needs no certificates, but an unsigned test host has no keychain
+        # entitlement, so SecItemAdd fails and every KeychainHelper-backed
+        # test reads its token back as nil.
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
+            | xcbeautify
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          # Model names drift between Xcode releases, so resolve one at run
+          # time instead of pinning "iPhone 16" and breaking on the next image.
+          UDID=$(xcrun simctl list devices available | grep -E '^ +iPhone' | head -1 | grep -oE '[0-9A-F-]{36}')
+          if [ -z "$UDID" ]; then
+            echo "::error::no iPhone simulator available on this runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
+            | xcbeautify
+
+  testflight:
+    name: Archive and upload
+    # Gated at the JOB, not at the upload step. Letting the job run for a
+    # build_only dispatch would write the App Store Connect key to the
+    # runner and point -allowProvisioningUpdates at Apple — which can create
+    # or renew a distribution certificate, and those are capped — for a run
+    # that ships nothing. build_only therefore does less here than on
+    # Android: there it still produces a signed AAB, here it is the PR build
+    # and nothing more. Retaining an .xcarchive is the change that would
+    # make the two mean the same thing, and it is not this PR.
+    if: github.event_name == 'workflow_dispatch' && inputs.release_action == 'upload_to_testflight'
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 60
+    environment: mobile-release
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Install the App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in the mobile-release environment."
+              exit 1
+            fi
+          done
+          # xcodebuild -allowProvisioningUpdates reads the key from this
+          # well-known location, which is what lets automatic signing create
+          # and download the distribution profile without a Mac in the loop.
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Through env, never interpolated into the script. A ${{ }} in a
+          # run: block is substituted as TEXT before bash sees it, so a
+          # dispatch input lands inside the command — in the one job that
+          # holds the App Store Connect signing key. The Android sibling
+          # already passes api_environment this way.
+          CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          set -o pipefail
+          # Date-based rather than the run number: run_number restarts at
+          # 1 for a new workflow file, and App Store Connect rejects any
+          # build number it has already seen for this marketing version.
+          # A UTC timestamp is always higher than the previous one.
+          BUILD_NUMBER=$(date -u +%Y%m%d%H%M)
+          echo "build number $BUILD_NUMBER"
+          xcodebuild archive \
+            -project MediHubPatient.xcodeproj \
+            -scheme MediHubPatient \
+            -configuration "$CONFIGURATION" \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MediHubPatient.xcarchive \
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify
+
+      - name: Check the ARCHIVED app carries the export declaration
+        run: |
+          # The PR-time check reads the SOURCE plist. This reads the one
+          # inside the archive Apple actually receives: the target sets
+          # GENERATE_INFOPLIST_FILE, so Xcode merges and processes the plist
+          # into the bundle, and the archive runs a Release configuration
+          # with Config/*.xcconfig layered on — a path the Debug-only PR job
+          # never exercises. Failing here costs nothing; failing at Apple
+          # costs a build number and a processing cycle.
+          APP=build/MediHubPatient.xcarchive/Products/Applications/MediHubPatient.app
+          if ! out=$(plutil -extract ITSAppUsesNonExemptEncryption xml1 -o - "$APP/Info.plist" 2>&1); then
+            echo "::error::the archived app has no usable ITSAppUsesNonExemptEncryption — this upload would land in Missing Compliance"
+            echo "plutil said: $out" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          # xml1 and a TAG match, exactly as the PR-time check does. The
+          # first version of this step used `raw`, which prints `false` for
+          # both <false/> and <string>false</string> — so it passed the one
+          # case its sibling had just been rewritten to catch, while being
+          # the last thing standing between a quoted value and an upload.
+          case "$(printf '%s' "$out" | tr -d '[:space:]')" in
+            *"<false/>"*)
+              echo "archived app declares ITSAppUsesNonExemptEncryption=false"
+              ;;
+            *"<true/>"*)
+              echo "::error::the archived app claims NON-exempt encryption, which App Store Connect will not accept without an ITSEncryptionExportComplianceCode this workflow does not set"
+              exit 1
+              ;;
+            *)
+              echo "::error::the archived app's ITSAppUsesNonExemptEncryption is not a boolean — a quoted value becomes a <string> that Apple ignores"
+              echo "archived value was: $out" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac
+
+      - name: Export and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          # ExportOptions.plist already carries method=app-store-connect and
+          # destination=upload, so this step both exports and ships the build.
+          xcodebuild -exportArchive \
+            -archivePath build/MediHubPatient.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify
+
+      - name: Remove the API key from the runner
+        if: always()
+        run: rm -rf ~/.appstoreconnect/private_keys

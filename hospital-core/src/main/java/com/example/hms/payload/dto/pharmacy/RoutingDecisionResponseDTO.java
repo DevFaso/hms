@@ -28,6 +28,13 @@ public class RoutingDecisionResponseDTO {
     private UUID patientId;
     private String reason;
     private LocalDate estimatedRestockDate;
+
+    /**
+     * The quantity this routing is for — the remainder on a partially filled
+     * order, the full amount otherwise. What the printed copy must show, so
+     * the external pharmacy fills what is owed and not the whole script.
+     */
+    private java.math.BigDecimal remainingQuantity;
     private String status;
     private LocalDateTime decidedAt;
     private LocalDateTime createdAt;

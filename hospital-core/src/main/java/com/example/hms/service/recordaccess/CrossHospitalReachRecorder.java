@@ -5,10 +5,14 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.service.AuditEventLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +47,7 @@ public class CrossHospitalReachRecorder {
 
     private final AuditEventLogService auditEventLogService;
     private final BreakGlassGate breakGlassGate;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     /**
      * Count the source hospitals in {@code sourceHospitalIds} that are not
@@ -71,6 +76,125 @@ public class CrossHospitalReachRecorder {
     public static Map<String, Long> merge(Map<String, Long> into, Map<String, Long> more) {
         more.forEach((k, v) -> into.merge(k, v, Long::sum));
         return into;
+    }
+
+    /**
+     * Batched sibling of {@link #recordReach} for a list read: the disclosures
+     * of a whole page resolved once and written in one pass, where a
+     * per-patient loop cost a committed transaction each — a few hundred
+     * patients on a worklist meant a few hundred transactions. The
+     * break-glass session is still looked up per patient, because it IS per
+     * patient; what batching removes is the transaction per patient, and the
+     * repeat lookups when one patient's rows come from several source
+     * hospitals.
+     *
+     * <p>Efficiency only: <strong>every read is recorded</strong>, exactly as
+     * {@code getLabOrdersByPatientId} records one. Nothing here suppresses a
+     * repeat. An earlier calendar-day dedupe was removed because the
+     * accounting has no notion of a repeat anywhere else, and every way of
+     * inventing one here under-reported: it matched any RECORD_SHARE for the
+     * actor and patient — so an unrelated chart read earlier in the day
+     * silenced the worklist disclosure — it left the acting hospital out of
+     * the key, so an actor working at two performing hospitals never recorded
+     * the second, and it froze {@code rowsSurfaced} at the day's first read.
+     *
+     * <p>Never throws: an audit failure must not fail the read it accounts
+     * for.
+     *
+     * @param perPatient patient id -> (source hospital id -> rows surfaced)
+     */
+    public void recordBatchedReach(Map<UUID, Map<String, Long>> perPatient, UUID actingHospitalId,
+                                   UUID requesterUserId, UUID assignmentId, String description) {
+        if (perPatient == null || perPatient.isEmpty()) {
+            return;
+        }
+        // One transaction for the page's break-glass reads, with the
+        // per-patient handling inside it: a transaction each was the cost the
+        // batching exists to remove, and it opened one even for a patient
+        // with nothing to look up.
+        Map<UUID, Optional<UUID>> breakGlassByPatient = liveBreakGlassSessions(
+            perPatient.keySet(), requesterUserId, actingHospitalId);
+
+        List<AuditEventRequestDTO> pending = new ArrayList<>();
+        for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
+            UUID patientId = patient.getKey();
+            // A patient whose lookup failed is skipped rather than recorded
+            // without its session stamp: one patient's failure costs that
+            // patient, never the page.
+            if (patientId != null && breakGlassByPatient.containsKey(patientId)) {
+                Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
+                for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
+                    Map<String, Object> details = new HashMap<>();
+                    details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
+                    details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
+                    details.put(DETAIL_ROWS_SURFACED, reach.getValue());
+                    breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
+                    pending.add(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.RECORD_SHARE)
+                        .status(AuditStatus.SUCCESS)
+                        .userId(requesterUserId)
+                        .assignmentId(assignmentId)
+                        .patientId(patientId)
+                        .entityType(ENTITY_TYPE_PATIENT)
+                        .resourceId(patientId.toString())
+                        .eventDescription(description)
+                        .details(details)
+                        .build());
+                }
+            }
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvents(pending);
+        } catch (RuntimeException ex) {
+            log.warn("[record-access] batched cross-hospital disclosure audit failed for {} row(s): {}",
+                pending.size(), ex.getMessage());
+        }
+    }
+
+    /**
+     * Every patient's break-glass session, in ONE transaction of its own.
+     *
+     * <p>These are repository reads and the caller is the read-only
+     * transaction serving a GET: a failure inside one would mark that
+     * transaction rollback-only, the catch would swallow the exception and the
+     * read would still die at commit — the rollback-only trap
+     * {@code LabOrderRoutingNotifier} documents. Suspending the caller's
+     * transaction keeps the damage here. One transaction for the page rather
+     * than one per patient, because a transaction each was the cost batching
+     * exists to remove.
+     *
+     * <p>A patient missing from the returned map is one whose lookup failed;
+     * the caller skips it, so a single failure costs that patient and not the
+     * page.
+     */
+    private Map<UUID, Optional<UUID>> liveBreakGlassSessions(java.util.Collection<UUID> patientIds,
+                                                             UUID requesterUserId, UUID actingHospitalId) {
+        Map<UUID, Optional<UUID>> sessions = new HashMap<>();
+        TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
+        ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        try {
+            ownTransaction.executeWithoutResult(status -> {
+                for (UUID patientId : patientIds) {
+                    if (patientId == null) {
+                        continue;
+                    }
+                    try {
+                        sessions.put(patientId,
+                            breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId));
+                    } catch (RuntimeException ex) {
+                        log.warn("[record-access] break-glass lookup failed for patient {} at hospital {}: {}",
+                            patientId, actingHospitalId, ex.getMessage());
+                    }
+                }
+            });
+        } catch (RuntimeException ex) {
+            log.warn("[record-access] break-glass lookups failed for a page of {} patient(s) at hospital {}: {}",
+                sessions.size(), actingHospitalId, ex.getMessage());
+        }
+        return sessions;
     }
 
     /**

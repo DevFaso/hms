@@ -16,6 +16,7 @@ import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,7 @@ class InstrumentOutboxServiceImplTest {
     @Mock private InstrumentOutboxRepository outboxRepository;
     @Mock private Hl7v2MessageBuilder hl7v2MessageBuilder;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     // Real properties, not a mock: the transport endpoint must report the
     // actual defaults, and a mock would pass with all-zero nonsense.
@@ -138,16 +140,40 @@ class InstrumentOutboxServiceImplTest {
     }
 
     @Test
-    void enqueueResultObservation_builderThrows_exceptionSwallowedNoSave() throws Exception {
+    void enqueueResultObservation_saveThrows_propagatesBecauseTheTransactionIsAlreadyPoisoned() {
+        // The rollback-only argument is about the INSERT: it marks the
+        // caller's transaction whatever anyone catches, so containing it
+        // would hide the cause and hand the caller a 500 at commit anyway.
+        LabResult result = LabResult.builder().labOrder(labOrder).resultValue("5.2").build();
+        result.setId(java.util.UUID.randomUUID());
+        when(hl7v2MessageBuilder.buildOruR01(result)).thenReturn("MSH|built-message");
+        when(outboxRepository.save(any())).thenThrow(new RuntimeException("insert failed"));
+
+        assertThatThrownBy(() -> service.enqueueResultObservation(result))
+            .isInstanceOf(RuntimeException.class)
+            .hasMessageContaining("insert failed");
+    }
+
+    @Test
+    void enqueueResultObservation_builderThrows_costsTheMessageNotTheResult() {
+        // It joins the caller's transaction, so a failure in here marks that
+        // transaction rollback-only whatever this method does with it:
+        // swallowing bought nothing and lied twice — the caller believed the
+        // enqueue was contained and got a 500 at commit anyway, with the
+        // cause logged as a warning rather than raised.
         LabResult result = LabResult.builder()
             .labOrder(labOrder)
+            .resultValue("5.2")
             .build();
+        result.setId(java.util.UUID.randomUUID());
 
         when(hl7v2MessageBuilder.buildOruR01(result))
             .thenThrow(new RuntimeException("HL7 build failed"));
 
-        assertThatCode(() -> service.enqueueResultObservation(result))
-            .doesNotThrowAnyException();
+        // Building the message is pure formatting and dereferences the
+        // order's patient: an interface defect there must not block every
+        // result entry on the order. It costs this one outbound message.
+        assertThatCode(() -> service.enqueueResultObservation(result)).doesNotThrowAnyException();
 
         verify(outboxRepository, never()).save(any());
     }
@@ -175,6 +201,30 @@ class InstrumentOutboxServiceImplTest {
             .filter(r -> "ERROR".equals(r.getStatus())).findFirst().orElseThrow();
         assertThat(errorRow.getLastError()).isEqualTo("Negative acknowledgement: MSA|AE|1");
         assertThat(errorRow.getAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void getMessagesByLabOrder_performingLaboratorySeesItsOwnResultMessages() {
+        Hospital performing = new Hospital();
+        performing.setId(UUID.randomUUID());
+        labOrder.setPerformingHospital(performing);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(outboxRepository.findByLabOrder_Id(labOrderId))
+            .thenReturn(List.of(message(InstrumentOutboxStatus.PENDING)));
+
+        assertThat(service.getMessagesByLabOrder(labOrderId)).hasSize(1);
+    }
+
+    @Test
+    void getMessage_performingLaboratoryReadsTheMessage() {
+        Hospital performing = new Hospital();
+        performing.setId(UUID.randomUUID());
+        labOrder.setPerformingHospital(performing);
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ACK);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+
+        assertThat(service.getMessage(row.getId()).getId()).isEqualTo(row.getId());
     }
 
     @Test
@@ -312,5 +362,78 @@ class InstrumentOutboxServiceImplTest {
         assertThat(dto.getMaxAttempts()).isEqualTo(5);
         assertThat(dto.getRetryAfterSeconds()).isEqualTo(60);
         assertThat(dto.getBatchSize()).isEqualTo(50);
+    }
+
+    // ── the released ORU, enqueued by id in its own transaction ──────────
+
+    @Test
+    @DisplayName("enqueueReleasedObservation loads the row by id and enqueues its final form")
+    void enqueueReleasedObservationLoadsById() {
+        UUID labResultId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult released = LabResult.builder().labOrder(order).build();
+        released.setId(labResultId);
+        released.setReleased(true);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(released));
+        when(hl7v2MessageBuilder.buildOruR01(released)).thenReturn("MSH|...|ORU^R01|...");
+
+        service.enqueueReleasedObservation(labResultId);
+
+        ArgumentCaptor<InstrumentOutbox> captor = ArgumentCaptor.forClass(InstrumentOutbox.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getMessageType()).isEqualTo("ORU^R01");
+        assertThat(captor.getValue().getLabOrder()).isSameAs(order);
+    }
+
+    @Test
+    @DisplayName("enqueueReleasedObservation swallows a vanished row rather than failing the caller")
+    void enqueueReleasedObservationToleratesAMissingRow() {
+        UUID labResultId = UUID.randomUUID();
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.empty());
+
+        service.enqueueReleasedObservation(labResultId);
+
+        verify(outboxRepository, never()).save(any());
+    }
+
+    /**
+     * Item 4 of #720's last round: the javadoc promises this method does not
+     * swallow its own failures, because only the caller — outside the
+     * REQUIRES_NEW proxy — can see the commit. It used to delegate to a method
+     * whose whole body was a catch-all, so a pre-commit failure was swallowed,
+     * the new transaction committed empty, the caller's handler never fired and
+     * the final outbound message was lost without a trace.
+     */
+    @Test
+    @DisplayName("enqueueReleasedObservation lets a failure reach the caller, rather than committing empty")
+    void enqueueReleasedObservationDoesNotSwallow() {
+        UUID labResultId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult released = LabResult.builder().labOrder(order).build();
+        released.setId(labResultId);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(released));
+        when(hl7v2MessageBuilder.buildOruR01(released))
+            .thenThrow(new IllegalStateException("cannot build the message"));
+
+        assertThatThrownBy(() -> service.enqueueReleasedObservation(labResultId))
+            .isInstanceOf(IllegalStateException.class);
+        verify(outboxRepository, never()).save(any());
+    }
+
+    /** The best-effort entry path keeps its own catch: a failed message must not fail the result write. */
+    @Test
+    @DisplayName("enqueueResultObservation still swallows, as its own contract says")
+    void enqueueResultObservationStillSwallows() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        LabResult result = LabResult.builder().labOrder(order).build();
+        result.setId(UUID.randomUUID());
+        when(hl7v2MessageBuilder.buildOruR01(result))
+            .thenThrow(new IllegalStateException("cannot build the message"));
+
+        assertThatCode(() -> service.enqueueResultObservation(result)).doesNotThrowAnyException();
+        verify(outboxRepository, never()).save(any());
     }
 }

@@ -38,6 +38,8 @@ public class LabOrderMapper {
         java.util.UUID labOrderId = labOrder.getId();
         Patient patient = JpaProxyUtils.safeInit(labOrder.getPatient(), OWNER, labOrderId, "patient");
         Hospital hospital = JpaProxyUtils.safeInit(labOrder.getHospital(), OWNER, labOrderId, "hospital");
+        Hospital performingHospital = JpaProxyUtils.safeInit(
+            labOrder.getPerformingHospital(), OWNER, labOrderId, "performingHospital");
         LabTestDefinition labTestDefinition = JpaProxyUtils.safeInit(
             labOrder.getLabTestDefinition(), OWNER, labOrderId, "labTestDefinition");
 
@@ -57,7 +59,11 @@ public class LabOrderMapper {
             ? patient.getId().toString() : null)
         .patientFullName(patientFullName)
         .patientEmail(patientEmail)
+        .hospitalId(hospital != null && hospital.getId() != null ? hospital.getId().toString() : null)
         .hospitalName(hospitalName)
+        .performingHospitalId(performingHospital != null && performingHospital.getId() != null
+            ? performingHospital.getId().toString() : null)
+        .performingHospitalName(performingHospital != null ? performingHospital.getName() : null)
         .labTestName(labTestName)
             .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
         .orderDatetime(labOrder.getOrderDatetime())

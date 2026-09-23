@@ -38,13 +38,12 @@ class DashboardViewModel @Inject constructor(
                 val healthDeferred = async { api.getHealthSummary() }
                 val appointmentsDeferred = async { api.getAppointments(size = 3) }
                 val labsDeferred = async { api.getLabResults(size = 5) }
-                val notificationsDeferred = async { api.getNotifications(read = false, size = 1) }
+                val notificationsDeferred = async { api.getUnreadNotificationCount() }
 
                 val health = healthDeferred.await().body()?.data
                 val appointments = appointmentsDeferred.await().body()?.data ?: emptyList()
                 val labs = labsDeferred.await().body()?.data ?: emptyList()
-                val notificationsPage = notificationsDeferred.await().body()?.data
-                val unreadCount = (notificationsPage?.totalElements ?: 0).toInt()
+                val unreadCount = (notificationsDeferred.await().body()?.data?.get("unreadCount") ?: 0L).toInt()
 
                 _uiState.value = DashboardUiState(
                     isLoading = false,
@@ -63,8 +62,7 @@ class DashboardViewModel @Inject constructor(
     fun refreshNotificationCount() {
         viewModelScope.launch {
             try {
-                val resp = api.getNotifications(read = false, size = 1)
-                val count = (resp.body()?.data?.totalElements ?: 0).toInt()
+                val count = (api.getUnreadNotificationCount().body()?.data?.get("unreadCount") ?: 0L).toInt()
                 _uiState.value = _uiState.value.copy(unreadNotificationCount = count.coerceAtLeast(0))
             } catch (_: Exception) {}
         }

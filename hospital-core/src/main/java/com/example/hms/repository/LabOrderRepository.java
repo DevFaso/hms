@@ -5,7 +5,9 @@ import com.example.hms.model.LabOrder;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,12 +17,100 @@ import java.util.UUID;
 
 public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOrderCustomRepository {
     List<LabOrder> findByPatient_Id(UUID patientId);
+
+    /**
+     * The order row under a write lock, for the release path that decides
+     * whether every result is released: two concurrent releases must
+     * serialise on the order or both see the other's result as unreleased.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM LabOrder o WHERE o.id = :id")
+    java.util.Optional<LabOrder> findWithLockById(@Param("id") UUID id);
+
+    /**
+     * Compare-and-set on the status, as a statement rather than a dirty field.
+     *
+     * <p>The entry path loads the order UNLOCKED (so the permission checks do
+     * not hold a row lock) and only then takes the write lock, which means
+     * Hibernate's snapshot for that instance holds the status as it was BEFORE
+     * the lock. Writing through the entity is then unreliable in exactly the
+     * case that matters: when the target equals the snapshot value — snapshot
+     * RESULTED, database COMPLETED, target RESULTED — the dirty check sees no
+     * change and flushes nothing, so a re-opened order silently stayed
+     * COMPLETED and the amendment never reached the doctor's queue.
+     *
+     * <p>{@code expected} is the status read under the lock: the update is a
+     * no-op (returns 0) if anything moved the row in between, so the caller
+     * learns rather than overwrites.
+     *
+     * @return the number of rows updated: 1, or 0 if the status is no longer
+     *         {@code expected}
+     */
+    // flushAutomatically: anything pending in the context is written before
+    // this statement, so it cannot be overwritten by a later flush.
+    // clearAutomatically is deliberately NOT set: it detaches every entity in
+    // the context — including the result just saved, whose LAZY test
+    // definition the severity and notification steps still read — which would
+    // trade a staleness nothing reads (no caller reads an order's status from
+    // the entity after this) for a LazyInitializationException. The managed
+    // order is never mutated on these paths, so it generates no UPDATE of its
+    // own to flush over this one.
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE LabOrder o SET o.status = :target, o.updatedAt = CURRENT_TIMESTAMP "
+        + "WHERE o.id = :id AND o.status = :expected")
+    int updateStatusFrom(@Param("id") UUID id,
+                         @Param("expected") LabOrderStatus expected,
+                         @Param("target") LabOrderStatus target);
+
+    /**
+     * The status as the database currently holds it, bypassing the entity
+     * instance this persistence context may already have: a scalar projection
+     * is not served from the first-level cache, so a status another
+     * transaction committed (a cancellation) is visible here even though the
+     * managed order still carries the value it was loaded with.
+     */
+    @Query("SELECT o.status FROM LabOrder o WHERE o.id = :id")
+    LabOrderStatus findStatusById(@Param("id") UUID id);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
 
     // Hospital-scoped queries for tenant isolation
     List<LabOrder> findByHospital_Id(UUID hospitalId);
+
+    // ── Audit gap B1: an order is handled by its ordering hospital AND by the
+    // laboratory that performs it (performing_hospital_id, V161). The lab-side
+    // worklists read "ordered here OR sent to us". ──────────────────────────
+
+    /** Every order the hospital orders or performs. */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+           OR o.performingHospital.id = :hospitalId
+    """)
+    List<LabOrder> findHandledBy(@Param("hospitalId") UUID hospitalId);
+
+    /** Orders in a status that the hospital orders or performs. */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.status = :status
+          AND (o.hospital.id = :hospitalId OR o.performingHospital.id = :hospitalId)
+    """)
+    List<LabOrder> findByStatusHandledBy(@Param("status") LabOrderStatus status,
+                                         @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * E9 #59b widened by B1: the patient's orders across the readable hospitals,
+     * plus the orders sent to the acting hospital's laboratory to perform.
+     */
+    @Query("""
+        SELECT o FROM LabOrder o
+        WHERE o.patient.id = :patientId
+          AND (o.hospital.id IN :hospitalIds OR o.performingHospital.id = :performingHospitalId)
+    """)
+    List<LabOrder> findByPatientIdReadableOrPerformedAt(@Param("patientId") UUID patientId,
+                                                        @Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+                                                        @Param("performingHospitalId") UUID performingHospitalId);
     List<LabOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
     /** E9 #59b — lab orders across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
     List<LabOrder> findByPatient_IdAndHospital_IdIn(UUID patientId, java.util.Collection<UUID> hospitalIds);
@@ -55,6 +145,14 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
 
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
+
+    /**
+     * Orders of one provider sitting in any of {@code statuses} — the critical
+     * strip's "still with the laboratory" tile. A per-status count cannot
+     * express it any more: the lifecycle now moves an order through COLLECTED
+     * and RECEIVED as well.
+     */
+    long countByOrderingStaff_IdAndStatusIn(UUID staffId, java.util.Collection<LabOrderStatus> statuses);
 
     // ── Dashboard count queries ──────────────────────────────────────────────
 

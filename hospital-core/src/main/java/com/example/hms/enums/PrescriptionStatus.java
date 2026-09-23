@@ -16,7 +16,16 @@ public enum PrescriptionStatus {
     PARTIALLY_FILLED,
     /** Medication not in stock; awaiting restock before dispensing. */
     PENDING_STOCK,
-    /** Prescription requires fill at an external / partner pharmacy. */
+    /**
+     * Prescription requires fill at an external / partner pharmacy.
+     *
+     * <p>Dead state (G4): no code path writes it. A pharmacist who cannot fill
+     * in-house records the routing decision directly (route-to-partner,
+     * print-for-patient, back-order, SMS dispatch), each of which moves the
+     * prescription to its own status from SIGNED. Kept only so rows or
+     * clients that still carry the value keep deserialising; it is neither
+     * dispensable nor routable.
+     */
     REQUIRES_EXTERNAL_FILL,
     /** Prescription forwarded to a partner pharmacy. */
     SENT_TO_PARTNER,

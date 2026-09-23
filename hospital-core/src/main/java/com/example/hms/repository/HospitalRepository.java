@@ -72,6 +72,9 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     /* Dashboard count */
     long countByActiveTrue();
 
+    /** B1: the laboratories a clinician may route an order to — every active hospital, by name. */
+    List<Hospital> findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState lifecycleState);
+
     /* Organization-related queries */
     List<Hospital> findByOrganizationIsNull();
 

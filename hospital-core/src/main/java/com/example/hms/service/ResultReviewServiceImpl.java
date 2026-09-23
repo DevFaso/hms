@@ -46,11 +46,35 @@ import java.util.Locale;
 public class ResultReviewServiceImpl implements ResultReviewService {
 
     private static final String URGENCY_NORMAL = "NORMAL";
+    /** Inbox action for an item the clinician opens and reads. */
+    private static final String ACTION_REVIEW = "REVIEW";
+
+    /** Inbox category for a pharmacy outcome on the prescriber's own order (gap G6). */
+    static final String CATEGORY_PHARMACY_EVENT = "PHARMACY_EVENT";
+    /** {@code Notification.type} written by PrescriberPharmacyNotificationWriter. */
+    static final String PHARMACY_EVENT_NOTIFICATION_TYPE = "PHARMACY_EVENT";
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // severity / urgency string SEVERITY_CRITICAL appears 3x in this file.
     // Naming follows the existing URGENCY_NORMAL sibling above.
     private static final String SEVERITY_CRITICAL = "CRITICAL";
+
+    /**
+     * Order states whose released results belong on a doctor's review queue.
+     *
+     * <p>COMPLETED alone was wrong once orders could move again: a late or
+     * corrected result re-opens a COMPLETED order to RESULTED
+     * ({@code LabOrderLifecycle.statusAfterNewResult}), and every result of that
+     * order — including the ones released days ago — dropped out of the queue
+     * until the new one was released. An order with at least one released
+     * result is reviewable whatever stage it is at; the released-only filter
+     * below is what decides which of its results the doctor sees.
+     */
+    private static final java.util.Set<LabOrderStatus> REVIEWABLE_ORDER_STATUSES =
+            java.util.EnumSet.of(
+                    LabOrderStatus.RESULTED,
+                    LabOrderStatus.VERIFIED,
+                    LabOrderStatus.COMPLETED);
 
     private final StaffRepository staffRepository;
     private final LabOrderRepository labOrderRepository;
@@ -62,6 +86,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final EncounterRepository encounterRepository;
     private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
 
     @Override
@@ -95,12 +120,17 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // commit. For a single physician's queue this stays bounded by the
         // staff-scoped completed-order count, which is small in practice.
         completedOrders.stream()
-                .filter(order -> order.getStatus() == LabOrderStatus.COMPLETED)
+                .filter(order -> REVIEWABLE_ORDER_STATUSES.contains(order.getStatus()))
                 .filter(order -> order.getPatient() != null)
                 .forEach(order -> {
                     List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
                     for (LabResult result : results) {
-                        queue.add(toQueueItem(order, result, locale));
+                        // Only what the laboratory has released is the
+                        // doctor's to review: a result entered on an order
+                        // that had already completed is not on the chart yet.
+                        if (result.isReleased()) {
+                            queue.add(toQueueItem(order, result, locale));
+                        }
                     }
                 });
 
@@ -245,11 +275,37 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .subject(text("inbox.pharmacy.clarification", locale, clarificationCount))
                         .urgency("HIGH")
                         .timestamp(LocalDateTime.now())
-                        .actionType("REVIEW")
+                        .actionType(ACTION_REVIEW)
                         .build());
             }
         } catch (Exception e) {
             log.debug("Pharmacy clarification inbox query error: {}", e.getMessage());
+        }
+
+        // 5b. Pharmacy outcomes on this prescriber's orders (gap G6): the
+        //     unread PHARMACY_EVENT notifications, one item each, so a fill,
+        //     a back order or a partner's refusal reaches the inbox and not
+        //     only the bell. The portal groups on the category, so this is
+        //     a new category rather than a second PHARMACY_CLARIFICATION
+        //     count; the portal lists it in its category order.
+        try {
+            String username = staff.getUser() != null ? staff.getUser().getUsername() : null;
+            if (username != null) {
+                notificationRepository
+                        .findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                                username, PHARMACY_EVENT_NOTIFICATION_TYPE)
+                        .forEach(n -> items.add(ClinicalInboxItemDTO.builder()
+                                .id(n.getId())
+                                .category(CATEGORY_PHARMACY_EVENT)
+                                .source(text("inbox.source.pharmacy", locale))
+                                .subject(n.getMessage() != null ? truncate(n.getMessage(), 160) : null)
+                                .urgency(URGENCY_NORMAL)
+                                .timestamp(n.getCreatedAt())
+                                .actionType(ACTION_REVIEW)
+                                .build()));
+            }
+        } catch (Exception e) {
+            log.debug("Pharmacy event inbox query error: {}", e.getMessage());
         }
 
         // 6. Patient-initiated medication refill requests awaiting this prescriber's decision.
@@ -274,7 +330,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .subject(text("inbox.refill.requested", locale, truncate(medication, 80)))
                                 .urgency(URGENCY_NORMAL)
                                 .timestamp(refill.getCreatedAt())
-                                .actionType("REVIEW")
+                                .actionType(ACTION_REVIEW)
                                 .build());
                     });
         } catch (Exception e) {
@@ -297,11 +353,14 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         String testName = order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName()
                 : text("lab.test.fallback", locale);
+        // The queue exposes the three-value family: the portal buckets on
+        // the exact strings NORMAL/ABNORMAL/CRITICAL, direction lives on the row.
         String abnormalFlag = result.getAbnormalFlag() != null
-                ? result.getAbnormalFlag().name()
+                ? result.getAbnormalFlag().severity().name()
                 : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
+                .abnormalDirection(result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null)
                 .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
                 .patientId(order.getPatient().getId())
                 .testName(testName)

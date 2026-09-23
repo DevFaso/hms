@@ -5,6 +5,7 @@
 // `docs/keycloak-implementation-gaps.md` Phase 2.8.C); the issuer URL is
 // pre-staged so the cutover flip is one xcconfig line, not a code edit.
 
+MEDIHUB_API_BASE_URL = https:/$()/api.e-keneya.com/api
 MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-prod.up.railway.app/realms/hms
 MEDIHUB_KEYCLOAK_SSO_ENABLED = 0
 MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios

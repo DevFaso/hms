@@ -141,6 +141,20 @@ public class LabResult extends BaseEntity {
     private String sourceObservationSetId;
 
     /**
+     * OBX-11, the observation result status the analyzer sent: {@code F}
+     * final, {@code P} preliminary, {@code C} corrected, and the rest of HL7
+     * table 0085. Stamped by the MLLP ingest and by nothing else — a row a
+     * person entered has no analyzer status and never gets one.
+     *
+     * <p>This is what makes a preliminary knowable rather than inferred. Null
+     * means the analyzer did not say (or the row predates V164), and a row
+     * that did not say it is preliminary is never hidden behind another.
+     */
+    @Size(max = 16)
+    @Column(name = "observation_result_status", length = 16)
+    private String observationResultStatus;
+
+    /**
      * OBX-3.1 (observation identifier code, e.g. LOINC or vendor code).
      * With many rows per order this is the only way to tell which
      * analyte a row is. Optional — the clinical-UI path doesn't set it.
@@ -255,10 +269,14 @@ public class LabResult extends BaseEntity {
         }
 
         if (actorType == ActorType.USER) {
+            // B1: the author works at the ordering hospital or at the
+            // laboratory the order was sent to (LabOrder.performingHospital).
             if (assignment == null || assignment.getHospital() == null
-                || !Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())) {
+                || !(Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())
+                    || labOrder.isPerformedAt(assignment.getHospital().getId()))) {
                 throw new IllegalStateException(
-                    "LabResult.assignment.hospital must match LabResult.labOrder.hospital for USER writes");
+                    "LabResult.assignment.hospital must match LabResult.labOrder.hospital "
+                        + "or its performing hospital for USER writes");
             }
         } else {
             // SYSTEM writes (MLLP / external LIS): no human assignment is

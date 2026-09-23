@@ -2202,6 +2202,107 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Device-only history notes are filed under a different identity per login path
+  (#709 iOS, #710 Android).** The personal notes on My Medical History live only
+  on the phone and are keyed by the Keycloak `sub` for an SSO session and by the
+  HMS user id for a password login — two different UUIDs — so a patient who
+  signs in one day with each button sees the notes vanish and reappear. Chosen
+  over a shared bucket, which leaked notes between patients on one phone. The
+  fix is one identity for both paths (the HMS user id resolved from `/me` once
+  per session, or the `sub` mapped server side), applied to both apps at once.
+
+- **Duplicate education progress rows make the client and the server pick
+  different rows (#708).** The list keeps the most recently accessed progress
+  row per resource while `PUT /me/patient/education/{id}/progress` writes the
+  newest-created one (`findTopBy…OrderByCreatedAtDesc`), so with duplicates a
+  rating on a completed item can flip it back to "to read" on the web and both
+  apps. Dedupe on the server (unique constraint on patient + resource, merge the
+  survivors) rather than in three clients.
+
+- **The patient apps send no `Accept-Language`, so every server `message` they
+  surface is English (#711, #712 and every earlier screen).** The apps localise
+  their own headline and append the server sentence for HTTP refusals; on a
+  French phone that sentence is English. One interceptor per app that sends the
+  app language, then the backend's `parseLocale` does the rest.
+
+- **Three upload size limits disagree (#713, #714).** The controller's OpenAPI
+  text and `FileUploadService.MAX_PATIENT_DOCUMENT_SIZE` say 20 MB,
+  `spring.servlet.multipart.max-file-size` / `max-request-size` are 10MB and
+  reject first, and `GlobalExceptionHandler.handleMaxUploadSize` tells the
+  patient "5MB". Both apps enforce 10 MiB minus a 64 KiB envelope margin and
+  word the refusal as "under 10 MB"; the web enforces nothing client side. Pick
+  one number, raise `max-request-size` above `max-file-size`, and fix the
+  handler text. Also `PatientDocumentRequestDTO` is built without `@Valid` and
+  `notes` has no `@Size`, so only the 2048 column bounds it (a longer note is a
+  500, not a 400).
+
+- **Mobile sign-out does not revoke the session server side.** `/auth/logout`
+  is `.authenticated()`, but the iOS app sends it with `requiresAuth: false`
+  so that a 401 on the way out cannot re-enter `refreshTokens()` and loop.
+  The request therefore carries no bearer and the server session lives until
+  it expires. It was equally unrevoked before (the keychain was cleared
+  before the request ran); the loop is fixed, the revocation is not. The fix
+  is a way to send one request with an explicit token —
+  `APIClient.post(..., bearer:)` — rather than reading the keychain at
+  request time. Android has the same shape.
+
+- **An SSO session cannot resolve the patient's user id on mobile, so chat
+  is unusable under SSO.** `AuthManager.completeSsoSession()` only flips
+  `isAuthenticated`; nothing sets `currentUser` or the persisted user id,
+  which `/chat/conversations/{userId}` and `/chat/history/{u1}/{u2}` both
+  require. Android has the same gap (`tokenStorage.userId` is only written in
+  `AuthRepository` on a password login). #690 responded by setting
+  `MEDIHUB_KEYCLOAK_SSO_ENABLED = 0` in `Config/Dev.xcconfig` rather than ship
+  a TestFlight build whose Messages tab reports "not signed in" to a
+  signed-in tester. **This blocks the Phase 3 Keycloak cutover for chat**: it
+  needs the HMS `users.id` resolved from the OIDC session (a `/me`-style
+  lookup, since the token `sub` is the Keycloak id, not the HMS one).
+
+- **The mobile inbox shows a raw backend timestamp.**
+  `ChatConversationSummaryDTO.lastMessageTimestamp` is a Jackson
+  `LocalDateTime` ("2026-09-19T10:30:00") and `ThreadRowView` prints it
+  verbatim, so every row shows a machine string instead of a localized or
+  relative time. Harmless until #690 because the endpoint 404'd and the list
+  was always empty. `APIClient` already carries a date decoder that could
+  parse it.
+
+- **Patient chat attachments are invisible on both mobile apps.**
+  `ChatMessageResponseDTO` carries `attachments: List<ChatAttachmentDTO>` and
+  `ChatMessageServiceImpl.sendMessage` explicitly allows an attachment-only
+  message (content may be null), but neither app's `ChatMessageDTO` decodes
+  the field. A clinician's wound photo or voice note renders as an empty
+  bubble with no way to reach `GET /chat/attachments/{id}/download`. Found in
+  the #690 self-review; out of scope there because it is a new capability,
+  not a repair. Needs the DTO field, a bubble treatment, and a download path
+  on both platforms.
+
+- **Opening a chat thread never marks it read on mobile.** The backend has
+  `PUT /chat/mark-read/{senderId}/{recipientId}` and computes
+  `ChatConversationSummaryDTO.unreadCount` from it, but neither app calls it,
+  so the unread badge never clears and `chat/unread-count` — which also feeds
+  the portal topbar badge — stays permanently inflated for that patient. The
+  Messages tab was dead on iOS until #690, so this surfaces for the first
+  time in the next release. Note `APIClient` has no request helper for a 204
+  No Content response, which is why #690 did not simply add the call.
+
+- **Mobile error text is English inside a French UI.** The new error states
+  in the patient apps render `error.localizedDescription`, which resolves to
+  `APIError`'s hard-coded English literals ("Server error (404)", "Session
+  expired. Please log in again."). A francophone patient sees a French
+  heading over an English body. Same layered-French problem the portal
+  tracks; the apps need the equivalent of the locale bundles.
+
+- **`api.dev.e-keneya.com` is still documented as the dev API host.** The
+  name has no DNS record (verified 2026-09-19); the dev API is served
+  same-origin at `https://dev.e-keneya.com/api`, which is what
+  `environment.dev.ts` already uses via `apiUrl: '/api'`. #690 corrected the
+  two mobile apps but left the docs: `docs/hms-stakeholder-overview.md` and
+  its French twin, `docs/observability/performance-baseline.md` (the k6
+  BASE_URL), and the two Keycloak runbooks
+  (`keycloak-realm-sync.md`, `keycloak-env-sync-remediation.md`) all still
+  hand out the dead name, so anyone following them gets a DNS failure with no
+  hint at the right origin.
+
 - **The enum gate cannot see an `enumLabel:` inside a component's inline
   `template:`.** `check-i18n-enum-coverage.mjs` walks `.html` only. Widening
   it to `.ts` was tried twice in #660 and withdrawn twice: raw, it recorded
@@ -2882,6 +2983,160 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   assignments (as #564 argued for audit rows), or add the two keys as
   `NOT VALID` after a backfill that decides what a dangling row should point
   at. Either way the schema and the model should stop disagreeing.
+
+- **A green mobile release run still does not prove the build was delivered.**
+  On `release_action=stage_on_internal`, `mobile-android.yml` commits the Play
+  edit without sending it for review, so the job can succeed while the release
+  sits in the console unreleased — which is exactly how the first dispatch
+  failed (the bundle uploaded, the edit never committed, and only a
+  hand-written Play API call showed the track still held version code 13).
+  The step now writes a `::notice::` saying what is owed, but an annotation
+  on a green run is not a gate. The
+  fix is a post-publish readback: call `edits.tracks.get` for `internal` with
+  the same service account and fail the job unless the new version code is
+  there. Deferred because it needs a decision about how CI authenticates for
+  a read — the action deletes the credentials file it writes, and adding
+  PyJWT to a release job is its own risk.
+
+- **The two mobile workflows implement the same concerns twice each.**
+  Build number (`mobile-ios.yml` uses `yyyymmddHHMM`, Android uses seconds
+  since 2026-01-01 because Play caps a version code at 2100000000), required-
+  secret preflight (iOS fails on the first missing one, Android accumulates
+  and reports them together — the better message, which iOS does not get) and
+  credential teardown (`if: always()`, now in two files), and since #694 a
+  fourth: the `release_action` guard step, copy-pasted between the two files
+  with a different vocabulary in each. Every fix has to be made twice and
+  reasoned about twice. A composite action for "check these secrets are set"
+  and one for "validate this dispatch" would leave one place to change.
+
+- **The iOS plist gates check presence, not values, and are written
+  twice.** #695 added two: one after `xcodegen generate` on every PR, one
+  on the archive before upload. What they do not do, left as debt rather
+  than designed further in that PR: assert the VALUES, which is the
+  documented `CFBundleVersion` failure — a literal outranks
+  `CURRENT_PROJECT_VERSION`, so every upload after the first is rejected as
+  a duplicate, and a key that is merely present passes; check more than one
+  key in the archive, so `MEDIHUB_API_BASE_URL` (resolved from
+  `Config/*.xcconfig` only at archive time) and `CFBundleURLTypes` are never
+  verified in the bundle Apple receives; derive the key list from
+  `project.yml` instead of restating it in the workflow, where
+  `project.yml`'s own comment already claims every key in the block is
+  asserted; and stop interpolating unvalidated values into `::error::`
+  lines, which the same file argues against for the dispatch guard fifty
+  lines earlier. The two gates are also near-duplicates in one file — a
+  `scripts/check-info-plist.sh` called from both would be one place to fix,
+  and the round that rewrote one of them and not the other is what this
+  bullet is for.
+
+- **Patient invoice payments persist the amount only.** `PatientPortalController.payMyInvoice` forwards `dto.getAmount()` and drops `paymentMethod`, `transactionReference` and `notes`, while the web, iOS and (since #698) Android forms all collect them. A mobile-money reference a patient types is never stored, so the cashier cannot reconcile the payment against the provider's statement. Fix = pass the whole DTO into `recordMyPayment` and store method/reference/notes on the payment row; then drop the "only the amount is stored" hint from the three clients.
+
+- **Patient parity across web, Android and iOS (audit 2026-09-20).** The web portal is the reference. Missing on BOTH apps: the booking wizard (hospital → department → provider; both apps only offer doctors from past appointments, so a new patient cannot book), pre-check-in questionnaires, PRO self-screenings, patient education, medical/surgical/family/social history, the disclosures view + record-sharing opt-out (apps use the older access log), document upload/delete, forgot-password / activation / MFA challenge / change-password (both apps ship a dead Forgot-password button). Phase 1 (defects + app-to-app parity) = the `fix/*-patient-parity-phase1` PRs; phase 2 = the seven web features; phase 3 = the account flows; phase 4 = push notifications, chat attachments, Spanish. Phase 2 progress (all seven features have a PR on both platforms, 2026-09-22): booking = #700 Android + #701 iOS (merged); pre-check-in = #703 Android + #704 iOS (merged); PRO self-screenings = #705 Android + #706 iOS (merged); patient education = #707 Android (merged) + #708 iOS; history = #710 Android + #709 iOS; disclosures + opt-out = #712 Android + #711 iOS; document upload/delete = #714 Android + #713 iOS. Residuals recorded under Standing platform debt: history notes keyed per login path, duplicate education progress rows, no `Accept-Language` from the apps, the three disagreeing upload size limits. Backend gap found by #703: `updatePatientDemographics` never reads the three insurance fields of `PreCheckInRequestDTO`, so the insurer, member ID and plan a patient enters at pre-check-in (web and Android) are accepted and dropped. Backend gap found on the way: `PatientPortalServiceImpl.scheduleMyAppointment` stores `notes` and drops `reason`, so the reason a patient types on the web or Android is lost (one-line fix, own PR off develop). Cross-cutting: most screens on both apps still swallow errors as empty states and carry hard-coded English.
+
+- **The mobile apps' in-app theme is still the pre-brand blue.** The store icons, launcher icons and screenshots now carry the e-Keneya mark and teal (scripts/mobile-store-assets/generate.mjs), but `patient-android-app` still paints `brand_blue` #1E40AF (theme, status bar, Compose colours) and the iOS app the matching blue. A tester sees a teal listing and installs a blue app. The retheme is one palette swap per app plus a re-check of contrast on the tinted surfaces; the screenshots then also want a pass to match what the apps really draw, since today they are mocks in the target identity, not captures.
+
+- **The iOS app's system prompts are French while the app defaults to
+  English.** `LocalizationManager` falls back to `"en"`, and `en.lproj` is
+  English, but `NSFaceIDUsageDescription` in `project.yml` is a hard-coded
+  French sentence and there is no `InfoPlist.strings` in either `en.lproj`
+  or `fr.lproj`. iOS localises a purpose string only through that file, so
+  an English-locale user tapping "Log in with Face ID" gets the French
+  modal — and App Review has rejected purpose strings that are not in the
+  app's primary language. Either ship `InfoPlist.strings` for both, or
+  settle whether the app's primary language is French and set
+  `CFBundleDevelopmentRegion` to match.
+
+- **The committed `Info.plist` is a fossil that `xcodegen` overwrites.**
+  `patient-ios-app/MediHubPatient/Resources/Info.plist` is tracked, and of
+  the things `xcodegen` generates only the `.xcodeproj` is ignored (the
+  40-line `.gitignore` covers plenty else), so every `xcodegen generate`
+  rewrites it and leaves a dirty tree; meanwhile the tracked copy is missing
+  `NSFaceIDUsageDescription`, `ITSAppUsesNonExemptEncryption` and —
+  the interesting one — `MEDIHUB_API_BASE_URL`, so an app built down that
+  path has no API base URL key at all. The four `MEDIHUB_KEYCLOAK_*` keys
+  are present, which is what makes the gap easy to miss. `patient-ios-app/README.md` still
+  documents a hand-built Xcode project that never runs `xcodegen`, and a
+  build down that path reaches Face ID with no purpose string — which iOS
+  terminates the app for. Either ignore the generated plist and delete the
+  hand-build instructions, or stop generating it.
+
+- **A regulatory declaration rests on a floating dependency.** `project.yml`
+  pins AppAuth `from: "1.7.5"` and no `Package.resolved` is committed, so
+  every CI checkout re-resolves to whatever 1.x is newest. The
+  `ITSAppUsesNonExemptEncryption: false` declaration was audited against
+  what AppAuth contains today; a future release that adds its own cipher
+  would make that statement untrue with no commit, no diff and no review.
+  Pin exactly or commit `Package.resolved` so the audited premise is
+  versioned alongside the claim.
+- **The mobile release workflows validate one dispatch input and trust the
+  rest.** #694's guard covers `release_action` only. `api_environment`
+  (Android) falls through to dev on anything that is not exactly `prod`,
+  while `releaseName` interpolates the raw value — so `-f
+  api_environment=production` ships a dev-pointing bundle the Play console
+  labels "production". `configuration` (iOS) is unchecked until xcodebuild
+  rejects it, after a macOS job holding the App Store Connect key has
+  started. Four smaller items from the same review, none of them urgent:
+  the signing preflight only proves the four secrets are non-empty, where a
+  `keytool -list` after the decode would prove they actually open the
+  keystore; `stage_and_submit` is offered in the dropdown although Play
+  refuses it until the app's first publish, and is warned about rather than
+  gated, so choosing it today burns a version code; the two-branch release
+  gate is written out twice and can drift; and `VERSION_CODE`/`SHORT_SHA`
+  go through `$GITHUB_ENV`, which scopes them to the whole job including
+  the third-party upload action, where step outputs would scope them to
+  their two consumers. iOS also still splices an unquoted `${ASC_KEY_ID}`
+  into three path arguments.
+
+- **No mobile release runbook, and the mobile release now has a manual step.**
+  `docs/runbooks/` covers Railway, Keycloak, the soak protocol and a dozen
+  other operational paths; nothing there mentions the two mobile workflows.
+  A `workflow_dispatch` with `release_action=stage_on_internal` stages a Play
+  release that a human has to send for review in the console, and the Play
+  service account is deliberately scoped to *Release to testing tracks* so it
+  cannot do it itself. That procedure, the TestFlight dispatch, the eight
+  `mobile-release` secrets and the move to `release_action=stage_and_submit`
+  after the app's first publish exist only in PR descriptions today.
+
+- **The Play upload action still passes the deprecated `track` input.**
+  `r0adkll/upload-google-play` warns on every release run that `track` is
+  deprecated in favour of `tracks`. The action is SHA-pinned, so nothing can
+  remove `track` under us and there is no urgency; the migration belongs to
+  whichever PR moves the pin, where the new version's parsing of `tracks`
+  can actually be checked instead of guessed.
+
+- **Pharmacy and laboratory end-to-end flows (audit 2026-09-22).** Two
+  read-only audits found neither flow works end to end. Lab: nothing advanced
+  `LabOrderStatus` so the doctor's review queue was permanently empty; the
+  patient received unreleased values; both mobile apps deserialise field names
+  the API never sends; there was no concept of a performing laboratory, so a
+  lab in another organisation could neither see nor result an order. Pharmacy:
+  sending to a community pharmacy was one-way with no reply path and left the
+  prescription dispensable in-house; refused and back-ordered prescriptions
+  vanished from every screen; the prescriber was never notified of anything the
+  pharmacy did; and no DTO carried which pharmacy a prescription went to.
+  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161). Still owed:
+  wave 2, the portal (lab tab on the patient chart, a lab category in the
+  clinical inbox, the pending-release worklist screen, the pharmacist
+  clarification UI, prescriber visibility of dispense and routing history, the
+  PHARMACY_VERIFIER nav entry, post-pharmacy status tabs); wave 3, the two
+  patient apps (the lab wire-contract mismatch, and pharmacy status labels
+  rendering raw enum names); and the open design question of whether a pharmacy
+  should be a platform tenant with its own work queue, since today the only
+  channel that crosses organisations is SMS.
+
+- **The cross-tenant oracle is still open on the ADT and merge inbound
+  paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
+  answer `REJECTED_CROSS_TENANT` → AR when the referenced patient exists but
+  belongs to another hospital, while an unknown one answers AE, so an
+  allowlisted sender can learn that an MRN exists in a hospital it cannot read.
+  #715 collapsed the two outcomes for the lab (ORU^R01) path only; the same
+  one-line change is owed on both, with the reason kept in the integration
+  message row rather than in the ACK.
+
+- **The co-sign path picks a doctor's oldest staff profile.** The
+  staff-profile lookup behind co-signature resolves by taking the first
+  profile it finds, so a doctor credentialed at two hospitals is matched to the
+  older one and refused at the newer. #717 fixed the clarification path only;
+  the co-sign path still needs the profile chosen by the active hospital.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

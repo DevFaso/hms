@@ -56,20 +56,20 @@ dependencies {
     implementation 'org.apache.pdfbox:pdfbox:2.0.34'
 
     // QR / Barcode
-    implementation 'com.google.zxing:core:3.5.3'
-    implementation 'com.google.zxing:javase:3.5.3'
+    implementation 'com.google.zxing:core:3.5.4'
+    implementation 'com.google.zxing:javase:3.5.4'
 
     // Twilio SMS
     implementation 'com.twilio.sdk:twilio:13.0.1'
 
     // HAPI FHIR (R4) — interoperability layer (mounted at /fhir/*)
-    implementation 'ca.uhn.hapi.fhir:hapi-fhir-base:7.4.5'
-    implementation 'ca.uhn.hapi.fhir:hapi-fhir-server:7.4.5'
-    implementation 'ca.uhn.hapi.fhir:hapi-fhir-structures-r4:7.4.5'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-base:8.12.1'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-server:8.12.1'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-structures-r4:8.12.1'
 
     // Apache Commons
     implementation 'commons-io:commons-io:2.17.0'
-    implementation 'org.apache.commons:commons-csv:1.11.0'
+    implementation 'org.apache.commons:commons-csv:1.14.1'
     implementation 'org.apache.commons:commons-lang3:3.18.0'
 
     // Database
@@ -88,7 +88,7 @@ dependencies {
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
     // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
     // splitStatements config) surface pre-merge instead of on dev deploy.
-    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'

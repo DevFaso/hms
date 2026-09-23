@@ -19,6 +19,7 @@ import com.example.hms.service.support.PatientChartAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.verify;
 import java.util.Map;
 import java.util.Set;
 import static org.mockito.Mockito.lenient;
+import com.example.hms.enums.AbnormalFlag;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
@@ -120,26 +122,270 @@ class PatientLabResultServiceImplTest {
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 999)).isEmpty();
     }
 
-    @Test void getLabResults_withResults_pendingStatus() {
+    /** An unreleased glucose with everything a leak could carry: value, unit, notes, performer. */
+    private LabResult unreleasedGlucoseWithEverything() {
         LabResult lr = buildLabResult("5.0", "mg/dL", false, false);
+        lr.setNotes("preliminary — repeat requested");
         LabTestDefinition testDef = new LabTestDefinition();
-        testDef.setName("Glucose"); testDef.setTestCode("GLU");
+        testDef.setName("Glucose"); testDef.setTestCode("GLU"); testDef.setCategory("CHEMISTRY");
         LabOrder order = new LabOrder();
         order.setLabTestDefinition(testDef);
         order.setOrderDatetime(LocalDateTime.now());
         lr.setLabOrder(order);
-        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        User tech = new User(); tech.setFirstName("Tech"); tech.setLastName("Nician");
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment(); assignment.setUser(tech);
+        lr.setAssignment(assignment);
+        return lr;
+    }
 
+    private void givenTheOnlyRowIs(LabResult lr) {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
             .thenReturn(List.of(lr));
+    }
+
+    /** Staff path: the unreleased row keeps its preliminary value, labelled released=false. */
+    @Test void getLabResults_withResults_pendingStatus() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyRowIs(lr);
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).getStatus()).isEqualTo("PENDING");
-        assertThat(results.get(0).getTestName()).isEqualTo("Glucose");
-        assertThat(results.get(0).getTestCode()).isEqualTo("GLU");
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getTestCode()).isEqualTo("GLU");
+        assertThat(row.getValue()).isEqualTo("5.0");
+        assertThat(row.getUnit()).isEqualTo("mg/dL");
+        assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /** B3 — patient path: the row is there so the patient knows a result is expected, but nothing of it. */
+    @Test void portalView_unreleasedRow_isPendingWithoutValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
+        assertThat(results).hasSize(1);
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getTestCode()).isEqualTo("GLU");
+        assertThat(row.getCategory()).isEqualTo("CHEMISTRY");
+        assertThat(row.getValue()).isNull();
+        assertThat(row.getUnit()).isNull();
+        assertThat(row.getReferenceRange()).isNull();
+        assertThat(row.getNotes()).isNull();
+        assertThat(row.getPerformedBy()).isNull();
+    }
+
+    /** B3 — the same row, once released, reaches the patient whole. */
+    @Test void portalView_releasedRow_carriesTheValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        lr.setReleased(true);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("NORMAL");
+        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
+        assertThat(row.isReleased()).isTrue();
+        assertThat(row.getStatus()).isEqualTo("NORMAL");
+        assertThat(row.getValue()).isEqualTo("5.0");
+        assertThat(row.getUnit()).isEqualTo("mg/dL");
+        assertThat(row.getReferenceRange()).isEqualTo("3.9 - 6.1 mg/dL");
+        assertThat(row.getNotes()).isEqualTo("preliminary — repeat requested");
+        assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /**
+     * The analyzer's preliminary and its final are two stored rows — the ingest
+     * keeps both on purpose — so the patient's view is where the pair is
+     * resolved: the finished value alone, with no "pending" lingering beside it.
+     */
+    @Test void portalView_hidesThePreliminaryThatAReleaseSuperseded() {
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setName("Haemoglobin"); testDef.setTestCode("HGB");
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(testDef);
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
+        preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
+        finalResult.setResultDate(preliminary.getResultDate());
+        finalResult.setCreatedAt(LocalDateTime.now());
+        lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
+        when(labResultMapper.toResponseDTO(finalResult)).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(preliminary, finalResult));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(finalResult.getId());
+        assertThat(results.get(0).getValue()).isEqualTo("13.7");
+        assertThat(results.get(0).getStatus()).isNotEqualTo("PENDING");
+    }
+
+    /**
+     * The pairing has to be resolved BEFORE the limit. Filtering afterwards cut
+     * rows out of an already-short page — asking for two results returned one —
+     * and a preliminary could sit inside the page while the final that
+     * supersedes it sat just outside it, leaving a permanent "Result pending"
+     * for a test that is released.
+     */
+    @Test void portalView_limitIsHonouredAfterTheSupersededRowIsRemoved() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(new LabTestDefinition());
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
+        preliminary.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
+        finalResult.setResultDate(preliminary.getResultDate());
+        finalResult.setCreatedAt(LocalDateTime.now());
+        LabResult another = buildLabResult("4.1", "mmol/L", true, false);
+        another.setLabOrder(order);
+        another.setTestCode("K");
+        another.setSourceObservationSetId("2");
+        when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
+        // Honour the page size, or the mock hands back every row whatever was
+        // asked for and the short-page path this test exists for never runs.
+        List<LabResult> newestFirst = List.of(finalResult, preliminary, another);
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), pageCaptor.capture()))
+            .thenAnswer(invocation -> {
+                Pageable requested = invocation.getArgument(2);
+                return newestFirst.subList(0, Math.min(requested.getPageSize(), newestFirst.size()));
+            });
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 2);
+
+        assertThat(results).as("two asked for, two returned — not one short of the page").hasSize(2);
+        assertThat(pageCaptor.getAllValues()).extracting(Pageable::getPageSize)
+            .as("the caller's limit first; the cap only because the pairing removed a row — "
+                + "never a hundred-row page on every call, and never a fixed +1 that a second "
+                + "pair on the page would defeat")
+            .containsExactly(2, 100);
+    }
+
+    /** The staff record is the record: both rows stay, each labelled. */
+    @Test void staffView_keepsBothRowsOfAPreliminaryFinalPair() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(new LabTestDefinition());
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        preliminary.setSourceSendingApplication("SYSMEX");
+        preliminary.setObservationResultStatus("P");
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        finalResult.setSourceSendingApplication("SYSMEX");
+        finalResult.setObservationResultStatus("F");
+        when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(preliminary, finalResult));
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10))
+            .as("the clinical record keeps what the analyzer said first")
+            .hasSize(2);
+    }
+
+    /** B18 — both gradings present: the more severe wins, direction from the directional one. */
+    @Test void releasedRow_withRangeAndFlag_takesTheMoreSevereAndKeepsDirection() {
+        record Case(String rangeSeverity, boolean acknowledged, AbnormalFlag flag, String expected) {}
+        List<Case> cases = List.of(
+            // inside the range, but the analyzer flagged H → the flag's direction
+            new Case("NORMAL", false, AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_HIGH"),
+            // range says high, analyzer said HH → CRITICAL, never merely ABNORMAL_HIGH
+            new Case("HIGH", true, AbnormalFlag.CRITICAL, "CRITICAL"),
+            // 16.0 against 12–15.5 that the analyzer flagged N and auto-released: out of range,
+            // unacknowledged — ABNORMAL_HIGH, never a synthetic CRITICAL the patient reads unreviewed
+            new Case("HIGH", false, AbnormalFlag.NORMAL, "ABNORMAL_HIGH"),
+            // range says low, analyzer said nothing abnormal → the range's direction
+            new Case("LOW", false, AbnormalFlag.NORMAL, "ABNORMAL_LOW"),
+            // range says low, technologist recorded an undirected ABNORMAL → the directional source
+            new Case("LOW", false, AbnormalFlag.ABNORMAL, "ABNORMAL_LOW"),
+            // both directional and disagreeing → the hospital's own range
+            new Case("LOW", false, AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_LOW"),
+            // range critical, flag directional → CRITICAL
+            new Case("CRITICAL", false, AbnormalFlag.ABNORMAL_LOW, "CRITICAL"),
+            // both normal
+            new Case("NORMAL", false, AbnormalFlag.NORMAL, "NORMAL"));
+        for (Case c : cases) {
+            LabResult lr = buildLabResult("1", null, true, c.acknowledged());
+            lr.setAbnormalFlag(c.flag());
+            LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
+            lr.setLabOrder(order);
+            LabResultResponseDTO mapped = new LabResultResponseDTO();
+            mapped.setSeverityFlag(c.rangeSeverity());
+            when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+            givenTheOnlyRowIs(lr);
+
+            assertThat(service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0).getStatus())
+                .as("range %s (ack=%s) + flag %s", c.rangeSeverity(), c.acknowledged(), c.flag())
+                .isEqualTo(c.expected());
+        }
+    }
+
+    /** B18 — no reference range to grade against: the recorded flag decides, direction kept. */
+    @Test void releasedRow_withoutRanges_statusFollowsTheRecordedFlag() {
+        for (Map.Entry<AbnormalFlag, String> expected : Map.of(
+                AbnormalFlag.ABNORMAL_LOW, "ABNORMAL_LOW",
+                AbnormalFlag.ABNORMAL_HIGH, "ABNORMAL_HIGH",
+                AbnormalFlag.ABNORMAL, "ABNORMAL",
+                AbnormalFlag.CRITICAL, "CRITICAL",
+                AbnormalFlag.NORMAL, "NORMAL").entrySet()) {
+            LabResult lr = buildLabResult("1", null, true, false);
+            lr.setAbnormalFlag(expected.getKey());
+            LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
+            lr.setLabOrder(order);
+            LabResultResponseDTO mapped = new LabResultResponseDTO();
+            mapped.setSeverityFlag(LabResultMapper.FLAG_UNSPECIFIED);
+            when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+            givenTheOnlyRowIs(lr);
+
+            assertThat(service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0).getStatus())
+                .as("flag %s", expected.getKey())
+                .isEqualTo(expected.getValue());
+        }
     }
 
     @Test void getLabResults_released_normalStatus() {
@@ -179,6 +425,7 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(0).getStatus()).isEqualTo("CRITICAL");
     }
 
+    /** Out of range is ABNORMAL_HIGH whether or not a clinician has acknowledged it: no synthetic CRITICAL. */
     @Test void getLabResults_released_highSeverity_notAcknowledged() {
         LabResult lr = buildLabResult("200", "mg/dL", true, false);
         LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());
@@ -193,7 +440,7 @@ class PatientLabResultServiceImplTest {
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
-        assertThat(results.get(0).getStatus()).isEqualTo("CRITICAL");
+        assertThat(results.get(0).getStatus()).isEqualTo("ABNORMAL_HIGH");
     }
 
     @Test void getLabResults_released_highSeverity_acknowledged() {

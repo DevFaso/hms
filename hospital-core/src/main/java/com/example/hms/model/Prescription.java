@@ -279,6 +279,48 @@ public class Prescription extends BaseEntity {
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
 
+    /* ── Pharmacist clarification (pharmacy flow gap G5, V162) ──────────── */
+
+    /**
+     * The pharmacist's question about this order. Encrypted like {@code notes}:
+     * it is clinical narrative ("dose exceeds the renal ceiling for this
+     * patient"), not metadata. Null once nobody has asked, or before the
+     * first request; kept after resolution so the answer reads in context.
+     */
+    @Size(max = 1000)
+    @Column(name = "clarification_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String clarificationReason;
+
+    @Column(name = "clarification_requested_at")
+    private LocalDateTime clarificationRequestedAt;
+
+    /** The asking pharmacist's user id; no FK, the V160 chart_restricted_by shape. */
+    @Column(name = "clarification_requested_by_user_id")
+    private java.util.UUID clarificationRequestedByUserId;
+
+    @Size(max = 1000)
+    @Column(name = "clarification_response", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String clarificationResponse;
+
+    /** Null while a clarification is open; the pharmacist's cue that the answer is in. */
+    @Column(name = "clarification_resolved_at")
+    private LocalDateTime clarificationResolvedAt;
+
+    @Column(name = "clarification_resolved_by_user_id")
+    private java.util.UUID clarificationResolvedByUserId;
+
+    /**
+     * The status the order held when the pharmacist asked, restored when the
+     * prescriber answers — so a PARTIALLY_FILLED or PENDING_STOCK order keeps
+     * its progress (and its pending BACKORDER decision) instead of reverting
+     * to SIGNED. Null on rows from before this column; those resolve to SIGNED.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "clarification_previous_status", length = 40)
+    private PrescriptionStatus clarificationPreviousStatus;
+
     /**
      * SHA-256 digest over the canonical signed content (P2 #16).
      *

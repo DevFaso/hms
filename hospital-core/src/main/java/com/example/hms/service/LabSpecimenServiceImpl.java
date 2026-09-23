@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -10,8 +11,10 @@ import com.example.hms.payload.dto.LabSpecimenRequestDTO;
 import com.example.hms.payload.dto.LabSpecimenResponseDTO;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabSpecimenRepository;
+import com.example.hms.service.lab.LabOrderLifecycle;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LabSpecimenServiceImpl implements LabSpecimenService {
@@ -43,10 +47,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
-        // Hospital scope check
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
+        // Hospital scope check: the ordering hospital or the performing laboratory (B1)
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
@@ -65,7 +67,11 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             .notes(request.getNotes())
             .build();
 
-        return labSpecimenMapper.toResponseDTO(labSpecimenRepository.save(specimen));
+        LabSpecimen saved = labSpecimenRepository.save(specimen);
+        // A collected specimen IS the order's COLLECTED state (B2): nothing
+        // else records it, and the transition endpoint has no callers.
+        advanceOrder(labOrder, LabOrderStatus.COLLECTED);
+        return labSpecimenMapper.toResponseDTO(saved);
     }
 
     @Override
@@ -74,9 +80,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && specimen.getLabOrder().getHospital() != null
-                && !specimen.getLabOrder().getHospital().getId().equals(hospitalId)) {
+        if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("labspecimen.notfound");
         }
         return labSpecimenMapper.toResponseDTO(specimen);
@@ -88,9 +92,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabOrder labOrder = labOrderRepository.findById(labOrderId)
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && labOrder.getHospital() != null
-                && !labOrder.getHospital().getId().equals(hospitalId)) {
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
         return labSpecimenRepository.findByLabOrder_Id(labOrderId)
@@ -105,9 +107,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
             .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound"));
 
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && specimen.getLabOrder().getHospital() != null
-                && !specimen.getLabOrder().getHospital().getId().equals(hospitalId)) {
+        if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("labspecimen.notfound");
         }
 
@@ -121,8 +121,40 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         specimen.setReceivedById(roleValidator.getCurrentUserId());
         specimen.setStatus(LabSpecimenStatus.RECEIVED);
         LabSpecimen saved = labSpecimenRepository.save(specimen);
+        advanceOrder(specimen.getLabOrder(), LabOrderStatus.RECEIVED);
         instrumentOutboxService.enqueueSpecimenReceived(saved);
         return labSpecimenMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Move the order on, by statement rather than through the entity.
+     *
+     * <p>The same writer the result path uses, and for the same reason: an
+     * order instance loaded for something else carries a snapshot that may
+     * predate another transaction's change, and writing status through it
+     * either flushes nothing or flushes the whole row back. The status the
+     * decision is made on is read fresh, and the update applies only if it is
+     * still that.
+     */
+    private void advanceOrder(LabOrder labOrder, LabOrderStatus target) {
+        if (labOrder == null || labOrder.getId() == null) {
+            return;
+        }
+        // The lock first, as the result-entry path does. Reading the status
+        // unlocked and then compare-and-setting on it leaves a window: a
+        // concurrent move makes the update match nothing, and the only thing
+        // that happened was a debug line — the order stays short of where
+        // this specimen event should have put it, and nothing revisits it.
+        labOrderRepository.findWithLockById(labOrder.getId());
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        LabOrderStatus moveTo = LabOrderLifecycle.statusAfterForwardStep(committedStatus, target);
+        if (moveTo == null) {
+            return;
+        }
+        if (labOrderRepository.updateStatusFrom(labOrder.getId(), committedStatus, moveTo) == 0) {
+            log.debug("Lab order {} moved from {} while its specimen was being recorded; status left alone",
+                labOrder.getId(), committedStatus);
+        }
     }
 
     // ── Accession number generation ───────────────────────────────────────────

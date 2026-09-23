@@ -17,6 +17,7 @@ import {
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
   LabSpecimen,
+  PerformingLab,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -52,6 +53,23 @@ export class LabComponent implements OnInit {
     this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN']),
   );
 
+  /**
+   * Everything the laboratory still owes: from the order being placed,
+   * through the specimen being collected and received, to the analysis.
+   * COLLECTED and RECEIVED are here because the backend now moves an
+   * order through them on the specimen events; without them an order
+   * vanished from both tabs between collection and result entry.
+   */
+  static readonly PENDING_STATUSES: readonly string[] = [
+    'ORDERED',
+    'PENDING',
+    'COLLECTED',
+    'RECEIVED',
+    'IN_PROGRESS',
+  ];
+  /** Results are in: entered, verified, or released and closed. */
+  static readonly COMPLETED_STATUSES: readonly string[] = ['RESULTED', 'VERIFIED', 'COMPLETED'];
+
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
   searchTerm = '';
@@ -64,6 +82,8 @@ export class LabComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   labTestDefs = signal<LabTestDefinition[]>([]);
+  /** Laboratories an order can be sent to (B1); empty until a provider opens the page. */
+  performingLabs = signal<PerformingLab[]>([]);
   private activeAssignmentId = '';
 
   // Patient picker
@@ -126,6 +146,12 @@ export class LabComponent implements OnInit {
     this.loadAssignedHospitals();
     this.initPatientSearch();
     this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+    if (this.canCreateOrder()) {
+      this.labService.listPerformingLabs().subscribe({
+        next: (labs) => this.performingLabs.set(labs ?? []),
+        error: () => this.performingLabs.set([]),
+      });
+    }
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a) => a.active);
@@ -150,7 +176,48 @@ export class LabComponent implements OnInit {
       orderChannel: 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: '',
     };
+  }
+
+  /**
+   * B1: an order is "incoming" when another hospital sent it to this
+   * laboratory, and "outgoing" when this hospital sent it out.
+   *
+   * Read through effectiveHospitalIdForRequest, the id the API is actually
+   * called with — not activeHospitalId, which for a super-admin is the
+   * primary hospital rather than the one the chip is pinned to. Reading the
+   * wrong one inverted every label for a chip-scoped super-admin and offered
+   * them Edit and Delete on incoming orders that the backend then 404s.
+   */
+  isIncomingExternal(o: LabOrderResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    return !!o.performingHospitalId && !!active && o.performingHospitalId === active;
+  }
+
+  isSentOut(o: LabOrderResponse): boolean {
+    return !!o.performingHospitalId && !this.isIncomingExternal(o);
+  }
+
+  /**
+   * The hospital on this side of the relationship — the one whose worklist
+   * this is. For an order another hospital sent here that is the performing
+   * laboratory (us), not the hospital that ordered it.
+   */
+  actingHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.performingHospitalName : o.hospitalName;
+    return name || '—';
+  }
+
+  /** The hospital on the other side: who ordered it, or where it was sent. */
+  counterpartHospitalName(o: LabOrderResponse): string {
+    const name = this.isIncomingExternal(o) ? o.hospitalName : o.performingHospitalName;
+    return name || '—';
+  }
+
+  /** The label that side carries: "Ordered by" when it came to us, "Sent to" when it left us. */
+  counterpartLabelKey(o: LabOrderResponse): string {
+    return this.isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO';
   }
 
   onTestDefChange(defId: string): void {
@@ -273,6 +340,7 @@ export class LabComponent implements OnInit {
       orderChannel: o.orderChannel ?? 'PORTAL',
       providerSignature: '',
       documentationSharedWithLab: null,
+      performingHospitalId: o.performingHospitalId ?? '',
     };
     this.selectedPatient.set({
       id: '',
@@ -291,9 +359,17 @@ export class LabComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    // The select is always sent, and "" is an explicit null rather than an
+    // absent field: absent tells the API to leave the routing as it is, so
+    // omitting it would make "this hospital's laboratory" unreachable on an
+    // order that had been sent out.
+    const payload: LabOrderRequest = {
+      ...this.form,
+      performingHospitalId: this.form.performingHospitalId || null,
+    };
     const op = this.editing()
-      ? this.labService.updateOrder(this.editingId()!, this.form)
-      : this.labService.createOrder(this.form);
+      ? this.labService.updateOrder(this.editingId()!, payload)
+      : this.labService.createOrder(payload);
     op.subscribe({
       next: () => {
         this.toast.success(
@@ -350,13 +426,19 @@ export class LabComponent implements OnInit {
     });
   }
 
+  isPending(order: LabOrderResponse): boolean {
+    return LabComponent.PENDING_STATUSES.includes(order.status ?? '');
+  }
+
+  isCompleted(order: LabOrderResponse): boolean {
+    return LabComponent.COMPLETED_STATUSES.includes(order.status ?? '');
+  }
+
   private computeStats(list: LabOrderResponse[]): void {
     this.stats.set({
       total: list.length,
-      pending: list.filter(
-        (o) => o.status === 'PENDING' || o.status === 'IN_PROGRESS' || o.status === 'ORDERED',
-      ).length,
-      completed: list.filter((o) => o.status === 'COMPLETED' || o.status === 'RESULTED').length,
+      pending: list.filter((o) => this.isPending(o)).length,
+      completed: list.filter((o) => this.isCompleted(o)).length,
       cancelled: list.filter((o) => o.status === 'CANCELLED').length,
     });
   }
@@ -370,11 +452,9 @@ export class LabComponent implements OnInit {
     let list = this.orders();
     const tab = this.activeTab();
     if (tab === 'pending') {
-      list = list.filter(
-        (o) => o.status === 'PENDING' || o.status === 'IN_PROGRESS' || o.status === 'ORDERED',
-      );
+      list = list.filter((o) => this.isPending(o));
     } else if (tab === 'completed') {
-      list = list.filter((o) => o.status === 'COMPLETED' || o.status === 'RESULTED');
+      list = list.filter((o) => this.isCompleted(o));
     }
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -400,11 +480,13 @@ export class LabComponent implements OnInit {
   getStatusClass(status: string): string {
     switch (status) {
       case 'COMPLETED':
+      case 'VERIFIED':
       case 'RESULTED':
         return 'status-badge status-completed';
       case 'IN_PROGRESS':
         return 'status-badge status-in_progress';
       case 'COLLECTED':
+      case 'RECEIVED':
         return 'status-badge status-collected';
       case 'PENDING':
       case 'ORDERED':

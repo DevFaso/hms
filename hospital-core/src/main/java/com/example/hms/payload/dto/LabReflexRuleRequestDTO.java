@@ -24,6 +24,7 @@ public class LabReflexRuleRequestDTO {
     /** Test definition to auto-order when condition fires. */
     private UUID reflexTestDefinitionId;
 
+    @Builder.Default
     private boolean active = true;
 
     /** Human-readable description of this rule. */
