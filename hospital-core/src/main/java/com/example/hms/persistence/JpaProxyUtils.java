@@ -4,6 +4,9 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
+import com.example.hms.model.BaseEntity;
+import org.hibernate.proxy.HibernateProxy;
+import java.util.UUID;
 
 /**
  * Defensive helpers for working with Hibernate lazy proxies whose referenced
@@ -49,6 +52,29 @@ public final class JpaProxyUtils {
      * @param association     name of the field carrying the FK, e.g. {@code "patient"}
      * @return {@code proxyOrEntity} on success, {@code null} when the FK is dangling
      */
+    /**
+     * The identifier of an association without initialising it.
+     *
+     * <p>{@code entity.getId()} is not the free read it looks like:
+     * {@code BaseEntity} puts {@code @Id} on the FIELD with no
+     * {@code @Access(PROPERTY)} override, so Hibernate uses field access, has
+     * no identifier getter to intercept, and the call loads the row — one
+     * query per association per row on a list read. The proxy's own
+     * initializer holds the identifier by definition, so this answers from it
+     * and touches nothing. An already-initialised association, or a plain
+     * entity, is read directly.
+     */
+    public static UUID idOf(BaseEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        if (entity instanceof HibernateProxy proxy) {
+            Object id = proxy.getHibernateLazyInitializer().getIdentifier();
+            return id instanceof UUID uuid ? uuid : null;
+        }
+        return entity.getId();
+    }
+
     public static <T> T safeInit(T proxyOrEntity, String parentEntity, Object parentId, String association) {
         if (proxyOrEntity == null) return null;
         try {

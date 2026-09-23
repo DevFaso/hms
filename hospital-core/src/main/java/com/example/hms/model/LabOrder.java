@@ -173,22 +173,29 @@ public class LabOrder extends BaseEntity {
 
     /** The hospital whose laboratory performs the test: the performing hospital, else the ordering one. */
     public UUID resolvePerformingHospitalId() {
-        if (performingHospital != null && performingHospital.getId() != null) {
-            return performingHospital.getId();
+        UUID performingId = com.example.hms.persistence.JpaProxyUtils.idOf(performingHospital);
+        if (performingId != null) {
+            return performingId;
         }
-        return hospital != null ? hospital.getId() : null;
+        return com.example.hms.persistence.JpaProxyUtils.idOf(hospital);
     }
 
     /** True when the order was sent to a laboratory at another hospital. */
+    /**
+     * Compared by identifier, never by loading the row: these run once per
+     * order on every list read and every scope check, and going through
+     * {@code getId()} on a lazy association would cost a query each.
+     */
     public boolean isPerformedExternally() {
-        return performingHospital != null && performingHospital.getId() != null
-            && (hospital == null || !Objects.equals(performingHospital.getId(), hospital.getId()));
+        UUID performingId = com.example.hms.persistence.JpaProxyUtils.idOf(performingHospital);
+        return performingId != null
+            && !Objects.equals(performingId, com.example.hms.persistence.JpaProxyUtils.idOf(hospital));
     }
 
     /** True when {@code hospitalId} is the performing hospital (only ever true for an external order). */
     public boolean isPerformedAt(UUID hospitalId) {
         return hospitalId != null && isPerformedExternally()
-            && Objects.equals(performingHospital.getId(), hospitalId);
+            && Objects.equals(com.example.hms.persistence.JpaProxyUtils.idOf(performingHospital), hospitalId);
     }
 
     /**
@@ -201,7 +208,8 @@ public class LabOrder extends BaseEntity {
         if (hospitalId == null) {
             return true;
         }
-        return (hospital != null && Objects.equals(hospital.getId(), hospitalId)) || isPerformedAt(hospitalId);
+        return Objects.equals(com.example.hms.persistence.JpaProxyUtils.idOf(hospital), hospitalId)
+            || isPerformedAt(hospitalId);
     }
 
     @PrePersist

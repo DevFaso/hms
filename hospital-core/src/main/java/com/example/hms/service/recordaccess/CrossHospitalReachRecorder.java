@@ -108,39 +108,43 @@ public class CrossHospitalReachRecorder {
         if (perPatient == null || perPatient.isEmpty()) {
             return;
         }
+        // One transaction for the page's break-glass reads, with the
+        // per-patient handling inside it: a transaction each was the cost the
+        // batching exists to remove, and it opened one even for a patient
+        // with nothing to look up.
+        Map<UUID, Optional<UUID>> breakGlassByPatient = liveBreakGlassSessions(
+            perPatient.keySet(), requesterUserId, actingHospitalId);
+
         List<AuditEventRequestDTO> pending = new ArrayList<>();
         for (Map.Entry<UUID, Map<String, Long>> patient : perPatient.entrySet()) {
             UUID patientId = patient.getKey();
             if (patientId == null) {
                 continue;
             }
-            // Per patient, so one patient's failure costs one patient's rows.
-            // Wrapping the whole loop meant a single break-glass lookup going
-            // down threw away the page's disclosures — worse than the
-            // per-patient recorder it replaced, which lost only its own.
-            try {
-                Optional<UUID> breakGlassSessionId = liveBreakGlassSession(requesterUserId, patientId, actingHospitalId);
-                for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
-                    Map<String, Object> details = new HashMap<>();
-                    details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
-                    details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
-                    details.put(DETAIL_ROWS_SURFACED, reach.getValue());
-                    breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
-                    pending.add(AuditEventRequestDTO.builder()
-                        .eventType(AuditEventType.RECORD_SHARE)
-                        .status(AuditStatus.SUCCESS)
-                        .userId(requesterUserId)
-                        .assignmentId(assignmentId)
-                        .patientId(patientId)
-                        .entityType(ENTITY_TYPE_PATIENT)
-                        .resourceId(patientId.toString())
-                        .eventDescription(description)
-                        .details(details)
-                        .build());
-                }
-            } catch (RuntimeException ex) {
-                log.warn("[record-access] could not prepare the disclosure of patient {} at hospital {}: {}",
-                    patientId, actingHospitalId, ex.getMessage());
+            // A patient whose lookup failed is skipped rather than recorded
+            // without its session stamp: one patient's failure costs that
+            // patient, never the page.
+            Optional<UUID> breakGlassSessionId = breakGlassByPatient.get(patientId);
+            if (breakGlassSessionId == null) {
+                continue;
+            }
+            for (Map.Entry<String, Long> reach : patient.getValue().entrySet()) {
+                Map<String, Object> details = new HashMap<>();
+                details.put(DETAIL_ACTING_HOSPITAL_ID, String.valueOf(actingHospitalId));
+                details.put(DETAIL_SOURCE_HOSPITAL_ID, reach.getKey());
+                details.put(DETAIL_ROWS_SURFACED, reach.getValue());
+                breakGlassSessionId.ifPresent(id -> details.put(DETAIL_BREAK_GLASS_SESSION_ID, id.toString()));
+                pending.add(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.RECORD_SHARE)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(requesterUserId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .entityType(ENTITY_TYPE_PATIENT)
+                    .resourceId(patientId.toString())
+                    .eventDescription(description)
+                    .details(details)
+                    .build());
             }
         }
         if (pending.isEmpty()) {
@@ -155,21 +159,46 @@ public class CrossHospitalReachRecorder {
     }
 
     /**
-     * The break-glass session, read in a transaction of its own.
+     * Every patient's break-glass session, in ONE transaction of its own.
      *
-     * <p>This is a repository read, and the caller is a read-only transaction
-     * serving a GET. A database failure inside it would mark that transaction
-     * rollback-only; the catch above would swallow the exception and the read
-     * would still die at commit, failing the request the accounting exists to
-     * account for — the rollback-only trap this project has been bitten by
-     * before, and the one {@code LabOrderRoutingNotifier} documents. Suspending
-     * the caller's transaction keeps the damage inside this one.
+     * <p>These are repository reads and the caller is the read-only
+     * transaction serving a GET: a failure inside one would mark that
+     * transaction rollback-only, the catch would swallow the exception and the
+     * read would still die at commit — the rollback-only trap
+     * {@code LabOrderRoutingNotifier} documents. Suspending the caller's
+     * transaction keeps the damage here. One transaction for the page rather
+     * than one per patient, because a transaction each was the cost batching
+     * exists to remove.
+     *
+     * <p>A patient missing from the returned map is one whose lookup failed;
+     * the caller skips it, so a single failure costs that patient and not the
+     * page.
      */
-    private Optional<UUID> liveBreakGlassSession(UUID requesterUserId, UUID patientId, UUID actingHospitalId) {
+    private Map<UUID, Optional<UUID>> liveBreakGlassSessions(java.util.Collection<UUID> patientIds,
+                                                             UUID requesterUserId, UUID actingHospitalId) {
+        Map<UUID, Optional<UUID>> sessions = new HashMap<>();
         TransactionTemplate ownTransaction = new TransactionTemplate(transactionManager);
         ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return ownTransaction.execute(status ->
-            breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId));
+        try {
+            ownTransaction.executeWithoutResult(status -> {
+                for (UUID patientId : patientIds) {
+                    if (patientId == null) {
+                        continue;
+                    }
+                    try {
+                        sessions.put(patientId,
+                            breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId));
+                    } catch (RuntimeException ex) {
+                        log.warn("[record-access] break-glass lookup failed for patient {} at hospital {}: {}",
+                            patientId, actingHospitalId, ex.getMessage());
+                    }
+                }
+            });
+        } catch (RuntimeException ex) {
+            log.warn("[record-access] break-glass lookups failed for a page of {} patient(s) at hospital {}: {}",
+                sessions.size(), actingHospitalId, ex.getMessage());
+        }
+        return sessions;
     }
 
     /**

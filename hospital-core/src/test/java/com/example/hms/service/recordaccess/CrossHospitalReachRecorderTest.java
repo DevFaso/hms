@@ -187,6 +187,24 @@ class CrossHospitalReachRecorderTest {
     }
 
     @Test
+    @DisplayName("a page's break-glass reads share ONE transaction, however many patients it holds")
+    void breakGlassLookupsShareOneTransaction() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID source = UUID.randomUUID();
+        when(breakGlassGate.liveSessionId(any(), any(), any())).thenReturn(Optional.empty());
+
+        recorder.recordBatchedReach(Map.of(
+            UUID.randomUUID(), Map.of(source.toString(), 1L),
+            UUID.randomUUID(), Map.of(source.toString(), 1L),
+            UUID.randomUUID(), Map.of(source.toString(), 1L)), acting, actor, null, "Batched read");
+
+        // A transaction per patient was the cost the batching exists to remove.
+        verify(transactionManager, times(1)).getTransaction(any());
+        verify(breakGlassGate, times(3)).liveSessionId(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("one patient failing costs that patient's row, not the page's")
     void batchedReachLosesOnlyTheFailingPatient() {
         UUID acting = UUID.randomUUID();

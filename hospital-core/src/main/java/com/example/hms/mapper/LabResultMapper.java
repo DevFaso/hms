@@ -215,13 +215,7 @@ public class LabResultMapper {
      * already-initialised association is read directly.
      */
     private String resolvePerformingHospitalId(LabOrder order) {
-        Hospital performing = order.getPerformingHospital();
-        if (performing == null) {
-            return null;
-        }
-        Object id = performing instanceof HibernateProxy proxy
-            ? proxy.getHibernateLazyInitializer().getIdentifier()
-            : performing.getId();
+        java.util.UUID id = com.example.hms.persistence.JpaProxyUtils.idOf(order.getPerformingHospital());
         return id != null ? id.toString() : null;
     }
 

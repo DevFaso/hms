@@ -76,6 +76,9 @@ public class LabResultServiceImpl implements LabResultService {
     private final CriticalValueNotificationService criticalValueNotificationService;
     private final com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /** Ceiling on an accounted result page — see {@link com.example.hms.utility.PageBounds}. */
+    private static final int MAX_RESULT_PAGE_SIZE = 500;
+
     /** The one description every performing-laboratory result disclosure carries (Sonar S1192). */
     private static final String PERFORMED_HERE_REACH_DESCRIPTION =
         "Cross-hospital lab result read at the performing laboratory";
@@ -299,7 +302,8 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId, pageable);
+        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId,
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
     }
@@ -319,7 +323,8 @@ public class LabResultServiceImpl implements LabResultService {
         // result waits on the performing laboratory's queue alone, because
         // putting it on both invited the ordering hospital to sign off work
         // its laboratory never did.
-        Page<LabResult> page = labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable);
+        Page<LabResult> page = labResultRepository.findPendingReleaseHandledBy(hospitalId,
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
     }
@@ -1082,15 +1087,9 @@ public class LabResultServiceImpl implements LabResultService {
         // B1: a critical value is the running laboratory's to see and chase —
         // it is the one that produced it. These two were the last lab-side
         // reads still asking only who ordered.
-        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
-        recordPerformedHereReach(results);
-
-        return results.stream()
-            .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
-            .map(labResultMapper::toResponseDTO)
-            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
-            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-            .toList();
+        List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        return surfaceCritical(candidates,
+            r -> r.getResultDate() != null && r.getResultDate().isAfter(since));
     }
 
     @Override
@@ -1098,15 +1097,45 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<LabResult> results = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
-        recordPerformedHereReach(results);
+        List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
+        return surfaceCritical(candidates, r -> !r.isAcknowledged());
+    }
 
-        return results.stream()
-            .filter(r -> !r.isAcknowledged())
-            .map(labResultMapper::toResponseDTO)
-            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
-            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+    /**
+     * The critical rows a caller actually gets, accounted for exactly.
+     *
+     * <p>Both critical-value endpoints read every result the hospital handles
+     * and then filter hard — by date or acknowledgement, then by severity —
+     * so accounting the query result rather than the answer wrote disclosures
+     * for patients who were never surfaced, inflated every surfaced count,
+     * and let a polled dashboard write without bound. The filtering happens
+     * first now and only the survivors are accounted.
+     */
+    private List<LabResultResponseDTO> surfaceCritical(List<LabResult> candidates,
+                                                       java.util.function.Predicate<LabResult> queueFilter) {
+        List<LabResult> surfaced = new ArrayList<>();
+        List<LabResultResponseDTO> answer = new ArrayList<>();
+        for (LabResult result : candidates) {
+            if (!queueFilter.test(result)) {
+                continue;
+            }
+            LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
+            if (dto == null || !isCriticalSeverity(dto)) {
+                continue;
+            }
+            surfaced.add(result);
+            answer.add(dto);
+        }
+        recordPerformedHereReach(surfaced);
+        return answer.stream()
+            .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
+    }
+
+    private static boolean isCriticalSeverity(LabResultResponseDTO dto) {
+        return CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag())
+            || "HIGH".equalsIgnoreCase(dto.getSeverityFlag());
     }
 
     private LabResultComparisonDTO.ComparisonMetadata calculateComparison(LabResult current, LabResult previous, List<LabResultTrendPointDTO> trendHistory) {
