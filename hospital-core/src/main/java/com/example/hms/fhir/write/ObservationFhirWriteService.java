@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -126,10 +125,9 @@ public class ObservationFhirWriteService {
                 OperationOutcome.IssueType.NOTFOUND
             ));
 
-        UUID resultHospitalId = existing.getLabOrder() == null || existing.getLabOrder().getHospital() == null
-            ? null
-            : existing.getLabOrder().getHospital().getId();
-        if (resultHospitalId == null || !Objects.equals(resultHospitalId, hospitalId)) {
+        // B1: same predicate as REST PUT /lab-results/{id} — the ordering
+        // hospital and the performing laboratory may both amend the result.
+        if (existing.getLabOrder() == null || !existing.getLabOrder().isHandledBy(hospitalId)) {
             throw forbidden(
                 "LabResult " + labResultId + " does not belong to the active hospital scope."
             );

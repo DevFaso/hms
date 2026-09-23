@@ -19,7 +19,8 @@ public class PrescriptionRoutingMapper {
             Prescription prescription,
             Pharmacy targetPharmacy,
             User decidedByUser,
-            Patient patient
+            Patient patient,
+            java.math.BigDecimal remainingQuantity
     ) {}
 
     public RoutingDecisionResponseDTO toResponseDTO(PrescriptionRoutingDecision entity) {
@@ -37,6 +38,7 @@ public class PrescriptionRoutingMapper {
                 .patientId(entity.getDecidedForPatient() != null ? entity.getDecidedForPatient().getId() : null)
                 .reason(entity.getReason())
                 .estimatedRestockDate(entity.getEstimatedRestockDate())
+                .remainingQuantity(entity.getRemainingQuantity())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
                 .decidedAt(entity.getDecidedAt())
                 .createdAt(entity.getCreatedAt())
@@ -57,6 +59,7 @@ public class PrescriptionRoutingMapper {
                 .decidedForPatient(ctx.patient())
                 .reason(dto.getReason())
                 .estimatedRestockDate(dto.getEstimatedRestockDate())
+                .remainingQuantity(ctx.remainingQuantity())
                 .status(RoutingDecisionStatus.PENDING)
                 .decidedAt(LocalDateTime.now())
                 .build();

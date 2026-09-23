@@ -5,6 +5,9 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.pharmacy.FillAccounting;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,6 +28,8 @@ import java.util.Locale;
 public class SmsPartnerNotificationChannel implements PartnerNotificationChannel {
 
     private final ObjectProvider<SmsService> smsServiceProvider;
+    private final PartnerSmsTemplates templates;
+    private final PatientLocaleResolver patientLocaleResolver;
 
     /** Short, human-friendly token shared with partners; prefix of the routing decision UUID. */
     @Override
@@ -33,6 +38,15 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
             return "";
         }
         return decision.getId().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    @Override
+    public String prescriptionOfferBody(PrescriptionRoutingDecision decision,
+                                        Prescription prescription,
+                                        String medicationSummary) {
+        String initials = patientInitials(prescription != null ? prescription.getPatient() : null);
+        return templates.prescriptionOffer(
+                buildRefToken(decision), safeMedication(medicationSummary), initials);
     }
 
     @Override
@@ -45,8 +59,16 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         }
         String initials = patientInitials(prescription.getPatient());
         String ref = buildRefToken(decision);
-        trySend(phone, PartnerSmsTemplates.prescriptionOffer(
-                ref, safeMedication(prescription.getMedicationName()), initials));
+        String medication = safeMedication(prescription.getMedicationName());
+        // A partially filled order offers its remainder, and the partner is
+        // told the number: the offer used to name the full prescribed amount
+        // whatever had already been handed over (gap G3, round 3).
+        String remainder = remainderLabel(decision, prescription);
+        if (remainder != null) {
+            trySend(phone, templates.prescriptionOfferPartial(ref, medication, remainder, initials));
+            return;
+        }
+        trySend(phone, templates.prescriptionOffer(ref, medication, initials));
     }
 
     @Override
@@ -55,7 +77,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.reminder(buildRefToken(decision)));
+        trySend(phone, templates.reminder(buildRefToken(decision)));
     }
 
     @Override
@@ -64,7 +86,16 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.autoRejected(buildRefToken(decision)));
+        trySend(phone, templates.autoRejected(buildRefToken(decision)));
+    }
+
+    @Override
+    public void sendSuperseded(PrescriptionRoutingDecision decision, Pharmacy partner) {
+        String phone = partner != null ? partner.getPhoneNumber() : null;
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        trySend(phone, templates.superseded(buildRefToken(decision)));
     }
 
     @Override
@@ -73,7 +104,8 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || partner == null) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.patientAccepted(safeName(partner.getName())));
+        Locale locale = patientLocale(patient);
+        trySend(phone, templates.patientAccepted(safeName(partner.getName(), locale), locale));
     }
 
     @Override
@@ -82,7 +114,8 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || partner == null) {
             return;
         }
-        trySend(phone, PartnerSmsTemplates.patientDispensed(safeName(partner.getName())));
+        Locale locale = patientLocale(patient);
+        trySend(phone, templates.patientDispensed(safeName(partner.getName(), locale), locale));
     }
 
     // ---------- helpers ----------
@@ -149,11 +182,35 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         return (s == null || s.isBlank()) ? 0 : Character.toUpperCase(s.trim().charAt(0));
     }
 
-    private static String safeMedication(String name) {
-        return (name == null || name.isBlank()) ? "médicament" : name;
+    /**
+     * The remainder to name in the offer, or null when there is nothing to
+     * qualify: an unknown quantity, or a decision that routes exactly what
+     * was prescribed.
+     */
+    private static String remainderLabel(PrescriptionRoutingDecision decision, Prescription prescription) {
+        java.math.BigDecimal remaining = decision != null ? decision.getRemainingQuantity() : null;
+        if (remaining == null) {
+            return null;
+        }
+        // Against the LIFETIME entitlement, not the per-fill quantity: an
+        // untouched prescription with one released refill owes 2 × quantity,
+        // and comparing that with quantity alone announced a remainder to a
+        // partner that is being offered the whole thing.
+        if (remaining.compareTo(FillAccounting.expectedLifetimeQuantity(prescription)) == 0) {
+            return null;
+        }
+        return FillAccounting.remainingLabel(remaining, prescription.getQuantityUnit());
     }
 
-    private static String safeName(String name) {
-        return (name == null || name.isBlank()) ? "la pharmacie partenaire" : name;
+    private Locale patientLocale(Patient patient) {
+        return patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+    }
+
+    private String safeMedication(String name) {
+        return (name == null || name.isBlank()) ? templates.medicationFallback() : name;
+    }
+
+    private String safeName(String name, Locale patientLocale) {
+        return (name == null || name.isBlank()) ? templates.pharmacyFallback(patientLocale) : name;
     }
 }

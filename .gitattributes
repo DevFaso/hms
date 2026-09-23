@@ -1,3 +1,8 @@
 # Ensure shell scripts always have LF line endings
 *.sh text eol=lf
 gradlew text eol=lf
+
+# Message bundles are LF in the repository. Without this, a Windows checkout
+# (core.autocrlf=true) lets an edit rewrite every line and a 27-key addition
+# lands as an 8,800-line diff nobody can review.
+*.properties text eol=lf

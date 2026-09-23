@@ -2679,6 +2679,9 @@
     "PATIENT": "Patient",
     "PENDING": "Pending",
     "PENDING_ORDERS": "Órdenes pendientes",
+    "PERFORMING_LAB": "Laboratorio que realiza la prueba",
+    "PERFORMING_LAB_HINT": "Deje el laboratorio de este hospital salvo que la prueba se envíe a otro; el laboratorio receptor recibe una notificación.",
+    "PERFORMING_LAB_OWN": "Laboratorio de este hospital",
     "PRINT_LABEL": "Etiqueta",
     "PRINT_LABEL_FAILED": "No se pudo generar la etiqueta de la muestra.",
     "PRINT_LABEL_TITLE": "Imprimir la etiqueta de la muestra",
@@ -2696,6 +2699,7 @@
     "SELECT_PRIORITY": "Select priority",
     "SELECT_SAMPLE": "Select sample type",
     "SELECT_TEST": "Select test",
+    "SENT_TO": "Enviado a",
     "SPECIMENS": "Muestras",
     "SPECIMEN_STATUS_COLLECTED": "Recolectada",
     "SPECIMEN_STATUS_COMPLETED": "Completada",
@@ -4365,7 +4369,10 @@
       "ABNORMAL": "Anormal",
       "NORMAL_RESULT": "Dentro de los límites normales",
       "ABNORMAL_RESULT": "Fuera del rango normal — consulte a su médico",
-      "NORMAL_PREFIX": "Normal:"
+      "NORMAL_PREFIX": "Normal:",
+      "PENDING_RESULT": "Resultado pendiente",
+      "PENDING_BADGE": "Pendiente",
+      "PENDING_INTERPRETATION": "Análisis en curso: su resultado aparecerá aquí en cuanto el laboratorio lo valide."
     },
     "VISITS": {
       "TITLE": "Historial de visitas",
@@ -5179,6 +5186,8 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqueado por el plan",
         "PLATFORM_REGISTRY_UPDATED": "Registro de la plataforma actualizado",
         "PRESCRIPTION_BACKORDER": "Receta en falta de stock",
+        "PRESCRIPTION_CLARIFICATION_REQUESTED": "Aclaración de receta solicitada",
+        "PRESCRIPTION_CLARIFICATION_RESOLVED": "Aclaración de receta resuelta",
         "PRESCRIPTION_CREATED": "Receta creada",
         "PRESCRIPTION_DISCONTINUED": "Receta suspendida",
         "PRESCRIPTION_PRINTED": "Receta impresa",

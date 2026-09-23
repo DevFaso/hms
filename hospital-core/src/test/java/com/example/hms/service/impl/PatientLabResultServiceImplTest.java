@@ -205,6 +205,64 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
     }
 
+    /**
+     * The analyzer's preliminary and its final are two stored rows — the ingest
+     * keeps both on purpose — so the patient's view is where the pair is
+     * resolved: the finished value alone, with no "pending" lingering beside it.
+     */
+    @Test void portalView_hidesThePreliminaryThatAReleaseSuperseded() {
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setName("Haemoglobin"); testDef.setTestCode("HGB");
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(testDef);
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
+        when(labResultMapper.toResponseDTO(finalResult)).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(preliminary, finalResult));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(finalResult.getId());
+        assertThat(results.get(0).getValue()).isEqualTo("13.7");
+        assertThat(results.get(0).getStatus()).isNotEqualTo("PENDING");
+    }
+
+    /** The staff record is the record: both rows stay, each labelled. */
+    @Test void staffView_keepsBothRowsOfAPreliminaryFinalPair() {
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(new LabTestDefinition());
+
+        LabResult preliminary = buildLabResult("13.1", "g/dL", false, false);
+        preliminary.setLabOrder(order);
+        preliminary.setTestCode("HGB");
+        LabResult finalResult = buildLabResult("13.7", "g/dL", true, false);
+        finalResult.setLabOrder(order);
+        finalResult.setTestCode("HGB");
+        when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(preliminary, finalResult));
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10))
+            .as("the clinical record keeps what the analyzer said first")
+            .hasSize(2);
+    }
+
     /** B18 — both gradings present: the more severe wins, direction from the directional one. */
     @Test void releasedRow_withRangeAndFlag_takesTheMoreSevereAndKeepsDirection() {
         record Case(String rangeSeverity, boolean acknowledged, AbnormalFlag flag, String expected) {}

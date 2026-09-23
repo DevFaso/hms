@@ -199,14 +199,16 @@
                       <span class="material-symbols-outlined">verified_user</span>
                     </button>
                   }
-                  <button
-                    class="action-link"
-                    (click)="openDispatchModal(p)"
-                    [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
-                    [attr.data-testid]="'rx-dispatch-sms-' + p.id"
-                  >
-                    <span class="material-symbols-outlined">sms</span>
-                  </button>
+                  @if (canDispatchSms(p)) {
+                    <button
+                      class="action-link"
+                      (click)="openDispatchModal(p)"
+                      [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                      [attr.data-testid]="'rx-dispatch-sms-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">sms</span>
+                    </button>
+                  }
                   <button
                     class="action-link delete-link"
                     (click)="confirmDelete(p)"

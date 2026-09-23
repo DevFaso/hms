@@ -11,6 +11,7 @@ import {
   PrescriptionService,
   CommunityPharmacyService,
   PrescriptionResponse,
+  PrescriptionSmsDispatchResult,
 } from '../services/prescription.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
@@ -31,10 +32,12 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 describe('PrescriptionsComponent — SMS dispatch modal', () => {
   let fixture: ComponentFixture<PrescriptionsComponent>;
   let component: PrescriptionsComponent;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
 
   beforeEach(async () => {
-    const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+    prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'dispatchSms',
     ]);
     prescriptionService.list.and.returnValue(of([]));
 
@@ -142,6 +145,35 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
 
     expect(component.showDispatchModal()).toBeFalse();
   });
+
+  it('reloads the list after a successful dispatch so the row leaves the dispatchable states', () => {
+    prescriptionService.dispatchSms.and.returnValue(
+      of({ pharmacyName: 'Pharmacie Centrale' } as PrescriptionSmsDispatchResult),
+    );
+    component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
+    component.dispatchPharmacyId = 'ph-1';
+    const listCallsBefore = prescriptionService.list.calls.count();
+
+    component.submitDispatch();
+
+    expect(prescriptionService.dispatchSms).toHaveBeenCalledWith('rx-1', 'ph-1', undefined);
+    expect(prescriptionService.list.calls.count())
+      .withContext(
+        'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
+      )
+      .toBe(listCallsBefore + 1);
+    expect(component.dispatching()).toBeFalse();
+  });
+
+  it('does not fire a second dispatch while one is in flight', () => {
+    component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
+    component.dispatchPharmacyId = 'ph-1';
+    component.dispatching.set(true);
+
+    component.submitDispatch();
+
+    expect(prescriptionService.dispatchSms).not.toHaveBeenCalled();
+  });
 });
 
 /**
@@ -240,6 +272,32 @@ describe('PrescriptionsComponent — signing', () => {
 
     expect(fixture.nativeElement.querySelector('[data-testid="rx-sign-rx-1"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="rx-sign-rx-2"]')).toBeNull();
+  });
+
+  it('offers SMS dispatch on exactly the backend DISPATCHABLE_STATUSES', () => {
+    component.filtered.set([
+      rx('rx-1', 'DRAFT'),
+      rx('rx-2', 'SIGNED'),
+      rx('rx-3', 'TRANSMITTED'),
+      // A silent pharmacy is the ordinary case to escape from: re-sending
+      // supersedes the offer it is holding.
+      rx('rx-4', 'SENT_TO_PARTNER'),
+      rx('rx-5', 'DISPENSED'),
+      // A refusal or a back order must leave a way to send it elsewhere.
+      rx('rx-6', 'PARTNER_REJECTED'),
+      rx('rx-7', 'PENDING_STOCK'),
+    ]);
+    fixture.detectChanges();
+
+    const dispatch = (id: string) =>
+      fixture.nativeElement.querySelector(`[data-testid="rx-dispatch-sms-${id}"]`);
+    expect(dispatch('rx-1')).toBeNull();
+    expect(dispatch('rx-2')).not.toBeNull();
+    expect(dispatch('rx-3')).not.toBeNull();
+    expect(dispatch('rx-4')).not.toBeNull();
+    expect(dispatch('rx-5')).toBeNull();
+    expect(dispatch('rx-6')).not.toBeNull();
+    expect(dispatch('rx-7')).not.toBeNull();
   });
 
   it('does not offer TRANSMITTED in the editable status list', () => {

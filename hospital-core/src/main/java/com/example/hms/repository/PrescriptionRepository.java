@@ -3,13 +3,18 @@ package com.example.hms.repository;
 import java.util.Collection;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Prescription;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -62,6 +67,17 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     /** Pharmacist work queue: dispensable prescriptions at a hospital, ordered by creation date. */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
+
+    /**
+     * The prescription with its row locked, for a caller about to make an
+     * exclusive decision about it — SMS dispatch, which may hold at most one
+     * open offer at a time. Two concurrent dispatches would otherwise both read
+     * no open decision, supersede nothing, and leave two live offers that could
+     * each be accepted.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Prescription p where p.id = :id")
+    Optional<Prescription> findByIdForUpdate(@Param("id") UUID id);
 
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);

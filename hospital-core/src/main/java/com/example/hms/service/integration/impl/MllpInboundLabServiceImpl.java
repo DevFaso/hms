@@ -27,7 +27,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -60,7 +59,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * a no-op): when on, an observation the analyzer explicitly flagged
      * normal is released at once; when off (the default) it waits on
      * the lab worklist
-     * ({@code LabResultRepository.findByLabOrder_Hospital_IdAndReleasedFalse})
+     * ({@code LabResultRepository.findPendingReleaseHandledBy})
      * like every other unreleased row. Field-injected so the positional
      * constructor the tests use stays as it is.
      */
@@ -161,7 +160,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "specimen without hospital-scoped order");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
-            if (!Objects.equals(order.getHospital().getId(), hospitalId)) {
+            if (!order.isHandledBy(hospitalId)) {
                 // B13 — cross-tenant: the analyzer's allowlisted hospital
                 // does not own this order. Internally (log + integration
                 // message row) this is kept apart from "unknown accession"
@@ -170,6 +169,11 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 // as for an unknown placer. Answering AR here and AE there
                 // let any allowlisted sender probe whether an accession
                 // number exists in another hospital.
+                //
+                // B1: "own" means the ordering hospital OR the laboratory the
+                // order was routed to — the performing lab's analyser is a
+                // legitimate sender, and comparing on the ordering hospital
+                // alone meant an outsourced order could never be resulted.
                 log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
                     order.getHospital().getId(), hospitalId,
                     sendingApplication, sendingFacility, placer);
@@ -201,9 +205,10 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .testCode(trimToNull(observation.testCode(), 255))
                 .referenceRange(trimToNull(observation.referenceRange(), 255))
                 .build();
-            autoReleaseIfExplicitlyNormal(result, observation.abnormalFlag());
+            boolean finalOrCorrected = isFinalOrCorrected(observation.resultStatus());
+            autoReleaseIfExplicitlyNormal(result, observation.abnormalFlag(), finalOrCorrected);
             saved.add(labResultRepository.save(result));
-            if (isFinalOrCorrected(observation.resultStatus())) {
+            if (finalOrCorrected) {
                 advanceToResulted(order);
             }
         }
@@ -228,10 +233,14 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     /**
      * B14 — mirrors {@code LabResultServiceImpl.performAutoVerification}
-     * for analyzer results: only an observation the analyzer itself
-     * flagged normal (an explicit OBX-8 {@code N}) may be released
-     * without a person looking at it, and only when the hospital has
-     * switched auto-verification on. A blank OBX-8 is an UNGRADED value
+     * for analyzer results: only a FINAL or CORRECTED observation
+     * (OBX-11) that the analyzer itself flagged normal (an explicit
+     * OBX-8 {@code N}) may be released without a person looking at it,
+     * and only when the hospital has switched auto-verification on.
+     * Releasing a preliminary value would publish as final the very
+     * number the bench has not finished with — and the order stays
+     * pre-RESULTED for exactly that reason, so the two gates are the
+     * same gate. A blank OBX-8 is an UNGRADED value
      * (an analyzer with no on-instrument ranges sends K = 7.8 with no
      * flag at all) and an OBX-8 code this mapper does not know
      * ({@code W}, {@code R}, {@code S}, {@code I}, {@code U}, ...) is
@@ -240,8 +249,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * lands unreleased and waits on the worklist; the patient sees
      * "pending", never the value.
      */
-    private void autoReleaseIfExplicitlyNormal(LabResult result, String hl7Flag) {
-        if (!autoReleaseEnabled || result.isReleased() || !isExplicitlyNormal(hl7Flag)) {
+    private void autoReleaseIfExplicitlyNormal(LabResult result, String hl7Flag, boolean finalOrCorrected) {
+        if (!autoReleaseEnabled || result.isReleased() || !finalOrCorrected || !isExplicitlyNormal(hl7Flag)) {
             return;
         }
         result.setReleased(true);

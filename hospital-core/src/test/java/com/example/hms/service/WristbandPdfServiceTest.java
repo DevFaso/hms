@@ -196,6 +196,28 @@ class WristbandPdfServiceTest {
     }
 
     @Test
+    void specimenLabelPrintsForThePerformingLaboratory() throws Exception {
+        Hospital orderingHospital = new Hospital();
+        orderingHospital.setId(UUID.randomUUID());
+        LabOrder order = LabOrder.builder().hospital(orderingHospital).performingHospital(hospital).patient(patient).build();
+        order.setId(UUID.randomUUID());
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(order)
+            .accessionNumber("ACC-B1")
+            .barcodeValue("LAB-ACC-B1")
+            .specimenType("Blood")
+            .collectedAt(LocalDateTime.of(2026, 9, 22, 10, 15))
+            .build();
+        specimen.setId(UUID.randomUUID());
+        when(specimenRepository.findById(specimen.getId())).thenReturn(Optional.of(specimen));
+
+        byte[] pdf = service.generateSpecimenLabelPdf(specimen.getId(), hospitalId);
+
+        assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        assertThat(textOf(pdf)).contains("ACC-B1");
+    }
+
+    @Test
     void specimenLabelIs404ForAForeignHospital() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());

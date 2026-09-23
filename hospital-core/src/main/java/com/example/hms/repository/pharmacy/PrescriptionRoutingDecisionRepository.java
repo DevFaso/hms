@@ -6,9 +6,12 @@ import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,6 +21,9 @@ public interface PrescriptionRoutingDecisionRepository extends JpaRepository<Pre
     List<PrescriptionRoutingDecision> findByPrescriptionId(UUID prescriptionId);
 
     List<PrescriptionRoutingDecision> findByPrescriptionIdOrderByDecidedAtDesc(UUID prescriptionId);
+
+    /** Decisions of a page of prescriptions, newest first — the work queue's last-action lookup. */
+    List<PrescriptionRoutingDecision> findByPrescription_IdInOrderByDecidedAtDesc(List<UUID> prescriptionIds);
 
     List<PrescriptionRoutingDecision> findByDecidedForPatientIdOrderByDecidedAtDesc(UUID patientId);
 
@@ -29,7 +35,21 @@ public interface PrescriptionRoutingDecisionRepository extends JpaRepository<Pre
     List<PrescriptionRoutingDecision> findByRoutingTypeAndStatusAndDecidedAtBefore(
             RoutingType routingType, RoutingDecisionStatus status, LocalDateTime before);
 
-    /** T-55: lookup PENDING partner decisions by short-token prefix from inbound SMS replies. */
-    List<PrescriptionRoutingDecision> findByRoutingTypeAndStatus(
-            RoutingType routingType, RoutingDecisionStatus status);
+    /**
+     * G8: the open decisions whose id starts with the short SMS reference
+     * token (the first 8 hex characters of the UUID, lower-cased — see
+     * SmsPartnerNotificationChannel#buildRefToken). Matched in the database
+     * rather than by loading every pending decision repository-wide; the
+     * caller still binds the result to the replying pharmacy's number.
+     */
+    @Query("""
+            select d from PrescriptionRoutingDecision d
+            where d.routingType = :routingType
+              and d.status in :statuses
+              and lower(cast(d.id as string)) like concat(:idPrefix, '%')
+            """)
+    List<PrescriptionRoutingDecision> findOpenByIdPrefix(
+            @Param("routingType") RoutingType routingType,
+            @Param("statuses") Collection<RoutingDecisionStatus> statuses,
+            @Param("idPrefix") String idPrefix);
 }

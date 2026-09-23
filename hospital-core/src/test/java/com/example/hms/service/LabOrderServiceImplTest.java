@@ -83,6 +83,7 @@ class LabOrderServiceImplTest {
     private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
 
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
@@ -519,7 +520,7 @@ class LabOrderServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(orderingUserId);
         when(recordAccessPolicy.readableHospitalIds(orderingUserId, patientId, hospitalId))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
-        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, otherHospitalId)))
+        when(labOrderRepository.findByPatientIdReadableOrPerformedAt(patientId, Set.of(hospitalId, otherHospitalId), hospitalId))
             .thenReturn(List.of(local, foreign));
         when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
             .thenAnswer(inv -> LabOrderResponseDTO.builder().id(((LabOrder) inv.getArgument(0)).getId().toString()).build());

@@ -255,10 +255,14 @@ public class LabResult extends BaseEntity {
         }
 
         if (actorType == ActorType.USER) {
+            // B1: the author works at the ordering hospital or at the
+            // laboratory the order was sent to (LabOrder.performingHospital).
             if (assignment == null || assignment.getHospital() == null
-                || !Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())) {
+                || !(Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())
+                    || labOrder.isPerformedAt(assignment.getHospital().getId()))) {
                 throw new IllegalStateException(
-                    "LabResult.assignment.hospital must match LabResult.labOrder.hospital for USER writes");
+                    "LabResult.assignment.hospital must match LabResult.labOrder.hospital "
+                        + "or its performing hospital for USER writes");
             }
         } else {
             // SYSTEM writes (MLLP / external LIS): no human assignment is

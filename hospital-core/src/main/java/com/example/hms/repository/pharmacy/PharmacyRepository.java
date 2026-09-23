@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,4 +53,8 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
     Optional<Pharmacy> findByLicenseNumberAndHospital_Id(String licenseNumber, UUID hospitalId);
 
     List<Pharmacy> findByHospitalIdAndPharmacyTypeAndActiveTrue(UUID hospitalId, PharmacyType pharmacyType);
+
+    /** Active pharmacies of any of the given types (stock-out routing options, G2). */
+    List<Pharmacy> findByHospitalIdAndPharmacyTypeInAndActiveTrue(UUID hospitalId,
+                                                                   Collection<PharmacyType> pharmacyTypes);
 }

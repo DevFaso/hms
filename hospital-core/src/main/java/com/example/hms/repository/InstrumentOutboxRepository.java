@@ -16,13 +16,21 @@ public interface InstrumentOutboxRepository extends JpaRepository<InstrumentOutb
     List<InstrumentOutbox> findByLabOrder_Id(UUID labOrderId);
 
     /**
+     * Whether we have ever transmitted a message of this type for the order.
+     * Used to keep a release from sending an unsolicited ORU^R01 for a result
+     * that arrived FROM an analyzer and that we never announced.
+     */
+    boolean existsByLabOrder_IdAndMessageType(UUID labOrderId, String messageType);
+
+    /**
      * Monitor feed. The outbox row itself carries no hospital_id (V28 predates
      * the tenancy conventions), so scope is reached through the owning lab
      * order. {@code hospitalId} null = super-admin global view.
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT o FROM InstrumentOutbox o "
-        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId) "
+        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId "
+        + "OR o.labOrder.performingHospital.id = :hospitalId) "
         + "AND (:status IS NULL OR o.status = :status)")
     org.springframework.data.domain.Page<InstrumentOutbox> searchScoped(
         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
@@ -32,7 +40,8 @@ public interface InstrumentOutboxRepository extends JpaRepository<InstrumentOutb
     /** Queue-level counts per status for the monitor header, same scoping rule. */
     @org.springframework.data.jpa.repository.Query(
         "SELECT o.status, COUNT(o) FROM InstrumentOutbox o "
-        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId) "
+        + "WHERE (:hospitalId IS NULL OR o.labOrder.hospital.id = :hospitalId "
+        + "OR o.labOrder.performingHospital.id = :hospitalId) "
         + "GROUP BY o.status")
     List<Object[]> countByStatusScoped(
         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId);
