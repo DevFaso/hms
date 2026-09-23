@@ -107,8 +107,13 @@ public class CriticalValueNotificationService {
 
     /**
      * Notify the ordering provider when a freshly saved result is critical.
-     * Never propagates — a notification failure must not roll back the
-     * clinical write (same policy as PatientTrackerEventPublisher).
+     *
+     * <p>Propagates. It used to say the opposite, and that was false once the
+     * alert and its stamp joined the caller's transaction: a failure writing
+     * them marks that transaction rollback-only whatever is caught, so the
+     * only thing a catch achieved was to hide the cause and let the caller
+     * meet it again at commit. Callers that must not be rolled back by an
+     * alert failure have to make the alert independent, not silence it.
      */
     public void notifyIfCritical(LabResult result) {
         notifyIfCritical(result, null);

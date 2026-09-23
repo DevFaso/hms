@@ -140,6 +140,12 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         if (labOrder == null || labOrder.getId() == null) {
             return;
         }
+        // The lock first, as the result-entry path does. Reading the status
+        // unlocked and then compare-and-setting on it leaves a window: a
+        // concurrent move makes the update match nothing, and the only thing
+        // that happened was a debug line — the order stays short of where
+        // this specimen event should have put it, and nothing revisits it.
+        labOrderRepository.findWithLockById(labOrder.getId());
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
         LabOrderStatus moveTo = LabOrderLifecycle.statusAfterForwardStep(committedStatus, target);
         if (moveTo == null) {

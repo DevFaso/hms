@@ -16,6 +16,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationWebSocketController notificationWebSocketController;
@@ -79,8 +81,22 @@ public class NotificationServiceImpl implements NotificationService {
                 .read(false)
                 .build();
         Notification saved = notificationRepository.save(notification);
-        com.example.hms.utility.TransactionCallbacks.afterCommit(
-            () -> notificationWebSocketController.sendNotification(saved));
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            // Guarded, because after the commit there is nothing left to
+            // undo: the row is stored and whatever prompted it is on the
+            // chart. An exception escaping here propagates to whoever
+            // committed, so a broker hiccup would answer 500 for a result
+            // that was written — and with the interactive duplicate check
+            // deliberately retired, the clinician's retry then writes a
+            // second result. A missed push is a notification the recipient
+            // still finds in their list; a duplicated result is not
+            // recoverable that cheaply.
+            try {
+                notificationWebSocketController.sendNotification(saved);
+            } catch (RuntimeException ex) {
+                log.warn("Notification {} was stored but not pushed: {}", saved.getId(), ex.getMessage(), ex);
+            }
+        });
         return saved;
     }
 

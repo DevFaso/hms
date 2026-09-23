@@ -76,9 +76,17 @@ public class Hl7InboundController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         // The MSH line, for the replay guard. Parsed here because the
-        // observation records carry OBX/OBR only.
-        com.example.hms.hl7.mllp.Hl7MessageHeader header =
-            com.example.hms.hl7.mllp.Hl7MessageInspector.parseHeader(hl7Message);
+        // observation records carry OBX/OBR only — and defensively, because
+        // Hl7MessageInspector is written for the MLLP transport, where a
+        // malformed frame is answered with an AR rather than an HTTP status:
+        // it throws MllpProtocolException (which no @ExceptionHandler maps,
+        // so it would surface as a 500) for a body that does not start with
+        // MSH, and a StringIndexOutOfBoundsException for a body of exactly
+        // "MSH". Running it ahead of the parse guard therefore turned this
+        // endpoint's documented 400 into a 500. A body we cannot read an MSH
+        // from simply has no replay identity; the guard below still rejects
+        // it as unparseable, which is the 400 the contract promises.
+        com.example.hms.hl7.mllp.Hl7MessageHeader header = readHeaderOrNull(hl7Message);
         java.util.List<ParsedObservation> observations = hl7v2MessageBuilder.parseOruR01(hl7Message);
         if (observations == null || observations.isEmpty()) {
             throw new com.example.hms.exception.BusinessException(
@@ -93,11 +101,15 @@ public class Hl7InboundController {
             .labOrderId(labOrderId)
             .assignmentId(assignmentId)
             .patientId(resolvePatientId(obs.patientId()))
-            .testCode(obs.testCode())
+            // Truncated to the columns they land in, exactly as the MLLP
+            // path does with trimToNull(..., 255). Persisting them verbatim
+            // meant a long analyte code or facility name failed an ingest
+            // that worked before these fields were carried at all.
+            .testCode(trimToColumn(obs.testCode()))
             // MSH-3/4/10: what makes a retransmission recognisable as one.
-            .sourceSendingApplication(header.sendingApplication())
-            .sourceSendingFacility(header.sendingFacility())
-            .sourceMessageControlId(header.messageControlId())
+            .sourceSendingApplication(trimToColumn(header == null ? null : header.sendingApplication()))
+            .sourceSendingFacility(trimToColumn(header == null ? null : header.sendingFacility()))
+            .sourceMessageControlId(trimToColumn(header == null ? null : header.messageControlId()))
             .resultValue(obs.resultValue())
             .resultUnit(obs.resultUnit())
             .resultDate(obs.resultDate() != null ? obs.resultDate() : LocalDateTime.now())
@@ -106,6 +118,40 @@ public class Hl7InboundController {
 
         LabResultResponseDTO created = labResultService.createIngestedLabResult(dto, locale);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
+    }
+
+    /** The longest any of these source columns is. */
+    private static final int SOURCE_COLUMN_LENGTH = 255;
+
+    /**
+     * The MSH line, or null when this body has none.
+     *
+     * <p>{@code Hl7MessageInspector} belongs to the MLLP transport and
+     * signals a malformed frame by throwing; here a malformed body is just a
+     * body with no replay identity, and the parse guard that follows answers
+     * it with the documented 400.
+     */
+    private com.example.hms.hl7.mllp.Hl7MessageHeader readHeaderOrNull(String hl7Message) {
+        try {
+            return com.example.hms.hl7.mllp.Hl7MessageInspector.parseHeader(hl7Message);
+        } catch (RuntimeException notReadable) {
+            log.debug("Inbound HL7v2 body carries no readable MSH; no replay identity: {}",
+                notReadable.getMessage());
+            return null;
+        }
+    }
+
+    /** Trim to the column, as the MLLP path does; blank becomes null. */
+    private static String trimToColumn(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() <= SOURCE_COLUMN_LENGTH
+            ? trimmed : trimmed.substring(0, SOURCE_COLUMN_LENGTH);
     }
 
     /** HL7v2 PID may contain a UUID string or an MRN. Parse if it looks like a UUID. */

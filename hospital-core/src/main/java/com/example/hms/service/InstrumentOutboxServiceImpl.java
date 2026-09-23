@@ -110,7 +110,23 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         // Failing loudly means the caller sees the real error and retries the
         // whole clinical write, which is recoverable; a result on the chart
         // with no ORU behind it is not.
-        String payload = hl7v2MessageBuilder.buildOruR01(result);
+        // Building the message is pure formatting, and it dereferences the
+        // order's patient and test definition: a null one is an interface
+        // defect, not a reason to refuse the clinician's result. Uncontaining
+        // the SAVE is what the rollback-only argument justifies — a failed
+        // INSERT poisons this transaction whatever anyone catches — and that
+        // argument says nothing about the formatting, which fails on its own
+        // and leaves the transaction untouched. So the build is contained and
+        // the save is not: a formatting bug costs this one outbound message,
+        // logged loudly, instead of blocking every result entry on the order.
+        String payload;
+        try {
+            payload = hl7v2MessageBuilder.buildOruR01(result);
+        } catch (RuntimeException cannotFormat) {
+            log.error("ORU^R01 could not be built for result {}; the result stands, the message is not queued: {}",
+                result.getId(), cannotFormat.getMessage(), cannotFormat);
+            return;
+        }
         InstrumentOutbox message = InstrumentOutbox.builder()
             .labOrder(result.getLabOrder())
             .messageType(ORU_R01)
