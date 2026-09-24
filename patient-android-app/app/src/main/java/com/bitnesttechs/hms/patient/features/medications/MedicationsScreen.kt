@@ -148,8 +148,11 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // The backend allows ONE open request per prescription
                         // (PatientPortalServiceImpl.requestMedicationRefill).
                         // Until this change the button never rendered at all, so
-                        // that refusal was unreachable; now it has to be told
-                        // before the patient taps, not after a 400.
+                        // that refusal was unreachable; now it is told before the
+                        // patient taps rather than after a 400. A courtesy, not
+                        // the gate: this only sees the refills page the screen
+                        // loaded, so a very old open row can still fall off it
+                        // and the server refusal is what actually decides.
                         val openRefill = refills.any {
                             it.prescriptionId == rx.id && it.statusEnum.isOpen
                         }
@@ -432,10 +435,10 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
                 HorizontalDivider()
 
                 Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                rx.dosage?.let { MedDetailRow("Dosage", it) }
-                rx.frequency?.let { MedDetailRow("Frequency", it) }
-                rx.duration?.let { MedDetailRow("Duration", it) }
-                rx.route?.let { MedDetailRow("Route", it) }
+                rx.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
+                rx.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
+                rx.duration?.let { MedDetailRow(stringResource(R.string.duration), it) }
+                rx.route?.let { MedDetailRow(stringResource(R.string.route), it) }
                 HorizontalDivider()
 
                 Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)

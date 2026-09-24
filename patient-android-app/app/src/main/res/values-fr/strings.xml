@@ -661,4 +661,8 @@
     <string name="refill_requested">Renouvellement demandé</string>
     <string name="refill_request_failed">La demande de renouvellement n\'a pas pu être envoyée</string>
     <string name="refill_already_open">Une demande de renouvellement pour ce médicament est déjà en cours d\'examen</string>
+    <string name="lab_result_with_value">Résultat : %1$s</string>
+    <string name="status_label_colon">Statut :</string>
+    <string name="duration">Durée</string>
+    <string name="route">Voie d\'administration</string>
 </resources>

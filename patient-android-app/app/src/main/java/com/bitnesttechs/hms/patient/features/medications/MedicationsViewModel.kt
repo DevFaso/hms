@@ -72,15 +72,20 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     _outcome.value = Outcome(R.string.refill_requested)
                     load()
                 } else {
-                    // The server explains WHY it refused — "You already have a
-                    // refill request awaiting review for this medication", or
-                    // that the provider put it on hold. Throwing that away for a
-                    // flat "Failed to request refill" leaves the patient with no
-                    // idea what to do next.
-                    _outcome.value = Outcome(
-                        R.string.refill_request_failed,
-                        serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"
-                    )
+                    val detail = serverMessage(resp.errorBody()?.string())
+                    // Reload first: the usual refusal is "you already have one
+                    // open", and once the list is refreshed we can say that in
+                    // the patient's own language instead of pasting the
+                    // server's English sentence into a French snackbar.
+                    load()
+                    _outcome.value =
+                        if (refills.value.any { it.prescriptionId == prescriptionId && it.statusEnum.isOpen }) {
+                            Outcome(R.string.refill_already_open)
+                        } else {
+                            // Anything else: the server's own words are still
+                            // better than nothing, even untranslated.
+                            Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
+                        }
                 }
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_request_failed, e.message)

@@ -129,13 +129,9 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } else {
                                 lab.valueWithUnit?.let {
-                                    Row {
-                                        Text("${stringResource(R.string.result)}: ",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(it, style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Medium)
-                                    }
+                                    Text(stringResource(R.string.lab_result_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium)
                                 }
                                 lab.referenceRange?.let {
                                     Text(stringResource(R.string.lab_reference_with_value, it),
@@ -180,7 +176,7 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
             ) {
                 // Status
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${stringResource(R.string.status)}: ",
+                    Text(stringResource(R.string.status_label_colon) + " ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     StatusBadge(
@@ -216,26 +212,31 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     lab.valueWithUnit?.let { DetailRow(stringResource(R.string.lab_value), it) }
                     lab.referenceRange?.let { DetailRow(stringResource(R.string.reference_range), it) }
 
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        when {
-                            lab.isCritical -> {
-                                Icon(Icons.Default.Warning, null, tint = toneContent,
-                                    modifier = Modifier.size(16.dp))
-                                Text(stringResource(R.string.lab_interpretation_critical),
-                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
-                            }
-                            lab.isAbnormal -> {
-                                Icon(Icons.Default.Warning, null, tint = toneContent,
-                                    modifier = Modifier.size(16.dp))
-                                Text(stringResource(R.string.lab_interpretation_abnormal),
-                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
-                            }
-                            lab.isNormal -> {
-                                Icon(Icons.Default.CheckCircle, null, tint = toneContent,
-                                    modifier = Modifier.size(16.dp))
-                                Text(stringResource(R.string.lab_interpretation_normal),
-                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
+                    // Only when there IS an interpretation: a released row
+                    // whose status this build cannot name has none, and an
+                    // empty Row still costs a gap in the spacedBy column.
+                    if (lab.isCritical || lab.isAbnormal || lab.isNormal) {
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            when {
+                                lab.isCritical -> {
+                                    Icon(Icons.Default.Warning, null, tint = toneContent,
+                                        modifier = Modifier.size(16.dp))
+                                    Text(stringResource(R.string.lab_interpretation_critical),
+                                        style = MaterialTheme.typography.bodySmall, color = toneContent)
+                                }
+                                lab.isAbnormal -> {
+                                    Icon(Icons.Default.Warning, null, tint = toneContent,
+                                        modifier = Modifier.size(16.dp))
+                                    Text(stringResource(R.string.lab_interpretation_abnormal),
+                                        style = MaterialTheme.typography.bodySmall, color = toneContent)
+                                }
+                                lab.isNormal -> {
+                                    Icon(Icons.Default.CheckCircle, null, tint = toneContent,
+                                        modifier = Modifier.size(16.dp))
+                                    Text(stringResource(R.string.lab_interpretation_normal),
+                                        style = MaterialTheme.typography.bodySmall, color = toneContent)
+                                }
                             }
                         }
                     }

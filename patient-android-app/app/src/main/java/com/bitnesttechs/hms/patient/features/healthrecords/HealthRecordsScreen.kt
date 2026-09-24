@@ -261,7 +261,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
                 } else {
                     lab.valueWithUnit?.let { SecondaryText(it) }
                 }
-                lab.resultedAt?.let { SecondaryText(it.take(10)) }
+                (lab.resultedAt ?: lab.collectedAt)?.let { SecondaryText(it.take(10)) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }

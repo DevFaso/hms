@@ -661,4 +661,8 @@
     <string name="refill_requested">Refill requested</string>
     <string name="refill_request_failed">The refill request could not be sent</string>
     <string name="refill_already_open">A refill request for this medication is already with your care team</string>
+    <string name="lab_result_with_value">Result: %1$s</string>
+    <string name="status_label_colon">Status:</string>
+    <string name="duration">Duration</string>
+    <string name="route">Route</string>
 </resources>

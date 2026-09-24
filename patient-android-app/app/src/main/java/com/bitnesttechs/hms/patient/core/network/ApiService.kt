@@ -156,8 +156,10 @@ interface ApiService {
     ): Response<ApiResponse<RefillDto>>
 
     // Newest first: the prescriptions tab decides whether to offer a refill
-    // from the rows on THIS page, and an open REQUESTED/PAUSED row outside an
-    // unsorted page would put the button back on screen.
+    // from the rows on THIS page. Sorting makes a miss unlikely rather than
+    // impossible — an old never-actioned PAUSED row on a patient with more
+    // than `size` lifetime refills still falls off it — so the on-page check
+    // is a courtesy and the server refusal remains the gate.
     @GET("me/patient/refills")
     suspend fun getRefills(
         @Query("page") page: Int = 0,
