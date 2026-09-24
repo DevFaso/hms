@@ -5683,7 +5683,8 @@
       "DETAILS": "Detalles",
       "RESTOCK_ETA": "Reposición prevista el {{date}}",
       "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
-      "ERROR": "No se pudo cargar el historial de dispensación."
+      "ERROR": "No se pudo cargar el historial de dispensación.",
+      "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación."
     }
   },
   "PROFILE": {

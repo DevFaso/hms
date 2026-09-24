@@ -5683,7 +5683,8 @@
       "DETAILS": "Details",
       "RESTOCK_ETA": "Restock expected {{date}}",
       "EMPTY": "No fill and no routing recorded for this prescription yet.",
-      "ERROR": "The dispensing history could not be loaded."
+      "ERROR": "The dispensing history could not be loaded.",
+      "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history."
     }
   },
   "PROFILE": {

@@ -13,26 +13,30 @@
       </button>
     </div>
   </div>
+  <!-- Every card counts a TAB, not a status. Counting DRAFT, SIGNED and
+       CANCELLED was fine while nothing else was on screen; beside the tab
+       counts this change introduced, "Draft 3" would have sat next to a
+       "Drafts 4" tab that also holds PENDING_SIGNATURE. -->
   <div class="summary-cards">
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon active">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('DRAFT') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.DRAFT' | translate }}</span>
+        <span class="card-value" data-testid="rx-draft-count">{{ countInTab('draft') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.DRAFT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('SIGNED') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.SIGNED' | translate }}</span>
+        <span class="card-value">{{ countInTab('inPharmacy') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.IN_PHARMACY' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('CANCELLED') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.CANCELLED' | translate }}</span>
+        <span class="card-value">{{ countInTab('closed') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.CLOSED' | translate }}</span>
       </div>
     </div>
     <!-- The count that answers "is anything waiting on ME?" (gap G10). The
@@ -469,10 +473,14 @@
                client. The panel is absent — not empty, not erroring — for the
                roles the route admits but the endpoints do not (NURSE, MIDWIFE,
                ADMIN), so nobody is shown a 403 they did not ask for. -->
-          @if (canReadPharmacyHistory() && hasPharmacyHistory(rx)) {
+          @if ((canReadPharmacyHistory() || historyNeedsScope()) && hasPharmacyHistory(rx)) {
             <div class="detail-notes" data-testid="rx-pharmacy-history">
               <span class="field-label">{{ 'PRESCRIPTIONS.HISTORY.SECTION' | translate }}</span>
-              @if (historyLoading()) {
+              @if (historyNeedsScope()) {
+                <p class="muted" data-testid="rx-history-scope">
+                  {{ 'PRESCRIPTIONS.HISTORY.SCOPE_REQUIRED' | translate }}
+                </p>
+              } @else if (historyLoading()) {
                 <div class="loading-state" data-testid="rx-history-loading">
                   <div class="spinner"></div>
                   <p>{{ 'COMMON.LOADING' | translate }}</p>

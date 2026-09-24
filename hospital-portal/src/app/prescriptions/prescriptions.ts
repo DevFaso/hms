@@ -702,12 +702,25 @@ export class PrescriptionsComponent implements OnInit {
   ];
 
   /**
+   * A super-admin in GLOBAL view has no hospital scope, and both history
+   * services start with `roleValidator.requireActiveHospitalId()`, which
+   * returns **null** for exactly that caller and is then dereferenced
+   * (`hospitalId.equals(prescription.getHospital().getId())`) — two 500s and
+   * an error box on a page that is explicitly cross-tenant. Reported to the
+   * coordinator as a backend defect; this is the client half, which declines
+   * to fire the calls and says why instead.
+   */
+  protected readonly historyNeedsScope = computed(() => this.isSuperAdmin() && this.globalView());
+
+  /**
    * Read live off the role signal rather than captured at construction: the
    * active role set changes under a hospital-scope switch, and a panel gated
    * on a constructor snapshot keeps the answer it was born with.
    */
-  protected readonly canReadPharmacyHistory = computed(() =>
-    this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES),
+  protected readonly canReadPharmacyHistory = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES) &&
+      !this.historyNeedsScope(),
   );
 
   dispenseHistory = signal<DispenseResponse[]>([]);
@@ -776,20 +789,30 @@ export class PrescriptionsComponent implements OnInit {
    * have gone on claiming 20 tablets were owed.
    *
    * <p>Two guards, because the server's number is a snapshot, not a live
-   * balance: a terminal status means nothing is owed whatever the last routing
-   * said, and a fill recorded AFTER the decision makes its remainder stale.
-   * In both cases this returns null and the row is simply absent — the
+   * balance. The first is the tab bucket rather than a list of status names:
+   * everything under `dispensed` or `closed` is finished with the hospital,
+   * and `printForPatient` writes a `remainingQuantity` on its PRINT decision
+   * and creates no dispense row at all — so a printed prescription would have
+   * gone on claiming a remainder forever, with no fill able to clear it.
+   * The second is a LIVE fill recorded after the decision, which makes the
+   * decision's remainder stale; a cancelled fill is skipped, because the
+   * backend excludes it from the dispensed total too, and letting one hide a
+   * real remainder is the opposite of the caution this comment argues for.
+   *
+   * <p>In both cases this returns null and the row is simply absent — the
    * per-fill "dispensed / requested" column below still shows what happened.
    * A prescription-level remainder needs `quantity` and `refillsUsed` on
    * PrescriptionResponseDTO, which it does not carry.
    */
   readonly outstandingQuantity = computed<number | null>(() => {
     const rx = this.selectedPrescription();
-    if (!rx || rx.status === 'DISPENSED' || rx.status === 'PARTNER_DISPENSED') return null;
+    if (!rx) return null;
+    const bucket = this.tabForStatus(rx.status);
+    if (bucket === 'dispensed' || bucket === 'closed') return null;
     const decision = this.routingHistory()[0];
     const remaining = decision?.remainingQuantity;
     if (remaining == null || remaining <= 0) return null;
-    const fill = this.dispenseHistory()[0];
+    const fill = this.dispenseHistory().find((d) => d.status !== 'CANCELLED');
     if (
       fill &&
       eventTime(fill.dispensedAt, fill.createdAt) >
@@ -994,10 +1017,6 @@ export class PrescriptionsComponent implements OnInit {
       default:
         return '';
     }
-  }
-
-  countByStatus(status: string): number {
-    return this.prescriptions().filter((p) => p.status === status).length;
   }
 }
 

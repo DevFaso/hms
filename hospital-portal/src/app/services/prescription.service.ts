@@ -104,10 +104,14 @@ export interface PrescriptionResponse {
  * Every value `com.example.hms.enums.PrescriptionStatus` can send, in its
  * declaration order.
  *
- * The prescriber's tab map is asserted exhaustive against this list, so a
- * status added to the backend without a tab fails a spec instead of quietly
- * dropping the prescription out of every list its prescriber looks at — which
- * is precisely what gap G10 was.
+ * <p>This is a HAND-MAINTAINED copy — nothing in the portal build reads the
+ * Java enum — so a status added to the backend does not on its own fail a spec
+ * here: the exhaustiveness spec iterates this list, which would not yet know
+ * about it. Two things do catch it. `npm run i18n:enums` reads
+ * `PrescriptionStatus.java` and fails on a constant with no
+ * `PORTAL.ENUM.PRESCRIPTION_STATUS` key, and `tabForStatus` files an unmapped
+ * value under "Needs attention" rather than out of every tab. Keying the new
+ * status is what brings it here; the spec then holds the partition.
  */
 export const PRESCRIPTION_STATUSES: readonly string[] = [
   'DRAFT',

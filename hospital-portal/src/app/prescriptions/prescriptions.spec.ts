@@ -629,6 +629,8 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
   interface SetupOptions {
     list?: PrescriptionResponse[];
     roles?: string[];
+    superAdmin?: boolean;
+    globalView?: boolean;
     dispenses?: Observable<ApiResponse<Page<DispenseResponse>>>;
     routings?: Observable<ApiResponse<Page<RoutingDecisionResponse>>>;
   }
@@ -688,9 +690,9 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
         {
           provide: RoleContextService,
           useValue: {
-            isSuperAdmin: signal(false),
-            globalView: signal(false),
-            activeHospitalId: 'h-1',
+            isSuperAdmin: signal(opts.superAdmin ?? false),
+            globalView: signal(opts.globalView ?? false),
+            activeHospitalId: opts.globalView ? null : 'h-1',
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
           },
         },
@@ -1079,6 +1081,114 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     expect(pharmacyService.listDispensesByPrescription).not.toHaveBeenCalled();
     expect(el('[data-testid="rx-pharmacy-history"]')).toBeNull();
+  });
+
+  it('declines to load the history in global view, and says why', async () => {
+    // Both services open with roleValidator.requireActiveHospitalId(), which
+    // returns NULL for a super-admin in global view and is then dereferenced
+    // — two 500s on a page that is explicitly cross-tenant.
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      roles: ['ROLE_SUPER_ADMIN'],
+      superAdmin: true,
+      globalView: true,
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(pharmacyService.listDispensesByPrescription).not.toHaveBeenCalled();
+    expect(pharmacyService.listRoutingDecisionsByPrescription).not.toHaveBeenCalled();
+    expect(el('[data-testid="rx-history-scope"]')).not.toBeNull();
+    expect(el('[data-testid="rx-history-error"]')).toBeNull();
+    expect(el('[data-testid="rx-history-empty"]')).toBeNull();
+  });
+
+  it('loads the history for a super-admin who has picked a hospital', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      roles: ['ROLE_SUPER_ADMIN'],
+      superAdmin: true,
+      globalView: false,
+      dispenses: of(page([makeDispense()])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-history-scope"]')).toBeNull();
+    expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
+  });
+
+  it('claims no remainder on a prescription printed for the patient to take away', async () => {
+    // printForPatient writes remainingQuantity on its PRINT decision and
+    // creates no dispense row at all, so nothing could ever clear it: the
+    // guard is the tab bucket, not a pair of status names.
+    const rx = makeRx({ status: 'PRINTED_FOR_PATIENT' });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ routingType: 'PRINT', remainingQuantity: 30 })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBeNull();
+    expect(el('[data-testid="rx-outstanding-quantity"]')).toBeNull();
+  });
+
+  it('claims no remainder on a prescription the prescriber has cancelled', async () => {
+    const rx = makeRx({ status: 'CANCELLED' });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ routingType: 'BACKORDER', remainingQuantity: 30 })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBeNull();
+  });
+
+  it('does not let a CANCELLED fill hide a remainder that is still owed', async () => {
+    // A cancelled dispense is reversed: the backend leaves the row in the
+    // list but excludes it from the dispensed total, so it cannot make the
+    // routing decision's remainder stale either.
+    const rx = makeRx({ status: 'PENDING_STOCK' });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([makeRouting({ remainingQuantity: 30, decidedAt: '2026-09-04T08:00:00' })]),
+      ),
+      dispenses: of(
+        page([
+          makeDispense({
+            id: 'd-cancelled',
+            status: 'CANCELLED',
+            dispensedAt: '2026-09-06T08:00:00',
+          }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(30);
+  });
+
+  it('counts the same thing in the summary card as in the tab beside it', async () => {
+    await setup({
+      list: [
+        makeRx({ id: 'a', status: 'DRAFT' }),
+        makeRx({ id: 'b', status: 'PENDING_SIGNATURE' }),
+      ],
+    });
+
+    expect(el('[data-testid="rx-draft-count"]')!.textContent!.trim()).toBe('2');
+    expect(el('[data-testid="rx-tab-draft"]')!.textContent).toContain('2');
   });
 
   it('drops the previous prescription history when the panel closes', async () => {
