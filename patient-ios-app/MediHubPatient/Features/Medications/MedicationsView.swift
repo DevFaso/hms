@@ -587,6 +587,18 @@ final class MedicationsViewModel: ObservableObject {
             // endpoint actually raises in the patient's own language, keeping
             // the server's words for anything else.
             let serverMessage = error.localizedDescription
+            // Only a 400 is the business refusal the two explainers below are
+            // about. A 401 with a stale `refillRequestOpen` would otherwise
+            // tell the patient their request is "already with your care team"
+            // and give them no reason to sign in again.
+            // `error` is an existential, so an enum-case pattern needs the
+            // cast first.
+            guard let apiError = error as? APIError,
+                  case let .httpError(statusCode, _) = apiError,
+                  statusCode == 400 else {
+                await load()
+                return serverMessage
+            }
             // The refusal itself is reported inline by the sheet below; any
             // error `load()` raises here is a different fact — the lists are
             // stale — and is left to stand.
