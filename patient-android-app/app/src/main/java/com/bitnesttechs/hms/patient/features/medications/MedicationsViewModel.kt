@@ -6,6 +6,7 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,8 +27,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
 
     init { load() }
 
-    fun load() {
-        viewModelScope.launch {
+    /**
+     * Returns the Job: a caller that has to READ the refreshed lists — the
+     * refill-refusal branch below — must join it, because
+     * `viewModelScope.launch` returns at the first suspension point and the
+     * flows still hold the pre-request values.
+     */
+    fun load(): Job {
+        return viewModelScope.launch {
             isLoading.value = true
             try {
                 val m = async { api.getMedications().body()?.data ?: emptyList() }
@@ -73,11 +80,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     load()
                 } else {
                     val detail = serverMessage(resp.errorBody()?.string())
-                    // Reload first: the usual refusal is "you already have one
-                    // open", and once the list is refreshed we can say that in
-                    // the patient's own language instead of pasting the
-                    // server's English sentence into a French snackbar.
-                    load()
+                    // Reload and WAIT for it: the usual refusal is "you already
+                    // have one open", and the button only renders while the
+                    // loaded list shows none — so the decision below has to be
+                    // made against the refreshed list, not the one that let the
+                    // button render. Without the join this branch could never
+                    // be taken, and the server's English sentence went straight
+                    // into a French snackbar.
+                    load().join()
                     _outcome.value =
                         if (refills.value.any { it.prescriptionId == prescriptionId && it.statusEnum.isOpen }) {
                             Outcome(R.string.refill_already_open)

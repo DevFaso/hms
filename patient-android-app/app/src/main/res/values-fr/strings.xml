@@ -650,7 +650,7 @@
     <string name="rx_pharmacy_with_value">Pharmacie : %1$s</string>
     <!-- G16 - statuts des demandes de renouvellement (com.example.hms.enums.RefillStatus) -->
     <string name="refill_status_requested">Demandé</string>
-    <string name="refill_status_paused">En attente</string>
+    <string name="refill_status_paused">Mis en attente</string>
     <string name="refill_status_approved">Approuvé</string>
     <string name="refill_status_denied">Refusé</string>
     <string name="refill_status_dispensed">Délivré</string>

@@ -122,7 +122,7 @@ class StatusLabelResourcesTest {
             ),
             expectedFrench = mapOf(
                 RefillStatus.REQUESTED to "Demandé",
-                RefillStatus.PAUSED to "En attente",
+                RefillStatus.PAUSED to "Mis en attente",
                 RefillStatus.APPROVED to "Approuvé",
                 RefillStatus.DENIED to "Refusé",
                 RefillStatus.DISPENSED to "Délivré",
