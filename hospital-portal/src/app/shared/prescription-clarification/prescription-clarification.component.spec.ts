@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { PrescriptionClarificationComponent } from './prescription-clarification.component';
 import { RoleContextService } from '../../core/role-context.service';
@@ -298,16 +298,93 @@ describe('PrescriptionClarificationComponent', () => {
     );
   });
 
-  it('closes on Escape', () => {
+  it('closes on Escape from the dialog, which is where focus lands', () => {
     create(['ROLE_PHARMACIST'], { mode: 'PHARMACY' });
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
 
-    el('rx-clarification-modal-rx-1')!.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape' }),
-    );
+    const dialog = el('rx-clarification-dialog-rx-1')!;
+    // The effect focuses the dialog as it opens, so the key event a real
+    // user generates is delivered here and not to the trigger button.
+    expect(document.activeElement).toBe(dialog);
+
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
 
     expect(el('rx-clarification-modal-rx-1')).toBeNull();
+  });
+
+  it('names the dialog for assistive technology, uniquely per row', () => {
+    create(['ROLE_PHARMACIST'], { mode: 'PHARMACY', prescriptionId: 'rx-9' });
+    el('rx-clarification-open-rx-9')!.click();
+    fixture.detectChanges();
+
+    const dialog = el('rx-clarification-dialog-rx-9')!;
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    expect(labelledBy).toBe('rx-clarify-title-rx-9');
+    expect(dialog.querySelector('#' + labelledBy)).not.toBeNull();
+  });
+
+  /* ── The answer must stay reachable when the flag is masked ────────── */
+
+  it('reads the exchange on every pharmacy open, not only on the resolved flag', () => {
+    // The backend resolves ONE attentionReason by precedence, so a question
+    // raised on a back-ordered row comes back flagged PENDING_STOCK and the
+    // prescriber's answer would otherwise be unreachable from the queue.
+    prescriptions.getById.and.returnValue(
+      of({
+        clarificationReason: 'Confirm the strength.',
+        clarificationResponse: 'Strength confirmed at 500 mg.',
+      } as PrescriptionResponse),
+    );
+    create(['ROLE_PHARMACIST'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(prescriptions.getById).toHaveBeenCalledWith('rx-1');
+    expect(el('rx-clarification-exchange')!.textContent).toContain('Strength confirmed at 500 mg.');
+  });
+
+  it('shows no exchange section on a prescription that never had one', () => {
+    prescriptions.getById.and.returnValue(of({} as PrescriptionResponse));
+    create(['ROLE_PHARMACIST'], { mode: 'PHARMACY' });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(el('rx-clarification-exchange')).toBeNull();
+  });
+
+  /* ── A dismissal must not discard an in-flight refusal ─────────────── */
+
+  it('refuses to close while the post is in flight', () => {
+    const pending = new Subject<PrescriptionResponse>();
+    prescriptions.requestClarification.and.returnValue(pending.asObservable());
+    create(['ROLE_PHARMACIST'], { mode: 'PHARMACY' });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    const textarea = el('rx-clarification-text-rx-1') as HTMLTextAreaElement;
+    textarea.value = 'Confirm the strength.';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el('rx-clarification-submit-rx-1')!.click();
+    fixture.detectChanges();
+
+    // Backdrop click mid-flight: ignored, or the server's refusal would land
+    // on a dialog nobody is looking at and be cleared on the next open.
+    el('rx-clarification-modal-rx-1')!.click();
+    fixture.detectChanges();
+    expect(el('rx-clarification-modal-rx-1')).not.toBeNull();
+
+    pending.error({ error: { message: 'This prescription is not awaiting a fill.' } });
+    fixture.detectChanges();
+
+    expect(el('rx-clarification-error')!.textContent).toContain(
+      'This prescription is not awaiting a fill.',
+    );
   });
 });

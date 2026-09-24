@@ -5533,7 +5533,7 @@
       "ANSWER_HINT": "Al enviar su respuesta, la receta vuelve a la cola de trabajo de farmacia con el estado que tenía antes de la pregunta.",
       "ANSWER_INPUT_LABEL": "Su respuesta (opcional)",
       "ANSWER_LABEL": "Respuesta del prescriptor",
-      "ANSWER_NOT_VISIBLE": "El prescriptor ha respondido. Leer el intercambio requiere una cuenta de farmacéutico: su rol puede dispensar pero no abrir el expediente de la receta.",
+      "ANSWER_NOT_VISIBLE": "El prescriptor ha respondido. Su rol actual no puede abrir el expediente de la receta, por lo que el intercambio no se muestra aquí.",
       "ANSWER_PLACEHOLDER": "Responda al farmacéutico, o déjelo vacío si ya corrigió la receta.",
       "ASK": "Consultar al prescriptor",
       "ASKED_LABEL": "Preguntada el",

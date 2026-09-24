@@ -5533,7 +5533,7 @@
       "ANSWER_HINT": "Sending your answer returns the prescription to the pharmacy work queue with the status it had before the question.",
       "ANSWER_INPUT_LABEL": "Your answer (optional)",
       "ANSWER_LABEL": "Prescriber's answer",
-      "ANSWER_NOT_VISIBLE": "The prescriber has answered. Reading the exchange needs a pharmacist account — your role can dispense but cannot open the prescription record.",
+      "ANSWER_NOT_VISIBLE": "The prescriber has answered. Your current role cannot open the prescription record, so the exchange is not shown here.",
       "ANSWER_PLACEHOLDER": "Answer the pharmacist, or leave this empty if you corrected the prescription itself.",
       "ASK": "Ask the prescriber",
       "ASKED_LABEL": "Asked",

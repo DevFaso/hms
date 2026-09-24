@@ -1,11 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
+  effect,
   inject,
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -125,6 +128,22 @@ export class PrescriptionClarificationComponent {
   /** Bound to the single textarea; its meaning depends on {@link mode}. */
   protected text = '';
 
+  private readonly dialog = viewChild<ElementRef<HTMLElement>>('dialog');
+  private readonly trigger = viewChild<ElementRef<HTMLButtonElement>>('trigger');
+
+  constructor() {
+    // Focus the dialog as it opens: without it, Escape is delivered to the
+    // trigger button (which sits outside the backdrop subtree) and the key
+    // handler on the dialog never runs, and a screen-reader user is left
+    // outside the thing that just appeared.
+    effect(() => {
+      const host = this.dialog();
+      if (this.open() && host) {
+        host.nativeElement.focus();
+      }
+    });
+  }
+
   protected readonly isPharmacy = computed(() => this.mode() === 'PHARMACY');
 
   /** True once the prescriber has answered and the row is back on the queue. */
@@ -171,19 +190,52 @@ export class PrescriptionClarificationComponent {
       : 'PRESCRIPTIONS.CLARIFICATION.ASK';
   });
 
+  /** Per-instance so `aria-labelledby` is unique across a page of rows. */
+  protected readonly titleId = computed(() => `rx-clarify-title-${this.prescriptionId()}`);
+
+  /** There is an exchange on screen, or a reason there is not. */
+  protected readonly showExchange = computed(
+    () =>
+      this.isPharmacy() &&
+      (this.loadingExchange() ||
+        this.exchangeError() ||
+        !!this.fetchedQuestion() ||
+        !!this.fetchedAnswer()),
+  );
+
   protected openDialog(): void {
     this.text = '';
     this.submitError.set(null);
     this.open.set(true);
-    if (this.hasAnswer()) {
+    // Always, not only when the row is flagged CLARIFICATION_RESOLVED. The
+    // backend resolves ONE attentionReason by precedence (status first, then
+    // an outstanding back order, then the clarification), and
+    // resolveClarification restores the PREVIOUS status — so a question
+    // raised on a PENDING_STOCK or PARTNER_REJECTED order comes back
+    // flagged with that status and the answer would be unreachable from the
+    // queue. Fetching on open costs one request and removes the dead end.
+    if (this.isPharmacy()) {
       this.loadExchange();
     }
+  }
+
+  /**
+   * Closing is refused while a post is in flight: the refusal lands on
+   * `submitError` inside this dialog, and dismissing it mid-flight would
+   * discard both the message and the text the user typed.
+   */
+  protected requestClose(): void {
+    if (this.submitting()) return;
+    this.close();
   }
 
   protected close(): void {
     this.open.set(false);
     this.text = '';
     this.submitError.set(null);
+    this.exchangeError.set(false);
+    // Focus goes back where it came from, not to the top of the document.
+    this.trigger()?.nativeElement.focus();
   }
 
   /**

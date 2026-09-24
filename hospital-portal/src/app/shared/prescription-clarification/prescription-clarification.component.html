@@ -1,5 +1,6 @@
 @if (visible()) {
   <button
+    #trigger
     type="button"
     class="action-link clarify-link"
     [class.clarify-link--answered]="hasAnswer()"
@@ -18,20 +19,23 @@
   <div
     class="modal-backdrop"
     tabindex="-1"
-    (click)="close()"
-    (keydown.escape)="close()"
+    (click)="requestClose()"
+    (keydown.escape)="requestClose()"
     [attr.data-testid]="'rx-clarification-modal-' + prescriptionId()"
   >
     <div
+      #dialog
       class="modal clarify-modal"
       role="dialog"
       aria-modal="true"
+      [attr.aria-labelledby]="titleId()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="requestClose()"
+      [attr.data-testid]="'rx-clarification-dialog-' + prescriptionId()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 [id]="titleId()">
           {{
             (isPharmacy()
               ? 'PRESCRIPTIONS.CLARIFICATION.TITLE_REQUEST'
@@ -42,7 +46,8 @@
         <button
           type="button"
           class="modal-close"
-          (click)="close()"
+          [disabled]="submitting()"
+          (click)="requestClose()"
           [title]="'COMMON.CLOSE' | translate"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
@@ -58,15 +63,18 @@
           </p>
         }
 
-        <!-- ── The prescriber's answer, pharmacy side ─────────────────────
-             The work-queue projection carries only the attention flag, so
-             the words come from the prescription record. -->
-        @if (hasAnswer()) {
-          @if (!canReadExchange()) {
-            <p class="clarify-note" [attr.data-testid]="'rx-clarification-unreadable'">
-              {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}
-            </p>
-          } @else if (loadingExchange()) {
+        <!-- ── The exchange so far, pharmacy side ─────────────────────────
+             The work-queue projection carries only an attention flag, and
+             that flag is masked whenever the row also has a status or a
+             back order to report, so the words are fetched from the
+             prescription record every time the dialog opens. -->
+        @if (hasAnswer() && !canReadExchange()) {
+          <p class="clarify-note" data-testid="rx-clarification-unreadable">
+            {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}
+          </p>
+        }
+        @if (showExchange()) {
+          @if (loadingExchange()) {
             <p class="clarify-note" role="status" data-testid="rx-clarification-loading">
               {{ 'PRESCRIPTIONS.CLARIFICATION.LOADING_EXCHANGE' | translate }}
             </p>
@@ -173,7 +181,12 @@
       </div>
 
       <div class="modal-actions">
-        <button type="button" class="btn-secondary" [disabled]="submitting()" (click)="close()">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="submitting()"
+          (click)="requestClose()"
+        >
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button

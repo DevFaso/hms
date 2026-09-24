@@ -113,7 +113,13 @@ export class PrescriptionService {
     staffId?: string;
     hospitalId?: string;
   }): Observable<PrescriptionResponse[]> {
-    let params = new HttpParams();
+    // Most-recently-touched first. The endpoint takes a Pageable and applied
+    // no sort at all, so the default page of 20 was an arbitrary slice of the
+    // hospital's prescriptions: a prescriber could be told by the clinical
+    // inbox that N orders await clarification and never find one of them on
+    // this page. Any write — signing, a pharmacist's question, the answer —
+    // bumps `updatedAt`, so the rows that need attention are on page one.
+    let params = new HttpParams().set('sort', 'updatedAt,desc');
     if (filters) {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);

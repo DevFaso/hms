@@ -5533,7 +5533,7 @@
       "ANSWER_HINT": "L'envoi de votre réponse renvoie l'ordonnance dans la file de travail de la pharmacie avec le statut qu'elle avait avant la question.",
       "ANSWER_INPUT_LABEL": "Votre réponse (facultative)",
       "ANSWER_LABEL": "Réponse du prescripteur",
-      "ANSWER_NOT_VISIBLE": "Le prescripteur a répondu. La lecture de l'échange nécessite un compte pharmacien : votre rôle peut délivrer mais ne peut pas ouvrir le dossier de l'ordonnance.",
+      "ANSWER_NOT_VISIBLE": "Le prescripteur a répondu. Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : l'échange n'est donc pas affiché ici.",
       "ANSWER_PLACEHOLDER": "Répondez au pharmacien, ou laissez vide si vous avez corrigé l'ordonnance elle-même.",
       "ASK": "Interroger le prescripteur",
       "ASKED_LABEL": "Posée le",
