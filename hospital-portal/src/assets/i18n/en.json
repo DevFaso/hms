@@ -6979,7 +6979,7 @@
     "labResultsEmpty": "No released lab results to review.",
     "labResultsError": "The lab result review queue could not be loaded.",
     "labResultsRefresh": "Refresh lab results",
-    "labResultsScopeHint": "Orders placed under your earliest staff record. Orders you placed at another hospital may be missing from this list.",
+    "labResultsScopeHint": "Orders placed under your earliest staff record. Orders you placed at another hospital may be missing, and a patient opens in your current hospital scope.",
     "labResultsSubtitle": "Released results on the orders you placed.",
     "labTruncated": "Showing {{shown}} of {{total}}, most urgent first.",
     "labUnknown": "Unknown",

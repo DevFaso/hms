@@ -250,6 +250,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resultQueue = signal<DoctorResultQueueItem[]>([]);
   /** The review-queue read failed; the panel says so instead of "all reviewed". */
   resultQueueError = signal(false);
+  /** A read is in flight; the panel shows a spinner, not an empty state. */
+  resultQueueLoading = signal(false);
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
   specialization = signal<string | null>(null);
@@ -2559,14 +2561,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   loadResultReviewQueue(done?: () => void): void {
     this.resultQueueError.set(false);
+    // Set BEFORE the request: clearing the error while `resultQueue` is still
+    // empty otherwise drew "all results reviewed" for the whole request
+    // window, on the first load and again on every Retry.
+    this.resultQueueLoading.set(true);
     this.dashboardService.getResultReviewQueue().subscribe({
       next: (items) => {
         this.resultQueue.set(items);
+        this.resultQueueLoading.set(false);
         done?.();
       },
       error: () => {
         this.resultQueue.set([]);
         this.resultQueueError.set(true);
+        this.resultQueueLoading.set(false);
         done?.();
       },
     });

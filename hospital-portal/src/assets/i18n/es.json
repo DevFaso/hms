@@ -6979,7 +6979,7 @@
     "labResultsEmpty": "No hay resultados de laboratorio publicados para revisar.",
     "labResultsError": "No se pudo cargar la lista de resultados de laboratorio.",
     "labResultsRefresh": "Actualizar los resultados de laboratorio",
-    "labResultsScopeHint": "Pruebas solicitadas con su primer registro de personal. Las pruebas que usted solicitó en otro hospital pueden faltar en esta lista.",
+    "labResultsScopeHint": "Pruebas solicitadas con su primer registro de personal. Las pruebas que usted solicitó en otro hospital pueden faltar, y un paciente se abre en su ámbito hospitalario actual.",
     "labResultsSubtitle": "Resultados publicados de las pruebas que usted solicitó.",
     "labTruncated": "Mostrando {{shown}} de {{total}}, los más urgentes primero.",
     "labUnknown": "Desconocido",

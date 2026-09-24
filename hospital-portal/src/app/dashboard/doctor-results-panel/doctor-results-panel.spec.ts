@@ -67,6 +67,19 @@ describe('DoctorResultsPanelComponent', () => {
     expect(emitted).toHaveBeenCalled();
   });
 
+  it('shows a spinner rather than "all reviewed" while a read is in flight', () => {
+    // Retry clears the error while `results` is still empty, so without this
+    // the panel flipped to the green empty card for the whole request window.
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.rp-loading')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+  });
+
   it('renders the rows when there is no error', () => {
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);

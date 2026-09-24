@@ -31,6 +31,15 @@ export class DoctorResultsPanelComponent {
    * at, so it needs the explicit state too, not just an empty list.
    */
   loadError = input(false);
+  /**
+   * A read is in flight.
+   *
+   * Without it, Retry cleared the error and left an empty `results` behind,
+   * so the panel flipped to the green "all results reviewed" card for the
+   * whole request window — the very rendering this state exists to prevent.
+   * The same window opened on the first load of the page.
+   */
+  loading = input(false);
   patientSelected = output<string>();
   resultAcknowledged = output<string>();
   reloadRequested = output<void>();

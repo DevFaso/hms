@@ -6979,7 +6979,7 @@
     "labResultsEmpty": "Aucun résultat de laboratoire publié à examiner.",
     "labResultsError": "Impossible de charger la file des résultats de laboratoire.",
     "labResultsRefresh": "Actualiser les résultats de laboratoire",
-    "labResultsScopeHint": "Examens prescrits sous votre première fiche de personnel. Les examens que vous avez prescrits dans un autre hôpital peuvent manquer dans cette liste.",
+    "labResultsScopeHint": "Examens prescrits sous votre première fiche de personnel. Les examens que vous avez prescrits dans un autre hôpital peuvent manquer, et un patient s'ouvre dans votre périmètre hospitalier actuel.",
     "labResultsSubtitle": "Résultats publiés sur les examens que vous avez prescrits.",
     "labTruncated": "Affichage de {{shown}} sur {{total}}, les plus urgents d’abord.",
     "labUnknown": "Inconnu",
