@@ -67,12 +67,16 @@ struct LabResultDTO: Codable, Identifiable {
         // A range alone is not proof it was applied: the range comes off the
         // test DEFINITION, while `LabResultMapper.determineSeverityFlag`
         // returns UNSPECIFIED whenever `Double.parseDouble(resultValue)`
-        // throws — a decimal comma, a censored "<0.5", a qualitative
-        // "Positive" on a test that happens to have numeric limits. The value
-        // has to be something the backend could actually compare.
+        // throws — a censored "<0.5", a qualitative "Positive", or a DECIMAL
+        // COMMA, on a test that happens to have numeric limits. The comma is
+        // deliberately NOT normalised: the question is not whether the value
+        // is a number to a human, it is whether the SERVER could parse it,
+        // and `Double.parseDouble` cannot. Normalising would hand a
+        // francophone site's "4,2" a green tick for a comparison that never
+        // happened.
         guard !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
-        return Double(raw.replacingOccurrences(of: ",", with: ".")) != nil
+        return Double(raw) != nil
     }
 
     /// What the badge shows: a pending row never borrows a grading.

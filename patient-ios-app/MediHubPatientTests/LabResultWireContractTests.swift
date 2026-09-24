@@ -154,15 +154,17 @@ final class LabResultWireContractTests: XCTestCase {
             XCTAssertEqual(row.tone, .neutral)
         }
 
-        // A decimal comma is a real value, just not one Double.parseDouble
-        // accepts on the server; the app normalises it before judging.
+        // A decimal comma is a real value to a human, but NOT to
+        // Double.parseDouble on the server — so the backend never compared it
+        // either, and the app must not treat it as graded.
         let comma = try decode("""
         {
           "id": "z4", "testName": "Potassium", "value": "4,2",
           "referenceRange": "3.5 - 5.1", "status": "NORMAL", "released": true
         }
         """)
-        XCTAssertTrue(comma.isGradedNormal)
+        XCTAssertFalse(comma.isGradedNormal)
+        XCTAssertEqual(comma.tone, .neutral)
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
