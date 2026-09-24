@@ -18,6 +18,19 @@ public interface MllpAllowedSenderService {
      */
     Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility);
 
+    /**
+     * The same lookup as {@link #resolveHospital}, returning only the
+     * receiving hospital's identifier.
+     *
+     * <p>Callers outside a transaction must use this one. {@code Hospital} is
+     * mapped with field access on its identifier, so reading {@code getId()}
+     * off the association initialises the proxy — which is a
+     * {@code LazyInitializationException} once {@code resolveHospital}'s
+     * read-only transaction has closed. Resolving the identifier inside the
+     * transaction removes the trap rather than documenting it.
+     */
+    Optional<UUID> resolveHospitalId(String sendingApplication, String sendingFacility);
+
     MllpAllowedSenderResponseDTO create(MllpAllowedSenderRequestDTO request, Locale locale);
 
     MllpAllowedSenderResponseDTO update(UUID id, MllpAllowedSenderRequestDTO request, Locale locale);

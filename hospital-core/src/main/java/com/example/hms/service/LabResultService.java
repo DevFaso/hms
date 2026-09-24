@@ -19,14 +19,29 @@ public interface LabResultService {
     /**
      * Entry point for the HL7 inbound adapter.
      *
-     * <p>Identical to {@link #createLabResult} except that it does not compare
-     * the order against the caller's active hospital: the caller is an
-     * interface account posting an ORU with no {@code X-Hospital-Id} and
-     * possibly no assignment, addressed by the order id in the message. Named
-     * explicitly so that the exemption belongs to this one path rather than to
-     * every caller whose hospital scope happens not to resolve.
+     * <p>Identical to {@link #createLabResult} except in where the tenant
+     * boundary comes from. An interface account posts an ORU with no {@code
+     * X-Hospital-Id} and possibly no assignment of its own, so there is no
+     * active hospital to compare the order against; the sending pair in the
+     * message header (MSH-3 / MSH-4) is resolved against the MLLP allowlist
+     * instead, and {@code senderHospitalId} is the hospital that allowlist
+     * entry points at. The order must be one that hospital handles.
+     *
+     * <p>{@code senderHospitalId} is mandatory: it is the whole tenant
+     * boundary on this path. A null one is refused exactly as an order at
+     * another hospital is, so a caller cannot reach an order by omitting the
+     * identification the allowlist would have supplied. A caller that DOES
+     * have a resolvable hospital scope is still pinned to it as well — being
+     * named by an allowlist entry does not let a lab user of one hospital
+     * write into another.
+     *
+     * @param senderHospitalId the hospital the allowlisted sending pair
+     *                         resolves to; never null in a call that should
+     *                         succeed
      */
-    LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO requestDTO, Locale locale);
+    LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO requestDTO,
+                                                 UUID senderHospitalId,
+                                                 Locale locale);
 
     LabResultResponseDTO getLabResultById(UUID id, Locale locale);
 

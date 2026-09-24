@@ -769,9 +769,25 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                // ---- HL7 inbound (system-to-system; restrict to SUPER_ADMIN / HOSPITAL_ADMIN or a service account) ----
+                // ---- HL7 inbound (system-to-system: an analyzer or middleware account) ----
+                // These are the roles Hl7InboundController's own @PreAuthorize names.
+                // They must match: the matchers here are first-match-wins, so a
+                // matcher narrower than the annotation answers 403 in the filter
+                // chain and the annotation never runs. It was narrower, and the
+                // three lab roles the endpoint is written for could not reach it at
+                // all - the door was open only to HOSPITAL_ADMIN, who is not in the
+                // result-author allow-list either.
+                //
+                // Widening this is safe only because the endpoint now has a tenant
+                // boundary that does not come from the caller: the message's sending
+                // pair must resolve to an active MLLP allowlist entry and the order
+                // must belong to that entry's hospital, and a caller who DOES have a
+                // hospital scope is still pinned to it as well. Before that, role
+                // was the only gate and the order id came from a header the caller
+                // chose.
                 .requestMatchers(HttpMethod.POST, API_LAB_HL7, API_LAB_HL7_PATTERN)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // ---- Instrument outbox monitoring ----
                 .requestMatchers(HttpMethod.GET, API_LAB_INSTRUMENT_OUTBOX, API_LAB_INSTRUMENT_OUTBOX_PATTERN)

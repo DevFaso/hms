@@ -152,6 +152,17 @@ class LabResultServiceImplLifecycleTest {
         return result;
     }
 
+    /**
+     * The live role lookup the author check makes on an unscoped ingest call.
+     *
+     * <p>It asks the DATABASE for an active assignment rather than reading the
+     * token, which is the whole point of running it on this path: a revoked
+     * technician's token still carries the role, their assignment does not.
+     */
+    private void stubIngestAuthorAt(UUID authorityHospitalId) {
+        when(roleValidator.hasRole(actorId, authorityHospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+    }
+
     /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     private void stubEntryPath() {
         // Entry reads the order unlocked and takes the write lock only for the
@@ -692,7 +703,6 @@ class LabResultServiceImplLifecycleTest {
         // binds one) but it carries no hospital, and there is no assignment
         // and no super-admin claim behind it — AND the operator has turned the
         // exemption on, which it is not by default
-        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         bindHospitalContext(null);
         when(roleValidator.getCurrentHospitalId()).thenReturn(null);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
@@ -705,14 +715,17 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
-        service.createIngestedLabResult(entryRequest(), Locale.ENGLISH);
+        stubIngestAuthorAt(hospitalId);
+        service.createIngestedLabResult(entryRequest(), hospitalId, Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         // the throwing resolver is never reached on the ingest path
         verify(roleValidator, never()).requireActiveHospitalId();
-        // and no per-hospital role is demanded of an account that has none —
-        // this test stubs no role, which is the real interface-account case
-        verify(roleValidator, never()).hasRole(any(), any(), any());
+        // but the author check IS made, at the hospital the allowlist named.
+        // It was skipped here once, on the premise that an interface account
+        // holds no role anywhere; so does a technician offboarded this morning
+        // whose token has not expired.
+        verify(roleValidator).hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST");
     }
 
     @Test
@@ -732,7 +745,7 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         LabResultRequestDTO request = entryRequest();
-        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
@@ -813,20 +826,132 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
-    @DisplayName("with the exemption off — the default — an unscoped ingest caller is refused")
-    void anUnscopedIngestCallerIsRefusedWhileTheExemptionIsOff() {
-        // "No resolvable scope" cannot tell a service account from a lab-role
-        // person holding no assignment, and the exemption waives BOTH the
-        // tenancy comparison and the author check, so it stays off until the
-        // sending facility can be resolved to a hospital.
+    @DisplayName("an ingest caller whose sender resolved to nobody is refused as a missing order")
+    void anIngestCallerWithNoResolvedSenderIsRefused() {
+        // What replaced the exemption flag. The adapter resolves the message's
+        // sending pair against the MLLP allowlist and passes the hospital that
+        // entry points at; a null one means the sender identified itself as
+        // nobody we know. It must be refused, and refused as a missing order —
+        // a distinguishable "unknown sender" would let a caller walk order ids
+        // with a pair it knows is unlisted and learn which ids exist.
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         bindHospitalContext(null);
-        when(roleValidator.requireActiveHospitalId())
-            .thenThrow(new BusinessException("Hospital context required."));
 
         LabResultRequestDTO request = entryRequest();
-        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, null, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        // and it never got as far as asking who the caller is
+        verify(authService, never()).getCurrentUserId();
+    }
+
+    @Test
+    @DisplayName("an allowlisted sender cannot post against an order its hospital does not handle")
+    void anAllowlistedSenderCannotReachAnotherHospitalsOrder() {
+        // THE hole this change closes. The order id arrives in a request
+        // header the caller chooses, and the roles on the endpoint say only
+        // that the caller may ingest results somewhere. Without this, an
+        // analyzer allowlisted at one hospital — or a lab user posting under
+        // its credentials — could attach a result to any order id it could
+        // name, at any tenant.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        UUID someOtherHospital = UUID.randomUUID();
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, someOtherHospital, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        verify(authService, never()).getCurrentUserId();
+    }
+
+    @Test
+    @DisplayName("the performing laboratory's own sender reaches the order it performs")
+    void thePerformingLaboratorysSenderReachesTheOrder() {
+        // B1 gave a lab order two hospitals that handle it: the one that
+        // ordered it and the laboratory performing it. The ingest boundary has
+        // to use that same predicate, or the analyzer at the performing
+        // laboratory — the machine this endpoint exists for — is refused the
+        // order it is running.
+        UUID performingHospitalId = UUID.randomUUID();
+        Hospital performing = new Hospital();
+        performing.setId(performingHospitalId);
+        order.setPerformingHospital(performing);
+        assignment.setHospital(performing);
+
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId()))
+            .thenAnswer(inv -> order.getStatus());
+        org.mockito.Mockito.lenient().when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any()))
+            .thenAnswer(inv -> {
+                order.setStatus(inv.getArgument(2));
+                return 1;
+            });
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+            .thenReturn(List.of());
+
+        stubIngestAuthorAt(performingHospitalId);
+        service.createIngestedLabResult(entryRequest(), performingHospitalId, Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a lab role in an unexpired token is not enough: the author check asks the database")
+    void anOffboardedTechniciansTokenCannotIngest() {
+        // The hole the first round of this PR opened and this one closes.
+        // Roles are baked into the token at login, so a technician offboarded
+        // this morning still presents ROLE_LAB_TECHNICIAN and still passes the
+        // endpoint's @PreAuthorize; their assignments are revoked, so no
+        // hospital scope resolves and they look exactly like an interface
+        // account. The sending pair is plaintext they type into the body, so
+        // the allowlist cannot tell them apart either. What can is this check,
+        // which asks the database for an ACTIVE assignment - and it is now run
+        // on this path rather than skipped.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        // every live-role lookup answers false: no active assignment anywhere
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a revoked assignment cannot be named as the author of an ingested result")
+    void aDeactivatedAssignmentCannotBeBorrowedOnTheIngestPath() {
+        // The assignment lookup on this path is a bare findById, so without
+        // this a caller could name a deactivated staff member and have them
+        // recorded as the author of the result, in the chart and in the
+        // response.
+        assignment.setActive(false);
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        stubIngestAuthorAt(hospitalId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
@@ -837,7 +962,6 @@ class LabResultServiceImplLifecycleTest {
         // comparison waves anything through; the order is the anchor instead,
         // or a staff member of another tenant ends up named as the author of
         // this result and returned in the response.
-        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         Hospital elsewhere = new Hospital();
         elsewhere.setId(UUID.randomUUID());
         UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
@@ -850,10 +974,12 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        // past the author check, so this test still fails on the assignment
+        stubIngestAuthorAt(hospitalId);
 
         LabResultRequestDTO request = entryRequest();
         request.setAssignmentId(foreign.getId());
-        assertThatThrownBy(() -> service.createIngestedLabResult(request, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
@@ -866,7 +992,6 @@ class LabResultServiceImplLifecycleTest {
         // hospital's analyzer, facility and control id, match that hospital's
         // row, and be handed it back in full — patient name and result value
         // included. The order id is what makes that impossible.
-        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         LabResultRequestDTO request = entryRequest();
         request.setSourceSendingApplication("SOMEONE-ELSES-ANALYZER");
         request.setSourceSendingFacility("HOSPITAL-B");
@@ -895,7 +1020,8 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
-        service.createIngestedLabResult(request, Locale.ENGLISH);
+        stubIngestAuthorAt(hospitalId);
+        service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH);
 
         // the lookup asked about THIS order, and the unscoped finder is never
         // reached from here at all
@@ -915,7 +1041,6 @@ class LabResultServiceImplLifecycleTest {
         // doubled the result, the critical alert, the SMS and the outbound
         // message — the interactive path stays dedup-free, which is a
         // different problem with a different answer.
-        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         LabResultRequestDTO request = entryRequest();
         request.setSourceSendingApplication("ANALYZER");
         request.setSourceSendingFacility("LAB-A");
@@ -936,7 +1061,8 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(Optional.of(alreadyRecorded));
         when(labResultMapper.toResponseDTO(alreadyRecorded)).thenReturn(recordedDto);
 
-        LabResultResponseDTO response = service.createIngestedLabResult(request, Locale.ENGLISH);
+        stubIngestAuthorAt(hospitalId);
+        LabResultResponseDTO response = service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH);
 
         assertThat(response).isSameAs(recordedDto);
         verify(labResultRepository, never()).save(any(LabResult.class));
@@ -975,7 +1101,6 @@ class LabResultServiceImplLifecycleTest {
         // results of one order entered in the same minute with the same value
         // collapsed, and the caller was answered 201 with somebody else's row.
         // A duplicate row is visible and correctable; a lost result is not.
-        ReflectionTestUtils.setField(service, "unscopedIngestExemptionEnabled", true);
         order.setStatus(LabOrderStatus.RESULTED);
         LabResultRequestDTO chloride = entryRequest();
         chloride.setTestCode("CL");
@@ -1011,7 +1136,8 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
-        service.createIngestedLabResult(chloride, Locale.ENGLISH);
+        stubIngestAuthorAt(hospitalId);
+        service.createIngestedLabResult(chloride, hospitalId, Locale.ENGLISH);
 
         verify(labResultRepository).save(any(LabResult.class));
     }

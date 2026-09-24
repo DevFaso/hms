@@ -34,18 +34,34 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
     @Override
     @Transactional(readOnly = true)
     public Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility) {
+        return lookup(sendingApplication, sendingFacility).map(MllpAllowedSender::getHospital);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveHospitalId(String sendingApplication, String sendingFacility) {
+        // The same lookup as resolveHospital, written out rather than
+        // delegating to it: a self-invocation does not pass through the proxy,
+        // so the annotation on the method being called would not apply and the
+        // reader has to know that this method's own annotation is what covers
+        // it. Reading the identifier INSIDE the transaction is the whole point
+        // here - Hospital maps @Id on a field, so getId() initialises the
+        // proxy, which is a LazyInitializationException once the transaction
+        // has closed.
+        return lookup(sendingApplication, sendingFacility).map(s -> s.getHospital().getId());
+    }
+
+    /** The allowlist row for a sending pair, normalised as the column stores it. */
+    private Optional<MllpAllowedSender> lookup(String sendingApplication, String sendingFacility) {
         if (!StringUtils.hasText(sendingApplication) || !StringUtils.hasText(sendingFacility)) {
             return Optional.empty();
         }
         // Stored values are normalised to upper-case canonical form
-        // (V62 CHECK constraints + MllpAllowedSenderMapper). Match
-        // that normalisation here so the case-sensitive index can be
-        // used directly.
-        return senderRepository
-            .findBySendingApplicationAndSendingFacilityAndActiveTrue(
-                sendingApplication.trim().toUpperCase(java.util.Locale.ROOT),
-                sendingFacility.trim().toUpperCase(java.util.Locale.ROOT))
-            .map(MllpAllowedSender::getHospital);
+        // (V62 CHECK constraints + MllpAllowedSenderMapper). Match that
+        // normalisation here so the case-sensitive index can be used directly.
+        return senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue(
+            sendingApplication.trim().toUpperCase(java.util.Locale.ROOT),
+            sendingFacility.trim().toUpperCase(java.util.Locale.ROOT));
     }
 
     @Override
