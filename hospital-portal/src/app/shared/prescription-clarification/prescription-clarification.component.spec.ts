@@ -387,4 +387,37 @@ describe('PrescriptionClarificationComponent', () => {
       'This prescription is not awaiting a fill.',
     );
   });
+
+  it('tells a verifier an unreadable exchange exists even when the flag is masked', () => {
+    // attentionReason reports PENDING_STOCK, not CLARIFICATION_RESOLVED, so
+    // nothing on the row says an answer is waiting; the verifier still
+    // cannot read it and must be told rather than shown a bare form.
+    create(['ROLE_PHARMACY_VERIFIER'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(prescriptions.getById).not.toHaveBeenCalled();
+    expect(el('rx-clarification-unreadable')).not.toBeNull();
+  });
+
+  it('replaces the backend\'s bare "Access denied" with the rule that was broken', () => {
+    // GlobalExceptionHandler collapses every AccessDeniedException to
+    // "Access denied", which names neither the rule nor the remedy.
+    prescriptions.resolveClarification.and.returnValue(
+      throwError(() => ({ status: 403, error: { message: 'Access denied' } })),
+    );
+    create(['ROLE_DOCTOR'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+    el('rx-clarification-submit-rx-1')!.click();
+    fixture.detectChanges();
+
+    const shown = el('rx-clarification-error')!.textContent ?? '';
+    expect(shown).toContain('PRESCRIPTIONS.CLARIFICATION.FORBIDDEN_RESOLVE');
+    expect(shown).not.toContain('Access denied');
+  });
 });

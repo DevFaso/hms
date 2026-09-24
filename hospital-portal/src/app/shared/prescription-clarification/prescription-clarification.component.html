@@ -58,7 +58,9 @@
       <div class="modal-body">
         @if (medicationLabel()) {
           <p class="clarify-subject">
-            {{ 'PRESCRIPTIONS.CLARIFICATION.FOR' | translate }}:
+            <!-- The colon lives in the locale string: French wants a
+                 no-break space before it, English and Spanish do not. -->
+            {{ 'PRESCRIPTIONS.CLARIFICATION.FOR' | translate }}
             <strong>{{ medicationLabel() }}</strong>
           </p>
         }
@@ -68,7 +70,11 @@
              that flag is masked whenever the row also has a status or a
              back order to report, so the words are fetched from the
              prescription record every time the dialog opens. -->
-        @if (hasAnswer() && !canReadExchange()) {
+        <!-- Not gated on the resolved flag: that flag is masked whenever the
+             row also reports a status or a back order, so a verifier would
+             otherwise be shown a bare "ask a question" form with no hint
+             that an answer they cannot read is already on the record. -->
+        @if (isPharmacy() && !canReadExchange()) {
           <p class="clarify-note" data-testid="rx-clarification-unreadable">
             {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}
           </p>

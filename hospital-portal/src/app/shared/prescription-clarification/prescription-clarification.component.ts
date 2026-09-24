@@ -10,9 +10,12 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EMPTY, Subject } from 'rxjs';
+import { catchError, switchMap, tap } from 'rxjs/operators';
 
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
@@ -42,8 +45,19 @@ export type ClarificationMode = 'PHARMACY' | 'PRESCRIBER';
  * than snapshotted in the constructor, so a hospital-scope or active-role
  * change re-evaluates the gate. The lists below mirror the backend
  * {@code @PreAuthorize} exactly; whether the CALLER may act is still the
- * server's decision (it refuses a doctor with no staff profile at the
- * prescribing hospital, for instance) and those refusals surface verbatim.
+ * server's decision — it refuses a doctor with no staff profile at the
+ * prescribing hospital, for instance.
+ *
+ * <p><b>What a refusal shows.</b> The workflow refusals
+ * ({@code BusinessException}: wrong status, missing reason) arrive with a
+ * message and are shown verbatim, because "this one is PENDING_CLARIFICATION"
+ * tells the user what to do next and a generic string does not — those
+ * sentences are composed in English on the server, which is a known gap in
+ * the French-completeness layers rather than something this component can
+ * fix. An authorization refusal is different: {@code GlobalExceptionHandler}
+ * collapses every {@code AccessDeniedException} to the literal "Access
+ * denied", which names neither the rule nor the remedy, so a 403 is replaced
+ * by the localized sentence that does.
  *
  * <p><b>Nothing clinical is logged.</b> The question and the answer are free
  * clinical text: they are rendered and posted, never written to the console
@@ -131,7 +145,41 @@ export class PrescriptionClarificationComponent {
   private readonly dialog = viewChild<ElementRef<HTMLElement>>('dialog');
   private readonly trigger = viewChild<ElementRef<HTMLButtonElement>>('trigger');
 
+  /** One in-flight exchange read at a time; a retry cancels its predecessor. */
+  private readonly exchangeRequests = new Subject<void>();
+
   constructor() {
+    // switchMap rather than a fresh subscription per click: two Retries in a
+    // row otherwise leave two responses racing to write the same four
+    // signals, and a late failure would hide an exchange that had loaded.
+    // catchError sits INSIDE so a failure ends that attempt, not the stream.
+    this.exchangeRequests
+      .pipe(
+        tap(() => {
+          this.loadingExchange.set(true);
+          this.exchangeError.set(false);
+        }),
+        switchMap(() =>
+          this.prescriptions.getById(this.prescriptionId()).pipe(
+            catchError(() => {
+              // Explicit error state — never an empty exchange, which would
+              // read as "the prescriber answered with nothing".
+              this.loadingExchange.set(false);
+              this.exchangeError.set(true);
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((rx) => {
+        this.fetchedQuestion.set(rx?.clarificationReason ?? null);
+        this.fetchedAnswer.set(rx?.clarificationResponse ?? null);
+        this.fetchedAskedAt.set(rx?.clarificationRequestedAt ?? null);
+        this.fetchedAnsweredAt.set(rx?.clarificationResolvedAt ?? null);
+        this.loadingExchange.set(false);
+      });
+
     // Focus the dialog as it opens: without it, Escape is delivered to the
     // trigger button (which sits outside the backdrop subtree) and the key
     // handler on the dialog never runs, and a screen-reader user is left
@@ -246,23 +294,7 @@ export class PrescriptionClarificationComponent {
    */
   private loadExchange(): void {
     if (!this.canReadExchange()) return;
-    this.loadingExchange.set(true);
-    this.exchangeError.set(false);
-    this.prescriptions.getById(this.prescriptionId()).subscribe({
-      next: (rx) => {
-        this.fetchedQuestion.set(rx?.clarificationReason ?? null);
-        this.fetchedAnswer.set(rx?.clarificationResponse ?? null);
-        this.fetchedAskedAt.set(rx?.clarificationRequestedAt ?? null);
-        this.fetchedAnsweredAt.set(rx?.clarificationResolvedAt ?? null);
-        this.loadingExchange.set(false);
-      },
-      error: () => {
-        // Explicit error state — never an empty exchange, which would read
-        // as "the prescriber answered with nothing".
-        this.loadingExchange.set(false);
-        this.exchangeError.set(true);
-      },
-    });
+    this.exchangeRequests.next();
   }
 
   protected retryExchange(): void {
@@ -291,13 +323,30 @@ export class PrescriptionClarificationComponent {
         this.changed.emit();
       },
       error: (err: unknown) => {
-        // The refusals are all things the user must read — wrong status,
-        // no staff profile at the prescribing hospital — so the server's
-        // message is shown verbatim, inline, next to the button that failed.
         this.submitting.set(false);
-        this.submitError.set(this.extractMessage(err) || this.translate.instant(failureKey));
+        this.submitError.set(this.refusalMessage(err, failureKey));
       },
     });
+  }
+
+  /**
+   * A workflow refusal carries a message worth reading ("this one is
+   * PENDING_CLARIFICATION"), so it is shown verbatim. A 403 does not:
+   * {@code GlobalExceptionHandler} answers every {@code AccessDeniedException}
+   * with the literal "Access denied", which tells a doctor credentialed at
+   * another hospital nothing about why or what to do, so the localized rule
+   * replaces it.
+   */
+  private refusalMessage(err: unknown, failureKey: string): string {
+    const status = (err as { status?: number } | null)?.status;
+    if (status === 403) {
+      return this.translate.instant(
+        this.isPharmacy()
+          ? 'PRESCRIPTIONS.CLARIFICATION.FORBIDDEN_REQUEST'
+          : 'PRESCRIPTIONS.CLARIFICATION.FORBIDDEN_RESOLVE',
+      );
+    }
+    return this.extractMessage(err) || this.translate.instant(failureKey);
   }
 
   /** A question is mandatory; an answer is not (the order may have been edited). */
