@@ -165,6 +165,27 @@ final class LabResultWireContractTests: XCTestCase {
         """)
         XCTAssertFalse(comma.isGradedNormal)
         XCTAssertEqual(comma.tone, .neutral)
+
+        // formatReferenceRange formats ranges[0] while determineSeverityFlag
+        // grades against findMatchingRange(unit, …): a row resulted in mmol/L
+        // against a first range in mg/dL is an all-clear beside limits it is
+        // nowhere near.
+        let wrongUnit = try decode("""
+        {
+          "id": "z5", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
+          "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertFalse(wrongUnit.isGradedNormal)
+        XCTAssertEqual(wrongUnit.tone, .neutral)
+
+        let matchingUnit = try decode("""
+        {
+          "id": "z6", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
+          "referenceRange": "3.9 - 6.1 mmol/L", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertTrue(matchingUnit.isGradedNormal)
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
