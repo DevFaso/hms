@@ -370,6 +370,13 @@ export interface RoutingDecisionResponse {
   patientId: string;
   reason?: string;
   estimatedRestockDate?: string;
+  /**
+   * The quantity this routing is for — the REMAINDER on a partially filled
+   * order, the full amount otherwise (`FillAccounting.remaining`). Null when
+   * the prescription carries no quantity at all, which means "unknown": do not
+   * render a zero in its place.
+   */
+  remainingQuantity?: number;
   status: string;
   decidedAt: string;
   createdAt: string;

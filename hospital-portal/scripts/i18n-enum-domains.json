@@ -71,6 +71,12 @@
   "platformReleaseStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformReleaseStatus.java" },
   "platformServiceStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/platform/PlatformServiceStatus.java" },
   "postpartumAlertType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PostpartumAlertType.java" },
+  "prescriptionDispatchChannel": {
+    "reason": "Prescription.dispatchChannel is a String column, not an enum. PrescriptionSmsDispatchServiceImpl is its only writer and writes one value, its CHANNEL_SMS constant (\"SMS\"). A second channel means a second key here."
+  },
+  "prescriptionDispatchStatus": {
+    "reason": "Prescription.dispatchStatus is a String column, not an enum. PrescriptionSmsDispatchServiceImpl writes STATUS_SENT onto the prescription row; STATUS_FAILED stays on the transmission record, and is keyed anyway so a future writer cannot render it raw."
+  },
   "prescriptionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PrescriptionStatus.java" },
   "procedureOrderStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureOrderStatus.java" },
   "referralStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/ReferralStatus.java" },
@@ -83,6 +89,8 @@
       "hospital-core/src/main/java/com/example/hms/bootstrap/DevSyntheticDataSeeder.java"
     ]
   },
+  "routingDecisionStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/RoutingDecisionStatus.java" },
+  "routingType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/RoutingType.java" },
   "shiftStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java" },
   "signatureStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java" },
   "snapshotItemType": {

@@ -61,7 +61,73 @@ export interface PrescriptionResponse {
   pharmacistVerifiedByUserId?: string | null;
   pharmacistVerifiedByName?: string | null;
   pharmacistVerificationNote?: string | null;
+
+  /* ── Pharmacy + dispatch state (gap G7, wave 1) ──────────────────── */
+
+  /**
+   * Where the prescription went: the partner pharmacy it was routed to, or the
+   * community pharmacy it was dispatched to by SMS. Null for an order still at
+   * the hospital's own dispensary — and also for one a partner REFUSED, because
+   * `StockOutRoutingServiceImpl` clears these three columns on a rejection and
+   * on a no-show. A PARTNER_REJECTED row therefore says nothing here about who
+   * refused it; only the routing history does.
+   */
+  pharmacyId?: string | null;
+  pharmacyName?: string | null;
+  pharmacyContact?: string | null;
+
+  /** `SMS` — the only channel PrescriptionSmsDispatchServiceImpl writes. */
+  dispatchChannel?: string | null;
+  /** `SENT` on the prescription row; a failure stays on the transmission. */
+  dispatchStatus?: string | null;
+  dispatchedAt?: string | null;
+
+  /**
+   * The current status while the pharmacy owns it (the backend mapper's
+   * PHARMACY_OWNED_STATUSES), null while the order is still the prescriber's.
+   * It is a PrescriptionStatus name — render it through
+   * `| enumLabel: 'prescriptionStatus'`, never raw.
+   */
+  lastPharmacyEvent?: string | null;
+  lastPharmacyEventAt?: string | null;
+
+  /* ── Pharmacist clarification (gap G5) ───────────────────────── */
+
+  /** Stripped from the patient-facing copy; present on the prescriber's. */
+  clarificationReason?: string | null;
+  clarificationRequestedAt?: string | null;
+  clarificationResponse?: string | null;
+  clarificationResolvedAt?: string | null;
 }
+
+/**
+ * Every value `com.example.hms.enums.PrescriptionStatus` can send, in its
+ * declaration order.
+ *
+ * The prescriber's tab map is asserted exhaustive against this list, so a
+ * status added to the backend without a tab fails a spec instead of quietly
+ * dropping the prescription out of every list its prescriber looks at — which
+ * is precisely what gap G10 was.
+ */
+export const PRESCRIPTION_STATUSES: readonly string[] = [
+  'DRAFT',
+  'PENDING_SIGNATURE',
+  'SIGNED',
+  'TRANSMITTED',
+  'TRANSMISSION_FAILED',
+  'CANCELLED',
+  'DISCONTINUED',
+  'PENDING_CLARIFICATION',
+  'DISPENSED',
+  'PARTIALLY_FILLED',
+  'PENDING_STOCK',
+  'REQUIRES_EXTERNAL_FILL',
+  'SENT_TO_PARTNER',
+  'PARTNER_ACCEPTED',
+  'PARTNER_REJECTED',
+  'PARTNER_DISPENSED',
+  'PRINTED_FOR_PATIENT',
+];
 
 export type PrescriptionStatusType =
   | 'DRAFT'

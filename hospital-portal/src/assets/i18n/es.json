@@ -5436,6 +5436,25 @@
         "SURGEON": "Cirujano(a)",
         "TECHNICIAN": "Técnico(a)",
         "VISITOR": "Visitante"
+      },
+      "ROUTING_TYPE": {
+        "PARTNER": "Farmacia asociada",
+        "PRINT": "Impresa para el paciente",
+        "BACKORDER": "Pedido pendiente"
+      },
+      "ROUTING_DECISION_STATUS": {
+        "PENDING": "Pendiente",
+        "ACCEPTED": "Aceptada",
+        "REJECTED": "Rechazada",
+        "COMPLETED": "Completada",
+        "CANCELLED": "Cancelada"
+      },
+      "PRESCRIPTION_DISPATCH_CHANNEL": {
+        "SMS": "SMS"
+      },
+      "PRESCRIPTION_DISPATCH_STATUS": {
+        "SENT": "Enviada",
+        "FAILED": "Fallida"
       }
     },
     "DOCUMENTS": {
@@ -5626,7 +5645,46 @@
     "PHARMACIST_VERIFYING": "Registrando…",
     "PHARMACIST_VERIFY_STATE": "Verificación farmacéutica",
     "PHARMACIST_VERIFY_PENDING": "Pendiente — un farmacéutico debe verificar antes de administrar",
-    "PHARMACIST_VERIFIED_BY": "Verificada por"
+    "PHARMACIST_VERIFIED_BY": "Verificada por",
+    "TAB": {
+      "ATTENTION": "Requiere atención",
+      "DRAFT": "Borradores",
+      "IN_PHARMACY": "En farmacia",
+      "DISPENSED": "Dispensadas",
+      "CLOSED": "Cerradas"
+    },
+    "ATTENTION": {
+      "PENDING_CLARIFICATION": "El farmacéutico espera su respuesta",
+      "TRANSMISSION_FAILED": "Fallo en la transmisión: vuelva a enviarla",
+      "PARTNER_REJECTED": "La farmacia asociada la rechazó: rediríjala a otra",
+      "PENDING_STOCK": "Sin existencias: en pedido",
+      "REQUIRES_EXTERNAL_FILL": "A la espera de una farmacia externa: ningún circuito mueve este estado",
+      "UNRECOGNISED_STATUS": "Estado no reconocido: consulte con la farmacia"
+    },
+    "PHARMACY": {
+      "SECTION": "Farmacia y envío",
+      "HOLDER": "A cargo de",
+      "CONTACT": "Contacto de la farmacia",
+      "DISPATCHED_AT": "Enviada el",
+      "DISPATCH": "Canal de envío",
+      "LAST_EVENT": "Último evento en farmacia",
+      "LAST_REFUSED_BY": "Rechazada por",
+      "OUTSTANDING": "Cantidad pendiente de dispensar",
+      "AT": "en {{pharmacy}}"
+    },
+    "HISTORY": {
+      "SECTION": "Historial de dispensación",
+      "DISPENSES": "Dispensaciones registradas",
+      "ROUTINGS": "Decisiones de derivación",
+      "QUANTITY": "Dispensado / solicitado",
+      "QUANTITY_ROUTED": "Cantidad derivada",
+      "ROUTING_TYPE": "Circuito",
+      "DESTINATION": "Destino",
+      "DETAILS": "Detalles",
+      "RESTOCK_ETA": "Reposición prevista el {{date}}",
+      "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
+      "ERROR": "No se pudo cargar el historial de dispensación."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",

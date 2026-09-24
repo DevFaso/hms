@@ -5436,6 +5436,25 @@
         "SURGEON": "Surgeon",
         "TECHNICIAN": "Technician",
         "VISITOR": "Visitor"
+      },
+      "ROUTING_TYPE": {
+        "PARTNER": "Partner pharmacy",
+        "PRINT": "Printed for the patient",
+        "BACKORDER": "Back order"
+      },
+      "ROUTING_DECISION_STATUS": {
+        "PENDING": "Pending",
+        "ACCEPTED": "Accepted",
+        "REJECTED": "Rejected",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled"
+      },
+      "PRESCRIPTION_DISPATCH_CHANNEL": {
+        "SMS": "SMS"
+      },
+      "PRESCRIPTION_DISPATCH_STATUS": {
+        "SENT": "Sent",
+        "FAILED": "Failed"
       }
     },
     "DOCUMENTS": {
@@ -5626,7 +5645,46 @@
     "PHARMACIST_VERIFYING": "Recording…",
     "PHARMACIST_VERIFY_STATE": "Pharmacist verification",
     "PHARMACIST_VERIFY_PENDING": "Pending — a pharmacist must verify before this may be given",
-    "PHARMACIST_VERIFIED_BY": "Verified by"
+    "PHARMACIST_VERIFIED_BY": "Verified by",
+    "TAB": {
+      "ATTENTION": "Needs attention",
+      "DRAFT": "Drafts",
+      "IN_PHARMACY": "At the pharmacy",
+      "DISPENSED": "Dispensed",
+      "CLOSED": "Closed"
+    },
+    "ATTENTION": {
+      "PENDING_CLARIFICATION": "The pharmacist is waiting for your answer",
+      "TRANSMISSION_FAILED": "Transmission failed — send it again",
+      "PARTNER_REJECTED": "The partner pharmacy refused it — route it elsewhere",
+      "PENDING_STOCK": "Out of stock — on back order",
+      "REQUIRES_EXTERNAL_FILL": "Waiting on an outside pharmacy — no workflow moves this status",
+      "UNRECOGNISED_STATUS": "Unrecognised status — check with the pharmacy"
+    },
+    "PHARMACY": {
+      "SECTION": "Pharmacy and dispatch",
+      "HOLDER": "Held by",
+      "CONTACT": "Pharmacy contact",
+      "DISPATCHED_AT": "Dispatched",
+      "DISPATCH": "Dispatch channel",
+      "LAST_EVENT": "Last pharmacy event",
+      "LAST_REFUSED_BY": "Refused by",
+      "OUTSTANDING": "Outstanding quantity",
+      "AT": "at {{pharmacy}}"
+    },
+    "HISTORY": {
+      "SECTION": "Dispensing history",
+      "DISPENSES": "Fills recorded",
+      "ROUTINGS": "Routing decisions",
+      "QUANTITY": "Dispensed / requested",
+      "QUANTITY_ROUTED": "Quantity routed",
+      "ROUTING_TYPE": "Route",
+      "DESTINATION": "Destination",
+      "DETAILS": "Details",
+      "RESTOCK_ETA": "Restock expected {{date}}",
+      "EMPTY": "No fill and no routing recorded for this prescription yet.",
+      "ERROR": "The dispensing history could not be loaded."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

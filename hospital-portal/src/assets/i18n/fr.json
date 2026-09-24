@@ -5402,6 +5402,25 @@
         "SURGEON": "Chirurgien(ne)",
         "TECHNICIAN": "Technicien(ne)",
         "VISITOR": "Visiteur(se)"
+      },
+      "ROUTING_TYPE": {
+        "PARTNER": "Pharmacie partenaire",
+        "PRINT": "Imprimée pour le patient",
+        "BACKORDER": "Commande en attente"
+      },
+      "ROUTING_DECISION_STATUS": {
+        "PENDING": "En attente",
+        "ACCEPTED": "Acceptée",
+        "REJECTED": "Refusée",
+        "COMPLETED": "Terminée",
+        "CANCELLED": "Annulée"
+      },
+      "PRESCRIPTION_DISPATCH_CHANNEL": {
+        "SMS": "SMS"
+      },
+      "PRESCRIPTION_DISPATCH_STATUS": {
+        "SENT": "Envoyée",
+        "FAILED": "Échec"
       }
     },
     "DOCUMENTS": {
@@ -5626,7 +5645,46 @@
     "PHARMACIST_VERIFYING": "Enregistrement…",
     "PHARMACIST_VERIFY_STATE": "Vérification pharmacien",
     "PHARMACIST_VERIFY_PENDING": "En attente — un pharmacien doit vérifier avant toute administration",
-    "PHARMACIST_VERIFIED_BY": "Vérifiée par"
+    "PHARMACIST_VERIFIED_BY": "Vérifiée par",
+    "TAB": {
+      "ATTENTION": "À traiter",
+      "DRAFT": "Brouillons",
+      "IN_PHARMACY": "En pharmacie",
+      "DISPENSED": "Délivrées",
+      "CLOSED": "Clôturées"
+    },
+    "ATTENTION": {
+      "PENDING_CLARIFICATION": "Le pharmacien attend votre réponse",
+      "TRANSMISSION_FAILED": "Échec de la transmission — renvoyez-la",
+      "PARTNER_REJECTED": "La pharmacie partenaire l'a refusée — réorientez-la",
+      "PENDING_STOCK": "Rupture de stock — en commande",
+      "REQUIRES_EXTERNAL_FILL": "En attente d'une pharmacie extérieure — aucun circuit ne fait avancer ce statut",
+      "UNRECOGNISED_STATUS": "Statut non reconnu — vérifiez auprès de la pharmacie"
+    },
+    "PHARMACY": {
+      "SECTION": "Pharmacie et envoi",
+      "HOLDER": "Prise en charge par",
+      "CONTACT": "Contact de la pharmacie",
+      "DISPATCHED_AT": "Envoyée le",
+      "DISPATCH": "Canal d'envoi",
+      "LAST_EVENT": "Dernier événement en pharmacie",
+      "LAST_REFUSED_BY": "Refusée par",
+      "OUTSTANDING": "Quantité restant à délivrer",
+      "AT": "chez {{pharmacy}}"
+    },
+    "HISTORY": {
+      "SECTION": "Historique de délivrance",
+      "DISPENSES": "Délivrances enregistrées",
+      "ROUTINGS": "Décisions d'orientation",
+      "QUANTITY": "Délivré / demandé",
+      "QUANTITY_ROUTED": "Quantité orientée",
+      "ROUTING_TYPE": "Circuit",
+      "DESTINATION": "Destinataire",
+      "DETAILS": "Détails",
+      "RESTOCK_ETA": "Réapprovisionnement prévu le {{date}}",
+      "EMPTY": "Aucune délivrance ni orientation enregistrée pour cette ordonnance.",
+      "ERROR": "L'historique de délivrance n'a pas pu être chargé."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",

@@ -2,17 +2,30 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 
-import { PrescriptionsComponent } from './prescriptions';
+import {
+  ATTENTION_REASONS,
+  PRESCRIPTION_TABS,
+  PrescriptionsComponent,
+  TAB_BY_STATUS,
+} from './prescriptions';
 import {
   PrescriptionService,
   CommunityPharmacyService,
   PrescriptionResponse,
   PrescriptionSmsDispatchResult,
+  PRESCRIPTION_STATUSES,
 } from '../services/prescription.service';
+import {
+  ApiResponse,
+  DispenseResponse,
+  Page,
+  PharmacyService,
+  RoutingDecisionResponse,
+} from '../services/pharmacy.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -532,5 +545,439 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(field)
       .withContext('a nurse needs to see PENDING — it is the state that refuses the dose')
       .not.toBeNull();
+  });
+});
+/**
+ * Gaps G7, G10 and G11 — what the prescriber can see once the pharmacy has
+ * the order.
+ *
+ * All three were the same defect wearing three hats: wave 1 gave the backend a
+ * hospital→pharmacy round trip, and the prescriber's screen kept rendering the
+ * four statuses it knew in August. A refused prescription vanished from every
+ * tab, the response's pharmacy columns were never read, and two endpoints that
+ * admit DOCTOR had no client at all.
+ */
+describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)', () => {
+  let fixture: ComponentFixture<PrescriptionsComponent>;
+  let component: PrescriptionsComponent;
+  let pharmacyService: jasmine.SpyObj<PharmacyService>;
+
+  function makeRx(over: Partial<PrescriptionResponse> = {}): PrescriptionResponse {
+    return {
+      id: 'rx-1',
+      patientId: 'p-1',
+      patientFullName: 'Ada Lovelace',
+      patientEmail: 'ada@example.test',
+      staffId: 's-1',
+      staffFullName: 'Dr Grace Hopper',
+      encounterId: 'e-1',
+      hospitalId: 'h-1',
+      medicationName: 'Amoxicillin',
+      medicationDisplayName: 'Amoxicillin 500 mg',
+      dosage: '500 mg',
+      frequency: 'BD',
+      duration: '7 days',
+      notes: '',
+      status: 'SIGNED',
+      createdAt: '2026-09-01T10:00:00',
+      updatedAt: '2026-09-01T10:00:00',
+      ...over,
+    };
+  }
+
+  function makeDispense(over: Partial<DispenseResponse> = {}): DispenseResponse {
+    return {
+      id: 'd-1',
+      prescriptionId: 'rx-1',
+      patientId: 'p-1',
+      pharmacyId: 'ph-1',
+      dispensedById: 'u-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+      unit: 'tablets',
+      substitution: false,
+      status: 'COMPLETED',
+      dispensedAt: '2026-09-02T09:00:00',
+      createdAt: '2026-09-02T09:00:00',
+      updatedAt: '2026-09-02T09:00:00',
+      ...over,
+    };
+  }
+
+  function makeRouting(over: Partial<RoutingDecisionResponse> = {}): RoutingDecisionResponse {
+    return {
+      id: 'rd-1',
+      prescriptionId: 'rx-1',
+      routingType: 'PARTNER',
+      decidedByUserId: 'u-1',
+      patientId: 'p-1',
+      status: 'PENDING',
+      decidedAt: '2026-09-02T08:00:00',
+      createdAt: '2026-09-02T08:00:00',
+      updatedAt: '2026-09-02T08:00:00',
+      ...over,
+    };
+  }
+
+  function page<T>(content: T[]): ApiResponse<Page<T>> {
+    return {
+      data: { content, totalElements: content.length, totalPages: 1, size: 20, number: 0 },
+    };
+  }
+
+  interface SetupOptions {
+    list?: PrescriptionResponse[];
+    roles?: string[];
+    dispenses?: Observable<ApiResponse<Page<DispenseResponse>>>;
+    routings?: Observable<ApiResponse<Page<RoutingDecisionResponse>>>;
+  }
+
+  async function setup(opts: SetupOptions = {}): Promise<void> {
+    const roles = opts.roles ?? ['ROLE_DOCTOR'];
+
+    const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+    ]);
+    prescriptionService.list.and.returnValue(of(opts.list ?? []));
+
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+
+    const communityPharmacyService = jasmine.createSpyObj<CommunityPharmacyService>(
+      'CommunityPharmacyService',
+      ['list'],
+    );
+    communityPharmacyService.list.and.returnValue(of([]));
+
+    pharmacyService = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'listDispensesByPrescription',
+      'listRoutingDecisionsByPrescription',
+    ]);
+    pharmacyService.listDispensesByPrescription.and.returnValue(opts.dispenses ?? of(page([])));
+    pharmacyService.listRoutingDecisionsByPrescription.and.returnValue(
+      opts.routings ?? of(page([])),
+    );
+
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: communityPharmacyService },
+        { provide: PharmacyService, useValue: pharmacyService },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+
+    // The one key in this block that interpolates. Loaded for real so the
+    // assertion below tests the PARAMETER NAME too: ngx-translate renders a
+    // missing key as the key itself, which would pass either way.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'en',
+      { PRESCRIPTIONS: { PHARMACY: { AT: 'at {{pharmacy}}' } } },
+      true,
+    );
+    translate.use('en');
+
+    fixture = TestBed.createComponent(PrescriptionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  function el(selector: string): HTMLElement | null {
+    return fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+  }
+
+  /* ── G10: no status falls outside every tab ────────────────────── */
+
+  it('files EVERY PrescriptionStatus under exactly one tab', async () => {
+    // The whole enum, not a sample: the defect was that thirteen of seventeen
+    // statuses matched no filter, and any sample small enough to hand-pick
+    // would have missed most of them.
+    await setup({
+      list: PRESCRIPTION_STATUSES.map((status, i) => makeRx({ id: 'rx-' + i, status })),
+    });
+
+    const buckets = PRESCRIPTION_TABS.map((t) => t.id).filter((id) => id !== 'all');
+
+    for (const status of PRESCRIPTION_STATUSES) {
+      const hits = buckets.filter((bucket) => {
+        component.setTab(bucket);
+        return component.filtered().some((p) => p.status === status);
+      });
+      expect(hits.length)
+        .withContext(`${status} is reachable from ${hits.length} tab(s): [${hits.join(', ')}]`)
+        .toBe(1);
+    }
+  });
+
+  it('keeps a status this build has never heard of visible instead of dropping it', async () => {
+    await setup({ list: [makeRx({ status: 'SOME_STATUS_SHIPPED_AFTER_THIS_BUILD' })] });
+
+    component.setTab('attention');
+    expect(component.filtered().length).toBe(1);
+    expect(component.attentionReasonKey(component.filtered()[0])).toBe(
+      'PRESCRIPTIONS.ATTENTION.UNRECOGNISED_STATUS',
+    );
+  });
+
+  it('gives a reason to exactly the statuses the attention tab holds', async () => {
+    await setup();
+
+    const attentionStatuses = PRESCRIPTION_STATUSES.filter(
+      (s) => TAB_BY_STATUS[s] === 'attention',
+    ).sort();
+    expect(ATTENTION_REASONS.map((r) => r.status).sort())
+      .withContext('the reason map and the attention bucket must not drift apart')
+      .toEqual(attentionStatuses);
+
+    for (const status of PRESCRIPTION_STATUSES) {
+      const key = component.attentionReasonKey(makeRx({ status }));
+      if (TAB_BY_STATUS[status] === 'attention') {
+        expect(key)
+          .withContext(`${status} needs a reason`)
+          .toMatch(/^PRESCRIPTIONS\.ATTENTION\./);
+      } else {
+        expect(key).withContext(`${status} must not claim to need attention`).toBeNull();
+      }
+    }
+  });
+
+  it('renders the Needs attention tab for a prescriber and collects the states waiting on them', async () => {
+    await setup({
+      list: [
+        makeRx({ id: 'a', status: 'PARTNER_REJECTED' }),
+        makeRx({ id: 'b', status: 'PENDING_CLARIFICATION' }),
+        makeRx({ id: 'c', status: 'DISPENSED' }),
+      ],
+    });
+
+    const tab = el('[data-testid="rx-tab-attention"]');
+    expect(tab).withContext('the prescriber has no way to reach the tab').not.toBeNull();
+    expect(tab!.textContent).toContain('2');
+
+    component.setTab('attention');
+    fixture.detectChanges();
+    expect(component.filtered().map((p) => p.id)).toEqual(['a', 'b']);
+    expect(el('[data-testid="rx-attention-count"]')!.textContent!.trim()).toBe('2');
+  });
+
+  it('never puts a raw enum name on screen for a pharmacy status', async () => {
+    await setup({ list: [makeRx({ status: 'PARTNER_REJECTED' })] });
+
+    const badge = el('.status-badge')!;
+    expect(badge.textContent!.trim()).not.toBe('PARTNER_REJECTED');
+    expect(badge.textContent!.trim()).toBe('Partner Rejected');
+  });
+
+  /* ── G7: where the order went ────────────────────────────── */
+
+  it('names the pharmacy holding the order, and why the row needs attention, on the row', async () => {
+    await setup({
+      list: [makeRx({ id: 'a', status: 'PENDING_STOCK', pharmacyName: 'Pharmacie du Marché' })],
+    });
+
+    expect(el('[data-testid="rx-pharmacy-a"]')!.textContent).toContain('Pharmacie du Marché');
+    expect(el('[data-testid="rx-attention-a"]')).not.toBeNull();
+  });
+
+  it('renders the pharmacy and dispatch columns the response has always carried', async () => {
+    const rx = makeRx({
+      status: 'SENT_TO_PARTNER',
+      pharmacyName: 'Pharmacie du Marché',
+      pharmacyContact: '+226 70 00 00 00',
+      dispatchChannel: 'SMS',
+      dispatchStatus: 'SENT',
+      dispatchedAt: '2026-09-02T08:30:00',
+      lastPharmacyEvent: 'SENT_TO_PARTNER',
+      lastPharmacyEventAt: '2026-09-02T08:30:00',
+    });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-pharmacy-name"]')!.textContent).toContain('Pharmacie du Marché');
+    expect(el('[data-testid="rx-dispatched-at"]')!.textContent!.trim()).not.toBe('');
+    expect(el('[data-testid="rx-dispatch-state"]')!.textContent!.trim()).not.toContain('SENT');
+    expect(el('[data-testid="rx-last-pharmacy-event"]')!.textContent).toContain('Sent to Partner');
+  });
+
+  it('names the partner that refused, which the prescription itself no longer carries', async () => {
+    const rx = makeRx({ status: 'PARTNER_REJECTED', pharmacyName: null });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            id: 'rd-2',
+            status: 'REJECTED',
+            targetPharmacyName: 'Pharmacie Centrale',
+            decidedAt: '2026-09-03T08:00:00',
+          }),
+          makeRouting({ id: 'rd-1', status: 'COMPLETED', decidedAt: '2026-09-01T08:00:00' }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.lastRefusedBy()).toBe('Pharmacie Centrale');
+    expect(el('[data-testid="rx-last-refused-by"]')!.textContent).toContain('Pharmacie Centrale');
+  });
+
+  it('shows what is still owed on a partially filled prescription', async () => {
+    const rx = makeRx({ status: 'PARTIALLY_FILLED' });
+    await setup({
+      list: [rx],
+      dispenses: of(
+        page([
+          makeDispense({ id: 'd-1', quantityRequested: 30, quantityDispensed: 10 }),
+          makeDispense({ id: 'd-2', quantityRequested: 5, quantityDispensed: 5 }),
+          // A cancelled fill owes nothing: reversing it put the stock back.
+          makeDispense({
+            id: 'd-3',
+            quantityRequested: 99,
+            quantityDispensed: 0,
+            status: 'CANCELLED',
+          }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toEqual({ amount: 20, unit: 'tablets' });
+    expect(el('[data-testid="rx-outstanding-quantity"]')!.textContent).toContain('20');
+  });
+
+  /* ── G11: the dispense and routing history ──────────────────── */
+
+  it('renders both histories in the detail panel for a prescriber', async () => {
+    const rx = makeRx({ status: 'PARTNER_DISPENSED' });
+    await setup({
+      list: [rx],
+      dispenses: of(page([makeDispense()])),
+      routings: of(page([makeRouting({ status: 'COMPLETED', remainingQuantity: 12 })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-pharmacy-history"]')).not.toBeNull();
+    expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
+    expect(el('[data-testid="rx-routing-history"]')).not.toBeNull();
+    expect(el('[data-testid="rx-routing-history"]')!.textContent).toContain('12');
+    // The routing type and decision status are labels, never wire tokens.
+    expect(el('[data-testid="rx-routing-history"]')!.textContent).toContain('Partner pharmacy');
+    expect(el('[data-testid="rx-routing-history"]')!.textContent).not.toContain('BACKORDER');
+  });
+
+  it('hides the history from a role the endpoints refuse, instead of 403-ing at them', async () => {
+    // The prescriptions ROUTE admits nurses; neither history endpoint does.
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({ list: [rx], roles: ['ROLE_NURSE'] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-pharmacy-history"]')).toBeNull();
+    expect(pharmacyService.listDispensesByPrescription).not.toHaveBeenCalled();
+    expect(pharmacyService.listRoutingDecisionsByPrescription).not.toHaveBeenCalled();
+  });
+
+  it('says so when there is no history rather than leaving the panel blank', async () => {
+    const rx = makeRx({ status: 'SIGNED' });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-history-empty"]')).not.toBeNull();
+    expect(el('[data-testid="rx-history-error"]')).toBeNull();
+  });
+
+  it('renders a refusal or an outage as an error, NEVER as an empty history', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      dispenses: throwError(() => ({ status: 403 })),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-history-error"]')).not.toBeNull();
+    expect(el('[data-testid="rx-history-empty"]'))
+      .withContext('a 403 rendered as "no fills recorded" is the defect, not the fallback')
+      .toBeNull();
+
+    // And it is retryable rather than terminal.
+    pharmacyService.listDispensesByPrescription.and.returnValue(of(page([makeDispense()])));
+    el('[data-testid="rx-history-retry"]')!.click();
+    fixture.detectChanges();
+    expect(el('[data-testid="rx-history-error"]')).toBeNull();
+    expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
+  });
+
+  it('does not spend two requests opening a draft, which can have no history', async () => {
+    const rx = makeRx({ status: 'DRAFT' });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(pharmacyService.listDispensesByPrescription).not.toHaveBeenCalled();
+    expect(el('[data-testid="rx-pharmacy-history"]')).toBeNull();
+  });
+
+  it('drops the previous prescription history when the panel closes', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({ list: [rx], dispenses: of(page([makeDispense()])) });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+    expect(component.dispenseHistory().length).toBe(1);
+
+    component.closeDetail();
+    fixture.detectChanges();
+    expect(component.dispenseHistory()).toEqual([]);
+    expect(component.routingHistory()).toEqual([]);
+    expect(component.historyError()).toBeFalse();
   });
 });
