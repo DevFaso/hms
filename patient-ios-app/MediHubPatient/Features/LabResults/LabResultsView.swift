@@ -146,7 +146,12 @@ struct LabResultDetailSheet: View {
                             Label("lab_interpretation_abnormal".localized,
                                   systemImage: "exclamationmark.circle")
                                 .foregroundColor(.orange)
-                        } else if result.isNormal {
+                        } else if result.isNormal, result.referenceRange != nil {
+                            // Only when there WAS a range to be inside:
+                            // PatientLabResultServiceImpl.resolveStatus returns
+                            // NORMAL from statusOf(null) too, i.e. when nothing
+                            // graded the row at all, and a qualitative result
+                            // must not be told it is "within normal range".
                             Label("lab_interpretation_normal".localized,
                                   systemImage: "checkmark.circle.fill")
                                 .foregroundColor(.green)

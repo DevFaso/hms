@@ -237,7 +237,7 @@ struct MedicationsView: View {
                             Button(role: .destructive) {
                                 Task { await vm.cancelRefill(id: refill.id ?? "") }
                             } label: {
-                                Label("Cancel", systemImage: "xmark.circle")
+                                Label("cancel".localized, systemImage: "xmark.circle")
                             }
                         }
                     }
@@ -404,7 +404,7 @@ struct MedicationDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("done".localized) { dismiss() }
                 }
             }
         }
@@ -438,18 +438,21 @@ struct PrescriptionDetailSheet: View {
                     }
                 }
 
-                Section("dosage_and_administration".localized) {
-                    if let dosage = prescription.dosage {
-                        detailRow("dosage".localized, dosage)
-                    }
-                    if let freq = prescription.frequency {
-                        detailRow("frequency".localized, freq)
-                    }
-                    if let duration = prescription.duration {
-                        detailRow("duration".localized, duration)
-                    }
-                    if let route = prescription.route {
-                        detailRow("route".localized, route)
+                if prescription.dosage != nil || prescription.frequency != nil
+                    || prescription.duration != nil || prescription.route != nil {
+                    Section("dosage_and_administration".localized) {
+                        if let dosage = prescription.dosage {
+                            detailRow("dosage".localized, dosage)
+                        }
+                        if let freq = prescription.frequency {
+                            detailRow("frequency".localized, freq)
+                        }
+                        if let duration = prescription.duration {
+                            detailRow("duration".localized, duration)
+                        }
+                        if let route = prescription.route {
+                            detailRow("route".localized, route)
+                        }
                     }
                 }
 
@@ -467,7 +470,7 @@ struct PrescriptionDetailSheet: View {
 
                 if let pharmacy = prescription.pharmacyName, !pharmacy.isEmpty {
                     Section("pharmacy".localized) {
-                        detailRow("pharmacy".localized, pharmacy)
+                        Text(pharmacy)
                     }
                 }
 
@@ -482,7 +485,7 @@ struct PrescriptionDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("done".localized) { dismiss() }
                 }
             }
         }
