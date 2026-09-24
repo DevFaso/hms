@@ -18,6 +18,7 @@ import { EMPTY, Subject } from 'rxjs';
 import { catchError, switchMap, tap } from 'rxjs/operators';
 
 import { RoleContextService } from '../../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../../core/role-equivalence';
 import { ToastService } from '../../core/toast.service';
 import { PrescriptionService } from '../../services/prescription.service';
 
@@ -84,7 +85,19 @@ export class PrescriptionClarificationComponent {
    */
   static readonly REQUEST_ROLES = ['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER', 'ROLE_SUPER_ADMIN'];
 
-  /** {@code /resolve-clarification} is ROLE_DOCTOR only — no role hierarchy backs it. */
+  /**
+   * {@code /resolve-clarification} is ROLE_DOCTOR — and a physician or surgeon
+   * IS one here. {@code RoleExpansion} adds ROLE_DOCTOR to their authorities
+   * before the annotation runs, and the service behind it only needs a Staff
+   * profile at the prescribing hospital ({@code resolveDoctorAtHospital}), not
+   * a second role-code lookup — so the call genuinely succeeds for them.
+   *
+   * <p>This list therefore stays one role and the gate expands, via
+   * {@code roleSatisfies}, rather than the three names being spelled out. The
+   * distinction matters: on paths where the service DOES re-check the role
+   * code per hospital, clearing the annotation is not clearing the endpoint,
+   * and offering the control produces a button that always fails.
+   */
   static readonly RESOLVE_ROLES = ['ROLE_DOCTOR'];
 
   /**
@@ -92,8 +105,20 @@ export class PrescriptionClarificationComponent {
    * read the exchange text: the work-queue projection carries the flag but
    * not the words. PHARMACY_VERIFIER is deliberately absent — the endpoint
    * refuses it, so the component explains instead of firing a certain 403.
+   *
+   * <p>SUPER_ADMIN is present although the annotation does not name it:
+   * {@code SUPER_ADMIN_INHERITS} grants ROLE_DOCTOR, so the endpoint returns
+   * the full exchange to them. Without it a super-admin was offered a "read
+   * the prescriber's answer" button that then told them the answer was
+   * unreadable — for data the API would have handed over.
    */
-  static readonly READ_ROLES = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'];
+  static readonly READ_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_PHARMACIST',
+    'ROLE_SUPER_ADMIN',
+  ];
 
   /**
    * Statuses the backend lets a question be raised from. Mirrors
@@ -221,12 +246,46 @@ export class PrescriptionClarificationComponent {
       PrescriptionClarificationComponent.CLARIFIABLE_STATUSES.includes(this.status() ?? ''),
   );
 
+  /**
+   * roleSatisfies, not hasAnyActiveRole: {@code RoleContextService} stores the
+   * raw JWT roles, so a surgeon scoped to ROLE_SURGEON failed a bare
+   * membership test and never saw the answer control — leaving their own
+   * PENDING_CLARIFICATION order stuck, which is the state this component
+   * exists to unstick. Falls back to the whole role list when no single
+   * active role is set, since activeRole is only assigned for single-role
+   * users. Same shape as {@code consultations.ts}.
+   */
   protected readonly canResolve = computed(
     () =>
       !this.isPharmacy() &&
-      this.roleContext.hasAnyActiveRole(PrescriptionClarificationComponent.RESOLVE_ROLES) &&
+      this.holdsAnyOf(PrescriptionClarificationComponent.RESOLVE_ROLES) &&
       this.status() === 'PENDING_CLARIFICATION',
   );
+
+  /**
+   * Does the caller hold one of these roles, counting the equivalences the
+   * backend counts?
+   *
+   * <p>{@code RoleContextService} stores the raw JWT roles, so a bare
+   * membership test refuses a surgeon every role list naming ROLE_DOCTOR —
+   * including the one that lets them answer their own stuck order. Falls back
+   * to the whole role list when no single active role is set, since
+   * activeRole is only assigned for single-role users. Same shape as
+   * {@code consultations.ts}, which documents the trap.
+   *
+   * <p>REQUEST_ROLES does not go through this: it names no ROLE_DOCTOR, so
+   * the expansion would be a no-op, and a pharmacist is not a doctor by any
+   * rule.
+   */
+  private holdsAnyOf(required: string[]): boolean {
+    const active = this.roleContext.activeRole;
+    if (active) {
+      return roleSatisfies(required, active);
+    }
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((role) =>
+      required.includes(role),
+    );
+  }
 
   /**
    * Whether this user may read the exchange text at all. Separate from
@@ -234,7 +293,7 @@ export class PrescriptionClarificationComponent {
    * not on {@code GET /prescriptions/{id}}.
    */
   protected readonly canReadExchange = computed(() =>
-    this.roleContext.hasAnyActiveRole(PrescriptionClarificationComponent.READ_ROLES),
+    this.holdsAnyOf(PrescriptionClarificationComponent.READ_ROLES),
   );
 
   /**

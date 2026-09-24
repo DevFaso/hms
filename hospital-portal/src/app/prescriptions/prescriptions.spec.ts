@@ -83,6 +83,11 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
             globalView: signal(false),
             activeHospitalId: 'h-1',
             hasAnyActiveRole: () => true,
+            // The real service exposes these too, and the clarification
+            // control reads them for doctor equivalence. A stub carrying only
+            // hasAnyActiveRole threw once the control started expanding roles.
+            activeRoles: ['ROLE_DOCTOR'],
+            activeRole: 'ROLE_DOCTOR',
           },
         },
         {
@@ -239,6 +244,11 @@ describe('PrescriptionsComponent — signing', () => {
             globalView: signal(false),
             activeHospitalId: 'h-1',
             hasAnyActiveRole: () => true,
+            // The real service exposes these too, and the clarification
+            // control reads them for doctor equivalence. A stub carrying only
+            // hasAnyActiveRole threw once the control started expanding roles.
+            activeRoles: ['ROLE_DOCTOR'],
+            activeRole: 'ROLE_DOCTOR',
           },
         },
         {
@@ -422,6 +432,14 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
             activeHospitalId: 'h-1',
             // Mirrors the real service: the caller's active role decides.
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+            get activeRoles() {
+              return activeRoles;
+            },
+            // As the real service does: a single active role is pinned only
+            // when the account holds exactly one.
+            get activeRole() {
+              return activeRoles.length === 1 ? activeRoles[0] : null;
+            },
           },
         },
         {
@@ -607,6 +625,12 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
             globalView: signal(false),
             activeHospitalId: 'h-1',
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => activeRoles.includes(r)),
+            get activeRoles() {
+              return activeRoles;
+            },
+            get activeRole() {
+              return activeRoles.length === 1 ? activeRoles[0] : null;
+            },
           },
         },
         {

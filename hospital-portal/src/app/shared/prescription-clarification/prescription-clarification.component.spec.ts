@@ -4,6 +4,7 @@ import { Subject, of, throwError } from 'rxjs';
 
 import { PrescriptionClarificationComponent } from './prescription-clarification.component';
 import { RoleContextService } from '../../core/role-context.service';
+import { roleContextStub } from '../../testing/role-context.stub';
 import { ToastService } from '../../core/toast.service';
 import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
 
@@ -18,7 +19,7 @@ describe('PrescriptionClarificationComponent', () => {
   let component: PrescriptionClarificationComponent;
   let prescriptions: jasmine.SpyObj<PrescriptionService>;
   let toast: jasmine.SpyObj<ToastService>;
-  let activeRoles: string[];
+  const roleState = { superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_PHARMACIST'] };
 
   const el = (testId: string): HTMLElement | null =>
     fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
@@ -34,7 +35,8 @@ describe('PrescriptionClarificationComponent', () => {
   }
 
   function create(roles: string[], inputs: Inputs): void {
-    activeRoles = roles;
+    roleState.roles = roles;
+    roleState.superAdmin = roles.includes('ROLE_SUPER_ADMIN');
     fixture = TestBed.createComponent(PrescriptionClarificationComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('mode', inputs.mode);
@@ -48,7 +50,8 @@ describe('PrescriptionClarificationComponent', () => {
   }
 
   beforeEach(async () => {
-    activeRoles = ['ROLE_PHARMACIST'];
+    roleState.roles = ['ROLE_PHARMACIST'];
+    roleState.superAdmin = false;
     prescriptions = jasmine.createSpyObj('PrescriptionService', [
       'getById',
       'requestClarification',
@@ -65,10 +68,11 @@ describe('PrescriptionClarificationComponent', () => {
         { provide: PrescriptionService, useValue: prescriptions },
         { provide: ToastService, useValue: toast },
         {
+          // The shared stub, not a hand-rolled one: it exposes activeRole and
+          // activeRoles, which the doctor-equivalence path reads. A stub with
+          // only hasAnyActiveRole cannot exercise that path at all.
           provide: RoleContextService,
-          useValue: {
-            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
-          },
+          useValue: roleContextStub(roleState),
         },
       ],
     }).compileComponents();
@@ -111,6 +115,22 @@ describe('PrescriptionClarificationComponent', () => {
 
     create(['ROLE_PHARMACIST'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
     expect(el('rx-clarification-open-rx-1')).toBeNull();
+  });
+
+  it('offers the resolve control to a surgeon, who really can answer', () => {
+    // RoleExpansion adds ROLE_DOCTOR to a surgeon's authorities before the
+    // annotation runs, and the service behind it only needs a Staff profile at
+    // the prescribing hospital — no second role-code lookup — so the call
+    // succeeds. A bare membership test hid the control and left the surgeon's
+    // own order stuck in PENDING_CLARIFICATION, which is the state this
+    // component exists to clear.
+    create(['ROLE_SURGEON'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
+    expect(el('rx-clarification-open-rx-1')).not.toBeNull();
+  });
+
+  it('offers it to a physician for the same reason', () => {
+    create(['ROLE_PHYSICIAN'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
+    expect(el('rx-clarification-open-rx-1')).not.toBeNull();
   });
 
   it('does not offer the resolve control on a row with no question open', () => {
