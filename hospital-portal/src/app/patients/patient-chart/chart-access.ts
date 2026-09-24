@@ -14,6 +14,14 @@ import { DOCTOR_EQUIVALENT_ROLES } from '../../core/role-equivalence';
  */
 const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
 
+/*
+ * Every list in this file that names a doctor uses DOCTOR_ROLES. Leaving any
+ * one of them on the bare name made the surgeon's patient page half-populated
+ * — a Chart tab and no Vitals, Encounters, Appointments or Chart Review —
+ * even though RoleExpansion grants them ROLE_DOCTOR and all four backends
+ * admit it.
+ */
+
 /**
  * Role lists mirroring the backend @PreAuthorize gates on the patient-chart
  * endpoints (allergies / diagnoses / chart-updates / doctor-timeline).
@@ -119,7 +127,7 @@ export const CHART_VIEW_ROLES: string[] = [
 export const VITALS_VIEW_ROLES: string[] = [
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_DOCTOR',
+  ...DOCTOR_ROLES,
   'ROLE_PHARMACIST',
   'ROLE_RADIOLOGIST',
   'ROLE_ANESTHESIOLOGIST',
@@ -139,7 +147,7 @@ export const APPOINTMENT_VIEW_ROLES: string[] = [
   'ROLE_HOSPITAL_ADMIN',
   'ROLE_STAFF',
   'ROLE_RECEPTIONIST',
-  'ROLE_DOCTOR',
+  ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
   'ROLE_RADIOLOGIST',
@@ -148,7 +156,7 @@ export const APPOINTMENT_VIEW_ROLES: string[] = [
 ];
 
 export const ENCOUNTER_VIEW_ROLES: string[] = [
-  'ROLE_DOCTOR',
+  ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
   'ROLE_RADIOLOGIST',
@@ -168,7 +176,7 @@ export const ENCOUNTER_VIEW_ROLES: string[] = [
  * those queues.
  */
 export const CHART_REVIEW_VIEW_ROLES: string[] = [
-  'ROLE_DOCTOR',
+  ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
   'ROLE_RECEPTIONIST',

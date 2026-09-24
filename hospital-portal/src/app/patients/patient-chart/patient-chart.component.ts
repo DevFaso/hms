@@ -308,10 +308,14 @@ export class PatientChartComponent implements OnInit, OnChanges {
         if (this.canViewUpdates() && this.updates().length === 0) this.loadUpdates();
         break;
       case 'labs':
-        // Keyed on "which scope have we read", not on "is the list empty": a
-        // patient with no labs would otherwise re-fetch both endpoints on
-        // every visit, and a failed read would be retried silently instead of
-        // offering Retry.
+        // Two reasons to read: the scope moved, or there is nothing on screen
+        // and nothing wrong. The second is what the other three sections have
+        // always done — a result released while the chart is open must not sit
+        // behind a cached "no results" — and it costs a re-read per visit only
+        // for a patient who genuinely has no labs. A read already in flight is
+        // not an empty section (see labsEmpty), and a FAILED read is not
+        // either: it keeps its error card and its Retry rather than being
+        // retried silently on every visit.
         if (
           this.canViewLabs() &&
           (this.labsLoadedFor() !== this.hospitalId() || this.labsEmpty())
