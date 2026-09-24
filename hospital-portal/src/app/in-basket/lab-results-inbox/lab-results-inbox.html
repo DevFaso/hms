@@ -13,6 +13,7 @@
       type="button"
       class="btn-refresh"
       (click)="load()"
+      [disabled]="loading()"
       [attr.aria-label]="'inBasket.labResultsRefresh' | translate"
     >
       ↻
@@ -61,7 +62,7 @@
           @if (group.items.length > 0) {
             <tbody class="severity-group">
               <tr class="group-row">
-                <th scope="colgroup" colspan="6">
+                <th scope="rowgroup" colspan="6">
                   <span [class]="group.badgeClass">{{ group.labelKey | translate }}</span>
                   <span class="group-count">{{ group.items.length }}</span>
                 </th>

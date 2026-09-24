@@ -68,14 +68,44 @@ describe('LabResultsInboxComponent', () => {
     ]);
 
     const groups = component.groups();
-    expect(groups.map((g) => g.key)).toEqual(['CRITICAL', 'ABNORMAL', 'NORMAL']);
+    expect(groups.map((g) => g.key)).toEqual(['CRITICAL', 'ABNORMAL', 'NORMAL', 'OTHER']);
     expect(groups[0].items.length).toBe(1);
     expect(groups[0].items[0].testName).toBe('Potassium');
+    expect(groups[3].items.length).toBe(0);
 
     const rendered = Array.from(
       fixture.nativeElement.querySelectorAll('tbody.severity-group tr td:first-child'),
     ).map((cell) => (cell as HTMLElement).textContent?.trim());
     expect(rendered).toEqual(['Potassium', 'Hémoglobine', 'Glycémie']);
+  });
+
+  it('never labels an unrecognised grade "Normal"', () => {
+    // AbnormalFlag.severity() cannot produce this today, but a second
+    // producer of DoctorResultQueueItemDTO could — and an out-of-range
+    // result shown to the ordering physician as "Normal" is the one
+    // failure this worklist exists to prevent.
+    setup([item({ abnormalFlag: 'ABNORMAL_HIGH', testName: 'Potassium' })]);
+
+    expect(component.flagKey(item({ abnormalFlag: 'ABNORMAL_HIGH' }))).toBe('inBasket.labUnknown');
+    const groups = component.groups();
+    expect(groups.find((g) => g.key === 'NORMAL')?.items.length).toBe(0);
+    expect(groups.find((g) => g.key === 'OTHER')?.items.length).toBe(1);
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Potassium');
+    expect(text).toContain('inBasket.labUnknown');
+    expect(text).not.toContain('inBasket.labNormal');
+  });
+
+  it('disables refresh while a read is in flight, so a stale snapshot cannot land last', () => {
+    setup([item()]);
+    const button = fixture.nativeElement.querySelector('.btn-refresh') as HTMLButtonElement;
+    expect(button.disabled).toBeFalse();
+
+    component.loading.set(true);
+    fixture.detectChanges();
+
+    expect(button.disabled).toBeTrue();
   });
 
   it('marks a critical row structurally, not by colour alone', () => {

@@ -291,6 +291,15 @@
     <!-- ── Orders: what was asked for, and where it has got to ── -->
     @if (canViewLabOrders()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>
+      <!--
+        The two blocks do NOT have the same reach and the section must not
+        pretend they do. GET /lab-orders filters on the acting hospital
+        (ordering OR performing); /patients/{id}/lab-results spans every
+        hospital the record-access policy makes readable. Without this line a
+        patient treated elsewhere shows released results above an orders table
+        reading "no lab orders", as if the order record were missing.
+      -->
+      <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
       @if (labOrdersLoading()) {
         <div class="loading-state"><div class="spinner"></div></div>
       } @else if (labOrdersError()) {
@@ -339,6 +348,11 @@
             </tbody>
           </table>
         </div>
+        @if (labOrdersTruncated()) {
+          <p class="labs-hint">
+            {{ 'CHART.LAB_TRUNCATED' | translate: { count: labPageSize } }}
+          </p>
+        }
       }
     }
 
@@ -417,6 +431,11 @@
             </tbody>
           </table>
         </div>
+        @if (labResultsTruncated()) {
+          <p class="labs-hint">
+            {{ 'CHART.LAB_TRUNCATED' | translate: { count: labPageSize } }}
+          </p>
+        }
       }
     }
   }

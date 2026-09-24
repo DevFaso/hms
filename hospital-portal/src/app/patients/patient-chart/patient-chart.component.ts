@@ -198,6 +198,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
   labOrdersError = signal(false);
   /** True once a labs visit has been attempted, so an empty state is honest. */
   labsLoaded = signal(false);
+  /** Exposed for the "showing the latest N" hint below each lab table. */
+  readonly labPageSize = LAB_PAGE_SIZE;
+  /**
+   * A full page is the only signal either endpoint gives that it cut the list:
+   * `/patients/{id}/lab-results` returns a bare array and `LabService
+   * .listOrders` drops the page's `totalElements`. Rendering the hint on a
+   * list that happens to hold exactly N rows overstates it slightly; saying
+   * nothing on a list that WAS cut reads as a complete history, which is the
+   * failure that matters on a chart.
+   */
+  readonly labResultsTruncated = computed(() => this.labResults().length >= LAB_PAGE_SIZE);
+  readonly labOrdersTruncated = computed(() => this.labOrders().length >= LAB_PAGE_SIZE);
 
   /* ── Timeline ── */
   timeline = signal<PatientTimeline | null>(null);

@@ -598,6 +598,12 @@ tr.foreign-row td:first-child,
   }
 }
 
+.labs-hint {
+  margin: 6px 0 0;
+  color: #5c5c74;
+  font-size: 0.8rem;
+}
+
 .lab-code {
   display: block;
   color: #5c5c74;
@@ -644,9 +650,19 @@ tr.foreign-row td:first-child,
 }
 
 /* The row is also marked structurally, so the "not released yet" signal
- * survives for anyone who cannot resolve the colour. */
+ * survives for anyone who cannot resolve the colour.
+ *
+ * A row can be BOTH pending and from another hospital, and `tr.foreign-row
+ * td:first-child` above has the same specificity, so the later rule would
+ * simply replace it and take the E8 #50 provenance marker off the row. The
+ * combined selector keeps both readings: the foreign colour, dashed for
+ * not-yet-released. */
 tr.pending-row td:first-child {
   border-left: 3px dashed #94a3b8;
+}
+
+tr.pending-row.foreign-row td:first-child {
+  border-left: 3px dashed var(--primary);
 }
 
 .lab-pending-cell {

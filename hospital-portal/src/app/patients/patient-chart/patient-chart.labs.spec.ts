@@ -255,6 +255,45 @@ describe('PatientChartComponent — labs section', () => {
     expect(text).toContain('Resulted');
   });
 
+  it('says the orders block is scoped to this hospital, because the results block is not', () => {
+    setup({ roles: ['ROLE_DOCTOR'] });
+    openLabs();
+
+    expect(fixture.nativeElement.textContent).toContain('CHART.LAB_ORDERS_SCOPE_HINT');
+  });
+
+  it('says so when a list came back capped, instead of reading as a full history', () => {
+    const page = Array.from({ length: 25 }, (_, i) => released({ id: 'r-' + i }));
+    setup({ roles: ['ROLE_DOCTOR'], results: page, orders: [order()] });
+    openLabs();
+
+    expect(component.labResultsTruncated()).toBeTrue();
+    expect(component.labOrdersTruncated()).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain('CHART.LAB_TRUNCATED');
+  });
+
+  it('shows no truncation hint on a short list', () => {
+    setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
+    openLabs();
+
+    expect(component.labResultsTruncated()).toBeFalse();
+    expect(fixture.nativeElement.textContent).not.toContain('CHART.LAB_TRUNCATED');
+  });
+
+  it('keeps the cross-hospital marker on a row that is both foreign and pending', () => {
+    // Same specificity, later rule wins: without the combined selector the
+    // pending border silently replaces the E8 #50 provenance border.
+    setup({
+      roles: ['ROLE_DOCTOR'],
+      results: [unreleased({ hospitalId: 'h-2', hospitalName: 'CHU Yalgado' })],
+    });
+    openLabs();
+
+    const row = fixture.nativeElement.querySelector('tr.pending-row');
+    expect(row).not.toBeNull();
+    expect(row.classList.contains('foreign-row')).toBeTrue();
+  });
+
   /* ── Empty and error states ── */
 
   it('renders the empty state for both blocks when the patient has no labs', () => {

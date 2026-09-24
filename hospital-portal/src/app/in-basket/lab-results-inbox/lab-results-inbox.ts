@@ -14,7 +14,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 
 /** One severity bucket of the review queue, as the template renders it. */
 interface LabResultGroup {
-  key: 'CRITICAL' | 'ABNORMAL' | 'NORMAL';
+  key: 'CRITICAL' | 'ABNORMAL' | 'NORMAL' | 'OTHER';
   labelKey: string;
   badgeClass: string;
   items: DoctorResultQueueItem[];
@@ -52,8 +52,12 @@ export class LabResultsInboxComponent implements OnInit {
 
   /**
    * The queue split by severity, in the order the backend already sorts by.
-   * Anything the backend grades outside the three-value family falls into
-   * NORMAL's bucket rather than disappearing from the worklist.
+   *
+   * The NORMAL bucket matches the flag EXACTLY. A grade outside the
+   * three-value family — which `AbnormalFlag.severity()` cannot produce today,
+   * but a second producer of `DoctorResultQueueItemDTO` could — lands in
+   * OTHER, labelled as unknown, rather than being shown to the ordering
+   * physician as "Normal". Nothing is ever dropped from the worklist.
    */
   readonly groups = computed<LabResultGroup[]>(() => {
     const items = this.results();
@@ -74,7 +78,18 @@ export class LabResultsInboxComponent implements OnInit {
         key: 'NORMAL',
         labelKey: 'inBasket.labNormal',
         badgeClass: 'flag-badge flag-normal',
-        items: items.filter((r) => r.abnormalFlag !== 'CRITICAL' && r.abnormalFlag !== 'ABNORMAL'),
+        items: items.filter((r) => r.abnormalFlag === 'NORMAL'),
+      },
+      {
+        key: 'OTHER',
+        labelKey: 'inBasket.labUnknown',
+        badgeClass: 'flag-badge',
+        items: items.filter(
+          (r) =>
+            r.abnormalFlag !== 'CRITICAL' &&
+            r.abnormalFlag !== 'ABNORMAL' &&
+            r.abnormalFlag !== 'NORMAL',
+        ),
       },
     ];
   });
@@ -117,8 +132,12 @@ export class LabResultsInboxComponent implements OnInit {
         return 'inBasket.labCritical';
       case 'ABNORMAL':
         return 'inBasket.labAbnormal';
-      default:
+      case 'NORMAL':
         return 'inBasket.labNormal';
+      default:
+        // Never "Normal" by default — the same rule the chart's labStatusKey
+        // follows. An unrecognised grade says so.
+        return 'inBasket.labUnknown';
     }
   }
 
