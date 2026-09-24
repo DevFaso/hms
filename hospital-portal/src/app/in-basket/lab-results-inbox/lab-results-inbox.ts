@@ -173,12 +173,13 @@ export class LabResultsInboxComponent implements OnInit {
   }
 
   load(): void {
-    // Only the latest read may write. The ↻ control is disabled while one is
-    // in flight, but the two Retry controls are reachable from the error
-    // states, so two reads can still overlap: a slow failure landing after a
-    // fast success drew the stale banner over current rows, and a slow
-    // success landing last overwrote newer ones. Same guard the chart's two
-    // lab reads and the dashboard's copy of this queue carry.
+    // Only the latest read may write. Disabling the controls is not enough on
+    // its own — the ↻ is disabled while a read is in flight, but the two
+    // Retry controls live in branches that are only rendered once `loading`
+    // is already false, so a second read can always be started. A slow
+    // failure landing after a fast success drew the stale banner over current
+    // rows; a slow success landing last overwrote newer ones. Same guard the
+    // chart's two lab reads and the dashboard's copy of this queue carry.
     const request = ++this.queueRequest;
     const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);

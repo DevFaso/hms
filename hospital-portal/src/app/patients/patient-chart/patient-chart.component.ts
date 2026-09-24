@@ -385,6 +385,14 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly labsScoped = computed(() => this.labHospitalId() != null);
 
   /**
+   * Whether this account has the scope chip at all. `hospital-scope-chip`
+   * renders only for a super-admin, so the "pick a hospital" hint is
+   * actionable only for them; anyone else with no scope has no assignment to
+   * pick from and needs to be told that instead.
+   */
+  readonly canPickHospitalScope = computed(() => this.roleContext.isSuperAdmin());
+
+  /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
    * global view and "pinned to my own hospital" are distinguishable — they
    * are the same string under `activeHospitalId`, which is how a chip toggle
@@ -408,9 +416,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
     // now is only correct because the watcher happens to clear them in the
     // same pass. Reading the stored key makes the invariant structural — a
     // row can never be compared against a scope it was not fetched under,
-    // which is what inverted the marker before.
+    // which is what inverted the marker before. The key is either null or a
+    // real hospital id: `loadLabs()` returns before writing it when unscoped,
+    // so the sentinel never reaches this comparison.
     const scope = this.labsLoadedFor();
-    return !!row.hospitalId && !!scope && scope !== UNSCOPED_KEY && row.hospitalId !== scope;
+    return !!row.hospitalId && !!scope && row.hospitalId !== scope;
   }
 
   setSection(section: ChartSection): void {

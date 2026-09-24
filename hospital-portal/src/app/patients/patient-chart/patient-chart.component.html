@@ -291,9 +291,20 @@
     <!--
       No hospital scope: both lab reads would go out unscoped, read across
       every tenant and write no cross-hospital reach row. The section declines
-      to read and points at the chip instead — see labsScoped().
+      to read — see labsScoped() — and says what can be done about it.
+
+      "Pick a hospital" only helps someone who HAS the picker: the scope chip
+      renders for a super-admin and nobody else. A clinical account whose
+      assignments have all been deactivated lands here too, and telling them
+      to use a control that is not on their screen is a dead end.
     -->
-    <app-hospital-scope-hint />
+    @if (canPickHospitalScope()) {
+      <app-hospital-scope-hint />
+    } @else {
+      <p class="labs-hint" role="status" data-testid="labs-no-hospital">
+        {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
+      </p>
+    }
   }
   @if (section() === 'labs' && canViewLabs() && labsScoped()) {
     <!--

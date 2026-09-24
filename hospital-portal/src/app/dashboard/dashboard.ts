@@ -70,6 +70,7 @@ import { EncounterService } from '../services/encounter.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
+import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
@@ -157,6 +158,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly portalService = inject(PatientPortalService);
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly labService = inject(LabService);
   private readonly translate = inject(TranslateService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly pharmacyService = inject(PharmacyService);
@@ -2557,15 +2559,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Acknowledge a result from the review panel.
+   *
+   * This used to filter the row out of the local array and nothing else,
+   * although `POST /lab-results/{id}/acknowledge` exists, `LabService`
+   * already wraps it, and the queue item's id IS the `LabResult` id
+   * (`ResultReviewServiceImpl.toQueueItem` builds it from
+   * `result.getId()`). So a physician acknowledging a CRITICAL row watched it
+   * disappear while `LabResult.acknowledged` stayed false and the critical
+   * escalation sweep went on paging for it.
+   *
+   * The row is removed only once the server has taken it; a failure leaves it
+   * on screen and says so, because a control that silently does nothing is
+   * worse than one that reports a problem.
+   *
+   * `resultQueueError` is deliberately NOT cleared here. Clearing it once the
+   * last row was dismissed let a physician turn a 502 into the green "all
+   * results reviewed" card by clicking through stale rows — the exact
+   * all-clear removing `catchError` was meant to make impossible. Only a read
+   * that actually succeeds clears it.
+   */
   acknowledgeResult(resultId: string): void {
-    // Local only: there is no acknowledge endpoint, so nothing is persisted
-    // and the row is back on the next successful read.
-    this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
-    // `resultQueueError` is deliberately NOT cleared here. Clearing it once
-    // the last row was dismissed let a physician turn a 502 into the green
-    // "all results reviewed" card by clicking through the stale rows — the
-    // exact all-clear removing `catchError` was meant to make impossible.
-    // Only a read that actually succeeds clears it.
+    this.labService.acknowledgeResult(resultId).subscribe({
+      next: () => this.resultQueue.update((q) => q.filter((r) => r.id !== resultId)),
+      error: () => this.toast.error(this.t('DASHBOARD.ACKNOWLEDGE_FAILED')),
+    });
   }
 
   /**
