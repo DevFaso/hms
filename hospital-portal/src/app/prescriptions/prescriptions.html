@@ -462,8 +462,25 @@
                   </div>
                 }
               </div>
+              <!-- The pharmacist asked something and the prescriber answered.
+                   Labelled, because an unattributed paragraph under a pharmacy
+                   heading reads as a note somebody left rather than a question
+                   somebody is waiting on. -->
               @if (rx.clarificationReason) {
-                <p data-testid="rx-clarification-reason">{{ rx.clarificationReason }}</p>
+                <div class="detail-field">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.CLARIFICATION.QUESTION' | translate
+                  }}</span>
+                  <p data-testid="rx-clarification-reason">{{ rx.clarificationReason }}</p>
+                </div>
+              }
+              @if (rx.clarificationResponse) {
+                <div class="detail-field">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.CLARIFICATION.ANSWER' | translate
+                  }}</span>
+                  <p data-testid="rx-clarification-response">{{ rx.clarificationResponse }}</p>
+                </div>
               }
             </div>
           }

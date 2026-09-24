@@ -5685,6 +5685,10 @@
       "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
       "ERROR": "No se pudo cargar el historial de dispensación.",
       "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación."
+    },
+    "CLARIFICATION": {
+      "QUESTION": "Pregunta del farmacéutico",
+      "ANSWER": "Su respuesta"
     }
   },
   "PROFILE": {

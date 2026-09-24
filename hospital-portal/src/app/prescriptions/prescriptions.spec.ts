@@ -1191,6 +1191,47 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-tab-draft"]')!.textContent).toContain('2');
   });
 
+  it('colours the badge by the tab, so the two can never disagree', async () => {
+    // A seventeen-case switch put TRANSMITTED (untouched in the pharmacy
+    // queue) in the same green as DISPENSED, and PARTNER_REJECTED (a live
+    // order to re-route) in the same red as CANCELLED. A prescriber scanning
+    // a list of controlled drugs reads colour before text.
+    await setup();
+
+    const classByTab: Record<string, string> = {};
+    for (const status of PRESCRIPTION_STATUSES) {
+      const tab = TAB_BY_STATUS[status];
+      const cls = component.getStatusClass(status);
+      expect(cls).withContext(`${status} renders an unstyled badge`).toBeTruthy();
+      if (classByTab[tab]) {
+        expect(cls).withContext(`${status} disagrees with its own tab`).toBe(classByTab[tab]);
+      } else {
+        classByTab[tab] = cls;
+      }
+    }
+    // Five buckets, five distinct colours — no two tabs share one.
+    expect(new Set(Object.values(classByTab)).size).toBe(Object.keys(classByTab).length);
+  });
+
+  it('keeps the clarification exchange readable after the prescriber answers it', async () => {
+    // resolveClarification restores the status the prescription held BEFORE
+    // the query — often SIGNED, which is not pharmacy-owned, so every
+    // pharmacy column goes back to null.
+    const rx = makeRx({
+      status: 'SIGNED',
+      clarificationReason: 'Dose looks high for this weight',
+      clarificationResponse: 'Confirmed, weight-based dosing is intended',
+    });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-pharmacy-state"]')).not.toBeNull();
+    expect(el('[data-testid="rx-clarification-reason"]')!.textContent).toContain('Dose looks high');
+    expect(el('[data-testid="rx-clarification-response"]')!.textContent).toContain('Confirmed');
+  });
+
   it('drops the previous prescription history when the panel closes', async () => {
     const rx = makeRx({ status: 'DISPENSED' });
     await setup({ list: [rx], dispenses: of(page([makeDispense()])) });

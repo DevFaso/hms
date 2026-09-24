@@ -1,11 +1,13 @@
 import {
   Component,
   computed,
+  DestroyRef,
   inject,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -146,6 +148,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly pharmacyService = inject(PharmacyService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -742,6 +745,20 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
+   * The pharmacist's question and the prescriber's answer, once either exists.
+   *
+   * <p>Checked separately from {@link #hasPharmacyState} because
+   * `resolveClarification` restores the status the prescription held BEFORE
+   * the query — often SIGNED, which is not a pharmacy-owned status, so
+   * `lastPharmacyEvent` goes back to null. Keying the section off the pharmacy
+   * columns alone made the exchange disappear from the prescriber's screen the
+   * moment they answered it.
+   */
+  hasClarificationExchange(p: PrescriptionResponse): boolean {
+    return !!(p.clarificationReason || p.clarificationResponse);
+  }
+
+  /**
    * Whether the "Pharmacy and dispatch" block has anything to say. Two of the
    * facts in it — the refusing partner and the outstanding quantity — come out
    * of the history rather than off the prescription, so a PARTIALLY_FILLED row
@@ -751,6 +768,7 @@ export class PrescriptionsComponent implements OnInit {
     return (
       this.hasPharmacyState(p) ||
       this.needsAttention(p) ||
+      this.hasClarificationExchange(p) ||
       !!this.outstandingQuantity() ||
       !!this.lastRefusedBy()
     );
@@ -896,6 +914,9 @@ export class PrescriptionsComponent implements OnInit {
             ),
           ),
         ),
+        // Navigating away with the panel open otherwise leaves the requests
+        // running and this subscription writing signals on a dead component.
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((res) => {
         if (this.selectedPrescription()?.id !== res.prescriptionId) return;
@@ -983,40 +1004,31 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /**
-   * A badge colour for every status the backend can send. The eleven
-   * pharmacy-owned states used to fall through to `''` and render as unstyled
-   * text next to the four that had a badge, which read as a rendering bug.
-   * No new colours: each maps onto one of the five classes the stylesheet
-   * already defines, so the contrast pairs stay the ones axe has checked.
+   * One badge colour per TAB, so the badge and the tab cannot disagree.
+   *
+   * <p>The eleven pharmacy-owned statuses used to fall through to `''` and
+   * render as unstyled text beside the four that had a badge. The obvious fix
+   * — a seventeen-case switch — was worse than it looked: it put
+   * `TRANSMITTED` (sitting untouched in the pharmacy queue) in the same green
+   * as `DISPENSED`, and `PARTNER_REJECTED` (a live order the prescriber must
+   * re-route) in the same red as `CANCELLED`. A prescriber scanning a list of
+   * controlled drugs reads colour before text.
+   *
+   * <p>Deriving the class from `tabForStatus` makes that impossible by
+   * construction, and a new status inherits its bucket's colour rather than
+   * rendering unstyled. Five buckets, five distinct colours the stylesheet
+   * already defines — no new pairs for axe to check.
    */
+  private static readonly TAB_BADGE_CLASS: Readonly<Record<PrescriptionStatusTab, string>> = {
+    draft: 'status-draft',
+    attention: 'status-pending',
+    inPharmacy: 'status-active',
+    dispensed: 'status-completed',
+    closed: 'status-cancelled',
+  };
+
   getStatusClass(status?: string): string {
-    switch (status) {
-      case 'DRAFT':
-        return 'status-draft';
-      case 'PENDING_SIGNATURE':
-      case 'PENDING_CLARIFICATION':
-      case 'PENDING_STOCK':
-      case 'REQUIRES_EXTERNAL_FILL':
-        return 'status-pending';
-      case 'SIGNED':
-      case 'SENT_TO_PARTNER':
-      case 'PARTNER_ACCEPTED':
-      case 'PARTIALLY_FILLED':
-        return 'status-active';
-      case 'TRANSMITTED':
-      case 'DISPENSED':
-      case 'PARTNER_DISPENSED':
-      case 'PRINTED_FOR_PATIENT':
-        return 'status-completed';
-      case 'CANCELLED':
-      case 'TRANSMISSION_FAILED':
-      case 'PARTNER_REJECTED':
-        return 'status-cancelled';
-      case 'DISCONTINUED':
-        return 'status-suspended';
-      default:
-        return '';
-    }
+    return PrescriptionsComponent.TAB_BADGE_CLASS[this.tabForStatus(status)];
   }
 }
 

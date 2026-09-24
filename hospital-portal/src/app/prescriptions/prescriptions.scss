@@ -42,9 +42,9 @@
     background: #e0e7ff;
     color: #3730a3;
   }
-  /* The same amber pair .status-pending and .status-suspended already use in
-     this file — deliberately not a new colour, so the contrast the axe smoke
-     has already cleared is the contrast this card renders. */
+  /* The same amber pair .status-pending already uses in this file —
+     deliberately not a new colour, so the contrast the axe smoke has already
+     cleared is the contrast this card renders. */
   &.attention {
     background: #fef3c7;
     color: #92400e;
@@ -181,10 +181,6 @@
   &.status-cancelled {
     background: #fee2e2;
     color: #991b1b;
-  }
-  &.status-suspended {
-    background: #fef3c7;
-    color: #92400e;
   }
 }
 

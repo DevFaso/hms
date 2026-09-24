@@ -5685,6 +5685,10 @@
       "EMPTY": "Aucune délivrance ni orientation enregistrée pour cette ordonnance.",
       "ERROR": "L'historique de délivrance n'a pas pu être chargé.",
       "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance."
+    },
+    "CLARIFICATION": {
+      "QUESTION": "Question du pharmacien",
+      "ANSWER": "Votre réponse"
     }
   },
   "PROFILE": {
