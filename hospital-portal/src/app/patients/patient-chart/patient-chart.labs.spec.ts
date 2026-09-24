@@ -355,6 +355,72 @@ describe('PatientChartComponent — labs section', () => {
     expect(fixture.nativeElement.textContent).toContain('9.2');
   });
 
+  it('re-reads BOTH blocks when Retry is pressed after the scope moved', () => {
+    // Otherwise the retried block renders the new hospital's rows directly
+    // above the other block's rows from the old one, under one heading.
+    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+      'listLabResults',
+    ]);
+    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listDiagnoses.and.returnValue(of([]));
+    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listLabResults.and.returnValue(throwError(() => new Error('500')));
+    labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
+    labService.listOrders.and.returnValue(of([order()]));
+
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: LabService, useValue: labService },
+        { provide: RoleContextService, useValue: roleContextStub(state) },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => state.roles,
+            getHospitalId: () => state.hospitalId,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(PatientChartComponent);
+    component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+
+    openLabs();
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
+
+    state.hospitalId = 'h-2';
+    patientService.listLabResults.and.returnValue(of([released()]));
+    component.loadLabResults();
+    fixture.detectChanges();
+
+    // Both blocks re-read, under the new scope.
+    expect(labService.listOrders).toHaveBeenCalledTimes(2);
+    expect(patientService.listLabResults.calls.mostRecent().args[1]).toEqual({
+      hospitalId: 'h-2',
+      limit: 25,
+    });
+  });
+
   it('does not re-read on a second visit to a patient with no labs', () => {
     setup({ roles: ['ROLE_DOCTOR'], results: [], orders: [] });
     openLabs();

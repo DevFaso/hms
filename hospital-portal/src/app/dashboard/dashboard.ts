@@ -252,6 +252,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resultQueueError = signal(false);
   /** A read is in flight; the panel shows a spinner, not an empty state. */
   resultQueueLoading = signal(false);
+  /**
+   * Which review-queue read is the current one.
+   *
+   * Two independent triggers can overlap — the panel's Retry and the
+   * dashboard's own Refresh — and a slow FAILING read landing after a fast
+   * successful one would replace freshly fetched rows with an error card that
+   * nothing re-reads. Only the latest request may write.
+   */
+  private resultQueueRequest = 0;
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
   specialization = signal<string | null>(null);
@@ -2560,6 +2569,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * nobody. So the stale rows are cleared AND the panel is told why.
    */
   loadResultReviewQueue(done?: () => void): void {
+    const request = ++this.resultQueueRequest;
+    const isCurrent = (): boolean => request === this.resultQueueRequest;
     this.resultQueueError.set(false);
     // Set BEFORE the request: clearing the error while `resultQueue` is still
     // empty otherwise drew "all results reviewed" for the whole request
@@ -2567,14 +2578,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.resultQueueLoading.set(true);
     this.dashboardService.getResultReviewQueue().subscribe({
       next: (items) => {
-        this.resultQueue.set(items);
-        this.resultQueueLoading.set(false);
+        if (isCurrent()) {
+          this.resultQueue.set(items);
+          this.resultQueueLoading.set(false);
+        }
         done?.();
       },
       error: () => {
-        this.resultQueue.set([]);
-        this.resultQueueError.set(true);
-        this.resultQueueLoading.set(false);
+        if (isCurrent()) {
+          this.resultQueue.set([]);
+          this.resultQueueError.set(true);
+          this.resultQueueLoading.set(false);
+        }
         done?.();
       },
     });

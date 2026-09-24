@@ -606,16 +606,37 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   loadLabs(): void {
     this.labsLoadedFor.set(this.hospitalId());
-    if (this.canViewLabResults()) this.loadLabResults();
-    if (this.canViewLabOrders()) this.loadLabOrders();
+    if (this.canViewLabResults()) this.fetchLabResults();
+    if (this.canViewLabOrders()) this.fetchLabOrders();
   }
 
   /**
-   * Each block's Retry re-reads ONLY that block. One shared retry re-fired
+   * Each block's Retry re-reads ONLY that block — one shared retry re-fired
    * both, so retrying a failed results read replaced the orders table the
    * clinician was reading with a spinner and re-fetched it for nothing.
+   *
+   * Unless the scope moved while the block was in its error state. Then the
+   * two blocks would end up holding two different hospitals' rows under one
+   * heading, so the whole section re-reads instead.
    */
   loadLabResults(): void {
+    if (this.labsLoadedFor() !== this.hospitalId()) {
+      this.loadLabs();
+      return;
+    }
+    this.fetchLabResults();
+  }
+
+  /** As loadLabResults, for the orders block. */
+  loadLabOrders(): void {
+    if (this.labsLoadedFor() !== this.hospitalId()) {
+      this.loadLabs();
+      return;
+    }
+    this.fetchLabOrders();
+  }
+
+  private fetchLabResults(): void {
     this.labResultsLoading.set(true);
     this.labResultsError.set(false);
     this.patientService
@@ -637,7 +658,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
       });
   }
 
-  loadLabOrders(): void {
+  private fetchLabOrders(): void {
     this.labOrdersLoading.set(true);
     this.labOrdersError.set(false);
     this.labService.listOrders({ patientId: this.patientId, size: LAB_PAGE_SIZE }).subscribe({
