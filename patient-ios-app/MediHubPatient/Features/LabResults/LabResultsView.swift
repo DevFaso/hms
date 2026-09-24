@@ -52,6 +52,12 @@ struct LabResultSummaryRow: View {
     /// there is nothing to be reassured by. Neither is a released row whose
     /// status this build cannot name — `.unknown` is exactly the case where
     /// the app does not know whether the value is normal.
+    ///
+    /// A released NORMAL row is left alone even when nothing graded it
+    /// (`resolveStatus` falls through to `statusOf(null)` = NORMAL): the badge
+    /// reports what the wire says, and `LabResult.resultValue` is `@NotBlank`,
+    /// so there is always a value behind it. The stronger claim — "Within
+    /// normal range" — is the one gated on a reference range, in the sheet.
     private var symbol: String {
         if result.isPending { return "hourglass" }
         if result.displayStatus == .unknown { return "questionmark.circle" }
@@ -166,7 +172,12 @@ struct LabResultDetailSheet: View {
                     if let d = result.collectedAt {
                         detailRow("ordered_at".localized, String(d.prefix(10)))
                     }
-                    if let d = result.resultedAt {
+                    // Not while pending: toResponse sets resultedAt BEFORE the
+                    // redaction early-return (fetchRows sorts on resultDate), so
+                    // an unreleased row still carries one — and printing
+                    // "Resulted: 22/09" two rows under "the laboratory has not
+                    // released this result yet" contradicts it.
+                    if !result.isPending, let d = result.resultedAt {
                         detailRow("resulted".localized, String(d.prefix(10)))
                     }
                 }
