@@ -211,11 +211,11 @@ describe('LabResultsInboxComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('inBasket.labTruncated');
   });
 
-  it('returns an empty string rather than "Invalid Date" for a missing timestamp', () => {
+  it('renders a dash, not a blank cell or "Invalid Date", for a missing timestamp', () => {
     setup([item({ resultedAt: '' })]);
 
-    expect(component.formatDate('')).toBe('');
-    expect(component.formatDate(undefined)).toBe('');
-    expect(component.formatDate('not-a-date')).toBe('');
+    expect(component.formatDate('')).toBe('—');
+    expect(component.formatDate(undefined)).toBe('—');
+    expect(component.formatDate('not-a-date')).toBe('—');
   });
 });

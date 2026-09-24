@@ -12,7 +12,15 @@
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
-  @if (results().length === 0) {
+  @if (loadError()) {
+    <div class="rp-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="rp-retry" (click)="requestReload()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (results().length === 0) {
     <div class="rp-empty">
       <span class="material-symbols-outlined">check_circle</span>
       <p>{{ 'DASHBOARD.ALL_RESULTS_REVIEWED' | translate }}</p>

@@ -1906,6 +1906,7 @@
     "REQUIRE_IMMEDIATE_ATTENTION": "Require Immediate Attention",
     "RESERVED": "Reserved",
     "RESOURCE": "Resource",
+    "RESULTS_LOAD_ERROR": "No se pudieron cargar los resultados por revisar.",
     "RESULTS_TO_REVIEW": "Results to Review",
     "REVENUE": "Ingresos",
     "REVIEW_NOW": "Revisar Ahora",

@@ -1377,8 +1377,10 @@
         <!-- ── Results Awaiting Review ── -->
         <app-doctor-results-panel
           [results]="resultQueue()"
+          [loadError]="resultQueueError()"
           (patientSelected)="openPatientSnapshot($event)"
           (resultAcknowledged)="acknowledgeResult($event)"
+          (reloadRequested)="loadResultReviewQueue()"
         />
 
         <!-- ── Provider In-Basket ── -->

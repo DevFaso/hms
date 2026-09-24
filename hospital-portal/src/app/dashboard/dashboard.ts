@@ -248,6 +248,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   patientFlowData = signal<Record<string, PatientFlowItem[]>>({});
   inboxItems = signal<ClinicalInboxItem[]>([]);
   resultQueue = signal<DoctorResultQueueItem[]>([]);
+  /** The review-queue read failed; the panel says so instead of "all reviewed". */
+  resultQueueError = signal(false);
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
   specialization = signal<string | null>(null);
@@ -2311,20 +2313,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
 
       pending++;
-      this.dashboardService.getResultReviewQueue().subscribe({
-        next: (items) => {
-          this.resultQueue.set(items);
-          done();
-        },
-        error: () => {
-          // The service no longer turns a failure into an empty array, so the
-          // queue has to be cleared here. Without it, a failed
-          // refreshDashboard() left the previously loaded results on screen
-          // with nothing saying they are stale.
-          this.resultQueue.set([]);
-          done();
-        },
-      });
+      this.loadResultReviewQueue(done);
     }
 
     // Today's appointments (for roles that can see them). Route access is
@@ -2559,6 +2548,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   acknowledgeResult(resultId: string): void {
     this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
+  }
+
+  /**
+   * The review queue, with an explicit failure state.
+   *
+   * The service no longer turns a failure into an empty array: a 403 or an
+   * outage drawn as "all results reviewed" is how a released result reaches
+   * nobody. So the stale rows are cleared AND the panel is told why.
+   */
+  loadResultReviewQueue(done?: () => void): void {
+    this.resultQueueError.set(false);
+    this.dashboardService.getResultReviewQueue().subscribe({
+      next: (items) => {
+        this.resultQueue.set(items);
+        done?.();
+      },
+      error: () => {
+        this.resultQueue.set([]);
+        this.resultQueueError.set(true);
+        done?.();
+      },
+    });
   }
 
   closePatientSnapshot(): void {

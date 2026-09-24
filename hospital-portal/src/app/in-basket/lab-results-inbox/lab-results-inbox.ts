@@ -185,10 +185,14 @@ export class LabResultsInboxComponent implements OnInit {
     return null;
   }
 
+  /** An em dash, as every other nullable cell in these tables renders. */
+  private static readonly NO_VALUE = '—';
+
   formatDate(iso: string | null | undefined): string {
-    if (!iso) return '';
+    if (!iso) return LabResultsInboxComponent.NO_VALUE;
     const parsed = new Date(iso);
-    if (Number.isNaN(parsed.getTime())) return '';
+    // A blank cell reads as a rendering fault; missing data reads as missing.
+    if (Number.isNaN(parsed.getTime())) return LabResultsInboxComponent.NO_VALUE;
     // No hour12 override: the locale decides, as the in-basket panel does.
     return parsed.toLocaleString(currentLocale(), {
       month: 'short',

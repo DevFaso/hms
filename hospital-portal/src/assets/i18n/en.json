@@ -1906,6 +1906,7 @@
     "REQUIRE_IMMEDIATE_ATTENTION": "Require Immediate Attention",
     "RESERVED": "Reserved",
     "RESOURCE": "Resource",
+    "RESULTS_LOAD_ERROR": "Results to review could not be loaded.",
     "RESULTS_TO_REVIEW": "Results to Review",
     "REVENUE": "Revenue",
     "REVIEW_NOW": "Review Now",
