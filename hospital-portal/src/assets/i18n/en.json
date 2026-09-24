@@ -5655,7 +5655,7 @@
     },
     "ATTENTION": {
       "PENDING_CLARIFICATION": "The pharmacist is waiting for your answer",
-      "TRANSMISSION_FAILED": "Transmission failed — send it again",
+      "TRANSMISSION_FAILED": "Transmission failed — the order reached no pharmacy, and no workflow moves this status",
       "PARTNER_REJECTED": "The partner pharmacy refused it — route it elsewhere",
       "PENDING_STOCK": "Out of stock — on back order",
       "REQUIRES_EXTERNAL_FILL": "Waiting on an outside pharmacy — no workflow moves this status",
@@ -5670,7 +5670,9 @@
       "LAST_EVENT": "Last pharmacy event",
       "LAST_REFUSED_BY": "Refused by",
       "OUTSTANDING": "Outstanding quantity",
-      "AT": "at {{pharmacy}}"
+      "AT": "at {{pharmacy}}",
+      "LAST_DISPATCHED_AT": "Last dispatched",
+      "LAST_DISPATCH": "Last dispatch channel"
     },
     "HISTORY": {
       "SECTION": "Dispensing history",
@@ -5684,7 +5686,8 @@
       "RESTOCK_ETA": "Restock expected {{date}}",
       "EMPTY": "No fill and no routing recorded for this prescription yet.",
       "ERROR": "The dispensing history could not be loaded.",
-      "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history."
+      "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history.",
+      "PARTIAL_ERROR": "Part of the history could not be loaded, so this is not the whole picture."
     },
     "CLARIFICATION": {
       "QUESTION": "The pharmacist's question",

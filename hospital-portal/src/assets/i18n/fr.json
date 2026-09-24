@@ -5655,7 +5655,7 @@
     },
     "ATTENTION": {
       "PENDING_CLARIFICATION": "Le pharmacien attend votre réponse",
-      "TRANSMISSION_FAILED": "Échec de la transmission — renvoyez-la",
+      "TRANSMISSION_FAILED": "Échec de la transmission — l'ordonnance n'est parvenue à aucune pharmacie, et aucun circuit ne fait avancer ce statut",
       "PARTNER_REJECTED": "La pharmacie partenaire l'a refusée — réorientez-la",
       "PENDING_STOCK": "Rupture de stock — en commande",
       "REQUIRES_EXTERNAL_FILL": "En attente d'une pharmacie extérieure — aucun circuit ne fait avancer ce statut",
@@ -5670,7 +5670,9 @@
       "LAST_EVENT": "Dernier événement en pharmacie",
       "LAST_REFUSED_BY": "Refusée par",
       "OUTSTANDING": "Quantité restant à délivrer",
-      "AT": "chez {{pharmacy}}"
+      "AT": "chez {{pharmacy}}",
+      "LAST_DISPATCHED_AT": "Dernier envoi le",
+      "LAST_DISPATCH": "Canal du dernier envoi"
     },
     "HISTORY": {
       "SECTION": "Historique de délivrance",
@@ -5684,7 +5686,8 @@
       "RESTOCK_ETA": "Réapprovisionnement prévu le {{date}}",
       "EMPTY": "Aucune délivrance ni orientation enregistrée pour cette ordonnance.",
       "ERROR": "L'historique de délivrance n'a pas pu être chargé.",
-      "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance."
+      "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance.",
+      "PARTIAL_ERROR": "Une partie de l'historique n'a pas pu être chargée : ceci n'est donc pas complet."
     },
     "CLARIFICATION": {
       "QUESTION": "Question du pharmacien",

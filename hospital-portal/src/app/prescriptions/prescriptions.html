@@ -39,8 +39,7 @@
         ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.CLOSED' | translate }}</span>
       </div>
     </div>
-    <!-- The count that answers "is anything waiting on ME?" (gap G10). The
-         three cards beside it count statuses; this one counts a tab. -->
+    <!-- The count that answers "is anything waiting on ME?" (gap G10). -->
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon attention">priority_high</span>
       <div class="card-info">
@@ -408,7 +407,10 @@
                 @if (rx.dispatchedAt) {
                   <div class="detail-field">
                     <span class="field-label">{{
-                      'PRESCRIPTIONS.PHARMACY.DISPATCHED_AT' | translate
+                      (dispatchIsCurrent(rx)
+                        ? 'PRESCRIPTIONS.PHARMACY.DISPATCHED_AT'
+                        : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT'
+                      ) | translate
                     }}</span
                     ><span class="field-value" data-testid="rx-dispatched-at">{{
                       rx.dispatchedAt | date: 'medium'
@@ -418,7 +420,10 @@
                 @if (rx.dispatchChannel || rx.dispatchStatus) {
                   <div class="detail-field">
                     <span class="field-label">{{
-                      'PRESCRIPTIONS.PHARMACY.DISPATCH' | translate
+                      (dispatchIsCurrent(rx)
+                        ? 'PRESCRIPTIONS.PHARMACY.DISPATCH'
+                        : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCH'
+                      ) | translate
                     }}</span
                     ><span class="field-value" data-testid="rx-dispatch-state">
                       {{ rx.dispatchChannel | enumLabel: 'prescriptionDispatchChannel' }}
@@ -514,10 +519,6 @@
                     {{ 'COMMON.RETRY' | translate }}
                   </button>
                 </div>
-              } @else if (dispenseHistory().length === 0 && routingHistory().length === 0) {
-                <p class="muted" data-testid="rx-history-empty">
-                  {{ 'PRESCRIPTIONS.HISTORY.EMPTY' | translate }}
-                </p>
               } @else {
                 @if (dispenseHistory().length > 0) {
                   <table class="history-table" data-testid="rx-dispense-history">
@@ -602,6 +603,26 @@
                       }
                     </tbody>
                   </table>
+                }
+                <!-- One endpoint down and the other fine: render what arrived,
+                     and say plainly which half is missing rather than letting
+                     its absence read as "nothing recorded". -->
+                @if (historyPartialError()) {
+                  <div class="history-error" role="alert" data-testid="rx-history-partial-error">
+                    <p>{{ 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR' | translate }}</p>
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      (click)="retryPharmacyHistory()"
+                      data-testid="rx-history-partial-retry"
+                    >
+                      {{ 'COMMON.RETRY' | translate }}
+                    </button>
+                  </div>
+                } @else if (dispenseHistory().length === 0 && routingHistory().length === 0) {
+                  <p class="muted" data-testid="rx-history-empty">
+                    {{ 'PRESCRIPTIONS.HISTORY.EMPTY' | translate }}
+                  </p>
                 }
               }
             </div>

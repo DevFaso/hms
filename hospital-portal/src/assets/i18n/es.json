@@ -5655,7 +5655,7 @@
     },
     "ATTENTION": {
       "PENDING_CLARIFICATION": "El farmacéutico espera su respuesta",
-      "TRANSMISSION_FAILED": "Fallo en la transmisión: vuelva a enviarla",
+      "TRANSMISSION_FAILED": "Fallo en la transmisión: la receta no llegó a ninguna farmacia y ningún circuito mueve este estado",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó: rediríjala a otra",
       "PENDING_STOCK": "Sin existencias: en pedido",
       "REQUIRES_EXTERNAL_FILL": "A la espera de una farmacia externa: ningún circuito mueve este estado",
@@ -5670,7 +5670,9 @@
       "LAST_EVENT": "Último evento en farmacia",
       "LAST_REFUSED_BY": "Rechazada por",
       "OUTSTANDING": "Cantidad pendiente de dispensar",
-      "AT": "en {{pharmacy}}"
+      "AT": "en {{pharmacy}}",
+      "LAST_DISPATCHED_AT": "Último envío el",
+      "LAST_DISPATCH": "Canal del último envío"
     },
     "HISTORY": {
       "SECTION": "Historial de dispensación",
@@ -5684,7 +5686,8 @@
       "RESTOCK_ETA": "Reposición prevista el {{date}}",
       "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
       "ERROR": "No se pudo cargar el historial de dispensación.",
-      "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación."
+      "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación.",
+      "PARTIAL_ERROR": "No se pudo cargar parte del historial, por lo que esto no es todo."
     },
     "CLARIFICATION": {
       "QUESTION": "Pregunta del farmacéutico",

@@ -1054,6 +1054,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     await setup({
       list: [rx],
       dispenses: throwError(() => ({ status: 403 })),
+      routings: throwError(() => ({ status: 403 })),
     });
 
     component.viewDetail(rx);
@@ -1066,9 +1067,11 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     // And it is retryable rather than terminal.
     pharmacyService.listDispensesByPrescription.and.returnValue(of(page([makeDispense()])));
+    pharmacyService.listRoutingDecisionsByPrescription.and.returnValue(of(page([])));
     el('[data-testid="rx-history-retry"]')!.click();
     fixture.detectChanges();
     expect(el('[data-testid="rx-history-error"]')).toBeNull();
+    expect(el('[data-testid="rx-history-partial-error"]')).toBeNull();
     expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
   });
 
@@ -1230,6 +1233,76 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-pharmacy-state"]')).not.toBeNull();
     expect(el('[data-testid="rx-clarification-reason"]')!.textContent).toContain('Dose looks high');
     expect(el('[data-testid="rx-clarification-response"]')!.textContent).toContain('Confirmed');
+  });
+
+  it('keeps the fill history when only the routing half fails, and says so', async () => {
+    // forkJoin is all-or-nothing, so a transient 500 on the routing decisions
+    // used to discard a fill list that had loaded perfectly well. On a
+    // controlled drug the fills are the half that matters most.
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      dispenses: of(page([makeDispense()])),
+      routings: throwError(() => ({ status: 500 })),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-dispense-history"]')).not.toBeNull();
+    expect(el('[data-testid="rx-history-partial-error"]'))
+      .withContext('a missing half must say so, not read as "nothing recorded"')
+      .not.toBeNull();
+    expect(el('[data-testid="rx-history-empty"]')).toBeNull();
+    expect(el('[data-testid="rx-history-error"]')).toBeNull();
+    expect(component.historyError()).toBeFalse();
+  });
+
+  it('labels a dispatch the pharmacy has since refused as past, not current', async () => {
+    // clearPharmacy nulls the three pharmacy columns on a refusal but leaves
+    // dispatchChannel / dispatchStatus / dispatchedAt as the SMS path wrote
+    // them, so a flat render reads as a live, successful dispatch.
+    const rx = makeRx({
+      status: 'PARTNER_REJECTED',
+      pharmacyName: null,
+      dispatchChannel: 'SMS',
+      dispatchStatus: 'SENT',
+      dispatchedAt: '2026-09-02T08:30:00',
+    });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.dispatchIsCurrent(rx)).toBeFalse();
+    expect(el('[data-testid="rx-dispatched-at"]')).not.toBeNull();
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="rx-pharmacy-state"] .field-label'),
+    ).map((n) => (n as HTMLElement).textContent!.trim());
+    expect(labels).toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
+    expect(labels).toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCH');
+    expect(labels).not.toContain('PRESCRIPTIONS.PHARMACY.DISPATCHED_AT');
+  });
+
+  it('labels a live dispatch as current', async () => {
+    const rx = makeRx({
+      status: 'SENT_TO_PARTNER',
+      pharmacyName: 'Pharmacie du Marché',
+      dispatchChannel: 'SMS',
+      dispatchStatus: 'SENT',
+      dispatchedAt: '2026-09-02T08:30:00',
+    });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.dispatchIsCurrent(rx)).toBeTrue();
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="rx-pharmacy-state"] .field-label'),
+    ).map((n) => (n as HTMLElement).textContent!.trim());
+    expect(labels).toContain('PRESCRIPTIONS.PHARMACY.DISPATCHED_AT');
+    expect(labels).not.toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
   });
 
   it('drops the previous prescription history when the panel closes', async () => {

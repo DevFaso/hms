@@ -729,7 +729,23 @@ export class PrescriptionsComponent implements OnInit {
   dispenseHistory = signal<DispenseResponse[]>([]);
   routingHistory = signal<RoutingDecisionResponse[]>([]);
   historyLoading = signal(false);
-  historyError = signal(false);
+
+  /**
+   * Tracked per half. The two endpoints fail independently, and a transient
+   * 500 on the routing decisions used to discard a fill list that had loaded
+   * perfectly well — on a controlled drug the fills are the half that matters
+   * most. Nothing is swallowed either way: whichever half is missing says so.
+   */
+  dispenseError = signal(false);
+  routingError = signal(false);
+
+  /** Both halves gone: the panel has nothing but the failure to report. */
+  readonly historyError = computed(() => this.dispenseError() && this.routingError());
+
+  /** One half loaded, the other did not — render what arrived AND say so. */
+  readonly historyPartialError = computed(
+    () => (this.dispenseError() || this.routingError()) && !this.historyError(),
+  );
 
   /**
    * True when this prescription can have a pharmacy history at all. A draft
@@ -742,6 +758,21 @@ export class PrescriptionsComponent implements OnInit {
   /** True when the response carries anything about where the order went. */
   hasPharmacyState(p: PrescriptionResponse): boolean {
     return !!(p.pharmacyName || p.dispatchedAt || p.lastPharmacyEvent);
+  }
+
+  /**
+   * Whether the dispatch columns still describe where the order IS.
+   *
+   * <p>`clearPharmacy` nulls the three pharmacy columns on a refusal and on a
+   * no-show, but leaves `dispatchChannel`, `dispatchStatus` and `dispatchedAt`
+   * exactly as the SMS path wrote them. Rendered flatly, a PARTNER_REJECTED
+   * order therefore reads "Dispatched — SMS — Sent" with no pharmacy beside
+   * it: a live, successful dispatch, for an order that is back in the
+   * hospital's queue. The columns are still worth showing — they are the last
+   * thing that happened — so they are labelled as past instead of suppressed.
+   */
+  dispatchIsCurrent(p: PrescriptionResponse): boolean {
+    return !!p.pharmacyName;
   }
 
   /**
@@ -851,7 +882,8 @@ export class PrescriptionsComponent implements OnInit {
     this.dispenseHistory.set([]);
     this.routingHistory.set([]);
     this.historyLoading.set(false);
-    this.historyError.set(false);
+    this.dispenseError.set(false);
+    this.routingError.set(false);
   }
 
   private readonly historyRequest$ = new Subject<string>();
@@ -880,22 +912,19 @@ export class PrescriptionsComponent implements OnInit {
       .pipe(
         switchMap((prescriptionId) =>
           forkJoin({
-            dispenses: this.pharmacyService.listDispensesByPrescription(
-              prescriptionId,
-              0,
-              20,
-              'dispensedAt,desc',
-            ),
-            routings: this.pharmacyService.listRoutingDecisionsByPrescription(
-              prescriptionId,
-              0,
-              20,
-              'decidedAt,desc',
-            ),
+            // Each arm collapses its own failure to null so the other still
+            // arrives; forkJoin is otherwise all-or-nothing.
+            dispenses: this.pharmacyService
+              .listDispensesByPrescription(prescriptionId, 0, 20, 'dispensedAt,desc')
+              .pipe(catchError(() => of(null))),
+            routings: this.pharmacyService
+              .listRoutingDecisionsByPrescription(prescriptionId, 0, 20, 'decidedAt,desc')
+              .pipe(catchError(() => of(null))),
           }).pipe(
             map((res) => ({
               prescriptionId,
-              failed: false,
+              dispenseFailed: res.dispenses === null,
+              routingFailed: res.routings === null,
               dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
                 (a, b) =>
                   eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
@@ -904,10 +933,13 @@ export class PrescriptionsComponent implements OnInit {
                 (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
               ),
             })),
+            // Belt and braces: each arm already swallows its own failure into
+            // a null, so this only fires on something neither arm produced.
             catchError(() =>
               of({
                 prescriptionId,
-                failed: true,
+                dispenseFailed: true,
+                routingFailed: true,
                 dispenses: [] as DispenseResponse[],
                 routings: [] as RoutingDecisionResponse[],
               }),
@@ -925,7 +957,8 @@ export class PrescriptionsComponent implements OnInit {
         // A refusal or an outage is an explicit error state — never "no fills
         // recorded", which is the one thing a prescriber must not be told
         // wrongly about a controlled drug.
-        this.historyError.set(res.failed);
+        this.dispenseError.set(res.dispenseFailed);
+        this.routingError.set(res.routingFailed);
         this.historyLoading.set(false);
       });
   }
@@ -933,7 +966,8 @@ export class PrescriptionsComponent implements OnInit {
   loadPharmacyHistory(p: PrescriptionResponse): void {
     this.dispenseHistory.set([]);
     this.routingHistory.set([]);
-    this.historyError.set(false);
+    this.dispenseError.set(false);
+    this.routingError.set(false);
     if (!this.canReadPharmacyHistory() || !this.hasPharmacyHistory(p)) {
       this.historyLoading.set(false);
       return;
