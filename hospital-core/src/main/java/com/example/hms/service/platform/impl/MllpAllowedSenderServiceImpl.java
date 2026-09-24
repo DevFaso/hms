@@ -49,6 +49,15 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> resolveHospitalId(String sendingApplication, String sendingFacility) {
+        // Inside the transaction, so initialising the hospital association is
+        // an ordinary extra select rather than a LazyInitializationException
+        // in the caller.
+        return resolveHospital(sendingApplication, sendingFacility).map(Hospital::getId);
+    }
+
+    @Override
     @Transactional
     public MllpAllowedSenderResponseDTO create(MllpAllowedSenderRequestDTO request, Locale locale) {
         Hospital hospital = loadHospital(request.hospitalId());

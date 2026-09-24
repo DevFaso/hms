@@ -103,57 +103,63 @@ public class LabResultServiceImpl implements LabResultService {
     @Value("${hms.lab.auto-verification.enabled:false}")
     private boolean autoVerificationEnabled;
 
-    /**
-     * Whether an HL7 ingest caller with no resolvable hospital scope may skip
-     * the tenancy and author checks. Off by default — the condition cannot
-     * tell a service account from a person, so it waits for
-     * fix/hl7-inbound-tenancy to resolve the hospital from the sending
-     * facility.
-     */
-    @Value("${hms.lab.hl7-ingest.unscoped-exemption.enabled:false}")
-    private boolean unscopedIngestExemptionEnabled;
-
     @Override
     @Transactional
     public LabResultResponseDTO createLabResult(LabResultRequestDTO request, Locale locale) {
-        return createLabResult(request, false);
+        return createLabResult(request, false, null);
     }
 
     @Override
     @Transactional
-    public LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO request, Locale locale) {
+    public LabResultResponseDTO createIngestedLabResult(LabResultRequestDTO request,
+                                                        UUID senderHospitalId,
+                                                        Locale locale) {
         // The HL7 inbound adapter: the caller is an interface account posting
         // an ORU under a lab role, with no X-Hospital-Id and possibly no
         // assignment of its own. It is named explicitly rather than inferred
         // from "no scope resolves", which also fitted any ordinary staff user
-        // holding two assignments who forgot the header.
-        return createLabResult(request, true);
+        // holding two assignments who forgot the header. The hospital comes
+        // from the allowlist entry the message's sending pair resolved to.
+        return createLabResult(request, true, senderHospitalId);
     }
 
-    private LabResultResponseDTO createLabResult(LabResultRequestDTO request, boolean ingested) {
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
+                                                 boolean ingested,
+                                                 UUID senderHospitalId) {
         // Read first, lock later. The write lock on the order is needed only
         // for the status decision further down, and taking it here held it
         // across the permission checks and — before the side effects moved
         // after the commit — across a blocking SMS gateway call.
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
-        // An interface principal: the ingest door AND no hospital scope of its
-        // own. Both halves are needed. Exempting the ENDPOINT would let a
-        // multi-hospital lab user — or a HOSPITAL_ADMIN, who passes that
-        // endpoint's @PreAuthorize — write into another tenant's order through
-        // it; exempting "no scope resolves" alone would let any unscoped
-        // interactive caller do the same.
+        // THE tenant boundary on the ingest path. The sending pair in the
+        // message header was resolved against the MLLP allowlist before we
+        // were called, and senderHospitalId is the hospital that entry points
+        // at; the order must be one that hospital handles, on B1's
+        // ordering-or-performing predicate. Null means the sender identified
+        // itself as nobody we know, and is refused here rather than earlier so
+        // that an unknown sender and an order at another hospital are the same
+        // 404 — neither learns which it was.
         //
-        // OFF BY DEFAULT, and that is the honest posture. "No resolvable
-        // scope" is not proof of a machine: a lab-role human with no active
-        // assignment, or with two and no X-Hospital-Id, satisfies it too, and
-        // for them this waives BOTH the tenancy comparison and the author
-        // check on an endpoint they can reach. Telling a service account from
-        // a person needs the sending facility resolved to a hospital, which
-        // is fix/hl7-inbound-tenancy; until that lands the exemption sits
-        // behind hms.lab.hl7-ingest.unscoped-exemption.enabled, and with it
-        // off an unscoped ingest caller is refused exactly as before #721.
-        boolean interfacePrincipal = ingested && unscopedIngestExemptionEnabled && !hasResolvableHospitalScope();
+        // This replaces a flag. Until now the ingest path decided whether to
+        // waive the tenancy comparison from "does a hospital scope resolve for
+        // this caller", which is not proof of a machine: a lab-role human with
+        // no active assignment, or with two and no X-Hospital-Id, satisfies it
+        // too. That waiver therefore sat behind a property defaulting to off,
+        // which left the endpoint unusable by the interface accounts it exists
+        // for. An allowlist entry is a real identity, so the waiver no longer
+        // needs one.
+        if (ingested && (senderHospitalId == null || !labOrder.isHandledBy(senderHospitalId))) {
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
+        }
+
+        // An interface principal: the ingest door, an allowlisted sender, AND
+        // no hospital scope of its own. All three. A caller that HAS a scope
+        // is still compared against it below, so an allowlisted sending
+        // facility is not a way for a lab user of one hospital to write into
+        // another's order — it narrows the reachable orders, it never widens
+        // them.
+        boolean interfacePrincipal = ingested && !hasResolvableHospitalScope();
 
         // Same 404-not-403 tenancy comparison as every other single-row path
         // here (B11, on B1's ordering-or-performing predicate): a hospital on

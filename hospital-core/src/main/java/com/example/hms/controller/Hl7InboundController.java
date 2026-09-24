@@ -1,9 +1,11 @@
 package com.example.hms.controller;
 
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.service.LabResultService;
+import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
@@ -32,9 +34,18 @@ import java.util.UUID;
  * Accepts raw HL7v2 text messages from analyzers/middleware and parses
  * ORU^R01 observation segments into {@code LabResult} records.
  *
- * <p>In production this endpoint would be secured with network-level controls
- * (IP allowlist, mTLS) and a dedicated service/LLP listener. Here it is
- * exposed as a REST endpoint secured by RBAC for integration testing.
+ * <p>In production this endpoint would also be secured with network-level
+ * controls (IP allowlist, mTLS) and a dedicated service/LLP listener. Here it
+ * is exposed as a REST endpoint.
+ *
+ * <p><strong>RBAC is not the tenant boundary here.</strong> The roles on the
+ * handler say the caller may ingest results somewhere; they say nothing about
+ * whose order this is, and the order id arrives in a request header the caller
+ * chooses. The boundary is the MLLP allowlist: the message's own sending pair
+ * (MSH-3 application, MSH-4 facility) must resolve to an active allowlist
+ * entry, and the order must belong to the hospital that entry points at - the
+ * same rule the MLLP transport applies to the same messages, so an analyzer
+ * cannot reach through one door what the other refuses it.
  */
 @Slf4j
 @RestController
@@ -45,6 +56,7 @@ public class Hl7InboundController {
 
     private final Hl7v2MessageBuilder hl7v2MessageBuilder;
     private final LabResultService labResultService;
+    private final MllpAllowedSenderService mllpAllowedSenderService;
 
     /**
      * POST /lab/hl7/inbound
@@ -60,15 +72,26 @@ public class Hl7InboundController {
      * <p>The caller must supply {@code X-Lab-Order-Id} and {@code X-Assignment-Id}
      * headers because HL7v2 PIDs in this environment are UUIDs, not MRNs, and
      * the order linkage must be explicit.
+     *
+     * <p>Those headers are the caller's own claim about which order this is,
+     * which is why they are not trusted on their own: the message must also
+     * identify a sender the receiving hospital has allowlisted, and the order
+     * must be one that hospital handles. An unknown sender and an order
+     * belonging to somebody else get the same 404.
      */
     @PostMapping(value = "/inbound",
                  consumes = {MediaType.TEXT_PLAIN_VALUE, "text/hl7-v2", MediaType.APPLICATION_OCTET_STREAM_VALUE})
     @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "HL7v2 ORU^R01 Inbound",
-               description = "Parses an inbound HL7v2 ORU^R01 message and creates a LabResult. " +
-                             "Requires X-Lab-Order-Id (UUID) and X-Assignment-Id (UUID) request headers.")
+               description = "Parses an inbound HL7v2 ORU^R01 message and creates a LabResult. "
+                           + "Requires X-Lab-Order-Id (UUID) and X-Assignment-Id (UUID) request headers. "
+                           + "The message's sending pair (MSH-3, MSH-4) must resolve to an active MLLP "
+                           + "allowlist entry, and the lab order must belong to that entry's hospital.")
     @ApiResponse(responseCode = "201", description = "LabResult created from HL7 message")
     @ApiResponse(responseCode = "400", description = "Unparseable HL7v2 message")
+    @ApiResponse(responseCode = "404",
+                 description = "The sending pair is not allowlisted, or the order is not one that "
+                             + "sender's hospital handles. Deliberately the same answer for both.")
     public ResponseEntity<ApiResponseWrapper<LabResultResponseDTO>> inbound(
         @RequestBody String hl7Message,
         @RequestHeader("X-Lab-Order-Id")    UUID labOrderId,
@@ -94,8 +117,19 @@ public class Hl7InboundController {
         }
         ParsedObservation obs = observations.get(0);
 
-        log.info("Inbound HL7v2 ORU^R01: testCode={}, value={}, unit={}, flag={}",
-            obs.testCode(), obs.resultValue(), obs.resultUnit(), obs.abnormalFlag());
+        // Who is sending, resolved the way the MLLP transport resolves it.
+        // Runs after the parse guard so an unreadable body still gets the 400
+        // the contract documents, and before anything is logged or written so
+        // an unknown sender learns nothing about the order it named.
+        UUID senderHospitalId = resolveSenderHospital(header);
+
+        // The message's own fields are attacker-controlled and would reach the
+        // log verbatim, so this line carries none of them: a value with an
+        // embedded newline forges entries, and a test code is the analyte being
+        // run on a named patient's specimen. The order id is a UUID we parsed,
+        // and identifies the ingest just as well.
+        log.info("Inbound HL7v2 ORU^R01 accepted for lab order {} ({} observation(s))",
+            labOrderId, observations.size());
 
         LabResultRequestDTO dto = LabResultRequestDTO.builder()
             .labOrderId(labOrderId)
@@ -116,7 +150,8 @@ public class Hl7InboundController {
             .notes("Imported via HL7v2 ORU^R01 inbound adapter.")
             .build();
 
-        LabResultResponseDTO created = labResultService.createIngestedLabResult(dto, locale);
+        LabResultResponseDTO created =
+            labResultService.createIngestedLabResult(dto, senderHospitalId, locale);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -139,6 +174,32 @@ public class Hl7InboundController {
                 notReadable.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The hospital this message's sending pair is allowlisted for.
+     *
+     * <p>Refused as a missing lab order, not as a forbidden sender. The two
+     * answers have to be indistinguishable: told apart, a caller could walk
+     * order ids with a sending pair it knows is unknown and learn which ids
+     * exist, which is the accession oracle this codebase already closed once on
+     * the ORU path. A message with no readable MSH is refused the same way - a
+     * sender that does not identify itself is not a known sender.
+     */
+    private UUID resolveSenderHospital(com.example.hms.hl7.mllp.Hl7MessageHeader header) {
+        UUID hospitalId = header == null ? null
+            : mllpAllowedSenderService
+                .resolveHospitalId(header.sendingApplication(), header.sendingFacility())
+                .orElse(null);
+        if (hospitalId == null) {
+            // No sender fields in the message: they are the caller's own text and
+            // would forge log entries. That the refusal happened is the
+            // operational fact; which pair was offered belongs in the allowlist
+            // administration screens, not here.
+            log.warn("Inbound HL7v2 ORU^R01 refused: the sending pair is not on the active MLLP allowlist");
+            throw new ResourceNotFoundException("laborder.notfound");
+        }
+        return hospitalId;
     }
 
     /** Trim to the column, as the MLLP path does; blank becomes null. */

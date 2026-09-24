@@ -79,6 +79,40 @@ class SecurityConfigLabMatcherTest {
         assertThat(source).doesNotContain(".requestMatchers(HttpMethod.PUT, API_LAB_RESULTS");
     }
 
+    /**
+     * The same first-match-wins trap as B8, on the HL7 ingest door. The
+     * matcher admitted only HOSPITAL_ADMIN and SUPER_ADMIN while the
+     * controller's annotation names three lab roles as well, so the accounts
+     * the endpoint exists for were answered 403 in the filter chain and the
+     * annotation never ran.
+     *
+     * <p>Read out of the controller's own source rather than restated here,
+     * so widening the annotation without widening the matcher fails this test
+     * instead of shipping a door nobody can open.
+     */
+    @Test
+    @DisplayName("POST /lab/hl7 matcher admits every role Hl7InboundController's annotation names")
+    void hl7IngestMatcherCoversTheAnnotation() throws IOException {
+        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
+        String matcherRoles = rolesOf(source, "API_LAB_HL7, API_LAB_HL7_PATTERN)");
+
+        String controller = Files.readString(
+            Paths.get("src/main/java/com/example/hms/controller/Hl7InboundController.java"),
+            StandardCharsets.UTF_8);
+        int at = controller.indexOf("@PreAuthorize(");
+        assertThat(at).as("the inbound handler carries an annotation").isPositive();
+        String annotation = controller.substring(at, controller.indexOf(")", at));
+
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("'([A-Z_]+)'").matcher(annotation);
+        int seen = 0;
+        while (m.find()) {
+            seen++;
+            assertThat(matcherRoles).as("POST /lab/hl7 admits %s", m.group(1))
+                .contains("ROLE_" + m.group(1));
+        }
+        assertThat(seen).as("the annotation names at least one role").isPositive();
+    }
+
     @Test
     @DisplayName("lab configuration and integration matchers keep HOSPITAL_ADMIN")
     void labConfigurationMatchersKeepTheRole() throws IOException {

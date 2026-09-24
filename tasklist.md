@@ -3113,7 +3113,8 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   prescription dispensable in-house; refused and back-ordered prescriptions
   vanished from every screen; the prescriber was never notified of anything the
   pharmacy did; and no DTO carried which pharmacy a prescription went to.
-  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161). Still owed:
+  Wave 1 (backend) = #715, #716, #717 (V162), #718, #719 (V161), plus the
+  follow-ups #720-#723 (V163, V164), all merged and live. Still owed:
   wave 2, the portal (lab tab on the patient chart, a lab category in the
   clinical inbox, the pending-release worklist screen, the pharmacist
   clarification UI, prescriber visibility of dispense and routing history, the
@@ -3122,6 +3123,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   rendering raw enum names); and the open design question of whether a pharmacy
   should be a platform tenant with its own work queue, since today the only
   channel that crosses organisations is SMS.
+
+- **The HTTP HL7 ingest door had no tenant boundary of its own.** Closed by
+  this PR, recorded because it was never written down: `POST
+  /lab/hl7/adapter/inbound` took the lab order id from a request header the
+  caller chooses, and its `@PreAuthorize` says only that the caller may ingest
+  results somewhere - so an authorised lab user of one hospital could attach a
+  result to another hospital's order. #721 narrowed the waiver that made this
+  reachable and put it behind a property defaulting to off, which left the
+  endpoint safe but unusable by the interface accounts it exists for. The
+  boundary is now the MLLP allowlist, as on the MLLP transport: the message's
+  own sending pair must resolve to an active entry and the order must belong to
+  that entry's hospital, so the property is gone rather than flipped. The
+  operational consequence is that an analyzer posting over HTTP now needs an
+  allowlist row, exactly as one posting over MLLP always has.
 
 - **The cross-tenant oracle is still open on the ADT and merge inbound
   paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
