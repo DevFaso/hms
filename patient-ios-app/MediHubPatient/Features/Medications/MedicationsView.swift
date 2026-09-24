@@ -113,29 +113,34 @@ struct MedicationsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Text(rx.medicationName ?? "Prescription").font(.headline)
+                                    Text(rx.displayName).font(.headline)
                                     Spacer()
-                                    StatusBadge(text: rx.status?.capitalized ?? "Active",
-                                                color: "blue")
+                                    StatusBadge(text: rx.statusEnum.localizedLabel,
+                                                color: rx.statusEnum.tone.badgeColor)
                                 }
                                 if let dosage = rx.dosage, let freq = rx.frequency {
                                     Text("\(dosage) · \(freq)").font(.subheadline).foregroundColor(.secondary)
                                 }
-                                if let dr = rx.prescribedBy {
-                                    Text("By \(dr)").font(.caption).foregroundColor(.secondary)
+                                if let dr = rx.staffFullName, !dr.isEmpty {
+                                    Text(String(format: "prescribed_by_with_value".localized, dr))
+                                        .font(.caption).foregroundColor(.secondary)
+                                }
+                                // Where the order went, when it left the hospital's
+                                // own dispensary (PrescriptionResponseDTO.pharmacyName).
+                                if let pharmacy = rx.pharmacyName, !pharmacy.isEmpty {
+                                    Text(String(format: "rx_pharmacy_with_value".localized, pharmacy))
+                                        .font(.caption).foregroundColor(.secondary)
                                 }
 
-                                HStack {
-                                    if let refills = rx.refillsRemaining {
-                                        Text("\(refills) refill(s) remaining")
-                                            .font(.caption2).foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                    if (rx.refillsRemaining ?? 0) > 0 {
+                                // The backend gate is PrescriptionStatus.isRefillable(),
+                                // not a refill counter — this DTO has never carried one.
+                                if rx.statusEnum.isRefillable {
+                                    HStack {
+                                        Spacer()
                                         Button {
                                             refillTarget = rx
                                         } label: {
-                                            Label("Request Refill", systemImage: "arrow.clockwise.circle.fill")
+                                            Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
                                                 .font(.caption)
                                         }
                                         .buttonStyle(.borderedProminent)
@@ -169,28 +174,40 @@ struct MedicationsView: View {
                         HStack {
                             Text(refill.medicationName ?? "Refill").font(.headline)
                             Spacer()
-                            StatusBadge(text: refill.status?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Pending",
-                                        color: refillStatusColor(refill.status))
+                            StatusBadge(text: refill.statusEnum.localizedLabel,
+                                        color: refill.statusEnum.tone.badgeColor)
                         }
                         if let pharmacy = refill.preferredPharmacy, !pharmacy.isEmpty {
-                            Text("Pharmacy: \(pharmacy)").font(.subheadline).foregroundColor(.secondary)
+                            Text(String(format: "rx_pharmacy_with_value".localized, pharmacy))
+                                .font(.subheadline).foregroundColor(.secondary)
                         }
                         if let requested = refill.requestedAt {
-                            Text("Requested: \(Self.formatDate(requested))").font(.caption).foregroundColor(.secondary)
+                            Text(String(format: "refill_requested_with_value".localized, Self.formatDate(requested)))
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                        if refill.statusEnum == .requested {
+                            Text("refill_sent_for_review".localized)
+                                .font(.caption).foregroundColor(.secondary)
                         }
                         if let updated = refill.updatedAt, updated != refill.requestedAt {
-                            Text("Updated: \(Self.formatDate(updated))").font(.caption2).foregroundColor(.secondary)
+                            Text(String(format: "refill_updated_with_value".localized, Self.formatDate(updated)))
+                                .font(.caption2).foregroundColor(.secondary)
                         }
                         if let providerNotes = refill.providerNotes, !providerNotes.isEmpty {
-                            Text("Provider: \(providerNotes)").font(.caption2).foregroundColor(.secondary)
+                            Text(String(format: "refill_provider_with_value".localized, providerNotes))
+                                .font(.caption2).foregroundColor(.secondary)
                         }
                         if let notes = refill.notes, !notes.isEmpty {
-                            Text("Notes: \(notes)").font(.caption2).foregroundColor(.secondary)
+                            Text(String(format: "refill_notes_with_value".localized, notes))
+                                .font(.caption2).foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
                     .swipeActions(edge: .trailing) {
-                        if refill.status?.uppercased() == "PENDING" || refill.status?.uppercased() == "REQUESTED" {
+                        // REQUESTED and PAUSED are the two states cancelMyRefill
+                        // lets the patient withdraw. PENDING is not a status this
+                        // backend has ever had, and PAUSED was never offered.
+                        if refill.statusEnum.isCancellable {
                             Button(role: .destructive) {
                                 Task { await vm.cancelRefill(id: refill.id ?? "") }
                             } label: {
@@ -201,16 +218,6 @@ struct MedicationsView: View {
                 }
                 .listStyle(.insetGrouped)
             }
-        }
-    }
-
-    private func refillStatusColor(_ status: String?) -> String {
-        switch status?.uppercased() {
-        case "COMPLETED", "FILLED", "DISPENSED": "green"
-        case "APPROVED": "blue"
-        case "PENDING", "REQUESTED": "yellow"
-        case "CANCELLED", "DENIED": "red"
-        default: "gray"
         }
     }
 
@@ -244,16 +251,19 @@ struct RefillRequestSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Prescription") {
-                    HStack { Text("Medication").foregroundColor(.secondary); Spacer(); Text(prescription.medicationName ?? "—") }
+                Section("prescription".localized) {
+                    HStack { Text("medication".localized).foregroundColor(.secondary); Spacer(); Text(prescription.displayName) }
                     if let dosage = prescription.dosage {
-                        HStack { Text("Dosage").foregroundColor(.secondary); Spacer(); Text(dosage) }
+                        HStack { Text("dosage".localized).foregroundColor(.secondary); Spacer(); Text(dosage) }
                     }
                     if let freq = prescription.frequency {
-                        HStack { Text("Frequency").foregroundColor(.secondary); Spacer(); Text(freq) }
+                        HStack { Text("frequency".localized).foregroundColor(.secondary); Spacer(); Text(freq) }
                     }
-                    if let refills = prescription.refillsRemaining {
-                        HStack { Text("Refills Remaining").foregroundColor(.secondary); Spacer(); Text("\(refills)") }
+                    HStack {
+                        Text("status".localized).foregroundColor(.secondary)
+                        Spacer()
+                        StatusBadge(text: prescription.statusEnum.localizedLabel,
+                                    color: prescription.statusEnum.tone.badgeColor)
                     }
                 }
 
@@ -392,72 +402,57 @@ struct PrescriptionDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Prescription") {
-                    detailRow("Medication", prescription.medicationName ?? "—")
-                    if let status = prescription.status {
-                        HStack {
-                            Text("Status").foregroundColor(.secondary)
-                            Spacer()
-                            StatusBadge(text: status.capitalized, color: "blue")
-                        }
+                Section("prescription".localized) {
+                    detailRow("medication".localized, prescription.displayName)
+                    HStack {
+                        Text("status".localized).foregroundColor(.secondary)
+                        Spacer()
+                        StatusBadge(text: prescription.statusEnum.localizedLabel,
+                                    color: prescription.statusEnum.tone.badgeColor)
                     }
                 }
 
                 Section("Dosage & Administration") {
                     if let dosage = prescription.dosage {
-                        detailRow("Dosage", dosage)
+                        detailRow("dosage".localized, dosage)
                     }
                     if let freq = prescription.frequency {
-                        detailRow("Frequency", freq)
+                        detailRow("frequency".localized, freq)
                     }
-                    if let qty = prescription.quantity {
-                        detailRow("Quantity", "\(qty)")
+                    if let duration = prescription.duration {
+                        detailRow("duration".localized, duration)
                     }
-                }
-
-                Section("Refills") {
-                    if let remaining = prescription.refillsRemaining {
-                        detailRow("Remaining", "\(remaining)")
-                    }
-                    if let total = prescription.refills {
-                        detailRow("Total Authorized", "\(total)")
+                    if let route = prescription.route {
+                        detailRow("route".localized, route)
                     }
                 }
 
-                Section("Dates") {
-                    if let prescribed = prescription.prescribedDate {
-                        detailRow("Prescribed", prescribed)
-                    }
-                    if let expiry = prescription.expiryDate {
-                        detailRow("Expires", expiry)
+                Section("lab_dates_section".localized) {
+                    if let prescribed = prescription.createdAt {
+                        detailRow("prescribed".localized, String(prescribed.prefix(10)))
                     }
                 }
 
-                if let dr = prescription.prescribedBy {
-                    Section("Provider") {
-                        detailRow("Prescribed By", dr)
+                if let dr = prescription.staffFullName, !dr.isEmpty {
+                    Section("provider".localized) {
+                        detailRow("prescribed_by".localized, dr)
                     }
                 }
 
-                if prescription.diagnosisCode != nil || prescription.diagnosisDescription != nil {
-                    Section("Diagnosis") {
-                        if let code = prescription.diagnosisCode {
-                            detailRow("Code", code)
-                        }
-                        if let desc = prescription.diagnosisDescription {
-                            detailRow("Description", desc)
-                        }
+                if let pharmacy = prescription.pharmacyName, !pharmacy.isEmpty {
+                    Section("pharmacy".localized) {
+                        detailRow("pharmacy".localized, pharmacy)
                     }
                 }
 
                 if let instructions = prescription.instructions, !instructions.isEmpty {
-                    Section("Instructions") {
+                    Section("instructions".localized) {
                         Text(instructions).font(.body)
                     }
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(prescription.medicationName ?? "Prescription")
+            .navigationTitle(prescription.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

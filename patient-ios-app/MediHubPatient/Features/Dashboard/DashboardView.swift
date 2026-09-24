@@ -249,24 +249,43 @@ struct AppointmentRowView: View {
 
 struct LabResultRowView: View {
     let result: LabResultDTO
+
+    /// A pending row is never a green tick — the lab has not released it.
+    private var symbol: String {
+        if result.isPending { return "hourglass" }
+        return result.isAbnormal || result.isCritical
+            ? "exclamationmark.triangle.fill"
+            : "checkmark.circle.fill"
+    }
+
+    private var symbolColor: Color {
+        switch result.tone {
+        case .positive: .green
+        case .attention: .orange
+        case .negative: .red
+        case .neutral: .secondary
+        }
+    }
+
     var body: some View {
         HStack {
-            Image(systemName: result.abnormal ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(result.abnormal ? .red : .green)
+            Image(systemName: symbol)
+                .foregroundStyle(symbolColor)
                 .font(.subheadline)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.testName ?? "Test").font(.subheadline.weight(.semibold))
-                Text(result.collectedDate ?? result.resultDate ?? result.orderedDate ?? "")
+                Text(result.testName ?? "test_name".localized).font(.subheadline.weight(.semibold))
+                Text((result.resultedAt ?? result.collectedAt).map { String($0.prefix(10)) } ?? "")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(result.result ?? "—").font(.subheadline)
-                if result.isCritical {
-                    Text("CRITICAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.red)
-                } else if result.abnormal {
-                    Text("ABNORMAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.orange)
+                if result.isPending {
+                    Text("lab_result_pending".localized)
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text(result.valueWithUnit ?? "—").font(.subheadline)
                 }
+                StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
             }
         }
     }

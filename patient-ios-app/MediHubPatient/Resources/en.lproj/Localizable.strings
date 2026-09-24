@@ -495,3 +495,70 @@
 "edu_cat_ultrasound_scans" = "Ultrasound scans";
 "edu_cat_genetic_screening" = "Genetic screening";
 "edu_cat_other" = "Other";
+
+/* B4 - lab result statuses (PatientLabResultResponseDTO.status) */
+"lab_status_pending" = "Pending";
+"lab_status_normal" = "Normal";
+"lab_status_abnormal" = "Abnormal";
+"lab_status_abnormal_low" = "Abnormal — low";
+"lab_status_abnormal_high" = "Abnormal — high";
+"lab_status_critical" = "Critical";
+"lab_status_unknown" = "Status unavailable";
+"lab_result_pending" = "Result pending";
+"lab_pending_explainer" = "The laboratory has not released this result yet.";
+"lab_interpretation_normal" = "Within normal range";
+"lab_interpretation_abnormal" = "Abnormal — review with your provider";
+"lab_interpretation_critical" = "Critical value — contact your provider";
+"lab_result_details" = "Lab result";
+"test_information" = "Test information";
+"lab_results_section" = "Results";
+"lab_dates_section" = "Dates";
+"lab_value" = "Value";
+"reference_range" = "Reference range";
+"test_code" = "Test code";
+"performed_by" = "Performed by";
+"resulted" = "Resulted";
+"laboratory" = "Laboratory";
+
+/* G16 - prescription statuses (com.example.hms.enums.PrescriptionStatus) */
+"rx_status_draft" = "Draft";
+"rx_status_pending_signature" = "Awaiting signature";
+"rx_status_signed" = "Signed";
+"rx_status_transmitted" = "Sent to the pharmacy";
+"rx_status_transmission_failed" = "Could not be sent";
+"rx_status_cancelled" = "Cancelled";
+"rx_status_discontinued" = "Discontinued";
+"rx_status_pending_clarification" = "Awaiting your prescriber";
+"rx_status_dispensed" = "Dispensed";
+"rx_status_partially_filled" = "Partly dispensed";
+"rx_status_pending_stock" = "Out of stock";
+"rx_status_requires_external_fill" = "Outside pharmacy";
+"rx_status_sent_to_partner" = "Sent to a partner pharmacy";
+"rx_status_partner_accepted" = "Accepted by the pharmacy";
+"rx_status_partner_rejected" = "Refused by the pharmacy";
+"rx_status_partner_dispensed" = "Dispensed by the pharmacy";
+"rx_status_printed_for_patient" = "Printed for you";
+"rx_status_unknown" = "Status unavailable";
+"rx_pharmacy_with_value" = "Pharmacy: %@";
+"prescribed_by_with_value" = "Prescribed by %@";
+"prescription" = "Prescription";
+"medication" = "Medication";
+"duration" = "Duration";
+"route" = "Route";
+"prescribed" = "Prescribed";
+"instructions" = "Instructions";
+
+/* G16 - refill statuses (com.example.hms.enums.RefillStatus) */
+"refill_status_requested" = "Requested";
+"refill_status_paused" = "On hold";
+"refill_status_approved" = "Approved";
+"refill_status_denied" = "Denied";
+"refill_status_dispensed" = "Dispensed";
+"refill_status_cancelled" = "Cancelled";
+"refill_status_unknown" = "Status unavailable";
+"refill_sent_for_review" = "Sent to the prescribing provider for review";
+"refill_requested_with_value" = "Requested: %@";
+"refill_updated_with_value" = "Updated: %@";
+"refill_provider_with_value" = "Provider: %@";
+"refill_notes_with_value" = "Notes: %@";
+"ordered_by_with_value" = "Ordered by %@";

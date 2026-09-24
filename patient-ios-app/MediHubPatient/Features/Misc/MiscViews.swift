@@ -314,7 +314,7 @@ struct HealthRecordsView: View {
                 List(vm.labs) { lab in
                     VStack(alignment: .leading, spacing: 4) {
                         LabResultSummaryRow(result: lab)
-                        SourceLine(parts: [lab.labName, lab.orderedBy.map { "Ordered by \($0)" }])
+                        SourceLine(parts: [lab.hospitalName, lab.orderedBy.map { String(format: "ordered_by_with_value".localized, $0) }])
                     }
                 }
                 .listStyle(.insetGrouped)
