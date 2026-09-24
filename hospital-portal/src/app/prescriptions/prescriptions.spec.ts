@@ -4,7 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 
 import {
   ATTENTION_REASONS,
@@ -860,20 +860,56 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-last-refused-by"]')!.textContent).toContain('Pharmacie Centrale');
   });
 
-  it('shows what is still owed on a partially filled prescription', async () => {
-    const rx = makeRx({ status: 'PARTIALLY_FILLED' });
+  it('shows what is still owed, as the server computed it on the routing decision', async () => {
+    const rx = makeRx({ status: 'PENDING_STOCK' });
     await setup({
       list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            routingType: 'BACKORDER',
+            remainingQuantity: 20,
+            decidedAt: '2026-09-05T08:00:00',
+          }),
+        ]),
+      ),
+      dispenses: of(
+        page([makeDispense({ quantityDispensed: 10, dispensedAt: '2026-09-04T08:00:00' })]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(20);
+    expect(el('[data-testid="rx-outstanding-quantity"]')!.textContent).toContain('20');
+  });
+
+  it('stops claiming a remainder once the order is complete', async () => {
+    // Regression guard. An earlier draft summed (requested − dispensed) per
+    // dispense row, but the backend records every fill as a NEW row and
+    // compares the SUM of quantityDispensed against the lifetime expected
+    // quantity. A 10-of-30 partial followed by a 20-of-20 second fill
+    // completes the order — and left the first row's shortfall of 20 in the
+    // client's sum forever, so a DISPENSED prescription went on saying that
+    // 20 tablets were owed.
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ remainingQuantity: 20 })])),
       dispenses: of(
         page([
-          makeDispense({ id: 'd-1', quantityRequested: 30, quantityDispensed: 10 }),
-          makeDispense({ id: 'd-2', quantityRequested: 5, quantityDispensed: 5 }),
-          // A cancelled fill owes nothing: reversing it put the stock back.
           makeDispense({
-            id: 'd-3',
-            quantityRequested: 99,
-            quantityDispensed: 0,
-            status: 'CANCELLED',
+            id: 'd-2',
+            quantityRequested: 20,
+            quantityDispensed: 20,
+            dispensedAt: '2026-09-06T08:00:00',
+          }),
+          makeDispense({
+            id: 'd-1',
+            quantityRequested: 30,
+            quantityDispensed: 10,
+            dispensedAt: '2026-09-04T08:00:00',
           }),
         ]),
       ),
@@ -882,8 +918,87 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     component.viewDetail(rx);
     fixture.detectChanges();
 
-    expect(component.outstandingQuantity()).toEqual({ amount: 20, unit: 'tablets' });
-    expect(el('[data-testid="rx-outstanding-quantity"]')!.textContent).toContain('20');
+    expect(component.outstandingQuantity()).toBeNull();
+    expect(el('[data-testid="rx-outstanding-quantity"]')).toBeNull();
+  });
+
+  it('drops a routing remainder that a later fill has made stale', async () => {
+    const rx = makeRx({ status: 'PARTIALLY_FILLED' });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([makeRouting({ remainingQuantity: 20, decidedAt: '2026-09-04T08:00:00' })]),
+      ),
+      dispenses: of(page([makeDispense({ dispensedAt: '2026-09-06T08:00:00' })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    // The server's figure is a snapshot, not a live balance: it has not been
+    // recomputed since the fill, and guessing is what the row above forbids.
+    expect(component.outstandingQuantity()).toBeNull();
+  });
+
+  it('asks for the NEWEST page, because neither endpoint orders its results', async () => {
+    // Both repository methods are unordered derived queries and the
+    // controllers' @PageableDefault sets no sort, so page 0 is an arbitrary
+    // subset: without this the table can omit the newest fill and present
+    // older ones as current.
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+
+    expect(pharmacyService.listDispensesByPrescription).toHaveBeenCalledWith(
+      'rx-1',
+      0,
+      20,
+      'dispensedAt,desc',
+    );
+    expect(pharmacyService.listRoutingDecisionsByPrescription).toHaveBeenCalledWith(
+      'rx-1',
+      0,
+      20,
+      'decidedAt,desc',
+    );
+  });
+
+  it('cancels the in-flight history when another prescription is opened', async () => {
+    const a = makeRx({ id: 'rx-a', status: 'DISPENSED' });
+    const b = makeRx({ id: 'rx-b', status: 'DISPENSED' });
+    const first = new Subject<ApiResponse<Page<DispenseResponse>>>();
+    const second = new Subject<ApiResponse<Page<DispenseResponse>>>();
+    await setup({ list: [a, b] });
+    pharmacyService.listDispensesByPrescription.and.returnValues(first, second);
+
+    component.viewDetail(a);
+    expect(first.observed).toBeTrue();
+
+    component.viewDetail(b);
+    expect(first.observed)
+      .withContext('opening B must cancel A, not leave two histories racing')
+      .toBeFalse();
+  });
+
+  it('never lands one prescription history under another', async () => {
+    // switchMap cannot cancel what never emitted: opening a DRAFT fires no
+    // request at all, so A's response would still have arrived and filled the
+    // panel with another order's dispense records.
+    const a = makeRx({ id: 'rx-a', status: 'DISPENSED' });
+    const draft = makeRx({ id: 'rx-b', status: 'DRAFT' });
+    const slow = new Subject<ApiResponse<Page<DispenseResponse>>>();
+    await setup({ list: [a, draft] });
+    pharmacyService.listDispensesByPrescription.and.returnValue(slow);
+
+    component.viewDetail(a);
+    component.viewDetail(draft);
+
+    slow.next(page([makeDispense({ id: 'd-a' })]));
+    slow.complete();
+
+    expect(component.dispenseHistory()).toEqual([]);
+    expect(component.historyLoading()).toBeFalse();
   });
 
   /* ── G11: the dispense and routing history ──────────────────── */

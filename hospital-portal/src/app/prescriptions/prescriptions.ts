@@ -9,8 +9,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { forkJoin, of, Subject } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
   PrescriptionResponse,
@@ -205,6 +205,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
     this.initPatientSearch();
+    this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
     if (params.get('new') === '1') {
@@ -620,10 +621,33 @@ export class PrescriptionsComponent implements OnInit {
     return TAB_BY_STATUS[status] ?? 'attention';
   }
 
+  /**
+   * Every tab's count in one pass, memoised by the signal.
+   *
+   * <p>The tab bar binds six counts and the summary card a seventh; filtering
+   * the whole list per call re-scanned it seven times on every change
+   * detection, which on a tenant with thousands of unpaged prescriptions is
+   * seven full scans per keystroke in the search box.
+   */
+  private readonly tabCounts = computed<Record<PrescriptionTab, number>>(() => {
+    const counts: Record<PrescriptionTab, number> = {
+      all: 0,
+      draft: 0,
+      attention: 0,
+      inPharmacy: 0,
+      dispensed: 0,
+      closed: 0,
+    };
+    for (const p of this.prescriptions()) {
+      counts.all += 1;
+      counts[this.tabForStatus(p.status)] += 1;
+    }
+    return counts;
+  });
+
   /** How many prescriptions the tab holds, before the search box narrows it. */
   countInTab(tab: PrescriptionTab): number {
-    if (tab === 'all') return this.prescriptions().length;
-    return this.prescriptions().filter((p) => this.tabForStatus(p.status) === tab).length;
+    return this.tabCounts()[tab];
   }
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
@@ -738,30 +762,42 @@ export class PrescriptionsComponent implements OnInit {
   });
 
   /**
-   * What was asked for at the counter and not handed over, summed across the
-   * fills that were not cancelled.
+   * What the prescription still owes — the figure the SERVER computed, taken
+   * off the latest routing decision's `remainingQuantity`
+   * (`FillAccounting.remaining` at the moment that routing was decided).
    *
-   * <p>Deliberately NOT the backend's `FillAccounting.remaining`:
-   * `PrescriptionResponseDTO` carries neither `quantity` nor `refillsUsed`, so
-   * the server's lifetime remainder is not available to a prescriber at all.
-   * This is the narrower fact the dispense records themselves state — the
-   * shortfall on the fills that happened — and it is labelled as that.
-   * Null when nothing is outstanding, so no row renders a misleading zero.
+   * <p>It is not derived from the dispense rows, and an earlier draft of this
+   * that summed `requested − dispensed` across them was wrong: the backend
+   * records each fill as a NEW Dispense row and compares the SUM of
+   * `quantityDispensed` against the lifetime expected quantity
+   * (`updatePrescriptionStatusFromHistory`). A 10-of-30 partial followed by a
+   * 20-of-20 second fill completes the order, but the first row's shortfall of
+   * 20 stays in any per-row sum forever — so a DISPENSED prescription would
+   * have gone on claiming 20 tablets were owed.
+   *
+   * <p>Two guards, because the server's number is a snapshot, not a live
+   * balance: a terminal status means nothing is owed whatever the last routing
+   * said, and a fill recorded AFTER the decision makes its remainder stale.
+   * In both cases this returns null and the row is simply absent — the
+   * per-fill "dispensed / requested" column below still shows what happened.
+   * A prescription-level remainder needs `quantity` and `refillsUsed` on
+   * PrescriptionResponseDTO, which it does not carry.
    */
-  readonly outstandingQuantity = computed<{ amount: number; unit: string } | null>(() => {
-    let amount = 0;
-    let unit = '';
-    for (const d of this.dispenseHistory()) {
-      if (d.status === 'CANCELLED') continue;
-      const requested = d.quantityRequested ?? 0;
-      const dispensed = d.quantityDispensed ?? 0;
-      const short = requested - dispensed;
-      if (short > 0) {
-        amount += short;
-        if (!unit && d.unit) unit = d.unit;
-      }
+  readonly outstandingQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    if (!rx || rx.status === 'DISPENSED' || rx.status === 'PARTNER_DISPENSED') return null;
+    const decision = this.routingHistory()[0];
+    const remaining = decision?.remainingQuantity;
+    if (remaining == null || remaining <= 0) return null;
+    const fill = this.dispenseHistory()[0];
+    if (
+      fill &&
+      eventTime(fill.dispensedAt, fill.createdAt) >
+        eventTime(decision.decidedAt, decision.createdAt)
+    ) {
+      return null;
     }
-    return amount > 0 ? { amount, unit } : null;
+    return remaining;
   });
 
   viewDetail(p: PrescriptionResponse): void {
@@ -777,11 +813,79 @@ export class PrescriptionsComponent implements OnInit {
     this.historyError.set(false);
   }
 
+  private readonly historyRequest$ = new Subject<string>();
+
   /**
-   * Both histories in one pass. A refusal or an outage sets an explicit error
-   * state — it is never rendered as "no fills recorded", which is the one
-   * thing a prescriber must not be told wrongly about a controlled drug.
+   * One stream for both histories.
+   *
+   * <p>`switchMap` so that opening prescription B while A is still in flight
+   * cancels A: the detail panel is a full-screen overlay, so the user always
+   * closes one before opening the next, and on a slow link A's fills were
+   * landing in the signals while B's panel was on screen — one patient's
+   * dispense records rendered under another's order.
+   *
+   * <p>The id is carried through and re-checked on arrival as well, because
+   * `switchMap` cannot cancel what never emitted: opening a DRAFT fires no
+   * request at all, and closing the panel fires none either, so an earlier
+   * response would still have arrived and populated a panel that is showing
+   * something else (or nothing).
+   *
+   * <p>`catchError` sits INSIDE the `switchMap` on purpose — on the outer
+   * pipe it would complete the stream and the panel would never load again
+   * for the rest of the session.
    */
+  private initPharmacyHistory(): void {
+    this.historyRequest$
+      .pipe(
+        switchMap((prescriptionId) =>
+          forkJoin({
+            dispenses: this.pharmacyService.listDispensesByPrescription(
+              prescriptionId,
+              0,
+              20,
+              'dispensedAt,desc',
+            ),
+            routings: this.pharmacyService.listRoutingDecisionsByPrescription(
+              prescriptionId,
+              0,
+              20,
+              'decidedAt,desc',
+            ),
+          }).pipe(
+            map((res) => ({
+              prescriptionId,
+              failed: false,
+              dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
+                (a, b) =>
+                  eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
+              ),
+              routings: [...(res.routings?.data?.content ?? [])].sort(
+                (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
+              ),
+            })),
+            catchError(() =>
+              of({
+                prescriptionId,
+                failed: true,
+                dispenses: [] as DispenseResponse[],
+                routings: [] as RoutingDecisionResponse[],
+              }),
+            ),
+          ),
+        ),
+      )
+      .subscribe((res) => {
+        if (this.selectedPrescription()?.id !== res.prescriptionId) return;
+        this.dispenseHistory.set(res.dispenses);
+        this.routingHistory.set(res.routings);
+        // A refusal or an outage is an explicit error state — never "no fills
+        // recorded", which is the one thing a prescriber must not be told
+        // wrongly about a controlled drug.
+        this.historyError.set(res.failed);
+        this.historyLoading.set(false);
+      });
+  }
+
   loadPharmacyHistory(p: PrescriptionResponse): void {
     this.dispenseHistory.set([]);
     this.routingHistory.set([]);
@@ -791,28 +895,7 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     this.historyLoading.set(true);
-    forkJoin({
-      dispenses: this.pharmacyService.listDispensesByPrescription(p.id),
-      routings: this.pharmacyService.listRoutingDecisionsByPrescription(p.id),
-    }).subscribe({
-      next: ({ dispenses, routings }) => {
-        this.dispenseHistory.set(
-          [...(dispenses?.data?.content ?? [])].sort(
-            (a, b) => eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
-          ),
-        );
-        this.routingHistory.set(
-          [...(routings?.data?.content ?? [])].sort(
-            (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
-          ),
-        );
-        this.historyLoading.set(false);
-      },
-      error: () => {
-        this.historyError.set(true);
-        this.historyLoading.set(false);
-      },
-    });
+    this.historyRequest$.next(p.id);
   }
 
   retryPharmacyHistory(): void {

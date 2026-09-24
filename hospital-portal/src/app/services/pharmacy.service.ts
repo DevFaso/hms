@@ -710,12 +710,22 @@ export class PharmacyService {
     return this.http.get<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}`);
   }
 
+  /**
+   * `DispenseRepository.findByPrescriptionId` is a derived query with NO
+   * ordering, and the controller's `@PageableDefault` sets none either, so
+   * page 0 is an arbitrary subset rather than the most recent fills. Pass
+   * `sort` (Spring resolves it off the request) whenever you show fewer rows
+   * than the prescription has — otherwise the table can omit the newest fill
+   * and present older ones as current.
+   */
   listDispensesByPrescription(
     prescriptionId: string,
     page = 0,
     size = 20,
+    sort?: string,
   ): Observable<ApiResponse<Page<DispenseResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (sort) params = params.set('sort', sort);
     return this.http.get<ApiResponse<Page<DispenseResponse>>>(
       `/pharmacy/dispense/prescription/${prescriptionId}`,
       { params },
@@ -808,12 +818,20 @@ export class PharmacyService {
     );
   }
 
+  /**
+   * Same unordered-derived-query trap as `listDispensesByPrescription`: the
+   * repository has a `findByPrescriptionIdOrderByDecidedAtDesc`, but the
+   * paged endpoint uses the unordered one. `decidedAt,desc` is what the
+   * backend itself orders these by when it needs the latest decision.
+   */
   listRoutingDecisionsByPrescription(
     prescriptionId: string,
     page = 0,
     size = 20,
+    sort?: string,
   ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (sort) params = params.set('sort', sort);
     return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
       `/pharmacy/routing/decisions/prescription/${prescriptionId}`,
       { params },
