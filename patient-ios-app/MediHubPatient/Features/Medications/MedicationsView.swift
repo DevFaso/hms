@@ -135,16 +135,27 @@ struct MedicationsView: View {
                                 // The backend gate is PrescriptionStatus.isRefillable(),
                                 // not a refill counter — this DTO has never carried one.
                                 if rx.statusEnum.isRefillable {
-                                    HStack {
-                                        Spacer()
-                                        Button {
-                                            refillTarget = rx
-                                        } label: {
-                                            Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
-                                                .font(.caption)
+                                    // The backend allows ONE open request per
+                                    // prescription (requestMedicationRefill).
+                                    // Until this change the button never
+                                    // rendered at all, so that refusal was
+                                    // unreachable; now the patient is told
+                                    // before tapping, not after a 400.
+                                    if vm.hasOpenRefill(forPrescription: rx.id) {
+                                        Text("refill_already_open".localized)
+                                            .font(.caption2).foregroundColor(.secondary)
+                                    } else {
+                                        HStack {
+                                            Spacer()
+                                            Button {
+                                                refillTarget = rx
+                                            } label: {
+                                                Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
+                                                    .font(.caption)
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .controlSize(.mini)
                                         }
-                                        .buttonStyle(.borderedProminent)
-                                        .controlSize(.mini)
                                     }
                                 }
                             }
@@ -513,6 +524,13 @@ final class MedicationsViewModel: ObservableObject {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Whether a REQUESTED or PAUSED refill already exists for this
+    /// prescription, which is what `requestMedicationRefill` refuses on.
+    func hasOpenRefill(forPrescription prescriptionId: String?) -> Bool {
+        guard let prescriptionId, !prescriptionId.isEmpty else { return false }
+        return refills.contains { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }
     }
 
     func cancelRefill(id: String) async {

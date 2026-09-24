@@ -155,17 +155,25 @@ struct LabResultDetailSheet: View {
                 }
 
                 Section("lab_dates_section".localized) {
+                    // Labelled "Ordered", not "Collected": PatientLabResultServiceImpl
+                    // fills collectedAt from LabOrder.getOrderDatetime(), and LabOrder
+                    // carries no sample-collection timestamp at all.
                     if let d = result.collectedAt {
-                        detailRow("collected_date".localized, String(d.prefix(10)))
+                        detailRow("ordered_at".localized, String(d.prefix(10)))
                     }
                     if let d = result.resultedAt {
                         detailRow("resulted".localized, String(d.prefix(10)))
                     }
                 }
 
-                if let orderedBy = result.orderedBy, !orderedBy.isEmpty {
+                // resolveStaffName returns nil whenever the order has no
+                // staff, so a result can carry a performer and no orderer;
+                // nesting one inside the other hid the performer entirely.
+                if result.orderedBy?.isEmpty == false || result.performedBy?.isEmpty == false {
                     Section("provider".localized) {
-                        detailRow("ordered_by".localized, orderedBy)
+                        if let orderedBy = result.orderedBy, !orderedBy.isEmpty {
+                            detailRow("ordered_by".localized, orderedBy)
+                        }
                         if let performedBy = result.performedBy, !performedBy.isEmpty {
                             detailRow("performed_by".localized, performedBy)
                         }

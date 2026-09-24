@@ -562,3 +562,5 @@
 "refill_provider_with_value" = "Soignant : %@";
 "refill_notes_with_value" = "Notes : %@";
 "ordered_by_with_value" = "Prescrit par %@";
+"ordered_at" = "Prescrit le";
+"refill_already_open" = "Une demande de renouvellement pour ce médicament est déjà en cours d'examen";

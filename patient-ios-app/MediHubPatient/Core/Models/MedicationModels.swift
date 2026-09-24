@@ -210,6 +210,19 @@ enum RefillStatus: String, CaseIterable {
         }
     }
 
+    /// Still with the provider, so a second request for the same
+    /// prescription would be refused: `OPEN_REFILL_STATUSES` in
+    /// `PatientPortalServiceImpl`. Deliberately a separate rule from
+    /// `isCancellable` even though the two sets coincide today — one is about
+    /// what the patient may withdraw, the other about what blocks a new
+    /// request, and they are free to diverge.
+    var isOpen: Bool {
+        switch self {
+        case .requested, .paused: true
+        case .approved, .denied, .dispensed, .cancelled, .unknown: false
+        }
+    }
+
     /// REQUESTED and PAUSED are the two states `cancelMyRefill` lets the
     /// patient withdraw. The swipe action used to offer PENDING, which this
     /// backend has never had, and never offered PAUSED, which it does.

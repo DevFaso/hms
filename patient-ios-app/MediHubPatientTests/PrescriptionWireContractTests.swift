@@ -104,6 +104,16 @@ final class PrescriptionWireContractTests: XCTestCase {
         XCTAssertFalse(dispensed.statusEnum.isCancellable)
     }
 
+    /// `OPEN_REFILL_STATUSES` in `PatientPortalServiceImpl` — the set that
+    /// makes a second request for the same prescription a 400.
+    func testOnlyRequestedAndPausedRefillsBlockANewRequest() {
+        let open: Set<RefillStatus> = [.requested, .paused]
+        for status in RefillStatus.allCases {
+            XCTAssertEqual(status.isOpen, open.contains(status),
+                           "openness of \(status.rawValue)")
+        }
+    }
+
     func testEveryStatusMapsToItsOwnLabelKey() {
         XCTAssertEqual(Set(PrescriptionStatus.allCases.map(\.labelKey)).count,
                        PrescriptionStatus.allCases.count)
