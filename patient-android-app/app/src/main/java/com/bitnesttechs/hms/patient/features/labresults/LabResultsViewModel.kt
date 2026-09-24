@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,8 +23,11 @@ class LabResultsViewModel @Inject constructor(private val api: ApiService) : Vie
 
     init { load() }
 
+    private var loadJob: Job? = null
+
     fun load() {
-        viewModelScope.launch {
+        if (loadJob?.isActive == true) return
+        loadJob = viewModelScope.launch {
             _isLoading.value = true
             try {
                 // Retrofit does NOT throw on a non-2xx, so an expired session

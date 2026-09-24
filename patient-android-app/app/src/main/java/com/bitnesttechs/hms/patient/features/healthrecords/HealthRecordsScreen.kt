@@ -284,7 +284,7 @@ private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
                         DetailItem(stringResource(R.string.medication), med.medicationName, Icons.Default.Medication),
                         DetailItem(stringResource(R.string.dosage), med.dosage, Icons.Default.Medication),
                         DetailItem(stringResource(R.string.frequency), med.frequency, Icons.Default.Info),
-                        DetailItem(stringResource(R.string.status), med.status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.status), stringResource(med.statusEnum.labelRes), Icons.Default.Warning),
                         DetailItem(stringResource(R.string.prescriber), med.prescribedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.start), med.startDate?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.end), med.endDate?.take(10), Icons.Default.CalendarMonth)
@@ -293,7 +293,7 @@ private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
                 }
             ) {
                 Text(med.medicationName, fontWeight = FontWeight.SemiBold)
-                FlowText(listOfNotNull(med.dosage, med.frequency, med.status))
+                FlowText(listOfNotNull(med.dosage, med.frequency, stringResource(med.statusEnum.labelRes)))
                 med.startDate?.let { SecondaryText(stringResource(R.string.start_date_with_value, it.take(10))) }
             }
         }

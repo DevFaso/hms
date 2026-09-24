@@ -102,6 +102,23 @@ class MedicationModelsTest {
         assertEquals(backend, named)
     }
 
+    /// `PatientMedicationServiceImpl.resolveStatus`, plus the safe default.
+    @Test
+    fun theEnumCoversEveryBackendMedicationStatus() {
+        val backend = setOf("ACTIVE", "COMPLETED", "DISCONTINUED", "ON_HOLD")
+        val named = MedicationStatus.entries
+            .filter { it != MedicationStatus.UNKNOWN }
+            .map { it.name }
+            .toSet()
+        assertEquals(backend, named)
+
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire(null))
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire(""))
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire("SOMETHING_NEW"))
+        assertEquals(MedicationStatus.ON_HOLD, MedicationStatus.fromWire(" on_hold "))
+        assertEquals(MedicationStatus.ON_HOLD, MedicationDto(status = "ON_HOLD").statusEnum)
+    }
+
     @Test
     fun theEnumCoversEveryBackendRefillStatus() {
         val backend = setOf("REQUESTED", "PAUSED", "APPROVED", "DENIED", "DISPENSED", "CANCELLED")

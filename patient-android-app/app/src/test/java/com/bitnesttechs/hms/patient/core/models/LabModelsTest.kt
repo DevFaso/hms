@@ -177,6 +177,19 @@ class LabModelsTest {
         val graded = ungraded.copy(value = "4.2", referenceRange = "3.5 - 5.1")
         assertTrue(graded.isGradedNormal)
         assertEquals(StatusTone.POSITIVE, graded.tone)
+
+        // formatReferenceRange formats ranges[0] while determineSeverityFlag
+        // grades against findMatchingRange(unit, …): a row resulted in mmol/L
+        // against a first range in mg/dL is an all-clear beside limits it is
+        // nowhere near.
+        val wrongUnit = ungraded.copy(
+            value = "5.4", unit = "mmol/L", referenceRange = "70 - 110 mg/dL"
+        )
+        assertFalse(wrongUnit.isGradedNormal)
+        assertEquals(StatusTone.NEUTRAL, wrongUnit.tone)
+
+        val matchingUnit = wrongUnit.copy(referenceRange = "3.9 - 6.1 mmol/L")
+        assertTrue(matchingUnit.isGradedNormal)
     }
 
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */

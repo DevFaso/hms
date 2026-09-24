@@ -64,8 +64,16 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * `viewModelScope.launch` returns at the first suspension point and the
      * flows still hold the pre-request values.
      */
+    private var loadJob: Job? = null
+
     fun load(): Job {
-        return viewModelScope.launch {
+        // One at a time. There are now four triggers (init, three per-tab
+        // retries) plus the joined reload in requestRefill/cancelRefill: two
+        // overlapping loads both set isLoading, the first to finish clears it
+        // while the other is still running, and the older response's
+        // reportLoadOutcome can overwrite the newer one's.
+        loadJob?.takeIf { it.isActive }?.let { return it }
+        val job = viewModelScope.launch {
             isLoading.value = true
             try {
                 // Each list is replaced only when its OWN fetch produced one.
@@ -120,6 +128,8 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             }
             finally { isLoading.value = false }
         }
+        loadJob = job
+        return job
     }
 
     /**
