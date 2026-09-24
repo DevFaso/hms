@@ -575,3 +575,10 @@
 "submit" = "Envoyer";
 "refill_not_refillable" = "Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante.";
 "refill_on_hold" = "Votre équipe soignante a mis cette demande de renouvellement en attente. Elle reviendra vers vous.";
+
+/* G16 - statuts des médicaments (PatientMedicationServiceImpl.resolveStatus) */
+"medication_status_active" = "En cours";
+"medication_status_completed" = "Traitement terminé";
+"medication_status_discontinued" = "Arrêté";
+"medication_status_on_hold" = "Pas encore délivré";
+"medication_status_unknown" = "Statut indisponible";

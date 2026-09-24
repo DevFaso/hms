@@ -71,6 +71,16 @@ final class PrescriptionWireContractTests: XCTestCase {
         XCTAssertEqual(Set(PrescriptionStatus.wireCases.map(\.rawValue)), backend)
     }
 
+    /// `PatientMedicationServiceImpl.resolveStatus` — the views used to print
+    /// `status?.capitalized`, so `ON_HOLD` reached the patient as "On_hold".
+    func testTheEnumCoversEveryBackendMedicationStatus() {
+        let backend: Set<String> = ["ACTIVE", "COMPLETED", "DISCONTINUED", "ON_HOLD"]
+        XCTAssertEqual(Set(MedicationStatus.wireCases.map(\.rawValue)), backend)
+        XCTAssertEqual(MedicationStatus(wire: nil), .active)
+        XCTAssertEqual(MedicationStatus(wire: "on_hold"), .onHold)
+        XCTAssertEqual(MedicationStatus(wire: "SOMETHING_NEW"), .unknown)
+    }
+
     func testTheEnumCoversEveryBackendRefillStatus() {
         let backend: Set<String> = [
             "REQUESTED", "PAUSED", "APPROVED", "DENIED", "DISPENSED", "CANCELLED"

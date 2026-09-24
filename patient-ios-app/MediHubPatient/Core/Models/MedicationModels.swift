@@ -36,6 +36,57 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     var displayName: String {
         name ?? medicationName ?? "Medication"
     }
+
+    var statusEnum: MedicationStatus { MedicationStatus(wire: status) }
+}
+
+/// The values `PatientMedicationServiceImpl.resolveStatus` can put on the
+/// wire. Exhaustive `switch`es with no `default`, like the other three — the
+/// views printed `status?.capitalized`, so `ON_HOLD` read as "On_hold".
+enum MedicationStatus: String, CaseIterable {
+    case active = "ACTIVE"
+    case completed = "COMPLETED"
+    case discontinued = "DISCONTINUED"
+    case onHold = "ON_HOLD"
+
+    /// App-side fallback for a status this build does not know yet.
+    case unknown = "__UNKNOWN__"
+
+    /// A medication with no status at all is treated as current: the backend
+    /// only omits it when `@JsonInclude(NON_NULL)` drops a null, and
+    /// `resolveStatus` never returns one.
+    init(wire: String?) {
+        let trimmed = (wire ?? "").trimmingCharacters(in: .whitespaces).uppercased()
+        if trimmed.isEmpty {
+            self = .active
+        } else {
+            self = MedicationStatus(rawValue: trimmed) ?? .unknown
+        }
+    }
+
+    var labelKey: String {
+        switch self {
+        case .active: "medication_status_active"
+        case .completed: "medication_status_completed"
+        case .discontinued: "medication_status_discontinued"
+        case .onHold: "medication_status_on_hold"
+        case .unknown: "medication_status_unknown"
+        }
+    }
+
+    var localizedLabel: String { labelKey.localized }
+
+    var tone: StatusTone {
+        switch self {
+        case .active: .positive
+        case .onHold: .attention
+        case .discontinued: .negative
+        case .completed, .unknown: .neutral
+        }
+    }
+
+    /// Every status the backend can actually send — `unknown` is ours.
+    static var wireCases: [MedicationStatus] { allCases.filter { $0 != .unknown } }
 }
 
 // MARK: - Prescription Models

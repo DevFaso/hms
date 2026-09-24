@@ -74,8 +74,8 @@ struct MedicationsView: View {
                                 HStack {
                                     Text(med.displayName).font(.headline)
                                     Spacer()
-                                    StatusBadge(text: med.status?.capitalized ?? "Active",
-                                                color: med.status?.uppercased() == "ACTIVE" ? "green" : "gray")
+                                    StatusBadge(text: med.statusEnum.localizedLabel,
+                                                color: med.statusEnum.tone.badgeColor)
                                 }
                                 if let dosage = med.dosage, let freq = med.frequency {
                                     Text("\(dosage) · \(freq)").font(.subheadline).foregroundColor(.secondary)
@@ -350,13 +350,11 @@ struct MedicationDetailSheet: View {
                     if let generic = medication.genericName, !generic.isEmpty {
                         detailRow("Generic Name", generic)
                     }
-                    if let status = medication.status {
-                        HStack {
-                            Text("Status").foregroundColor(.secondary)
-                            Spacer()
-                            StatusBadge(text: status.capitalized,
-                                        color: status.uppercased() == "ACTIVE" ? "green" : "gray")
-                        }
+                    HStack {
+                        Text("status".localized).foregroundColor(.secondary)
+                        Spacer()
+                        StatusBadge(text: medication.statusEnum.localizedLabel,
+                                    color: medication.statusEnum.tone.badgeColor)
                     }
                 }
 
@@ -586,7 +584,17 @@ final class MedicationsViewModel: ObservableObject {
                !refreshed.statusEnum.isRefillable {
                 return "refill_not_refillable".localized
             }
-            if let open = openRefillStatus(forPrescription: prescriptionId) {
+            // Here — unlike the button, where a stale "open" row would wrongly
+            // BLOCK the patient — the server has already refused, so an open
+            // row from EITHER source is a better answer than an English
+            // sentence. It also covers what `refillRequestOpen` cannot see:
+            // `latestRefillsFor` grades only the NEWEST request, so an older
+            // PAUSED one that the server's `findFirst…StatusIn` still counts
+            // reads as false.
+            let open = openRefillStatus(forPrescription: prescriptionId)
+                ?? refills.first { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }?
+                    .statusEnum
+            if let open {
                 return Self.openRefillMessageKey(open).localized
             }
             return serverMessage

@@ -338,8 +338,8 @@ struct HealthRecordsView: View {
                             SourceLine(parts: [med.prescribedBy.map { "Prescribed by \($0)" }, med.frequency])
                         }
                         Spacer()
-                        StatusBadge(text: med.status?.capitalized ?? "Active",
-                                    color: med.status?.uppercased() == "ACTIVE" ? "green" : "gray")
+                        StatusBadge(text: med.statusEnum.localizedLabel,
+                                    color: med.statusEnum.tone.badgeColor)
                     }
                 }
                 .listStyle(.insetGrouped)
