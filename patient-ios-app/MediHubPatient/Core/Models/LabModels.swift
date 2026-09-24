@@ -82,9 +82,20 @@ struct LabResultDTO: Codable, Identifiable {
         // `statusOf(null)`. Under-reassuring is the safe direction, and
         // exposing the flag is reported as backend debt rather than guessed
         // at from this side.
-        guard !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let range = (referenceRange ?? "").trimmingCharacters(in: .whitespaces)
+        guard !range.isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
-        return Double(raw) != nil
+        guard Double(raw) != nil else { return false }
+        // The range SHOWN and the range GRADED AGAINST are not necessarily the
+        // same one: `formatReferenceRange` always formats `ranges[0]`, while
+        // `determineSeverityFlag` grades against
+        // `findMatchingRange(resultUnit, …)`. On a test configured with two
+        // unit-specific ranges, the row can be graded NORMAL in mmol/L and
+        // displayed against the mg/dL limits — an all-clear beside a range the
+        // value is nowhere near. If the row has a unit, only claim the grading
+        // when the displayed range is in that unit.
+        let unit = (self.unit ?? "").trimmingCharacters(in: .whitespaces)
+        return unit.isEmpty || range.localizedCaseInsensitiveContains(unit)
     }
 
     /// What the badge shows: a pending row never borrows a grading.
