@@ -262,6 +262,16 @@ describe('PatientChartComponent — labs section', () => {
     expect(fixture.nativeElement.textContent).toContain('CHART.LAB_ORDERS_SCOPE_HINT');
   });
 
+  it('says the results block shows every stored row, superseded preliminaries included', () => {
+    // The staff path returns BOTH rows of an analyzer's preliminary/final
+    // pair, and the DTO carries no supersession marker — so the section says
+    // so rather than guessing which row to hide.
+    setup({ roles: ['ROLE_DOCTOR'] });
+    openLabs();
+
+    expect(fixture.nativeElement.textContent).toContain('CHART.LAB_RESULTS_SCOPE_HINT');
+  });
+
   it('says so when a list came back capped, instead of reading as a full history', () => {
     const page = Array.from({ length: 25 }, (_, i) => released({ id: 'r-' + i }));
     setup({ roles: ['ROLE_DOCTOR'], results: page, orders: [order()] });
@@ -327,16 +337,20 @@ describe('PatientChartComponent — labs section', () => {
     expect(text).not.toContain('CHART.NO_LAB_ORDERS');
   });
 
-  it('retries both reads from the error state', () => {
+  it('retries only the block that failed, leaving the other one on screen', () => {
     setup({ roles: ['ROLE_DOCTOR'], resultsFail: true });
     openLabs();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
     patientService.listLabResults.and.returnValue(of([released()]));
-    component.reloadLabs();
+    component.loadLabResults();
     fixture.detectChanges();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    // The orders table the clinician was reading is neither re-fetched nor
+    // replaced by a spinner.
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
     expect(component.labResultsError()).toBeFalse();
     expect(fixture.nativeElement.textContent).toContain('9.2');
   });
@@ -349,5 +363,69 @@ describe('PatientChartComponent — labs section', () => {
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-reads when the hospital scope changed under it', () => {
+    // The scope chip moves activeHospitalId in place with no navigation, and
+    // both lab reads are scoped — stale rows under a new chip would be wrong.
+    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+      'listLabResults',
+    ]);
+    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listDiagnoses.and.returnValue(of([]));
+    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listLabResults.and.returnValue(of([released()]));
+    labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
+    labService.listOrders.and.returnValue(of([order()]));
+
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: LabService, useValue: labService },
+        { provide: RoleContextService, useValue: roleContextStub(state) },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => state.roles,
+            getHospitalId: () => state.hospitalId,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(PatientChartComponent);
+    component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+
+    openLabs();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+
+    state.hospitalId = 'h-2';
+    component.setSection('allergies');
+    openLabs();
+
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    expect(patientService.listLabResults.calls.mostRecent().args[1]).toEqual({
+      hospitalId: 'h-2',
+      limit: 25,
+    });
   });
 });

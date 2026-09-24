@@ -305,7 +305,7 @@
       } @else if (labOrdersError()) {
         <div class="error-state">
           <p>{{ 'CHART.LAB_ORDERS_LOAD_ERROR' | translate }}</p>
-          <button type="button" class="btn-secondary" (click)="reloadLabs()">
+          <button type="button" class="btn-secondary" (click)="loadLabOrders()">
             {{ 'COMMON.RETRY' | translate }}
           </button>
         </div>
@@ -359,12 +359,23 @@
     <!-- ── Results: released values, and the rows still awaiting release ── -->
     @if (canViewLabResults()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_RESULTS' | translate }}</h3>
+      <!--
+        The staff path of /patients/{id}/lab-results resolves nothing: an
+        analyzer that reported preliminary then final stored TWO rows and both
+        are returned, because both are the record
+        (PatientLabResultServiceImpl.resolvePairs returns early off the
+        patient path). The DTO carries no OBX-11 / supersession marker, and
+        SupersededLabResults documents at length why inferring one from
+        release state or recency is wrong — so the section says what it is
+        showing rather than guessing which row to hide.
+      -->
+      <p class="labs-hint">{{ 'CHART.LAB_RESULTS_SCOPE_HINT' | translate }}</p>
       @if (labResultsLoading()) {
         <div class="loading-state"><div class="spinner"></div></div>
       } @else if (labResultsError()) {
         <div class="error-state">
           <p>{{ 'CHART.LAB_RESULTS_LOAD_ERROR' | translate }}</p>
-          <button type="button" class="btn-secondary" (click)="reloadLabs()">
+          <button type="button" class="btn-secondary" (click)="loadLabResults()">
             {{ 'COMMON.RETRY' | translate }}
           </button>
         </div>

@@ -196,8 +196,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
   labOrders = signal<LabOrderResponse[]>([]);
   labOrdersLoading = signal(false);
   labOrdersError = signal(false);
-  /** True once a labs visit has been attempted, so an empty state is honest. */
-  labsLoaded = signal(false);
+  /**
+   * The hospital scope the labs section was last read for, or null if never.
+   *
+   * Not a plain "have we loaded" flag: the scope chip moves
+   * `roleContext.activeHospitalId` in place with no navigation, and both lab
+   * reads are scoped, so a boolean left hospital A's orders on screen under a
+   * hospital B chip. Comparing the scope re-reads on a switch and still
+   * refuses to re-fetch a patient who simply has no labs.
+   */
+  labsLoadedFor = signal<string | null>(null);
   /** Exposed for the "showing the latest N" hint below each lab table. */
   readonly labPageSize = LAB_PAGE_SIZE;
   /**
@@ -264,10 +272,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
         if (this.canViewUpdates() && this.updates().length === 0) this.loadUpdates();
         break;
       case 'labs':
-        // Keyed on "have we tried", not on "is the list empty": a patient with
-        // no labs would otherwise re-fetch both endpoints on every visit, and
-        // a failed read would be retried silently instead of offering Retry.
-        if (this.canViewLabs() && !this.labsLoaded()) this.loadLabs();
+        // Keyed on "which scope have we read", not on "is the list empty": a
+        // patient with no labs would otherwise re-fetch both endpoints on
+        // every visit, and a failed read would be retried silently instead of
+        // offering Retry.
+        if (this.canViewLabs() && this.labsLoadedFor() !== this.hospitalId()) this.loadLabs();
         break;
       case 'timeline':
         // Timeline requires an access reason first — prompt instead of loading.
@@ -589,18 +598,17 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * one and not the other never fires a request it is certain to be refused.
    */
   loadLabs(): void {
-    this.labsLoaded.set(true);
+    this.labsLoadedFor.set(this.hospitalId());
     if (this.canViewLabResults()) this.loadLabResults();
     if (this.canViewLabOrders()) this.loadLabOrders();
   }
 
-  /** Retry control on the labs error state — re-reads whatever failed. */
-  reloadLabs(): void {
-    this.labsLoaded.set(false);
-    this.loadLabs();
-  }
-
-  private loadLabResults(): void {
+  /**
+   * Each block's Retry re-reads ONLY that block. One shared retry re-fired
+   * both, so retrying a failed results read replaced the orders table the
+   * clinician was reading with a spinner and re-fetched it for nothing.
+   */
+  loadLabResults(): void {
     this.labResultsLoading.set(true);
     this.labResultsError.set(false);
     this.patientService
@@ -622,7 +630,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
       });
   }
 
-  private loadLabOrders(): void {
+  loadLabOrders(): void {
     this.labOrdersLoading.set(true);
     this.labOrdersError.set(false);
     this.labService.listOrders({ patientId: this.patientId, size: LAB_PAGE_SIZE }).subscribe({
@@ -733,7 +741,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.updates.set([]);
     this.labResults.set([]);
     this.labOrders.set([]);
-    this.labsLoaded.set(false);
+    this.labsLoadedFor.set(null);
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

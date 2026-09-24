@@ -8,6 +8,15 @@
         }
       </h2>
       <p class="category-subtitle">{{ 'inBasket.labResultsSubtitle' | translate }}</p>
+      <!--
+        ResultReviewServiceImpl.getResultReviewQueue resolves the caller with
+        findFirstByUserIdOrderByCreatedAtAsc and then
+        findByOrderingStaff_Id — no hospital filter and no date window. A
+        clinician with assignments at two hospitals gets both, so the queue
+        can carry patients outside the chip's current scope. Said plainly
+        rather than left for the reader to discover on a 403.
+      -->
+      <p class="category-hint">{{ 'inBasket.labResultsScopeHint' | translate }}</p>
     </div>
     <button
       type="button"

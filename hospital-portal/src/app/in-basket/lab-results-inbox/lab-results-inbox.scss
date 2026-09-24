@@ -30,6 +30,13 @@
   color: var(--text-secondary);
 }
 
+.category-hint {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
