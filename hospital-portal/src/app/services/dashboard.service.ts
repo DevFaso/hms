@@ -218,7 +218,16 @@ export interface DoctorResultQueueItem {
   patientId: string;
   testName: string;
   resultValue: string;
+  /** NORMAL | ABNORMAL | CRITICAL — the three-value family, nothing else. */
   abnormalFlag: string;
+  /**
+   * Which side of the reference range an abnormal value crossed, when the
+   * backend knows (DoctorResultQueueItemDTO.abnormalDirection, the
+   * AbnormalDirection enum). Absent on a normal result and on an abnormal one
+   * whose side was never recorded — it was missing from this interface, so the
+   * field the API has been sending all along was dropped on the floor.
+   */
+  abnormalDirection?: 'LOW' | 'HIGH';
   resultedAt: string;
   orderingContext?: string;
 }
@@ -733,11 +742,21 @@ export class DashboardService {
     );
   }
 
+  /**
+   * `GET /me/results/review-queue` — the released lab/imaging results on
+   * orders this physician placed (MeController, ROLE_DOCTOR / ROLE_PHYSICIAN /
+   * ROLE_SURGEON).
+   *
+   * The `catchError(() => of([]))` this used to carry is gone on purpose: a
+   * 403 or an outage rendered as an empty queue is indistinguishable from
+   * "nothing to review", which is exactly how a released result reaches
+   * nobody. Callers render an explicit error state; the dashboard's own call
+   * site already had an `error` handler.
+   */
   getResultReviewQueue(): Observable<DoctorResultQueueItem[]> {
-    return this.http.get<ApiWrapper<DoctorResultQueueItem[]>>('/me/results/review-queue').pipe(
-      map((res) => res.data ?? []),
-      catchError(() => of([])),
-    );
+    return this.http
+      .get<ApiWrapper<DoctorResultQueueItem[]>>('/me/results/review-queue')
+      .pipe(map((res) => res.data ?? []));
   }
 
   getPatientSnapshot(patientId: string): Observable<PatientSnapshot> {

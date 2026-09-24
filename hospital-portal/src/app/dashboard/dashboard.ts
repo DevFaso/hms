@@ -248,6 +248,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
   patientFlowData = signal<Record<string, PatientFlowItem[]>>({});
   inboxItems = signal<ClinicalInboxItem[]>([]);
   resultQueue = signal<DoctorResultQueueItem[]>([]);
+  /** The review-queue read failed; the panel says so instead of "all reviewed". */
+  resultQueueError = signal(false);
+  /** A read is in flight; the panel shows a spinner, not an empty state. */
+  resultQueueLoading = signal(false);
+  /**
+   * Which review-queue read is the current one.
+   *
+   * Two independent triggers can overlap — the panel's Retry and the
+   * dashboard's own Refresh — and a slow FAILING read landing after a fast
+   * successful one would replace freshly fetched rows with an error card that
+   * nothing re-reads. Only the latest request may write.
+   */
+  private resultQueueRequest = 0;
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
   specialization = signal<string | null>(null);
@@ -2311,13 +2324,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
 
       pending++;
-      this.dashboardService.getResultReviewQueue().subscribe({
-        next: (items) => {
-          this.resultQueue.set(items);
-          done();
-        },
-        error: () => done(),
-      });
+      this.loadResultReviewQueue(done);
     }
 
     // Today's appointments (for roles that can see them). Route access is
@@ -2552,6 +2559,49 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   acknowledgeResult(resultId: string): void {
     this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
+    // The stale notice described the rows that were on screen. Once the
+    // physician has cleared them it describes nothing, and leaving it set
+    // flipped an emptied panel into a full "could not be loaded" card —
+    // telling them the queue failed when they had just worked through it.
+    this.resultQueueError.set(false);
+  }
+
+  /**
+   * The review queue, with an explicit failure state.
+   *
+   * The service no longer turns a failure into an empty array: a 403 or an
+   * outage drawn as "all results reviewed" is how a released result reaches
+   * nobody. So the panel is told, and — when it has rows — keeps drawing
+   * them under that notice rather than losing them to a transient failure.
+   */
+  loadResultReviewQueue(done?: () => void): void {
+    const request = ++this.resultQueueRequest;
+    const isCurrent = (): boolean => request === this.resultQueueRequest;
+    this.resultQueueError.set(false);
+    // Set BEFORE the request: clearing the error while `resultQueue` is still
+    // empty otherwise drew "all results reviewed" for the whole request
+    // window, on the first load and again on every Retry.
+    this.resultQueueLoading.set(true);
+    this.dashboardService.getResultReviewQueue().subscribe({
+      next: (items) => {
+        if (isCurrent()) {
+          this.resultQueue.set(items);
+          this.resultQueueLoading.set(false);
+        }
+        done?.();
+      },
+      error: () => {
+        if (isCurrent()) {
+          // The rows are NOT cleared. A transient 502 on a refresh used to
+          // take three critical results off the screen and leave an error
+          // card where they had been; the panel draws them with the failure
+          // stated above, exactly as the in-basket category does.
+          this.resultQueueError.set(true);
+          this.resultQueueLoading.set(false);
+        }
+        done?.();
+      },
+    });
   }
 
   closePatientSnapshot(): void {

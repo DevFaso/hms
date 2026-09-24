@@ -12,12 +12,43 @@
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
-  @if (results().length === 0) {
+  <!--
+    Only when there is nothing to replace. A dashboard refresh re-reads this
+    queue, and swapping a populated, readable list for a spinner every time is
+    worse than letting the rows stand until the new ones land.
+  -->
+  @if (loading() && results().length === 0) {
+    <div class="rp-loading" aria-live="polite">
+      <span class="rp-spinner"></span>
+      <span>{{ 'common.loading' | translate }}</span>
+    </div>
+  } @else if (loadError() && results().length === 0) {
+    <div class="rp-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="rp-retry" (click)="requestReload()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (results().length === 0) {
     <div class="rp-empty">
       <span class="material-symbols-outlined">check_circle</span>
       <p>{{ 'DASHBOARD.ALL_RESULTS_REVIEWED' | translate }}</p>
     </div>
   } @else {
+    <!--
+      A failed refresh over rows that are still held: state it, keep them. An
+      error card where three critical results had been is worse than the rows
+      plus a notice.
+    -->
+    @if (loadError()) {
+      <p class="rp-stale" role="status">
+        {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
+        <button type="button" class="rp-retry" (click)="requestReload()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </p>
+    }
     <div class="rp-sections">
       <!-- Critical -->
       @if (criticalResults().length > 0) {

@@ -41,6 +41,7 @@
     "BREAK_GLASS_REVIEW.PAGINATION_LABEL": "Pagination",
     "CDS.INDICATOR.INFO": "Info",
     "CHART.ALLERGIES": "Allergies",
+    "CHART.LAB_STATUS_NORMAL": "Normal",
     "CHART.SECTIONS": "Sections",
     "CHART_REVIEW.COL.DATE": "Date",
     "CHART_REVIEW.COL.TYPE": "Type",
@@ -429,10 +430,14 @@
     "WEBHOOKS.EVENT_PING": "Ping",
     "WEBHOOKS.KEY_LABEL": "Client",
     "WEBHOOKS.PING": "Ping",
+    "inBasket.labColContext": "Indication",
+    "inBasket.labColPatient": "Patient",
+    "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
     "inBasket.urgent": "Urgent"
   },
   "es": {
+    "CHART.LAB_STATUS_NORMAL": "Normal",
     "ENCOUNTERS.ELIGIBILITY.ERROR": "Error",
     "ENCOUNTERS.NOTE_FORM_SOAP_P": "P — Plan",
     "IMAGING.LATERALITY_BILATERAL": "Bilateral",
@@ -451,6 +456,7 @@
     "PORTAL.ENUM.STATUS.ERROR": "Error",
     "PORTAL.ENUM.STATUS.FINAL": "Final",
     "PORTAL.ENUM.STATUS.NORMAL": "Normal",
-    "SHELL.AVATAR_ALT": "Avatar"
+    "SHELL.AVATAR_ALT": "Avatar",
+    "inBasket.labNormal": "Normal"
   }
 }
