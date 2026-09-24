@@ -49,9 +49,12 @@ struct LabResultSummaryRow: View {
     let result: LabResultDTO
 
     /// A pending row is never a green tick: the lab has not released it and
-    /// there is nothing to be reassured by.
+    /// there is nothing to be reassured by. Neither is a released row whose
+    /// status this build cannot name — `.unknown` is exactly the case where
+    /// the app does not know whether the value is normal.
     private var symbol: String {
         if result.isPending { return "hourglass" }
+        if result.displayStatus == .unknown { return "questionmark.circle" }
         return result.isAbnormal || result.isCritical
             ? "exclamationmark.triangle.fill"
             : "checkmark.circle.fill"
@@ -81,7 +84,7 @@ struct LabResultSummaryRow: View {
                         Text(value).font(.caption)
                     }
                     if let range = result.referenceRange {
-                        Text("\("reference".localized): \(range)")
+                        Text(String(format: "reference_with_value".localized, range))
                             .font(.caption).foregroundColor(.secondary)
                     }
                 }

@@ -250,9 +250,11 @@ struct AppointmentRowView: View {
 struct LabResultRowView: View {
     let result: LabResultDTO
 
-    /// A pending row is never a green tick — the lab has not released it.
+    /// A pending row is never a green tick — the lab has not released it —
+    /// and neither is a released row whose status this build cannot name.
     private var symbol: String {
         if result.isPending { return "hourglass" }
+        if result.displayStatus == .unknown { return "questionmark.circle" }
         return result.isAbnormal || result.isCritical
             ? "exclamationmark.triangle.fill"
             : "checkmark.circle.fill"

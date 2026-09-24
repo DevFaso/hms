@@ -564,3 +564,5 @@
 "ordered_by_with_value" = "Ordered by %@";
 "ordered_at" = "Ordered";
 "refill_already_open" = "A refill request for this medication is already with your care team";
+"reference_with_value" = "Reference: %@";
+"dates" = "Dates";

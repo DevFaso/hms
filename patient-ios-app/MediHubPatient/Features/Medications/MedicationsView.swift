@@ -109,7 +109,12 @@ struct MedicationsView: View {
                                        description: Text("No prescriptions on record."))
             } else {
                 List(vm.prescriptions) { rx in
-                    Button { selectedRx = rx } label: {
+                    // NOT a Button wrapping the whole row: the refill button
+                    // below is a control of its own, and an outer Button's
+                    // gesture covers its entire label, so tapping "Request
+                    // refill" would open the detail sheet instead — or set
+                    // both sheet items, of which SwiftUI presents only one.
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
@@ -131,39 +136,42 @@ struct MedicationsView: View {
                                     Text(String(format: "rx_pharmacy_with_value".localized, pharmacy))
                                         .font(.caption).foregroundColor(.secondary)
                                 }
-
-                                // The backend gate is PrescriptionStatus.isRefillable(),
-                                // not a refill counter — this DTO has never carried one.
-                                if rx.statusEnum.isRefillable {
-                                    // The backend allows ONE open request per
-                                    // prescription (requestMedicationRefill).
-                                    // Until this change the button never
-                                    // rendered at all, so that refusal was
-                                    // unreachable; now the patient is told
-                                    // before tapping, not after a 400.
-                                    if vm.hasOpenRefill(forPrescription: rx.id) {
-                                        Text("refill_already_open".localized)
-                                            .font(.caption2).foregroundColor(.secondary)
-                                    } else {
-                                        HStack {
-                                            Spacer()
-                                            Button {
-                                                refillTarget = rx
-                                            } label: {
-                                                Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
-                                                    .font(.caption)
-                                            }
-                                            .buttonStyle(.borderedProminent)
-                                            .controlSize(.mini)
-                                        }
-                                    }
-                                }
                             }
+                            Spacer(minLength: 4)
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary).font(.caption)
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedRx = rx }
+
+                        // The backend gate is PrescriptionStatus.isRefillable(),
+                        // not a refill counter — this DTO has never carried one.
+                        if rx.statusEnum.isRefillable {
+                            // The backend allows ONE open request per
+                            // prescription (requestMedicationRefill). Until this
+                            // change the button never rendered at all, so that
+                            // refusal was unreachable; now the patient is told
+                            // before tapping rather than after a 400. It is a
+                            // courtesy, not the gate: the server re-checks and
+                            // its message reaches the alert.
+                            if vm.hasOpenRefill(forPrescription: rx.id) {
+                                Text("refill_already_open".localized)
+                                    .font(.caption2).foregroundColor(.secondary)
+                            } else {
+                                HStack {
+                                    Spacer()
+                                    Button {
+                                        refillTarget = rx
+                                    } label: {
+                                        Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
+                                            .font(.caption)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.mini)
+                                }
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
                     .padding(.vertical, 4)
                 }
                 .listStyle(.insetGrouped)
@@ -438,7 +446,7 @@ struct PrescriptionDetailSheet: View {
                     }
                 }
 
-                Section("lab_dates_section".localized) {
+                Section("dates".localized) {
                     if let prescribed = prescription.createdAt {
                         detailRow("prescribed".localized, String(prescribed.prefix(10)))
                     }
@@ -505,9 +513,15 @@ final class MedicationsViewModel: ObservableObject {
                 self.prescriptions = await (try? APIClient.shared.get(APIEndpoints.prescriptions)) ?? []
             }
             group.addTask { @MainActor in
+                // Newest first: `hasOpenRefill` can only see this page, and
+                // an open REQUESTED/PAUSED row outside it would put the button
+                // back on screen. The backend sorts on whatever Pageable says.
                 let page: PageDTO<RefillDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.refills,
-                    queryItems: [URLQueryItem(name: "size", value: "50")]
+                    queryItems: [
+                        URLQueryItem(name: "size", value: "50"),
+                        URLQueryItem(name: "sort", value: "createdAt,desc")
+                    ]
                 )
                 self.refills = page?.content ?? []
             }
