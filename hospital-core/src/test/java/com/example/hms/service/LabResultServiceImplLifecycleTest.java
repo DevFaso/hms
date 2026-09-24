@@ -153,6 +153,17 @@ class LabResultServiceImplLifecycleTest {
     }
 
     /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
+    /**
+     * The live role lookup the author check makes on an unscoped ingest call.
+     *
+     * <p>It asks the DATABASE for an active assignment rather than reading the
+     * token, which is the whole point of running it on this path: a revoked
+     * technician's token still carries the role, their assignment does not.
+     */
+    private void stubIngestAuthorAt(UUID authorityHospitalId) {
+        when(roleValidator.hasRole(actorId, authorityHospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+    }
+
     private void stubEntryPath() {
         // Entry reads the order unlocked and takes the write lock only for the
         // status decision (follow-up 2), so both finders are exercised.
@@ -704,14 +715,17 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
+        stubIngestAuthorAt(hospitalId);
         service.createIngestedLabResult(entryRequest(), hospitalId, Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         // the throwing resolver is never reached on the ingest path
         verify(roleValidator, never()).requireActiveHospitalId();
-        // and no per-hospital role is demanded of an account that has none —
-        // this test stubs no role, which is the real interface-account case
-        verify(roleValidator, never()).hasRole(any(), any(), any());
+        // but the author check IS made, at the hospital the allowlist named.
+        // It was skipped here once, on the premise that an interface account
+        // holds no role anywhere; so does a technician offboarded this morning
+        // whose token has not expired.
+        verify(roleValidator).hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST");
     }
 
     @Test
@@ -888,9 +902,57 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
+        stubIngestAuthorAt(performingHospitalId);
         service.createIngestedLabResult(entryRequest(), performingHospitalId, Locale.ENGLISH);
 
         verify(labResultRepository).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a lab role in an unexpired token is not enough: the author check asks the database")
+    void anOffboardedTechniciansTokenCannotIngest() {
+        // The hole the first round of this PR opened and this one closes.
+        // Roles are baked into the token at login, so a technician offboarded
+        // this morning still presents ROLE_LAB_TECHNICIAN and still passes the
+        // endpoint's @PreAuthorize; their assignments are revoked, so no
+        // hospital scope resolves and they look exactly like an interface
+        // account. The sending pair is plaintext they type into the body, so
+        // the allowlist cannot tell them apart either. What can is this check,
+        // which asks the database for an ACTIVE assignment - and it is now run
+        // on this path rather than skipped.
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        // every live-role lookup answers false: no active assignment anywhere
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("a revoked assignment cannot be named as the author of an ingested result")
+    void aDeactivatedAssignmentCannotBeBorrowedOnTheIngestPath() {
+        // The assignment lookup on this path is a bare findById, so without
+        // this a caller could name a deactivated staff member and have them
+        // recorded as the author of the result, in the chart and in the
+        // response.
+        assignment.setActive(false);
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        bindHospitalContext(null);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(null);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        stubIngestAuthorAt(hospitalId);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -912,6 +974,8 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(assignmentRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        // past the author check, so this test still fails on the assignment
+        stubIngestAuthorAt(hospitalId);
 
         LabResultRequestDTO request = entryRequest();
         request.setAssignmentId(foreign.getId());
@@ -956,6 +1020,7 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
+        stubIngestAuthorAt(hospitalId);
         service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH);
 
         // the lookup asked about THIS order, and the unscoped finder is never
@@ -996,6 +1061,7 @@ class LabResultServiceImplLifecycleTest {
             .thenReturn(Optional.of(alreadyRecorded));
         when(labResultMapper.toResponseDTO(alreadyRecorded)).thenReturn(recordedDto);
 
+        stubIngestAuthorAt(hospitalId);
         LabResultResponseDTO response = service.createIngestedLabResult(request, hospitalId, Locale.ENGLISH);
 
         assertThat(response).isSameAs(recordedDto);
@@ -1070,6 +1136,7 @@ class LabResultServiceImplLifecycleTest {
         when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
 
+        stubIngestAuthorAt(hospitalId);
         service.createIngestedLabResult(chloride, hospitalId, Locale.ENGLISH);
 
         verify(labResultRepository).save(any(LabResult.class));

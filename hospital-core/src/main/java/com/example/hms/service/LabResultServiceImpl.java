@@ -153,19 +153,18 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
-        // An interface principal: the ingest door, an allowlisted sender, AND
-        // no hospital scope of its own. All three. A caller that HAS a scope
-        // is still compared against it below, so an allowlisted sending
-        // facility is not a way for a lab user of one hospital to write into
-        // another's order — it narrows the reachable orders, it never widens
-        // them.
-        boolean interfacePrincipal = ingested && !hasResolvableHospitalScope();
+        // An ingest caller with no hospital scope of its own. There is nothing
+        // to compare the order against for them, which is why the allowlist
+        // pin above is the boundary. A caller that HAS a scope is still
+        // compared against it below, so an allowlisted sending facility never
+        // widens what is reachable - it only narrows it.
+        boolean unscopedIngest = ingested && !hasResolvableHospitalScope();
 
         // Same 404-not-403 tenancy comparison as every other single-row path
         // here (B11, on B1's ordering-or-performing predicate): a hospital on
         // neither side must not learn the order exists, let alone attach a
         // result to it.
-        if (!interfacePrincipal) {
+        if (!unscopedIngest) {
             requireOrderInActiveHospital(labOrder);
         }
 
@@ -173,7 +172,7 @@ public class LabResultServiceImpl implements LabResultService {
         // requireActiveHospitalId THROWS when nothing resolves, which is an
         // interface account's normal state; a null acting hospital then means
         // "no scope to judge against", which the helpers below already handle.
-        UUID actingHospitalId = interfacePrincipal ? null : roleValidator.requireActiveHospitalId();
+        UUID actingHospitalId = unscopedIngest ? null : roleValidator.requireActiveHospitalId();
 
         // Who may record THIS test's result. Role alone cannot answer it: a
         // nurse recording a bedside glucose is doing their job, and the same
@@ -184,21 +183,32 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
-    // Skipped for an interface account on the same narrow condition as the
-    // tenancy check: it holds no role at any hospital, which is the premise
-    // of the ingest path. HOSPITAL_ADMIN passes that endpoint's @PreAuthorize
-    // but is not in the author allow-list, and is a scoped principal, so it
-    // is still judged here.
-    if (!interfacePrincipal) {
-        validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, actingHospitalId));
-    }
+    // Never skipped, including for an unscoped ingest caller. It used to be,
+    // on the premise that an interface account holds no role anywhere - but
+    // "holds no role anywhere" also describes a lab technician whose
+    // assignments were revoked this morning and whose token has not expired
+    // yet. Roles are baked into the token at login; this check is not, it asks
+    // the database for an ACTIVE assignment. Skipping it therefore handed an
+    // offboarded technician a write, needing only a well-known analyzer pair
+    // to quote, and an allowlist entry cannot tell them apart because the
+    // sending pair is plaintext the caller types into the body.
+    //
+    // An unscoped ingest caller is judged at the hospital its allowlist entry
+    // names, since that is the only hospital anything about this request
+    // points at. A genuine interface account passes by being provisioned the
+    // way every other actor in this system is: a lab role at the hospital it
+    // sends for. It already has to name an assignment that hospital handles,
+    // so this asks for nothing it was not already carrying.
+    validateLabResultAuthor(currentUserId, unscopedIngest
+        ? senderHospitalId
+        : authorityHospitalId(labOrder, hospital, actingHospitalId));
 
         // An interface principal has no acting hospital, so the acting-hospital
         // comparison below would wave any tenant's assignment through and put
         // that staff member's name on the result and in the response. The
         // order is the anchor instead: the assignment must belong to a
         // hospital that handles it (ordering or performing, B1's predicate).
-        UserRoleHospitalAssignment assignment = interfacePrincipal
+        UserRoleHospitalAssignment assignment = unscopedIngest
             ? requireAssignmentHandlingOrder(request.getAssignmentId(), labOrder)
             : requireAssignmentAtActingHospital(request.getAssignmentId(), actingHospitalId);
 
@@ -689,6 +699,12 @@ public class LabResultServiceImpl implements LabResultService {
         UUID assignmentHospitalId = assignment.getHospital() != null
             ? assignment.getHospital().getId() : null;
         if (assignmentHospitalId == null || !labOrder.isHandledBy(assignmentHospitalId)) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        // And it must still be live. A deactivated assignment is a staff
+        // member who no longer works here; attributing a result to them names
+        // them as its author in the chart and in the response.
+        if (!Boolean.TRUE.equals(assignment.getActive())) {
             throw new ResourceNotFoundException("assignment.notfound");
         }
         return assignment;

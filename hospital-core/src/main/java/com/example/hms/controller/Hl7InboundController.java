@@ -123,14 +123,6 @@ public class Hl7InboundController {
         // an unknown sender learns nothing about the order it named.
         UUID senderHospitalId = resolveSenderHospital(header);
 
-        // The message's own fields are attacker-controlled and would reach the
-        // log verbatim, so this line carries none of them: a value with an
-        // embedded newline forges entries, and a test code is the analyte being
-        // run on a named patient's specimen. The order id is a UUID we parsed,
-        // and identifies the ingest just as well.
-        log.info("Inbound HL7v2 ORU^R01 accepted for lab order {} ({} observation(s))",
-            labOrderId, observations.size());
-
         LabResultRequestDTO dto = LabResultRequestDTO.builder()
             .labOrderId(labOrderId)
             .assignmentId(assignmentId)
@@ -152,6 +144,18 @@ public class Hl7InboundController {
 
         LabResultResponseDTO created =
             labResultService.createIngestedLabResult(dto, senderHospitalId, locale);
+
+        // After the service, not before. An allowlisted sender still has to
+        // clear the order-belongs-to-its-hospital check inside, so a line
+        // written before the call says "accepted" for every order id a sender
+        // walks, including the ones it is then refused.
+        //
+        // None of the message's own fields appear here. They are the caller's
+        // text: a value with an embedded newline forges log entries, and a test
+        // code is the analyte being run on a named patient's specimen. The
+        // order id is a UUID we parsed, and identifies the ingest just as well.
+        log.info("Inbound HL7v2 ORU^R01 recorded against lab order {} ({} observation(s) parsed, first recorded)",
+            labOrderId, observations.size());
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -187,19 +191,26 @@ public class Hl7InboundController {
      * sender that does not identify itself is not a known sender.
      */
     private UUID resolveSenderHospital(com.example.hms.hl7.mllp.Hl7MessageHeader header) {
-        UUID hospitalId = header == null ? null
-            : mllpAllowedSenderService
-                .resolveHospitalId(header.sendingApplication(), header.sendingFacility())
-                .orElse(null);
-        if (hospitalId == null) {
-            // No sender fields in the message: they are the caller's own text and
-            // would forge log entries. That the refusal happened is the
-            // operational fact; which pair was offered belongs in the allowlist
-            // administration screens, not here.
-            log.warn("Inbound HL7v2 ORU^R01 refused: the sending pair is not on the active MLLP allowlist");
+        // The two causes are distinguished in the log and only in the log. The
+        // caller is told nothing either way, so this is the only place an
+        // integration engineer can tell a malformed frame from a missing
+        // /mllp-allowed-senders row - and without it the first cause left only a
+        // DEBUG line, which is off in production.
+        //
+        // Neither line carries the sender fields. They are the caller's own
+        // text and would forge log entries; that the refusal happened is the
+        // operational fact, and which pair was offered belongs in the allowlist
+        // administration screens.
+        if (header == null) {
+            log.warn("Inbound HL7v2 ORU^R01 refused: no readable MSH, so the message identifies no sender");
             throw new ResourceNotFoundException("laborder.notfound");
         }
-        return hospitalId;
+        return mllpAllowedSenderService
+            .resolveHospitalId(header.sendingApplication(), header.sendingFacility())
+            .orElseThrow(() -> {
+                log.warn("Inbound HL7v2 ORU^R01 refused: the sending pair is not on the active MLLP allowlist");
+                return new ResourceNotFoundException("laborder.notfound");
+            });
     }
 
     /** Trim to the column, as the MLLP path does; blank becomes null. */
