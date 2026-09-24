@@ -152,7 +152,6 @@ class LabResultServiceImplLifecycleTest {
         return result;
     }
 
-    /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     /**
      * The live role lookup the author check makes on an unscoped ingest call.
      *
@@ -164,6 +163,7 @@ class LabResultServiceImplLifecycleTest {
         when(roleValidator.hasRole(actorId, authorityHospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
     }
 
+    /** Everything createLabResult needs from its collaborators, for a lab scientist at the order's hospital. */
     private void stubEntryPath() {
         // Entry reads the order unlocked and takes the write lock only for the
         // status decision (follow-up 2), so both finders are exercised.

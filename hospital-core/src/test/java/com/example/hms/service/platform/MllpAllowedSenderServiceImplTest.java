@@ -92,6 +92,40 @@ class MllpAllowedSenderServiceImplTest {
     }
 
     @Test
+    @DisplayName("resolveHospitalId answers the same lookup, as an identifier")
+    void resolveHospitalIdMatchesResolveHospital() {
+        // The HTTP HL7 ingest door calls this one rather than resolveHospital:
+        // Hospital maps its identifier with field access, so reading getId()
+        // off the association initialises the proxy, and doing that after the
+        // read-only transaction has closed is a LazyInitializationException.
+        // Resolving it inside removes the trap instead of documenting it.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        assertThat(service.resolveHospitalId("Roche_Cobas", "lab_a")).contains(hospitalId);
+    }
+
+    @Test
+    @DisplayName("resolveHospitalId is empty for a blank pair, without asking the database")
+    void resolveHospitalIdEmptyOnBlank() {
+        assertThat(service.resolveHospitalId(null, "LAB_A")).isEmpty();
+        assertThat(service.resolveHospitalId("APP", "  ")).isEmpty();
+        verify(senderRepository, never())
+            .findBySendingApplicationAndSendingFacilityAndActiveTrue(any(), any());
+    }
+
+    @Test
+    @DisplayName("resolveHospitalId is empty for a sender that is not allowlisted")
+    void resolveHospitalIdEmptyOnMiss() {
+        // What the ingest door turns into its 404. An inactive or unknown pair
+        // must not resolve, or the allowlist is not a boundary.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue(any(), any()))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.resolveHospitalId("UNKNOWN", "LAB_X")).isEmpty();
+    }
+
+    @Test
     @DisplayName("resolveHospital empty when the lookup misses")
     void resolveHospitalEmptyOnMiss() {
         when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue(any(), any()))
