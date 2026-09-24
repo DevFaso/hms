@@ -681,4 +681,7 @@
     <string name="no_refills">Aucune demande de renouvellement enregistrée</string>
     <string name="lab_status_reported">Résultat disponible</string>
     <string name="since_with_value">Depuis le %1$s</string>
+    <string name="refill_updated_with_value">Mis à jour : %1$s</string>
+    <string name="refill_provider_with_value">Soignant : %1$s</string>
+    <string name="refill_notes_with_value">Notes : %1$s</string>
 </resources>

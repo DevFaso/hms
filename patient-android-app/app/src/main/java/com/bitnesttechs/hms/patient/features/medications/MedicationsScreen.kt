@@ -218,28 +218,31 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Spacer(Modifier.height(6.dp))
-                                // The backend gate is PrescriptionStatus.isRefillable(),
-                                // not a refill counter — this DTO has never carried one.
-                                if (rx.statusEnum.isRefillable) {
-                                    if (openRefill != null) {
-                                        // REQUESTED is "awaiting review"; PAUSED is
-                                        // "your care team held it and will follow
-                                        // up" — the one message that explains the
-                                        // delay, so do not collapse the two.
-                                        Text(stringResource(openRefillMessage(openRefill)),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    } else {
-                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                            FilledTonalButton(
-                                                onClick = { refillTarget = rx },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                                modifier = Modifier.height(28.dp)
-                                            ) {
-                                                Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
-                                            }
+                                // An open request is worth saying whatever the
+                                // prescription's own status is: a PAUSED refill on
+                                // a prescription the prescriber has since
+                                // DISCONTINUED would otherwise vanish from this tab
+                                // entirely — no button and no explanation.
+                                if (openRefill != null) {
+                                    // REQUESTED is "awaiting review"; PAUSED is
+                                    // "your care team held it and will follow up"
+                                    // — the one message that explains the delay, so
+                                    // do not collapse the two.
+                                    Text(stringResource(openRefillMessage(openRefill)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else if (rx.statusEnum.isRefillable) {
+                                    // The backend gate is PrescriptionStatus.isRefillable(),
+                                    // not a refill counter — this DTO has never carried one.
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        FilledTonalButton(
+                                            onClick = { refillTarget = rx },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }
@@ -310,15 +313,18 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     ) { Text(stringResource(R.string.cancel_refill_request)) }
                                 }
                                 refill.updatedAt?.takeIf { it != refill.requestedAt }?.let {
-                                    Text("Updated: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_updated_with_value, it.take(10)),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.providerNotes?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Provider: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_provider_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.notes?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Notes: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_notes_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }

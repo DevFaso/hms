@@ -70,6 +70,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 val mResp = m.await()
                 val pResp = p.await()
                 val rResp = r.await()
+                // Snapshot BEFORE the assignments below: "showing what was
+                // last loaded" is only true of data that was on screen
+                // already, and a cold open whose medications call succeeds
+                // would otherwise satisfy the check with rows it just
+                // fetched.
+                val hadDataBefore = medications.value.isNotEmpty() ||
+                    prescriptions.value.isNotEmpty() ||
+                    refills.value.isNotEmpty()
                 mResp.body()?.data?.let { medications.value = it }
                 pResp.body()?.data?.let { prescriptions.value = it }
                 rResp.body()?.data?.content?.let { refills.value = it }
@@ -78,10 +86,16 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                         medications = !mResp.isSuccessful,
                         prescriptions = !pResp.isSuccessful,
                         refills = !rResp.isSuccessful
-                    )
+                    ),
+                    hadDataBefore
                 )
             } catch (_: Exception) {
-                reportLoadOutcome(LoadFailures(medications = true, prescriptions = true, refills = true))
+                reportLoadOutcome(
+                    LoadFailures(medications = true, prescriptions = true, refills = true),
+                    medications.value.isNotEmpty() ||
+                        prescriptions.value.isNotEmpty() ||
+                        refills.value.isNotEmpty()
+                )
             }
             finally { isLoading.value = false }
         }
@@ -93,15 +107,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * a silent no-op. On a COLD open there is nothing stale to show, so the
      * empty states offer a retry rather than claiming old data is on screen.
      */
-    private fun reportLoadOutcome(failures: LoadFailures) {
+    private fun reportLoadOutcome(failures: LoadFailures, hadDataBefore: Boolean) {
         loadFailed.value = failures
-        // Something is still on screen when ANY list held rows — including the
-        // refills one, whose tab may be the only populated thing a patient
-        // with no active prescriptions has.
-        val hasStaleData = medications.value.isNotEmpty() ||
-            prescriptions.value.isNotEmpty() ||
-            refills.value.isNotEmpty()
-        if (failures.any && hasStaleData) {
+        // `hadDataBefore` counts ANY list — including refills, whose tab may
+        // be the only populated thing a patient with no active prescriptions
+        // has — and is measured before this load wrote anything.
+        if (failures.any && hadDataBefore) {
             _outcome.value = Outcome(R.string.refresh_failed)
         }
     }
