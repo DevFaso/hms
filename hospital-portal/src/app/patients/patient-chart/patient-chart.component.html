@@ -1,6 +1,6 @@
 <div class="chart-container">
   <div class="chart-tabs">
-    @if (canViewAllergies) {
+    @if (canViewAllergies()) {
       <button
         type="button"
         class="chart-tab"
@@ -10,7 +10,7 @@
         {{ 'CHART.ALLERGIES' | translate }}
       </button>
     }
-    @if (canViewProblems) {
+    @if (canViewProblems()) {
       <button
         type="button"
         class="chart-tab"
@@ -20,7 +20,7 @@
         {{ 'CHART.PROBLEMS' | translate }}
       </button>
     }
-    @if (canViewUpdates) {
+    @if (canViewUpdates()) {
       <button
         type="button"
         class="chart-tab"
@@ -30,7 +30,17 @@
         {{ 'CHART.UPDATES' | translate }}
       </button>
     }
-    @if (canViewTimeline) {
+    @if (canViewLabs()) {
+      <button
+        type="button"
+        class="chart-tab"
+        [class.active]="section() === 'labs'"
+        (click)="setSection('labs')"
+      >
+        {{ 'CHART.LABS' | translate }}
+      </button>
+    }
+    @if (canViewTimeline()) {
       <button
         type="button"
         class="chart-tab"
@@ -43,9 +53,9 @@
   </div>
 
   <!-- ══ Allergies ══ -->
-  @if (section() === 'allergies' && canViewAllergies) {
+  @if (section() === 'allergies' && canViewAllergies()) {
     <div class="section-toolbar">
-      @if (canEditAllergies) {
+      @if (canEditAllergies()) {
         <button type="button" class="btn-primary btn-sm" (click)="openAddAllergy()">
           <span class="material-symbols-outlined">add</span>
           {{ 'CHART.ADD_ALLERGY' | translate }}
@@ -69,7 +79,7 @@
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-              @if (canEditAllergies) {
+              @if (canEditAllergies()) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
             </tr>
@@ -97,7 +107,7 @@
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
                 </td>
                 <td class="hospital-cell">{{ a.hospitalName || '—' }}</td>
-                @if (canEditAllergies) {
+                @if (canEditAllergies()) {
                   <td>
                     <div class="action-group">
                       <button
@@ -130,13 +140,13 @@
   }
 
   <!-- ══ Problems / diagnoses ══ -->
-  @if (section() === 'problems' && canViewProblems) {
+  @if (section() === 'problems' && canViewProblems()) {
     <div class="section-toolbar">
       <label class="row-check">
         <input type="checkbox" [checked]="includeHistorical()" (change)="toggleHistorical()" />
         {{ 'CHART.INCLUDE_HISTORICAL' | translate }}
       </label>
-      @if (canEditProblems) {
+      @if (canEditProblems()) {
         <button type="button" class="btn-primary btn-sm" (click)="openAddProblem()">
           <span class="material-symbols-outlined">add</span>
           {{ 'CHART.ADD_PROBLEM' | translate }}
@@ -159,7 +169,7 @@
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'CHART.CHRONIC' | translate }}</th>
               <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-              @if (canEditProblems) {
+              @if (canEditProblems()) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
             </tr>
@@ -187,7 +197,7 @@
                 <td>{{ p.onsetDate ? (p.onsetDate | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
                 <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
-                @if (canEditProblems) {
+                @if (canEditProblems()) {
                   <td>
                     <div class="action-group">
                       <button
@@ -218,9 +228,9 @@
   }
 
   <!-- ══ Chart updates ══ -->
-  @if (section() === 'updates' && canViewUpdates) {
+  @if (section() === 'updates' && canViewUpdates()) {
     <div class="section-toolbar">
-      @if (canCreateUpdates) {
+      @if (canCreateUpdates()) {
         <button type="button" class="btn-primary btn-sm" (click)="openCreateUpdate()">
           <span class="material-symbols-outlined">add</span>
           {{ 'CHART.NEW_UPDATE' | translate }}
@@ -276,8 +286,143 @@
     }
   }
 
+  <!-- ══ Labs (B6) ══ -->
+  @if (section() === 'labs' && canViewLabs()) {
+    <!-- ── Orders: what was asked for, and where it has got to ── -->
+    @if (canViewLabOrders()) {
+      <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>
+      @if (labOrdersLoading()) {
+        <div class="loading-state"><div class="spinner"></div></div>
+      } @else if (labOrdersError()) {
+        <div class="error-state">
+          <p>{{ 'CHART.LAB_ORDERS_LOAD_ERROR' | translate }}</p>
+          <button type="button" class="btn-secondary" (click)="reloadLabs()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      } @else if (labOrders().length === 0) {
+        <p class="empty-hint">{{ 'CHART.NO_LAB_ORDERS' | translate }}</p>
+      } @else {
+        <div class="data-table">
+          <table>
+            <caption class="sr-only">
+              {{
+                'CHART.LAB_ORDERS' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART.LAB_TEST' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_ORDERED_AT' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_PERFORMING_LAB' | translate }}</th>
+                <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (o of labOrders(); track o.id) {
+                <tr [class.foreign-row]="isForeignRow(o)">
+                  <td>
+                    <strong>{{ o.labTestName || '—' }}</strong>
+                    @if (o.labOrderCode) {
+                      <span class="lab-code">{{ o.labOrderCode }}</span>
+                    }
+                  </td>
+                  <td>
+                    <span class="status-badge">{{ o.status | enumLabel: 'labOrderStatus' }}</span>
+                  </td>
+                  <td>{{ o.orderDatetime ? (o.orderDatetime | date: 'short') : '—' }}</td>
+                  <td>{{ o.performingHospitalName || ('CHART.LAB_IN_HOUSE' | translate) }}</td>
+                  <td class="hospital-cell">{{ o.hospitalName || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ── Results: released values, and the rows still awaiting release ── -->
+    @if (canViewLabResults()) {
+      <h3 class="labs-heading">{{ 'CHART.LAB_RESULTS' | translate }}</h3>
+      @if (labResultsLoading()) {
+        <div class="loading-state"><div class="spinner"></div></div>
+      } @else if (labResultsError()) {
+        <div class="error-state">
+          <p>{{ 'CHART.LAB_RESULTS_LOAD_ERROR' | translate }}</p>
+          <button type="button" class="btn-secondary" (click)="reloadLabs()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      } @else if (labResults().length === 0) {
+        <p class="empty-hint">{{ 'CHART.NO_LAB_RESULTS' | translate }}</p>
+      } @else {
+        <div class="data-table">
+          <table>
+            <caption class="sr-only">
+              {{
+                'CHART.LAB_RESULTS' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART.LAB_TEST' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_VALUE' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_REFERENCE_RANGE' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_RESULTED_AT' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_ORDERED_BY' | translate }}</th>
+                <th scope="col">{{ 'CHART.LAB_PERFORMED_BY' | translate }}</th>
+                <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of labResults(); track r.id) {
+                <tr [class.pending-row]="isPendingResult(r)" [class.foreign-row]="isForeignRow(r)">
+                  <td>
+                    <strong>{{ r.testName }}</strong>
+                    @if (r.testCode) {
+                      <span class="lab-code">{{ r.testCode }}</span>
+                    }
+                  </td>
+                  <!--
+                    An unreleased row carries no value here on purpose. The
+                    staff endpoint does send a preliminary one, but rendering
+                    it beside released values — or rendering a released-looking
+                    row with a blank cell — is the defect this section exists
+                    to avoid. The row says, in words, that release is pending.
+                  -->
+                  @if (isPendingResult(r)) {
+                    <td class="lab-pending-cell" colspan="2">
+                      {{ 'CHART.LAB_AWAITING_RELEASE' | translate }}
+                    </td>
+                  } @else {
+                    <td>
+                      <span class="lab-value">{{ r.value || '—' }}</span>
+                      @if (r.unit) {
+                        <span class="lab-unit">{{ r.unit }}</span>
+                      }
+                    </td>
+                    <td>{{ r.referenceRange || '—' }}</td>
+                  }
+                  <td>
+                    <span [class]="labStatusClass(r)">{{ labStatusKey(r) | translate }}</span>
+                  </td>
+                  <td>{{ r.resultedAt ? (r.resultedAt | date: 'short') : '—' }}</td>
+                  <td>{{ r.orderedBy || '—' }}</td>
+                  <td>{{ r.performedBy || '—' }}</td>
+                  <td class="hospital-cell">{{ r.hospitalName || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+
   <!-- ══ Timeline ══ -->
-  @if (section() === 'timeline' && canViewTimeline) {
+  @if (section() === 'timeline' && canViewTimeline()) {
     @if (timelineLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (timeline(); as tl) {

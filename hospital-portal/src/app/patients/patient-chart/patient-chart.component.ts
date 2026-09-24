@@ -4,6 +4,7 @@ import {
   OnChanges,
   OnInit,
   SimpleChanges,
+  computed,
   inject,
   output,
   signal,
@@ -27,20 +28,26 @@ import {
   ChartUpdateRequest,
   ChartSectionType,
   PatientTimeline,
+  PatientLabResult,
   TimelineEntry,
 } from '../../services/patient.service';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { LabService, LabOrderResponse } from '../../services/lab.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
-type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline';
+type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
+
+/** How many lab rows the section asks for; the backend caps `limit` at 100. */
+const LAB_PAGE_SIZE = 25;
 
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RestrictedRowsComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
@@ -58,6 +65,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly openRestricted = output<void>();
 
   private readonly patientService = inject(PatientService);
+  private readonly labService = inject(LabService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -65,14 +73,45 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   section = signal<ChartSection>('allergies');
 
-  /* ── Role gates (single source: chart-access.ts, mirrors backend @PreAuthorize) ── */
-  readonly canViewAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]);
-  readonly canEditAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]);
-  readonly canViewProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]);
-  readonly canEditProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]);
-  readonly canViewUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]);
-  readonly canCreateUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]);
-  readonly canViewTimeline = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]);
+  /* ── Role gates (single source: chart-access.ts, mirrors backend @PreAuthorize) ──
+   *
+   * `computed`, not a field assignment: `hasAnyActiveRole` reads the service's
+   * role signals, so a gate evaluated once in the constructor freezes whatever
+   * role was active when the chart was first built and never notices a role or
+   * hospital-scope change. Several controls on this repo were wrong for
+   * exactly that reason.
+   */
+  readonly canViewAllergies = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
+  );
+  readonly canEditAllergies = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]),
+  );
+  readonly canViewProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
+  );
+  readonly canEditProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
+  );
+  readonly canViewUpdates = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
+  );
+  readonly canCreateUpdates = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]),
+  );
+  readonly canViewTimeline = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]),
+  );
+  /** B6 — `GET /patients/{id}/lab-results`. */
+  readonly canViewLabResults = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewLabResults]),
+  );
+  /** B6 — `GET /lab-orders?patientId=`; a narrower list, see chart-access.ts. */
+  readonly canViewLabOrders = computed(() =>
+    this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewLabOrders]),
+  );
+  /** The Labs tab shows whichever of the two reads this role is allowed. */
+  readonly canViewLabs = computed(() => this.canViewLabResults() || this.canViewLabOrders());
 
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
@@ -145,6 +184,21 @@ export class PatientChartComponent implements OnInit, OnChanges {
     'OTHER',
   ];
 
+  /* ── Labs (B6) ──
+   *
+   * Two reads, each with its own role gate, its own loading flag and its own
+   * error flag: a 403 or an outage on one of them must show as an error on
+   * that block, never as an empty other block.
+   */
+  labResults = signal<PatientLabResult[]>([]);
+  labResultsLoading = signal(false);
+  labResultsError = signal(false);
+  labOrders = signal<LabOrderResponse[]>([]);
+  labOrdersLoading = signal(false);
+  labOrdersError = signal(false);
+  /** True once a labs visit has been attempted, so an empty state is honest. */
+  labsLoaded = signal(false);
+
   /* ── Timeline ── */
   timeline = signal<PatientTimeline | null>(null);
   timelineLoading = signal(false);
@@ -152,10 +206,23 @@ export class PatientChartComponent implements OnInit, OnChanges {
   timelineReason = '';
 
   ngOnInit(): void {
-    if (!this.canViewAllergies) {
-      this.section.set(this.canViewProblems ? 'problems' : 'updates');
-    }
+    this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
+  }
+
+  /**
+   * The first tab this role actually renders. The old two-step fallback
+   * (allergies → problems → updates) could land a role on a tab it cannot
+   * see, which draws an empty chart with every tab hidden; the list below is
+   * the tab order in the template, so the default is always the leftmost tab
+   * on screen.
+   */
+  private firstVisibleSection(): ChartSection {
+    if (this.canViewAllergies()) return 'allergies';
+    if (this.canViewProblems()) return 'problems';
+    if (this.canViewUpdates()) return 'updates';
+    if (this.canViewLabs()) return 'labs';
+    return 'timeline';
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -176,17 +243,23 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private loadCurrentSection(): void {
     switch (this.section()) {
       case 'allergies':
-        if (this.canViewAllergies && this.allergies().length === 0) this.loadAllergies();
+        if (this.canViewAllergies() && this.allergies().length === 0) this.loadAllergies();
         break;
       case 'problems':
-        if (this.canViewProblems && this.problems().length === 0) this.loadProblems();
+        if (this.canViewProblems() && this.problems().length === 0) this.loadProblems();
         break;
       case 'updates':
-        if (this.canViewUpdates && this.updates().length === 0) this.loadUpdates();
+        if (this.canViewUpdates() && this.updates().length === 0) this.loadUpdates();
+        break;
+      case 'labs':
+        // Keyed on "have we tried", not on "is the list empty": a patient with
+        // no labs would otherwise re-fetch both endpoints on every visit, and
+        // a failed read would be retried silently instead of offering Retry.
+        if (this.canViewLabs() && !this.labsLoaded()) this.loadLabs();
         break;
       case 'timeline':
         // Timeline requires an access reason first — prompt instead of loading.
-        if (this.canViewTimeline && !this.timeline()) this.openTimelineReason();
+        if (this.canViewTimeline() && !this.timeline()) this.openTimelineReason();
         break;
     }
   }
@@ -497,6 +570,109 @@ export class PatientChartComponent implements OnInit, OnChanges {
       });
   }
 
+  /* ── Labs (B6) ── */
+
+  /**
+   * Both lab reads, each guarded by its own role gate so a role that may read
+   * one and not the other never fires a request it is certain to be refused.
+   */
+  loadLabs(): void {
+    this.labsLoaded.set(true);
+    if (this.canViewLabResults()) this.loadLabResults();
+    if (this.canViewLabOrders()) this.loadLabOrders();
+  }
+
+  /** Retry control on the labs error state — re-reads whatever failed. */
+  reloadLabs(): void {
+    this.labsLoaded.set(false);
+    this.loadLabs();
+  }
+
+  private loadLabResults(): void {
+    this.labResultsLoading.set(true);
+    this.labResultsError.set(false);
+    this.patientService
+      .listLabResults(this.patientId, {
+        hospitalId: this.hospitalId() || undefined,
+        limit: LAB_PAGE_SIZE,
+      })
+      .subscribe({
+        next: (list) => {
+          this.labResults.set(list ?? []);
+          this.labResultsLoading.set(false);
+        },
+        error: () => {
+          // An explicit error state, not an empty list: a 403 or an outage
+          // rendered as "no labs" is how a released result reaches nobody.
+          this.labResultsError.set(true);
+          this.labResultsLoading.set(false);
+        },
+      });
+  }
+
+  private loadLabOrders(): void {
+    this.labOrdersLoading.set(true);
+    this.labOrdersError.set(false);
+    this.labService.listOrders({ patientId: this.patientId, size: LAB_PAGE_SIZE }).subscribe({
+      next: (list) => {
+        this.labOrders.set(list ?? []);
+        this.labOrdersLoading.set(false);
+      },
+      error: () => {
+        this.labOrdersError.set(true);
+        this.labOrdersLoading.set(false);
+      },
+    });
+  }
+
+  /**
+   * A row the laboratory has not released. It is rendered as pending with no
+   * value and no normal/abnormal colouring: the staff path DOES return the
+   * preliminary value an analyzer posted, and showing it next to released
+   * rows — or worse, showing a released-looking row with a blank value — is
+   * the defect that shipped once on the patient portal.
+   */
+  isPendingResult(result: PatientLabResult): boolean {
+    return !result.released;
+  }
+
+  /** Colour class for a RELEASED row only; a pending row gets none. */
+  labStatusClass(result: PatientLabResult): string {
+    if (this.isPendingResult(result)) return 'lab-badge lab-pending';
+    switch (result.status) {
+      case 'CRITICAL':
+        return 'lab-badge lab-critical';
+      case 'ABNORMAL':
+      case 'ABNORMAL_HIGH':
+      case 'ABNORMAL_LOW':
+        return 'lab-badge lab-abnormal';
+      case 'NORMAL':
+        return 'lab-badge lab-normal';
+      default:
+        return 'lab-badge';
+    }
+  }
+
+  /**
+   * i18n key for a result status. A pending row always reads PENDING whatever
+   * grading the payload carried, so a preliminary NORMAL can never be read as
+   * a released normal result.
+   */
+  labStatusKey(result: PatientLabResult): string {
+    if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
+    switch (result.status) {
+      case 'NORMAL':
+      case 'ABNORMAL':
+      case 'ABNORMAL_HIGH':
+      case 'ABNORMAL_LOW':
+      case 'CRITICAL':
+      case 'PENDING':
+        return 'CHART.LAB_STATUS_' + result.status;
+      default:
+        return 'CHART.LAB_STATUS_UNKNOWN';
+    }
+  }
+
   /* ── Timeline ── */
 
   openTimelineReason(): void {
@@ -543,6 +719,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.allergies.set([]);
     this.problems.set([]);
     this.updates.set([]);
+    this.labResults.set([]);
+    this.labOrders.set([]);
+    this.labsLoaded.set(false);
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

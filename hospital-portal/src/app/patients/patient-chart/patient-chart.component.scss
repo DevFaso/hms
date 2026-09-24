@@ -567,3 +567,89 @@ tr.foreign-row td:first-child,
   color: #5c5c74;
   font-size: 0.85rem;
 }
+
+/* ── Labs (B6) ───────────────────────────────────────────────────────────
+ * Two tables in one section: what was ordered, and what came back. Colours
+ * are the severity palette already used by the badges above, and a PENDING
+ * row deliberately gets a neutral one — an unreleased result must never
+ * read as "normal".
+ */
+.labs-heading {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.error-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: #fff;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  color: #991b1b;
+
+  p {
+    margin: 0 0 12px;
+  }
+}
+
+.lab-code {
+  display: block;
+  color: #5c5c74;
+  font-size: 0.78rem;
+}
+
+.lab-value {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.lab-unit {
+  margin-left: 4px;
+  color: #5c5c74;
+  font-size: 0.85rem;
+}
+
+.lab-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #eef2f7;
+  color: #33415c;
+
+  &.lab-critical {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  &.lab-abnormal {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.lab-normal {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  /* Neutral on purpose: no normal/abnormal colouring before release. */
+  &.lab-pending {
+    background: #eef2f7;
+    color: #33415c;
+  }
+}
+
+/* The row is also marked structurally, so the "not released yet" signal
+ * survives for anyone who cannot resolve the colour. */
+tr.pending-row td:first-child {
+  border-left: 3px dashed #94a3b8;
+}
+
+.lab-pending-cell {
+  color: #5c5c74;
+  font-style: italic;
+}

@@ -274,6 +274,37 @@ export interface TimelineEntry {
   metadata?: TimelineEntryMetadata;
 }
 
+/**
+ * B6 — one row of `GET /patients/{patientId}/lab-results`
+ * (PatientLabResultController → PatientLabResultResponseDTO). Field names are
+ * copied from that DTO, not guessed.
+ *
+ * `@JsonInclude(NON_NULL)` on the DTO means every optional below is genuinely
+ * absent when null, and the staff path omits `value`, `unit`,
+ * `referenceRange`, `performedBy` and `notes` for a row the lab has not
+ * released — `released` is the flag that says so, and `status` reads
+ * `PENDING`.
+ */
+export interface PatientLabResult {
+  id: string;
+  testName: string;
+  testCode?: string;
+  value?: string;
+  unit?: string;
+  referenceRange?: string;
+  /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING. */
+  status?: string;
+  released: boolean;
+  collectedAt?: string;
+  resultedAt?: string;
+  orderedBy?: string;
+  performedBy?: string;
+  category?: string;
+  notes?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+}
+
 export interface PatientTimeline {
   patientId: string;
   patientName: string;
@@ -505,6 +536,24 @@ export class PatientService {
 
   createChartUpdate(patientId: string, req: ChartUpdateRequest): Observable<ChartUpdate> {
     return this.http.post<ChartUpdate>(`/patients/${patientId}/chart-updates`, req);
+  }
+
+  /* ── Lab results (B6 — staff view of the patient's laboratory record) ── */
+
+  /**
+   * `GET /patients/{patientId}/lab-results` — the staff path, so unreleased
+   * rows are returned too, carrying `released: false` and `status: 'PENDING'`.
+   * Errors are NOT swallowed here: a 403 or an outage must reach the caller's
+   * error state rather than render as "this patient has no labs".
+   */
+  listLabResults(
+    patientId: string,
+    options?: { hospitalId?: string; limit?: number },
+  ): Observable<PatientLabResult[]> {
+    let params = new HttpParams();
+    if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
+    if (options?.limit !== undefined) params = params.set('limit', String(options.limit));
+    return this.http.get<PatientLabResult[]>(`/patients/${patientId}/lab-results`, { params });
   }
 
   /* ── Doctor timeline (audited access) ── */

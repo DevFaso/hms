@@ -24,9 +24,63 @@ export const CHART_ROLES = {
   viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   createUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   viewTimeline: ['ROLE_DOCTOR'],
+  /**
+   * B6 — the Labs section reads TWO backends, and they do not admit the same
+   * roles, so each read carries its own list instead of one combined flag: a
+   * combined flag would 403 half the roles on one of the two calls and render
+   * that failure as "nothing to show".
+   *
+   * Both are READ lists lifted from the backend gates, never the lab
+   * workbench's write permissions — the trap VITALS_VIEW_ROLES documents
+   * below.
+   *
+   * viewLabResults mirrors PatientLabResultController#listLabResults
+   * (`/patients/{id}/lab-results`); SecurityConfig's GET matcher for
+   * API_PATIENT_CHART_PATTERNS admits every role the annotation names, so the
+   * annotation is the effective gate.
+   */
+  viewLabResults: [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_PHARMACIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_SUPER_ADMIN',
+  ],
+  /**
+   * viewLabOrders mirrors LabOrderController#getAllLabOrders
+   * (`GET /lab-orders?patientId=`). The annotation also names ROLE_STAFF and
+   * the lab roles; SecurityConfig's GET matcher for /lab-orders names the
+   * same set but NOT ROLE_PHARMACIST, and the chain is first-match-wins and
+   * terminal, so a pharmacist is refused before the annotation ever runs.
+   * This list is the intersection — the roles that actually get a 200.
+   */
+  viewLabOrders: [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_STAFF',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_QUALITY_MANAGER',
+    'ROLE_SUPER_ADMIN',
+  ],
 } as const;
 
-/** Roles that can see at least one chart section (gates the Chart tab). */
+/**
+ * Roles that can see at least one chart section (gates the Chart tab).
+ *
+ * B6 deliberately leaves the two lab lists OUT of this union. The union gates
+ * the Chart TAB in PatientDetailComponent, and folding the lab lists in would
+ * hand the whole tab to seven roles that reach no other section — the lab
+ * bench, quality and ROLE_STAFF. Those roles read a patient's labs from the
+ * /lab workbench and from Chart Review (CHART_REVIEW_VIEW_ROLES below), which
+ * is where CHART_REVIEW_VIEW_ROLES' own note says audit decisions D5/D6 put
+ * them. Every role that already reaches the chart and passes CHART_ROLES
+ * .viewLabResults / .viewLabOrders gets the Labs section.
+ */
 export const CHART_VIEW_ROLES: string[] = [
   ...new Set([
     ...CHART_ROLES.viewAllergies,

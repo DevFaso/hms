@@ -1,0 +1,98 @@
+<section class="lab-results-inbox">
+  <header class="category-header">
+    <div>
+      <h2 class="category-title">
+        <span>{{ 'inBasket.labResults' | translate }}</span>
+        @if (!loading() && !loadError() && results().length > 0) {
+          <span class="badge">{{ results().length }}</span>
+        }
+      </h2>
+      <p class="category-subtitle">{{ 'inBasket.labResultsSubtitle' | translate }}</p>
+    </div>
+    <button
+      type="button"
+      class="btn-refresh"
+      (click)="load()"
+      [attr.aria-label]="'inBasket.labResultsRefresh' | translate"
+    >
+      ↻
+    </button>
+  </header>
+
+  @if (loading()) {
+    <div class="loading-spinner" aria-live="polite">
+      <span class="spinner"></span>
+      <span>{{ 'common.loading' | translate }}</span>
+    </div>
+  } @else if (loadError()) {
+    <div class="error-state">
+      <p>{{ 'inBasket.labResultsError' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (results().length === 0) {
+    <p class="empty-state">{{ 'inBasket.labResultsEmpty' | translate }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="result-table">
+        <caption class="sr-only">
+          {{
+            'inBasket.labResults' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'inBasket.labColTest' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColPatient' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColValue' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColResultedAt' | translate }}</th>
+            <th scope="col">{{ 'inBasket.labColContext' | translate }}</th>
+          </tr>
+        </thead>
+        <!--
+          One tbody per severity, in the order the backend already sorts by
+          (CRITICAL, then ABNORMAL, then NORMAL, each newest first). The
+          heading row is what stops a critical value being one row among
+          forty; an empty group renders nothing at all.
+        -->
+        @for (group of groups(); track group.key) {
+          @if (group.items.length > 0) {
+            <tbody class="severity-group">
+              <tr class="group-row">
+                <th scope="colgroup" colspan="6">
+                  <span [class]="group.badgeClass">{{ group.labelKey | translate }}</span>
+                  <span class="group-count">{{ group.items.length }}</span>
+                </th>
+              </tr>
+              @for (r of group.items; track r.id) {
+                <tr [class.row-critical]="r.abnormalFlag === 'CRITICAL'">
+                  <td>
+                    <strong>{{ r.testName }}</strong>
+                  </td>
+                  <td>
+                    <a [routerLink]="['/patients', r.patientId]" class="patient-link">
+                      {{ r.patientName }}
+                    </a>
+                  </td>
+                  <td>
+                    <span class="result-value">{{ r.resultValue || '—' }}</span>
+                    @if (directionKey(r); as dirKey) {
+                      <span class="result-direction">{{ dirKey | translate }}</span>
+                    }
+                  </td>
+                  <td>
+                    <span [class]="flagClass(r)">{{ flagKey(r) | translate }}</span>
+                  </td>
+                  <td>{{ formatDate(r.resultedAt) }}</td>
+                  <td>{{ r.orderingContext || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          }
+        }
+      </table>
+    </div>
+  }
+</section>
