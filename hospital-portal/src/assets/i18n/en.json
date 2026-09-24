@@ -5467,6 +5467,25 @@
         "SURGEON": "Surgeon",
         "TECHNICIAN": "Technician",
         "VISITOR": "Visitor"
+      },
+      "ROUTING_TYPE": {
+        "PARTNER": "Partner pharmacy",
+        "PRINT": "Printed for the patient",
+        "BACKORDER": "Back order"
+      },
+      "ROUTING_DECISION_STATUS": {
+        "PENDING": "Pending",
+        "ACCEPTED": "Accepted",
+        "REJECTED": "Rejected",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled"
+      },
+      "PRESCRIPTION_DISPATCH_CHANNEL": {
+        "SMS": "SMS"
+      },
+      "PRESCRIPTION_DISPATCH_STATUS": {
+        "SENT": "Sent",
+        "FAILED": "Failed"
       }
     },
     "DOCUMENTS": {
@@ -5560,6 +5579,7 @@
   },
   "PRESCRIPTIONS": {
     "CLARIFICATION": {
+      "ANSWER": "The prescriber's answer",
       "ANSWERED_LABEL": "Answered",
       "ANSWER_HINT": "Sending your answer returns the prescription to the pharmacy work queue with the status it had before the question.",
       "ANSWER_INPUT_LABEL": "Your answer (optional)",
@@ -5570,12 +5590,13 @@
       "ASKED_LABEL": "Asked",
       "BLOCKS_DISPENSING": "Sending this question stops the fill: the prescription moves to Pending clarification and leaves your work queue until the prescriber answers.",
       "EXCHANGE_FAILED": "The clarification exchange could not be loaded.",
+      "FOR": "Prescription:",
       "FORBIDDEN_REQUEST": "Your account is not allowed to raise a clarification on this prescription.",
       "FORBIDDEN_RESOLVE": "Only a clinician with a staff profile at the prescribing hospital can answer this clarification.",
-      "FOR": "Prescription:",
       "LOADING_EXCHANGE": "Loading the exchange…",
       "NO_ANSWER_TEXT": "The prescriber answered without leaving a note.",
       "NO_QUESTION": "No question was recorded.",
+      "QUESTION": "The pharmacist's question",
       "QUESTION_LABEL": "Pharmacist's question",
       "READ_ANSWER": "Read the prescriber's answer",
       "REASON_LABEL": "What do you need the prescriber to clarify?",
@@ -5689,7 +5710,52 @@
     "PHARMACIST_VERIFYING": "Recording…",
     "PHARMACIST_VERIFY_STATE": "Pharmacist verification",
     "PHARMACIST_VERIFY_PENDING": "Pending — a pharmacist must verify before this may be given",
-    "PHARMACIST_VERIFIED_BY": "Verified by"
+    "PHARMACIST_VERIFIED_BY": "Verified by",
+    "TAB": {
+      "ATTENTION": "Needs attention",
+      "DRAFT": "Drafts",
+      "IN_PHARMACY": "At the pharmacy",
+      "DISPENSED": "Dispensed",
+      "CLOSED": "Closed"
+    },
+    "ATTENTION": {
+      "PENDING_CLARIFICATION": "The pharmacist is waiting for the prescriber to answer",
+      "TRANSMISSION_FAILED": "Transmission failed — the order reached no pharmacy, and no workflow moves this status",
+      "PARTNER_REJECTED": "The partner pharmacy refused it — it needs routing elsewhere",
+      "PENDING_STOCK": "Out of stock — on back order",
+      "REQUIRES_EXTERNAL_FILL": "Waiting on an outside pharmacy — no workflow moves this status",
+      "UNRECOGNISED_STATUS": "Unrecognised status — check with the pharmacy"
+    },
+    "PHARMACY": {
+      "SECTION": "Pharmacy and dispatch",
+      "HOLDER": "Held by",
+      "CONTACT": "Pharmacy contact",
+      "DISPATCHED_AT": "Dispatched",
+      "DISPATCH": "Dispatch channel",
+      "LAST_EVENT": "Last pharmacy event",
+      "LAST_REFUSED_BY": "Refused by",
+      "OUTSTANDING": "Outstanding quantity",
+      "AT": "at {{pharmacy}}",
+      "LAST_DISPATCHED_AT": "Last dispatched",
+      "LAST_DISPATCH": "Last dispatch channel"
+    },
+    "HISTORY": {
+      "SECTION": "Dispensing history",
+      "DISPENSES": "Fills recorded",
+      "ROUTINGS": "Routing decisions",
+      "QUANTITY": "Dispensed / requested",
+      "QUANTITY_ROUTED": "Quantity routed",
+      "ROUTING_TYPE": "Route",
+      "DESTINATION": "Destination",
+      "DETAILS": "Details",
+      "RESTOCK_ETA": "Restock expected {{date}}",
+      "EMPTY": "No fill and no routing recorded for this prescription yet.",
+      "ERROR": "The dispensing history could not be loaded.",
+      "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history.",
+      "PARTIAL_ERROR_DISPENSES": "The fills could not be loaded, so this is not the whole picture.",
+      "PARTIAL_ERROR_ROUTINGS": "The routing decisions could not be loaded, so this is not the whole picture."
+    },
+    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

@@ -1,9 +1,18 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { forkJoin, of, Subject } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
   PrescriptionResponse,
@@ -11,6 +20,11 @@ import {
   CommunityPharmacyService,
   CommunityPharmacyOption,
 } from '../services/prescription.service';
+import {
+  DispenseResponse,
+  PharmacyService,
+  RoutingDecisionResponse,
+} from '../services/pharmacy.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -22,6 +36,92 @@ import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+
+/**
+ * The prescriber's list tabs (gap G10).
+ *
+ * `all` is the only one that is not a status bucket; the other five PARTITION
+ * {@link PRESCRIPTION_STATUSES}, so every value the backend enum can send is
+ * reachable from exactly one of them. The tabs this page shipped with filtered
+ * on three statuses out of seventeen, which meant a prescription the pharmacy
+ * had sent back — a refusal, a back order, an unanswered question — was
+ * invisible everywhere except the unfiltered list.
+ */
+export type PrescriptionTab = 'all' | 'draft' | 'attention' | 'inPharmacy' | 'dispensed' | 'closed';
+
+/** Every tab except `all`: the buckets that partition the status enum. */
+export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
+
+/**
+ * Why a prescription is waiting on its PRESCRIBER rather than on the pharmacy,
+ * and the key that says so on screen.
+ *
+ * This list is the definition of the "Needs attention" tab — {@link
+ * TAB_BY_STATUS} is built from it rather than repeating it, because the one
+ * failure mode that matters here is a status that is flagged in one place and
+ * not the other. Each entry is a state the pharmacy has handed BACK: it cannot
+ * fill the order as written, and only the prescriber can move it on.
+ *
+ * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
+ * reads it, so a typo fails the gate instead of rendering the raw key.
+ */
+export const ATTENTION_REASONS: readonly { status: string; labelKey: string }[] = [
+  { status: 'PENDING_CLARIFICATION', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_CLARIFICATION' },
+  { status: 'TRANSMISSION_FAILED', labelKey: 'PRESCRIPTIONS.ATTENTION.TRANSMISSION_FAILED' },
+  { status: 'PARTNER_REJECTED', labelKey: 'PRESCRIPTIONS.ATTENTION.PARTNER_REJECTED' },
+  { status: 'PENDING_STOCK', labelKey: 'PRESCRIPTIONS.ATTENTION.PENDING_STOCK' },
+  { status: 'REQUIRES_EXTERNAL_FILL', labelKey: 'PRESCRIPTIONS.ATTENTION.REQUIRES_EXTERNAL_FILL' },
+];
+
+/**
+ * What an unmapped status is called. A value the portal has never heard of
+ * lands in "Needs attention" rather than nowhere: a prescription the
+ * prescriber cannot see is the defect, and a status this build predates is
+ * exactly the case a hard-coded list gets wrong.
+ */
+export const UNRECOGNISED_STATUS = {
+  labelKey: 'PRESCRIPTIONS.ATTENTION.UNRECOGNISED_STATUS',
+};
+
+/**
+ * Which tab each {@code PrescriptionStatus} falls under.
+ *
+ * SIGNED and TRANSMITTED sit under "At the pharmacy" because that is where a
+ * signed order physically is — in the queue, waiting to be filled.
+ * PARTIALLY_FILLED sits there too: the remainder is still the pharmacy's to
+ * route, and the prescriber has nothing to do until it comes back.
+ * PRINTED_FOR_PATIENT is filed as dispensed, not as attention: the patient is
+ * holding the paper and the hospital's part is over.
+ */
+export const TAB_BY_STATUS: Readonly<Record<string, PrescriptionStatusTab>> = {
+  DRAFT: 'draft',
+  PENDING_SIGNATURE: 'draft',
+
+  SIGNED: 'inPharmacy',
+  TRANSMITTED: 'inPharmacy',
+  SENT_TO_PARTNER: 'inPharmacy',
+  PARTNER_ACCEPTED: 'inPharmacy',
+  PARTIALLY_FILLED: 'inPharmacy',
+
+  DISPENSED: 'dispensed',
+  PARTNER_DISPENSED: 'dispensed',
+  PRINTED_FOR_PATIENT: 'dispensed',
+
+  CANCELLED: 'closed',
+  DISCONTINUED: 'closed',
+
+  ...Object.fromEntries(ATTENTION_REASONS.map((r) => [r.status, 'attention' as const])),
+};
+
+/** The tab bar, in render order. */
+export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string }[] = [
+  { id: 'all', labelKey: 'COMMON.ALL' },
+  { id: 'attention', labelKey: 'PRESCRIPTIONS.TAB.ATTENTION' },
+  { id: 'draft', labelKey: 'PRESCRIPTIONS.TAB.DRAFT' },
+  { id: 'inPharmacy', labelKey: 'PRESCRIPTIONS.TAB.IN_PHARMACY' },
+  { id: 'dispensed', labelKey: 'PRESCRIPTIONS.TAB.DISPENSED' },
+  { id: 'closed', labelKey: 'PRESCRIPTIONS.TAB.CLOSED' },
+];
 
 @Component({
   selector: 'app-prescriptions',
@@ -47,8 +147,10 @@ export class PrescriptionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly communityPharmacyService = inject(CommunityPharmacyService);
+  private readonly pharmacyService = inject(PharmacyService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -58,7 +160,8 @@ export class PrescriptionsComponent implements OnInit {
   filtered = signal<PrescriptionResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
-  activeTab = signal<'all' | 'active' | 'completed' | 'cancelled'>('all');
+  activeTab = signal<PrescriptionTab>('all');
+  protected readonly tabs = PRESCRIPTION_TABS;
   selectedPrescription = signal<PrescriptionResponse | null>(null);
 
   staffMembers = signal<StaffResponse[]>([]);
@@ -107,6 +210,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
     this.initPatientSearch();
+    this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
     if (params.get('new') === '1') {
@@ -506,17 +610,80 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'all' | 'active' | 'completed' | 'cancelled'): void {
+  setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
     this.applyFilter();
+  }
+
+  /**
+   * Which bucket a status belongs to (gap G10). An unmapped or absent status
+   * falls into "Needs attention" rather than out of the list altogether — a
+   * prescription nobody can see is worse than one filed under the wrong tab,
+   * and that is the failure this whole change exists to remove.
+   */
+  tabForStatus(status: string | null | undefined): PrescriptionStatusTab {
+    if (!status) return 'attention';
+    return TAB_BY_STATUS[status] ?? 'attention';
+  }
+
+  /**
+   * Every tab's count in one pass, memoised by the signal.
+   *
+   * <p>The tab bar binds six counts and the summary card a seventh; filtering
+   * the whole list per call re-scanned it seven times on every change
+   * detection, which on a tenant with thousands of unpaged prescriptions is
+   * seven full scans per keystroke in the search box.
+   */
+  private readonly tabCounts = computed<Record<PrescriptionTab, number>>(() => {
+    const counts: Record<PrescriptionTab, number> = {
+      all: 0,
+      draft: 0,
+      attention: 0,
+      inPharmacy: 0,
+      dispensed: 0,
+      closed: 0,
+    };
+    for (const p of this.prescriptions()) {
+      counts.all += 1;
+      counts[this.tabForStatus(p.status)] += 1;
+    }
+    return counts;
+  });
+
+  /** How many prescriptions the tab holds, before the search box narrows it. */
+  countInTab(tab: PrescriptionTab): number {
+    return this.tabCounts()[tab];
+  }
+
+  /**
+   * True when the list came back full, so there may be prescriptions this
+   * page has never seen — and every count on the tab bar is a lower bound
+   * rather than a total. Said out loud, because a silently truncated
+   * "Needs attention 0" is worse than no count at all.
+   */
+  readonly listTruncated = computed(
+    () => this.prescriptions().length >= PrescriptionService.LIST_PAGE_SIZE,
+  );
+
+  /** True while the prescriber, not the pharmacy, is the one holding this up. */
+  needsAttention(p: PrescriptionResponse): boolean {
+    return this.tabForStatus(p.status) === 'attention';
+  }
+
+  /**
+   * The translation key that says WHY, or null when nothing is waiting on the
+   * prescriber. Never the raw status.
+   */
+  attentionReasonKey(p: PrescriptionResponse): string | null {
+    if (!this.needsAttention(p)) return null;
+    const match = ATTENTION_REASONS.find((r) => r.status === p.status);
+    return match ? match.labelKey : UNRECOGNISED_STATUS.labelKey;
   }
 
   applyFilter(): void {
     let list = this.prescriptions();
     const tab = this.activeTab();
-    if (tab === 'active') list = list.filter((p) => p.status === 'DRAFT');
-    else if (tab === 'completed') list = list.filter((p) => p.status === 'SIGNED');
-    else if (tab === 'cancelled') list = list.filter((p) => p.status === 'CANCELLED');
+    if (tab !== 'all') list = list.filter((p) => this.tabForStatus(p.status) === tab);
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -529,11 +696,323 @@ export class PrescriptionsComponent implements OnInit {
     this.filtered.set(list);
   }
 
+  /* ── Pharmacy state + history (gaps G7 / G11) ─────────────────── */
+
+  /**
+   * Roles BOTH history endpoints admit — the intersection of
+   * `DispenseController#listByPrescription` and
+   * `StockOutRoutingController#listByPrescription`, which happen to agree.
+   *
+   * <p>The prescriptions ROUTE is wider than that: it also admits NURSE,
+   * MIDWIFE and ADMIN. Rendering the panel for them would fire two requests
+   * that 403 and leave an error box on a page they opened for something else,
+   * so the panel is absent for those three rather than broken.
+   */
+  private static readonly HISTORY_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_PHARMACIST',
+    'ROLE_PHARMACY_VERIFIER',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /**
+   * A super-admin in GLOBAL view has no hospital scope, and both history
+   * services start with `roleValidator.requireActiveHospitalId()`, which
+   * returns **null** for exactly that caller and is then dereferenced
+   * (`hospitalId.equals(prescription.getHospital().getId())`) — two 500s and
+   * an error box on a page that is explicitly cross-tenant. Reported to the
+   * coordinator as a backend defect; this is the client half, which declines
+   * to fire the calls and says why instead.
+   */
+  protected readonly historyNeedsScope = computed(() => this.isSuperAdmin() && this.globalView());
+
+  /**
+   * Read live off the role signal rather than captured at construction: the
+   * active role set changes under a hospital-scope switch, and a panel gated
+   * on a constructor snapshot keeps the answer it was born with.
+   */
+  protected readonly canReadPharmacyHistory = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole(PrescriptionsComponent.HISTORY_ROLES) &&
+      !this.historyNeedsScope(),
+  );
+
+  dispenseHistory = signal<DispenseResponse[]>([]);
+  routingHistory = signal<RoutingDecisionResponse[]>([]);
+  historyLoading = signal(false);
+
+  /**
+   * Tracked per half. The two endpoints fail independently, and a transient
+   * 500 on the routing decisions used to discard a fill list that had loaded
+   * perfectly well — on a controlled drug the fills are the half that matters
+   * most. Nothing is swallowed either way: whichever half is missing says so.
+   */
+  dispenseError = signal(false);
+  routingError = signal(false);
+
+  /** Both halves gone: the panel has nothing but the failure to report. */
+  readonly historyError = computed(() => this.dispenseError() && this.routingError());
+
+  /** One half loaded, the other did not — render what arrived AND say so. */
+  readonly historyPartialError = computed(
+    () => (this.dispenseError() || this.routingError()) && !this.historyError(),
+  );
+
+  /**
+   * True when this prescription can have a pharmacy history at all. A draft
+   * has never been dispensable, so opening one must not cost two requests.
+   */
+  hasPharmacyHistory(p: PrescriptionResponse): boolean {
+    return this.tabForStatus(p.status) !== 'draft';
+  }
+
+  /** True when the response carries anything about where the order went. */
+  hasPharmacyState(p: PrescriptionResponse): boolean {
+    return !!(p.pharmacyName || p.dispatchedAt || p.lastPharmacyEvent);
+  }
+
+  /**
+   * Whether the dispatch columns still describe where the order IS.
+   *
+   * <p>`clearPharmacy` nulls the three pharmacy columns on a refusal and on a
+   * no-show, but leaves `dispatchChannel`, `dispatchStatus` and `dispatchedAt`
+   * exactly as the SMS path wrote them. Rendered flatly, a PARTNER_REJECTED
+   * order therefore reads "Dispatched — SMS — Sent" with no pharmacy beside
+   * it: a live, successful dispatch, for an order that is back in the
+   * hospital's queue. The columns are still worth showing — they are the last
+   * thing that happened — so they are labelled as past instead of suppressed.
+   *
+   * <p>A re-route is the same trap one step further on, and worse:
+   * `routeToPartner` sets the three pharmacy columns to the NEW partner and
+   * never touches the dispatch ones, so "Held by B / Dispatched T1 / SMS Sent"
+   * would say B had been SMS'd at a time that belongs to A. Only
+   * `PrescriptionSmsDispatchServiceImpl` writes those columns, so a routing
+   * decision taken after `dispatchedAt` means they describe a previous
+   * destination. (`dispatchReference` on the response DTO would settle it
+   * outright — flagged to the coordinator.)
+   */
+  dispatchIsCurrent(p: PrescriptionResponse): boolean {
+    if (!p.pharmacyName || !p.dispatchedAt) return false;
+    const decision = this.routingHistory()[0];
+    if (!decision) return true;
+    return eventTime(decision.decidedAt, decision.createdAt) <= eventTime(p.dispatchedAt, null);
+  }
+
+  /**
+   * The pharmacist's question and the prescriber's answer, once either exists.
+   *
+   * <p>Checked separately from {@link #hasPharmacyState} because
+   * `resolveClarification` restores the status the prescription held BEFORE
+   * the query — often SIGNED, which is not a pharmacy-owned status, so
+   * `lastPharmacyEvent` goes back to null. Keying the section off the pharmacy
+   * columns alone made the exchange disappear from the prescriber's screen the
+   * moment they answered it.
+   */
+  hasClarificationExchange(p: PrescriptionResponse): boolean {
+    return !!(p.clarificationReason || p.clarificationResponse);
+  }
+
+  /**
+   * Whether the "Pharmacy and dispatch" block has anything to say. Two of the
+   * facts in it — the refusing partner and the outstanding quantity — come out
+   * of the history rather than off the prescription, so a PARTIALLY_FILLED row
+   * whose pharmacy columns are empty still has a remainder worth showing.
+   */
+  showPharmacySection(p: PrescriptionResponse): boolean {
+    return (
+      this.hasPharmacyState(p) ||
+      this.needsAttention(p) ||
+      this.hasClarificationExchange(p) ||
+      !!this.outstandingQuantity() ||
+      !!this.lastRefusedBy()
+    );
+  }
+
+  /**
+   * The partner that refused this order.
+   *
+   * <p>`StockOutRoutingServiceImpl` clears the prescription's own pharmacy
+   * columns on a refusal, so the name is only recoverable from the routing
+   * decisions — which is why this is a computed over the history and not a
+   * field. Mirrors the backend's `lastRefusedBy` guard exactly: the row must
+   * be PARTNER_REJECTED and the LATEST decision must be the partner refusal,
+   * or a re-route since would make this the wrong pharmacy.
+   */
+  readonly lastRefusedBy = computed<string | null>(() => {
+    const rx = this.selectedPrescription();
+    if (!rx || rx.status !== 'PARTNER_REJECTED') return null;
+    const latest = this.routingHistory()[0];
+    if (!latest || latest.routingType !== 'PARTNER' || latest.status !== 'REJECTED') return null;
+    return latest.targetPharmacyName ?? null;
+  });
+
+  /**
+   * What the prescription still owes — the figure the SERVER computed, taken
+   * off the latest routing decision's `remainingQuantity`
+   * (`FillAccounting.remaining` at the moment that routing was decided).
+   *
+   * <p>It is not derived from the dispense rows, and an earlier draft of this
+   * that summed `requested − dispensed` across them was wrong: the backend
+   * records each fill as a NEW Dispense row and compares the SUM of
+   * `quantityDispensed` against the lifetime expected quantity
+   * (`updatePrescriptionStatusFromHistory`). A 10-of-30 partial followed by a
+   * 20-of-20 second fill completes the order, but the first row's shortfall of
+   * 20 stays in any per-row sum forever — so a DISPENSED prescription would
+   * have gone on claiming 20 tablets were owed.
+   *
+   * <p>Two guards, because the server's number is a snapshot, not a live
+   * balance. The first is the tab bucket rather than a list of status names:
+   * everything under `dispensed` or `closed` is finished with the hospital,
+   * and `printForPatient` writes a `remainingQuantity` on its PRINT decision
+   * and creates no dispense row at all — so a printed prescription would have
+   * gone on claiming a remainder forever, with no fill able to clear it.
+   * The second is a LIVE fill recorded after the decision, which makes the
+   * decision's remainder stale; a cancelled fill is skipped, because the
+   * backend excludes it from the dispensed total too, and letting one hide a
+   * real remainder is the opposite of the caution this comment argues for.
+   *
+   * <p>In both cases this returns null and the row is simply absent — the
+   * per-fill "dispensed / requested" column below still shows what happened.
+   * A prescription-level remainder needs `quantity` and `refillsUsed` on
+   * PrescriptionResponseDTO, which it does not carry.
+   */
+  readonly outstandingQuantity = computed<number | null>(() => {
+    const rx = this.selectedPrescription();
+    if (!rx) return null;
+    const bucket = this.tabForStatus(rx.status);
+    if (bucket === 'dispensed' || bucket === 'closed') return null;
+    const decision = this.routingHistory()[0];
+    const remaining = decision?.remainingQuantity;
+    if (remaining == null || remaining <= 0) return null;
+    const fill = this.dispenseHistory().find((d) => d.status !== 'CANCELLED');
+    if (
+      fill &&
+      eventTime(fill.dispensedAt, fill.createdAt) >
+        eventTime(decision.decidedAt, decision.createdAt)
+    ) {
+      return null;
+    }
+    return remaining;
+  });
+
   viewDetail(p: PrescriptionResponse): void {
     this.selectedPrescription.set(p);
+    this.loadPharmacyHistory(p);
   }
+
   closeDetail(): void {
     this.selectedPrescription.set(null);
+    this.dispenseHistory.set([]);
+    this.routingHistory.set([]);
+    this.historyLoadedFor = null;
+    this.historyLoading.set(false);
+    this.dispenseError.set(false);
+    this.routingError.set(false);
+  }
+
+  private readonly historyRequest$ = new Subject<string>();
+
+  /**
+   * One stream for both histories.
+   *
+   * <p>`switchMap` so that opening prescription B while A is still in flight
+   * cancels A: the detail panel is a full-screen overlay, so the user always
+   * closes one before opening the next, and on a slow link A's fills were
+   * landing in the signals while B's panel was on screen — one patient's
+   * dispense records rendered under another's order.
+   *
+   * <p>The id is carried through and re-checked on arrival as well, because
+   * `switchMap` cannot cancel what never emitted: opening a DRAFT fires no
+   * request at all, and closing the panel fires none either, so an earlier
+   * response would still have arrived and populated a panel that is showing
+   * something else (or nothing).
+   *
+   * <p>`catchError` sits INSIDE the `switchMap` on purpose — on the outer
+   * pipe it would complete the stream and the panel would never load again
+   * for the rest of the session.
+   */
+  private initPharmacyHistory(): void {
+    this.historyRequest$
+      .pipe(
+        switchMap((prescriptionId) =>
+          forkJoin({
+            // Each arm collapses its own failure to null so the other still
+            // arrives; forkJoin is otherwise all-or-nothing.
+            dispenses: this.pharmacyService
+              .listDispensesByPrescription(prescriptionId, 0, 20, 'dispensedAt,desc')
+              .pipe(catchError(() => of(null))),
+            routings: this.pharmacyService
+              .listRoutingDecisionsByPrescription(prescriptionId, 0, 20, 'decidedAt,desc')
+              .pipe(catchError(() => of(null))),
+          }).pipe(
+            map((res) => ({
+              prescriptionId,
+              dispenseFailed: res.dispenses === null,
+              routingFailed: res.routings === null,
+              dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
+                (a, b) =>
+                  eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
+              ),
+              routings: [...(res.routings?.data?.content ?? [])].sort(
+                (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
+              ),
+            })),
+            // Belt and braces: each arm already swallows its own failure into
+            // a null, so this only fires on something neither arm produced.
+            catchError(() =>
+              of({
+                prescriptionId,
+                dispenseFailed: true,
+                routingFailed: true,
+                dispenses: [] as DispenseResponse[],
+                routings: [] as RoutingDecisionResponse[],
+              }),
+            ),
+          ),
+        ),
+        // Navigating away with the panel open otherwise leaves the requests
+        // running and this subscription writing signals on a dead component.
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((res) => {
+        if (this.selectedPrescription()?.id !== res.prescriptionId) return;
+        // Only overwrite a half that actually came back. A retry whose OTHER
+        // half fails this time must not take away rows the prescriber could
+        // read a second ago.
+        if (!res.dispenseFailed) this.dispenseHistory.set(res.dispenses);
+        if (!res.routingFailed) this.routingHistory.set(res.routings);
+        // A refusal or an outage is an explicit error state — never "no fills
+        // recorded", which is the one thing a prescriber must not be told
+        // wrongly about a controlled drug.
+        this.dispenseError.set(res.dispenseFailed);
+        this.routingError.set(res.routingFailed);
+        this.historyLoading.set(false);
+      });
+  }
+
+  /** The prescription the loaded history belongs to, so a RETRY is not a swap. */
+  private historyLoadedFor: string | null = null;
+
+  loadPharmacyHistory(p: PrescriptionResponse): void {
+    if (this.historyLoadedFor !== p.id) {
+      this.dispenseHistory.set([]);
+      this.routingHistory.set([]);
+      this.historyLoadedFor = p.id;
+    }
+    this.dispenseError.set(false);
+    this.routingError.set(false);
+    if (!this.canReadPharmacyHistory() || !this.hasPharmacyHistory(p)) {
+      this.historyLoading.set(false);
+      return;
+    }
+    this.historyLoading.set(true);
+    this.historyRequest$.next(p.id);
+  }
+
+  retryPharmacyHistory(): void {
+    const rx = this.selectedPrescription();
+    if (rx) this.loadPharmacyHistory(rx);
   }
 
   /* ── SMS dispatch ────────────────────────────────────────── */
@@ -592,28 +1071,43 @@ export class PrescriptionsComponent implements OnInit {
       });
   }
 
-  getStatusClass(status?: string): string {
-    switch (status) {
-      case 'DRAFT':
-        return 'status-draft';
-      case 'PENDING_SIGNATURE':
-        return 'status-pending';
-      case 'SIGNED':
-        return 'status-active';
-      case 'TRANSMITTED':
-        return 'status-completed';
-      case 'CANCELLED':
-        return 'status-cancelled';
-      case 'DISCONTINUED':
-        return 'status-suspended';
-      case 'TRANSMISSION_FAILED':
-        return 'status-cancelled';
-      default:
-        return '';
-    }
-  }
+  /**
+   * One badge colour per TAB, so the badge and the tab cannot disagree.
+   *
+   * <p>The eleven pharmacy-owned statuses used to fall through to `''` and
+   * render as unstyled text beside the four that had a badge. The obvious fix
+   * — a seventeen-case switch — was worse than it looked: it put
+   * `TRANSMITTED` (sitting untouched in the pharmacy queue) in the same green
+   * as `DISPENSED`, and `PARTNER_REJECTED` (a live order the prescriber must
+   * re-route) in the same red as `CANCELLED`. A prescriber scanning a list of
+   * controlled drugs reads colour before text.
+   *
+   * <p>Deriving the class from `tabForStatus` makes that impossible by
+   * construction, and a new status inherits its bucket's colour rather than
+   * rendering unstyled. Five buckets, five distinct colours the stylesheet
+   * already defines — no new pairs for axe to check.
+   */
+  private static readonly TAB_BADGE_CLASS: Readonly<Record<PrescriptionStatusTab, string>> = {
+    draft: 'status-draft',
+    attention: 'status-pending',
+    inPharmacy: 'status-active',
+    dispensed: 'status-completed',
+    closed: 'status-cancelled',
+  };
 
-  countByStatus(status: string): number {
-    return this.prescriptions().filter((p) => p.status === status).length;
+  getStatusClass(status?: string): string {
+    return PrescriptionsComponent.TAB_BADGE_CLASS[this.tabForStatus(status)];
   }
+}
+
+/**
+ * Newest first, tolerating a row whose primary timestamp is missing. An
+ * unparseable or absent pair sorts last rather than throwing NaN through the
+ * comparator and scrambling the order.
+ */
+function eventTime(primary?: string | null, fallback?: string | null): number {
+  const raw = primary ?? fallback;
+  if (!raw) return 0;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }

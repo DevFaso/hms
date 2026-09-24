@@ -13,26 +13,47 @@
       </button>
     </div>
   </div>
+  <!-- Every card counts a TAB, not a status. Counting DRAFT, SIGNED and
+       CANCELLED was fine while nothing else was on screen; beside the tab
+       counts this change introduced, "Draft 3" would have sat next to a
+       "Drafts 4" tab that also holds PENDING_SIGNATURE. -->
   <div class="summary-cards">
+    <!-- Each icon carries its own tab's badge colour: teal was labelling
+         "Drafts" in the header while it meant "At the pharmacy" in the rows,
+         and a green tick labelled "At the pharmacy" while green meant
+         "Dispensed" below it. -->
     <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">medication</span>
+      <span class="material-symbols-outlined card-icon draft">edit_note</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('DRAFT') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.DRAFT' | translate }}</span>
+        <span class="card-value" data-testid="rx-draft-count">{{ countInTab('draft') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.DRAFT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <span class="material-symbols-outlined card-icon active">local_pharmacy</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('SIGNED') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.SIGNED' | translate }}</span>
+        <span class="card-value">{{ countInTab('inPharmacy') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.IN_PHARMACY' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('CANCELLED') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.CANCELLED' | translate }}</span>
+        <span class="card-value">{{ countInTab('closed') }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.CLOSED' | translate }}</span>
+      </div>
+    </div>
+    <!-- The count that answers "is anything waiting on a prescriber?"
+         (gap G10). The list is the tenant's, not the reader's own:
+         PrescriptionController.list filters by staffId only when asked, and
+         this page never asks, so every prescriber's orders are on it. -->
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon attention">priority_high</span>
+      <div class="card-info">
+        <span class="card-value" data-testid="rx-attention-count">{{
+          countInTab('attention')
+        }}</span
+        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.ATTENTION' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
@@ -44,40 +65,28 @@
     </div>
   </div>
   <div class="filter-bar">
+    <!-- Gap G10: the tabs are a PARTITION of PrescriptionStatus, not three
+         hand-picked values. Every status the backend can send is reachable
+         from exactly one of them, and the count says so before the click. -->
     <div class="tabs">
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'all'"
-        (click)="setTab('all')"
-        [title]="'COMMON.SHOW_ALL' | translate"
-      >
-        {{ 'COMMON.ALL' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'active'"
-        (click)="setTab('active')"
-        [title]="'PRESCRIPTIONS.SHOW_DRAFT' | translate"
-      >
-        {{ 'PRESCRIPTIONS.DRAFT' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'completed'"
-        (click)="setTab('completed')"
-        [title]="'PRESCRIPTIONS.SHOW_SIGNED' | translate"
-      >
-        {{ 'PRESCRIPTIONS.SIGNED' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'cancelled'"
-        (click)="setTab('cancelled')"
-        [title]="'PRESCRIPTIONS.SHOW_CANCELLED' | translate"
-      >
-        {{ 'PRESCRIPTIONS.CANCELLED' | translate }}
-      </button>
+      @for (tab of tabs; track tab.id) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === tab.id"
+          [attr.aria-pressed]="activeTab() === tab.id"
+          (click)="setTab(tab.id)"
+          [attr.data-testid]="'rx-tab-' + tab.id"
+        >
+          {{ tab.labelKey | translate }}
+          <span class="tab-count">{{ countInTab(tab.id) }}</span>
+        </button>
+      }
     </div>
+    @if (listTruncated()) {
+      <p class="muted list-truncated" role="status" data-testid="rx-list-truncated">
+        {{ 'PRESCRIPTIONS.LIST_TRUNCATED' | translate }}
+      </p>
+    }
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
@@ -147,6 +156,20 @@
                 <span class="status-badge {{ getStatusClass(p.status) }}">{{
                   p.status | enumLabel: 'prescriptionStatus'
                 }}</span>
+                <!-- Gap G7: the response has named the holding pharmacy since
+                     wave 1 and the row rendered only the status, so "sent to
+                     partner" never said which partner. -->
+                @if (p.pharmacyName) {
+                  <span class="cell-sub" [attr.data-testid]="'rx-pharmacy-' + p.id">{{
+                    'PRESCRIPTIONS.PHARMACY.AT' | translate: { pharmacy: p.pharmacyName }
+                  }}</span>
+                }
+                @if (attentionReasonKey(p); as reasonKey) {
+                  <span class="attention-note" [attr.data-testid]="'rx-attention-' + p.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+                    {{ reasonKey | translate }}
+                  </span>
+                }
               </td>
               <td>
                 <div class="action-group">
@@ -368,6 +391,270 @@
               }
               @if (rx.status === 'SIGNED' && !rx.signatureValue) {
                 <p class="muted">{{ 'PRESCRIPTIONS.SIGNED_PRE_V118' | translate }}</p>
+              }
+            </div>
+          }
+
+          <!-- ═══ WHERE THE ORDER WENT (gap G7) ═══
+               Wave 1 put the pharmacy, the dispatch columns and the last
+               pharmacy event on the response and no template read any of
+               them, so a prescriber could see that an order was SENT_TO_PARTNER
+               without being able to see WHICH partner, or when. -->
+          @if (showPharmacySection(rx)) {
+            <div class="detail-notes" data-testid="rx-pharmacy-state">
+              <span class="field-label">{{ 'PRESCRIPTIONS.PHARMACY.SECTION' | translate }}</span>
+              @if (attentionReasonKey(rx); as reasonKey) {
+                <p class="attention-note" data-testid="rx-attention-reason">
+                  <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+                  {{ reasonKey | translate }}
+                </p>
+              }
+              <div class="detail-grid">
+                @if (rx.pharmacyName) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACY.HOLDER' | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-pharmacy-name">{{
+                      rx.pharmacyName
+                    }}</span>
+                  </div>
+                }
+                @if (rx.pharmacyContact) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACY.CONTACT' | translate
+                    }}</span
+                    ><span class="field-value">{{ rx.pharmacyContact }}</span>
+                  </div>
+                }
+                @if (rx.dispatchedAt) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      (dispatchIsCurrent(rx)
+                        ? 'PRESCRIPTIONS.PHARMACY.DISPATCHED_AT'
+                        : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT'
+                      ) | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-dispatched-at">{{
+                      rx.dispatchedAt | date: 'medium'
+                    }}</span>
+                  </div>
+                }
+                @if (rx.dispatchChannel || rx.dispatchStatus) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      (dispatchIsCurrent(rx)
+                        ? 'PRESCRIPTIONS.PHARMACY.DISPATCH'
+                        : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCH'
+                      ) | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-dispatch-state">
+                      {{ rx.dispatchChannel | enumLabel: 'prescriptionDispatchChannel' }}
+                      @if (rx.dispatchStatus) {
+                        — {{ rx.dispatchStatus | enumLabel: 'prescriptionDispatchStatus' }}
+                      }
+                    </span>
+                  </div>
+                }
+                @if (rx.lastPharmacyEvent) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACY.LAST_EVENT' | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-last-pharmacy-event">
+                      {{ rx.lastPharmacyEvent | enumLabel: 'prescriptionStatus' }}
+                      @if (rx.lastPharmacyEventAt) {
+                        — {{ rx.lastPharmacyEventAt | date: 'medium' }}
+                      }
+                    </span>
+                  </div>
+                }
+                <!-- The refusing partner is cleared off the prescription by the
+                     backend, so this one comes out of the routing history. -->
+                @if (lastRefusedBy(); as refuser) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACY.LAST_REFUSED_BY' | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-last-refused-by">{{ refuser }}</span>
+                  </div>
+                }
+                @if (outstandingQuantity(); as outstanding) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACY.OUTSTANDING' | translate
+                    }}</span
+                    ><span class="field-value" data-testid="rx-outstanding-quantity">{{
+                      outstanding
+                    }}</span>
+                  </div>
+                }
+              </div>
+              <!-- The pharmacist asked something and the prescriber answered.
+                   Labelled, because an unattributed paragraph under a pharmacy
+                   heading reads as a note somebody left rather than a question
+                   somebody is waiting on. -->
+              @if (rx.clarificationReason) {
+                <div class="detail-field">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.CLARIFICATION.QUESTION' | translate
+                  }}</span>
+                  <p data-testid="rx-clarification-reason">{{ rx.clarificationReason }}</p>
+                </div>
+              }
+              @if (rx.clarificationResponse) {
+                <div class="detail-field">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.CLARIFICATION.ANSWER' | translate
+                  }}</span>
+                  <p data-testid="rx-clarification-response">{{ rx.clarificationResponse }}</p>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- ═══ FILL AND ROUTING HISTORY (gap G11) ═══
+               Both endpoints admit DOCTOR and neither had a prescriber-facing
+               client. The panel is absent — not empty, not erroring — for the
+               roles the route admits but the endpoints do not (NURSE, MIDWIFE,
+               ADMIN), so nobody is shown a 403 they did not ask for. -->
+          @if ((canReadPharmacyHistory() || historyNeedsScope()) && hasPharmacyHistory(rx)) {
+            <div class="detail-notes" data-testid="rx-pharmacy-history">
+              <span class="field-label">{{ 'PRESCRIPTIONS.HISTORY.SECTION' | translate }}</span>
+              @if (historyNeedsScope()) {
+                <p class="muted" data-testid="rx-history-scope">
+                  {{ 'PRESCRIPTIONS.HISTORY.SCOPE_REQUIRED' | translate }}
+                </p>
+              } @else if (historyLoading()) {
+                <div class="loading-state" data-testid="rx-history-loading">
+                  <div class="spinner"></div>
+                  <p>{{ 'COMMON.LOADING' | translate }}</p>
+                </div>
+              } @else if (historyError()) {
+                <div class="history-error" role="alert" data-testid="rx-history-error">
+                  <p>{{ 'PRESCRIPTIONS.HISTORY.ERROR' | translate }}</p>
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    (click)="retryPharmacyHistory()"
+                    data-testid="rx-history-retry"
+                  >
+                    {{ 'COMMON.RETRY' | translate }}
+                  </button>
+                </div>
+              } @else {
+                @if (dispenseHistory().length > 0) {
+                  <table class="history-table" data-testid="rx-dispense-history">
+                    <caption>
+                      {{
+                        'PRESCRIPTIONS.HISTORY.DISPENSES' | translate
+                      }}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+                        <th scope="col">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</th>
+                        <th scope="col">{{ 'PRESCRIPTIONS.HISTORY.QUANTITY' | translate }}</th>
+                        <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (d of dispenseHistory(); track d.id) {
+                        <tr>
+                          <td>{{ d.dispensedAt ? (d.dispensedAt | date: 'short') : '—' }}</td>
+                          <td>{{ d.medicationName || '—' }}</td>
+                          <td>
+                            {{ d.quantityDispensed }} / {{ d.quantityRequested }} {{ d.unit }}
+                          </td>
+                          <td>
+                            <span class="status-badge">{{
+                              d.status | enumLabel: 'dispenseStatus'
+                            }}</span>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+                @if (routingHistory().length > 0) {
+                  <table class="history-table" data-testid="rx-routing-history">
+                    <caption>
+                      {{
+                        'PRESCRIPTIONS.HISTORY.ROUTINGS' | translate
+                      }}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+                        <th scope="col">{{ 'PRESCRIPTIONS.HISTORY.ROUTING_TYPE' | translate }}</th>
+                        <th scope="col">{{ 'PRESCRIPTIONS.HISTORY.DESTINATION' | translate }}</th>
+                        <th scope="col">
+                          {{ 'PRESCRIPTIONS.HISTORY.QUANTITY_ROUTED' | translate }}
+                        </th>
+                        <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                        <th scope="col">{{ 'PRESCRIPTIONS.HISTORY.DETAILS' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (r of routingHistory(); track r.id) {
+                        <tr>
+                          <td>{{ r.decidedAt ? (r.decidedAt | date: 'short') : '—' }}</td>
+                          <td>{{ r.routingType | enumLabel: 'routingType' }}</td>
+                          <td>{{ r.targetPharmacyName || '—' }}</td>
+                          <td>{{ r.remainingQuantity ?? '—' }}</td>
+                          <td>
+                            <span class="status-badge">{{
+                              r.status | enumLabel: 'routingDecisionStatus'
+                            }}</span>
+                          </td>
+                          <td>
+                            @if (r.reason) {
+                              <span>{{ r.reason }}</span>
+                            }
+                            @if (r.estimatedRestockDate) {
+                              <span class="cell-sub">{{
+                                'PRESCRIPTIONS.HISTORY.RESTOCK_ETA'
+                                  | translate
+                                    : { date: (r.estimatedRestockDate | date: 'shortDate') }
+                              }}</span>
+                            }
+                            @if (!r.reason && !r.estimatedRestockDate) {
+                              —
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+                <!-- One endpoint down and the other fine: render what arrived,
+                     and say plainly which half is missing rather than letting
+                     its absence read as "nothing recorded". -->
+                @if (historyPartialError()) {
+                  <div class="history-error" role="alert" data-testid="rx-history-partial-error">
+                    <p>
+                      {{
+                        (dispenseError()
+                          ? 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR_DISPENSES'
+                          : 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR_ROUTINGS'
+                        ) | translate
+                      }}
+                    </p>
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      (click)="retryPharmacyHistory()"
+                      data-testid="rx-history-partial-retry"
+                    >
+                      {{ 'COMMON.RETRY' | translate }}
+                    </button>
+                  </div>
+                } @else if (dispenseHistory().length === 0 && routingHistory().length === 0) {
+                  <p class="muted" data-testid="rx-history-empty">
+                    {{ 'PRESCRIPTIONS.HISTORY.EMPTY' | translate }}
+                  </p>
+                }
               }
             </div>
           }

@@ -5467,6 +5467,25 @@
         "SURGEON": "Cirujano(a)",
         "TECHNICIAN": "Técnico(a)",
         "VISITOR": "Visitante"
+      },
+      "ROUTING_TYPE": {
+        "PARTNER": "Farmacia asociada",
+        "PRINT": "Impresa para el paciente",
+        "BACKORDER": "Pedido pendiente"
+      },
+      "ROUTING_DECISION_STATUS": {
+        "PENDING": "Pendiente",
+        "ACCEPTED": "Aceptada",
+        "REJECTED": "Rechazada",
+        "COMPLETED": "Completada",
+        "CANCELLED": "Cancelada"
+      },
+      "PRESCRIPTION_DISPATCH_CHANNEL": {
+        "SMS": "SMS"
+      },
+      "PRESCRIPTION_DISPATCH_STATUS": {
+        "SENT": "Enviada",
+        "FAILED": "Fallida"
       }
     },
     "DOCUMENTS": {
@@ -5560,6 +5579,7 @@
   },
   "PRESCRIPTIONS": {
     "CLARIFICATION": {
+      "ANSWER": "Respuesta del prescriptor",
       "ANSWERED_LABEL": "Respondida el",
       "ANSWER_HINT": "Al enviar su respuesta, la receta vuelve a la cola de trabajo de farmacia con el estado que tenía antes de la pregunta.",
       "ANSWER_INPUT_LABEL": "Su respuesta (opcional)",
@@ -5570,12 +5590,13 @@
       "ASKED_LABEL": "Preguntada el",
       "BLOCKS_DISPENSING": "Enviar esta pregunta detiene la dispensación: la receta pasa a «Pendiente de aclaración» y sale de su cola de trabajo hasta que el prescriptor responda.",
       "EXCHANGE_FAILED": "No se pudo cargar el intercambio de aclaración.",
+      "FOR": "Receta:",
       "FORBIDDEN_REQUEST": "Su cuenta no está autorizada a solicitar una aclaración sobre esta receta.",
       "FORBIDDEN_RESOLVE": "Solo un clínico con perfil en el hospital prescriptor puede responder a esta aclaración.",
-      "FOR": "Receta:",
       "LOADING_EXCHANGE": "Cargando el intercambio…",
       "NO_ANSWER_TEXT": "El prescriptor respondió sin dejar una nota.",
       "NO_QUESTION": "No se registró ninguna pregunta.",
+      "QUESTION": "Pregunta del farmacéutico",
       "QUESTION_LABEL": "Pregunta del farmacéutico",
       "READ_ANSWER": "Leer la respuesta del prescriptor",
       "REASON_LABEL": "¿Qué necesita que aclare el prescriptor?",
@@ -5689,7 +5710,52 @@
     "PHARMACIST_VERIFYING": "Registrando…",
     "PHARMACIST_VERIFY_STATE": "Verificación farmacéutica",
     "PHARMACIST_VERIFY_PENDING": "Pendiente — un farmacéutico debe verificar antes de administrar",
-    "PHARMACIST_VERIFIED_BY": "Verificada por"
+    "PHARMACIST_VERIFIED_BY": "Verificada por",
+    "TAB": {
+      "ATTENTION": "Requiere atención",
+      "DRAFT": "Borradores",
+      "IN_PHARMACY": "En farmacia",
+      "DISPENSED": "Dispensadas",
+      "CLOSED": "Cerradas"
+    },
+    "ATTENTION": {
+      "PENDING_CLARIFICATION": "El farmacéutico espera la respuesta del prescriptor",
+      "TRANSMISSION_FAILED": "Fallo en la transmisión: la receta no llegó a ninguna farmacia y ningún circuito mueve este estado",
+      "PARTNER_REJECTED": "La farmacia asociada la rechazó: debe derivarse a otra",
+      "PENDING_STOCK": "Sin existencias: en pedido",
+      "REQUIRES_EXTERNAL_FILL": "A la espera de una farmacia externa: ningún circuito mueve este estado",
+      "UNRECOGNISED_STATUS": "Estado no reconocido: consulte con la farmacia"
+    },
+    "PHARMACY": {
+      "SECTION": "Farmacia y envío",
+      "HOLDER": "A cargo de",
+      "CONTACT": "Contacto de la farmacia",
+      "DISPATCHED_AT": "Enviada el",
+      "DISPATCH": "Canal de envío",
+      "LAST_EVENT": "Último evento en farmacia",
+      "LAST_REFUSED_BY": "Rechazada por",
+      "OUTSTANDING": "Cantidad pendiente de dispensar",
+      "AT": "en {{pharmacy}}",
+      "LAST_DISPATCHED_AT": "Último envío el",
+      "LAST_DISPATCH": "Canal del último envío"
+    },
+    "HISTORY": {
+      "SECTION": "Historial de dispensación",
+      "DISPENSES": "Dispensaciones registradas",
+      "ROUTINGS": "Decisiones de derivación",
+      "QUANTITY": "Dispensado / solicitado",
+      "QUANTITY_ROUTED": "Cantidad derivada",
+      "ROUTING_TYPE": "Circuito",
+      "DESTINATION": "Destino",
+      "DETAILS": "Detalles",
+      "RESTOCK_ETA": "Reposición prevista el {{date}}",
+      "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
+      "ERROR": "No se pudo cargar el historial de dispensación.",
+      "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación.",
+      "PARTIAL_ERROR_DISPENSES": "No se pudieron cargar las dispensaciones, por lo que esto no es todo.",
+      "PARTIAL_ERROR_ROUTINGS": "No se pudieron cargar las decisiones de derivación, por lo que esto no es todo."
+    },
+    "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",

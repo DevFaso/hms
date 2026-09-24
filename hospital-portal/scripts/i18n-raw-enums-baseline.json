@@ -194,6 +194,8 @@
     "src/app/platform/platform.html::task.nextAction",
     "src/app/platform/platform.html::task.status",
     "src/app/prescriptions/prescriptions.html::p.frequency",
+    "src/app/prescriptions/prescriptions.html::r.reason",
+    "src/app/prescriptions/prescriptions.html::rx.clarificationReason",
     "src/app/prescriptions/prescriptions.html::rx.frequency",
     "src/app/procedure-orders/procedure-orders.html::o.anesthesiaType",
     "src/app/procedure-orders/procedure-orders.html::o.cancellationReason",
