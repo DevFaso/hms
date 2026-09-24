@@ -106,6 +106,17 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
+  it('drops the stale notice once the rows it described are gone', () => {
+    // Otherwise an emptied panel flips to a full "could not be loaded" card,
+    // telling the physician the queue failed when they just cleared it.
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-empty')).not.toBeNull();
+  });
+
   it('renders the rows when there is no error', () => {
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);

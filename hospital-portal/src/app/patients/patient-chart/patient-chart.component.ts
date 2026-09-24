@@ -334,7 +334,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * with the chip pinned elsewhere, passes the chart gate and gets the two
    * reads on two different hospitals.
    *
-   * NULL IS RETURNED AS NULL. Substituting the primary assignment in global
+   * NULL IS RETURNED AS NULL. Substituting a fallback in global
    * view pinned the results read to one hospital's readable set
    * (`ControllerAuthUtils.resolveHospitalScope` honours a requested id for a
    * super-admin holder) while the orders read, carrying no header, stayed
@@ -342,11 +342,13 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * reads are unscoped together and the backend resolves.
    */
   private labHospitalId(): string | null {
-    const effective = this.roleContext.effectiveHospitalIdForRequest();
-    if (effective) return effective;
-    // Only a super-admin in global view is deliberately unscoped; anyone else
-    // with no effective id still has their assignment to fall back on.
-    return this.roleContext.globalView() ? null : this.hospitalId() || null;
+    // No fallback. `AuthService.getHospitalId()` now returns
+    // `effectiveHospitalIdForRequest()` verbatim and `activeHospitalId` is
+    // what that computed returns on the non-super-admin branch, so every
+    // fallback resolves to the same null — a super-admin in global view and
+    // an account with no active assignment alike. Writing one anyway made
+    // this method look as if it could disagree with the header.
+    return this.roleContext.effectiveHospitalIdForRequest();
   }
 
   /**
@@ -354,10 +356,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
    *
    * Keyed on `labHospitalId()`, not on `globalView()`: a super-admin in
    * global view is the usual case, but a clinical account whose assignments
-   * have all been deactivated resolves to no scope too, and then the reads go
-   * out unscoped — `fetchRows` takes its unfiltered branch — while the hint
-   * still claimed "this hospital's" and `isForeignLabRow` marked nothing.
-   * The two have to agree by construction, so they read the same value.
+   * have all been deactivated resolves to no scope too, and then the hint
+   * claimed "this hospital's" while `isForeignLabRow` marked nothing. The
+   * hint and the marker have to agree with the reads by construction, so all
+   * three read the same value.
    */
   readonly globalScope = computed(() => this.labHospitalId() == null);
 

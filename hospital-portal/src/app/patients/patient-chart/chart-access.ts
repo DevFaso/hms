@@ -72,6 +72,15 @@ export const CHART_ROLES = {
     'ROLE_SUPER_ADMIN',
   ],
   /**
+   * Both lists mirror their ENDPOINT, not the set of roles that can reach this
+   * component. Several names in them — ROLE_STAFF, the lab bench, quality,
+   * ROLE_SUPER_ADMIN — are not in CHART_VIEW_ROLES and so never open the Chart
+   * tab at all. They are kept because these lists are the single place a
+   * reviewer checks a portal gate against a backend gate, and pruning them to
+   * what happens to be reachable today would make the next comparison wrong the
+   * moment CHART_VIEW_ROLES changes. `canViewLabs()` is therefore an upper
+   * bound: the tab gate is the narrower of the two, as it is for every section.
+   *
    * viewLabOrders mirrors LabOrderController#getAllLabOrders
    * (`GET /lab-orders?patientId=`), whose annotation adds ROLE_STAFF and the
    * lab bench to the clinical roles. Neither layer admits ROLE_PHARMACIST —
