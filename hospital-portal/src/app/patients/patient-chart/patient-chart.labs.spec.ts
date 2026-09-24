@@ -456,6 +456,26 @@ describe('PatientChartComponent — labs section', () => {
     expect(fixture.nativeElement.textContent).toContain('9.2');
   });
 
+  it('keeps looking for results even when the ORDERS read failed', () => {
+    // One section-wide "is it empty" flag froze the results block's re-read
+    // as soon as the orders block errored, so a result released after that
+    // failure never appeared however often the clinician came back.
+    setup({ roles: ['ROLE_DOCTOR'], results: [], ordersFail: true });
+    openLabs();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+    expect(component.labOrdersError()).toBeTrue();
+
+    patientService.listLabResults.and.returnValue(of([released()]));
+    component.setSection('allergies');
+    openLabs();
+
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The failed block keeps its error card and is NOT retried silently.
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.textContent).toContain('CHART.LAB_ORDERS_LOAD_ERROR');
+  });
+
   it('does not re-read on a revisit once the section has rows', () => {
     setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
     openLabs();

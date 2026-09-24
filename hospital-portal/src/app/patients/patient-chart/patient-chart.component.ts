@@ -229,18 +229,21 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * The other three sections re-read whenever their list is empty; without
    * this the Labs tab was the one section where "no results" stuck for the
    * life of the page, which is the failure it exists to close.
+   *
+   * PER BLOCK, never section-wide: one flag ANDing both blocks meant a failed
+   * ORDERS read froze the results block's re-read, so a result released after
+   * that failure never appeared however often the clinician came back — even
+   * though the results read had never failed.
+   *
+   * A read in flight is not an empty block either. Without that, toggling
+   * away and back during the first read re-fired the endpoint every time —
+   * wasted traffic, and a cross-hospital reach row per results call.
    */
-  readonly labsEmpty = computed(
-    () =>
-      this.labResults().length === 0 &&
-      this.labOrders().length === 0 &&
-      !this.labResultsError() &&
-      !this.labOrdersError() &&
-      // A read in flight is not an empty section. Without this, toggling away
-      // and back during the first read re-fired both endpoints every time —
-      // wasted traffic, and a cross-hospital reach row per results call.
-      !this.labResultsLoading() &&
-      !this.labOrdersLoading(),
+  readonly labResultsStale = computed(
+    () => this.labResults().length === 0 && !this.labResultsError() && !this.labResultsLoading(),
+  );
+  readonly labOrdersStale = computed(
+    () => this.labOrders().length === 0 && !this.labOrdersError() && !this.labOrdersLoading(),
   );
   /** Exposed for the "showing the latest N" hint below each lab table. */
   readonly labPageSize = LAB_PAGE_SIZE;
@@ -308,20 +311,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
         if (this.canViewUpdates() && this.updates().length === 0) this.loadUpdates();
         break;
       case 'labs':
-        // Two reasons to read: the scope moved, or there is nothing on screen
-        // and nothing wrong. The second is what the other three sections have
-        // always done — a result released while the chart is open must not sit
-        // behind a cached "no results" — and it costs a re-read per visit only
-        // for a patient who genuinely has no labs. A read already in flight is
-        // not an empty section (see labsEmpty), and a FAILED read is not
-        // either: it keeps its error card and its Retry rather than being
-        // retried silently on every visit.
-        if (
-          this.canViewLabs() &&
-          (this.labsLoadedFor() !== this.hospitalId() || this.labsEmpty())
-        ) {
-          this.loadLabs();
-        }
+        if (this.canViewLabs()) this.loadStaleLabs();
         break;
       case 'timeline':
         // Timeline requires an access reason first — prompt instead of loading.
@@ -642,6 +632,26 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * Both lab reads, each guarded by its own role gate so a role that may read
    * one and not the other never fires a request it is certain to be refused.
    */
+  /**
+   * What a visit to the Labs tab reads.
+   *
+   * Two reasons to read: the scope moved — in which case everything is stale
+   * together — or a block has nothing on screen and nothing wrong. The second
+   * is what the other three sections have always done: a result released
+   * while the chart is open must not sit behind a cached "no results". It
+   * costs a re-read per visit only for a block that is genuinely empty, and a
+   * FAILED block is not re-read at all — it keeps its error card and its
+   * Retry rather than being retried silently on every visit.
+   */
+  private loadStaleLabs(): void {
+    if (this.labsLoadedFor() !== this.hospitalId()) {
+      this.loadLabs();
+      return;
+    }
+    if (this.canViewLabResults() && this.labResultsStale()) this.fetchLabResults();
+    if (this.canViewLabOrders() && this.labOrdersStale()) this.fetchLabOrders();
+  }
+
   loadLabs(): void {
     this.labsLoadedFor.set(this.hospitalId());
     if (this.canViewLabResults()) this.fetchLabResults();
