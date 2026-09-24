@@ -31,12 +31,20 @@
     </button>
   </header>
 
-  @if (loading()) {
+  <!--
+    Loading and failure only REPLACE the table when there is nothing to
+    replace. A refresh of a populated worklist must not blank the rows the
+    physician is working from, and a refresh that then fails must not leave
+    them with an error card where twelve critical results used to be — the
+    rows are still held, so they are still drawn, with the failure stated
+    above them.
+  -->
+  @if (loading() && results().length === 0) {
     <div class="loading-spinner" aria-live="polite">
       <span class="spinner"></span>
       <span>{{ 'common.loading' | translate }}</span>
     </div>
-  } @else if (loadError()) {
+  } @else if (loadError() && results().length === 0) {
     <div class="error-state">
       <p>{{ 'inBasket.labResultsError' | translate }}</p>
       <button type="button" class="btn-secondary" (click)="load()">
@@ -46,6 +54,14 @@
   } @else if (results().length === 0) {
     <p class="empty-state">{{ 'inBasket.labResultsEmpty' | translate }}</p>
   } @else {
+    @if (loadError()) {
+      <p class="stale-banner" role="status">
+        {{ 'inBasket.labResultsError' | translate }}
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </p>
+    }
     <div class="table-wrap">
       <table class="result-table">
         <caption class="sr-only">
@@ -108,7 +124,9 @@
     </div>
     @if (truncated()) {
       <p class="category-hint">
-        {{ 'inBasket.labTruncated' | translate: { shown: maxVisible, total: results().length } }}
+        {{
+          'inBasket.labTruncated' | translate: { shown: visibleCount(), total: results().length }
+        }}
       </p>
     }
   }

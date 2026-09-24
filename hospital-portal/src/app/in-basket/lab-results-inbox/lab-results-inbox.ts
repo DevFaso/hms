@@ -125,20 +125,41 @@ export class LabResultsInboxComponent implements OnInit {
   });
 
   /**
-   * The groups as drawn: severity order preserved, the whole list capped at
-   * MAX_VISIBLE_RESULTS. CRITICAL is filled first, so the cap can only ever
-   * eat into the least urgent tail.
+   * The groups as drawn: severity order preserved, the list capped at
+   * MAX_VISIBLE_RESULTS — except that CRITICAL is never capped.
+   *
+   * There is no paging and no filter here, so a capped row is not merely
+   * further down the page, it is unreachable. A budget that merely fills
+   * CRITICAL first still hid rows 51 onwards of a 60-critical queue, and this
+   * queue has no date window and no reviewed state, so it only grows. A
+   * critical released result the ordering physician cannot reach at all is
+   * the one outcome this worklist exists to prevent; the cap applies to
+   * everything else.
    */
   readonly visibleGroups = computed<LabResultGroup[]>(() => {
     let budget = MAX_VISIBLE_RESULTS;
     return this.groups().map((group) => {
+      if (group.key === 'CRITICAL') {
+        budget -= group.items.length;
+        return group;
+      }
       const items = group.items.slice(0, Math.max(budget, 0));
       budget -= items.length;
       return { ...group, items };
     });
   });
 
-  readonly truncated = computed(() => this.results().length > MAX_VISIBLE_RESULTS);
+  /** True when a row was cut — i.e. more was drawn than is on screen. */
+  readonly truncated = computed(
+    () =>
+      this.visibleGroups().reduce((total, group) => total + group.items.length, 0) <
+      this.results().length,
+  );
+
+  /** How many rows are actually drawn, for the "showing N of M" line. */
+  readonly visibleCount = computed(() =>
+    this.visibleGroups().reduce((total, group) => total + group.items.length, 0),
+  );
 
   ngOnInit(): void {
     this.load();

@@ -331,7 +331,9 @@ describe('PatientChartComponent — labs section', () => {
     });
     openLabs();
 
-    // h-1 is the acting scope, so only the h-2 row carries the E8 #50 marker.
+    // h-1 is the scope the rows were fetched under, so only the h-2 row
+    // carries the E8 #50 marker.
+    expect(component.labsLoadedFor()).toBe('h-1');
     expect(component.isForeignLabRow({ hospitalId: 'h-1' })).toBeFalse();
     expect(component.isForeignLabRow({ hospitalId: 'h-2' })).toBeTrue();
     expect(component.isForeignLabRow({})).toBeFalse();

@@ -204,6 +204,41 @@ describe('LabResultsInboxComponent', () => {
     ).toBe(component.maxVisible);
   });
 
+  it('never caps the CRITICAL group, which has no paging to fall back on', () => {
+    const queue = [
+      ...Array.from({ length: 60 }, (_, i) =>
+        item({ id: 'c-' + i, abnormalFlag: 'CRITICAL', testName: 'Potassium' }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        item({ id: 'n-' + i, abnormalFlag: 'NORMAL', testName: 'Glycémie' }),
+      ),
+    ];
+    setup(queue);
+
+    const drawn = component.visibleGroups();
+    expect(drawn.find((g) => g.key === 'CRITICAL')?.items.length).toBe(60);
+    expect(drawn.find((g) => g.key === 'NORMAL')?.items.length).toBe(0);
+    expect(component.visibleCount()).toBe(60);
+    expect(component.truncated()).toBeTrue();
+  });
+
+  it('keeps the rows on screen when a refresh of a populated list fails', () => {
+    setup([item()]);
+    expect(fixture.nativeElement.querySelector('table')).not.toBeNull();
+
+    dashboardService.getResultReviewQueue.and.returnValue(throwError(() => new Error('500')));
+    component.load();
+    fixture.detectChanges();
+
+    // The rows the physician was working from are still drawn, and the
+    // failure is stated above them rather than replacing them.
+    expect(component.loadError()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('table')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+    expect(fixture.nativeElement.querySelector('.stale-banner')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
+  });
+
   it('draws no truncation line on a short queue', () => {
     setup([item()]);
 

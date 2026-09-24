@@ -365,15 +365,22 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   /**
-   * E9 #61 provenance for a LAB row: compared against the scope the row was
+   * E9 #61 provenance for a LAB row: compared against the scope the rows were
    * FETCHED under, not `hospitalId()`. Using the primary assignment flagged
    * every row of a chip-pinned hospital as foreign and rendered a genuinely
-   * foreign one as local — the marker inverted. In global view nothing is
-   * foreign, because there is no acting hospital to be foreign to.
+   * foreign one as local — the marker inverted. With no scope at all (global
+   * view) nothing is foreign, because there is no acting hospital for a row
+   * to be foreign to.
    */
   isForeignLabRow(row: { hospitalId?: string }): boolean {
-    const scope = this.labHospitalId();
-    return !!row.hospitalId && !!scope && row.hospitalId !== scope;
+    // `labsLoadedFor`, not a live re-derivation: the rows on screen were
+    // fetched under THAT scope, and comparing them to whatever the chip says
+    // now is only correct because the watcher happens to clear them in the
+    // same pass. Reading the stored key makes the invariant structural — a
+    // row can never be compared against a scope it was not fetched under,
+    // which is what inverted the marker before.
+    const scope = this.labsLoadedFor();
+    return !!row.hospitalId && !!scope && scope !== GLOBAL_SCOPE_KEY && row.hospitalId !== scope;
   }
 
   setSection(section: ChartSection): void {
