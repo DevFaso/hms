@@ -61,6 +61,15 @@ export interface PrescriptionResponse {
   pharmacistVerifiedByUserId?: string | null;
   pharmacistVerifiedByName?: string | null;
   pharmacistVerificationNote?: string | null;
+  /**
+   * Pharmacist clarification exchange (gap G5). The backend strips all four
+   * from the patient's copy of a prescription, so they are optional here and
+   * absent rather than blank when the reader is a patient.
+   */
+  clarificationReason?: string | null;
+  clarificationRequestedAt?: string | null;
+  clarificationResponse?: string | null;
+  clarificationResolvedAt?: string | null;
 }
 
 export type PrescriptionStatusType =
@@ -160,6 +169,36 @@ export class PrescriptionService {
   pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
+    });
+  }
+
+  /**
+   * Gap G5, pharmacy side: the pharmacist sends the order back to its
+   * prescriber with a question. The backend moves it to
+   * PENDING_CLARIFICATION, which takes it off the dispense work queue, so
+   * the caller must make that consequence explicit before calling.
+   *
+   * <p>Pharmacist roles only (PHARMACIST, PHARMACY_VERIFIER, SUPER_ADMIN).
+   * The reason is required and capped at 1000 characters server-side.
+   */
+  requestClarification(id: string, reason: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/request-clarification`, {
+      reason: reason.trim(),
+    });
+  }
+
+  /**
+   * Gap G5, prescriber side: a doctor with a staff profile at the
+   * prescribing hospital answers, and the order returns to the status it
+   * held when the question was asked.
+   *
+   * <p>The answer is optional — the doctor may have edited the order instead
+   * of, or as well as, replying — so an empty box sends no `response` at all
+   * rather than an empty string.
+   */
+  resolveClarification(id: string, response?: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/resolve-clarification`, {
+      response: response?.trim() || undefined,
     });
   }
 

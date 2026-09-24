@@ -1004,6 +1004,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // PHARMACY_VERIFIER's core workflow, previously unreachable: the block
     // above omits the role, and it must — the inventory-page guards reject
     // verifiers. Only Dispensing + Stock Routing admit them (2026-08-23 audit).
+    //
+    // Gap G9, re-audited 2026-09-24: there is deliberately NO /prescriptions
+    // entry here, and adding one would be a regression, not a fix. The route
+    // guard admits ROLE_PHARMACY_VERIFIER and the pharmacist-verify ceremony
+    // does live on that page, but the list the page opens with —
+    // GET /prescriptions — is @PreAuthorize'd to DOCTOR, NURSE, MIDWIFE,
+    // PHARMACIST, SUPER_ADMIN, and GET /prescriptions/{id} likewise omits the
+    // verifier. A nav entry would therefore land the role on a page that
+    // toasts "failed to load" every time. Until the backend admits the role
+    // to those two reads, the verifier's dispensing-side controls (including
+    // the G5 clarification, which the role IS on) are the reachable surface.
     if (this.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
       items.push(
         {

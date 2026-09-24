@@ -534,3 +534,145 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
       .not.toBeNull();
   });
 });
+
+/**
+ * Gap G5, prescriber half. The pharmacist's question arrives as a
+ * PENDING_CLARIFICATION row on this list, and until now the only way out of
+ * that status was a client-asserted PUT no pharmacist could call. The control
+ * is `<app-prescription-clarification>` in PRESCRIBER mode; its own spec
+ * covers the dialog, so what is guarded here is that the list row wires it
+ * and that only a doctor is offered it.
+ */
+describe('PrescriptionsComponent — answering a pharmacist clarification', () => {
+  let fixture: ComponentFixture<PrescriptionsComponent>;
+  let component: PrescriptionsComponent;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
+  let activeRoles: string[];
+
+  function pendingClarification(): PrescriptionResponse {
+    return {
+      id: 'rx-1',
+      status: 'PENDING_CLARIFICATION',
+      medicationName: 'Metformin',
+      clarificationReason: 'Is the 1 g strength intended for this weight?',
+      clarificationRequestedAt: '2026-09-20T09:00:00',
+    } as PrescriptionResponse;
+  }
+
+  async function render(roles: string[]): Promise<void> {
+    activeRoles = roles;
+    prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+      'resolveClarification',
+      'getById',
+    ]);
+    prescriptionService.list.and.returnValue(of([pendingClarification()]));
+    prescriptionService.resolveClarification.and.returnValue(of(pendingClarification()));
+
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+    const communityPharmacyService = jasmine.createSpyObj<CommunityPharmacyService>(
+      'CommunityPharmacyService',
+      ['list'],
+    );
+    communityPharmacyService.list.and.returnValue(of([]));
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: communityPharmacyService },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => activeRoles.includes(r)),
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PrescriptionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('offers the answer control to a doctor on a PENDING_CLARIFICATION row', async () => {
+    await render(['ROLE_DOCTOR']);
+
+    expect(component.filtered().length).toBe(1);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).not.toBeNull();
+  });
+
+  it('withholds it from a nurse — /resolve-clarification is ROLE_DOCTOR only', async () => {
+    await render(['ROLE_NURSE']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).toBeNull();
+  });
+
+  it('shows the pharmacist question and sends the answer', async () => {
+    await render(['ROLE_DOCTOR']);
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="rx-clarification-open-rx-1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-question"]').textContent,
+    ).toContain('Is the 1 g strength intended for this weight?');
+
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="rx-clarification-text-rx-1"]',
+    ) as HTMLTextAreaElement;
+    textarea.value = 'Yes — 1 g is intended, the weight on file is stale.';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="rx-clarification-submit-rx-1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(prescriptionService.resolveClarification).toHaveBeenCalledWith(
+      'rx-1',
+      'Yes — 1 g is intended, the weight on file is stale.',
+    );
+    // The list reloads so the row leaves PENDING_CLARIFICATION on screen too.
+    expect(prescriptionService.list.calls.count()).toBeGreaterThan(1);
+  });
+});
