@@ -169,12 +169,29 @@ export class PrescriptionService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/prescriptions';
 
+  /**
+   * How many rows the prescriber's list asks for.
+   *
+   * <p>`GET /prescriptions` declares no `@PageableDefault`, so it was serving
+   * Spring's default page 0 of 20 from an UNORDERED derived query — an
+   * arbitrary twenty rows out of the tenant. That was survivable while the
+   * page only listed what it had; it stopped being survivable when the tabs
+   * started counting, because a "Needs attention 0" is a confident claim that
+   * nothing is waiting. The page still has a ceiling, and the UI says so when
+   * it is reached rather than pretending otherwise.
+   */
+  static readonly LIST_PAGE_SIZE = 200;
+
   list(filters?: {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
   }): Observable<PrescriptionResponse[]> {
-    let params = new HttpParams();
+    let params = new HttpParams()
+      .set('size', PrescriptionService.LIST_PAGE_SIZE)
+      // Without an explicit sort the derived query's order is arbitrary, so
+      // "the first page" would not even be the newest prescriptions.
+      .set('sort', 'createdAt,desc');
     if (filters) {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);

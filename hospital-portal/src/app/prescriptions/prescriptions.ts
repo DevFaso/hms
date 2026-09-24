@@ -653,6 +653,16 @@ export class PrescriptionsComponent implements OnInit {
     return this.tabCounts()[tab];
   }
 
+  /**
+   * True when the list came back full, so there may be prescriptions this
+   * page has never seen — and every count on the tab bar is a lower bound
+   * rather than a total. Said out loud, because a silently truncated
+   * "Needs attention 0" is worse than no count at all.
+   */
+  readonly listTruncated = computed(
+    () => this.prescriptions().length >= PrescriptionService.LIST_PAGE_SIZE,
+  );
+
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
   needsAttention(p: PrescriptionResponse): boolean {
     return this.tabForStatus(p.status) === 'attention';
@@ -770,9 +780,21 @@ export class PrescriptionsComponent implements OnInit {
    * it: a live, successful dispatch, for an order that is back in the
    * hospital's queue. The columns are still worth showing — they are the last
    * thing that happened — so they are labelled as past instead of suppressed.
+   *
+   * <p>A re-route is the same trap one step further on, and worse:
+   * `routeToPartner` sets the three pharmacy columns to the NEW partner and
+   * never touches the dispatch ones, so "Held by B / Dispatched T1 / SMS Sent"
+   * would say B had been SMS'd at a time that belongs to A. Only
+   * `PrescriptionSmsDispatchServiceImpl` writes those columns, so a routing
+   * decision taken after `dispatchedAt` means they describe a previous
+   * destination. (`dispatchReference` on the response DTO would settle it
+   * outright — flagged to the coordinator.)
    */
   dispatchIsCurrent(p: PrescriptionResponse): boolean {
-    return !!p.pharmacyName;
+    if (!p.pharmacyName || !p.dispatchedAt) return false;
+    const decision = this.routingHistory()[0];
+    if (!decision) return true;
+    return eventTime(decision.decidedAt, decision.createdAt) <= eventTime(p.dispatchedAt, null);
   }
 
   /**
@@ -881,6 +903,7 @@ export class PrescriptionsComponent implements OnInit {
     this.selectedPrescription.set(null);
     this.dispenseHistory.set([]);
     this.routingHistory.set([]);
+    this.historyLoadedFor = null;
     this.historyLoading.set(false);
     this.dispenseError.set(false);
     this.routingError.set(false);
@@ -952,8 +975,11 @@ export class PrescriptionsComponent implements OnInit {
       )
       .subscribe((res) => {
         if (this.selectedPrescription()?.id !== res.prescriptionId) return;
-        this.dispenseHistory.set(res.dispenses);
-        this.routingHistory.set(res.routings);
+        // Only overwrite a half that actually came back. A retry whose OTHER
+        // half fails this time must not take away rows the prescriber could
+        // read a second ago.
+        if (!res.dispenseFailed) this.dispenseHistory.set(res.dispenses);
+        if (!res.routingFailed) this.routingHistory.set(res.routings);
         // A refusal or an outage is an explicit error state — never "no fills
         // recorded", which is the one thing a prescriber must not be told
         // wrongly about a controlled drug.
@@ -963,9 +989,15 @@ export class PrescriptionsComponent implements OnInit {
       });
   }
 
+  /** The prescription the loaded history belongs to, so a RETRY is not a swap. */
+  private historyLoadedFor: string | null = null;
+
   loadPharmacyHistory(p: PrescriptionResponse): void {
-    this.dispenseHistory.set([]);
-    this.routingHistory.set([]);
+    if (this.historyLoadedFor !== p.id) {
+      this.dispenseHistory.set([]);
+      this.routingHistory.set([]);
+      this.historyLoadedFor = p.id;
+    }
     this.dispenseError.set(false);
     this.routingError.set(false);
     if (!this.canReadPharmacyHistory() || !this.hasPharmacyHistory(p)) {

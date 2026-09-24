@@ -18,15 +18,19 @@
        counts this change introduced, "Draft 3" would have sat next to a
        "Drafts 4" tab that also holds PENDING_SIGNATURE. -->
   <div class="summary-cards">
+    <!-- Each icon carries its own tab's badge colour: teal was labelling
+         "Drafts" in the header while it meant "At the pharmacy" in the rows,
+         and a green tick labelled "At the pharmacy" while green meant
+         "Dispensed" below it. -->
     <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">medication</span>
+      <span class="material-symbols-outlined card-icon draft">edit_note</span>
       <div class="card-info">
         <span class="card-value" data-testid="rx-draft-count">{{ countInTab('draft') }}</span
         ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.DRAFT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <span class="material-symbols-outlined card-icon active">local_pharmacy</span>
       <div class="card-info">
         <span class="card-value">{{ countInTab('inPharmacy') }}</span
         ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.IN_PHARMACY' | translate }}</span>
@@ -39,7 +43,10 @@
         ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.CLOSED' | translate }}</span>
       </div>
     </div>
-    <!-- The count that answers "is anything waiting on ME?" (gap G10). -->
+    <!-- The count that answers "is anything waiting on a prescriber?"
+         (gap G10). The list is the tenant's, not the reader's own:
+         PrescriptionController.list filters by staffId only when asked, and
+         this page never asks, so every prescriber's orders are on it. -->
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon attention">priority_high</span>
       <div class="card-info">
@@ -75,6 +82,11 @@
         </button>
       }
     </div>
+    @if (listTruncated()) {
+      <p class="muted list-truncated" role="status" data-testid="rx-list-truncated">
+        {{ 'PRESCRIPTIONS.LIST_TRUNCATED' | translate }}
+      </p>
+    }
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
@@ -609,7 +621,14 @@
                      its absence read as "nothing recorded". -->
                 @if (historyPartialError()) {
                   <div class="history-error" role="alert" data-testid="rx-history-partial-error">
-                    <p>{{ 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR' | translate }}</p>
+                    <p>
+                      {{
+                        (dispenseError()
+                          ? 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR_DISPENSES'
+                          : 'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR_ROUTINGS'
+                        ) | translate
+                      }}
+                    </p>
                     <button
                       type="button"
                       class="btn-secondary"

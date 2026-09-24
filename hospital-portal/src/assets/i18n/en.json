@@ -5654,9 +5654,9 @@
       "CLOSED": "Closed"
     },
     "ATTENTION": {
-      "PENDING_CLARIFICATION": "The pharmacist is waiting for your answer",
+      "PENDING_CLARIFICATION": "The pharmacist is waiting for the prescriber to answer",
       "TRANSMISSION_FAILED": "Transmission failed — the order reached no pharmacy, and no workflow moves this status",
-      "PARTNER_REJECTED": "The partner pharmacy refused it — route it elsewhere",
+      "PARTNER_REJECTED": "The partner pharmacy refused it — it needs routing elsewhere",
       "PENDING_STOCK": "Out of stock — on back order",
       "REQUIRES_EXTERNAL_FILL": "Waiting on an outside pharmacy — no workflow moves this status",
       "UNRECOGNISED_STATUS": "Unrecognised status — check with the pharmacy"
@@ -5687,12 +5687,14 @@
       "EMPTY": "No fill and no routing recorded for this prescription yet.",
       "ERROR": "The dispensing history could not be loaded.",
       "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history.",
-      "PARTIAL_ERROR": "Part of the history could not be loaded, so this is not the whole picture."
+      "PARTIAL_ERROR_DISPENSES": "The fills could not be loaded, so this is not the whole picture.",
+      "PARTIAL_ERROR_ROUTINGS": "The routing decisions could not be loaded, so this is not the whole picture."
     },
     "CLARIFICATION": {
       "QUESTION": "The pharmacist's question",
-      "ANSWER": "Your answer"
-    }
+      "ANSWER": "The prescriber's answer"
+    },
+    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

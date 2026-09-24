@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
@@ -1305,6 +1305,91 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(labels).not.toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
   });
 
+  it('says so when the list is capped, instead of letting a count lie', async () => {
+    const full = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
+    );
+    await setup({ list: full });
+
+    expect(component.listTruncated()).toBeTrue();
+    expect(el('[data-testid="rx-list-truncated"]')).not.toBeNull();
+  });
+
+  it('says nothing about a cap when the list came back short of one', async () => {
+    await setup({ list: [makeRx({ status: 'SIGNED' })] });
+
+    expect(component.listTruncated()).toBeFalse();
+    expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
+  });
+
+  it('treats a dispatch older than the latest re-route as past, not current', async () => {
+    // routeToPartner sets the pharmacy columns to the NEW partner and never
+    // touches the dispatch ones, so "Held by B / Dispatched T1 / SMS Sent"
+    // would say B had been SMS'd at a time that belongs to A.
+    const rx = makeRx({
+      status: 'PARTNER_ACCEPTED',
+      pharmacyName: 'Pharmacie B',
+      dispatchChannel: 'SMS',
+      dispatchStatus: 'SENT',
+      dispatchedAt: '2026-09-02T08:30:00',
+    });
+    await setup({
+      list: [rx],
+      routings: of(page([makeRouting({ decidedAt: '2026-09-05T09:00:00' })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.dispatchIsCurrent(rx)).toBeFalse();
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('[data-testid="rx-pharmacy-state"] .field-label'),
+    ).map((n) => (n as HTMLElement).textContent!.trim());
+    expect(labels).toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
+  });
+
+  it('names the half of the history that is missing', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      dispenses: throwError(() => ({ status: 500 })),
+      routings: of(page([makeRouting()])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(el('[data-testid="rx-history-partial-error"]')!.textContent).toContain(
+      'PRESCRIPTIONS.HISTORY.PARTIAL_ERROR_DISPENSES',
+    );
+  });
+
+  it('keeps the half that already loaded when a retry loses the other one', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({
+      list: [rx],
+      dispenses: of(page([makeDispense()])),
+      routings: throwError(() => ({ status: 500 })),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+    expect(component.dispenseHistory().length).toBe(1);
+
+    // The session is expiring: this time it is the fills that fail.
+    pharmacyService.listDispensesByPrescription.and.returnValue(
+      throwError(() => ({ status: 500 })),
+    );
+    pharmacyService.listRoutingDecisionsByPrescription.and.returnValue(of(page([makeRouting()])));
+    component.retryPharmacyHistory();
+    fixture.detectChanges();
+
+    expect(component.dispenseHistory().length)
+      .withContext('rows the prescriber could read a second ago must not vanish on a retry')
+      .toBe(1);
+    expect(component.routingHistory().length).toBe(1);
+  });
+
   it('drops the previous prescription history when the panel closes', async () => {
     const rx = makeRx({ status: 'DISPENSED' });
     await setup({ list: [rx], dispenses: of(page([makeDispense()])) });
@@ -1318,5 +1403,35 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(component.dispenseHistory()).toEqual([]);
     expect(component.routingHistory()).toEqual([]);
     expect(component.historyError()).toBeFalse();
+  });
+});
+/**
+ * `GET /prescriptions` declares no `@PageableDefault`, so Spring served page 0
+ * of 20 from an unordered derived query. That was survivable while the page
+ * only listed what it had; it stopped being survivable when the tabs started
+ * counting, because "Needs attention 0" is a confident claim that nothing is
+ * waiting.
+ */
+describe('PrescriptionService — list paging', () => {
+  let service: PrescriptionService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PrescriptionService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('asks for a real page of the newest prescriptions, not an arbitrary twenty', () => {
+    service.list().subscribe();
+
+    const req = httpMock.expectOne((r) => r.url === '/prescriptions');
+    expect(req.request.params.get('size')).toBe(String(PrescriptionService.LIST_PAGE_SIZE));
+    expect(req.request.params.get('sort')).toBe('createdAt,desc');
+    req.flush({ content: [] });
   });
 });

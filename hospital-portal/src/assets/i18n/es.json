@@ -5654,9 +5654,9 @@
       "CLOSED": "Cerradas"
     },
     "ATTENTION": {
-      "PENDING_CLARIFICATION": "El farmacéutico espera su respuesta",
+      "PENDING_CLARIFICATION": "El farmacéutico espera la respuesta del prescriptor",
       "TRANSMISSION_FAILED": "Fallo en la transmisión: la receta no llegó a ninguna farmacia y ningún circuito mueve este estado",
-      "PARTNER_REJECTED": "La farmacia asociada la rechazó: rediríjala a otra",
+      "PARTNER_REJECTED": "La farmacia asociada la rechazó: debe derivarse a otra",
       "PENDING_STOCK": "Sin existencias: en pedido",
       "REQUIRES_EXTERNAL_FILL": "A la espera de una farmacia externa: ningún circuito mueve este estado",
       "UNRECOGNISED_STATUS": "Estado no reconocido: consulte con la farmacia"
@@ -5687,12 +5687,14 @@
       "EMPTY": "Todavía no hay dispensaciones ni derivaciones registradas para esta receta.",
       "ERROR": "No se pudo cargar el historial de dispensación.",
       "SCOPE_REQUIRED": "Elija un hospital en el selector de ámbito para ver el historial de dispensación.",
-      "PARTIAL_ERROR": "No se pudo cargar parte del historial, por lo que esto no es todo."
+      "PARTIAL_ERROR_DISPENSES": "No se pudieron cargar las dispensaciones, por lo que esto no es todo.",
+      "PARTIAL_ERROR_ROUTINGS": "No se pudieron cargar las decisiones de derivación, por lo que esto no es todo."
     },
     "CLARIFICATION": {
       "QUESTION": "Pregunta del farmacéutico",
-      "ANSWER": "Su respuesta"
-    }
+      "ANSWER": "Respuesta del prescriptor"
+    },
+    "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",

@@ -30,9 +30,11 @@
     background: var(--primary-tint);
     color: var(--primary-deep);
   }
-  &.completed {
-    background: #d1fae5;
-    color: #065f46;
+  /* The grey pair .status-draft uses, so the Drafts card and the Draft
+     badge are the same colour. */
+  &.draft {
+    background: #f3f4f6;
+    color: #4b5563;
   }
   &.cancelled {
     background: #fee2e2;
@@ -525,6 +527,12 @@
 .tab-btn.active .tab-count {
   background: var(--primary-tint);
   color: var(--primary-deep);
+}
+
+/* The list is capped; this says so rather than letting a count lie. */
+.list-truncated {
+  margin: 0;
+  font-size: 0.78rem;
 }
 
 /* A second line under a table cell: where the order is, what a routing says. */
