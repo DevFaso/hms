@@ -2929,6 +2929,35 @@
     "READ_BACK_RECORDED": "Relecture confirmée",
     "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté"
   },
+  "LAB_RELEASE": {
+    "TITLE": "File de validation",
+    "SUBTITLE": "Résultats en attente de validation par le laboratoire",
+    "AWAITING_COUNT": "{{count}} en attente de validation",
+    "TABLE_CAPTION": "Résultats en attente de validation, par date de résultat croissante",
+    "COL_PATIENT": "Patient",
+    "COL_TEST": "Analyse",
+    "COL_VALUE": "Valeur",
+    "COL_FLAG": "Indicateur",
+    "COL_RESULT_DATE": "Date du résultat",
+    "COL_RECEIVED": "Reçu le",
+    "COL_ACTIONS": "Actions",
+    "FLAG_HIGH": "Élevé",
+    "FLAG_LOW": "Bas",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_UNSPECIFIED": "Non signalé",
+    "CRITICAL": "Critique",
+    "RELEASE": "Valider",
+    "NOT_YOURS": "À valider par le laboratoire exécutant",
+    "CONFIRM_TITLE": "Valider ce résultat ?",
+    "CONFIRM_BODY": "Valider {{test}} = {{value}} pour {{patient}} ?",
+    "CONFIRM_NOTE": "La validation atteste que le résultat est correct et peut être utilisé. Elle est enregistrée à votre nom.",
+    "RELEASED": "Résultat validé.",
+    "JUST_RELEASED": "{{test}} validé pour {{patient}}.",
+    "RELEASE_ERROR": "Impossible de valider le résultat.",
+    "EMPTY": "Aucun résultat en attente de validation.",
+    "LOAD_ERROR": "Impossible de charger la file de validation.",
+    "PAGE_OF": "Page {{page}} sur {{total}}"
+  },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
     "SUBTITLE": "Gérer les instruments et équipements de laboratoire",
@@ -3238,7 +3267,8 @@
     "SEARCH_PLACEHOLDER": "Rechercher un module...",
     "SEARCH_CLEAR": "Effacer la recherche",
     "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} ».",
-    "BREAK_GLASS_REVIEW": "Revue des accès d'urgence"
+    "BREAK_GLASS_REVIEW": "Revue des accès d'urgence",
+    "LAB_RELEASE_WORKLIST": "File de validation"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",

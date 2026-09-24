@@ -477,6 +477,44 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(doctor.canReleaseResult({ id: 'r1', released: false } as LabResultResponse)).toBeFalse();
   });
 
+  it('re-reads the sign authority after a hospital-scope change', () => {
+    // `canSign` was a field computed once at construction, so a user who
+    // switched hospital kept the sign button they had at the hospital they
+    // left — and lost it where they did have it. The role context is the
+    // live answer; reading it once is reading the wrong hospital's.
+    const roles = ['ROLE_DOCTOR'];
+    const component = createWithRoles(roles);
+    expect(component.canSign()).toBeTrue();
+
+    // The scope change: the active role set becomes the one held at the
+    // newly selected hospital, where this user is a technician.
+    roles.length = 0;
+    roles.push('ROLE_LAB_TECHNICIAN');
+
+    expect(component.canSign()).toBeFalse();
+  });
+
+  it('does NOT offer signing to a surgeon, whom the endpoint would refuse', () => {
+    // RoleExpansion maps SURGEON onto ROLE_DOCTOR before the @PreAuthorize
+    // runs, so the annotation passes — and then validateSignPermissions calls
+    // RoleValidator.isDoctor, which matches the stored ASSIGNMENT ROLE CODE
+    // against {DOCTOR, ROLE_DOCTOR} and knows no such equivalence. Offering
+    // the button here means a filled-in signature modal answered 400 with no
+    // way to succeed. Clearing the annotation is not clearing the endpoint.
+    expect(createWithRoles(['ROLE_SURGEON']).canSign()).toBeFalse();
+  });
+
+  it('does NOT offer signing to a physician for the same reason', () => {
+    expect(createWithRoles(['ROLE_PHYSICIAN']).canSign()).toBeFalse();
+  });
+
+  it('offers signing to a super-admin, who inherits both signing roles', () => {
+    // SUPER_ADMIN_INHERITS grants ROLE_DOCTOR and ROLE_LAB_SCIENTIST, so the
+    // sign endpoint accepts them — they were being offered Release on a row
+    // and refused Sign on the same row.
+    expect(createWithRoles(['ROLE_SUPER_ADMIN']).canSign()).toBeTrue();
+  });
+
   it('does not offer read-back to the lab roles the backend refuses', () => {
     // Read-back is the ordering clinician confirming what they were told;
     // lab attestation is a different act. A button that 403s teaches the
