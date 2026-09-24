@@ -1,3 +1,19 @@
+import { DOCTOR_EQUIVALENT_ROLES } from '../../core/role-equivalence';
+
+/**
+ * ROLE_DOCTOR and the authorities the BACKEND expands into it (role audit
+ * decision C2, mirrored by JwtTokenProvider / SecurityConfig's authorities
+ * mapper): a physician and a surgeon are doctors to every endpoint below.
+ *
+ * Spelled out in the lists rather than left to `roleSatisfies`, because these
+ * lists are read through `RoleContextService.hasAnyActiveRole`, which compares
+ * raw strings and does NOT expand — so a list naming only ROLE_DOCTOR is
+ * narrower than the endpoint it claims to mirror, and hides the chart from a
+ * surgeon the backend admits. B7's in-basket category routes exactly that
+ * surgeon here.
+ */
+const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
+
 /**
  * Role lists mirroring the backend @PreAuthorize gates on the patient-chart
  * endpoints (allergies / diagnoses / chart-updates / doctor-timeline).
@@ -9,7 +25,7 @@
 export const CHART_ROLES = {
   // E9 #69: every clinical role reads allergies (contrast, induction, therapy).
   viewAllergies: [
-    'ROLE_DOCTOR',
+    ...DOCTOR_ROLES,
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_PHARMACIST',
@@ -17,13 +33,13 @@ export const CHART_ROLES = {
     'ROLE_ANESTHESIOLOGIST',
     'ROLE_PHYSIOTHERAPIST',
   ],
-  editAllergies: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+  editAllergies: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_PHARMACIST'],
   // E9 #69: the pharmacist reads the problem list to verify a prescription.
-  viewProblems: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
-  editProblems: ['ROLE_DOCTOR'],
-  viewUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
-  createUpdates: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
-  viewTimeline: ['ROLE_DOCTOR'],
+  viewProblems: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
+  editProblems: [...DOCTOR_ROLES],
+  viewUpdates: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  createUpdates: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  viewTimeline: [...DOCTOR_ROLES],
   /**
    * B6 — the Labs section reads TWO backends, and they do not admit the same
    * roles, so each read carries its own list instead of one combined flag: a
@@ -40,7 +56,7 @@ export const CHART_ROLES = {
    * annotation is the effective gate.
    */
   viewLabResults: [
-    'ROLE_DOCTOR',
+    ...DOCTOR_ROLES,
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_PHARMACIST',
@@ -58,7 +74,7 @@ export const CHART_ROLES = {
    * the two reads are gated apart instead of behind one flag.
    */
   viewLabOrders: [
-    'ROLE_DOCTOR',
+    ...DOCTOR_ROLES,
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_STAFF',
@@ -69,7 +85,7 @@ export const CHART_ROLES = {
     'ROLE_QUALITY_MANAGER',
     'ROLE_SUPER_ADMIN',
   ],
-} as const;
+};
 
 /**
  * Roles that can see at least one chart section (gates the Chart tab).

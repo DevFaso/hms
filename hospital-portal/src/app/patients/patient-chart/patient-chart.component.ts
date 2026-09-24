@@ -235,7 +235,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
       this.labResults().length === 0 &&
       this.labOrders().length === 0 &&
       !this.labResultsError() &&
-      !this.labOrdersError(),
+      !this.labOrdersError() &&
+      // A read in flight is not an empty section. Without this, toggling away
+      // and back during the first read re-fired both endpoints every time —
+      // wasted traffic, and a cross-hospital reach row per results call.
+      !this.labResultsLoading() &&
+      !this.labOrdersLoading(),
   );
   /** Exposed for the "showing the latest N" hint below each lab table. */
   readonly labPageSize = LAB_PAGE_SIZE;

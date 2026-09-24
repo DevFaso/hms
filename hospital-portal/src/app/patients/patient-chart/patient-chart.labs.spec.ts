@@ -196,6 +196,26 @@ describe('PatientChartComponent — labs section', () => {
     expect(fixture.nativeElement.querySelector('.labs-heading')).toBeNull();
   });
 
+  it('shows the Labs tab to a surgeon, whom the backend expands into a doctor', () => {
+    // hasAnyActiveRole compares raw strings and does not expand, so a list
+    // naming only ROLE_DOCTOR is narrower than the endpoint it mirrors — and
+    // B7's in-basket category links a surgeon straight here.
+    setup({ roles: ['ROLE_SURGEON'] });
+
+    expect(component.canViewLabs()).toBeTrue();
+    expect(tabLabels()).toContain('CHART.LABS');
+
+    openLabs();
+    expect(patientService.listLabResults).toHaveBeenCalled();
+    expect(labService.listOrders).toHaveBeenCalled();
+  });
+
+  it('shows the Labs tab to a physician', () => {
+    setup({ roles: ['ROLE_PHYSICIAN'] });
+
+    expect(tabLabels()).toContain('CHART.LABS');
+  });
+
   it('reads results but never lab orders for a pharmacist', () => {
     // SecurityConfig's GET matcher for /lab-orders omits ROLE_PHARMACIST, so
     // that call is a guaranteed 403 — the section must not make it.
