@@ -7223,7 +7223,6 @@
     "LAB_ORDERS": "Demandes de laboratoire",
     "LAB_ORDERS_LOAD_ERROR": "Impossible de charger les demandes de laboratoire.",
     "LAB_ORDERS_SCOPE_HINT": "Demandes émises par cet hôpital ou réalisées dans cet hôpital. Les résultats ci-dessous peuvent provenir d'autres hôpitaux du dossier du patient.",
-    "LAB_ORDERS_SCOPE_HINT_GLOBAL": "Tous les hôpitaux — aucun périmètre hospitalier n'est appliqué : les demandes de tous les établissements sont listées et aucune n'est signalée comme provenant d'un autre hôpital.",
     "LAB_PERFORMED_BY": "Réalisé par",
     "LAB_PERFORMING_LAB": "Laboratoire exécutant",
     "LAB_REFERENCE_RANGE": "Valeurs de référence",

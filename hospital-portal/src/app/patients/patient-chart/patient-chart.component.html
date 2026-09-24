@@ -287,7 +287,15 @@
   }
 
   <!-- ══ Labs (B6) ══ -->
-  @if (section() === 'labs' && canViewLabs()) {
+  @if (section() === 'labs' && canViewLabs() && !labsScoped()) {
+    <!--
+      No hospital scope: both lab reads would go out unscoped, read across
+      every tenant and write no cross-hospital reach row. The section declines
+      to read and points at the chip instead — see labsScoped().
+    -->
+    <app-hospital-scope-hint />
+  }
+  @if (section() === 'labs' && canViewLabs() && labsScoped()) {
     <!--
       A populated section is cached for the scope it was read under, so a
       result released while the chart is open would not appear on a revisit.
@@ -346,11 +354,7 @@
           patient treated elsewhere shows released results above an orders
           table reading "no lab orders", as if the order record were missing.
         -->
-        @if (globalScope()) {
-          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT_GLOBAL' | translate }}</p>
-        } @else {
-          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
-        }
+        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
         <div class="data-table">
           <table>
             <caption class="sr-only">

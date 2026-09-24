@@ -106,15 +106,15 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
-  it('drops the stale notice once the rows it described are gone', () => {
-    // Otherwise an emptied panel flips to a full "could not be loaded" card,
-    // telling the physician the queue failed when they just cleared it.
+  it('never shows "all reviewed" while the last read is still failed', () => {
+    // Acknowledge persists nothing, so clicking through stale rows must not
+    // be a way to turn a 502 into a green all-clear.
     fixture.componentRef.setInput('results', []);
-    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('loadError', true);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.rp-empty')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-error')).not.toBeNull();
   });
 
   it('renders the rows when there is no error', () => {

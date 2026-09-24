@@ -2558,15 +2558,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   acknowledgeResult(resultId: string): void {
+    // Local only: there is no acknowledge endpoint, so nothing is persisted
+    // and the row is back on the next successful read.
     this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
-    // Only once the LAST row is gone. The stale notice describes the rows on
-    // screen, so clearing it while eleven of twelve remain would present rows
-    // from a failed read as current; clearing it on an emptied panel stops
-    // that panel flipping into a full "could not be loaded" card, which told
-    // the physician the queue failed when they had just worked through it.
-    if (this.resultQueue().length === 0) {
-      this.resultQueueError.set(false);
-    }
+    // `resultQueueError` is deliberately NOT cleared here. Clearing it once
+    // the last row was dismissed let a physician turn a 502 into the green
+    // "all results reviewed" card by clicking through the stale rows — the
+    // exact all-clear removing `catchError` was meant to make impossible.
+    // Only a read that actually succeeds clears it.
   }
 
   /**
