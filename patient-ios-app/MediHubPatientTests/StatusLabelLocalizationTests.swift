@@ -126,7 +126,7 @@ final class StatusLabelLocalizationTests: XCTestCase {
             ],
             french: [
                 "REQUESTED": "Demand\u{00e9}",
-                "PAUSED": "En attente",
+                "PAUSED": "Mis en attente",
                 "APPROVED": "Approuv\u{00e9}",
                 "DENIED": "Refus\u{00e9}",
                 "DISPENSED": "D\u{00e9}livr\u{00e9}",

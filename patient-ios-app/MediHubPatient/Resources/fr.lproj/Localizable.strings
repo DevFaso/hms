@@ -550,7 +550,7 @@
 
 /* G16 - statuts des demandes de renouvellement (com.example.hms.enums.RefillStatus) */
 "refill_status_requested" = "Demandé";
-"refill_status_paused" = "En attente";
+"refill_status_paused" = "Mis en attente";
 "refill_status_approved" = "Approuvé";
 "refill_status_denied" = "Refusé";
 "refill_status_dispensed" = "Délivré";
