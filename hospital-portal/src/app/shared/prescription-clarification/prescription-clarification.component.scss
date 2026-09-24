@@ -3,7 +3,22 @@
 // from the global `_page-common.scss`; only what is specific to the
 // clarification exchange lives here.
 
+// The host must not be a box of its own: both action cells are flex rows
+// with a gap, and a component that renders nothing would still take a slot
+// and add a phantom gap to every row it sits in.
+:host {
+  display: contents;
+}
+
 .clarify-link {
+  // The `.action-link` button reset lives in each PAGE's component-scoped
+  // stylesheet, which cannot reach a child component's DOM, and the global
+  // copy sets only colour and spacing — so without this the trigger renders
+  // with the browser's default button chrome beside flat icon buttons.
+  background: none;
+  border: none;
+  cursor: pointer;
+
   // The answered state is the cue that brings the pharmacist back to the
   // row, so it is a filled chip rather than the neutral icon buttons beside
   // it. --primary-tint / --primary-deep is the 5.98:1 pairing from the

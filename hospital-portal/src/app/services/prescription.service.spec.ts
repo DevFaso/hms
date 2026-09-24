@@ -52,15 +52,4 @@ describe('PrescriptionService — clarification endpoints', () => {
     expect(req.request.body).toEqual({ response: undefined });
     req.flush({});
   });
-
-  it('asks the list endpoint for the most recently touched first', () => {
-    // Without a sort the default page of 20 is an arbitrary slice, so a
-    // prescription awaiting clarification can be unreachable on the page
-    // that carries the only control for answering it.
-    service.list().subscribe();
-
-    const req = http.expectOne((r) => r.url === '/prescriptions');
-    expect(req.request.params.get('sort')).toBe('updatedAt,desc');
-    req.flush({ content: [] });
-  });
 });

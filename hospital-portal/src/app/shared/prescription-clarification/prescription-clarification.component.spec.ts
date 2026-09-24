@@ -420,4 +420,14 @@ describe('PrescriptionClarificationComponent', () => {
     expect(shown).toContain('PRESCRIPTIONS.CLARIFICATION.FORBIDDEN_RESOLVE');
     expect(shown).not.toContain('Access denied');
   });
+
+  it('gives a verifier no warning about an exchange that does not exist', () => {
+    // A first question on a freshly signed order: no attentionReason, so
+    // nothing can be masking a resolved clarification.
+    create(['ROLE_PHARMACY_VERIFIER'], { mode: 'PHARMACY', attentionReason: null });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(el('rx-clarification-unreadable')).toBeNull();
+  });
 });

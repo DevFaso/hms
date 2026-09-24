@@ -113,13 +113,14 @@ export class PrescriptionService {
     staffId?: string;
     hospitalId?: string;
   }): Observable<PrescriptionResponse[]> {
-    // Most-recently-touched first. The endpoint takes a Pageable and applied
-    // no sort at all, so the default page of 20 was an arbitrary slice of the
-    // hospital's prescriptions: a prescriber could be told by the clinical
-    // inbox that N orders await clarification and never find one of them on
-    // this page. Any write — signing, a pharmacist's question, the answer —
-    // bumps `updatedAt`, so the rows that need attention are on page one.
-    let params = new HttpParams().set('sort', 'updatedAt,desc');
+    // NOTE: no sort and no size, which means the default page of 20 is an
+    // arbitrary slice of the hospital's prescriptions. A prescriber can be
+    // told by the clinical inbox that N orders await clarification and find
+    // none of them here. Sorting by updatedAt was tried and dropped: it
+    // reorders the page for everyone and still loses the row on a busy day,
+    // because every sign, edit and fill bumps the same column. The fix is a
+    // status filter on GET /prescriptions — reported to the coordinator.
+    let params = new HttpParams();
     if (filters) {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);

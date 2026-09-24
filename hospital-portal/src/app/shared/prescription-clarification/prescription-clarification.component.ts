@@ -194,7 +194,20 @@ export class PrescriptionClarificationComponent {
 
   protected readonly isPharmacy = computed(() => this.mode() === 'PHARMACY');
 
-  /** True once the prescriber has answered and the row is back on the queue. */
+  /**
+   * True once the prescriber has answered and the row is back on the queue.
+   *
+   * <p>A CUE, not a fact: the backend reports one {@code attentionReason}
+   * by precedence (status, then an outstanding back order, then the
+   * clarification), and {@code resolveClarification} restores the previous
+   * status — so a question raised on a PENDING_STOCK or PARTNER_REJECTED
+   * order comes back flagged with that status and this is false even though
+   * an answer is waiting. Those rows still carry {@code needsAttention}, so
+   * the row is flagged for a second look either way, and the dialog reads
+   * the exchange on every open rather than only on this flag. A reliable
+   * cue needs {@code clarificationResolvedAt} on the work-queue projection —
+   * reported to the coordinator.
+   */
   protected readonly hasAnswer = computed(
     () =>
       this.isPharmacy() &&
@@ -241,6 +254,17 @@ export class PrescriptionClarificationComponent {
   /** Per-instance so `aria-labelledby` is unique across a page of rows. */
   protected readonly titleId = computed(() => `rx-clarify-title-${this.prescriptionId()}`);
 
+  /**
+   * The row may be carrying an answer this user cannot read. Any
+   * {@code attentionReason} could be masking a resolved clarification
+   * (the backend reports one reason by precedence); none means there is
+   * nothing to mask, so a first question on a freshly signed order does not
+   * get a warning about an exchange that does not exist.
+   */
+  protected readonly mayHideAnswer = computed(
+    () => this.isPharmacy() && !this.canReadExchange() && !!this.attentionReason(),
+  );
+
   /** There is an exchange on screen, or a reason there is not. */
   protected readonly showExchange = computed(
     () =>
@@ -283,6 +307,10 @@ export class PrescriptionClarificationComponent {
     this.submitError.set(null);
     this.exchangeError.set(false);
     // Focus goes back where it came from, not to the top of the document.
+    // On the pharmacy success path the host reloads and the row leaves the
+    // queue, so the button this focuses is removed a moment later and focus
+    // lands on the document: closing that loop needs an anchor the host
+    // owns (the queue heading), which a child component cannot reach.
     this.trigger()?.nativeElement.focus();
   }
 
