@@ -573,3 +573,4 @@
 "refill_details" = "Détails de la demande";
 "dosage_and_administration" = "Posologie et administration";
 "submit" = "Envoyer";
+"refill_not_refillable" = "Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante.";

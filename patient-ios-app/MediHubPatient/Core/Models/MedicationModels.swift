@@ -19,6 +19,15 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     let instructions: String?
     let refillsRemaining: Int?
 
+    /// `PatientMedicationResponseDTO` is built one-to-one FROM prescriptions
+    /// and its `id` IS the prescription id, so these two answer the refill
+    /// question for a prescription authoritatively: `refillRequestOpen` is
+    /// computed over every refill row for the page (`latestRefillsFor`, no
+    /// pagination), unlike anything the app can derive from a page of
+    /// `/me/patient/refills`.
+    let refillable: Bool?
+    let refillRequestOpen: Bool?
+
     /// Display name: prefer `name`, fall back to `medicationName`
     var displayName: String {
         name ?? medicationName ?? "Medication"
@@ -34,12 +43,16 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
 /// pharmacist-to-prescriber clarification exchange and leaves everything else.
 ///
 /// `quantity`, `refills`, `refillsRemaining`, `expiryDate`, `diagnosisCode`
-/// and `diagnosisDescription` used to be mapped here and are not on that DTO
-/// at all — a prescription carries no refill counter on this backend; whether
-/// a refill may be requested is decided by `PrescriptionStatus.isRefillable`,
-/// the same rule `PrescriptionStatus.isRefillable()` applies server-side.
-/// `prescribedBy` and `prescribedDate` are served, under the names
-/// `staffFullName` and `createdAt`.
+/// and `diagnosisDescription` used to be mapped here and are not on THIS DTO.
+/// The counter does exist on the domain — `Prescription` has
+/// `refillsAllowed`/`refillsRemaining`/`refillsUsed`, and
+/// `PatientMedicationResponseDTO` serves all three — but
+/// `PrescriptionResponseDTO` omits them, so the prescriptions tab cannot read
+/// one. Whether a refill may be requested is decided by
+/// `PrescriptionStatus.isRefillable`, the same rule
+/// `PrescriptionStatus.isRefillable()` applies server-side. `prescribedBy`
+/// and `prescribedDate` are served, under the names `staffFullName` and
+/// `createdAt`.
 struct PrescriptionDTO: Codable, Identifiable, Hashable {
     let id: String?
     let medicationName: String?

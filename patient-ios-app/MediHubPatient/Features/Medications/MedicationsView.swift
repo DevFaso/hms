@@ -514,9 +514,13 @@ final class MedicationsViewModel: ObservableObject {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
+                // The endpoint defaults to 20 and the tab lists everything
+                // it is given; the prescriptions tab also joins on these rows
+                // for `refillRequestOpen`, which only helps for the
+                // prescriptions the window covers.
                 self.medications = await (try? APIClient.shared.get(
                     APIEndpoints.medications,
-                    queryItems: [URLQueryItem(name: "limit", value: "50")]
+                    queryItems: [URLQueryItem(name: "limit", value: "100")]
                 )) ?? []
             }
             group.addTask { @MainActor in
@@ -546,14 +550,40 @@ final class MedicationsViewModel: ObservableObject {
             await load()
             return nil
         } catch {
-            return error.localizedDescription
+            // APIClient lifts the server's `message` into the error, but that
+            // sentence is English-only. Refresh and name the two refusals this
+            // endpoint actually raises in the patient's own language, keeping
+            // the server's words for anything else.
+            let serverMessage = error.localizedDescription
+            await load()
+            // requestMedicationRefill checks isRefillable() BEFORE the
+            // one-open-request guard, so a prescription discontinued since the
+            // screen loaded is refused for that reason even when an open refill
+            // also exists — ask in the same order.
+            if let refreshed = prescriptions.first(where: { $0.id == prescriptionId }),
+               !refreshed.statusEnum.isRefillable {
+                return "refill_not_refillable".localized
+            }
+            if hasOpenRefill(forPrescription: prescriptionId) {
+                return "refill_already_open".localized
+            }
+            return serverMessage
         }
     }
 
     /// Whether a REQUESTED or PAUSED refill already exists for this
     /// prescription, which is what `requestMedicationRefill` refuses on.
+    ///
+    /// `PatientMedicationResponseDTO` is built from prescriptions and its `id`
+    /// IS the prescription id, and its `refillRequestOpen` is computed over
+    /// EVERY refill row rather than a page — so prefer it. The scan over the
+    /// loaded refills page is the fallback for a prescription outside the
+    /// medications window; either way the server re-checks.
     func hasOpenRefill(forPrescription prescriptionId: String?) -> Bool {
         guard let prescriptionId, !prescriptionId.isEmpty else { return false }
+        if let open = medications.first(where: { $0.id == prescriptionId })?.refillRequestOpen {
+            return open
+        }
         return refills.contains { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }
     }
 

@@ -55,9 +55,12 @@ final class PrescriptionWireContractTests: XCTestCase {
         XCTAssertEqual(RefillStatus(wire: "paused"), .paused)
     }
 
-    /// Every constant of `com.example.hms.enums.PrescriptionStatus`, pinned
-    /// here so a backend addition shows up as a failure on this side instead
-    /// of as a raw wire name on a patient's screen.
+    /// Every constant of `com.example.hms.enums.PrescriptionStatus` as of this
+    /// change. This is a hand-copied set inside the iOS target — it does NOT
+    /// compile against the Java enum, so a constant added on the backend will
+    /// not fail here; it reaches the app as `.unknown` and renders "Status
+    /// unavailable" until someone updates both sides. What this pins is the
+    /// other direction: an app-side edit that drops or renames a case.
     func testTheEnumCoversEveryBackendPrescriptionStatus() {
         let backend: Set<String> = [
             "DRAFT", "PENDING_SIGNATURE", "SIGNED", "TRANSMITTED", "TRANSMISSION_FAILED",

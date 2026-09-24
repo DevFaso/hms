@@ -126,9 +126,11 @@ final class LabResultWireContractTests: XCTestCase {
         XCTAssertEqual(LabResultStatus(wire: " critical "), .critical)
     }
 
-    /// Every status `PatientLabResultServiceImpl` can put on the wire, not a
-    /// sample: a value the app cannot name would otherwise reach a patient as
-    /// `ABNORMAL_HIGH`.
+    /// Every status `PatientLabResultServiceImpl` can put on the wire as of
+    /// this change, not a sample. Hand-copied, like the prescription one: it
+    /// pins the app enum against a contract a reader can check by eye, and
+    /// catches an app-side edit that drops a case. A status added on the
+    /// backend reaches the app as `.unknown`, not as a raw `ABNORMAL_HIGH`.
     func testEveryBackendLabStatusIsNamedByTheEnum() {
         let backend: Set<String> = [
             "NORMAL", "ABNORMAL", "ABNORMAL_LOW", "ABNORMAL_HIGH", "CRITICAL", "PENDING"
