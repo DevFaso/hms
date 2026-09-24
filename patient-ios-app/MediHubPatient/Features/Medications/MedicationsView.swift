@@ -42,8 +42,8 @@ struct MedicationsView: View {
         .navigationTitle("medications_title".localized)
         .refreshable { await vm.load() }
         .onChange(of: vm.errorMessage) { _, newVal in showError = (newVal != nil) }
-        .alert("Error", isPresented: $showError) {
-            Button("OK") { vm.errorMessage = nil }
+        .alert("error".localized, isPresented: $showError) {
+            Button("ok".localized) { vm.errorMessage = nil }
         } message: {
             Text(vm.errorMessage ?? "")
         }
@@ -561,7 +561,12 @@ final class MedicationsViewModel: ObservableObject {
             }
             return first
         }
-        errorMessage = failure
+        // `APIError.errorDescription` is English-only ("Session expired…",
+        // "Server error (500)"), and this alert was dead before this PR made
+        // it live — a French patient would have met it as a fully English
+        // modal on the one screen the PR exists to de-anglicise. What matters
+        // here is that the lists on screen are stale, which is sayable.
+        errorMessage = failure == nil ? nil : "refresh_failed".localized
         isLoading = false
     }
 
@@ -569,11 +574,12 @@ final class MedicationsViewModel: ObservableObject {
         let req = RefillRequest(prescriptionId: prescriptionId, preferredPharmacy: pharmacy, notes: notes)
         do {
             let _: RefillDTO = try await APIClient.shared.post(APIEndpoints.refills, body: req)
+            // The request went through, but if the reload fails the lists on
+            // screen no longer show it — the new row is missing from the
+            // Refills tab and the prescription still offers "Request refill".
+            // Letting `load()`'s own error stand is what stops the patient
+            // submitting a second time into a 400.
             await load()
-            // The request went through. A refills page that failed to reload a
-            // second later must not raise the tab's error alert on top of the
-            // dismissed sheet, or the patient submits again and gets a 400.
-            errorMessage = nil
             return nil
         } catch {
             // APIClient lifts the server's `message` into the error, but that
@@ -581,10 +587,10 @@ final class MedicationsViewModel: ObservableObject {
             // endpoint actually raises in the patient's own language, keeping
             // the server's words for anything else.
             let serverMessage = error.localizedDescription
+            // The refusal itself is reported inline by the sheet below; any
+            // error `load()` raises here is a different fact — the lists are
+            // stale — and is left to stand.
             await load()
-            // The sheet reports this inline; arming the tab's alert as well
-            // would show the same failure twice.
-            errorMessage = nil
             // requestMedicationRefill checks isRefillable() BEFORE the
             // one-open-request guard, so a prescription discontinued since the
             // screen loaded is refused for that reason even when an open refill

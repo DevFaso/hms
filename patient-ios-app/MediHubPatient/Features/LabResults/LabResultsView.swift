@@ -48,38 +48,12 @@ struct LabResultsView: View {
 struct LabResultSummaryRow: View {
     let result: LabResultDTO
 
-    /// A pending row is never a green tick: the lab has not released it and
-    /// there is nothing to be reassured by. Neither is a released row whose
-    /// status this build cannot name — `.unknown` is exactly the case where
-    /// the app does not know whether the value is normal.
-    ///
-    /// A released NORMAL row is left alone even when nothing graded it
-    /// (`resolveStatus` falls through to `statusOf(null)` = NORMAL): the badge
-    /// reports what the wire says, and `LabResult.resultValue` is `@NotBlank`,
-    /// so there is always a value behind it. The stronger claim — "Within
-    /// normal range" — is the one gated on a reference range, in the sheet.
-    private var symbol: String {
-        if result.isPending { return "hourglass" }
-        if result.displayStatus == .unknown { return "questionmark.circle" }
-        if result.isAbnormal || result.isCritical { return "exclamationmark.triangle.fill" }
-        // Neutral rather than an all-clear when nothing graded the row.
-        return result.isGradedNormal ? "checkmark.circle.fill" : "testtube.2"
-    }
-
-    private var symbolColor: Color {
-        switch result.tone {
-        case .positive: .green
-        case .attention: .orange
-        case .negative: .red
-        case .neutral: .secondary
-        }
-    }
-
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Image(systemName: symbol).foregroundColor(symbolColor)
+                    Image(systemName: result.symbolName)
+                        .foregroundColor(result.tone.symbolColor)
                     Text(result.testName ?? "test_name".localized).font(.headline)
                 }
                 if result.isPending {

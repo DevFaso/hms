@@ -584,3 +584,4 @@
 "medication_status_unknown" = "Statut indisponible";
 "lab_status_reported" = "Résultat disponible";
 "since_with_value" = "Depuis le %@";
+"refresh_failed" = "Actualisation impossible — affichage des dernières données chargées";

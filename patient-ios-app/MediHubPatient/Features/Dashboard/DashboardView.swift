@@ -250,29 +250,10 @@ struct AppointmentRowView: View {
 struct LabResultRowView: View {
     let result: LabResultDTO
 
-    /// A pending row is never a green tick — the lab has not released it —
-    /// and neither is a released row whose status this build cannot name.
-    private var symbol: String {
-        if result.isPending { return "hourglass" }
-        if result.displayStatus == .unknown { return "questionmark.circle" }
-        if result.isAbnormal || result.isCritical { return "exclamationmark.triangle.fill" }
-        // Neutral rather than an all-clear when nothing graded the row.
-        return result.isGradedNormal ? "checkmark.circle.fill" : "testtube.2"
-    }
-
-    private var symbolColor: Color {
-        switch result.tone {
-        case .positive: .green
-        case .attention: .orange
-        case .negative: .red
-        case .neutral: .secondary
-        }
-    }
-
     var body: some View {
         HStack {
-            Image(systemName: symbol)
-                .foregroundStyle(symbolColor)
+            Image(systemName: result.symbolName)
+                .foregroundStyle(result.tone.symbolColor)
                 .font(.subheadline)
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.testName ?? "test_name".localized).font(.subheadline.weight(.semibold))
@@ -301,6 +282,20 @@ struct LabResultRowView: View {
 }
 
 // MARK: - Status badge
+
+extension StatusTone {
+    /// The colour a standalone glyph takes for this tone. `StatusBadge` speaks
+    /// the same vocabulary through `badgeColor`; this is its SwiftUI form for
+    /// the callers that draw an icon rather than a pill.
+    var symbolColor: Color {
+        switch self {
+        case .positive: .green
+        case .attention: .orange
+        case .negative: .red
+        case .neutral: .secondary
+        }
+    }
+}
 
 struct StatusBadge: View {
     let text: String

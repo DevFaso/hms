@@ -94,6 +94,22 @@ struct LabResultDTO: Codable, Identifiable {
         return displayStatus.tone
     }
 
+    /// The SF Symbol every lab surface draws for this row. It lives here, not
+    /// in a view, because the lab list and the dashboard card had identical
+    /// copies of it and their comments had already drifted apart — the next
+    /// change to the pending/graded rules has to land on both at once.
+    ///
+    /// A pending row is never a green tick: the lab has not released it and
+    /// there is nothing to be reassured by. Neither is a released row whose
+    /// status this build cannot name, nor one that nothing graded — see
+    /// `isGradedNormal`.
+    var symbolName: String {
+        if isPending { return "hourglass" }
+        if displayStatus == .unknown { return "questionmark.circle" }
+        if isAbnormal || isCritical { return "exclamationmark.triangle.fill" }
+        return isGradedNormal ? "checkmark.circle.fill" : "testtube.2"
+    }
+
     /// The value with its unit, or nil while the result is pending.
     var valueWithUnit: String? {
         guard !isPending,
