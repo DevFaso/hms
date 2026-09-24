@@ -136,10 +136,34 @@ final class StatusLabelLocalizationTests: XCTestCase {
         )
     }
 
+    // MARK: - Medication statuses
+
+    func testEveryMedicationStatusHasAnEnglishAndAFrenchLabel() throws {
+        try assertLabels(
+            keys: MedicationStatus.allCases.map { (wire: $0.rawValue, labelKey: $0.labelKey) },
+            english: [
+                "ACTIVE": "Active",
+                "COMPLETED": "Course finished",
+                "DISCONTINUED": "Stopped",
+                "ON_HOLD": "Not yet issued",
+                "__UNKNOWN__": "Status unavailable"
+            ],
+            french: [
+                "ACTIVE": "En cours",
+                "COMPLETED": "Traitement termin\u{00e9}",
+                "DISCONTINUED": "Arr\u{00ea}t\u{00e9}",
+                "ON_HOLD": "Pas encore d\u{00e9}livr\u{00e9}",
+                "__UNKNOWN__": "Statut indisponible"
+            ]
+        )
+    }
+
     func testNoStatusLabelIsTheRawWireName() throws {
         let keys = LabResultStatus.allCases.map(\.labelKey)
             + PrescriptionStatus.allCases.map(\.labelKey)
             + RefillStatus.allCases.map(\.labelKey)
+            + MedicationStatus.allCases.map(\.labelKey)
+            + ["lab_status_reported"]
         for language in ["en", "fr"] {
             let bundle = try self.bundle(language)
             for key in keys {

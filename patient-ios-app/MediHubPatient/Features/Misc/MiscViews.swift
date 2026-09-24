@@ -335,7 +335,7 @@ struct HealthRecordsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(med.displayName).font(.headline)
                             if let dosage = med.dosage { Text(dosage).font(.subheadline).foregroundColor(.secondary) }
-                            SourceLine(parts: [med.prescribedBy.map { "Prescribed by \($0)" }, med.frequency])
+                            SourceLine(parts: [med.prescribedBy.map { String(format: "prescribed_by_with_value".localized, $0) }, med.frequency])
                         }
                         Spacer()
                         StatusBadge(text: med.statusEnum.localizedLabel,

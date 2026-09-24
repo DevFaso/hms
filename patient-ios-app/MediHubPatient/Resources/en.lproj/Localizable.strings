@@ -582,3 +582,5 @@
 "medication_status_discontinued" = "Stopped";
 "medication_status_on_hold" = "Not yet issued";
 "medication_status_unknown" = "Status unavailable";
+"lab_status_reported" = "Reported";
+"since_with_value" = "Since %@";

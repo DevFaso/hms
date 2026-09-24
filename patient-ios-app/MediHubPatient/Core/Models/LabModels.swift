@@ -64,13 +64,26 @@ struct LabResultDTO: Codable, Identifiable {
     /// serology must not read as an all-clear.
     var isGradedNormal: Bool {
         guard isNormal else { return false }
-        return !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        // A range alone is not proof it was applied: the range comes off the
+        // test DEFINITION, while `LabResultMapper.determineSeverityFlag`
+        // returns UNSPECIFIED whenever `Double.parseDouble(resultValue)`
+        // throws — a decimal comma, a censored "<0.5", a qualitative
+        // "Positive" on a test that happens to have numeric limits. The value
+        // has to be something the backend could actually compare.
+        guard !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
+        return Double(raw.replacingOccurrences(of: ",", with: ".")) != nil
     }
 
     /// What the badge shows: a pending row never borrows a grading.
     var displayStatus: LabResultStatus { isPending ? .pending : statusEnum }
 
-    var statusDisplay: String { displayStatus.localizedLabel }
+    var statusDisplay: String {
+        // Withholding the green but keeping the word "Normal" would leave the
+        // claim in place. An ungraded row is reported, not normal.
+        if isNormal, !isGradedNormal { return "lab_status_reported".localized }
+        return displayStatus.localizedLabel
+    }
 
     var tone: StatusTone {
         if isNormal, !isGradedNormal { return .neutral }

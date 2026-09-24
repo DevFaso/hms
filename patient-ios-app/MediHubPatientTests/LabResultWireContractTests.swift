@@ -139,6 +139,30 @@ final class LabResultWireContractTests: XCTestCase {
         """)
         XCTAssertTrue(graded.isGradedNormal)
         XCTAssertEqual(graded.tone, .positive)
+
+        // A range on the test DEFINITION is not proof the value was compared:
+        // determineSeverityFlag returns UNSPECIFIED when the value will not
+        // parse, and resolveStatus then falls through to NORMAL anyway.
+        for unparsable in ["Positive", "<0.5", ">12"] {
+            let row = try decode("""
+            {
+              "id": "z3", "testName": "Serology", "value": "\(unparsable)",
+              "referenceRange": "135 - 145", "status": "NORMAL", "released": true
+            }
+            """)
+            XCTAssertFalse(row.isGradedNormal, "\(unparsable) must not read as graded")
+            XCTAssertEqual(row.tone, .neutral)
+        }
+
+        // A decimal comma is a real value, just not one Double.parseDouble
+        // accepts on the server; the app normalises it before judging.
+        let comma = try decode("""
+        {
+          "id": "z4", "testName": "Potassium", "value": "4,2",
+          "referenceRange": "3.5 - 5.1", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertTrue(comma.isGradedNormal)
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {

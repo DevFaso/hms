@@ -81,10 +81,12 @@ struct MedicationsView: View {
                                     Text("\(dosage) · \(freq)").font(.subheadline).foregroundColor(.secondary)
                                 }
                                 if let dr = med.prescribedBy {
-                                    Text("Prescribed by \(dr)").font(.caption).foregroundColor(.secondary)
+                                    Text(String(format: "prescribed_by_with_value".localized, dr))
+                                        .font(.caption).foregroundColor(.secondary)
                                 }
                                 if let start = med.startDate {
-                                    Text("Since \(start)").font(.caption2).foregroundColor(.secondary)
+                                    Text(String(format: "since_with_value".localized, String(start.prefix(10))))
+                                        .font(.caption2).foregroundColor(.secondary)
                                 }
                             }
                             Image(systemName: "chevron.right")
@@ -568,6 +570,10 @@ final class MedicationsViewModel: ObservableObject {
         do {
             let _: RefillDTO = try await APIClient.shared.post(APIEndpoints.refills, body: req)
             await load()
+            // The request went through. A refills page that failed to reload a
+            // second later must not raise the tab's error alert on top of the
+            // dismissed sheet, or the patient submits again and gets a 400.
+            errorMessage = nil
             return nil
         } catch {
             // APIClient lifts the server's `message` into the error, but that
@@ -576,6 +582,9 @@ final class MedicationsViewModel: ObservableObject {
             // the server's words for anything else.
             let serverMessage = error.localizedDescription
             await load()
+            // The sheet reports this inline; arming the tab's alert as well
+            // would show the same failure twice.
+            errorMessage = nil
             // requestMedicationRefill checks isRefillable() BEFORE the
             // one-open-request guard, so a prescription discontinued since the
             // screen loaded is refused for that reason even when an open refill
