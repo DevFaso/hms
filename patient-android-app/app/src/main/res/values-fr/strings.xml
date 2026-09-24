@@ -672,4 +672,11 @@
     <string name="dates_section">Dates</string>
     <string name="prescribed_at">Prescrite le</string>
     <string name="refresh_failed">Actualisation impossible — affichage des dernières données chargées</string>
+    <string name="medication_status_active">En cours</string>
+    <string name="medication_status_completed">Traitement terminé</string>
+    <string name="medication_status_discontinued">Arrêté</string>
+    <string name="medication_status_on_hold">Pas encore délivré</string>
+    <string name="medication_status_unknown">Statut indisponible</string>
+    <string name="load_failed">Chargement impossible. Vérifiez votre connexion et réessayez.</string>
+    <string name="no_refills">Aucune demande de renouvellement enregistrée</string>
 </resources>

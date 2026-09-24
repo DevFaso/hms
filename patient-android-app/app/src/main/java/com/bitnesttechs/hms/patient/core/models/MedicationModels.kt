@@ -16,7 +16,14 @@ data class MedicationDto(
     @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "prescribedBy") val prescribedBy: String? = null,
     @Json(name = "instructions") val instructions: String? = null,
-    @Json(name = "isActive") val isActive: Boolean = true,
+    /**
+     * `PatientMedicationServiceImpl.resolveStatus` puts ACTIVE, COMPLETED,
+     * DISCONTINUED or ON_HOLD here. The app decoded a boolean `isActive` the
+     * DTO has never carried, so it defaulted to `true` and every row — a
+     * discontinued prescription, a course that ended in June — was badged
+     * "Active".
+     */
+    @Json(name = "status") val status: String? = null,
     /**
      * `PatientMedicationResponseDTO` is built one-to-one FROM prescriptions
      * and its `id` IS the prescription id, so this answers the refill question
@@ -37,6 +44,10 @@ data class MedicationDto(
     /** Backward compat alias */
     val name: String get() = medicationName
 
+    val statusEnum: MedicationStatus get() = MedicationStatus.fromWire(status)
+
+    val isActive: Boolean get() = statusEnum == MedicationStatus.ACTIVE
+
     /**
      * The state of the open refill on this prescription, or null when there
      * is none. `refillRequestStatus` can name a CLOSED state (the newest
@@ -49,6 +60,51 @@ data class MedicationDto(
             val status = RefillStatus.fromWire(refillRequestStatus)
             return if (status.isOpen) status else RefillStatus.REQUESTED
         }
+}
+
+/**
+ * The values `PatientMedicationServiceImpl.resolveStatus` can put on the
+ * wire. Exhaustive `when`s with no `else`, like the other three.
+ */
+enum class MedicationStatus {
+    ACTIVE,
+    COMPLETED,
+    DISCONTINUED,
+    ON_HOLD,
+
+    /** App-side fallback for a status this build does not know yet. */
+    UNKNOWN;
+
+    @get:StringRes
+    val labelRes: Int
+        get() = when (this) {
+            ACTIVE -> R.string.medication_status_active
+            COMPLETED -> R.string.medication_status_completed
+            DISCONTINUED -> R.string.medication_status_discontinued
+            ON_HOLD -> R.string.medication_status_on_hold
+            UNKNOWN -> R.string.medication_status_unknown
+        }
+
+    val tone: StatusTone
+        get() = when (this) {
+            ACTIVE -> StatusTone.POSITIVE
+            ON_HOLD -> StatusTone.ATTENTION
+            DISCONTINUED -> StatusTone.NEGATIVE
+            COMPLETED, UNKNOWN -> StatusTone.NEUTRAL
+        }
+
+    companion object {
+        /**
+         * A medication with no status at all is treated as current: the
+         * backend only omits it when `@JsonInclude(NON_NULL)` drops a null,
+         * and `resolveStatus` never returns one.
+         */
+        fun fromWire(raw: String?): MedicationStatus {
+            val trimmed = raw?.trim().orEmpty()
+            if (trimmed.isEmpty()) return ACTIVE
+            return entries.firstOrNull { it.name.equals(trimmed, ignoreCase = true) } ?: UNKNOWN
+        }
+    }
 }
 
 /**

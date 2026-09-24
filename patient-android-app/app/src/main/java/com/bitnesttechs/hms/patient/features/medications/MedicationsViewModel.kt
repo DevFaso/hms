@@ -19,6 +19,9 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val refills = MutableStateFlow<List<RefillDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
 
+    /** True while the last load failed and the lists are therefore stale or empty. */
+    val loadFailed = MutableStateFlow(false)
+
     /** A localized outcome: a string resource plus an optional detail argument. */
     data class Outcome(val resId: Int, val detail: String? = null)
     private val _outcome = MutableStateFlow<Outcome?>(null)
@@ -49,11 +52,17 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 m.await()?.let { medications.value = it }
                 p.await()?.let { prescriptions.value = it }
                 r.await()?.let { refills.value = it }
+                loadFailed.value = false
             } catch (_: Exception) {
                 // Keeping the previous lists (above) removed the only signal a
                 // refresh had failed — the screen used to empty. Say so instead,
-                // so an expired session is not a silent no-op.
-                _outcome.value = Outcome(R.string.refresh_failed)
+                // so an expired session is not a silent no-op. On a COLD open
+                // there is nothing stale to show, so the empty states offer a
+                // retry rather than claiming old data is on screen.
+                loadFailed.value = true
+                if (medications.value.isNotEmpty() || prescriptions.value.isNotEmpty()) {
+                    _outcome.value = Outcome(R.string.refresh_failed)
+                }
             }
             finally { isLoading.value = false }
         }
@@ -87,8 +96,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     )
                 )
                 if (resp.isSuccessful) {
+                    // Join before announcing: `load()`'s own failure path sets an
+                    // outcome too, and an unjoined reload that fails a second
+                    // later replaced "Refill requested" with "Could not refresh"
+                    // — so the patient never learned the request went through.
+                    load().join()
                     _outcome.value = Outcome(R.string.refill_requested)
-                    load()
                 } else {
                     val detail = serverMessage(resp.errorBody()?.string())
                     // Reload and WAIT for it: the usual refusal is "you already
@@ -111,14 +124,18 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // it says there is no open request: otherwise a stale refills
                     // page kept by a partially-failed reload would report an
                     // unrelated 400 as "already with your care team".
-                    val medicationRow = medications.value.firstOrNull { it.id == prescriptionId }
-                    val openRefill = if (medicationRow != null) {
-                        medicationRow.openRefillStatus
-                    } else {
-                        refills.value.firstOrNull {
+                    // Here — unlike the button, where a stale "open" row would
+                    // wrongly BLOCK the patient — the server has already refused,
+                    // so an open row from either source is the better guess than
+                    // an English sentence. It also covers what
+                    // `refillRequestOpen` cannot see: `latestRefillsFor` grades
+                    // only the NEWEST request, so an older PAUSED one that the
+                    // server's `findFirst…StatusIn` still counts reads as false.
+                    val openRefill = medications.value.firstOrNull { it.id == prescriptionId }
+                        ?.openRefillStatus
+                        ?: refills.value.firstOrNull {
                             it.prescriptionId == prescriptionId && it.statusEnum.isOpen
                         }?.statusEnum
-                    }
                     _outcome.value = when {
                         !stillRefillable -> Outcome(R.string.refill_not_refillable)
                         openRefill != null -> Outcome(openRefillMessage(openRefill))

@@ -672,4 +672,11 @@
     <string name="dates_section">Dates</string>
     <string name="prescribed_at">Prescribed</string>
     <string name="refresh_failed">Could not refresh — showing what was last loaded</string>
+    <string name="medication_status_active">Active</string>
+    <string name="medication_status_completed">Course finished</string>
+    <string name="medication_status_discontinued">Stopped</string>
+    <string name="medication_status_on_hold">Not yet issued</string>
+    <string name="medication_status_unknown">Status unavailable</string>
+    <string name="load_failed">We could not load this. Check your connection and try again.</string>
+    <string name="no_refills">No refill requests on record</string>
 </resources>

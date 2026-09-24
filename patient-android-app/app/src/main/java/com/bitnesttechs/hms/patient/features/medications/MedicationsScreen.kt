@@ -40,6 +40,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     val prescriptions by viewModel.prescriptions.collectAsState()
     val refills by viewModel.refills.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val loadFailed by viewModel.loadFailed.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Medications", "Prescriptions", "Refills")
@@ -95,7 +96,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (medications.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No active medications")
+                            EmptyOrRetry(R.string.no_active_medications, loadFailed) { viewModel.load() }
                         }
                     }
                     items(medications) { med ->
@@ -109,13 +110,11 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                         Text(med.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                         Surface(shape = RoundedCornerShape(50),
-                                            color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32).copy(alpha = 0.12f)
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
-                                            Text(if (med.isActive) "Active" else "Inactive",
+                                            color = med.statusEnum.tone.badgeFill().copy(alpha = 0.15f)) {
+                                            Text(stringResource(med.statusEnum.labelRes),
                                                 Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32)
-                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = med.statusEnum.tone.onBadge(),
                                                 fontWeight = FontWeight.Medium)
                                         }
                                     }
@@ -141,7 +140,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (prescriptions.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No prescriptions")
+                            EmptyOrRetry(R.string.no_prescriptions, loadFailed) { viewModel.load() }
                         }
                     }
                     items(prescriptions) { rx ->
@@ -249,7 +248,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (refills.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No refill requests on record")
+                            EmptyOrRetry(R.string.no_refills, loadFailed) { viewModel.load() }
                         }
                     }
                     items(refills) { refill ->
@@ -415,7 +414,7 @@ private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Status
-                MedDetailRow("Status", if (med.isActive) "Active" else "Inactive")
+                MedDetailRow(stringResource(R.string.status), stringResource(med.statusEnum.labelRes))
                 HorizontalDivider()
 
                 Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -486,6 +485,22 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
             }
         }
     )
+}
+
+/**
+ * An empty tab is not the same thing as a tab that could not be loaded. The
+ * screen has no pull-to-refresh, so without this a single failed load left
+ * the patient's medication list empty for the life of the ViewModel.
+ */
+@Composable
+private fun EmptyOrRetry(@StringRes emptyText: Int, failed: Boolean, onRetry: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(stringResource(if (failed) R.string.load_failed else emptyText))
+        if (failed) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+        }
+    }
 }
 
 /**
