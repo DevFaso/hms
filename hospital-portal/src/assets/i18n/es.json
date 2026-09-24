@@ -7161,6 +7161,7 @@
     "LAB_ORDERS": "Órdenes de laboratorio",
     "LAB_ORDERS_LOAD_ERROR": "No se pudieron cargar las órdenes de laboratorio.",
     "LAB_ORDERS_SCOPE_HINT": "Órdenes emitidas por este hospital o realizadas en este hospital. Los resultados siguientes pueden proceder de otros hospitales de la historia del paciente.",
+    "LAB_ORDERS_SCOPE_HINT_GLOBAL": "Todos los hospitales: no se aplica ningún ámbito hospitalario, por lo que se listan las órdenes de todos los centros y ninguna se marca como procedente de otro hospital.",
     "LAB_PERFORMED_BY": "Realizado por",
     "LAB_PERFORMING_LAB": "Laboratorio ejecutor",
     "LAB_REFERENCE_RANGE": "Valores de referencia",

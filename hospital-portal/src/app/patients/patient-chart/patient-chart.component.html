@@ -316,7 +316,19 @@
         patient treated elsewhere shows released results above an orders table
         reading "no lab orders", as if the order record were missing.
       -->
-      <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
+      @if (globalScope()) {
+        <!--
+          In global view the interceptor sends no X-Hospital-Id,
+          requireActiveHospitalId() returns null and buildPredicates adds no
+          hospital predicate — so the table lists every tenant's orders, and
+          isForeignLabRow marks none of them because there is no acting
+          hospital to be foreign to. Saying "this hospital's" there would be
+          simply false.
+        -->
+        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT_GLOBAL' | translate }}</p>
+      } @else {
+        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
+      }
       @if (labOrdersLoading()) {
         <div class="loading-state"><div class="spinner"></div></div>
       } @else if (labOrdersError()) {

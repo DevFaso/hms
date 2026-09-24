@@ -193,8 +193,14 @@ export class LabResultsInboxComponent implements OnInit {
     const parsed = new Date(iso);
     // A blank cell reads as a rendering fault; missing data reads as missing.
     if (Number.isNaN(parsed.getTime())) return LabResultsInboxComponent.NO_VALUE;
+    // The queue has no date window and no reviewed state, so it carries every
+    // result this physician ever ordered. Without the year, a critical result
+    // from two years ago sits at the top of the worklist — severity sorts
+    // first — reading exactly like one released this morning.
+    const showYear = parsed.getFullYear() !== new Date().getFullYear();
     // No hour12 override: the locale decides, as the in-basket panel does.
     return parsed.toLocaleString(currentLocale(), {
+      ...(showYear ? { year: 'numeric' } : {}),
       month: 'short',
       day: 'numeric',
       hour: 'numeric',

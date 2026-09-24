@@ -272,8 +272,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * change, and the section re-reads at once when it is the one on screen.
    */
   private readonly labScopeWatcher = effect(() => {
-    const scope = this.roleContext.effectiveHospitalIdForRequest();
-    const key = scope ?? (this.roleContext.globalView() ? GLOBAL_SCOPE_KEY : null);
+    // The SAME key the section caches under. Deriving a second one diverged
+    // the moment `activeHospitalId` was populated: the watcher saw a change
+    // (null → h-1) that `labsScopeKey()` never made, threw away rows that had
+    // just loaded and re-issued both reads — a second cross-hospital reach
+    // row per results call, which is what the stale guards exist to avoid.
+    const key = this.labsScopeKey();
     const previous = this.watchedLabScope;
     this.watchedLabScope = key;
     if (previous === undefined || previous === key) return;
@@ -284,7 +288,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   });
 
   /** undefined until the watcher has run once; then the last scope seen. */
-  private watchedLabScope: string | null | undefined = undefined;
+  private watchedLabScope: string | undefined = undefined;
 
   ngOnInit(): void {
     this.section.set(this.firstVisibleSection());
@@ -344,6 +348,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
     // with no effective id still has their assignment to fall back on.
     return this.roleContext.globalView() ? null : this.hospitalId() || null;
   }
+
+  /** True when the lab reads carry no hospital scope at all (global view). */
+  readonly globalScope = computed(
+    () => this.roleContext.globalView() && this.roleContext.effectiveHospitalIdForRequest() == null,
+  );
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so

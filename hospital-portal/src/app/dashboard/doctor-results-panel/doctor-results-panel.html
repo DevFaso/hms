@@ -12,7 +12,12 @@
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
-  @if (loading()) {
+  <!--
+    Only when there is nothing to replace. A dashboard refresh re-reads this
+    queue, and swapping a populated, readable list for a spinner every time is
+    worse than letting the rows stand until the new ones land.
+  -->
+  @if (loading() && results().length === 0) {
     <div class="rp-loading" aria-live="polite">
       <span class="rp-spinner"></span>
       <span>{{ 'common.loading' | translate }}</span>

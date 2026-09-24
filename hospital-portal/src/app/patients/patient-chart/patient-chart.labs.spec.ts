@@ -338,6 +338,75 @@ describe('PatientChartComponent — labs section', () => {
     expect(fixture.nativeElement.querySelectorAll('tr.foreign-row').length).toBe(1);
   });
 
+  it('re-reads at once when the scope chip moves while the Labs tab is open', () => {
+    // The REAL RoleContextService, because the watcher is an effect over its
+    // signals and the stub's accessors are plain functions — under the stub
+    // the effect never re-runs and deleting it would leave the suite green.
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+      'listLabResults',
+    ]);
+    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listDiagnoses.and.returnValue(of([]));
+    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listLabResults.and.returnValue(of([released()]));
+    labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
+    labService.listOrders.and.returnValue(of([order()]));
+
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: LabService, useValue: labService },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => ['ROLE_DOCTOR'],
+            getHospitalId: () => null,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(['ROLE_DOCTOR']);
+    roleContext.activeHospitalId = 'h-1';
+
+    fixture = TestBed.createComponent(PatientChartComponent);
+    component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+
+    openLabs();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
+
+    // No navigation, no tab switch: the chip alone.
+    roleContext.activeHospitalId = 'h-2';
+    fixture.detectChanges();
+
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    expect(labService.listOrders).toHaveBeenCalledTimes(2);
+    expect(patientService.listLabResults.calls.mostRecent().args[1]).toEqual({
+      hospitalId: 'h-2',
+      limit: 25,
+    });
+  });
+
   /* ── Empty and error states ── */
 
   it('renders the empty state for both blocks when the patient has no labs', () => {

@@ -7161,6 +7161,7 @@
     "LAB_ORDERS": "Lab orders",
     "LAB_ORDERS_LOAD_ERROR": "Lab orders could not be loaded.",
     "LAB_ORDERS_SCOPE_HINT": "Orders placed by, or performed at, this hospital. Results below may include other hospitals in this patient's record.",
+    "LAB_ORDERS_SCOPE_HINT_GLOBAL": "All hospitals — no hospital scope is applied, so orders from every tenant are listed and none is marked as coming from another hospital.",
     "LAB_PERFORMED_BY": "Performed by",
     "LAB_PERFORMING_LAB": "Performing laboratory",
     "LAB_REFERENCE_RANGE": "Reference range",
