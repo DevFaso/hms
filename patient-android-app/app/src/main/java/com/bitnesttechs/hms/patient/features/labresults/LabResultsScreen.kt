@@ -110,13 +110,13 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         // name — UNKNOWN is exactly the case where the app does
                         // not know whether the value is normal.
                         //
-                        // A released NORMAL row with no reference range is not
-                        // an all-clear either: resolveStatus falls through to
+                        // A released NORMAL row that nothing graded is not an
+                        // all-clear either: resolveStatus falls through to
                         // statusOf(null) = NORMAL, so "graded normal" and
                         // "nothing graded this" are the same word on the wire.
-                        // The badge still reports what the wire says; the tick
-                        // and the green, which are the app's own reassurance,
-                        // are withheld.
+                        // The tick, the green and the word "Normal" are all
+                        // withheld for it — see LabResultDto.isGradedNormal and
+                        // statusLabelRes, which reads "Reported" instead.
                         Icon(
                             when {
                                 lab.isPending -> Icons.Default.HourglassEmpty
