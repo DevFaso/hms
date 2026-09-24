@@ -188,9 +188,6 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                 lab.testCode?.takeIf { it.isNotBlank() }?.let {
                     DetailRow(stringResource(R.string.test_code), it)
                 }
-                lab.category?.takeIf { it.isNotBlank() }?.let {
-                    DetailRow(stringResource(R.string.category), it)
-                }
 
                 HorizontalDivider()
 

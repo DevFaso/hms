@@ -42,6 +42,11 @@ data class LabResultDto(
     @Json(name = "resultedAt") val resultedAt: String? = null,
     @Json(name = "orderedBy") val orderedBy: String? = null,
     @Json(name = "performedBy") val performedBy: String? = null,
+    /**
+     * Decoded but not displayed: LabTestDefinition normalises this to
+     * trim().toUpperCase() and the set is hospital-configured, so there is no
+     * closed list to localize it against.
+     */
     @Json(name = "category") val category: String? = null,
     @Json(name = "notes") val notes: String? = null,
     @Json(name = "hospitalName") val hospitalName: String? = null
