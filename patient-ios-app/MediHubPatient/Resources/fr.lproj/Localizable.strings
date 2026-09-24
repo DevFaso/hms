@@ -495,3 +495,96 @@
 "edu_cat_ultrasound_scans" = "Échographies";
 "edu_cat_genetic_screening" = "Dépistage génétique";
 "edu_cat_other" = "Autre";
+
+/* B4 - statuts des résultats de laboratoire (PatientLabResultResponseDTO.status) */
+"lab_status_pending" = "En attente";
+"lab_status_normal" = "Normal";
+"lab_status_abnormal" = "Anormal";
+"lab_status_abnormal_low" = "Anormal — bas";
+"lab_status_abnormal_high" = "Anormal — élevé";
+"lab_status_critical" = "Critique";
+"lab_status_unknown" = "Statut indisponible";
+"lab_result_pending" = "Résultat en attente";
+"lab_pending_explainer" = "Le laboratoire n'a pas encore validé ce résultat.";
+"lab_interpretation_normal" = "Dans les valeurs normales";
+"lab_interpretation_abnormal" = "Anormal — à revoir avec votre soignant";
+"lab_interpretation_critical" = "Valeur critique — contactez votre soignant";
+"lab_result_details" = "Résultat d'analyse";
+"test_information" = "Informations sur l'analyse";
+"lab_results_section" = "Résultats";
+"lab_dates_section" = "Dates";
+"lab_value" = "Valeur";
+"reference_range" = "Valeurs de référence";
+"test_code" = "Code de l'analyse";
+"performed_by" = "Réalisé par";
+"resulted" = "Résultat rendu";
+"laboratory" = "Laboratoire";
+
+/* G16 - statuts des ordonnances (com.example.hms.enums.PrescriptionStatus) */
+"rx_status_draft" = "Brouillon";
+"rx_status_pending_signature" = "En attente de signature";
+"rx_status_signed" = "Signée";
+"rx_status_transmitted" = "Transmise à la pharmacie";
+"rx_status_transmission_failed" = "Envoi impossible";
+"rx_status_cancelled" = "Annulée";
+"rx_status_discontinued" = "Interrompue";
+"rx_status_pending_clarification" = "En attente de votre prescripteur";
+"rx_status_dispensed" = "Délivrée";
+"rx_status_partially_filled" = "Partiellement délivrée";
+"rx_status_pending_stock" = "En rupture de stock";
+"rx_status_requires_external_fill" = "Pharmacie externe";
+"rx_status_sent_to_partner" = "Envoyée à une pharmacie partenaire";
+"rx_status_partner_accepted" = "Acceptée par la pharmacie";
+"rx_status_partner_rejected" = "Refusée par la pharmacie";
+"rx_status_partner_dispensed" = "Délivrée par la pharmacie";
+"rx_status_printed_for_patient" = "Imprimée pour vous";
+"rx_status_unknown" = "Statut indisponible";
+"rx_pharmacy_with_value" = "Pharmacie : %@";
+"prescribed_by_with_value" = "Prescrit par %@";
+"prescription" = "Ordonnance";
+"medication" = "Médicament";
+"duration" = "Durée";
+"route" = "Voie d'administration";
+"prescribed" = "Prescrite le";
+"instructions" = "Instructions";
+
+/* G16 - statuts des demandes de renouvellement (com.example.hms.enums.RefillStatus) */
+"refill_status_requested" = "Demandé";
+"refill_status_paused" = "Mis en attente";
+"refill_status_approved" = "Approuvé";
+"refill_status_denied" = "Refusé";
+"refill_status_dispensed" = "Délivré";
+"refill_status_cancelled" = "Annulé";
+"refill_status_unknown" = "Statut indisponible";
+"refill_sent_for_review" = "Transmise au prescripteur pour examen";
+"refill_requested_with_value" = "Demandé le : %@";
+"refill_updated_with_value" = "Mis à jour : %@";
+"refill_provider_with_value" = "Soignant : %@";
+"refill_notes_with_value" = "Notes : %@";
+"ordered_by_with_value" = "Prescrit par %@";
+"ordered_at" = "Prescrit le";
+"refill_already_open" = "Une demande de renouvellement pour ce médicament est déjà en cours d'examen";
+"reference_with_value" = "Référence : %@";
+"dates" = "Dates";
+"no_prescriptions_desc" = "Aucune ordonnance enregistrée.";
+"no_active_medications_desc" = "Aucun médicament actif enregistré.";
+"no_refills_desc" = "Aucune demande de renouvellement enregistrée.";
+"refill" = "Renouvellement";
+"refill_details" = "Détails de la demande";
+"dosage_and_administration" = "Posologie et administration";
+"submit" = "Envoyer";
+"refill_not_refillable" = "Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante.";
+"refill_on_hold" = "Votre équipe soignante a mis cette demande de renouvellement en attente. Elle reviendra vers vous.";
+
+/* G16 - statuts des médicaments (PatientMedicationServiceImpl.resolveStatus) */
+"medication_status_active" = "En cours";
+"medication_status_completed" = "Traitement terminé";
+"medication_status_discontinued" = "Arrêté";
+"medication_status_on_hold" = "Pas encore délivré";
+"medication_status_unknown" = "Statut indisponible";
+"lab_status_reported" = "Résultat disponible";
+"since_with_value" = "Depuis le %@";
+"refresh_failed" = "Actualisation impossible — affichage des dernières données chargées";
+"generic_name" = "Dénomination commune";
+"start_date" = "Date de début";
+"end_date" = "Date de fin";

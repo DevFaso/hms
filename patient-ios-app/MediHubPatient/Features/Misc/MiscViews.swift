@@ -314,7 +314,7 @@ struct HealthRecordsView: View {
                 List(vm.labs) { lab in
                     VStack(alignment: .leading, spacing: 4) {
                         LabResultSummaryRow(result: lab)
-                        SourceLine(parts: [lab.labName, lab.orderedBy.map { "Ordered by \($0)" }])
+                        SourceLine(parts: [lab.hospitalName, lab.orderedBy.map { String(format: "ordered_by_with_value".localized, $0) }])
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -335,11 +335,11 @@ struct HealthRecordsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(med.displayName).font(.headline)
                             if let dosage = med.dosage { Text(dosage).font(.subheadline).foregroundColor(.secondary) }
-                            SourceLine(parts: [med.prescribedBy.map { "Prescribed by \($0)" }, med.frequency])
+                            SourceLine(parts: [med.prescribedBy.map { String(format: "prescribed_by_with_value".localized, $0) }, med.frequency])
                         }
                         Spacer()
-                        StatusBadge(text: med.status?.capitalized ?? "Active",
-                                    color: med.status?.uppercased() == "ACTIVE" ? "green" : "gray")
+                        StatusBadge(text: med.statusEnum.localizedLabel,
+                                    color: med.statusEnum.tone.badgeColor)
                     }
                 }
                 .listStyle(.insetGrouped)
