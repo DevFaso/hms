@@ -104,38 +104,43 @@ export class LabResultsComponent implements OnInit {
   comparisonLoading = signal(false);
 
   /**
-   * POST /lab-results/{id}/sign backend role list, plus the two roles the
-   * backend expands into it.
+   * Who can actually sign — which is NOT who `POST /lab-results/{id}/sign`
+   * admits at its annotation.
    *
-   * <p>`RoleExpansion` maps PHYSICIAN and SURGEON onto ROLE_DOCTOR before the
-   * `@PreAuthorize` runs, and the portal has the same rule in
-   * `role-equivalence.ts` — but only `RoleGuard` and the shell's nav gate go
-   * through it. `RoleContextService.hasAnyActiveRole` compares the raw stored
-   * roles, so a surgeon was refused a control the endpoint would have
-   * accepted. Naming the equivalents here keeps this list what its name says:
-   * who the backend admits.
+   * <p>PHYSICIAN and SURGEON are deliberately absent. `RoleExpansion` maps
+   * them onto ROLE_DOCTOR while the authorities are built, so they do clear
+   * the `@PreAuthorize`; but the handler then calls
+   * `LabResultServiceImpl.validateSignPermissions` →
+   * `RoleValidator.isDoctor(userId, hospitalId)`, which matches the stored
+   * ASSIGNMENT ROLE CODE against `{DOCTOR, ROLE_DOCTOR}` and knows no
+   * PHYSICIAN/SURGEON equivalence at that layer. Listing them here would show
+   * a surgeon a Sign button, let them fill in the signature modal, and answer
+   * 400 "Only attending clinicians may sign lab results." with no way to
+   * succeed. Passing the annotation is not the same as passing the endpoint.
+   *
+   * <p>Whether that equivalence SHOULD exist one layer down is a question
+   * about who may sign a lab result across the whole product, not a question
+   * this screen gets to answer; it is recorded as standing debt in
+   * tasklist.md instead.
    */
   private static readonly SIGN_ROLES = [
     'ROLE_DOCTOR',
-    'ROLE_PHYSICIAN',
-    'ROLE_SURGEON',
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
-    // Same expansion, second rule: SUPER_ADMIN_INHERITS grants both
-    // ROLE_DOCTOR and ROLE_LAB_SCIENTIST, so the endpoint accepts a
-    // super-admin — who was being offered Release on a row and refused Sign.
+    // SUPER_ADMIN is different, and stays: validateSignPermissions returns
+    // early for it before any role-code lookup happens, so the button works.
     'ROLE_SUPER_ADMIN',
   ];
 
   /**
    * Whether to offer the signature control.
    *
-   * <p>A method, not a field: `canSign` was evaluated once while the
-   * component was being constructed, so after a hospital-scope change — which
-   * changes the active role set — it still answered for the roles the user
-   * held at the hospital they had left. That is the same defect #723 fixed on
-   * the release button, and this is the same fix: read the role context live,
-   * every time the template asks.
+   * <p>A method, not a field: `canSign` was evaluated once while the component
+   * was being constructed. The role set it read cannot in fact change under
+   * this screen — portal roles come from `/me/session-bootstrap` once and are
+   * not per-hospital — so this is not a live defect here; it is the same shape
+   * #723 fixed on the release button, kept consistent with it rather than left
+   * as the one control in this file that answers from a snapshot.
    */
   canSign(): boolean {
     return this.roleContext.hasAnyActiveRole(LabResultsComponent.SIGN_ROLES);

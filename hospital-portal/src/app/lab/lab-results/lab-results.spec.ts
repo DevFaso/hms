@@ -494,15 +494,18 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(component.canSign()).toBeFalse();
   });
 
-  it('offers signing to a surgeon, whom the backend expands to ROLE_DOCTOR', () => {
-    // RoleExpansion maps PHYSICIAN/SURGEON onto ROLE_DOCTOR before the
-    // @PreAuthorize runs, but hasAnyActiveRole compares raw roles — so the
-    // equivalents have to be named in the list the button reads.
-    expect(createWithRoles(['ROLE_SURGEON']).canSign()).toBeTrue();
+  it('does NOT offer signing to a surgeon, whom the endpoint would refuse', () => {
+    // RoleExpansion maps SURGEON onto ROLE_DOCTOR before the @PreAuthorize
+    // runs, so the annotation passes — and then validateSignPermissions calls
+    // RoleValidator.isDoctor, which matches the stored ASSIGNMENT ROLE CODE
+    // against {DOCTOR, ROLE_DOCTOR} and knows no such equivalence. Offering
+    // the button here means a filled-in signature modal answered 400 with no
+    // way to succeed. Clearing the annotation is not clearing the endpoint.
+    expect(createWithRoles(['ROLE_SURGEON']).canSign()).toBeFalse();
   });
 
-  it('offers signing to a physician for the same reason', () => {
-    expect(createWithRoles(['ROLE_PHYSICIAN']).canSign()).toBeTrue();
+  it('does NOT offer signing to a physician for the same reason', () => {
+    expect(createWithRoles(['ROLE_PHYSICIAN']).canSign()).toBeFalse();
   });
 
   it('offers signing to a super-admin, who inherits both signing roles', () => {
