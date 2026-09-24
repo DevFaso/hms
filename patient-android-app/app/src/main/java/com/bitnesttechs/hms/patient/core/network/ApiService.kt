@@ -155,10 +155,14 @@ interface ApiService {
         @Body request: RefillRequest
     ): Response<ApiResponse<RefillDto>>
 
+    // Newest first: the prescriptions tab decides whether to offer a refill
+    // from the rows on THIS page, and an open REQUESTED/PAUSED row outside an
+    // unsorted page would put the button back on screen.
     @GET("me/patient/refills")
     suspend fun getRefills(
         @Query("page") page: Int = 0,
-        @Query("size") size: Int = 50
+        @Query("size") size: Int = 50,
+        @Query("sort") sort: String = "createdAt,desc"
     ): Response<ApiResponse<PageDto<RefillDto>>>
 
     @PUT("me/patient/refills/{refillId}/cancel")

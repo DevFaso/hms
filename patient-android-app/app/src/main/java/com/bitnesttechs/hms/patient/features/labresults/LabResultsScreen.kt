@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Warning
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
+import com.bitnesttechs.hms.patient.core.models.LabResultStatus
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.*
 
@@ -91,9 +93,13 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         // A pending row is never a green tick: the lab has not
                         // released it and there is nothing to be reassured by.
+                        // Nor is a released row whose status this build cannot
+                        // name — UNKNOWN is exactly the case where the app does
+                        // not know whether the value is normal.
                         Icon(
                             when {
                                 lab.isPending -> Icons.Default.HourglassEmpty
+                                lab.displayStatus == LabResultStatus.UNKNOWN -> Icons.Default.HelpOutline
                                 lab.isAbnormal || lab.isCritical -> Icons.Default.Warning
                                 else -> Icons.Default.CheckCircle
                             },
