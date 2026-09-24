@@ -24,9 +24,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.MedicationDto
 import com.bitnesttechs.hms.patient.core.models.PrescriptionDto
 import com.bitnesttechs.hms.patient.core.models.RefillDto
+import com.bitnesttechs.hms.patient.core.models.RefillStatus
 import androidx.compose.ui.res.stringResource
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.brandColor
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,12 +157,13 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                             Column(Modifier.padding(16.dp)) {
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                    Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f))
-                                    Surface(shape = RoundedCornerShape(50), color = BrandBlue.copy(alpha = 0.1f)) {
-                                        Text(rx.status.replaceFirstChar { it.uppercase() },
+                                    val rxTone = rx.statusEnum.tone.brandColor()
+                                    Surface(shape = RoundedCornerShape(50), color = rxTone.copy(alpha = 0.15f)) {
+                                        Text(stringResource(rx.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall, color = BrandBlue,
+                                            style = MaterialTheme.typography.labelSmall, color = rxTone,
                                             fontWeight = FontWeight.Medium)
                                     }
                                     Icon(Icons.Default.ChevronRight, contentDescription = "View details",
@@ -171,15 +174,23 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     val dosageFreq = listOfNotNull(dosage, rx.frequency).joinToString(" · ")
                                     Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                rx.prescribedBy?.let { Text("By $it", style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                Spacer(Modifier.height(6.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${rx.refillsRemaining} refill(s) remaining",
+                                rx.staffFullName?.takeIf { it.isNotBlank() }?.let {
+                                    Text(stringResource(R.string.prescribed_by_with_value, it),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (rx.refillsRemaining > 0) {
+                                }
+                                // Where the order went, when it left the hospital's own
+                                // dispensary (PrescriptionResponseDTO.pharmacyName).
+                                rx.pharmacyName?.takeIf { it.isNotBlank() }?.let {
+                                    Text(stringResource(R.string.rx_pharmacy_with_value, it),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                // The backend gate is PrescriptionStatus.isRefillable(),
+                                // not a refill counter — this DTO has never carried one.
+                                if (rx.statusEnum.isRefillable) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                         FilledTonalButton(
                                             onClick = { refillTarget = rx },
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -187,7 +198,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         ) {
                                             Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Request Refill", style = MaterialTheme.typography.labelSmall)
+                                            Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }
@@ -222,35 +233,36 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f)
                                     )
+                                    val refillTone = refill.statusEnum.tone.brandColor()
                                     Surface(
                                         shape = RoundedCornerShape(50),
-                                        color = refillStatusColor(refill.status).copy(alpha = 0.15f)
+                                        color = refillTone.copy(alpha = 0.15f)
                                     ) {
                                         Text(
-                                            refill.status.replace("_", " ")
-                                                .replaceFirstChar { it.uppercase() },
+                                            stringResource(refill.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = refillStatusColor(refill.status)
+                                            color = refillTone
                                         )
                                     }
                                 }
                                 refill.preferredPharmacy?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Pharmacy: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.rx_pharmacy_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.requestedAt?.let {
                                     Text("Requested: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                if (refill.status.uppercase() == "REQUESTED") {
+                                if (refill.statusEnum == RefillStatus.REQUESTED) {
                                     Text("Sent to the prescribing provider for review",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 // REQUESTED and PAUSED are the two states the backend
                                 // (cancelMyRefill) and the web let the patient withdraw.
-                                if (refill.status.uppercase() in listOf("REQUESTED", "PAUSED")) {
+                                if (refill.statusEnum.isCancellable) {
                                     TextButton(
                                         onClick = { cancelRefillTarget = refill },
                                         colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
@@ -400,32 +412,33 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        title = { Text(rx.medicationName, fontWeight = FontWeight.Bold) },
+        title = { Text(rx.displayName, fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                rx.status.takeIf { it.isNotBlank() }?.let { MedDetailRow("Status", it) }
+                MedDetailRow(stringResource(R.string.status), stringResource(rx.statusEnum.labelRes))
                 HorizontalDivider()
 
                 Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 rx.dosage?.let { MedDetailRow("Dosage", it) }
                 rx.frequency?.let { MedDetailRow("Frequency", it) }
-                rx.quantity?.let { MedDetailRow("Quantity", "$it") }
-                HorizontalDivider()
-
-                Text("Refills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                MedDetailRow("Remaining", "${rx.refillsRemaining}")
+                rx.duration?.let { MedDetailRow("Duration", it) }
+                rx.route?.let { MedDetailRow("Route", it) }
                 HorizontalDivider()
 
                 Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                rx.prescribedDate?.let { MedDetailRow("Prescribed", it.take(10)) }
-                rx.expiryDate?.let { MedDetailRow("Expires", it.take(10)) }
+                rx.createdAt?.let { MedDetailRow("Prescribed", it.take(10)) }
 
-                rx.prescribedBy?.let {
+                rx.staffFullName?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()
-                    MedDetailRow("Prescribed By", it)
+                    MedDetailRow(stringResource(R.string.prescribed_by), it)
+                }
+
+                rx.pharmacyName?.takeIf { it.isNotBlank() }?.let {
+                    HorizontalDivider()
+                    MedDetailRow(stringResource(R.string.pharmacy), it)
                 }
 
                 rx.instructions?.takeIf { it.isNotBlank() }?.let {
@@ -444,15 +457,5 @@ private fun MedDetailRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-    }
-}
-
-private fun refillStatusColor(status: String): androidx.compose.ui.graphics.Color {
-    return when (status.uppercase()) {
-        "COMPLETED", "FILLED", "DISPENSED" -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
-        "APPROVED" -> androidx.compose.ui.graphics.Color(0xFF1565C0)
-        "PENDING", "REQUESTED" -> androidx.compose.ui.graphics.Color(0xFFF9A825)
-        "CANCELLED", "DENIED" -> androidx.compose.ui.graphics.Color(0xFFC62828)
-        else -> androidx.compose.ui.graphics.Color.Gray
     }
 }

@@ -11,13 +11,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.brandColor
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -228,12 +231,16 @@ private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(lab.testName, fontWeight = FontWeight.Bold)
-                        lab.resultDate?.let { Text(it.take(10), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    }
-                    lab.status?.let {
-                        Surface(shape = RoundedCornerShape(12.dp), color = statusColor(it).copy(alpha = 0.15f)) {
-                            Text(it, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = statusColor(it))
+                        (lab.resultedAt ?: lab.collectedAt)?.let { Text(it.take(10), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (lab.isPending) {
+                            Text(stringResource(R.string.lab_result_pending), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            lab.valueWithUnit?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
+                    }
+                    val labTone = lab.tone.brandColor()
+                    Surface(shape = RoundedCornerShape(12.dp), color = labTone.copy(alpha = 0.15f)) {
+                        Text(stringResource(lab.statusLabelRes), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = labTone)
                     }
                 }
             }

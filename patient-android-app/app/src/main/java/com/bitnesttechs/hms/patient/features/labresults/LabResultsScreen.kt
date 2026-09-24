@@ -11,15 +11,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.*
@@ -34,10 +37,11 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lab Results") },
+                title = { Text(stringResource(R.string.lab_results)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back),
+                            tint = androidx.compose.ui.graphics.Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
@@ -63,12 +67,14 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Science, null, Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("No lab results", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.no_lab_results),
+                                style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
             }
             items(results) { lab ->
+                val tone = lab.tone.brandColor()
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { selectedResult = lab },
                     shape = RoundedCornerShape(12.dp),
@@ -82,15 +88,16 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                     elevation = CardDefaults.cardElevation(2.dp)
                 ) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // Status icon like iOS
+                        // A pending row is never a green tick: the lab has not
+                        // released it and there is nothing to be reassured by.
                         Icon(
-                            if (lab.isAbnormal || lab.isCritical) Icons.Default.Warning else Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = when {
-                                lab.isCritical -> CriticalRed
-                                lab.isAbnormal -> WarningAmber
-                                else -> SuccessGreen
+                            when {
+                                lab.isPending -> Icons.Default.HourglassEmpty
+                                lab.isAbnormal || lab.isCritical -> Icons.Default.Warning
+                                else -> Icons.Default.CheckCircle
                             },
+                            contentDescription = null,
+                            tint = tone,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(12.dp))
@@ -102,30 +109,32 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                             ) {
                                 Text(lab.testName, style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                StatusBadge(
-                                    text = lab.statusDisplay,
-                                    color = when {
-                                        lab.isCritical -> CriticalRed
-                                        lab.isAbnormal -> WarningAmber
-                                        else -> SuccessGreen
-                                    }
-                                )
+                                StatusBadge(text = stringResource(lab.statusLabelRes), color = tone)
                             }
                             Spacer(Modifier.height(8.dp))
-                            lab.result?.let {
-                                Row {
-                                    Text("Result: ", style = MaterialTheme.typography.bodySmall,
+                            if (lab.isPending) {
+                                Text(stringResource(R.string.lab_result_pending),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                lab.valueWithUnit?.let {
+                                    Row {
+                                        Text("${stringResource(R.string.result)}: ",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(it, style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                                lab.referenceRange?.let {
+                                    Text(stringResource(R.string.lab_reference_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("$it ${lab.unit ?: ""}".trim(),
-                                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                                 }
                             }
-                            lab.referenceRange?.let {
-                                Text("Reference: $it", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            lab.resultDate?.let {
-                                Text("Date: $it", style = MaterialTheme.typography.bodySmall,
+                            (lab.resultedAt ?: lab.collectedAt)?.let {
+                                Text(stringResource(R.string.lab_date_with_value, it.take(10)),
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -147,9 +156,10 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
 
 @Composable
 internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
+    val tone = lab.tone.brandColor()
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
         title = { Text(lab.testName, fontWeight = FontWeight.Bold) },
         text = {
             Column(
@@ -158,42 +168,59 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
             ) {
                 // Status
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Status: ", style = MaterialTheme.typography.bodyMedium,
+                    Text("${stringResource(R.string.status)}: ",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    StatusBadge(
-                        text = lab.statusDisplay,
-                        color = when {
-                            lab.isCritical -> CriticalRed
-                            lab.isAbnormal -> WarningAmber
-                            else -> SuccessGreen
-                        }
-                    )
+                    StatusBadge(text = stringResource(lab.statusLabelRes), color = tone)
+                }
+                lab.testCode?.takeIf { it.isNotBlank() }?.let {
+                    DetailRow(stringResource(R.string.test_code), it)
+                }
+                lab.category?.takeIf { it.isNotBlank() }?.let {
+                    DetailRow(stringResource(R.string.category), it)
                 }
 
                 HorizontalDivider()
 
                 // Result section
-                Text("Results", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                lab.result?.let { DetailRow("Value", "$it ${lab.unit ?: ""}".trim()) }
-                lab.referenceRange?.let { DetailRow("Reference Range", it) }
+                Text(stringResource(R.string.lab_results_section),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (lab.isPending) {
+                    // No value, no reference range and no interpretation: an
+                    // unreleased result is redacted server-side and colouring
+                    // it "normal" would tell the patient something untrue.
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.HourglassEmpty, null, tint = NeutralGrey,
+                            modifier = Modifier.size(16.dp))
+                        Text(stringResource(R.string.lab_pending_explainer),
+                            style = MaterialTheme.typography.bodySmall, color = NeutralGrey)
+                    }
+                } else {
+                    lab.valueWithUnit?.let { DetailRow(stringResource(R.string.lab_value), it) }
+                    lab.referenceRange?.let { DetailRow(stringResource(R.string.reference_range), it) }
 
-                // Interpretation label like iOS
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    when {
-                        lab.isCritical -> {
-                            Icon(Icons.Default.Warning, null, tint = CriticalRed, modifier = Modifier.size(16.dp))
-                            Text("Critical value — contact your provider",
-                                style = MaterialTheme.typography.bodySmall, color = CriticalRed)
-                        }
-                        lab.isAbnormal -> {
-                            Icon(Icons.Default.Warning, null, tint = WarningAmber, modifier = Modifier.size(16.dp))
-                            Text("Abnormal — review with your provider",
-                                style = MaterialTheme.typography.bodySmall, color = WarningAmber)
-                        }
-                        else -> {
-                            Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
-                            Text("Within normal range",
-                                style = MaterialTheme.typography.bodySmall, color = SuccessGreen)
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        when {
+                            lab.isCritical -> {
+                                Icon(Icons.Default.Warning, null, tint = CriticalRed,
+                                    modifier = Modifier.size(16.dp))
+                                Text(stringResource(R.string.lab_interpretation_critical),
+                                    style = MaterialTheme.typography.bodySmall, color = CriticalRed)
+                            }
+                            lab.isAbnormal -> {
+                                Icon(Icons.Default.Warning, null, tint = WarningAmber,
+                                    modifier = Modifier.size(16.dp))
+                                Text(stringResource(R.string.lab_interpretation_abnormal),
+                                    style = MaterialTheme.typography.bodySmall, color = WarningAmber)
+                            }
+                            lab.isNormal -> {
+                                Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen,
+                                    modifier = Modifier.size(16.dp))
+                                Text(stringResource(R.string.lab_interpretation_normal),
+                                    style = MaterialTheme.typography.bodySmall, color = SuccessGreen)
+                            }
                         }
                     }
                 }
@@ -201,25 +228,30 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                 HorizontalDivider()
 
                 // Dates
-                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                lab.collectionDate?.let { DetailRow("Collected", it.take(10)) }
-                lab.resultDate?.let { DetailRow("Resulted", it.take(10)) }
+                Text(stringResource(R.string.lab_dates_section),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                lab.collectedAt?.let { DetailRow(stringResource(R.string.collected), it.take(10)) }
+                lab.resultedAt?.let { DetailRow(stringResource(R.string.resulted), it.take(10)) }
 
                 // Lab info
-                lab.labName?.let {
+                lab.hospitalName?.let {
                     HorizontalDivider()
-                    Text("Lab", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    DetailRow("Lab Name", it)
+                    Text(stringResource(R.string.laboratory),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    DetailRow(stringResource(R.string.laboratory), it)
                 }
 
                 lab.orderedBy?.let {
                     HorizontalDivider()
-                    DetailRow("Ordered By", it)
+                    DetailRow(stringResource(R.string.ordered_by), it)
                 }
+
+                lab.performedBy?.let { DetailRow(stringResource(R.string.performed_by), it) }
 
                 lab.notes?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()
-                    Text("Notes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.notes),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
             }

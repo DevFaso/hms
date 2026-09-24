@@ -370,17 +370,10 @@ fun LabResultRow(lab: LabResultDto) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(lab.testName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(lab.resultDate ?: lab.collectionDate ?: "", style = MaterialTheme.typography.bodySmall,
+            Text((lab.resultedAt ?: lab.collectedAt)?.take(10) ?: "", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        StatusBadge(
-            text = lab.statusDisplay,
-            color = when {
-                lab.isCritical -> CriticalRed
-                lab.isAbnormal -> WarningAmber
-                else -> SuccessGreen
-            }
-        )
+        StatusBadge(text = stringResource(lab.statusLabelRes), color = lab.tone.brandColor())
     }
     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
 }
