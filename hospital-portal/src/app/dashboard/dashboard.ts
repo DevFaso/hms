@@ -2559,11 +2559,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   acknowledgeResult(resultId: string): void {
     this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
-    // The stale notice described the rows that were on screen. Once the
-    // physician has cleared them it describes nothing, and leaving it set
-    // flipped an emptied panel into a full "could not be loaded" card —
-    // telling them the queue failed when they had just worked through it.
-    this.resultQueueError.set(false);
+    // Only once the LAST row is gone. The stale notice describes the rows on
+    // screen, so clearing it while eleven of twelve remain would present rows
+    // from a failed read as current; clearing it on an emptied panel stops
+    // that panel flipping into a full "could not be loaded" card, which told
+    // the physician the queue failed when they had just worked through it.
+    if (this.resultQueue().length === 0) {
+      this.resultQueueError.set(false);
+    }
   }
 
   /**

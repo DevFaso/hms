@@ -354,12 +354,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /**
    * True when the lab reads carry no hospital scope at all.
    *
-   * Keyed on `labHospitalId()`, not on `globalView()`: a super-admin in
-   * global view is the usual case, but a clinical account whose assignments
-   * have all been deactivated resolves to no scope too, and then the hint
-   * claimed "this hospital's" while `isForeignLabRow` marked nothing. The
-   * hint and the marker have to agree with the reads by construction, so all
-   * three read the same value.
+   * Keyed on `labHospitalId()`, not on `globalView()`, so the hint, the
+   * provenance marker and the reads cannot disagree: all three read one value.
+   *
+   * It is reachable, though not by a plain super-admin — CHART_VIEW_ROLES
+   * does not admit one. It is reached by an account that HOLDS
+   * ROLE_SUPER_ADMIN alongside a clinical role: the chart gate asks
+   * `hasAnyActiveRole`, which passes on the clinical role, while
+   * `effectiveHospitalIdForRequest` branches on the HELD roles and returns
+   * null in global view. That account gets an unscoped orders table, and this
+   * is what says so.
    */
   readonly globalScope = computed(() => this.labHospitalId() == null);
 

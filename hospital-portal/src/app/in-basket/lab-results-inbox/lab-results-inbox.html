@@ -47,7 +47,7 @@
   } @else if (loadError() && results().length === 0) {
     <div class="error-state">
       <p>{{ 'inBasket.labResultsError' | translate }}</p>
-      <button type="button" class="btn-secondary" (click)="load()">
+      <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
         {{ 'COMMON.RETRY' | translate }}
       </button>
     </div>
@@ -57,7 +57,7 @@
     @if (loadError()) {
       <p class="stale-banner" role="status">
         {{ 'inBasket.labResultsError' | translate }}
-        <button type="button" class="btn-secondary" (click)="load()">
+        <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
           {{ 'COMMON.RETRY' | translate }}
         </button>
       </p>
