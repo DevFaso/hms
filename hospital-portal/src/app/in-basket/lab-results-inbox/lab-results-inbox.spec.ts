@@ -222,6 +222,23 @@ describe('LabResultsInboxComponent', () => {
     expect(component.truncated()).toBeTrue();
   });
 
+  it('never caps the unknown-grade group either, however many abnormals precede it', () => {
+    const queue = [
+      ...Array.from({ length: 60 }, (_, i) =>
+        item({ id: 'a-' + i, abnormalFlag: 'ABNORMAL', testName: 'Hémoglobine' }),
+      ),
+      ...Array.from({ length: 5 }, (_, i) =>
+        item({ id: 'u-' + i, abnormalFlag: 'INDETERMINATE', testName: 'Calcium' }),
+      ),
+    ];
+    setup(queue);
+
+    const drawn = component.visibleGroups();
+    expect(drawn.find((g) => g.key === 'OTHER')?.items.length).toBe(5);
+    expect(drawn.find((g) => g.key === 'ABNORMAL')?.items.length).toBe(50);
+    expect(component.truncated()).toBeTrue();
+  });
+
   it('keeps the rows on screen when a refresh of a populated list fails', () => {
     setup([item()]);
     expect(fixture.nativeElement.querySelector('table')).not.toBeNull();

@@ -133,13 +133,17 @@ export class LabResultsInboxComponent implements OnInit {
    * CRITICAL first still hid rows 51 onwards of a 60-critical queue, and this
    * queue has no date window and no reviewed state, so it only grows. A
    * critical released result the ordering physician cannot reach at all is
-   * the one outcome this worklist exists to prevent; the cap applies to
-   * everything else.
+   * the one outcome this worklist exists to prevent.
+   *
+   * OTHER is exempt for the same reason: ordering it ahead of NORMAL is no
+   * protection when fifty ABNORMAL rows come first, and a grade nobody can
+   * read is not something to drop silently. The cap applies to what is
+   * graded ABNORMAL or NORMAL.
    */
   readonly visibleGroups = computed<LabResultGroup[]>(() => {
     let budget = MAX_VISIBLE_RESULTS;
     return this.groups().map((group) => {
-      if (group.key === 'CRITICAL') {
+      if (group.key === 'CRITICAL' || group.key === 'OTHER') {
         budget -= group.items.length;
         return group;
       }

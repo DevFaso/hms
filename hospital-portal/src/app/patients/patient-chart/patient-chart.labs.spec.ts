@@ -442,6 +442,23 @@ describe('PatientChartComponent — labs section', () => {
     expect(text).not.toContain('CHART.NO_LAB_ORDERS');
   });
 
+  it('keeps the rows on screen when a refresh over them fails', () => {
+    setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
+    openLabs();
+    expect(fixture.nativeElement.textContent).toContain('9.2');
+
+    patientService.listLabResults.and.returnValue(throwError(() => new Error('502')));
+    component.loadLabResults();
+    fixture.detectChanges();
+
+    // The rows the clinician was reading are still drawn, with the failure
+    // stated above them rather than replacing them.
+    expect(component.labResultsError()).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('9.2');
+    expect(fixture.nativeElement.querySelector('.stale-banner')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
+  });
+
   it('retries only the block that failed, leaving the other one on screen', () => {
     setup({ roles: ['ROLE_DOCTOR'], resultsFail: true });
     openLabs();

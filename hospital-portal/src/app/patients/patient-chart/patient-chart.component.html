@@ -309,29 +309,14 @@
     @if (canViewLabOrders()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>
       <!--
-        The two blocks do NOT have the same reach and the section must not
-        pretend they do. GET /lab-orders filters on the acting hospital
-        (ordering OR performing); /patients/{id}/lab-results spans every
-        hospital the record-access policy makes readable. Without this line a
-        patient treated elsewhere shows released results above an orders table
-        reading "no lab orders", as if the order record were missing.
+        Loading and failure only REPLACE the table when there is nothing to
+        replace: a failed Refresh over rows the clinician is reading must not
+        take them away, as it does not on the other two surfaces this PR
+        touches.
       -->
-      @if (globalScope()) {
-        <!--
-          In global view the interceptor sends no X-Hospital-Id,
-          requireActiveHospitalId() returns null and buildPredicates adds no
-          hospital predicate — so the table lists every tenant's orders, and
-          isForeignLabRow marks none of them because there is no acting
-          hospital to be foreign to. Saying "this hospital's" there would be
-          simply false.
-        -->
-        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT_GLOBAL' | translate }}</p>
-      } @else {
-        <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
-      }
-      @if (labOrdersLoading()) {
+      @if (labOrdersLoading() && labOrders().length === 0) {
         <div class="loading-state"><div class="spinner"></div></div>
-      } @else if (labOrdersError()) {
+      } @else if (labOrdersError() && labOrders().length === 0) {
         <div class="error-state">
           <p>{{ 'CHART.LAB_ORDERS_LOAD_ERROR' | translate }}</p>
           <button type="button" class="btn-secondary" (click)="loadLabOrders()">
@@ -341,6 +326,31 @@
       } @else if (labOrders().length === 0) {
         <p class="empty-hint">{{ 'CHART.NO_LAB_ORDERS' | translate }}</p>
       } @else {
+        @if (labOrdersError()) {
+          <p class="stale-banner" role="status">
+            {{ 'CHART.LAB_ORDERS_LOAD_ERROR' | translate }}
+            <button type="button" class="btn-secondary btn-sm" (click)="loadLabOrders()">
+              {{ 'COMMON.RETRY' | translate }}
+            </button>
+          </p>
+        }
+        <!--
+          The scope hint sits with the TABLE, never above an empty or failed
+          block: "orders placed by, or performed at, this hospital" describing
+          an error card is worse than no hint at all.
+
+          The two blocks do NOT have the same reach and the section must not
+          pretend they do. GET /lab-orders filters on the acting hospital
+          (ordering OR performing); /patients/{id}/lab-results spans every
+          hospital the record-access policy makes readable. Without this line a
+          patient treated elsewhere shows released results above an orders
+          table reading "no lab orders", as if the order record were missing.
+        -->
+        @if (globalScope()) {
+          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT_GLOBAL' | translate }}</p>
+        } @else {
+          <p class="labs-hint">{{ 'CHART.LAB_ORDERS_SCOPE_HINT' | translate }}</p>
+        }
         <div class="data-table">
           <table>
             <caption class="sr-only">
@@ -401,10 +411,9 @@
         inferring one from release state or recency is wrong, so the section
         states what it is showing rather than guessing which row to hide.
       -->
-      <p class="labs-hint">{{ 'CHART.LAB_RESULTS_SCOPE_HINT' | translate }}</p>
-      @if (labResultsLoading()) {
+      @if (labResultsLoading() && labResults().length === 0) {
         <div class="loading-state"><div class="spinner"></div></div>
-      } @else if (labResultsError()) {
+      } @else if (labResultsError() && labResults().length === 0) {
         <div class="error-state">
           <p>{{ 'CHART.LAB_RESULTS_LOAD_ERROR' | translate }}</p>
           <button type="button" class="btn-secondary" (click)="loadLabResults()">
@@ -414,6 +423,15 @@
       } @else if (labResults().length === 0) {
         <p class="empty-hint">{{ 'CHART.NO_LAB_RESULTS' | translate }}</p>
       } @else {
+        @if (labResultsError()) {
+          <p class="stale-banner" role="status">
+            {{ 'CHART.LAB_RESULTS_LOAD_ERROR' | translate }}
+            <button type="button" class="btn-secondary btn-sm" (click)="loadLabResults()">
+              {{ 'COMMON.RETRY' | translate }}
+            </button>
+          </p>
+        }
+        <p class="labs-hint">{{ 'CHART.LAB_RESULTS_SCOPE_HINT' | translate }}</p>
         <div class="data-table">
           <table>
             <caption class="sr-only">
