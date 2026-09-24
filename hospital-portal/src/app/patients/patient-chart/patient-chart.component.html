@@ -364,10 +364,13 @@
         analyzer that reported preliminary then final stored TWO rows and both
         are returned, because both are the record
         (PatientLabResultServiceImpl.resolvePairs returns early off the
-        patient path). The DTO carries no OBX-11 / supersession marker, and
-        SupersededLabResults documents at length why inferring one from
-        release state or recency is wrong — so the section says what it is
-        showing rather than guessing which row to hide.
+        patient path). Both rows may be released — SupersededLabResults' rule
+        4 refuses to hide a released row behind an unreleased one — so the
+        pair is not always one pending row beside one released one; it can be
+        two fully graded rows for a single observation. The DTO carries no
+        OBX-11 / supersession marker, and that class documents at length why
+        inferring one from release state or recency is wrong, so the section
+        states what it is showing rather than guessing which row to hide.
       -->
       <p class="labs-hint">{{ 'CHART.LAB_RESULTS_SCOPE_HINT' | translate }}</p>
       @if (labResultsLoading()) {

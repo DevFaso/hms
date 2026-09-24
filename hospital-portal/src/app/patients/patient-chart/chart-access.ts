@@ -49,11 +49,13 @@ export const CHART_ROLES = {
   ],
   /**
    * viewLabOrders mirrors LabOrderController#getAllLabOrders
-   * (`GET /lab-orders?patientId=`). The annotation also names ROLE_STAFF and
-   * the lab roles; SecurityConfig's GET matcher for /lab-orders names the
-   * same set but NOT ROLE_PHARMACIST, and the chain is first-match-wins and
-   * terminal, so a pharmacist is refused before the annotation ever runs.
-   * This list is the intersection — the roles that actually get a 200.
+   * (`GET /lab-orders?patientId=`), whose annotation adds ROLE_STAFF and the
+   * lab bench to the clinical roles. Neither layer admits ROLE_PHARMACIST —
+   * not the annotation, and not SecurityConfig's GET matcher for /lab-orders,
+   * which is first-match-wins and terminal and would refuse a pharmacist
+   * before the annotation ever ran. So this list is NOT viewLabResults: a
+   * pharmacist reads a patient's results and never their orders, which is why
+   * the two reads are gated apart instead of behind one flag.
    */
   viewLabOrders: [
     'ROLE_DOCTOR',

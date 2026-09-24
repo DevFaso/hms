@@ -365,9 +365,10 @@ describe('PatientChartComponent — labs section', () => {
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
   });
 
-  it('re-reads when the hospital scope changed under it', () => {
-    // The scope chip moves activeHospitalId in place with no navigation, and
-    // both lab reads are scoped — stale rows under a new chip would be wrong.
+  it('re-reads when the hospital the request is scoped to changes', () => {
+    // Both lab reads are scoped, so rows from the previous scope must not
+    // survive the change. The key is hospitalId() — the same value the
+    // results request sends — not a "have we loaded" boolean.
     const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
     patientService = jasmine.createSpyObj<PatientService>('PatientService', [
       'getDoctorTimeline',

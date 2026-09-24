@@ -68,10 +68,12 @@ describe('LabResultsInboxComponent', () => {
     ]);
 
     const groups = component.groups();
-    expect(groups.map((g) => g.key)).toEqual(['CRITICAL', 'ABNORMAL', 'NORMAL', 'OTHER']);
+    // OTHER ahead of NORMAL: this order is also the order visibleGroups
+    // fills its cap in, and an unknown grade must outrank a normal one.
+    expect(groups.map((g) => g.key)).toEqual(['CRITICAL', 'ABNORMAL', 'OTHER', 'NORMAL']);
     expect(groups[0].items.length).toBe(1);
     expect(groups[0].items[0].testName).toBe('Potassium');
-    expect(groups[3].items.length).toBe(0);
+    expect(groups[2].items.length).toBe(0);
 
     const rendered = Array.from(
       fixture.nativeElement.querySelectorAll('tbody.severity-group tr td:first-child'),
@@ -163,6 +165,9 @@ describe('LabResultsInboxComponent', () => {
       ...Array.from({ length: 3 }, (_, i) =>
         item({ id: 'c-' + i, abnormalFlag: 'CRITICAL', testName: 'Potassium' }),
       ),
+      ...Array.from({ length: 4 }, (_, i) =>
+        item({ id: 'u-' + i, abnormalFlag: 'ABNORMAL_HIGH', testName: 'Calcium' }),
+      ),
       ...Array.from({ length: 60 }, (_, i) =>
         item({ id: 'n-' + i, abnormalFlag: 'NORMAL', testName: 'Glycémie' }),
       ),
@@ -173,6 +178,10 @@ describe('LabResultsInboxComponent', () => {
     const drawn = component.visibleGroups();
     expect(drawn.reduce((total, g) => total + g.items.length, 0)).toBe(component.maxVisible);
     expect(drawn.find((g) => g.key === 'CRITICAL')?.items.length).toBe(3);
+    // An unknown grade is drawn before a normal one, so the cap cannot be
+    // what drops it.
+    expect(drawn.map((g) => g.key)).toEqual(['CRITICAL', 'ABNORMAL', 'OTHER', 'NORMAL']);
+    expect(drawn.find((g) => g.key === 'OTHER')?.items.length).toBe(4);
     expect(fixture.nativeElement.textContent).toContain('inBasket.labTruncated');
     expect(
       fixture.nativeElement.querySelectorAll('tbody.severity-group tr td:first-child').length,

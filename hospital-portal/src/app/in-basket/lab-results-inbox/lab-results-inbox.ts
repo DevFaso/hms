@@ -75,7 +75,11 @@ export class LabResultsInboxComponent implements OnInit {
    * three-value family — which `AbnormalFlag.severity()` cannot produce today,
    * but a second producer of `DoctorResultQueueItemDTO` could — lands in
    * OTHER, labelled as unknown, rather than being shown to the ordering
-   * physician as "Normal". Nothing is ever dropped from the worklist.
+   * physician as "Normal".
+   *
+   * OTHER sits AHEAD of NORMAL, because this order is also the order
+   * `visibleGroups` fills its budget in: an unrecognised grade must not be
+   * what a cap drops while every normal result is drawn.
    */
   readonly groups = computed<LabResultGroup[]>(() => {
     const items = this.results();
@@ -93,12 +97,6 @@ export class LabResultsInboxComponent implements OnInit {
         items: items.filter((r) => r.abnormalFlag === 'ABNORMAL'),
       },
       {
-        key: 'NORMAL',
-        labelKey: 'inBasket.labNormal',
-        badgeClass: 'flag-badge flag-normal',
-        items: items.filter((r) => r.abnormalFlag === 'NORMAL'),
-      },
-      {
         key: 'OTHER',
         labelKey: 'inBasket.labUnknown',
         badgeClass: 'flag-badge',
@@ -108,6 +106,12 @@ export class LabResultsInboxComponent implements OnInit {
             r.abnormalFlag !== 'ABNORMAL' &&
             r.abnormalFlag !== 'NORMAL',
         ),
+      },
+      {
+        key: 'NORMAL',
+        labelKey: 'inBasket.labNormal',
+        badgeClass: 'flag-badge flag-normal',
+        items: items.filter((r) => r.abnormalFlag === 'NORMAL'),
       },
     ];
   });

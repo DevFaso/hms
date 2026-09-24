@@ -7166,7 +7166,7 @@
     "LAB_RESULTED_AT": "Résultat le",
     "LAB_RESULTS": "Résultats de laboratoire",
     "LAB_RESULTS_LOAD_ERROR": "Impossible de charger les résultats de laboratoire.",
-    "LAB_RESULTS_SCOPE_HINT": "Toutes les lignes enregistrées, pour l'ensemble des hôpitaux du dossier du patient. Une ligne en attente de publication peut être un résultat préliminaire que le laboratoire a déjà remplacé.",
+    "LAB_RESULTS_SCOPE_HINT": "Toutes les lignes enregistrées, pour l'ensemble des hôpitaux du dossier du patient. Un automate qui a transmis un résultat préliminaire puis un résultat définitif a enregistré deux lignes, et les deux sont affichées ici.",
     "LAB_STATUS_ABNORMAL": "Anormal",
     "LAB_STATUS_ABNORMAL_HIGH": "Anormal (élevé)",
     "LAB_STATUS_ABNORMAL_LOW": "Anormal (bas)",

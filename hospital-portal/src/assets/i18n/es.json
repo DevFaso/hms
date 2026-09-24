@@ -7166,7 +7166,7 @@
     "LAB_RESULTED_AT": "Resultado el",
     "LAB_RESULTS": "Resultados de laboratorio",
     "LAB_RESULTS_LOAD_ERROR": "No se pudieron cargar los resultados de laboratorio.",
-    "LAB_RESULTS_SCOPE_HINT": "Todas las filas registradas, en todos los hospitales de la historia del paciente. Una fila pendiente de publicación puede ser un resultado preliminar que el laboratorio ya ha sustituido.",
+    "LAB_RESULTS_SCOPE_HINT": "Todas las filas registradas, en todos los hospitales de la historia del paciente. Un analizador que informó un valor preliminar y después uno definitivo registró dos filas, y aquí se muestran ambas.",
     "LAB_STATUS_ABNORMAL": "Anormal",
     "LAB_STATUS_ABNORMAL_HIGH": "Anormal (alto)",
     "LAB_STATUS_ABNORMAL_LOW": "Anormal (bajo)",

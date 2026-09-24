@@ -199,11 +199,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /**
    * The hospital scope the labs section was last read for, or null if never.
    *
-   * Not a plain "have we loaded" flag: the scope chip moves
-   * `roleContext.activeHospitalId` in place with no navigation, and both lab
-   * reads are scoped, so a boolean left hospital A's orders on screen under a
-   * hospital B chip. Comparing the scope re-reads on a switch and still
-   * refuses to re-fetch a patient who simply has no labs.
+   * Not a plain "have we loaded" flag: both lab reads are scoped, so a boolean
+   * left one hospital's rows on screen after the scope moved. The key is
+   * `hospitalId()` — the very value the results request sends — so the section
+   * re-reads whenever what it asked for changes, and still refuses to
+   * re-fetch a patient who simply has no labs.
+   *
+   * `hospitalId()` is `activeHospitalId`, the primary assignment, NOT the
+   * chip's `effectiveHospitalIdForRequest`. That is the same helper the
+   * allergies, problems and updates reads have always used, and the two only
+   * differ for a super-admin — whom CHART_VIEW_ROLES does not admit to the
+   * chart at all. Moving the whole component onto the effective id is a
+   * separate change, not one to make on the labs section alone.
    */
   labsLoadedFor = signal<string | null>(null);
   /** Exposed for the "showing the latest N" hint below each lab table. */
