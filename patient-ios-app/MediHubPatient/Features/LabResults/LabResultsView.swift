@@ -113,9 +113,6 @@ struct LabResultDetailSheet: View {
                     if let code = result.testCode, !code.isEmpty {
                         detailRow("test_code".localized, code)
                     }
-                    if let category = result.category, !category.isEmpty {
-                        detailRow("category".localized, category)
-                    }
                     HStack {
                         Text("status".localized).foregroundColor(.secondary)
                         Spacer()

@@ -566,3 +566,10 @@
 "refill_already_open" = "A refill request for this medication is already with your care team";
 "reference_with_value" = "Reference: %@";
 "dates" = "Dates";
+"no_prescriptions_desc" = "No prescriptions on record.";
+"no_active_medications_desc" = "No active medications on record.";
+"no_refills_desc" = "No refill requests on record.";
+"refill" = "Refill";
+"refill_details" = "Refill details";
+"dosage_and_administration" = "Dosage & administration";
+"submit" = "Submit";

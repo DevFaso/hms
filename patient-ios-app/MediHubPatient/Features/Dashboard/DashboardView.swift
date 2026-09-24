@@ -282,12 +282,14 @@ struct LabResultRowView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 if result.isPending {
+                    // The badge would read "Pending" directly under this; one
+                    // line is enough in a three-line dashboard cell.
                     Text("lab_result_pending".localized)
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(result.valueWithUnit ?? "—").font(.subheadline)
+                    StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
                 }
-                StatusBadge(text: result.statusDisplay, color: result.tone.badgeColor)
             }
         }
     }

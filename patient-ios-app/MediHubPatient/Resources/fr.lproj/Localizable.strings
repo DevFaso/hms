@@ -566,3 +566,10 @@
 "refill_already_open" = "Une demande de renouvellement pour ce médicament est déjà en cours d'examen";
 "reference_with_value" = "Référence : %@";
 "dates" = "Dates";
+"no_prescriptions_desc" = "Aucune ordonnance enregistrée.";
+"no_active_medications_desc" = "Aucun médicament actif enregistré.";
+"no_refills_desc" = "Aucune demande de renouvellement enregistrée.";
+"refill" = "Renouvellement";
+"refill_details" = "Détails de la demande";
+"dosage_and_administration" = "Posologie et administration";
+"submit" = "Envoyer";

@@ -34,6 +34,9 @@ struct LabResultDTO: Codable, Identifiable {
     let resultedAt: String?
     let orderedBy: String?
     let performedBy: String?
+    /// Decoded but not displayed: LabTestDefinition normalises this to
+    /// trim().toUpperCase() and the set is hospital-configured, so there is no
+    /// closed list to localize it against.
     let category: String?
     let notes: String?
     let hospitalName: String?

@@ -63,9 +63,9 @@ struct MedicationsView: View {
     private var medicationsList: some View {
         Group {
             if vm.medications.isEmpty {
-                ContentUnavailableView("No Medications",
+                ContentUnavailableView("no_active_medications".localized,
                                        systemImage: "pill.fill",
-                                       description: Text("No active medications on record."))
+                                       description: Text("no_active_medications_desc".localized))
             } else {
                 List(vm.medications) { med in
                     Button { selectedMed = med } label: {
@@ -104,9 +104,9 @@ struct MedicationsView: View {
     private var prescriptionsList: some View {
         Group {
             if vm.prescriptions.isEmpty {
-                ContentUnavailableView("No Prescriptions",
+                ContentUnavailableView("no_prescriptions".localized,
                                        systemImage: "doc.text.fill",
-                                       description: Text("No prescriptions on record."))
+                                       description: Text("no_prescriptions_desc".localized))
             } else {
                 List(vm.prescriptions) { rx in
                     // NOT a Button wrapping the whole row: the refill button
@@ -143,6 +143,13 @@ struct MedicationsView: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { selectedRx = rx }
+                        // The outer Button used to give VoiceOver and Switch
+                        // Control the trait and the activation for free; a bare
+                        // onTapGesture gives neither, and this is the only route
+                        // to the prescription detail.
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { selectedRx = rx }
 
                         // The backend gate is PrescriptionStatus.isRefillable(),
                         // not a refill counter — this DTO has never carried one.
@@ -184,14 +191,14 @@ struct MedicationsView: View {
     private var refillsList: some View {
         Group {
             if vm.refills.isEmpty {
-                ContentUnavailableView("No Refills",
+                ContentUnavailableView("no_refills".localized,
                                        systemImage: "arrow.clockwise",
-                                       description: Text("No refill requests on record."))
+                                       description: Text("no_refills_desc".localized))
             } else {
                 List(vm.refills) { refill in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(refill.medicationName ?? "Refill").font(.headline)
+                            Text(refill.medicationName ?? "refill".localized).font(.headline)
                             Spacer()
                             StatusBadge(text: refill.statusEnum.localizedLabel,
                                         color: refill.statusEnum.tone.badgeColor)
@@ -286,9 +293,9 @@ struct RefillRequestSheet: View {
                     }
                 }
 
-                Section("Refill Details") {
-                    TextField("Preferred Pharmacy (optional)", text: $pharmacy)
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
+                Section("refill_details".localized) {
+                    TextField("preferred_pharmacy".localized, text: $pharmacy)
+                    TextField("notes_optional".localized, text: $notes, axis: .vertical)
                         .lineLimit(3)
                 }
 
@@ -296,14 +303,14 @@ struct RefillRequestSheet: View {
                     Section { Text(err).foregroundColor(.red).font(.caption) }
                 }
             }
-            .navigationTitle("Request Refill")
+            .navigationTitle("request_refill".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = nil }
+                    Button("cancel".localized) { isPresented = nil }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Submit") { Task { await submit() } }
+                    Button("submit".localized) { Task { await submit() } }
                         .disabled(isSubmitting)
                         .bold()
                 }
@@ -431,7 +438,7 @@ struct PrescriptionDetailSheet: View {
                     }
                 }
 
-                Section("Dosage & Administration") {
+                Section("dosage_and_administration".localized) {
                     if let dosage = prescription.dosage {
                         detailRow("dosage".localized, dosage)
                     }
