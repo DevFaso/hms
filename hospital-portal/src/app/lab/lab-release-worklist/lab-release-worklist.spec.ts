@@ -56,8 +56,8 @@ describe('LabReleaseWorklistComponent', () => {
     } as LabResultResponse;
   }
 
-  function setup(roles: string[]): void {
-    scope = { superAdmin: false, hospitalId: 'h-1', roles: [...roles] };
+  function setup(roles: string[], superAdmin = false): void {
+    scope = { superAdmin, hospitalId: 'h-1', roles: [...roles] };
     toast = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
       'error',
@@ -229,12 +229,35 @@ describe('LabReleaseWorklistComponent', () => {
     // row it is on must still be there to try again.
     expect(component.rows().length).toBe(1);
     expect(component.releasingId()).toBeNull();
-    expect(component.releaseError()).toBe('This result is released by the performing laboratory.');
-    expect(host().querySelector('[data-testid="release-confirm-error"]')?.textContent).toContain(
-      'performing laboratory',
-    );
+    // The localized key, not the backend's English sentence — the refusals
+    // this endpoint produces are hard-coded English and one is a raw message
+    // key, neither of which belongs in a French modal.
+    expect(component.releaseError()).toBe('LAB_RELEASE.RELEASE_ERROR');
+    expect(host().querySelector('[data-testid="release-confirm-error"]')).not.toBeNull();
     expect(toast.error).toHaveBeenCalled();
     expect(component.justReleased()).toBeNull();
+  });
+
+  it('drops the last release banner when the reader asks for a fresh look', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+
+    component.askRelease(result());
+    component.confirmRelease();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results/result-1/release' && r.method === 'POST')
+      .flush({ ...result(), released: true });
+    flushWorklist([]);
+    expect(component.justReleased()).not.toBeNull();
+
+    // A refresh is a new look at the queue; a green "X released" left sitting
+    // above it claims something just happened.
+    component.refresh();
+    flushWorklist([]);
+
+    expect(component.justReleased()).toBeNull();
+    expect(host().querySelector('[data-testid="release-just-released"]')).toBeNull();
   });
 
   it('does not let a read started before the release resurrect the released row', () => {
@@ -259,6 +282,18 @@ describe('LabReleaseWorklistComponent', () => {
 
     expect(stale.cancelled).toBeTrue();
     expect(component.rows().length).toBe(0);
+  });
+
+  it('serves a super-admin, whom the backend expands into the laboratory', () => {
+    // RoleExpansion.SUPER_ADMIN_INHERITS grants ROLE_LAB_SCIENTIST, so the
+    // worklist @PreAuthorize passes although it never names SUPER_ADMIN —
+    // and SUPER_ADMIN is in RELEASE_ROLES, the one role that may always
+    // release. Locking it out of its own queue was the first draft's bug.
+    setup(['ROLE_SUPER_ADMIN'], true);
+    fixture.detectChanges();
+    flushWorklist([result({ performingHospitalId: 'lab-b' })]);
+
+    expect(component.canReleaseResult(component.rows()[0])).toBeTrue();
   });
 
   it('flags a critical result on the queue', () => {

@@ -318,6 +318,20 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.map((i) => i.route)).toContain('/lab-release-worklist');
   });
 
+  it('super-admin reaches the release worklist, being expanded into the laboratory', () => {
+    // RoleExpansion.SUPER_ADMIN_INHERITS grants ROLE_LAB_SCIENTIST, so the
+    // worklist endpoint serves a super-admin although its @PreAuthorize does
+    // not name the role — and SUPER_ADMIN is the one role that may always
+    // release. A nav that hid the queue hid it from them alone.
+    const { items } = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/lab-release-worklist');
+  });
+
   it('admin sees neither Lab Results nor the release worklist (B16)', () => {
     // ROLE_ADMIN is on no lab-result gate the backend runs — not the
     // SecurityConfig matcher, not the @PreAuthorize. The entry was a link to

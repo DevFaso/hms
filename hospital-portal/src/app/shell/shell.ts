@@ -1106,10 +1106,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-approval-queue',
       });
     }
-    // Release worklist (B14). Exactly the @PreAuthorize on
-    // GET /lab-results/pending-release, which the route guard mirrors:
-    // the five laboratory roles and no super-admin, because that annotation
-    // has none and the endpoint 403s it.
+    // Release worklist (B14). The @PreAuthorize on
+    // GET /lab-results/pending-release, which the route guard mirrors: the
+    // five laboratory roles, plus SUPER_ADMIN — the annotation does not name
+    // it but RoleExpansion.SUPER_ADMIN_INHERITS grants it ROLE_LAB_SCIENTIST,
+    // so the endpoint serves it, and it is the one role that may always
+    // release.
     if (
       this.hasAnyRole([
         'ROLE_LAB_TECHNICIAN',
@@ -1117,6 +1119,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
+        'ROLE_SUPER_ADMIN',
       ])
     ) {
       items.push({

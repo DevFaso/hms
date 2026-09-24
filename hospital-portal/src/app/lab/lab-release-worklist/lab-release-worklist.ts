@@ -34,7 +34,8 @@ import { ToastService } from '../../core/toast.service';
  * shares no row type, no endpoint and no audience rule with a queue of
  * patients' results. A tab there would have been two screens in one file.
  *
- * <p>Who sees what: the endpoint admits five laboratory roles, and release
+ * <p>Who sees what: the endpoint admits the five laboratory roles (and a
+ * super-admin, through `RoleExpansion.SUPER_ADMIN_INHERITS`), while release
  * admits four (`LabResultAuthority.RELEASE_EXPRESSION`). A technician and a
  * quality manager therefore read this queue and get no release control — that
  * is deliberate, not an oversight, and a spec pins it.
@@ -203,6 +204,9 @@ export class LabReleaseWorklistComponent implements OnInit {
       return;
     }
     this.releaseError.set(null);
+    // The previous release's banner goes with the previous release. Left up,
+    // a green "X released" would sit beside the red refusal of the next one.
+    this.justReleased.set(null);
     this.releaseTarget.set(r);
   }
 
@@ -234,11 +238,17 @@ export class LabReleaseWorklistComponent implements OnInit {
         // paging stay the server's answer too.
         this.load();
       },
-      error: (err) => {
+      error: (err: unknown) => {
         // The row stays. A queue that drops a row whose release failed tells
         // the laboratory a result is signed off when it is not.
         this.releasingId.set(null);
-        const message = err?.error?.message ?? this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
+        // The localized message, not the backend's. This endpoint's refusals
+        // are hard-coded English sentences, and one of them is a raw message
+        // key ("labresult.notfound") — echoing either into a French modal is
+        // how a fully-translated screen stops being one. The detail is
+        // logged, where a developer can read it and a biologist need not.
+        console.error('Release refused for lab result', err);
+        const message = this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
         this.releaseError.set(message);
         this.toast.error(message);
       },
@@ -249,17 +259,31 @@ export class LabReleaseWorklistComponent implements OnInit {
     this.justReleased.set(null);
   }
 
+  /**
+   * The Refresh and Retry controls.
+   *
+   * <p>Separate from {@link load} because the read that follows a release
+   * must keep the banner that read exists to explain, while a re-read the
+   * user asked for is a new look at the queue: a green "X released" still
+   * sitting there ten minutes and two pages later claims something just
+   * happened.
+   */
+  refresh(): void {
+    this.justReleased.set(null);
+    this.load();
+  }
+
   previousPage(): void {
     if (this.pageIndex() > 0) {
       this.pageIndex.set(this.pageIndex() - 1);
-      this.load();
+      this.refresh();
     }
   }
 
   nextPage(): void {
     if (this.pageIndex() + 1 < this.totalPages()) {
       this.pageIndex.set(this.pageIndex() + 1);
-      this.load();
+      this.refresh();
     }
   }
 

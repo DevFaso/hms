@@ -635,11 +635,15 @@ export const routes: Routes = [
           ),
       },
       // Release worklist (B14). Roles mirror the @PreAuthorize on
-      // GET /lab-results/pending-release exactly — the five laboratory roles.
-      // SUPER_ADMIN is absent because that annotation omits it: the endpoint
-      // answers 403, so a nav entry or guard admitting it would be a dead
-      // link. Scope-gated: the service refuses a global-view read outright
-      // ("A hospital scope is required for the release worklist").
+      // GET /lab-results/pending-release — the five laboratory roles — plus
+      // SUPER_ADMIN, which that annotation does not name but the backend
+      // admits anyway: RoleExpansion.SUPER_ADMIN_INHERITS grants every
+      // super-admin ROLE_LAB_SCIENTIST, so hasAnyRole(...) passes. Omitting
+      // it here 403'd the one role LabResultAuthority.RELEASE_ROLES
+      // guarantees may always release, out of its own queue.
+      // Scope-gated: getPendingRelease refuses a scopeless read outright
+      // ("A hospital scope is required for the release worklist"), so a
+      // super-admin in global view is asked to pick a hospital first.
       {
         path: 'lab-release-worklist',
         canActivate: [RoleGuard],
@@ -651,6 +655,7 @@ export const routes: Routes = [
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
+            'ROLE_SUPER_ADMIN',
           ],
         },
         loadComponent: () =>

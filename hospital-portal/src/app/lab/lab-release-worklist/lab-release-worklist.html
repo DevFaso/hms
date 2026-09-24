@@ -15,7 +15,7 @@
       }
       <button
         class="btn-refresh"
-        (click)="load()"
+        (click)="refresh()"
         [disabled]="loading() || releasingId() !== null"
         [attr.aria-label]="'COMMON.REFRESH' | translate"
         [title]="'COMMON.REFRESH' | translate"
@@ -54,7 +54,7 @@
     <div class="state-block state-error" role="alert" data-testid="release-error">
       <span class="material-symbols-outlined">error</span>
       <p>{{ error() }}</p>
-      <button class="btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+      <button class="btn-primary" (click)="refresh()">{{ 'COMMON.RETRY' | translate }}</button>
     </div>
   } @else if (rows().length === 0) {
     <div class="state-block" data-testid="release-empty">
