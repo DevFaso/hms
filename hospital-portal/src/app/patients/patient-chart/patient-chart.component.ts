@@ -201,16 +201,13 @@ export class PatientChartComponent implements OnInit, OnChanges {
    *
    * Not a plain "have we loaded" flag: both lab reads are scoped, so a boolean
    * left one hospital's rows on screen after the scope moved. The key is
-   * `hospitalId()` — the very value the results request sends — so the section
+   * `labHospitalId()` — the very value both reads work in — so the section
    * re-reads whenever what it asked for changes, and still refuses to
    * re-fetch a patient who simply has no labs.
    *
-   * `hospitalId()` is `activeHospitalId`, the primary assignment, NOT the
-   * chip's `effectiveHospitalIdForRequest`. That is the same helper the
-   * allergies, problems and updates reads have always used, and the two only
-   * differ for a super-admin — whom CHART_VIEW_ROLES does not admit to the
-   * chart at all. Moving the whole component onto the effective id is a
-   * separate change, not one to make on the labs section alone.
+   * The allergies, problems and updates reads still use `hospitalId()` (the
+   * primary assignment) and are not keyed on it at all; aligning them is a
+   * separate change, not one to make from the labs section.
    */
   labsLoadedFor = signal<string | null>(null);
   /**
@@ -292,6 +289,29 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+  }
+
+  /**
+   * The scope the LAB reads work in.
+   *
+   * The two blocks resolve their hospital differently — the results read
+   * sends an explicit `hospitalId` query param, the orders read carries only
+   * the `X-Hospital-Id` header the auth interceptor derives from
+   * `effectiveHospitalIdForRequest` — so they must agree on one value or they
+   * will draw two hospitals' rows under one heading. `activeHospitalId` is
+   * not that value: `effectiveHospitalIdForRequest` branches on the HELD
+   * roles while `hasAnyActiveRole` compares the ACTIVE one, so an account
+   * holding ROLE_SUPER_ADMIN alongside a clinical role, acting as the
+   * clinical role with the chip pinned elsewhere, passes the chart gate and
+   * gets the two reads on two different hospitals.
+   *
+   * So the labs section uses what the interceptor will actually send, falling
+   * back to the primary assignment when a super-admin is in global view (no
+   * header, backend-resolved). It is also what `labsLoadedFor` keys on, so
+   * moving the chip invalidates the section.
+   */
+  private labHospitalId(): string {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? this.hospitalId();
   }
 
   setSection(section: ChartSection): void {
@@ -644,7 +664,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * Retry rather than being retried silently on every visit.
    */
   private loadStaleLabs(): void {
-    if (this.labsLoadedFor() !== this.hospitalId()) {
+    if (this.labsLoadedFor() !== this.labHospitalId()) {
       this.loadLabs();
       return;
     }
@@ -653,7 +673,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   loadLabs(): void {
-    this.labsLoadedFor.set(this.hospitalId());
+    this.labsLoadedFor.set(this.labHospitalId());
     if (this.canViewLabResults()) this.fetchLabResults();
     if (this.canViewLabOrders()) this.fetchLabOrders();
   }
@@ -668,7 +688,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * heading, so the whole section re-reads instead.
    */
   loadLabResults(): void {
-    if (this.labsLoadedFor() !== this.hospitalId()) {
+    if (this.labsLoadedFor() !== this.labHospitalId()) {
       this.loadLabs();
       return;
     }
@@ -677,7 +697,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   /** As loadLabResults, for the orders block. */
   loadLabOrders(): void {
-    if (this.labsLoadedFor() !== this.hospitalId()) {
+    if (this.labsLoadedFor() !== this.labHospitalId()) {
       this.loadLabs();
       return;
     }
@@ -691,7 +711,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labResultsError.set(false);
     this.patientService
       .listLabResults(this.patientId, {
-        hospitalId: this.hospitalId() || undefined,
+        hospitalId: this.labHospitalId() || undefined,
         limit: LAB_PAGE_SIZE,
       })
       .subscribe({

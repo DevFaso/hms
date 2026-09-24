@@ -2323,8 +2323,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         error: () => done(),
       });
 
-      pending++;
-      this.loadResultReviewQueue(done);
+      // `/me/results/review-queue` is @PreAuthorize DOCTOR / PHYSICIAN /
+      // SURGEON, so a nurse or midwife reaching this block gets a guaranteed
+      // 403 — and, now that the service no longer swallows failures, an error
+      // flag for a panel their view never renders. Its four siblings above
+      // carry the same annotation and the same pre-existing 403; narrowing
+      // them belongs to a dashboard chore, not to this PR.
+      if (this.isDoctor()) {
+        pending++;
+        this.loadResultReviewQueue(done);
+      }
     }
 
     // Today's appointments (for roles that can see them). Route access is

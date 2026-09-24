@@ -45,7 +45,24 @@ export class DoctorResultsPanelComponent {
   reloadRequested = output<void>();
 
   criticalResults = computed(() => this.results().filter((r) => r.abnormalFlag === 'CRITICAL'));
-  abnormalResults = computed(() => this.results().filter((r) => r.abnormalFlag === 'ABNORMAL'));
+  /**
+   * Abnormal, plus anything this panel does not recognise.
+   *
+   * `ResultReviewServiceImpl.toQueueItem` collapses the flag to the
+   * three-value family today, but a second producer of the DTO could send
+   * something else — and with three exact matches such a row counted towards
+   * the header badge while every section stayed empty, so the panel drew a
+   * count above nothing at all (the "all reviewed" card is gated on a
+   * zero-length list, so it did not appear either).
+   *
+   * The catch-all goes HERE, not in `normalResults`: a grade this panel
+   * cannot read must never be presented to the ordering physician as normal.
+   * The panel has three sections and no room for an "unknown" heading; the
+   * in-basket copy of this queue, which has one, gives such a row its own.
+   */
+  abnormalResults = computed(() =>
+    this.results().filter((r) => r.abnormalFlag !== 'CRITICAL' && r.abnormalFlag !== 'NORMAL'),
+  );
   normalResults = computed(() => this.results().filter((r) => r.abnormalFlag === 'NORMAL'));
 
   selectPatient(patientId: string): void {

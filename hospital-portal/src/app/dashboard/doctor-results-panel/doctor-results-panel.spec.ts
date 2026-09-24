@@ -80,6 +80,22 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
   });
 
+  it('never lets an unrecognised grade fall out of every section', () => {
+    // Three exact matches meant such a row counted towards the header badge
+    // while every section stayed empty — a count above nothing at all. It is
+    // bucketed with ABNORMAL, never with NORMAL: a grade the panel cannot
+    // read must not be shown to the ordering physician as normal.
+    fixture.componentRef.setInput('results', [{ ...item(), abnormalFlag: 'INDETERMINATE' }]);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance;
+    expect(component.criticalResults().length).toBe(0);
+    expect(component.normalResults().length).toBe(0);
+    expect(component.abnormalResults().length).toBe(1);
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+  });
+
   it('renders the rows when there is no error', () => {
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);
