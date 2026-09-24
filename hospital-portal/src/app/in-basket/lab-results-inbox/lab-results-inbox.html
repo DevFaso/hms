@@ -10,11 +10,13 @@
       <p class="category-subtitle">{{ 'inBasket.labResultsSubtitle' | translate }}</p>
       <!--
         ResultReviewServiceImpl.getResultReviewQueue resolves the caller with
-        findFirstByUserIdOrderByCreatedAtAsc and then
-        findByOrderingStaff_Id — no hospital filter and no date window. A
-        clinician with assignments at two hospitals gets both, so the queue
-        can carry patients outside the chip's current scope. Said plainly
-        rather than left for the reader to discover on a 403.
+        findFirstByUserIdOrderByCreatedAtAsc — ONE Staff row — and then
+        findByOrderingStaff_Id. Staff is per-hospital (uq_staff_user_hospital),
+        so a clinician with staff records at two hospitals gets only the
+        earliest-created one's orders: what this queue under-covers is the
+        other hospital, not the other way round. It also has no date window
+        and no reviewed state. Said plainly, because the omission is the one
+        thing a worklist must not hide.
       -->
       <p class="category-hint">{{ 'inBasket.labResultsScopeHint' | translate }}</p>
     </div>

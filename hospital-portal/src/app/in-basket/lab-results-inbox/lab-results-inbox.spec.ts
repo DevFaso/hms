@@ -86,9 +86,9 @@ describe('LabResultsInboxComponent', () => {
     // producer of DoctorResultQueueItemDTO could — and an out-of-range
     // result shown to the ordering physician as "Normal" is the one
     // failure this worklist exists to prevent.
-    setup([item({ abnormalFlag: 'ABNORMAL_HIGH', testName: 'Potassium' })]);
+    setup([item({ abnormalFlag: 'INDETERMINATE', testName: 'Potassium' })]);
 
-    expect(component.flagKey(item({ abnormalFlag: 'ABNORMAL_HIGH' }))).toBe('inBasket.labUnknown');
+    expect(component.flagKey(item({ abnormalFlag: 'INDETERMINATE' }))).toBe('inBasket.labUnknown');
     const groups = component.groups();
     expect(groups.find((g) => g.key === 'NORMAL')?.items.length).toBe(0);
     expect(groups.find((g) => g.key === 'OTHER')?.items.length).toBe(1);
@@ -108,6 +108,22 @@ describe('LabResultsInboxComponent', () => {
     fixture.detectChanges();
 
     expect(button.disabled).toBeTrue();
+  });
+
+  it('reads the directional abnormal grades as abnormal, not as unknown', () => {
+    // Only the bare ABNORMAL arrives today; if a producer ever sends the
+    // AbnormalFlag directions raw they must not rank below plain ABNORMAL.
+    setup([
+      item({ id: 'h', abnormalFlag: 'ABNORMAL_HIGH' }),
+      item({ id: 'l', abnormalFlag: 'ABNORMAL_LOW' }),
+    ]);
+
+    expect(component.flagKey(item({ abnormalFlag: 'ABNORMAL_HIGH' }))).toBe('inBasket.labAbnormal');
+    expect(component.flagClass(item({ abnormalFlag: 'ABNORMAL_LOW' }))).toBe(
+      'flag-badge flag-abnormal',
+    );
+    expect(component.groups().find((g) => g.key === 'ABNORMAL')?.items.length).toBe(2);
+    expect(component.groups().find((g) => g.key === 'OTHER')?.items.length).toBe(0);
   });
 
   it('marks a critical row structurally, not by colour alone', () => {
@@ -166,7 +182,7 @@ describe('LabResultsInboxComponent', () => {
         item({ id: 'c-' + i, abnormalFlag: 'CRITICAL', testName: 'Potassium' }),
       ),
       ...Array.from({ length: 4 }, (_, i) =>
-        item({ id: 'u-' + i, abnormalFlag: 'ABNORMAL_HIGH', testName: 'Calcium' }),
+        item({ id: 'u-' + i, abnormalFlag: 'INDETERMINATE', testName: 'Calcium' }),
       ),
       ...Array.from({ length: 60 }, (_, i) =>
         item({ id: 'n-' + i, abnormalFlag: 'NORMAL', testName: 'Glycémie' }),

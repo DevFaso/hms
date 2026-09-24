@@ -35,6 +35,19 @@ interface LabResultGroup {
 const MAX_VISIBLE_RESULTS = 50;
 
 /**
+ * The abnormal grades this worklist understands.
+ *
+ * `ResultReviewServiceImpl.toQueueItem` collapses `AbnormalFlag` through
+ * `.severity()` today, so only the bare `ABNORMAL` arrives — but the OTHER
+ * bucket below exists for a second producer of `DoctorResultQueueItemDTO`,
+ * and if one ever sends the directional values raw they must read as abnormal
+ * rather than as an unknown grade ranked below plain ABNORMAL. The chart's
+ * `labStatusKey` already maps both directions to Abnormal.
+ */
+const ABNORMAL_FLAGS: string[] = ['ABNORMAL', 'ABNORMAL_LOW', 'ABNORMAL_HIGH'];
+const KNOWN_FLAGS: string[] = ['CRITICAL', ...ABNORMAL_FLAGS, 'NORMAL'];
+
+/**
  * B7 — the lab-results category of the clinical in-basket.
  *
  * Wave 1 made the laboratory release results deliberately and advanced the
@@ -94,18 +107,13 @@ export class LabResultsInboxComponent implements OnInit {
         key: 'ABNORMAL',
         labelKey: 'inBasket.labAbnormal',
         badgeClass: 'flag-badge flag-abnormal',
-        items: items.filter((r) => r.abnormalFlag === 'ABNORMAL'),
+        items: items.filter((r) => ABNORMAL_FLAGS.includes(r.abnormalFlag)),
       },
       {
         key: 'OTHER',
         labelKey: 'inBasket.labUnknown',
         badgeClass: 'flag-badge',
-        items: items.filter(
-          (r) =>
-            r.abnormalFlag !== 'CRITICAL' &&
-            r.abnormalFlag !== 'ABNORMAL' &&
-            r.abnormalFlag !== 'NORMAL',
-        ),
+        items: items.filter((r) => !KNOWN_FLAGS.includes(r.abnormalFlag)),
       },
       {
         key: 'NORMAL',
@@ -155,31 +163,19 @@ export class LabResultsInboxComponent implements OnInit {
   }
 
   flagClass(item: DoctorResultQueueItem): string {
-    switch (item.abnormalFlag) {
-      case 'CRITICAL':
-        return 'flag-badge flag-critical';
-      case 'ABNORMAL':
-        return 'flag-badge flag-abnormal';
-      case 'NORMAL':
-        return 'flag-badge flag-normal';
-      default:
-        return 'flag-badge';
-    }
+    if (item.abnormalFlag === 'CRITICAL') return 'flag-badge flag-critical';
+    if (ABNORMAL_FLAGS.includes(item.abnormalFlag)) return 'flag-badge flag-abnormal';
+    if (item.abnormalFlag === 'NORMAL') return 'flag-badge flag-normal';
+    return 'flag-badge';
   }
 
   flagKey(item: DoctorResultQueueItem): string {
-    switch (item.abnormalFlag) {
-      case 'CRITICAL':
-        return 'inBasket.labCritical';
-      case 'ABNORMAL':
-        return 'inBasket.labAbnormal';
-      case 'NORMAL':
-        return 'inBasket.labNormal';
-      default:
-        // Never "Normal" by default — the same rule the chart's labStatusKey
-        // follows. An unrecognised grade says so.
-        return 'inBasket.labUnknown';
-    }
+    if (item.abnormalFlag === 'CRITICAL') return 'inBasket.labCritical';
+    if (ABNORMAL_FLAGS.includes(item.abnormalFlag)) return 'inBasket.labAbnormal';
+    if (item.abnormalFlag === 'NORMAL') return 'inBasket.labNormal';
+    // Never "Normal" by default — the same rule the chart's labStatusKey
+    // follows. An unrecognised grade says so.
+    return 'inBasket.labUnknown';
   }
 
   /** HIGH / LOW when the backend recorded which side of the range was crossed. */
