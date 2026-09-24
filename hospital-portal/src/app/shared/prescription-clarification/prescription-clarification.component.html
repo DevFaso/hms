@@ -76,7 +76,8 @@
              hint that an answer they cannot read is on the record. Any
              attentionReason at all could be masking one; none means there
              is nothing to hide, which keeps the note off a first question
-             on a freshly signed order. -->
+             on a freshly signed order. The note is a conditional: a reason
+             could be masking an exchange, it does not prove one exists. -->
         @if (mayHideAnswer()) {
           <p class="clarify-note" data-testid="rx-clarification-unreadable">
             {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}

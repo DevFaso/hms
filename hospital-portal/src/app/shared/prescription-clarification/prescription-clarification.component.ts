@@ -314,22 +314,35 @@ export class PrescriptionClarificationComponent {
   protected readonly titleId = computed(() => `rx-clarify-title-${this.prescriptionId()}`);
 
   /**
-   * The row may be carrying an answer this user cannot read. Any
-   * {@code attentionReason} could be masking a resolved clarification
-   * (the backend reports one reason by precedence); none means there is
-   * nothing to mask, so a first question on a freshly signed order does not
-   * get a warning about an exchange that does not exist.
+   * The row MAY be carrying an answer this user cannot read — may, not does.
+   *
+   * <p>The backend reports one {@code attentionReason} by precedence (status,
+   * then an outstanding back order, then the clarification), so any reason
+   * could be masking a resolved clarification and none of them proves one
+   * exists. A plain PENDING_STOCK row usually carries no exchange at all.
+   * The note is therefore worded as a conditional — "if an earlier question
+   * was raised" — rather than asserting a question and an answer that may
+   * never have been written. No reason at all means nothing to mask, so a
+   * first question on a freshly signed order gets no note.
    */
   protected readonly mayHideAnswer = computed(
     () => this.isPharmacy() && !this.canReadExchange() && !!this.attentionReason(),
   );
 
-  /** There is an exchange on screen, or a reason there is not. */
+  /**
+   * There is an exchange on screen, or a reason there is not.
+   *
+   * <p>A failed read is reported only on a row that was flagged for
+   * attention. On an unflagged row the fetch is speculative — we look in case
+   * an old exchange is there — so a transient failure would put a red alert
+   * and a Retry above a first-question form that needs no read at all, about
+   * something that probably does not exist.
+   */
   protected readonly showExchange = computed(
     () =>
       this.isPharmacy() &&
       (this.loadingExchange() ||
-        this.exchangeError() ||
+        (!!this.exchangeError() && !!this.attentionReason()) ||
         !!this.fetchedQuestion() ||
         !!this.fetchedAnswer()),
   );
