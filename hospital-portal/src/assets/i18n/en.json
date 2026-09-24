@@ -2929,6 +2929,35 @@
     "READ_BACK_RECORDED": "Read back",
     "READ_BACK_MISMATCH": "Read-back MISMATCH — not acknowledged"
   },
+  "LAB_RELEASE": {
+    "TITLE": "Release Worklist",
+    "SUBTITLE": "Results waiting for the laboratory to release them",
+    "AWAITING_COUNT": "{{count}} awaiting release",
+    "TABLE_CAPTION": "Results awaiting release, oldest result date first",
+    "COL_PATIENT": "Patient",
+    "COL_TEST": "Test",
+    "COL_VALUE": "Value",
+    "COL_FLAG": "Flag",
+    "COL_RESULT_DATE": "Result date",
+    "COL_RECEIVED": "Received",
+    "COL_ACTIONS": "Actions",
+    "FLAG_HIGH": "High",
+    "FLAG_LOW": "Low",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_UNSPECIFIED": "Not flagged",
+    "CRITICAL": "Critical",
+    "RELEASE": "Release",
+    "NOT_YOURS": "To be released by the performing laboratory",
+    "CONFIRM_TITLE": "Release this result?",
+    "CONFIRM_BODY": "Release {{test}} = {{value}} for {{patient}}?",
+    "CONFIRM_NOTE": "Releasing attests that the result is correct and may be acted on. It is recorded against your name.",
+    "RELEASED": "Result released.",
+    "JUST_RELEASED": "{{test}} released for {{patient}}.",
+    "RELEASE_ERROR": "Could not release the result.",
+    "EMPTY": "Nothing is waiting for release.",
+    "LOAD_ERROR": "Could not load the release worklist.",
+    "PAGE_OF": "Page {{page}} of {{total}}"
+  },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
     "SUBTITLE": "Manage laboratory instruments and equipment",
@@ -3238,7 +3267,8 @@
     "SEARCH_PLACEHOLDER": "Search modules...",
     "SEARCH_CLEAR": "Clear search",
     "SEARCH_NO_RESULTS": "No module matches \"{{query}}\".",
-    "BREAK_GLASS_REVIEW": "Break-glass review"
+    "BREAK_GLASS_REVIEW": "Break-glass review",
+    "LAB_RELEASE_WORKLIST": "Release Worklist"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -5547,6 +5577,40 @@
     }
   },
   "PRESCRIPTIONS": {
+    "CLARIFICATION": {
+      "ANSWER": "The prescriber's answer",
+      "ANSWERED_LABEL": "Answered",
+      "ANSWER_HINT": "Sending your answer returns the prescription to the pharmacy work queue with the status it had before the question.",
+      "ANSWER_INPUT_LABEL": "Your answer (optional)",
+      "ANSWER_LABEL": "Prescriber's answer",
+      "ANSWER_NOT_VISIBLE": "Your current role cannot open the prescription record, so if an earlier question was raised, neither it nor the prescriber's answer can be shown here.",
+      "ANSWER_PLACEHOLDER": "Answer the pharmacist, or leave this empty if you corrected the prescription itself.",
+      "ASK": "Ask the prescriber",
+      "ASKED_LABEL": "Asked",
+      "BLOCKS_DISPENSING": "Sending this question stops the fill: the prescription moves to Pending clarification and leaves your work queue until the prescriber answers.",
+      "EXCHANGE_FAILED": "The clarification exchange could not be loaded.",
+      "FOR": "Prescription:",
+      "FORBIDDEN_REQUEST": "Your account is not allowed to raise a clarification on this prescription.",
+      "FORBIDDEN_RESOLVE": "Only a clinician with a staff profile at the prescribing hospital can answer this clarification.",
+      "LOADING_EXCHANGE": "Loading the exchange…",
+      "NO_ANSWER_TEXT": "The prescriber answered without leaving a note.",
+      "NO_QUESTION": "No question was recorded.",
+      "QUESTION": "The pharmacist's question",
+      "QUESTION_LABEL": "Pharmacist's question",
+      "READ_ANSWER": "Read the prescriber's answer",
+      "REASON_LABEL": "What do you need the prescriber to clarify?",
+      "REASON_PLACEHOLDER": "Say what cannot be filled as written.",
+      "RESOLVE": "Answer the pharmacist",
+      "RESOLVED": "Answer sent. The prescription is back with the pharmacy.",
+      "RESOLVE_FAILED": "The answer could not be sent.",
+      "RESOLVE_SEND": "Send the answer",
+      "SEND": "Send the question",
+      "SENDING": "Sending…",
+      "SEND_FAILED": "The question could not be sent.",
+      "SENT": "Question sent. The prescription has left the work queue until the prescriber answers.",
+      "TITLE_REQUEST": "Clarification with the prescriber",
+      "TITLE_RESOLVE": "Answer the pharmacist"
+    },
     "ACTIVE": "Active",
     "CANCELLED": "Cancelled",
     "CLOSE_DETAIL": "Close detail",
@@ -5689,10 +5753,6 @@
       "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history.",
       "PARTIAL_ERROR_DISPENSES": "The fills could not be loaded, so this is not the whole picture.",
       "PARTIAL_ERROR_ROUTINGS": "The routing decisions could not be loaded, so this is not the whole picture."
-    },
-    "CLARIFICATION": {
-      "QUESTION": "The pharmacist's question",
-      "ANSWER": "The prescriber's answer"
     },
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },

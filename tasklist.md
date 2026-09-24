@@ -3132,6 +3132,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   one-line change is owed on both, with the reason kept in the integration
   message row rather than in the ACK.
 
+- **Role equivalence stops at the annotation, and two layers disagree about
+  it.** `RoleExpansion` maps PHYSICIAN and SURGEON onto ROLE_DOCTOR while the
+  authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
+  `RoleValidator`'s per-hospital checks (`isDoctor` and its siblings) then match
+  the stored ASSIGNMENT ROLE CODE against `{DOCTOR, ROLE_DOCTOR}` and know no
+  such equivalence, so a surgeon passes the door and is refused by the service
+  behind it. #724 handled the one control it touched by not offering it; the
+  general question — whether a surgeon or physician should count as a doctor for
+  per-hospital authority, everywhere, or whether the annotation expansion is the
+  thing that is wrong — is a product decision, and it decides who may sign lab
+  results, prescribe, and co-sign. Related and separate: the portal's
+  `RoleContextService.hasAnyActiveRole` applies no expansion at all, while
+  `RoleGuard` and the shell nav go through `role-equivalence.ts`, so every
+  in-component role gate is narrower than the route that hosts it.
+
 - **The co-sign path picks a doctor's oldest staff profile.** The
   staff-profile lookup behind co-signature resolves by taking the first
   profile it finds, so a doctor credentialed at two hospitals is matched to the

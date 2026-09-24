@@ -35,6 +35,7 @@ import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -132,6 +133,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
     CdsCardListComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
+    PrescriptionClarificationComponent,
   ],
   templateUrl: './prescriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,

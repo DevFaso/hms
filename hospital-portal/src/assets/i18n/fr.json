@@ -2929,6 +2929,35 @@
     "READ_BACK_RECORDED": "Relecture confirmée",
     "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté"
   },
+  "LAB_RELEASE": {
+    "TITLE": "File de validation",
+    "SUBTITLE": "Résultats en attente de validation par le laboratoire",
+    "AWAITING_COUNT": "{{count}} en attente de validation",
+    "TABLE_CAPTION": "Résultats en attente de validation, par date de résultat croissante",
+    "COL_PATIENT": "Patient",
+    "COL_TEST": "Analyse",
+    "COL_VALUE": "Valeur",
+    "COL_FLAG": "Indicateur",
+    "COL_RESULT_DATE": "Date du résultat",
+    "COL_RECEIVED": "Reçu le",
+    "COL_ACTIONS": "Actions",
+    "FLAG_HIGH": "Élevé",
+    "FLAG_LOW": "Bas",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_UNSPECIFIED": "Non signalé",
+    "CRITICAL": "Critique",
+    "RELEASE": "Valider",
+    "NOT_YOURS": "À valider par le laboratoire exécutant",
+    "CONFIRM_TITLE": "Valider ce résultat ?",
+    "CONFIRM_BODY": "Valider {{test}} = {{value}} pour {{patient}} ?",
+    "CONFIRM_NOTE": "La validation atteste que le résultat est correct et peut être utilisé. Elle est enregistrée à votre nom.",
+    "RELEASED": "Résultat validé.",
+    "JUST_RELEASED": "{{test}} validé pour {{patient}}.",
+    "RELEASE_ERROR": "Impossible de valider le résultat.",
+    "EMPTY": "Aucun résultat en attente de validation.",
+    "LOAD_ERROR": "Impossible de charger la file de validation.",
+    "PAGE_OF": "Page {{page}} sur {{total}}"
+  },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
     "SUBTITLE": "Gérer les instruments et équipements de laboratoire",
@@ -3238,7 +3267,8 @@
     "SEARCH_PLACEHOLDER": "Rechercher un module...",
     "SEARCH_CLEAR": "Effacer la recherche",
     "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} ».",
-    "BREAK_GLASS_REVIEW": "Revue des accès d'urgence"
+    "BREAK_GLASS_REVIEW": "Revue des accès d'urgence",
+    "LAB_RELEASE_WORKLIST": "File de validation"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -5547,6 +5577,40 @@
     }
   },
   "PRESCRIPTIONS": {
+    "CLARIFICATION": {
+      "ANSWER": "Réponse du prescripteur",
+      "ANSWERED_LABEL": "Répondue le",
+      "ANSWER_HINT": "L'envoi de votre réponse renvoie l'ordonnance dans la file de travail de la pharmacie avec le statut qu'elle avait avant la question.",
+      "ANSWER_INPUT_LABEL": "Votre réponse (facultative)",
+      "ANSWER_LABEL": "Réponse du prescripteur",
+      "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : si une question a déjà été posée, ni celle-ci ni la réponse du prescripteur ne peuvent être affichées ici.",
+      "ANSWER_PLACEHOLDER": "Répondez au pharmacien, ou laissez vide si vous avez corrigé l'ordonnance elle-même.",
+      "ASK": "Interroger le prescripteur",
+      "ASKED_LABEL": "Posée le",
+      "BLOCKS_DISPENSING": "L'envoi de cette question suspend la délivrance : l'ordonnance passe en « En attente de clarification » et quitte votre file de travail jusqu'à la réponse du prescripteur.",
+      "EXCHANGE_FAILED": "L'échange de clarification n'a pas pu être chargé.",
+      "FOR": "Ordonnance :",
+      "FORBIDDEN_REQUEST": "Votre compte n'est pas autorisé à demander une clarification sur cette ordonnance.",
+      "FORBIDDEN_RESOLVE": "Seul un clinicien disposant d'un profil au sein de l'hôpital prescripteur peut répondre à cette clarification.",
+      "LOADING_EXCHANGE": "Chargement de l'échange…",
+      "NO_ANSWER_TEXT": "Le prescripteur a répondu sans laisser de note.",
+      "NO_QUESTION": "Aucune question n'a été enregistrée.",
+      "QUESTION": "Question du pharmacien",
+      "QUESTION_LABEL": "Question du pharmacien",
+      "READ_ANSWER": "Lire la réponse du prescripteur",
+      "REASON_LABEL": "Que devez-vous faire clarifier par le prescripteur ?",
+      "REASON_PLACEHOLDER": "Indiquez ce qui ne peut pas être délivré tel quel.",
+      "RESOLVE": "Répondre au pharmacien",
+      "RESOLVED": "Réponse envoyée. L'ordonnance est de nouveau chez le pharmacien.",
+      "RESOLVE_FAILED": "La réponse n'a pas pu être envoyée.",
+      "RESOLVE_SEND": "Envoyer la réponse",
+      "SEND": "Envoyer la question",
+      "SENDING": "Envoi en cours…",
+      "SEND_FAILED": "La question n'a pas pu être envoyée.",
+      "SENT": "Question envoyée. L'ordonnance a quitté la file de travail jusqu'à la réponse du prescripteur.",
+      "TITLE_REQUEST": "Demande de clarification au prescripteur",
+      "TITLE_RESOLVE": "Répondre au pharmacien"
+    },
     "ACTIVE": "Active",
     "CANCELLED": "Annulée",
     "CLOSE_DETAIL": "Fermer le détail",
@@ -5689,10 +5753,6 @@
       "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance.",
       "PARTIAL_ERROR_DISPENSES": "Les délivrances n'ont pas pu être chargées : ceci n'est donc pas complet.",
       "PARTIAL_ERROR_ROUTINGS": "Les décisions d'orientation n'ont pas pu être chargées : ceci n'est donc pas complet."
-    },
-    "CLARIFICATION": {
-      "QUESTION": "Question du pharmacien",
-      "ANSWER": "Réponse du prescripteur"
     },
     "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne."
   },

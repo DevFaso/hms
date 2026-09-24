@@ -7,7 +7,10 @@ import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
+import { By } from '@angular/platform-browser';
 import { BehaviorSubject, of, throwError } from 'rxjs';
+import { RoleContextService } from '../core/role-context.service';
+import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
 describe('DispensingComponent', () => {
   let component: DispensingComponent;
@@ -504,5 +507,145 @@ describe('DispensingComponent — refill context on the work queue', () => {
     expect(component.refillBadgeClass('DENIED')).toContain('badge-danger');
     expect(component.refillBadgeClass('PAUSED')).toContain('badge-warning');
     expect(component.refillBadgeClass('REQUESTED')).toContain('badge-info');
+  });
+});
+
+/**
+ * Gap G5 — the clarification control on the dispense work queue. The queue
+ * row is where the pharmacist decides whether to fill, so it is where the
+ * question belongs; the control itself is
+ * `<app-prescription-clarification>` and its own spec covers the modal.
+ * What matters here is that the row wires it correctly and that the role
+ * gate is honoured on the real page.
+ */
+describe('DispensingComponent — clarification control on the work queue', () => {
+  let fixture: ComponentFixture<DispensingComponent>;
+  let pharmacySvc: jasmine.SpyObj<PharmacyService>;
+  let roleContext: RoleContextService;
+
+  function queueRow(overrides: Record<string, unknown>) {
+    return {
+      data: {
+        content: [
+          {
+            id: 'rx-1',
+            medicationName: 'Metformin 500mg',
+            dosage: '500mg',
+            quantity: 30,
+            status: 'SIGNED',
+            patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+            staff: { id: 'staff-1', user: { id: 'user-1', firstName: 'Dr.', lastName: 'Smith' } },
+            ...overrides,
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      },
+    };
+  }
+
+  async function render(roles: string[], overrides: Record<string, unknown> = {}) {
+    pharmacySvc = jasmine.createSpyObj('PharmacyService', [
+      'listPharmacies',
+      'getDispenseWorkQueue',
+      'listDispensesByPharmacy',
+      'listInventoryByPharmacy',
+      'listLotsByPharmacy',
+      'createDispense',
+      'cancelDispense',
+    ]);
+    pharmacySvc.listPharmacies.and.returnValue(
+      of({
+        content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
+        totalElements: 1,
+        totalPages: 1,
+        size: 100,
+        number: 0,
+      }) as never,
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(of(queueRow(overrides)) as never);
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+
+    const offlineQueueStub: Pick<
+      OfflineDispenseQueueService,
+      'pending$' | 'pending' | 'enqueue' | 'replayAll' | 'clear'
+    > = {
+      pending$: new BehaviorSubject<number>(0).asObservable(),
+      pending: 0,
+      enqueue: () => Promise.resolve({ id: 'k', request: {} as never, enqueuedAt: 0, attempts: 0 }),
+      replayAll: () => Promise.resolve({ succeeded: 0, failed: 0, remaining: 0 }),
+      clear: () => Promise.resolve(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [DispensingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PharmacyService, useValue: pharmacySvc },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', [], {
+            currentProfile: () => ({ id: 'user-1' }),
+          }),
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
+      ],
+    }).compileComponents();
+
+    roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(roles);
+    roleContext.activeRole = roles[0] ?? null;
+
+    fixture = TestBed.createComponent(DispensingComponent);
+    fixture.detectChanges();
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('offers the control to a pharmacist on a fillable row', async () => {
+    await render(['ROLE_PHARMACIST']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).not.toBeNull();
+  });
+
+  it('offers the control to a pharmacy verifier', async () => {
+    await render(['ROLE_PHARMACY_VERIFIER']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).not.toBeNull();
+  });
+
+  it('withholds the control from a role the endpoint would reject', async () => {
+    // HOSPITAL_ADMIN reaches the dispensing page but is not on
+    // /request-clarification, so the button would only ever earn a 403.
+    await render(['ROLE_HOSPITAL_ADMIN']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).toBeNull();
+  });
+
+  it('reloads the queue when a clarification is raised', async () => {
+    await render(['ROLE_PHARMACIST']);
+    const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+
+    const control = fixture.debugElement.query(By.directive(PrescriptionClarificationComponent))
+      .componentInstance as PrescriptionClarificationComponent;
+    control.changed.emit();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
   });
 });

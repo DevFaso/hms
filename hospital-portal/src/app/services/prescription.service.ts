@@ -93,7 +93,11 @@ export interface PrescriptionResponse {
 
   /* ── Pharmacist clarification (gap G5) ───────────────────────── */
 
-  /** Stripped from the patient-facing copy; present on the prescriber's. */
+  /**
+   * Pharmacist clarification exchange (gap G5). The backend strips all four
+   * from the patient's copy of a prescription, so they are optional here and
+   * absent rather than blank when the reader is a patient.
+   */
   clarificationReason?: string | null;
   clarificationRequestedAt?: string | null;
   clarificationResponse?: string | null;
@@ -187,10 +191,17 @@ export class PrescriptionService {
     staffId?: string;
     hospitalId?: string;
   }): Observable<PrescriptionResponse[]> {
+    // An explicit size and sort. Without them the derived query's order is
+    // arbitrary, so "the first page" is not even the newest prescriptions:
+    // a prescriber told by the clinical inbox that N orders await
+    // clarification could find none of them here. Sorting by updatedAt was
+    // tried and dropped — it reorders the page for everyone and still loses
+    // the row on a busy day, because every sign, edit and fill bumps that
+    // column. This makes the page deterministic and large enough to count
+    // from; the real fix is a status filter on GET /prescriptions, which is
+    // filed as backend work.
     let params = new HttpParams()
       .set('size', PrescriptionService.LIST_PAGE_SIZE)
-      // Without an explicit sort the derived query's order is arbitrary, so
-      // "the first page" would not even be the newest prescriptions.
       .set('sort', 'createdAt,desc');
     if (filters) {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
@@ -247,6 +258,36 @@ export class PrescriptionService {
   pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,
+    });
+  }
+
+  /**
+   * Gap G5, pharmacy side: the pharmacist sends the order back to its
+   * prescriber with a question. The backend moves it to
+   * PENDING_CLARIFICATION, which takes it off the dispense work queue, so
+   * the caller must make that consequence explicit before calling.
+   *
+   * <p>Pharmacist roles only (PHARMACIST, PHARMACY_VERIFIER, SUPER_ADMIN).
+   * The reason is required and capped at 1000 characters server-side.
+   */
+  requestClarification(id: string, reason: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/request-clarification`, {
+      reason: reason.trim(),
+    });
+  }
+
+  /**
+   * Gap G5, prescriber side: a doctor with a staff profile at the
+   * prescribing hospital answers, and the order returns to the status it
+   * held when the question was asked.
+   *
+   * <p>The answer is optional — the doctor may have edited the order instead
+   * of, or as well as, replying — so an empty box sends no `response` at all
+   * rather than an empty string.
+   */
+  resolveClarification(id: string, response?: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/resolve-clarification`, {
+      response: response?.trim() || undefined,
     });
   }
 

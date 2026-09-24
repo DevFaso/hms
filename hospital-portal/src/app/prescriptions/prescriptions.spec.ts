@@ -96,6 +96,11 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
             globalView: signal(false),
             activeHospitalId: 'h-1',
             hasAnyActiveRole: () => true,
+            // The real service exposes these too, and the clarification
+            // control reads them for doctor equivalence. A stub carrying only
+            // hasAnyActiveRole threw once the control started expanding roles.
+            activeRoles: ['ROLE_DOCTOR'],
+            activeRole: 'ROLE_DOCTOR',
           },
         },
         {
@@ -252,6 +257,11 @@ describe('PrescriptionsComponent — signing', () => {
             globalView: signal(false),
             activeHospitalId: 'h-1',
             hasAnyActiveRole: () => true,
+            // The real service exposes these too, and the clarification
+            // control reads them for doctor equivalence. A stub carrying only
+            // hasAnyActiveRole threw once the control started expanding roles.
+            activeRoles: ['ROLE_DOCTOR'],
+            activeRole: 'ROLE_DOCTOR',
           },
         },
         {
@@ -435,6 +445,14 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
             activeHospitalId: 'h-1',
             // Mirrors the real service: the caller's active role decides.
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+            get activeRoles() {
+              return activeRoles;
+            },
+            // As the real service does: a single active role is pinned only
+            // when the account holds exactly one.
+            get activeRole() {
+              return activeRoles.length === 1 ? activeRoles[0] : null;
+            },
           },
         },
         {
@@ -694,6 +712,12 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
             globalView: signal(opts.globalView ?? false),
             activeHospitalId: opts.globalView ? null : 'h-1',
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            get activeRoles() {
+              return roles;
+            },
+            get activeRole() {
+              return roles.length === 1 ? roles[0] : null;
+            },
           },
         },
         {
@@ -1433,5 +1457,153 @@ describe('PrescriptionService — list paging', () => {
     expect(req.request.params.get('size')).toBe(String(PrescriptionService.LIST_PAGE_SIZE));
     expect(req.request.params.get('sort')).toBe('createdAt,desc');
     req.flush({ content: [] });
+  });
+});
+
+/**
+ * Gap G5, prescriber half. The pharmacist's question arrives as a
+ * PENDING_CLARIFICATION row on this list, and until now the only way out of
+ * that status was a client-asserted PUT no pharmacist could call. The control
+ * is `<app-prescription-clarification>` in PRESCRIBER mode; its own spec
+ * covers the dialog, so what is guarded here is that the list row wires it
+ * and that only a doctor is offered it.
+ */
+describe('PrescriptionsComponent — answering a pharmacist clarification', () => {
+  let fixture: ComponentFixture<PrescriptionsComponent>;
+  let component: PrescriptionsComponent;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
+  let activeRoles: string[];
+
+  function pendingClarification(): PrescriptionResponse {
+    return {
+      id: 'rx-1',
+      status: 'PENDING_CLARIFICATION',
+      medicationName: 'Metformin',
+      clarificationReason: 'Is the 1 g strength intended for this weight?',
+      clarificationRequestedAt: '2026-09-20T09:00:00',
+    } as PrescriptionResponse;
+  }
+
+  async function render(roles: string[]): Promise<void> {
+    activeRoles = roles;
+    prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+      'resolveClarification',
+      'getById',
+    ]);
+    prescriptionService.list.and.returnValue(of([pendingClarification()]));
+    prescriptionService.resolveClarification.and.returnValue(of(pendingClarification()));
+
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+    const communityPharmacyService = jasmine.createSpyObj<CommunityPharmacyService>(
+      'CommunityPharmacyService',
+      ['list'],
+    );
+    communityPharmacyService.list.and.returnValue(of([]));
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: communityPharmacyService },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => activeRoles.includes(r)),
+            get activeRoles() {
+              return activeRoles;
+            },
+            get activeRole() {
+              return activeRoles.length === 1 ? activeRoles[0] : null;
+            },
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PrescriptionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('offers the answer control to a doctor on a PENDING_CLARIFICATION row', async () => {
+    await render(['ROLE_DOCTOR']);
+
+    expect(component.filtered().length).toBe(1);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).not.toBeNull();
+  });
+
+  it('withholds it from a nurse — /resolve-clarification is ROLE_DOCTOR only', async () => {
+    await render(['ROLE_NURSE']);
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
+    ).toBeNull();
+  });
+
+  it('shows the pharmacist question and sends the answer', async () => {
+    await render(['ROLE_DOCTOR']);
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="rx-clarification-open-rx-1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-clarification-question"]').textContent,
+    ).toContain('Is the 1 g strength intended for this weight?');
+
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="rx-clarification-text-rx-1"]',
+    ) as HTMLTextAreaElement;
+    textarea.value = 'Yes — 1 g is intended, the weight on file is stale.';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="rx-clarification-submit-rx-1"]',
+      ) as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(prescriptionService.resolveClarification).toHaveBeenCalledWith(
+      'rx-1',
+      'Yes — 1 g is intended, the weight on file is stale.',
+    );
+    // The list reloads so the row leaves PENDING_CLARIFICATION on screen too.
+    expect(prescriptionService.list.calls.count()).toBeGreaterThan(1);
   });
 });

@@ -356,6 +356,12 @@ interface PageResponse<T> {
   number: number;
 }
 
+/**
+ * A page of results, exported because the release worklist pages through one
+ * and shows its total — see {@link LabService.listPendingRelease}.
+ */
+export type LabResultPage = PageResponse<LabResultResponse>;
+
 @Injectable({ providedIn: 'root' })
 export class LabService {
   private readonly http = inject(HttpClient);
@@ -392,6 +398,21 @@ export class LabService {
   getResult(id: string): Observable<LabResultResponse> {
     return this.http
       .get<ApiWrapper<LabResultResponse>>(`/lab-results/${id}`)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * B14 — the release worklist: every result of the acting hospital that
+   * nobody has released yet, oldest first (the endpoint's own default sort).
+   *
+   * <p>Unlike {@link listResults} this keeps the whole page rather than its
+   * content: the worklist counts what is waiting and pages through it, and a
+   * total that has been thrown away cannot be shown.
+   */
+  listPendingRelease(page: number, size: number): Observable<LabResultPage> {
+    const params = new HttpParams().set('page', String(page)).set('size', String(size));
+    return this.http
+      .get<ApiWrapper<LabResultPage>>('/lab-results/pending-release', { params })
       .pipe(map((res) => res.data));
   }
 

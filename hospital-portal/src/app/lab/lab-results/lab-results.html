@@ -179,7 +179,7 @@
                       <span class="material-symbols-outlined">verified</span>
                     </button>
                   }
-                  @if (canSign && !r.signedAt) {
+                  @if (canSign() && !r.signedAt) {
                     <button
                       class="action-link sign-link"
                       [title]="'LAB_RESULTS.SIGN' | translate"

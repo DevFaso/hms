@@ -312,6 +312,17 @@
                     <span class="material-symbols-outlined">alt_route</span>
                     {{ 'PHARMACY.ROUTE' | translate }}
                   </button>
+                  <!-- Gap G5 — send the order back to its prescriber with a
+                       question, and read the answer when the row returns
+                       flagged CLARIFICATION_RESOLVED. -->
+                  <app-prescription-clarification
+                    mode="PHARMACY"
+                    [prescriptionId]="rx.id"
+                    [status]="rx.status"
+                    [medicationLabel]="rx.medicationName"
+                    [attentionReason]="rx.attentionReason ?? null"
+                    (changed)="loadWorkQueue()"
+                  />
                 </td>
               </tr>
             }
