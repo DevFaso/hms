@@ -494,6 +494,17 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(component.canSign()).toBeFalse();
   });
 
+  it('offers signing to a surgeon, whom the backend expands to ROLE_DOCTOR', () => {
+    // RoleExpansion maps PHYSICIAN/SURGEON onto ROLE_DOCTOR before the
+    // @PreAuthorize runs, but hasAnyActiveRole compares raw roles — so the
+    // equivalents have to be named in the list the button reads.
+    expect(createWithRoles(['ROLE_SURGEON']).canSign()).toBeTrue();
+  });
+
+  it('offers signing to a physician for the same reason', () => {
+    expect(createWithRoles(['ROLE_PHYSICIAN']).canSign()).toBeTrue();
+  });
+
   it('does not offer read-back to the lab roles the backend refuses', () => {
     // Read-back is the ordering clinician confirming what they were told;
     // lab attestation is a different act. A button that 403s teaches the

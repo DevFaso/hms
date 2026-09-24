@@ -237,6 +237,30 @@ describe('LabReleaseWorklistComponent', () => {
     expect(component.justReleased()).toBeNull();
   });
 
+  it('does not let a read started before the release resurrect the released row', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+
+    // A refresh is in flight — its snapshot still holds the row — when the
+    // release succeeds and triggers its own read. Believing whichever answer
+    // arrives last put the released row back, with a live Release button.
+    component.load();
+    const stale = httpMock.expectOne(
+      (r) => r.url === '/lab-results/pending-release' && r.method === 'GET',
+    );
+
+    component.askRelease(result());
+    component.confirmRelease();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results/result-1/release' && r.method === 'POST')
+      .flush({ ...result(), released: true });
+    flushWorklist([]);
+
+    expect(stale.cancelled).toBeTrue();
+    expect(component.rows().length).toBe(0);
+  });
+
   it('flags a critical result on the queue', () => {
     setup(['ROLE_LAB_DIRECTOR']);
     fixture.detectChanges();

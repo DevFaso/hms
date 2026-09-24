@@ -6,8 +6,11 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { LabResultPage, LabResultResponse, LabService } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -91,6 +94,55 @@ export class LabReleaseWorklistComponent implements OnInit {
     return Math.max(1, p.totalPages || Math.ceil(p.totalElements / this.pageSize));
   });
 
+  /**
+   * Reads are serialised through one stream and a `switchMap`, so only the
+   * newest ever lands.
+   *
+   * <p>Independent subscriptions raced: a manual refresh started while the
+   * confirmation dialog was open is still in flight when the release
+   * succeeds and triggers its own read, and if the older read resolves last
+   * its snapshot — taken before the release — wins, putting the released row
+   * back on the queue with a live Release button. The older request is now
+   * cancelled rather than believed.
+   */
+  private readonly reload = new Subject<void>();
+
+  constructor() {
+    this.reload
+      .pipe(
+        switchMap(() =>
+          this.labService.listPendingRelease(this.pageIndex(), this.pageSize).pipe(
+            map((page) => ({ page, error: null as unknown })),
+            // Caught inside the inner observable: an error escaping to the
+            // outer stream would complete it and kill every later read.
+            catchError((error: unknown) => of({ page: null, error })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ page, error }) => {
+        if (error || !page) {
+          // Never render a refusal or an outage as an empty queue: "nothing
+          // to release" and "we could not ask" are opposite facts for a
+          // laboratory.
+          console.error('Failed to load the lab release worklist', error);
+          this.page.set(null);
+          this.error.set(this.translate.instant('LAB_RELEASE.LOAD_ERROR'));
+          this.loading.set(false);
+          return;
+        }
+        this.page.set(page);
+        this.loading.set(false);
+        // Releasing the last row of the last page leaves the reader on a page
+        // that no longer exists — an empty queue that is not empty. Step back
+        // once and re-read; pageIndex only ever decreases here, so this ends.
+        if (page.content.length === 0 && this.pageIndex() > 0 && page.totalElements > 0) {
+          this.pageIndex.set(this.pageIndex() - 1);
+          this.load();
+        }
+      });
+  }
+
   ngOnInit(): void {
     this.load();
   }
@@ -98,27 +150,7 @@ export class LabReleaseWorklistComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.labService.listPendingRelease(this.pageIndex(), this.pageSize).subscribe({
-      next: (result) => {
-        this.page.set(result);
-        this.loading.set(false);
-        // Releasing the last row of the last page leaves the reader on a page
-        // that no longer exists — an empty queue that is not empty. Step back
-        // once and re-read; pageIndex only ever decreases here, so this ends.
-        if (result.content.length === 0 && this.pageIndex() > 0 && result.totalElements > 0) {
-          this.pageIndex.set(this.pageIndex() - 1);
-          this.load();
-        }
-      },
-      error: (err) => {
-        // Never render a refusal or an outage as an empty queue: "nothing to
-        // release" and "we could not ask" are opposite facts for a laboratory.
-        console.error('Failed to load the lab release worklist', err);
-        this.page.set(null);
-        this.error.set(this.translate.instant('LAB_RELEASE.LOAD_ERROR'));
-        this.loading.set(false);
-      },
-    });
+    this.reload.next();
   }
 
   /**
@@ -137,19 +169,25 @@ export class LabReleaseWorklistComponent implements OnInit {
     if (r.released) {
       return false;
     }
-    if (!this.roleContext.hasAnyActiveRole(LabReleaseWorklistComponent.RELEASE_ROLES)) {
-      return false;
-    }
-    return !this.releaseBelongsElsewhere(r);
+    return this.hasReleaseAuthority() && !this.releaseBelongsElsewhere(r);
+  }
+
+  /**
+   * The reader holds a role the release endpoint admits — read live, never a
+   * field captured while the component was built.
+   */
+  hasReleaseAuthority(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabReleaseWorklistComponent.RELEASE_ROLES);
   }
 
   /**
    * The row is another laboratory's to release (B1).
    *
    * <p>Separate from {@link canReleaseResult} so the screen can say WHICH
-   * reason applies. One message for both would tell a technician — who simply
-   * may not release anything — that the result is released elsewhere, which
-   * is untrue and sends them chasing a hospital that is not involved.
+   * reason applies, and the template asks for it only once the reader has the
+   * authority: telling a technician — who may not release anything, anywhere
+   * — that this one belongs to another laboratory would send them chasing a
+   * hospital that is not the obstacle.
    */
   releaseBelongsElsewhere(r: LabResultResponse): boolean {
     const performing = r.performingHospitalId;

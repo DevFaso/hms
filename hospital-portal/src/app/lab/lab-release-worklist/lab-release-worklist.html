@@ -16,7 +16,7 @@
       <button
         class="btn-refresh"
         (click)="load()"
-        [disabled]="loading()"
+        [disabled]="loading() || releasingId() !== null"
         [attr.aria-label]="'COMMON.REFRESH' | translate"
         [title]="'COMMON.REFRESH' | translate"
         data-testid="release-refresh"
@@ -119,7 +119,7 @@
                     <span class="material-symbols-outlined">published_with_changes</span>
                     {{ 'LAB_RELEASE.RELEASE' | translate }}
                   </button>
-                } @else if (releaseBelongsElsewhere(row)) {
+                } @else if (hasReleaseAuthority() && releaseBelongsElsewhere(row)) {
                   <span class="no-action" [attr.data-testid]="'release-elsewhere-' + row.id">
                     {{ 'LAB_RELEASE.NOT_YOURS' | translate }}
                   </span>

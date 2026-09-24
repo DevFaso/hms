@@ -103,8 +103,25 @@ export class LabResultsComponent implements OnInit {
   comparison = signal<LabResultComparison | null>(null);
   comparisonLoading = signal(false);
 
-  /** POST /lab-results/{id}/sign backend role list. */
-  private static readonly SIGN_ROLES = ['ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST'];
+  /**
+   * POST /lab-results/{id}/sign backend role list, plus the two roles the
+   * backend expands into it.
+   *
+   * <p>`RoleExpansion` maps PHYSICIAN and SURGEON onto ROLE_DOCTOR before the
+   * `@PreAuthorize` runs, and the portal has the same rule in
+   * `role-equivalence.ts` — but only `RoleGuard` and the shell's nav gate go
+   * through it. `RoleContextService.hasAnyActiveRole` compares the raw stored
+   * roles, so a surgeon was refused a control the endpoint would have
+   * accepted. Naming the equivalents here keeps this list what its name says:
+   * who the backend admits.
+   */
+  private static readonly SIGN_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_PHYSICIAN',
+    'ROLE_SURGEON',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+  ];
 
   /**
    * Whether to offer the signature control.

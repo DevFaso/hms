@@ -2946,7 +2946,7 @@
     "FLAG_UNSPECIFIED": "Not flagged",
     "CRITICAL": "Critical",
     "RELEASE": "Release",
-    "NOT_YOURS": "Released by the performing laboratory",
+    "NOT_YOURS": "To be released by the performing laboratory",
     "CONFIRM_TITLE": "Release this result?",
     "CONFIRM_BODY": "Release {{test}} = {{value}} for {{patient}}?",
     "CONFIRM_NOTE": "Releasing attests that the result is correct and may be acted on. It is recorded against your name.",

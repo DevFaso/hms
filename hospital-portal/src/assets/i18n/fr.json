@@ -2946,7 +2946,7 @@
     "FLAG_UNSPECIFIED": "Non signalé",
     "CRITICAL": "Critique",
     "RELEASE": "Valider",
-    "NOT_YOURS": "Validé par le laboratoire exécutant",
+    "NOT_YOURS": "À valider par le laboratoire exécutant",
     "CONFIRM_TITLE": "Valider ce résultat ?",
     "CONFIRM_BODY": "Valider {{test}} = {{value}} pour {{patient}} ?",
     "CONFIRM_NOTE": "La validation atteste que le résultat est correct et peut être utilisé. Elle est enregistrée à votre nom.",
