@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.medications
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,9 +25,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.MedicationDto
 import com.bitnesttechs.hms.patient.core.models.PrescriptionDto
 import com.bitnesttechs.hms.patient.core.models.RefillDto
+import com.bitnesttechs.hms.patient.core.models.RefillStatus
 import androidx.compose.ui.res.stringResource
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.badgeFill
+import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +40,8 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     val prescriptions by viewModel.prescriptions.collectAsState()
     val refills by viewModel.refills.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val loadFailed by viewModel.loadFailed.collectAsState()
+    val openRefills by viewModel.openRefills.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Medications", "Prescriptions", "Refills")
@@ -43,12 +49,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
     var refillTarget by remember { mutableStateOf<PrescriptionDto?>(null) }
     var cancelRefillTarget by remember { mutableStateOf<RefillDto?>(null) }
-    val snackbarMessage by viewModel.snackbar.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSnackbar() }
-    }
     val outcome by viewModel.outcome.collectAsState()
     val outcomeText = outcome?.let { o ->
         val base = stringResource(o.resId)
@@ -96,7 +97,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (medications.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No active medications")
+                            EmptyOrRetry(R.string.no_active_medications, loadFailed.medications) { viewModel.load() }
                         }
                     }
                     items(medications) { med ->
@@ -110,13 +111,11 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                         Text(med.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                         Surface(shape = RoundedCornerShape(50),
-                                            color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32).copy(alpha = 0.12f)
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
-                                            Text(if (med.isActive) "Active" else "Inactive",
+                                            color = med.statusEnum.tone.badgeFill().copy(alpha = 0.15f)) {
+                                            Text(stringResource(med.statusEnum.labelRes),
                                                 Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32)
-                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = med.statusEnum.tone.onBadge(),
                                                 fontWeight = FontWeight.Medium)
                                         }
                                     }
@@ -124,10 +123,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         val dosageFreq = listOfNotNull(dosage, med.frequency).joinToString(" · ")
                                         Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    med.prescribedBy?.let { Text("Prescribed by $it", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                    med.startDate?.let { Text("Since ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    med.prescribedBy?.let {
+                                        Text(stringResource(R.string.prescribed_by_with_value, it),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    med.startDate?.let {
+                                        Text(stringResource(R.string.since_with_value, it.take(10)),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                                 Icon(Icons.Default.ChevronRight, contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
@@ -142,11 +147,33 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (prescriptions.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No prescriptions")
+                            EmptyOrRetry(R.string.no_prescriptions, loadFailed.prescriptions) { viewModel.load() }
                         }
                     }
                     items(prescriptions) { rx ->
                         var expanded by remember { mutableStateOf(false) }
+                        // The backend allows ONE open request per prescription
+                        // (PatientPortalServiceImpl.requestMedicationRefill).
+                        // Until this change the button never rendered at all, so
+                        // that refusal was unreachable; now it is told before the
+                        // patient taps rather than after a 400.
+                        //
+                        // PatientMedicationResponseDTO is built from prescriptions
+                        // and its id IS the prescription id, and its
+                        // `refillRequestOpen` is computed over EVERY refill row,
+                        // not a page — so prefer it. The scan over the loaded
+                        // refills page is the fallback for a prescription outside
+                        // the medications window; either way the server re-checks.
+                        // If the medications row exists it DECIDES, including
+                        // when it says there is no open request. The two sources
+                        // go stale in opposite directions: falling through on a
+                        // `false` would let a stale refills page — kept by
+                        // `load()` when only that fetch failed — hide the button
+                        // for a refill the patient has just cancelled, whereas
+                        // the opposite staleness merely costs a 400 they are
+                        // then told about in their own language. This is the
+                        // safer way to be wrong.
+                        val openRefill = openRefills[rx.id]
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -155,12 +182,14 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                             Column(Modifier.padding(16.dp)) {
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                    Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f))
-                                    Surface(shape = RoundedCornerShape(50), color = BrandBlue.copy(alpha = 0.1f)) {
-                                        Text(rx.status.replaceFirstChar { it.uppercase() },
+                                    Surface(shape = RoundedCornerShape(50),
+                                        color = rx.statusEnum.tone.badgeFill().copy(alpha = 0.15f)) {
+                                        Text(stringResource(rx.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall, color = BrandBlue,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = rx.statusEnum.tone.onBadge(),
                                             fontWeight = FontWeight.Medium)
                                     }
                                     Icon(Icons.Default.ChevronRight, contentDescription = "View details",
@@ -171,15 +200,36 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     val dosageFreq = listOfNotNull(dosage, rx.frequency).joinToString(" · ")
                                     Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                rx.prescribedBy?.let { Text("By $it", style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                Spacer(Modifier.height(6.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${rx.refillsRemaining} refill(s) remaining",
+                                rx.staffFullName?.takeIf { it.isNotBlank() }?.let {
+                                    Text(stringResource(R.string.prescribed_by_with_value, it),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (rx.refillsRemaining > 0) {
+                                }
+                                // Where the order went, when it left the hospital's own
+                                // dispensary (PrescriptionResponseDTO.pharmacyName).
+                                rx.pharmacyName?.takeIf { it.isNotBlank() }?.let {
+                                    Text(stringResource(R.string.rx_pharmacy_with_value, it),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                // An open request is worth saying whatever the
+                                // prescription's own status is: a PAUSED refill on
+                                // a prescription the prescriber has since
+                                // DISCONTINUED would otherwise vanish from this tab
+                                // entirely — no button and no explanation.
+                                if (openRefill != null) {
+                                    // REQUESTED is "awaiting review"; PAUSED is
+                                    // "your care team held it and will follow up"
+                                    // — the one message that explains the delay, so
+                                    // do not collapse the two.
+                                    Text(stringResource(openRefillMessage(openRefill)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else if (rx.statusEnum.isRefillable) {
+                                    // The backend gate is PrescriptionStatus.isRefillable(),
+                                    // not a refill counter — this DTO has never carried one.
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                         FilledTonalButton(
                                             onClick = { refillTarget = rx },
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
@@ -187,7 +237,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         ) {
                                             Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Request Refill", style = MaterialTheme.typography.labelSmall)
+                                            Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }
@@ -202,7 +252,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (refills.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No refill requests on record")
+                            EmptyOrRetry(R.string.no_refills, loadFailed.refills) { viewModel.load() }
                         }
                     }
                     items(refills) { refill ->
@@ -224,48 +274,52 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     )
                                     Surface(
                                         shape = RoundedCornerShape(50),
-                                        color = refillStatusColor(refill.status).copy(alpha = 0.15f)
+                                        color = refill.statusEnum.tone.badgeFill().copy(alpha = 0.15f)
                                     ) {
                                         Text(
-                                            refill.status.replace("_", " ")
-                                                .replaceFirstChar { it.uppercase() },
+                                            stringResource(refill.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = refillStatusColor(refill.status)
+                                            color = refill.statusEnum.tone.onBadge()
                                         )
                                     }
                                 }
                                 refill.preferredPharmacy?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Pharmacy: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.rx_pharmacy_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.requestedAt?.let {
-                                    Text("Requested: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_requested_with_value, it.take(10)),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                if (refill.status.uppercase() == "REQUESTED") {
-                                    Text("Sent to the prescribing provider for review",
+                                if (refill.statusEnum == RefillStatus.REQUESTED) {
+                                    Text(stringResource(R.string.refill_sent_for_review),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 // REQUESTED and PAUSED are the two states the backend
                                 // (cancelMyRefill) and the web let the patient withdraw.
-                                if (refill.status.uppercase() in listOf("REQUESTED", "PAUSED")) {
+                                if (refill.statusEnum.isCancellable) {
                                     TextButton(
                                         onClick = { cancelRefillTarget = refill },
                                         colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
                                     ) { Text(stringResource(R.string.cancel_refill_request)) }
                                 }
                                 refill.updatedAt?.takeIf { it != refill.requestedAt }?.let {
-                                    Text("Updated: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_updated_with_value, it.take(10)),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.providerNotes?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Provider: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_provider_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.notes?.takeIf { it.isNotBlank() }?.let {
-                                    Text("Notes: $it", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_notes_with_value, it),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -313,7 +367,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
             title = { Text("Request Refill", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     rx.dosage?.let { d ->
                         val info = listOfNotNull(d, rx.frequency).joinToString(" · ")
                         Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -367,22 +421,26 @@ private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Status
-                MedDetailRow("Status", if (med.isActive) "Active" else "Inactive")
+                MedDetailRow(stringResource(R.string.status), stringResource(med.statusEnum.labelRes))
                 HorizontalDivider()
 
-                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                med.dosage?.let { MedDetailRow("Dosage", it) }
-                med.frequency?.let { MedDetailRow("Frequency", it) }
-                med.route?.let { MedDetailRow("Route", it) }
-                HorizontalDivider()
+                Text(stringResource(R.string.dosage_and_administration),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                med.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
+                med.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
+                med.route?.let { MedDetailRow(stringResource(R.string.route), it) }
 
-                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                med.startDate?.let { MedDetailRow("Start Date", it.take(10)) }
-                med.endDate?.let { MedDetailRow("End Date", it.take(10)) }
+                if (med.startDate != null || med.endDate != null) {
+                    HorizontalDivider()
+                    Text(stringResource(R.string.dates_section),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    med.startDate?.let { MedDetailRow(stringResource(R.string.start_date), it.take(10)) }
+                    med.endDate?.let { MedDetailRow(stringResource(R.string.end_date), it.take(10)) }
+                }
 
                 med.prescribedBy?.let {
                     HorizontalDivider()
-                    MedDetailRow("Prescribed By", it)
+                    MedDetailRow(stringResource(R.string.prescribed_by), it)
                 }
 
                 med.instructions?.takeIf { it.isNotBlank() }?.let {
@@ -400,32 +458,34 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        title = { Text(rx.medicationName, fontWeight = FontWeight.Bold) },
+        title = { Text(rx.displayName, fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                rx.status.takeIf { it.isNotBlank() }?.let { MedDetailRow("Status", it) }
+                MedDetailRow(stringResource(R.string.status), stringResource(rx.statusEnum.labelRes))
                 HorizontalDivider()
 
                 Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                rx.dosage?.let { MedDetailRow("Dosage", it) }
-                rx.frequency?.let { MedDetailRow("Frequency", it) }
-                rx.quantity?.let { MedDetailRow("Quantity", "$it") }
+                rx.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
+                rx.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
+                rx.duration?.let { MedDetailRow(stringResource(R.string.duration), it) }
+                rx.route?.let { MedDetailRow(stringResource(R.string.route), it) }
                 HorizontalDivider()
 
-                Text("Refills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                MedDetailRow("Remaining", "${rx.refillsRemaining}")
-                HorizontalDivider()
+                Text(stringResource(R.string.dates_section),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                rx.createdAt?.let { MedDetailRow(stringResource(R.string.prescribed_at), it.take(10)) }
 
-                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                rx.prescribedDate?.let { MedDetailRow("Prescribed", it.take(10)) }
-                rx.expiryDate?.let { MedDetailRow("Expires", it.take(10)) }
-
-                rx.prescribedBy?.let {
+                rx.staffFullName?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()
-                    MedDetailRow("Prescribed By", it)
+                    MedDetailRow(stringResource(R.string.prescribed_by), it)
+                }
+
+                rx.pharmacyName?.takeIf { it.isNotBlank() }?.let {
+                    HorizontalDivider()
+                    MedDetailRow(stringResource(R.string.pharmacy), it)
                 }
 
                 rx.instructions?.takeIf { it.isNotBlank() }?.let {
@@ -438,21 +498,40 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
     )
 }
 
+/**
+ * An empty tab is not the same thing as a tab that could not be loaded. The
+ * screen has no pull-to-refresh, so without this a single failed load left
+ * the patient's medication list empty for the life of the ViewModel.
+ */
+@Composable
+private fun EmptyOrRetry(@StringRes emptyText: Int, failed: Boolean, onRetry: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(stringResource(if (failed) R.string.load_failed else emptyText))
+        if (failed) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+        }
+    }
+}
+
+/**
+ * The backend says two different things about an open refill
+ * (PatientPortalServiceImpl.requestMedicationRefill): REQUESTED is awaiting
+ * review, PAUSED was deliberately held with a follow-up promised.
+ */
+@StringRes
+internal fun openRefillMessage(status: RefillStatus): Int = when (status) {
+    RefillStatus.PAUSED -> R.string.refill_on_hold
+    RefillStatus.REQUESTED, RefillStatus.APPROVED, RefillStatus.DENIED,
+    RefillStatus.DISPENSED, RefillStatus.CANCELLED, RefillStatus.UNKNOWN ->
+        R.string.refill_already_open
+}
+
 @Composable
 private fun MedDetailRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-    }
-}
-
-private fun refillStatusColor(status: String): androidx.compose.ui.graphics.Color {
-    return when (status.uppercase()) {
-        "COMPLETED", "FILLED", "DISPENSED" -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
-        "APPROVED" -> androidx.compose.ui.graphics.Color(0xFF1565C0)
-        "PENDING", "REQUESTED" -> androidx.compose.ui.graphics.Color(0xFFF9A825)
-        "CANCELLED", "DENIED" -> androidx.compose.ui.graphics.Color(0xFFC62828)
-        else -> androidx.compose.ui.graphics.Color.Gray
     }
 }

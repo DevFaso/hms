@@ -19,3 +19,15 @@ val SurfaceGrey = Color(0xFFF5F5F5)
 // Dark theme variants
 val BrandBlueDark = Color(0xFF1EB4F5)
 val BrandDarkBlueDark = Color(0xFF3A82CC)
+
+// Status-badge content colours (WCAG AA on the badge's pale fill).
+// The bright semantic colours above are the FILL; using them as the text
+// colour too put ~1.7:1 amber on pale amber at 11 sp.
+val StatusPositiveOnLight = Color(0xFF2E7D32)
+val StatusAttentionOnLight = Color(0xFF8C5A00)
+val StatusNegativeOnLight = Color(0xFFC62828)
+val StatusNeutralOnLight = Color(0xFF616161)
+val StatusPositiveOnDark = Color(0xFF81C995)
+val StatusAttentionOnDark = Color(0xFFFDD663)
+val StatusNegativeOnDark = Color(0xFFF28B82)
+val StatusNeutralOnDark = Color(0xFFBDBDBD)

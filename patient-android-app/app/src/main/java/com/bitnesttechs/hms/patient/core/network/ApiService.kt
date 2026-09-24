@@ -133,34 +133,44 @@ interface ApiService {
     ): Response<ApiResponse<AppointmentDto>>
 
     // ── Lab Results ───────────────────────────────────────────────────────────
+    // PatientPortalController.getMyLabResults takes `limit`, not Spring
+    // pageable params: `page`/`size` were silently dropped, so every caller
+    // got the server default of 20 rows whatever it asked for.
     @GET("me/patient/lab-results")
     suspend fun getLabResults(
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
+        @Query("limit") limit: Int = 20
     ): Response<ApiResponse<List<LabResultDto>>>
 
-    @GET("me/patient/lab-results/{id}")
-    suspend fun getLabResult(@Path("id") id: String): Response<ApiResponse<LabResultDto>>
-
     // ── Medications ───────────────────────────────────────────────────────────
+    // The endpoint defaults to 20 and the tab lists everything it is given, so
+    // a patient with more medications than that was silently shown a slice.
+    // The prescriptions tab also joins on these rows for `refillRequestOpen`,
+    // which only helps for the prescriptions the window covers.
     @GET("me/patient/medications")
-    suspend fun getMedications(): Response<ApiResponse<List<MedicationDto>>>
+    suspend fun getMedications(
+        @Query("limit") limit: Int = 100
+    ): Response<ApiResponse<List<MedicationDto>>>
 
+    // getMyPrescriptions takes no paging parameters: it returns the
+    // patient's prescriptions in full.
     @GET("me/patient/prescriptions")
-    suspend fun getPrescriptions(
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<List<PrescriptionDto>>>
+    suspend fun getPrescriptions(): Response<ApiResponse<List<PrescriptionDto>>>
 
     @POST("me/patient/refills")
     suspend fun requestRefill(
         @Body request: RefillRequest
     ): Response<ApiResponse<RefillDto>>
 
+    // Newest first: the prescriptions tab decides whether to offer a refill
+    // from the rows on THIS page. Sorting makes a miss unlikely rather than
+    // impossible — an old never-actioned PAUSED row on a patient with more
+    // than `size` lifetime refills still falls off it — so the on-page check
+    // is a courtesy and the server refusal remains the gate.
     @GET("me/patient/refills")
     suspend fun getRefills(
         @Query("page") page: Int = 0,
-        @Query("size") size: Int = 50
+        @Query("size") size: Int = 50,
+        @Query("sort") sort: String = "createdAt,desc"
     ): Response<ApiResponse<PageDto<RefillDto>>>
 
     @PUT("me/patient/refills/{refillId}/cancel")
