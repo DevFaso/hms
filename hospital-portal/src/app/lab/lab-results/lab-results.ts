@@ -121,6 +121,10 @@ export class LabResultsComponent implements OnInit {
     'ROLE_SURGEON',
     'ROLE_MIDWIFE',
     'ROLE_LAB_SCIENTIST',
+    // Same expansion, second rule: SUPER_ADMIN_INHERITS grants both
+    // ROLE_DOCTOR and ROLE_LAB_SCIENTIST, so the endpoint accepts a
+    // super-admin — who was being offered Release on a row and refused Sign.
+    'ROLE_SUPER_ADMIN',
   ];
 
   /**

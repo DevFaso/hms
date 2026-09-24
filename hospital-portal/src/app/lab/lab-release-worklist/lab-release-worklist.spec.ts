@@ -121,6 +121,23 @@ describe('LabReleaseWorklistComponent', () => {
     expect(host().querySelector('[data-testid="release-action-result-1"]')).not.toBeNull();
   });
 
+  it('shows the result date and when the row actually landed as two columns', () => {
+    // An analyzer's OBX-14 can be hours before the ORU reaches us, and a
+    // hand-entered result can be backdated: calling the result date an
+    // arrival time misstates how long the row has been waiting.
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([
+      result({ resultDate: '2026-09-20T08:00:00', createdAt: '2026-09-20T14:30:00' }),
+    ]);
+
+    const cells = Array.from(
+      host().querySelectorAll('[data-testid="release-row-result-1"] td'),
+    ).map((c) => c.textContent ?? '');
+    expect(cells.some((t) => t.includes('8:00'))).toBeTrue();
+    expect(cells.some((t) => t.includes('2:30'))).toBeTrue();
+  });
+
   it('withholds the release control from a role the release endpoint refuses', () => {
     // A technician and a quality manager are on the worklist's @PreAuthorize
     // but not on LabResultAuthority.RELEASE_ROLES: they read the queue and

@@ -75,7 +75,8 @@
             <th scope="col">{{ 'LAB_RELEASE.COL_TEST' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_VALUE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_FLAG' | translate }}</th>
-            <th scope="col">{{ 'LAB_RELEASE.COL_ARRIVED' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_RESULT_DATE' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_RECEIVED' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_ACTIONS' | translate }}</th>
           </tr>
         </thead>
@@ -107,7 +108,14 @@
                   {{ 'LAB_RELEASE.FLAG_' + severityKey(row) | translate }}
                 </span>
               </td>
+              <!-- Two different times, and the difference is the point. The
+                   result date is OBX-14 from the analyzer, or whatever the
+                   person entering typed — it can be hours or days before the
+                   row existed here, and it is what the queue is sorted by.
+                   `createdAt` is when it actually landed, which is what
+                   "how long has this been waiting" means. -->
               <td>{{ row.resultDate ? (row.resultDate | date: 'short') : '—' }}</td>
+              <td>{{ row.createdAt ? (row.createdAt | date: 'short') : '—' }}</td>
               <td class="actions-cell">
                 @if (canReleaseResult(row)) {
                   <button

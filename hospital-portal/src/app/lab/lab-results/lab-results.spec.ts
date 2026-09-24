@@ -505,6 +505,13 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(createWithRoles(['ROLE_PHYSICIAN']).canSign()).toBeTrue();
   });
 
+  it('offers signing to a super-admin, who inherits both signing roles', () => {
+    // SUPER_ADMIN_INHERITS grants ROLE_DOCTOR and ROLE_LAB_SCIENTIST, so the
+    // sign endpoint accepts them — they were being offered Release on a row
+    // and refused Sign on the same row.
+    expect(createWithRoles(['ROLE_SUPER_ADMIN']).canSign()).toBeTrue();
+  });
+
   it('does not offer read-back to the lab roles the backend refuses', () => {
     // Read-back is the ordering clinician confirming what they were told;
     // lab attestation is a different act. A button that 403s teaches the
