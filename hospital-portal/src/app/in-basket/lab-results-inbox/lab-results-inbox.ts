@@ -73,6 +73,9 @@ export class LabResultsInboxComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** Which read of the queue is the current one; see load(). */
+  private queueRequest = 0;
+
   /** Exposed for the "showing N of M" line. */
   readonly maxVisible = MAX_VISIBLE_RESULTS;
 
@@ -170,6 +173,14 @@ export class LabResultsInboxComponent implements OnInit {
   }
 
   load(): void {
+    // Only the latest read may write. The ↻ control is disabled while one is
+    // in flight, but the two Retry controls are reachable from the error
+    // states, so two reads can still overlap: a slow failure landing after a
+    // fast success drew the stale banner over current rows, and a slow
+    // success landing last overwrote newer ones. Same guard the chart's two
+    // lab reads and the dashboard's copy of this queue carry.
+    const request = ++this.queueRequest;
+    const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);
     this.loadError.set(false);
     this.dashboardService
@@ -177,10 +188,12 @@ export class LabResultsInboxComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (items) => {
+          if (!isCurrent()) return;
           this.results.set(items ?? []);
           this.loading.set(false);
         },
         error: () => {
+          if (!isCurrent()) return;
           this.loadError.set(true);
           this.loading.set(false);
         },
