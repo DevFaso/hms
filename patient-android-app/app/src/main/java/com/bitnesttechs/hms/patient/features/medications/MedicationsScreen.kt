@@ -122,10 +122,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         val dosageFreq = listOfNotNull(dosage, med.frequency).joinToString(" · ")
                                         Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    med.prescribedBy?.let { Text("Prescribed by $it", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                    med.startDate?.let { Text("Since ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    med.prescribedBy?.let {
+                                        Text(stringResource(R.string.prescribed_by_with_value, it),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    med.startDate?.let {
+                                        Text(stringResource(R.string.since_with_value, it.take(10)),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                                 Icon(Icons.Default.ChevronRight, contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))

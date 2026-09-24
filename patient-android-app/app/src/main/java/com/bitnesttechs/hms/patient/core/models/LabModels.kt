@@ -76,7 +76,18 @@ data class LabResultDto(
      * withheld when there was no range to be inside — a positive qualitative
      * serology must not read as an all-clear.
      */
-    val isGradedNormal: Boolean get() = isNormal && !referenceRange.isNullOrBlank()
+    val isGradedNormal: Boolean
+        get() {
+            if (!isNormal || referenceRange.isNullOrBlank()) return false
+            // A range alone is not proof it was applied: the range comes off
+            // the test DEFINITION, while `LabResultMapper.determineSeverityFlag`
+            // returns UNSPECIFIED whenever `Double.parseDouble(resultValue)`
+            // throws — a decimal comma, a censored "<0.5", a qualitative
+            // "Positive" on a test that happens to have numeric limits. The
+            // value has to be something the backend could actually compare.
+            val raw = value?.trim().orEmpty()
+            return raw.isNotEmpty() && raw.replace(',', '.').toDoubleOrNull() != null
+        }
 
     /** The value with its unit, or null while the result is pending. */
     val valueWithUnit: String?
@@ -89,8 +100,14 @@ data class LabResultDto(
     val displayStatus: LabResultStatus
         get() = if (isPending) LabResultStatus.PENDING else statusEnum
 
+    /**
+     * Withholding the green but keeping the word "Normal" would leave the
+     * claim in place. An ungraded row is reported, not normal.
+     */
     @get:StringRes
-    val statusLabelRes: Int get() = displayStatus.labelRes
+    val statusLabelRes: Int
+        get() = if (isNormal && !isGradedNormal) R.string.lab_status_reported
+        else displayStatus.labelRes
 
     val tone: StatusTone
         get() = if (isNormal && !isGradedNormal) StatusTone.NEUTRAL else displayStatus.tone

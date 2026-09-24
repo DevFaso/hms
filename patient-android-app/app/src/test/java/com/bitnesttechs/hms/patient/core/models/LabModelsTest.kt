@@ -158,7 +158,18 @@ class LabModelsTest {
         assertFalse(ungraded.isGradedNormal)
         assertEquals(StatusTone.NEUTRAL, ungraded.tone)
 
-        val graded = ungraded.copy(referenceRange = "Negative")
+        // A range on the test DEFINITION is not proof the value was compared:
+        // determineSeverityFlag returns UNSPECIFIED when the value will not
+        // parse, and resolveStatus then falls through to NORMAL anyway.
+        for (unparsable in listOf("Positive", "<0.5", ">12")) {
+            val row = ungraded.copy(value = unparsable, referenceRange = "135 - 145")
+            assertFalse("$unparsable must not read as graded", row.isGradedNormal)
+            assertEquals(StatusTone.NEUTRAL, row.tone)
+        }
+
+        // A decimal comma is a real value, just not one Double.parseDouble
+        // accepts on the server; the app normalises it before judging.
+        val graded = ungraded.copy(value = "4,2", referenceRange = "3.5 - 5.1")
         assertTrue(graded.isGradedNormal)
         assertEquals(StatusTone.POSITIVE, graded.tone)
     }

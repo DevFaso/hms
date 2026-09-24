@@ -679,4 +679,6 @@
     <string name="medication_status_unknown">Statut indisponible</string>
     <string name="load_failed">Chargement impossible. Vérifiez votre connexion et réessayez.</string>
     <string name="no_refills">Aucune demande de renouvellement enregistrée</string>
+    <string name="lab_status_reported">Résultat disponible</string>
+    <string name="since_with_value">Depuis le %1$s</string>
 </resources>

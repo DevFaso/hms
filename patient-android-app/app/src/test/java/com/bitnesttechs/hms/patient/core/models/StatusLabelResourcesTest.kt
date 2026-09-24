@@ -132,11 +132,37 @@ class StatusLabelResourcesTest {
         )
     }
 
+    // ── Medication statuses ──────────────────────────────────────────────
+
+    @Test
+    fun everyMedicationStatusHasAnEnglishAndAFrenchLabel() {
+        assertLabels(
+            MedicationStatus.entries.associateWith { "medication_status_${it.name.lowercase()}" },
+            { it.labelRes },
+            expectedEnglish = mapOf(
+                MedicationStatus.ACTIVE to "Active",
+                MedicationStatus.COMPLETED to "Course finished",
+                MedicationStatus.DISCONTINUED to "Stopped",
+                MedicationStatus.ON_HOLD to "Not yet issued",
+                MedicationStatus.UNKNOWN to "Status unavailable"
+            ),
+            expectedFrench = mapOf(
+                MedicationStatus.ACTIVE to "En cours",
+                MedicationStatus.COMPLETED to "Traitement termin\u00e9",
+                MedicationStatus.DISCONTINUED to "Arr\u00eat\u00e9",
+                MedicationStatus.ON_HOLD to "Pas encore d\u00e9livr\u00e9",
+                MedicationStatus.UNKNOWN to "Statut indisponible"
+            )
+        )
+    }
+
     @Test
     fun noStatusLabelIsTheRawWireName() {
         val keys = LabResultStatus.entries.map { "lab_status_${it.name.lowercase()}" } +
             PrescriptionStatus.entries.map { "rx_status_${it.name.lowercase()}" } +
-            RefillStatus.entries.map { "refill_status_${it.name.lowercase()}" }
+            RefillStatus.entries.map { "refill_status_${it.name.lowercase()}" } +
+            MedicationStatus.entries.map { "medication_status_${it.name.lowercase()}" } +
+            listOf("lab_status_reported")
         for (key in keys) {
             for ((locale, table) in listOf("en" to english, "fr" to french)) {
                 val label = table[key]

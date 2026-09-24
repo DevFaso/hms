@@ -679,4 +679,6 @@
     <string name="medication_status_unknown">Status unavailable</string>
     <string name="load_failed">We could not load this. Check your connection and try again.</string>
     <string name="no_refills">No refill requests on record</string>
+    <string name="lab_status_reported">Reported</string>
+    <string name="since_with_value">Since %1$s</string>
 </resources>
