@@ -34,6 +34,7 @@ import com.bitnesttechs.hms.patient.ui.theme.*
 fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = hiltViewModel()) {
     val results by viewModel.results.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val loadFailed by viewModel.loadFailed.collectAsState()
     var selectedResult by remember { mutableStateOf<LabResultDto?>(null) }
 
     Scaffold(
@@ -69,8 +70,20 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.Science, null, Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(stringResource(R.string.no_lab_results),
-                                style = MaterialTheme.typography.bodyLarge)
+                            // An empty list is not the same thing as a list
+                            // that could not be loaded.
+                            Text(
+                                stringResource(
+                                    if (loadFailed) R.string.load_failed else R.string.no_lab_results
+                                ),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            if (loadFailed) {
+                                Spacer(Modifier.height(8.dp))
+                                TextButton(onClick = { viewModel.load() }) {
+                                    Text(stringResource(R.string.retry))
+                                }
+                            }
                         }
                     }
                 }

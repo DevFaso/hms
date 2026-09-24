@@ -46,25 +46,38 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 // refill-failure path — swapped the patient's medications for
                 // an empty tab. A successful fetch that returns nothing still
                 // empties it, which is the honest case.
-                val m = async { api.getMedications().body()?.data }
-                val p = async { api.getPrescriptions().body()?.data }
-                val r = async { api.getRefills().body()?.data?.content }
-                m.await()?.let { medications.value = it }
-                p.await()?.let { prescriptions.value = it }
-                r.await()?.let { refills.value = it }
-                loadFailed.value = false
+                //
+                // Retrofit does NOT throw on a non-2xx: a 401 arrives as
+                // `isSuccessful == false` with a null body, so the catch below
+                // never sees it and an expired session would have looked like
+                // an empty medication list. Every call reports its own outcome.
+                val m = async { api.getMedications() }
+                val p = async { api.getPrescriptions() }
+                val r = async { api.getRefills() }
+                val mResp = m.await()
+                val pResp = p.await()
+                val rResp = r.await()
+                mResp.body()?.data?.let { medications.value = it }
+                pResp.body()?.data?.let { prescriptions.value = it }
+                rResp.body()?.data?.content?.let { refills.value = it }
+                reportLoadOutcome(mResp.isSuccessful && pResp.isSuccessful && rResp.isSuccessful)
             } catch (_: Exception) {
-                // Keeping the previous lists (above) removed the only signal a
-                // refresh had failed — the screen used to empty. Say so instead,
-                // so an expired session is not a silent no-op. On a COLD open
-                // there is nothing stale to show, so the empty states offer a
-                // retry rather than claiming old data is on screen.
-                loadFailed.value = true
-                if (medications.value.isNotEmpty() || prescriptions.value.isNotEmpty()) {
-                    _outcome.value = Outcome(R.string.refresh_failed)
-                }
+                reportLoadOutcome(false)
             }
             finally { isLoading.value = false }
+        }
+    }
+
+    /**
+     * Keeping the previous lists removed the only signal a refresh had failed
+     * — the screen used to empty. Say so instead, so an expired session is not
+     * a silent no-op. On a COLD open there is nothing stale to show, so the
+     * empty states offer a retry rather than claiming old data is on screen.
+     */
+    private fun reportLoadOutcome(succeeded: Boolean) {
+        loadFailed.value = !succeeded
+        if (!succeeded && (medications.value.isNotEmpty() || prescriptions.value.isNotEmpty())) {
+            _outcome.value = Outcome(R.string.refresh_failed)
         }
     }
 
@@ -74,8 +87,13 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             try {
                 val resp = api.cancelRefill(refillId)
                 if (resp.isSuccessful) {
+                    // Join before announcing, as requestRefill does: `load()`'s
+                    // failure path sets an outcome too, and an unjoined reload
+                    // that fails a second later would replace "Refill cancelled"
+                    // with "Could not refresh" — so the patient would never
+                    // learn the cancellation went through.
+                    load().join()
                     _outcome.value = Outcome(R.string.refill_cancelled)
-                    load()
                 } else {
                     _outcome.value = Outcome(R.string.refill_cancel_failed, "HTTP ${resp.code()}")
                 }
@@ -120,10 +138,6 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // dead prescription is merely under review.
                     val refreshed = prescriptions.value.firstOrNull { it.id == prescriptionId }
                     val stillRefillable = refreshed?.statusEnum?.isRefillable ?: true
-                    // If the medications row exists it DECIDES, including when
-                    // it says there is no open request: otherwise a stale refills
-                    // page kept by a partially-failed reload would report an
-                    // unrelated 400 as "already with your care team".
                     // Here — unlike the button, where a stale "open" row would
                     // wrongly BLOCK the patient — the server has already refused,
                     // so an open row from either source is the better guess than

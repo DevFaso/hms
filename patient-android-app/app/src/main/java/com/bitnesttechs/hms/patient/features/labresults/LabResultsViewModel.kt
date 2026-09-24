@@ -16,13 +16,26 @@ class LabResultsViewModel @Inject constructor(private val api: ApiService) : Vie
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    /** True while the last load failed, so the empty state can offer a retry. */
+    private val _loadFailed = MutableStateFlow(false)
+    val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
+
     init { load() }
 
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
-            try { _results.value = api.getLabResults(limit = 50).body()?.data ?: emptyList() }
-            catch (_: Exception) {}
+            try {
+                // Retrofit does NOT throw on a non-2xx, so an expired session
+                // arrives as isSuccessful == false with a null body — which
+                // used to render as "No lab results" and tell the patient they
+                // have none.
+                val resp = api.getLabResults(limit = 50)
+                resp.body()?.data?.let { _results.value = it }
+                _loadFailed.value = !resp.isSuccessful
+            } catch (_: Exception) {
+                _loadFailed.value = true
+            }
             finally { _isLoading.value = false }
         }
     }

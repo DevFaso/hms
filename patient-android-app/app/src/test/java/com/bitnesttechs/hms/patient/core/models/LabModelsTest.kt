@@ -167,9 +167,14 @@ class LabModelsTest {
             assertEquals(StatusTone.NEUTRAL, row.tone)
         }
 
-        // A decimal comma is a real value, just not one Double.parseDouble
-        // accepts on the server; the app normalises it before judging.
-        val graded = ungraded.copy(value = "4,2", referenceRange = "3.5 - 5.1")
+        // A decimal comma is a real value to a human, but NOT to
+        // Double.parseDouble on the server — so the backend never compared it
+        // either, and the app must not treat it as graded.
+        val comma = ungraded.copy(value = "4,2", referenceRange = "3.5 - 5.1")
+        assertFalse(comma.isGradedNormal)
+        assertEquals(StatusTone.NEUTRAL, comma.tone)
+
+        val graded = ungraded.copy(value = "4.2", referenceRange = "3.5 - 5.1")
         assertTrue(graded.isGradedNormal)
         assertEquals(StatusTone.POSITIVE, graded.tone)
     }

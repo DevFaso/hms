@@ -82,11 +82,15 @@ data class LabResultDto(
             // A range alone is not proof it was applied: the range comes off
             // the test DEFINITION, while `LabResultMapper.determineSeverityFlag`
             // returns UNSPECIFIED whenever `Double.parseDouble(resultValue)`
-            // throws — a decimal comma, a censored "<0.5", a qualitative
-            // "Positive" on a test that happens to have numeric limits. The
-            // value has to be something the backend could actually compare.
+            // throws — a censored "<0.5", a qualitative "Positive", or a
+            // DECIMAL COMMA, on a test that happens to have numeric limits.
+            // `toDoubleOrNull` is deliberately not given the comma: the
+            // question is not whether the value is a number to a human, it is
+            // whether the SERVER could parse it, and `Double.parseDouble`
+            // cannot. Normalising here would hand a francophone site's "4,2"
+            // a green tick for a comparison that never happened.
             val raw = value?.trim().orEmpty()
-            return raw.isNotEmpty() && raw.replace(',', '.').toDoubleOrNull() != null
+            return raw.isNotEmpty() && raw.toDoubleOrNull() != null
         }
 
     /** The value with its unit, or null while the result is pending. */
