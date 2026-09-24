@@ -288,6 +288,23 @@
 
   <!-- ══ Labs (B6) ══ -->
   @if (section() === 'labs' && canViewLabs()) {
+    <!--
+      A populated section is cached for the scope it was read under, so a
+      result released while the chart is open would not appear on a revisit.
+      This is the control that asks again.
+    -->
+    <div class="section-toolbar">
+      <button
+        type="button"
+        class="btn-secondary btn-sm"
+        (click)="loadLabs()"
+        [disabled]="labResultsLoading() || labOrdersLoading()"
+        [title]="'CHART.LAB_REFRESH' | translate"
+      >
+        <span class="material-symbols-outlined">refresh</span>
+        {{ 'CHART.LAB_REFRESH' | translate }}
+      </button>
+    </div>
     <!-- ── Orders: what was asked for, and where it has got to ── -->
     @if (canViewLabOrders()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>

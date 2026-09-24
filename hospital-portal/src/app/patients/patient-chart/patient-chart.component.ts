@@ -213,6 +213,30 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * separate change, not one to make on the labs section alone.
    */
   labsLoadedFor = signal<string | null>(null);
+  /**
+   * Which read of each block is the current one.
+   *
+   * A break-glass declaration clears the cache and re-issues both reads while
+   * the first pair may still be in flight; without this, a slow 403 landing
+   * after the authorised response replaced freshly visible rows with an error
+   * card. Only the latest read of a block may write to it.
+   */
+  private labResultsRequest = 0;
+  private labOrdersRequest = 0;
+
+  /**
+   * Nothing on screen and nothing wrong — so a revisit should look again.
+   * The other three sections re-read whenever their list is empty; without
+   * this the Labs tab was the one section where "no results" stuck for the
+   * life of the page, which is the failure it exists to close.
+   */
+  readonly labsEmpty = computed(
+    () =>
+      this.labResults().length === 0 &&
+      this.labOrders().length === 0 &&
+      !this.labResultsError() &&
+      !this.labOrdersError(),
+  );
   /** Exposed for the "showing the latest N" hint below each lab table. */
   readonly labPageSize = LAB_PAGE_SIZE;
   /**
@@ -283,7 +307,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
         // patient with no labs would otherwise re-fetch both endpoints on
         // every visit, and a failed read would be retried silently instead of
         // offering Retry.
-        if (this.canViewLabs() && this.labsLoadedFor() !== this.hospitalId()) this.loadLabs();
+        if (
+          this.canViewLabs() &&
+          (this.labsLoadedFor() !== this.hospitalId() || this.labsEmpty())
+        ) {
+          this.loadLabs();
+        }
         break;
       case 'timeline':
         // Timeline requires an access reason first — prompt instead of loading.
@@ -637,6 +666,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   private fetchLabResults(): void {
+    const request = ++this.labResultsRequest;
+    const isCurrent = (): boolean => request === this.labResultsRequest;
     this.labResultsLoading.set(true);
     this.labResultsError.set(false);
     this.patientService
@@ -646,12 +677,14 @@ export class PatientChartComponent implements OnInit, OnChanges {
       })
       .subscribe({
         next: (list) => {
+          if (!isCurrent()) return;
           this.labResults.set(list ?? []);
           this.labResultsLoading.set(false);
         },
         error: () => {
           // An explicit error state, not an empty list: a 403 or an outage
           // rendered as "no labs" is how a released result reaches nobody.
+          if (!isCurrent()) return;
           this.labResultsError.set(true);
           this.labResultsLoading.set(false);
         },
@@ -659,14 +692,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   private fetchLabOrders(): void {
+    const request = ++this.labOrdersRequest;
+    const isCurrent = (): boolean => request === this.labOrdersRequest;
     this.labOrdersLoading.set(true);
     this.labOrdersError.set(false);
     this.labService.listOrders({ patientId: this.patientId, size: LAB_PAGE_SIZE }).subscribe({
       next: (list) => {
+        if (!isCurrent()) return;
         this.labOrders.set(list ?? []);
         this.labOrdersLoading.set(false);
       },
       error: () => {
+        if (!isCurrent()) return;
         this.labOrdersError.set(true);
         this.labOrdersLoading.set(false);
       },

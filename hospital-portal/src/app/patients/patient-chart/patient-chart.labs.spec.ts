@@ -421,14 +421,44 @@ describe('PatientChartComponent — labs section', () => {
     });
   });
 
-  it('does not re-read on a second visit to a patient with no labs', () => {
+  it('looks again on a revisit while the section has nothing to show', () => {
+    // A result released while the chart is open must not be hidden behind a
+    // cached empty list — the other three sections re-read the same way.
     setup({ roles: ['ROLE_DOCTOR'], results: [], orders: [] });
+    openLabs();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+
+    patientService.listLabResults.and.returnValue(of([released()]));
+    component.setSection('allergies');
+    openLabs();
+
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    expect(fixture.nativeElement.textContent).toContain('9.2');
+  });
+
+  it('does not re-read on a revisit once the section has rows', () => {
+    setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
     openLabs();
     component.setSection('allergies');
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-reads a populated section on demand from the Refresh control', () => {
+    setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
+    openLabs();
+
+    const refresh = fixture.nativeElement.querySelector(
+      '.section-toolbar button',
+    ) as HTMLButtonElement;
+    expect(refresh).not.toBeNull();
+    refresh.click();
+    fixture.detectChanges();
+
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
+    expect(labService.listOrders).toHaveBeenCalledTimes(2);
   });
 
   it('re-reads when the hospital the request is scoped to changes', () => {

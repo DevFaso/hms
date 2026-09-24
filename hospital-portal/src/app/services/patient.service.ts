@@ -280,10 +280,14 @@ export interface TimelineEntry {
  * copied from that DTO, not guessed.
  *
  * `@JsonInclude(NON_NULL)` on the DTO means every optional below is genuinely
- * absent when null, and the staff path omits `value`, `unit`,
- * `referenceRange`, `performedBy` and `notes` for a row the lab has not
- * released — `released` is the flag that says so, and `status` reads
- * `PENDING`.
+ * absent when null.
+ *
+ * `value` is NOT a pending test. `PatientLabResultServiceImpl.toResponse`
+ * drops `value`, `unit`, `referenceRange`, `performedBy` and `notes` only
+ * under `redactUnreleased`, which is the PATIENT path; this staff path always
+ * sets them, preliminary analyzer values included. `released` is the only
+ * flag that says whether the laboratory has released the row (`status` then
+ * reads `PENDING`), and it is what the chart keys its pending rendering on.
  */
 export interface PatientLabResult {
   id: string;
