@@ -90,7 +90,17 @@ data class LabResultDto(
             // cannot. Normalising here would hand a francophone site's "4,2"
             // a green tick for a comparison that never happened.
             val raw = value?.trim().orEmpty()
-            return raw.isNotEmpty() && raw.toDoubleOrNull() != null
+            if (raw.isEmpty() || raw.toDoubleOrNull() == null) return false
+            // The range shown and the range graded against are not necessarily
+            // the same one: `formatReferenceRange` always formats `ranges[0]`,
+            // while `determineSeverityFlag` grades against
+            // `findMatchingRange(resultUnit, …)`. On a test configured with two
+            // unit-specific ranges, the row can be graded NORMAL in mmol/L and
+            // displayed against the mg/dL limits — an all-clear beside a range
+            // the value is nowhere near. If the row has a unit, only claim the
+            // grading when the displayed range is in that unit.
+            val unit = unit?.trim().orEmpty()
+            return unit.isEmpty() || referenceRange.orEmpty().contains(unit, ignoreCase = true)
         }
 
     /** The value with its unit, or null while the result is pending. */

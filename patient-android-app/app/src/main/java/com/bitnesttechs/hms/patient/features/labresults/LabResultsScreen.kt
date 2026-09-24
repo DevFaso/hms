@@ -88,6 +88,22 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                     }
                 }
             }
+            // A failed refresh over results that ARE on screen renders nothing
+            // at all otherwise: the empty state never runs, so the patient
+            // reads stale results with no sign the reload failed.
+            if (loadFailed && results.isNotEmpty()) {
+                item {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center) {
+                        Text(stringResource(R.string.refresh_failed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { viewModel.load() }) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
+            }
             items(results) { lab ->
                 val toneFill = lab.tone.badgeFill()
                 val toneContent = lab.tone.onBadge()

@@ -467,7 +467,8 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
                 MedDetailRow(stringResource(R.string.status), stringResource(rx.statusEnum.labelRes))
                 HorizontalDivider()
 
-                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.dosage_and_administration),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 rx.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
                 rx.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
                 rx.duration?.let { MedDetailRow(stringResource(R.string.duration), it) }
