@@ -574,3 +574,4 @@
 "dosage_and_administration" = "Dosage & administration";
 "submit" = "Submit";
 "refill_not_refillable" = "This prescription can no longer be refilled. Please contact your care team.";
+"refill_on_hold" = "Your care team has put this refill request on hold. They will follow up with you.";

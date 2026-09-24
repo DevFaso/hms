@@ -161,8 +161,8 @@ struct MedicationsView: View {
                             // before tapping rather than after a 400. It is a
                             // courtesy, not the gate: the server re-checks and
                             // its message reaches the alert.
-                            if vm.hasOpenRefill(forPrescription: rx.id) {
-                                Text("refill_already_open".localized)
+                            if let open = vm.openRefillStatus(forPrescription: rx.id) {
+                                Text(MedicationsViewModel.openRefillMessageKey(open).localized)
                                     .font(.caption2).foregroundColor(.secondary)
                             } else {
                                 HStack {
@@ -513,23 +513,31 @@ final class MedicationsViewModel: ObservableObject {
     func load() async {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
+            // Each list is replaced only when its own fetch SUCCEEDS. A
+            // refresh that throws — no connectivity, an expired session, or
+            // the reload on the refill-failure path below — used to swap the
+            // patient's medications for "No active medications on record."
             group.addTask { @MainActor in
                 // The endpoint defaults to 20 and the tab lists everything
                 // it is given; the prescriptions tab also joins on these rows
                 // for `refillRequestOpen`, which only helps for the
                 // prescriptions the window covers.
-                self.medications = await (try? APIClient.shared.get(
+                if let meds: [MedicationDTO] = try? await APIClient.shared.get(
                     APIEndpoints.medications,
                     queryItems: [URLQueryItem(name: "limit", value: "100")]
-                )) ?? []
+                ) {
+                    self.medications = meds
+                }
             }
             group.addTask { @MainActor in
-                self.prescriptions = await (try? APIClient.shared.get(APIEndpoints.prescriptions)) ?? []
+                if let rx: [PrescriptionDTO] = try? await APIClient.shared.get(APIEndpoints.prescriptions) {
+                    self.prescriptions = rx
+                }
             }
             group.addTask { @MainActor in
-                // Newest first: `hasOpenRefill` can only see this page, and
-                // an open REQUESTED/PAUSED row outside it would put the button
-                // back on screen. The backend sorts on whatever Pageable says.
+                // Newest first: the refills-page fallback below can only see
+                // this page, and an open REQUESTED/PAUSED row outside it would
+                // put the button back on screen.
                 let page: PageDTO<RefillDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.refills,
                     queryItems: [
@@ -537,7 +545,9 @@ final class MedicationsViewModel: ObservableObject {
                         URLQueryItem(name: "sort", value: "createdAt,desc")
                     ]
                 )
-                self.refills = page?.content ?? []
+                if let content = page?.content {
+                    self.refills = content
+                }
             }
         }
         isLoading = false
@@ -564,27 +574,43 @@ final class MedicationsViewModel: ObservableObject {
                !refreshed.statusEnum.isRefillable {
                 return "refill_not_refillable".localized
             }
-            if hasOpenRefill(forPrescription: prescriptionId) {
-                return "refill_already_open".localized
+            if let open = openRefillStatus(forPrescription: prescriptionId) {
+                return Self.openRefillMessageKey(open).localized
             }
             return serverMessage
         }
     }
 
-    /// Whether a REQUESTED or PAUSED refill already exists for this
-    /// prescription, which is what `requestMedicationRefill` refuses on.
+    /// The state of the REQUESTED or PAUSED refill already on this
+    /// prescription, which is what `requestMedicationRefill` refuses on, or
+    /// nil when there is none.
     ///
     /// `PatientMedicationResponseDTO` is built from prescriptions and its `id`
     /// IS the prescription id, and its `refillRequestOpen` is computed over
     /// EVERY refill row rather than a page — so prefer it. The scan over the
     /// loaded refills page is the fallback for a prescription outside the
     /// medications window; either way the server re-checks.
-    func hasOpenRefill(forPrescription prescriptionId: String?) -> Bool {
-        guard let prescriptionId, !prescriptionId.isEmpty else { return false }
-        if let open = medications.first(where: { $0.id == prescriptionId })?.refillRequestOpen {
-            return open
+    func openRefillStatus(forPrescription prescriptionId: String?) -> RefillStatus? {
+        guard let prescriptionId, !prescriptionId.isEmpty else { return nil }
+        if let medication = medications.first(where: { $0.id == prescriptionId }),
+           let open = medication.refillRequestOpen {
+            guard open else { return nil }
+            let status = RefillStatus(wire: medication.refillRequestStatus)
+            return status.isOpen ? status : .requested
         }
-        return refills.contains { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }
+        return refills.first { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }?
+            .statusEnum
+    }
+
+    func hasOpenRefill(forPrescription prescriptionId: String?) -> Bool {
+        openRefillStatus(forPrescription: prescriptionId) != nil
+    }
+
+    /// The backend says two different things: a REQUESTED refill is awaiting
+    /// review, a PAUSED one was deliberately held with a follow-up promised —
+    /// and the second is the message that explains the delay.
+    static func openRefillMessageKey(_ status: RefillStatus) -> String {
+        status == .paused ? "refill_on_hold" : "refill_already_open"
     }
 
     func cancelRefill(id: String) async {

@@ -27,6 +27,9 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     /// `/me/patient/refills`.
     let refillable: Bool?
     let refillRequestOpen: Bool?
+    /// The wire name of that request's status, so the app can tell "awaiting
+    /// review" from "your provider put it on hold" without a second call.
+    let refillRequestStatus: String?
 
     /// Display name: prefer `name`, fall back to `medicationName`
     var displayName: String {
