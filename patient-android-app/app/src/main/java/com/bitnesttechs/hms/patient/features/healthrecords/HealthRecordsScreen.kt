@@ -244,7 +244,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
                         DetailItem(stringResource(R.string.range), lab.referenceRange.takeUnless { lab.isPending }, Icons.Default.Info),
                         DetailItem(stringResource(R.string.status), stringResource(lab.statusLabelRes), Icons.Default.Warning),
                         DetailItem(stringResource(R.string.ordered_at), lab.collectedAt?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem(stringResource(R.string.result_date), lab.resultedAt?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.result_date), lab.resultedAt?.takeUnless { lab.isPending }?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.ordered_by), lab.orderedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.performed_by), lab.performedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.laboratory), lab.hospitalName, Icons.Default.LocalHospital)
@@ -261,7 +261,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
                 } else {
                     lab.valueWithUnit?.let { SecondaryText(it) }
                 }
-                (lab.resultedAt ?: lab.collectedAt)?.let { SecondaryText(it.take(10)) }
+                lab.displayDate?.let { SecondaryText(it.take(10)) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }

@@ -19,13 +19,14 @@ data class MedicationDto(
     @Json(name = "isActive") val isActive: Boolean = true,
     /**
      * `PatientMedicationResponseDTO` is built one-to-one FROM prescriptions
-     * and its `id` IS the prescription id, so these two answer the refill
-     * question for a prescription authoritatively: `refillRequestOpen` is
-     * computed over every refill row for the page (`latestRefillsFor`, no
-     * pagination), unlike anything the app can derive from a page of
-     * `/me/patient/refills`.
+     * and its `id` IS the prescription id, so this answers the refill question
+     * for a prescription authoritatively: `refillRequestOpen` is computed over
+     * every refill row for the page (`latestRefillsFor`, no pagination),
+     * unlike anything the app can derive from a page of
+     * `/me/patient/refills`. (`refillable` is served beside it and is not
+     * decoded: it is the same verdict as [PrescriptionStatus.isRefillable],
+     * which the app mirrors exactly.)
      */
-    @Json(name = "refillable") val refillable: Boolean = true,
     @Json(name = "refillRequestOpen") val refillRequestOpen: Boolean = false,
     /**
      * The wire name of that request's status, so the app can tell "awaiting

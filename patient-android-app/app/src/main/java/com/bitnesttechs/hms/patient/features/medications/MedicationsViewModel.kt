@@ -49,7 +49,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 m.await()?.let { medications.value = it }
                 p.await()?.let { prescriptions.value = it }
                 r.await()?.let { refills.value = it }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // Keeping the previous lists (above) removed the only signal a
+                // refresh had failed — the screen used to empty. Say so instead,
+                // so an expired session is not a silent no-op.
+                _outcome.value = Outcome(R.string.refresh_failed)
+            }
             finally { isLoading.value = false }
         }
     }

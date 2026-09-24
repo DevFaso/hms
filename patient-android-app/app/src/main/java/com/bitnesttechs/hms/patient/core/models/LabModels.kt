@@ -67,6 +67,17 @@ data class LabResultDto(
 
     val isNormal: Boolean get() = !isPending && statusEnum == LabResultStatus.NORMAL
 
+    /**
+     * NORMAL *with a range it could have been inside*. `resolveStatus` falls
+     * through to `statusOf(result.getAbnormalFlag())` and `statusOf(null)` is
+     * also NORMAL, so on the wire "graded normal" and "nothing graded this"
+     * are the same word. The green tick and the green badge are the app's own
+     * reassurance rather than anything the backend asserted, so they are
+     * withheld when there was no range to be inside — a positive qualitative
+     * serology must not read as an all-clear.
+     */
+    val isGradedNormal: Boolean get() = isNormal && !referenceRange.isNullOrBlank()
+
     /** The value with its unit, or null while the result is pending. */
     val valueWithUnit: String?
         get() {
@@ -81,7 +92,11 @@ data class LabResultDto(
     @get:StringRes
     val statusLabelRes: Int get() = displayStatus.labelRes
 
-    val tone: StatusTone get() = displayStatus.tone
+    val tone: StatusTone
+        get() = if (isNormal && !isGradedNormal) StatusTone.NEUTRAL else displayStatus.tone
+
+    /** The date worth showing: a pending row's `resultedAt` is not its own. */
+    val displayDate: String? get() = if (isPending) collectedAt else (resultedAt ?: collectedAt)
 }
 
 /**

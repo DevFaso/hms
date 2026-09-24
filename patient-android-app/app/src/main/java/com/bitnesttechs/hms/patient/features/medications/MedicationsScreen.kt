@@ -159,10 +159,14 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // refills page is the fallback for a prescription outside
                         // the medications window; either way the server re-checks.
                         // If the medications row exists it DECIDES, including
-                        // when it says there is no open request. Falling through
-                        // on a `false` would let a stale refills page — kept by
+                        // when it says there is no open request. The two sources
+                        // go stale in opposite directions: falling through on a
+                        // `false` would let a stale refills page — kept by
                         // `load()` when only that fetch failed — hide the button
-                        // for a refill the patient has just cancelled.
+                        // for a refill the patient has just cancelled, whereas
+                        // the opposite staleness merely costs a 400 they are
+                        // then told about in their own language. This is the
+                        // safer way to be wrong.
                         val medicationRow = medications.firstOrNull { it.id == rx.id }
                         val openRefill = if (medicationRow != null) {
                             medicationRow.openRefillStatus

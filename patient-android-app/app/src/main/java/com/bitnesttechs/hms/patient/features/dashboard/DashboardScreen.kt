@@ -370,7 +370,10 @@ fun LabResultRow(lab: LabResultDto) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(lab.testName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text((lab.resultedAt ?: lab.collectedAt)?.take(10) ?: "", style = MaterialTheme.typography.bodySmall,
+            // Not resultedAt while pending: resultDate is @NotNull, so an
+            // unreleased row always carries one, and showing it beside a
+            // "Pending" badge contradicts it.
+            Text(lab.displayDate?.take(10) ?: "", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         StatusBadge(

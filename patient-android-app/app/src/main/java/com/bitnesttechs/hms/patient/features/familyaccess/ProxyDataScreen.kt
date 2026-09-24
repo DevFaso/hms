@@ -232,7 +232,7 @@ private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(lab.testName, fontWeight = FontWeight.Bold)
-                        (lab.resultedAt ?: lab.collectedAt)?.let { Text(it.take(10), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        lab.displayDate?.let { Text(it.take(10), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         if (lab.isPending) {
                             Text(stringResource(R.string.lab_result_pending), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {

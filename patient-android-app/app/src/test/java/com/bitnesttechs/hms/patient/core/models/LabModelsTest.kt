@@ -144,6 +144,38 @@ class LabModelsTest {
         assertEquals(LabResultStatus.PENDING, lab.displayStatus)
     }
 
+    /**
+     * `statusOf(null)` is NORMAL, so "graded normal" and "nothing graded this"
+     * arrive as the same word. Only the first earns the green tick.
+     */
+    @Test
+    fun normalWithoutAReferenceRangeIsNotAnAllClear() {
+        val ungraded = LabResultDto(
+            id = "z", testName = "Malaria RDT", value = "Positive",
+            status = "NORMAL", released = true
+        )
+        assertTrue(ungraded.isNormal)
+        assertFalse(ungraded.isGradedNormal)
+        assertEquals(StatusTone.NEUTRAL, ungraded.tone)
+
+        val graded = ungraded.copy(referenceRange = "Negative")
+        assertTrue(graded.isGradedNormal)
+        assertEquals(StatusTone.POSITIVE, graded.tone)
+    }
+
+    /** A pending row's `resultedAt` is the analyzer's, not the lab's. */
+    @Test
+    fun aPendingRowShowsTheOrderDateRatherThanAResultDate() {
+        val pending = LabResultDto(
+            id = "p", testName = "Glucose", status = "PENDING", released = false,
+            collectedAt = "2026-09-22T07:10:00", resultedAt = "2026-09-22T14:05:00"
+        )
+        assertEquals("2026-09-22T07:10:00", pending.displayDate)
+
+        val released = pending.copy(released = true, status = "NORMAL")
+        assertEquals("2026-09-22T14:05:00", released.displayDate)
+    }
+
     @Test
     fun unknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
         assertEquals(LabResultStatus.UNKNOWN, LabResultStatus.fromWire(null))

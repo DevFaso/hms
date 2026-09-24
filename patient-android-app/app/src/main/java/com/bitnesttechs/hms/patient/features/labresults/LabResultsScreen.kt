@@ -97,19 +97,22 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         // name — UNKNOWN is exactly the case where the app does
                         // not know whether the value is normal.
                         //
-                        // A released NORMAL row is left alone even when nothing
-                        // graded it (resolveStatus falls through to
-                        // statusOf(null) = NORMAL): the badge reports what the
-                        // wire says, and LabResult.resultValue is @NotBlank, so
-                        // there is always a value behind it. The stronger claim
-                        // — "Within normal range" — is the one gated on a
-                        // reference range, in the detail dialog below.
+                        // A released NORMAL row with no reference range is not
+                        // an all-clear either: resolveStatus falls through to
+                        // statusOf(null) = NORMAL, so "graded normal" and
+                        // "nothing graded this" are the same word on the wire.
+                        // The badge still reports what the wire says; the tick
+                        // and the green, which are the app's own reassurance,
+                        // are withheld.
                         Icon(
                             when {
                                 lab.isPending -> Icons.Default.HourglassEmpty
                                 lab.displayStatus == LabResultStatus.UNKNOWN -> Icons.Default.HelpOutline
                                 lab.isAbnormal || lab.isCritical -> Icons.Default.Warning
-                                else -> Icons.Default.CheckCircle
+                                // Neutral rather than an all-clear when nothing
+                                // graded the row.
+                                lab.isGradedNormal -> Icons.Default.CheckCircle
+                                else -> Icons.Default.Science
                             },
                             contentDescription = null,
                             tint = toneContent,
@@ -147,7 +150,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            (lab.resultedAt ?: lab.collectedAt)?.let {
+                            lab.displayDate?.let {
                                 Text(stringResource(R.string.lab_date_with_value, it.take(10)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -226,8 +229,7 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     // a qualitative or ungraded row NORMAL means "nothing graded
                     // this", and a culture narrative must not be told it is
                     // within a range nobody configured.
-                    val showsNormal = lab.isNormal && lab.referenceRange != null
-                    if (lab.isCritical || lab.isAbnormal || showsNormal) {
+                    if (lab.isCritical || lab.isAbnormal || lab.isGradedNormal) {
                         Row(verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             when {
@@ -243,7 +245,7 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                                     Text(stringResource(R.string.lab_interpretation_abnormal),
                                         style = MaterialTheme.typography.bodySmall, color = toneContent)
                                 }
-                                showsNormal -> {
+                                lab.isGradedNormal -> {
                                     Icon(Icons.Default.CheckCircle, null, tint = toneContent,
                                         modifier = Modifier.size(16.dp))
                                     Text(stringResource(R.string.lab_interpretation_normal),
