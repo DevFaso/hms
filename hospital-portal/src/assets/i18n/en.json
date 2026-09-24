@@ -6980,6 +6980,7 @@
     "labResultsRefresh": "Refresh lab results",
     "labResultsScopeHint": "Includes orders you placed at other hospitals, which may fall outside your current scope.",
     "labResultsSubtitle": "Released results on the orders you placed.",
+    "labTruncated": "Showing {{shown}} of {{total}}, most urgent first.",
     "labUnknown": "Unknown",
     "messages": "Messages",
     "orders": "Orders",

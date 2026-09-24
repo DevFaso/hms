@@ -67,7 +67,7 @@
           heading row is what stops a critical value being one row among
           forty; an empty group renders nothing at all.
         -->
-        @for (group of groups(); track group.key) {
+        @for (group of visibleGroups(); track group.key) {
           @if (group.items.length > 0) {
             <tbody class="severity-group">
               <tr class="group-row">
@@ -104,5 +104,10 @@
         }
       </table>
     </div>
+    @if (truncated()) {
+      <p class="category-hint">
+        {{ 'inBasket.labTruncated' | translate: { shown: maxVisible, total: results().length } }}
+      </p>
+    }
   }
 </section>

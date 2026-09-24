@@ -6980,6 +6980,7 @@
     "labResultsRefresh": "Actualiser les résultats de laboratoire",
     "labResultsScopeHint": "Inclut les examens que vous avez prescrits dans d'autres hôpitaux, qui peuvent se situer hors de votre périmètre actuel.",
     "labResultsSubtitle": "Résultats validés sur les examens que vous avez prescrits.",
+    "labTruncated": "Affichage de {{shown}} sur {{total}}, les plus urgents d’abord.",
     "labUnknown": "Inconnu",
     "messages": "Messages",
     "orders": "Ordonnances",

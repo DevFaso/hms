@@ -1,11 +1,13 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   OnInit,
   computed,
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -19,6 +21,18 @@ interface LabResultGroup {
   badgeClass: string;
   items: DoctorResultQueueItem[];
 }
+
+/**
+ * How many rows the category draws.
+ *
+ * `getResultReviewQueue` has no date window, no hospital filter and no
+ * reviewed state, so it returns every released result this physician has ever
+ * ordered. Drawn whole, a worklist becomes an un-paginated table that only
+ * grows and a header count that reads as "items needing attention". The cap
+ * is applied AFTER the severity split, so a critical row is never the one
+ * dropped, and what was cut is stated on screen.
+ */
+const MAX_VISIBLE_RESULTS = 50;
 
 /**
  * B7 — the lab-results category of the clinical in-basket.
@@ -44,6 +58,10 @@ interface LabResultGroup {
 })
 export class LabResultsInboxComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Exposed for the "showing N of M" line. */
+  readonly maxVisible = MAX_VISIBLE_RESULTS;
 
   readonly results = signal<DoctorResultQueueItem[]>([]);
   readonly loading = signal(false);
@@ -94,6 +112,22 @@ export class LabResultsInboxComponent implements OnInit {
     ];
   });
 
+  /**
+   * The groups as drawn: severity order preserved, the whole list capped at
+   * MAX_VISIBLE_RESULTS. CRITICAL is filled first, so the cap can only ever
+   * eat into the least urgent tail.
+   */
+  readonly visibleGroups = computed<LabResultGroup[]>(() => {
+    let budget = MAX_VISIBLE_RESULTS;
+    return this.groups().map((group) => {
+      const items = group.items.slice(0, Math.max(budget, 0));
+      budget -= items.length;
+      return { ...group, items };
+    });
+  });
+
+  readonly truncated = computed(() => this.results().length > MAX_VISIBLE_RESULTS);
+
   ngOnInit(): void {
     this.load();
   }
@@ -101,16 +135,19 @@ export class LabResultsInboxComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.loadError.set(false);
-    this.dashboardService.getResultReviewQueue().subscribe({
-      next: (items) => {
-        this.results.set(items ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loadError.set(true);
-        this.loading.set(false);
-      },
-    });
+    this.dashboardService
+      .getResultReviewQueue()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (items) => {
+          this.results.set(items ?? []);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loadError.set(true);
+          this.loading.set(false);
+        },
+      });
   }
 
   flagClass(item: DoctorResultQueueItem): string {

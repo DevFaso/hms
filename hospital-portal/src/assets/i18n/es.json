@@ -6980,6 +6980,7 @@
     "labResultsRefresh": "Actualizar los resultados de laboratorio",
     "labResultsScopeHint": "Incluye las pruebas que usted solicitó en otros hospitales, que pueden quedar fuera de su ámbito actual.",
     "labResultsSubtitle": "Resultados validados de las pruebas que usted solicitó.",
+    "labTruncated": "Mostrando {{shown}} de {{total}}, los más urgentes primero.",
     "labUnknown": "Desconocido",
     "messages": "Mensajes",
     "orders": "Órdenes",

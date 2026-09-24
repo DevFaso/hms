@@ -156,6 +156,36 @@ describe('LabResultsInboxComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
+  it('caps the drawn list and says what it cut, filling CRITICAL first', () => {
+    // The endpoint has no date window and no reviewed state, so the queue
+    // only grows; the cap must never be what drops a critical row.
+    const queue = [
+      ...Array.from({ length: 3 }, (_, i) =>
+        item({ id: 'c-' + i, abnormalFlag: 'CRITICAL', testName: 'Potassium' }),
+      ),
+      ...Array.from({ length: 60 }, (_, i) =>
+        item({ id: 'n-' + i, abnormalFlag: 'NORMAL', testName: 'Glycémie' }),
+      ),
+    ];
+    setup(queue);
+
+    expect(component.truncated()).toBeTrue();
+    const drawn = component.visibleGroups();
+    expect(drawn.reduce((total, g) => total + g.items.length, 0)).toBe(component.maxVisible);
+    expect(drawn.find((g) => g.key === 'CRITICAL')?.items.length).toBe(3);
+    expect(fixture.nativeElement.textContent).toContain('inBasket.labTruncated');
+    expect(
+      fixture.nativeElement.querySelectorAll('tbody.severity-group tr td:first-child').length,
+    ).toBe(component.maxVisible);
+  });
+
+  it('draws no truncation line on a short queue', () => {
+    setup([item()]);
+
+    expect(component.truncated()).toBeFalse();
+    expect(fixture.nativeElement.textContent).not.toContain('inBasket.labTruncated');
+  });
+
   it('returns an empty string rather than "Invalid Date" for a missing timestamp', () => {
     setup([item({ resultedAt: '' })]);
 

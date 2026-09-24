@@ -2316,7 +2316,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.resultQueue.set(items);
           done();
         },
-        error: () => done(),
+        error: () => {
+          // The service no longer turns a failure into an empty array, so the
+          // queue has to be cleared here. Without it, a failed
+          // refreshDashboard() left the previously loaded results on screen
+          // with nothing saying they are stale.
+          this.resultQueue.set([]);
+          done();
+        },
       });
     }
 
