@@ -158,10 +158,18 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // not a page — so prefer it. The scan over the loaded
                         // refills page is the fallback for a prescription outside
                         // the medications window; either way the server re-checks.
-                        val openRefill = medications.firstOrNull { it.id == rx.id }
-                            ?.let { if (it.refillRequestOpen) it.openRefillStatus else null }
-                            ?: refills.firstOrNull { it.prescriptionId == rx.id && it.statusEnum.isOpen }
+                        // If the medications row exists it DECIDES, including
+                        // when it says there is no open request. Falling through
+                        // on a `false` would let a stale refills page — kept by
+                        // `load()` when only that fetch failed — hide the button
+                        // for a refill the patient has just cancelled.
+                        val medicationRow = medications.firstOrNull { it.id == rx.id }
+                        val openRefill = if (medicationRow != null) {
+                            medicationRow.openRefillStatus
+                        } else {
+                            refills.firstOrNull { it.prescriptionId == rx.id && it.statusEnum.isOpen }
                                 ?.statusEnum
+                        }
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -452,8 +460,9 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
                 rx.route?.let { MedDetailRow(stringResource(R.string.route), it) }
                 HorizontalDivider()
 
-                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                rx.createdAt?.let { MedDetailRow("Prescribed", it.take(10)) }
+                Text(stringResource(R.string.dates_section),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                rx.createdAt?.let { MedDetailRow(stringResource(R.string.prescribed_at), it.take(10)) }
 
                 rx.staffFullName?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()

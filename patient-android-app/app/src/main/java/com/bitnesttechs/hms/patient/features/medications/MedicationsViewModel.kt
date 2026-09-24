@@ -102,11 +102,18 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // dead prescription is merely under review.
                     val refreshed = prescriptions.value.firstOrNull { it.id == prescriptionId }
                     val stillRefillable = refreshed?.statusEnum?.isRefillable ?: true
-                    val openRefill = medications.value.firstOrNull { it.id == prescriptionId }
-                        ?.let { if (it.refillRequestOpen) it.openRefillStatus else null }
-                        ?: refills.value.firstOrNull {
+                    // If the medications row exists it DECIDES, including when
+                    // it says there is no open request: otherwise a stale refills
+                    // page kept by a partially-failed reload would report an
+                    // unrelated 400 as "already with your care team".
+                    val medicationRow = medications.value.firstOrNull { it.id == prescriptionId }
+                    val openRefill = if (medicationRow != null) {
+                        medicationRow.openRefillStatus
+                    } else {
+                        refills.value.firstOrNull {
                             it.prescriptionId == prescriptionId && it.statusEnum.isOpen
                         }?.statusEnum
+                    }
                     _outcome.value = when {
                         !stillRefillable -> Outcome(R.string.refill_not_refillable)
                         openRefill != null -> Outcome(openRefillMessage(openRefill))

@@ -669,4 +669,6 @@
     <string name="refill_sent_for_review">Transmise au prescripteur pour examen</string>
     <string name="refill_not_refillable">Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante.</string>
     <string name="refill_on_hold">Votre équipe soignante a mis cette demande de renouvellement en attente. Elle reviendra vers vous.</string>
+    <string name="dates_section">Dates</string>
+    <string name="prescribed_at">Prescrite le</string>
 </resources>

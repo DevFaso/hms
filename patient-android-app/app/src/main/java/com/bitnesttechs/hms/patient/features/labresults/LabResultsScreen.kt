@@ -96,6 +96,14 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                         // Nor is a released row whose status this build cannot
                         // name — UNKNOWN is exactly the case where the app does
                         // not know whether the value is normal.
+                        //
+                        // A released NORMAL row is left alone even when nothing
+                        // graded it (resolveStatus falls through to
+                        // statusOf(null) = NORMAL): the badge reports what the
+                        // wire says, and LabResult.resultValue is @NotBlank, so
+                        // there is always a value behind it. The stronger claim
+                        // — "Within normal range" — is the one gated on a
+                        // reference range, in the detail dialog below.
                         Icon(
                             when {
                                 lab.isPending -> Icons.Default.HourglassEmpty
@@ -255,7 +263,14 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                 // fills collectedAt from LabOrder.getOrderDatetime(), and LabOrder
                 // carries no sample-collection timestamp at all. See the PR body.
                 lab.collectedAt?.let { DetailRow(stringResource(R.string.ordered_at), it.take(10)) }
-                lab.resultedAt?.let { DetailRow(stringResource(R.string.resulted), it.take(10)) }
+                // Not while pending: toResponse sets resultedAt BEFORE the
+                // redaction early-return (fetchRows sorts on resultDate), so an
+                // unreleased row still carries one — and printing "Resulted:
+                // 22/09" two rows under "the laboratory has not released this
+                // result yet" contradicts it.
+                if (!lab.isPending) {
+                    lab.resultedAt?.let { DetailRow(stringResource(R.string.resulted), it.take(10)) }
+                }
 
                 // Lab info
                 lab.hospitalName?.let {
