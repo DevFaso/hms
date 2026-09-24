@@ -347,7 +347,7 @@
             </thead>
             <tbody>
               @for (o of labOrders(); track o.id) {
-                <tr [class.foreign-row]="isForeignRow(o)">
+                <tr [class.foreign-row]="isForeignLabRow(o)">
                   <td>
                     <strong>{{ o.labTestName || '—' }}</strong>
                     @if (o.labOrderCode) {
@@ -423,7 +423,10 @@
             </thead>
             <tbody>
               @for (r of labResults(); track r.id) {
-                <tr [class.pending-row]="isPendingResult(r)" [class.foreign-row]="isForeignRow(r)">
+                <tr
+                  [class.pending-row]="isPendingResult(r)"
+                  [class.foreign-row]="isForeignLabRow(r)"
+                >
                   <td>
                     <strong>{{ r.testName }}</strong>
                     @if (r.testCode) {

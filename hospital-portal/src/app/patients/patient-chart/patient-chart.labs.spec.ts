@@ -324,6 +324,20 @@ describe('PatientChartComponent — labs section', () => {
     expect(row.classList.contains('foreign-row')).toBeTrue();
   });
 
+  it('marks a lab row foreign against the scope it was FETCHED under', () => {
+    setup({
+      roles: ['ROLE_DOCTOR'],
+      results: [released({ hospitalId: 'h-1' }), released({ id: 'r-9', hospitalId: 'h-2' })],
+    });
+    openLabs();
+
+    // h-1 is the acting scope, so only the h-2 row carries the E8 #50 marker.
+    expect(component.isForeignLabRow({ hospitalId: 'h-1' })).toBeFalse();
+    expect(component.isForeignLabRow({ hospitalId: 'h-2' })).toBeTrue();
+    expect(component.isForeignLabRow({})).toBeFalse();
+    expect(fixture.nativeElement.querySelectorAll('tr.foreign-row').length).toBe(1);
+  });
+
   /* ── Empty and error states ── */
 
   it('renders the empty state for both blocks when the patient has no labs', () => {
