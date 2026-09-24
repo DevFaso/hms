@@ -35,8 +35,8 @@ struct LabResultsView: View {
         }
         .navigationTitle("lab_results_title".localized)
         .refreshable { await vm.load() }
-        .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
-            Button("OK") { vm.errorMessage = nil }
+        .alert("error".localized, isPresented: .constant(vm.errorMessage != nil)) {
+            Button("ok".localized) { vm.errorMessage = nil }
         } message: { Text(vm.errorMessage ?? "") }
         .sheet(item: $selectedResult) { result in
             LabResultDetailSheet(result: result)

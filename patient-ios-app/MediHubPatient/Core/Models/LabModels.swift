@@ -74,6 +74,14 @@ struct LabResultDTO: Codable, Identifiable {
         // and `Double.parseDouble` cannot. Normalising would hand a
         // francophone site's "4,2" a green tick for a comparison that never
         // happened.
+        //
+        // Known cost, accepted: a QUALITATIVE result the analyst did grade —
+        // a negative malaria RDT carrying `AbnormalFlag.NORMAL` — is a real
+        // all-clear and still loses the green line here, because the DTO does
+        // not serve `abnormalFlag` and the app cannot tell it apart from
+        // `statusOf(null)`. Under-reassuring is the safe direction, and
+        // exposing the flag is reported as backend debt rather than guessed
+        // at from this side.
         guard !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
         return Double(raw) != nil

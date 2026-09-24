@@ -349,10 +349,10 @@ struct MedicationDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Medication") {
-                    detailRow("Name", medication.displayName)
+                Section("medication".localized) {
+                    detailRow("name".localized, medication.displayName)
                     if let generic = medication.genericName, !generic.isEmpty {
-                        detailRow("Generic Name", generic)
+                        detailRow("generic_name".localized, generic)
                     }
                     HStack {
                         Text("status".localized).foregroundColor(.secondary)
@@ -362,41 +362,43 @@ struct MedicationDetailSheet: View {
                     }
                 }
 
-                Section("Dosage & Administration") {
+                Section("dosage_and_administration".localized) {
                     if let dosage = medication.dosage {
-                        detailRow("Dosage", dosage)
+                        detailRow("dosage".localized, dosage)
                     }
                     if let freq = medication.frequency {
-                        detailRow("Frequency", freq)
+                        detailRow("frequency".localized, freq)
                     }
                     if let route = medication.route {
-                        detailRow("Route", route)
+                        detailRow("route".localized, route)
                     }
                 }
 
-                Section("Dates") {
-                    if let start = medication.startDate {
-                        detailRow("Start Date", start)
-                    }
-                    if let end = medication.endDate {
-                        detailRow("End Date", end)
+                if medication.startDate != nil || medication.endDate != nil {
+                    Section("dates".localized) {
+                        if let start = medication.startDate {
+                            detailRow("start_date".localized, String(start.prefix(10)))
+                        }
+                        if let end = medication.endDate {
+                            detailRow("end_date".localized, String(end.prefix(10)))
+                        }
                     }
                 }
 
                 if let dr = medication.prescribedBy {
-                    Section("Provider") {
-                        detailRow("Prescribed By", dr)
+                    Section("provider".localized) {
+                        detailRow("prescribed_by".localized, dr)
                     }
                 }
 
                 if let refills = medication.refillsRemaining {
-                    Section("Refills") {
-                        detailRow("Remaining", "\(refills)")
+                    Section("refills".localized) {
+                        detailRow("refills_remaining".localized, "\(refills)")
                     }
                 }
 
                 if let instructions = medication.instructions, !instructions.isEmpty {
-                    Section("Instructions") {
+                    Section("instructions".localized) {
                         Text(instructions).font(.body)
                     }
                 }
@@ -512,6 +514,10 @@ final class MedicationsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    /// prescription id → the open refill on it. Published so a rebuild
+    /// re-renders the rows that read it.
+    @Published private(set) var openRefillIndex: [String: RefillStatus] = [:]
+
     func load() async {
         isLoading = true
         // Keeping the previous lists on failure (below) removed the only
@@ -568,7 +574,19 @@ final class MedicationsViewModel: ObservableObject {
         // it live — a French patient would have met it as a fully English
         // modal on the one screen the PR exists to de-anglicise. What matters
         // here is that the lists on screen are stale, which is sayable.
-        errorMessage = failure == nil ? nil : "refresh_failed".localized
+        if let failure {
+            // The patient is told what matters — the lists are stale — in
+            // their own language, but the underlying reason must not vanish:
+            // a `decodingError` here IS a wire-contract break, the class of
+            // bug this whole change exists to fix.
+            #if DEBUG
+            print("[MedicationsViewModel] load failed: \(failure)")
+            #endif
+            errorMessage = "refresh_failed".localized
+        } else {
+            errorMessage = nil
+        }
+        rebuildOpenRefillIndex()
         isLoading = false
     }
 
@@ -641,20 +659,38 @@ final class MedicationsViewModel: ObservableObject {
     /// medications window; either way the server re-checks.
     func openRefillStatus(forPrescription prescriptionId: String?) -> RefillStatus? {
         guard let prescriptionId, !prescriptionId.isEmpty else { return nil }
-        if let medication = medications.first(where: { $0.id == prescriptionId }),
-           let open = medication.refillRequestOpen {
-            // `false` is an answer, not a miss: falling through to the refills
-            // page here would let a row the patient has just cancelled — kept
-            // by `load()` when only that fetch failed — hide the button and
-            // tell them a withdrawn request is still with their care team.
-            // The opposite staleness merely costs a 400 the patient is then
-            // told about, so this is the safer way to be wrong.
-            guard open else { return nil }
-            let status = RefillStatus(wire: medication.refillRequestStatus)
-            return status.isOpen ? status : .requested
+        return openRefillIndex[prescriptionId]
+    }
+
+    /**
+     Rebuilt at the end of every `load()` rather than scanned per row:
+     `/me/patient/prescriptions` is unpaged, so a long-standing patient's list
+     is unbounded and a linear search of `medications` (and, on a miss,
+     `refills`) per row per layout pass is O(n·m).
+     */
+    private func rebuildOpenRefillIndex() {
+        var index: [String: RefillStatus] = [:]
+        for refill in refills {
+            guard let id = refill.prescriptionId, refill.statusEnum.isOpen else { continue }
+            if index[id] == nil { index[id] = refill.statusEnum }
         }
-        return refills.first { $0.prescriptionId == prescriptionId && $0.statusEnum.isOpen }?
-            .statusEnum
+        // The medications pass runs second and OVERWRITES, including with
+        // nothing: `false` there is an answer, not a miss. Falling back to the
+        // refills page on it would let a row the patient has just cancelled —
+        // kept by `load()` when only that fetch failed — hide the button and
+        // tell them a withdrawn request is still with their care team. The
+        // opposite staleness merely costs a 400 the patient is then told
+        // about, so this is the safer way to be wrong.
+        for medication in medications {
+            guard let id = medication.id, let open = medication.refillRequestOpen else { continue }
+            guard open else {
+                index[id] = nil
+                continue
+            }
+            let status = RefillStatus(wire: medication.refillRequestStatus)
+            index[id] = status.isOpen ? status : .requested
+        }
+        openRefillIndex = index
     }
 
 

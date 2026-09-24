@@ -585,3 +585,6 @@
 "lab_status_reported" = "Reported";
 "since_with_value" = "Since %@";
 "refresh_failed" = "Could not refresh — showing what was last loaded";
+"generic_name" = "Generic name";
+"start_date" = "Start date";
+"end_date" = "End date";
