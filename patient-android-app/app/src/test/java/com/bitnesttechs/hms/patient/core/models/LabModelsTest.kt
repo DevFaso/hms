@@ -154,9 +154,11 @@ class LabModelsTest {
     }
 
     /**
-     * Every status `PatientLabResultServiceImpl` can put on the wire, not a
-     * sample: a value the app cannot name would otherwise reach a patient as
-     * `ABNORMAL_HIGH`.
+     * Every status `PatientLabResultServiceImpl` can put on the wire as of this
+     * change, not a sample. Hand-copied, like the prescription one: it pins the
+     * app enum against the contract a reader can check by eye, and catches an
+     * app-side edit that drops a constant. A status added on the backend
+     * reaches the app as `UNKNOWN`, not as a raw `ABNORMAL_HIGH`.
      */
     @Test
     fun everyBackendLabStatusIsNamedByTheEnum() {

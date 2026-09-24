@@ -665,4 +665,7 @@
     <string name="status_label_colon">Status:</string>
     <string name="duration">Duration</string>
     <string name="route">Route</string>
+    <string name="refill_requested_with_value">Requested: %1$s</string>
+    <string name="refill_sent_for_review">Sent to the prescribing provider for review</string>
+    <string name="refill_not_refillable">This prescription can no longer be refilled. Please contact your care team.</string>
 </resources>

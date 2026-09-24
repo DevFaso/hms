@@ -665,4 +665,7 @@
     <string name="status_label_colon">Statut :</string>
     <string name="duration">Durée</string>
     <string name="route">Voie d\'administration</string>
+    <string name="refill_requested_with_value">Demandé le : %1$s</string>
+    <string name="refill_sent_for_review">Transmise au prescripteur pour examen</string>
+    <string name="refill_not_refillable">Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante.</string>
 </resources>

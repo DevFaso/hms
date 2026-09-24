@@ -16,7 +16,17 @@ data class MedicationDto(
     @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "prescribedBy") val prescribedBy: String? = null,
     @Json(name = "instructions") val instructions: String? = null,
-    @Json(name = "isActive") val isActive: Boolean = true
+    @Json(name = "isActive") val isActive: Boolean = true,
+    /**
+     * `PatientMedicationResponseDTO` is built one-to-one FROM prescriptions
+     * and its `id` IS the prescription id, so these two answer the refill
+     * question for a prescription authoritatively: `refillRequestOpen` is
+     * computed over every refill row for the page (`latestRefillsFor`, no
+     * pagination), unlike anything the app can derive from a page of
+     * `/me/patient/refills`.
+     */
+    @Json(name = "refillable") val refillable: Boolean = true,
+    @Json(name = "refillRequestOpen") val refillRequestOpen: Boolean = false
 ) {
     /** Backward compat alias */
     val name: String get() = medicationName
@@ -30,8 +40,11 @@ data class MedicationDto(
  * pharmacist-to-prescriber clarification exchange and leaves everything else.
  *
  * `quantity`, `expiryDate` and `refillsRemaining` used to be mapped here and
- * are not on that DTO at all — a prescription carries no refill counter on
- * this backend; whether a refill may be requested is decided by
+ * are not on THIS DTO. The counter does exist on the domain — `Prescription`
+ * has `refillsAllowed`/`refillsRemaining`/`refillsUsed`, and
+ * `PatientMedicationResponseDTO` serves all three — but
+ * `PrescriptionResponseDTO` omits them, so the prescriptions tab cannot read
+ * one. Whether a refill may be requested is decided by
  * [PrescriptionStatus.isRefillable], the same rule
  * `PrescriptionStatus.isRefillable()` applies server-side. `prescribedBy` and
  * `prescribedDate` are served, under the names `staffFullName` and

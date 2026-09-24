@@ -142,8 +142,14 @@ interface ApiService {
     ): Response<ApiResponse<List<LabResultDto>>>
 
     // ── Medications ───────────────────────────────────────────────────────────
+    // The endpoint defaults to 20 and the tab lists everything it is given, so
+    // a patient with more medications than that was silently shown a slice.
+    // The prescriptions tab also joins on these rows for `refillRequestOpen`,
+    // which only helps for the prescriptions the window covers.
     @GET("me/patient/medications")
-    suspend fun getMedications(): Response<ApiResponse<List<MedicationDto>>>
+    suspend fun getMedications(
+        @Query("limit") limit: Int = 100
+    ): Response<ApiResponse<List<MedicationDto>>>
 
     // getMyPrescriptions takes no paging parameters: it returns the
     // patient's prescriptions in full.

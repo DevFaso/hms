@@ -88,14 +88,24 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // be taken, and the server's English sentence went straight
                     // into a French snackbar.
                     load().join()
-                    _outcome.value =
-                        if (refills.value.any { it.prescriptionId == prescriptionId && it.statusEnum.isOpen }) {
-                            Outcome(R.string.refill_already_open)
-                        } else {
-                            // Anything else: the server's own words are still
-                            // better than nothing, even untranslated.
-                            Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
-                        }
+                    // requestMedicationRefill checks isRefillable() BEFORE the
+                    // one-open-request guard, so a prescription discontinued
+                    // since the screen loaded is refused for that reason even
+                    // when an open refill also exists. Read the refreshed
+                    // prescription first, or we would tell the patient their
+                    // dead prescription is merely under review.
+                    val refreshed = prescriptions.value.firstOrNull { it.id == prescriptionId }
+                    val stillRefillable = refreshed?.statusEnum?.isRefillable ?: true
+                    val hasOpen = medications.value.firstOrNull { it.id == prescriptionId }
+                        ?.refillRequestOpen
+                        ?: refills.value.any { it.prescriptionId == prescriptionId && it.statusEnum.isOpen }
+                    _outcome.value = when {
+                        !stillRefillable -> Outcome(R.string.refill_not_refillable)
+                        hasOpen -> Outcome(R.string.refill_already_open)
+                        // Anything else: the server's own words are still
+                        // better than nothing, even untranslated.
+                        else -> Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
+                    }
                 }
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_request_failed, e.message)

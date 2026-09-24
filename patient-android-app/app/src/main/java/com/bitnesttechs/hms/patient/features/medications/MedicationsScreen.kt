@@ -149,13 +149,17 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // (PatientPortalServiceImpl.requestMedicationRefill).
                         // Until this change the button never rendered at all, so
                         // that refusal was unreachable; now it is told before the
-                        // patient taps rather than after a 400. A courtesy, not
-                        // the gate: this only sees the refills page the screen
-                        // loaded, so a very old open row can still fall off it
-                        // and the server refusal is what actually decides.
-                        val openRefill = refills.any {
-                            it.prescriptionId == rx.id && it.statusEnum.isOpen
-                        }
+                        // patient taps rather than after a 400.
+                        //
+                        // PatientMedicationResponseDTO is built from prescriptions
+                        // and its id IS the prescription id, and its
+                        // `refillRequestOpen` is computed over EVERY refill row,
+                        // not a page — so prefer it. The scan over the loaded
+                        // refills page is the fallback for a prescription outside
+                        // the medications window; either way the server re-checks.
+                        val openRefill = medications.firstOrNull { it.id == rx.id }
+                            ?.refillRequestOpen
+                            ?: refills.any { it.prescriptionId == rx.id && it.statusEnum.isOpen }
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -265,11 +269,12 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 refill.requestedAt?.let {
-                                    Text("Requested: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                    Text(stringResource(R.string.refill_requested_with_value, it.take(10)),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 if (refill.statusEnum == RefillStatus.REQUESTED) {
-                                    Text("Sent to the prescribing provider for review",
+                                    Text(stringResource(R.string.refill_sent_for_review),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
