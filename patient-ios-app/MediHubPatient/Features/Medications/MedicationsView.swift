@@ -153,31 +153,33 @@ struct MedicationsView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityAction { selectedRx = rx }
 
-                        // The backend gate is PrescriptionStatus.isRefillable(),
-                        // not a refill counter — this DTO has never carried one.
-                        if rx.statusEnum.isRefillable {
-                            // The backend allows ONE open request per
-                            // prescription (requestMedicationRefill). Until this
-                            // change the button never rendered at all, so that
-                            // refusal was unreachable; now the patient is told
-                            // before tapping rather than after a 400. It is a
-                            // courtesy, not the gate: the server re-checks and
-                            // its message reaches the alert.
-                            if let open = vm.openRefillStatus(forPrescription: rx.id) {
-                                Text(MedicationsViewModel.openRefillMessageKey(open).localized)
-                                    .font(.caption2).foregroundColor(.secondary)
-                            } else {
-                                HStack {
-                                    Spacer()
-                                    Button {
-                                        refillTarget = rx
-                                    } label: {
-                                        Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
-                                            .font(.caption)
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .controlSize(.mini)
+                        // The backend allows ONE open request per prescription
+                        // (requestMedicationRefill). Until this change the button
+                        // never rendered at all, so that refusal was unreachable;
+                        // now the patient is told before tapping rather than
+                        // after a 400. It is a courtesy, not the gate: the server
+                        // re-checks and its message reaches the alert.
+                        //
+                        // Said whatever the prescription's own status is: a PAUSED
+                        // refill on a prescription the prescriber has since
+                        // DISCONTINUED would otherwise vanish from this tab
+                        // entirely — no button and no explanation.
+                        if let open = vm.openRefillStatus(forPrescription: rx.id) {
+                            Text(MedicationsViewModel.openRefillMessageKey(open).localized)
+                                .font(.caption2).foregroundColor(.secondary)
+                        } else if rx.statusEnum.isRefillable {
+                            // The backend gate is PrescriptionStatus.isRefillable(),
+                            // not a refill counter — this DTO has never carried one.
+                            HStack {
+                                Spacer()
+                                Button {
+                                    refillTarget = rx
+                                } label: {
+                                    Label("request_refill".localized, systemImage: "arrow.clockwise.circle.fill")
+                                        .font(.caption)
                                 }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.mini)
                             }
                         }
                     }
