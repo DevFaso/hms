@@ -96,7 +96,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (medications.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyOrRetry(R.string.no_active_medications, loadFailed) { viewModel.load() }
+                            EmptyOrRetry(R.string.no_active_medications, loadFailed.medications) { viewModel.load() }
                         }
                     }
                     items(medications) { med ->
@@ -146,7 +146,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (prescriptions.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyOrRetry(R.string.no_prescriptions, loadFailed) { viewModel.load() }
+                            EmptyOrRetry(R.string.no_prescriptions, loadFailed.prescriptions) { viewModel.load() }
                         }
                     }
                     items(prescriptions) { rx ->
@@ -254,7 +254,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 ) {
                     if (refills.isEmpty()) item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyOrRetry(R.string.no_refills, loadFailed) { viewModel.load() }
+                            EmptyOrRetry(R.string.no_refills, loadFailed.refills) { viewModel.load() }
                         }
                     }
                     items(refills) { refill ->

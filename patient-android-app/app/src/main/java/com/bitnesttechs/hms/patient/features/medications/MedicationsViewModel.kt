@@ -19,8 +19,21 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val refills = MutableStateFlow<List<RefillDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
 
-    /** True while the last load failed and the lists are therefore stale or empty. */
-    val loadFailed = MutableStateFlow(false)
+    /**
+     * Which of the three fetches failed, per list. One flag for all three
+     * would tell the Refills tab "we could not load this" because the
+     * PRESCRIPTIONS call 500'd, over a refills list that loaded fine and is
+     * legitimately empty.
+     */
+    data class LoadFailures(
+        val medications: Boolean = false,
+        val prescriptions: Boolean = false,
+        val refills: Boolean = false
+    ) {
+        val any: Boolean get() = medications || prescriptions || refills
+    }
+
+    val loadFailed = MutableStateFlow(LoadFailures())
 
     /** A localized outcome: a string resource plus an optional detail argument. */
     data class Outcome(val resId: Int, val detail: String? = null)
@@ -60,9 +73,15 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 mResp.body()?.data?.let { medications.value = it }
                 pResp.body()?.data?.let { prescriptions.value = it }
                 rResp.body()?.data?.content?.let { refills.value = it }
-                reportLoadOutcome(mResp.isSuccessful && pResp.isSuccessful && rResp.isSuccessful)
+                reportLoadOutcome(
+                    LoadFailures(
+                        medications = !mResp.isSuccessful,
+                        prescriptions = !pResp.isSuccessful,
+                        refills = !rResp.isSuccessful
+                    )
+                )
             } catch (_: Exception) {
-                reportLoadOutcome(false)
+                reportLoadOutcome(LoadFailures(medications = true, prescriptions = true, refills = true))
             }
             finally { isLoading.value = false }
         }
@@ -74,9 +93,15 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * a silent no-op. On a COLD open there is nothing stale to show, so the
      * empty states offer a retry rather than claiming old data is on screen.
      */
-    private fun reportLoadOutcome(succeeded: Boolean) {
-        loadFailed.value = !succeeded
-        if (!succeeded && (medications.value.isNotEmpty() || prescriptions.value.isNotEmpty())) {
+    private fun reportLoadOutcome(failures: LoadFailures) {
+        loadFailed.value = failures
+        // Something is still on screen when ANY list held rows — including the
+        // refills one, whose tab may be the only populated thing a patient
+        // with no active prescriptions has.
+        val hasStaleData = medications.value.isNotEmpty() ||
+            prescriptions.value.isNotEmpty() ||
+            refills.value.isNotEmpty()
+        if (failures.any && hasStaleData) {
             _outcome.value = Outcome(R.string.refresh_failed)
         }
     }
@@ -95,7 +120,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     load().join()
                     _outcome.value = Outcome(R.string.refill_cancelled)
                 } else {
-                    _outcome.value = Outcome(R.string.refill_cancel_failed, "HTTP ${resp.code()}")
+                    // Reload on refusal too: `cancelMyRefill` refuses a request
+                    // the provider has already acted on, and without this the
+                    // stale REQUESTED badge and its Cancel button stay on
+                    // screen, so the patient taps into the same 400 forever.
+                    val detail = serverMessage(resp.errorBody()?.string())
+                    load().join()
+                    _outcome.value =
+                        Outcome(R.string.refill_cancel_failed, detail ?: "HTTP ${resp.code()}")
                 }
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_cancel_failed, e.message)
@@ -150,9 +182,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                         ?: refills.value.firstOrNull {
                             it.prescriptionId == prescriptionId && it.statusEnum.isOpen
                         }?.statusEnum
+                    // Only a 400 is the business refusal these two explain. A
+                    // 401 with a stale `refillRequestOpen` would otherwise tell
+                    // the patient their request is "already with your care team"
+                    // and give them no reason to sign in again.
+                    val businessRefusal = resp.code() == 400
                     _outcome.value = when {
-                        !stillRefillable -> Outcome(R.string.refill_not_refillable)
-                        openRefill != null -> Outcome(openRefillMessage(openRefill))
+                        businessRefusal && !stillRefillable -> Outcome(R.string.refill_not_refillable)
+                        businessRefusal && openRefill != null -> Outcome(openRefillMessage(openRefill))
                         // Anything else: the server's own words are still
                         // better than nothing, even untranslated.
                         else -> Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
