@@ -512,7 +512,10 @@ final class MedicationsViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        await withTaskGroup(of: Void.self) { group in
+        // Keeping the previous lists on failure (below) removed the only
+        // signal a refresh had failed — the screen used to empty. Report the
+        // first failure instead, so an expired session is not a silent no-op.
+        let failure: String? = await withTaskGroup(of: String?.self) { group in
             // Each list is replaced only when its own fetch SUCCEEDS. A
             // refresh that throws — no connectivity, an expired session, or
             // the reload on the refill-failure path below — used to swap the
@@ -522,34 +525,43 @@ final class MedicationsViewModel: ObservableObject {
                 // it is given; the prescriptions tab also joins on these rows
                 // for `refillRequestOpen`, which only helps for the
                 // prescriptions the window covers.
-                if let meds: [MedicationDTO] = try? await APIClient.shared.get(
-                    APIEndpoints.medications,
-                    queryItems: [URLQueryItem(name: "limit", value: "100")]
-                ) {
-                    self.medications = meds
-                }
+                do {
+                    self.medications = try await APIClient.shared.get(
+                        APIEndpoints.medications,
+                        queryItems: [URLQueryItem(name: "limit", value: "100")]
+                    )
+                    return nil
+                } catch { return error.localizedDescription }
             }
             group.addTask { @MainActor in
-                if let rx: [PrescriptionDTO] = try? await APIClient.shared.get(APIEndpoints.prescriptions) {
-                    self.prescriptions = rx
-                }
+                do {
+                    self.prescriptions = try await APIClient.shared.get(APIEndpoints.prescriptions)
+                    return nil
+                } catch { return error.localizedDescription }
             }
             group.addTask { @MainActor in
                 // Newest first: the refills-page fallback below can only see
                 // this page, and an open REQUESTED/PAUSED row outside it would
                 // put the button back on screen.
-                let page: PageDTO<RefillDTO>? = try? await APIClient.shared.get(
-                    APIEndpoints.refills,
-                    queryItems: [
-                        URLQueryItem(name: "size", value: "50"),
-                        URLQueryItem(name: "sort", value: "createdAt,desc")
-                    ]
-                )
-                if let content = page?.content {
-                    self.refills = content
-                }
+                do {
+                    let page: PageDTO<RefillDTO> = try await APIClient.shared.get(
+                        APIEndpoints.refills,
+                        queryItems: [
+                            URLQueryItem(name: "size", value: "50"),
+                            URLQueryItem(name: "sort", value: "createdAt,desc")
+                        ]
+                    )
+                    self.refills = page.content
+                    return nil
+                } catch { return error.localizedDescription }
             }
+            var first: String?
+            for await result in group where first == nil {
+                first = result
+            }
+            return first
         }
+        errorMessage = failure
         isLoading = false
     }
 
@@ -594,6 +606,12 @@ final class MedicationsViewModel: ObservableObject {
         guard let prescriptionId, !prescriptionId.isEmpty else { return nil }
         if let medication = medications.first(where: { $0.id == prescriptionId }),
            let open = medication.refillRequestOpen {
+            // `false` is an answer, not a miss: falling through to the refills
+            // page here would let a row the patient has just cancelled — kept
+            // by `load()` when only that fetch failed — hide the button and
+            // tell them a withdrawn request is still with their care team.
+            // The opposite staleness merely costs a 400 the patient is then
+            // told about, so this is the safer way to be wrong.
             guard open else { return nil }
             let status = RefillStatus(wire: medication.refillRequestStatus)
             return status.isOpen ? status : .requested
@@ -602,9 +620,6 @@ final class MedicationsViewModel: ObservableObject {
             .statusEnum
     }
 
-    func hasOpenRefill(forPrescription prescriptionId: String?) -> Bool {
-        openRefillStatus(forPrescription: prescriptionId) != nil
-    }
 
     /// The backend says two different things: a REQUESTED refill is awaiting
     /// review, a PAUSED one was deliberately held with a follow-up promised —

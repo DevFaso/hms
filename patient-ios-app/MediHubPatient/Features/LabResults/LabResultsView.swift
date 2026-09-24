@@ -61,9 +61,9 @@ struct LabResultSummaryRow: View {
     private var symbol: String {
         if result.isPending { return "hourglass" }
         if result.displayStatus == .unknown { return "questionmark.circle" }
-        return result.isAbnormal || result.isCritical
-            ? "exclamationmark.triangle.fill"
-            : "checkmark.circle.fill"
+        if result.isAbnormal || result.isCritical { return "exclamationmark.triangle.fill" }
+        // Neutral rather than an all-clear when nothing graded the row.
+        return result.isGradedNormal ? "checkmark.circle.fill" : "testtube.2"
     }
 
     private var symbolColor: Color {
@@ -152,7 +152,7 @@ struct LabResultDetailSheet: View {
                             Label("lab_interpretation_abnormal".localized,
                                   systemImage: "exclamationmark.circle")
                                 .foregroundColor(.orange)
-                        } else if result.isNormal, result.referenceRange != nil {
+                        } else if result.isGradedNormal {
                             // Only when there WAS a range to be inside:
                             // PatientLabResultServiceImpl.resolveStatus returns
                             // NORMAL from statusOf(null) too, i.e. when nothing

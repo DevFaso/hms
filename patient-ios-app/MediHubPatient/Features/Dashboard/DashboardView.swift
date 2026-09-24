@@ -255,9 +255,9 @@ struct LabResultRowView: View {
     private var symbol: String {
         if result.isPending { return "hourglass" }
         if result.displayStatus == .unknown { return "questionmark.circle" }
-        return result.isAbnormal || result.isCritical
-            ? "exclamationmark.triangle.fill"
-            : "checkmark.circle.fill"
+        if result.isAbnormal || result.isCritical { return "exclamationmark.triangle.fill" }
+        // Neutral rather than an all-clear when nothing graded the row.
+        return result.isGradedNormal ? "checkmark.circle.fill" : "testtube.2"
     }
 
     private var symbolColor: Color {
@@ -276,7 +276,12 @@ struct LabResultRowView: View {
                 .font(.subheadline)
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.testName ?? "test_name".localized).font(.subheadline.weight(.semibold))
-                Text((result.resultedAt ?? result.collectedAt).map { String($0.prefix(10)) } ?? "")
+                // While pending, resultedAt is the analyzer's timestamp on a
+                // row the lab has not released — showing it next to "Result
+                // pending" contradicts it. resultDate is @NotNull, so it is
+                // always there to be shown by mistake.
+                Text((result.isPending ? result.collectedAt : (result.resultedAt ?? result.collectedAt))
+                    .map { String($0.prefix(10)) } ?? "")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

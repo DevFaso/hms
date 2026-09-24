@@ -55,12 +55,27 @@ struct LabResultDTO: Codable, Identifiable {
 
     var isNormal: Bool { !isPending && statusEnum == .normal }
 
+    /// NORMAL *with a range it could have been inside*. `resolveStatus` falls
+    /// through to `statusOf(result.getAbnormalFlag())` and `statusOf(null)` is
+    /// also NORMAL, so on the wire "graded normal" and "nothing graded this"
+    /// are the same word. The green tick and the green badge are the app's own
+    /// reassurance rather than anything the backend asserted, so they are
+    /// withheld when there was no range to be inside — a positive qualitative
+    /// serology must not read as an all-clear.
+    var isGradedNormal: Bool {
+        guard isNormal else { return false }
+        return !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// What the badge shows: a pending row never borrows a grading.
     var displayStatus: LabResultStatus { isPending ? .pending : statusEnum }
 
     var statusDisplay: String { displayStatus.localizedLabel }
 
-    var tone: StatusTone { displayStatus.tone }
+    var tone: StatusTone {
+        if isNormal, !isGradedNormal { return .neutral }
+        return displayStatus.tone
+    }
 
     /// The value with its unit, or nil while the result is pending.
     var valueWithUnit: String? {

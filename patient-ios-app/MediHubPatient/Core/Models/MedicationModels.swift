@@ -20,12 +20,13 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     let refillsRemaining: Int?
 
     /// `PatientMedicationResponseDTO` is built one-to-one FROM prescriptions
-    /// and its `id` IS the prescription id, so these two answer the refill
+    /// and its `id` IS the prescription id, so this answers the refill
     /// question for a prescription authoritatively: `refillRequestOpen` is
     /// computed over every refill row for the page (`latestRefillsFor`, no
     /// pagination), unlike anything the app can derive from a page of
-    /// `/me/patient/refills`.
-    let refillable: Bool?
+    /// `/me/patient/refills`. (`refillable` is served beside it and is not
+    /// decoded: it is the same verdict as `PrescriptionStatus.isRefillable`,
+    /// which the app mirrors exactly.)
     let refillRequestOpen: Bool?
     /// The wire name of that request's status, so the app can tell "awaiting
     /// review" from "your provider put it on hold" without a second call.

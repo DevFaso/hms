@@ -118,6 +118,29 @@ final class LabResultWireContractTests: XCTestCase {
         XCTAssertFalse(lab.isNormal)
     }
 
+    /// `statusOf(null)` is NORMAL, so "graded normal" and "nothing graded
+    /// this" arrive as the same word. Only the first earns the green tick.
+    func testNormalWithoutAReferenceRangeIsNotAnAllClear() throws {
+        let ungraded = try decode("""
+        {
+          "id": "z", "testName": "Malaria RDT", "value": "Positive",
+          "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertTrue(ungraded.isNormal)
+        XCTAssertFalse(ungraded.isGradedNormal)
+        XCTAssertEqual(ungraded.tone, .neutral)
+
+        let graded = try decode("""
+        {
+          "id": "z2", "testName": "Sodium", "value": "140", "unit": "mmol/L",
+          "referenceRange": "135 - 145 mmol/L", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertTrue(graded.isGradedNormal)
+        XCTAssertEqual(graded.tone, .positive)
+    }
+
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
         XCTAssertEqual(LabResultStatus(wire: nil), .unknown)
         XCTAssertEqual(LabResultStatus(wire: ""), .unknown)
