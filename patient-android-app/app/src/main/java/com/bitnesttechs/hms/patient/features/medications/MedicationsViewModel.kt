@@ -17,8 +17,6 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val prescriptions = MutableStateFlow<List<PrescriptionDto>>(emptyList())
     val refills = MutableStateFlow<List<RefillDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
-    private val _snackbar = MutableStateFlow<String?>(null)
-    val snackbar: StateFlow<String?> = _snackbar
 
     /** A localized outcome: a string resource plus an optional detail argument. */
     data class Outcome(val resId: Int, val detail: String? = null)
@@ -71,16 +69,27 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     )
                 )
                 if (resp.isSuccessful) {
-                    _snackbar.value = "Refill requested successfully"
+                    _outcome.value = Outcome(R.string.refill_requested)
                     load()
                 } else {
-                    _snackbar.value = "Failed to request refill"
+                    // The server explains WHY it refused — "You already have a
+                    // refill request awaiting review for this medication", or
+                    // that the provider put it on hold. Throwing that away for a
+                    // flat "Failed to request refill" leaves the patient with no
+                    // idea what to do next.
+                    _outcome.value = Outcome(
+                        R.string.refill_request_failed,
+                        serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"
+                    )
                 }
             } catch (e: Exception) {
-                _snackbar.value = "Error: ${e.message}"
+                _outcome.value = Outcome(R.string.refill_request_failed, e.message)
             }
         }
     }
 
-    fun clearSnackbar() { _snackbar.value = null }
+    /** The error body's message, which is where BusinessException lands. */
+    private fun serverMessage(body: String?): String? = body
+        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
+        ?.takeIf { it.isNotBlank() }
 }

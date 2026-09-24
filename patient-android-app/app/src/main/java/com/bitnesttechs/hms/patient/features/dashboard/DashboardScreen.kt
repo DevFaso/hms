@@ -373,13 +373,21 @@ fun LabResultRow(lab: LabResultDto) {
             Text((lab.resultedAt ?: lab.collectedAt)?.take(10) ?: "", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        StatusBadge(text = stringResource(lab.statusLabelRes), color = lab.tone.brandColor())
+        StatusBadge(
+            text = stringResource(lab.statusLabelRes),
+            color = lab.tone.badgeFill(),
+            contentColor = lab.tone.onBadge()
+        )
     }
     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable
-fun StatusBadge(text: String, color: Color = BrandBlue) {
+fun StatusBadge(text: String, color: Color = BrandBlue, contentColor: Color = color) {
+    // `color` tints the pill; `contentColor` draws the label. They default to
+    // the same value for the callers that pass an already-readable colour, but
+    // a bright semantic fill needs a darker label or the 11 sp text falls
+    // below the WCAG AA 4.5:1 floor.
     Surface(
         shape = RoundedCornerShape(50),
         color = color.copy(alpha = 0.15f)
@@ -388,7 +396,7 @@ fun StatusBadge(text: String, color: Color = BrandBlue) {
             text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = color,
+            color = contentColor,
             fontWeight = FontWeight.Medium
         )
     }

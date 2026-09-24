@@ -74,7 +74,8 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                 }
             }
             items(results) { lab ->
-                val tone = lab.tone.brandColor()
+                val toneFill = lab.tone.badgeFill()
+                val toneContent = lab.tone.onBadge()
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { selectedResult = lab },
                     shape = RoundedCornerShape(12.dp),
@@ -97,7 +98,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                 else -> Icons.Default.CheckCircle
                             },
                             contentDescription = null,
-                            tint = tone,
+                            tint = toneContent,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(12.dp))
@@ -109,7 +110,11 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                             ) {
                                 Text(lab.testName, style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                StatusBadge(text = stringResource(lab.statusLabelRes), color = tone)
+                                StatusBadge(
+                                    text = stringResource(lab.statusLabelRes),
+                                    color = toneFill,
+                                    contentColor = toneContent
+                                )
                             }
                             Spacer(Modifier.height(8.dp))
                             if (lab.isPending) {
@@ -156,7 +161,8 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
 
 @Composable
 internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
-    val tone = lab.tone.brandColor()
+    val toneFill = lab.tone.badgeFill()
+    val toneContent = lab.tone.onBadge()
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
@@ -171,7 +177,11 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     Text("${stringResource(R.string.status)}: ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    StatusBadge(text = stringResource(lab.statusLabelRes), color = tone)
+                    StatusBadge(
+                        text = stringResource(lab.statusLabelRes),
+                        color = toneFill,
+                        contentColor = toneContent
+                    )
                 }
                 lab.testCode?.takeIf { it.isNotBlank() }?.let {
                     DetailRow(stringResource(R.string.test_code), it)
@@ -191,10 +201,10 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     // it "normal" would tell the patient something untrue.
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Icons.Default.HourglassEmpty, null, tint = NeutralGrey,
+                        Icon(Icons.Default.HourglassEmpty, null, tint = toneContent,
                             modifier = Modifier.size(16.dp))
                         Text(stringResource(R.string.lab_pending_explainer),
-                            style = MaterialTheme.typography.bodySmall, color = NeutralGrey)
+                            style = MaterialTheme.typography.bodySmall, color = toneContent)
                     }
                 } else {
                     lab.valueWithUnit?.let { DetailRow(stringResource(R.string.lab_value), it) }
@@ -204,22 +214,22 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         when {
                             lab.isCritical -> {
-                                Icon(Icons.Default.Warning, null, tint = CriticalRed,
+                                Icon(Icons.Default.Warning, null, tint = toneContent,
                                     modifier = Modifier.size(16.dp))
                                 Text(stringResource(R.string.lab_interpretation_critical),
-                                    style = MaterialTheme.typography.bodySmall, color = CriticalRed)
+                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
                             }
                             lab.isAbnormal -> {
-                                Icon(Icons.Default.Warning, null, tint = WarningAmber,
+                                Icon(Icons.Default.Warning, null, tint = toneContent,
                                     modifier = Modifier.size(16.dp))
                                 Text(stringResource(R.string.lab_interpretation_abnormal),
-                                    style = MaterialTheme.typography.bodySmall, color = WarningAmber)
+                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
                             }
                             lab.isNormal -> {
-                                Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen,
+                                Icon(Icons.Default.CheckCircle, null, tint = toneContent,
                                     modifier = Modifier.size(16.dp))
                                 Text(stringResource(R.string.lab_interpretation_normal),
-                                    style = MaterialTheme.typography.bodySmall, color = SuccessGreen)
+                                    style = MaterialTheme.typography.bodySmall, color = toneContent)
                             }
                         }
                     }
@@ -230,23 +240,27 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                 // Dates
                 Text(stringResource(R.string.lab_dates_section),
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                lab.collectedAt?.let { DetailRow(stringResource(R.string.collected), it.take(10)) }
+                // Labelled "Ordered", not "Collected": PatientLabResultServiceImpl
+                // fills collectedAt from LabOrder.getOrderDatetime(), and LabOrder
+                // carries no sample-collection timestamp at all. See the PR body.
+                lab.collectedAt?.let { DetailRow(stringResource(R.string.ordered_at), it.take(10)) }
                 lab.resultedAt?.let { DetailRow(stringResource(R.string.resulted), it.take(10)) }
 
                 // Lab info
                 lab.hospitalName?.let {
                     HorizontalDivider()
-                    Text(stringResource(R.string.laboratory),
-                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     DetailRow(stringResource(R.string.laboratory), it)
                 }
 
-                lab.orderedBy?.let {
+                // One divider for the pair: performedBy can arrive without
+                // orderedBy (resolveStaffName returns null when the order has
+                // no staff), and it used to land under the Dates section with
+                // no separator at all.
+                if (lab.orderedBy != null || lab.performedBy != null) {
                     HorizontalDivider()
-                    DetailRow(stringResource(R.string.ordered_by), it)
+                    lab.orderedBy?.let { DetailRow(stringResource(R.string.ordered_by), it) }
+                    lab.performedBy?.let { DetailRow(stringResource(R.string.performed_by), it) }
                 }
-
-                lab.performedBy?.let { DetailRow(stringResource(R.string.performed_by), it) }
 
                 lab.notes?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()

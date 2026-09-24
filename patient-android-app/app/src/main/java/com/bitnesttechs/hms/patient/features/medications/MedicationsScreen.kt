@@ -28,7 +28,8 @@ import com.bitnesttechs.hms.patient.core.models.RefillStatus
 import androidx.compose.ui.res.stringResource
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.brandColor
+import com.bitnesttechs.hms.patient.ui.theme.badgeFill
+import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,12 +46,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
     var refillTarget by remember { mutableStateOf<PrescriptionDto?>(null) }
     var cancelRefillTarget by remember { mutableStateOf<RefillDto?>(null) }
-    val snackbarMessage by viewModel.snackbar.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSnackbar() }
-    }
     val outcome by viewModel.outcome.collectAsState()
     val outcomeText = outcome?.let { o ->
         val base = stringResource(o.resId)
@@ -149,6 +145,14 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                     }
                     items(prescriptions) { rx ->
                         var expanded by remember { mutableStateOf(false) }
+                        // The backend allows ONE open request per prescription
+                        // (PatientPortalServiceImpl.requestMedicationRefill).
+                        // Until this change the button never rendered at all, so
+                        // that refusal was unreachable; now it has to be told
+                        // before the patient taps, not after a 400.
+                        val openRefill = refills.any {
+                            it.prescriptionId == rx.id && it.statusEnum.isOpen
+                        }
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -159,11 +163,12 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     verticalAlignment = Alignment.CenterVertically) {
                                     Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f))
-                                    val rxTone = rx.statusEnum.tone.brandColor()
-                                    Surface(shape = RoundedCornerShape(50), color = rxTone.copy(alpha = 0.15f)) {
+                                    Surface(shape = RoundedCornerShape(50),
+                                        color = rx.statusEnum.tone.badgeFill().copy(alpha = 0.15f)) {
                                         Text(stringResource(rx.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall, color = rxTone,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = rx.statusEnum.tone.onBadge(),
                                             fontWeight = FontWeight.Medium)
                                     }
                                     Icon(Icons.Default.ChevronRight, contentDescription = "View details",
@@ -190,15 +195,21 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                 // The backend gate is PrescriptionStatus.isRefillable(),
                                 // not a refill counter — this DTO has never carried one.
                                 if (rx.statusEnum.isRefillable) {
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                        FilledTonalButton(
-                                            onClick = { refillTarget = rx },
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                            modifier = Modifier.height(28.dp)
-                                        ) {
-                                            Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
+                                    if (openRefill) {
+                                        Text(stringResource(R.string.refill_already_open),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            FilledTonalButton(
+                                                onClick = { refillTarget = rx },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(stringResource(R.string.request_refill), style = MaterialTheme.typography.labelSmall)
+                                            }
                                         }
                                     }
                                 }
@@ -233,16 +244,15 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    val refillTone = refill.statusEnum.tone.brandColor()
                                     Surface(
                                         shape = RoundedCornerShape(50),
-                                        color = refillTone.copy(alpha = 0.15f)
+                                        color = refill.statusEnum.tone.badgeFill().copy(alpha = 0.15f)
                                     ) {
                                         Text(
                                             stringResource(refill.statusEnum.labelRes),
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = refillTone
+                                            color = refill.statusEnum.tone.onBadge()
                                         )
                                     }
                                 }
@@ -325,7 +335,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
             title = { Text("Request Refill", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     rx.dosage?.let { d ->
                         val info = listOfNotNull(d, rx.frequency).joinToString(" · ")
                         Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

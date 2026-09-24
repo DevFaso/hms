@@ -20,7 +20,8 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.brandColor
+import com.bitnesttechs.hms.patient.ui.theme.badgeFill
+import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -238,9 +239,8 @@ private fun LabResultsList(viewModel: ProxyDataViewModel, padding: PaddingValues
                             lab.valueWithUnit?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                     }
-                    val labTone = lab.tone.brandColor()
-                    Surface(shape = RoundedCornerShape(12.dp), color = labTone.copy(alpha = 0.15f)) {
-                        Text(stringResource(lab.statusLabelRes), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = labTone)
+                    Surface(shape = RoundedCornerShape(12.dp), color = lab.tone.badgeFill().copy(alpha = 0.15f)) {
+                        Text(stringResource(lab.statusLabelRes), Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = lab.tone.onBadge())
                     }
                 }
             }

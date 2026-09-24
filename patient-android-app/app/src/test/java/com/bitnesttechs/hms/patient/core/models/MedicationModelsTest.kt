@@ -142,6 +142,18 @@ class MedicationModelsTest {
         assertFalse(RefillDto(status = "DISPENSED").statusEnum.isCancellable)
     }
 
+    /**
+     * `OPEN_REFILL_STATUSES` in `PatientPortalServiceImpl` — the set that
+     * makes a second request for the same prescription a 400.
+     */
+    @Test
+    fun onlyRequestedAndPausedRefillsBlockANewRequest() {
+        val open = setOf(RefillStatus.REQUESTED, RefillStatus.PAUSED)
+        for (status in RefillStatus.entries) {
+            assertEquals("openness of $status", status in open, status.isOpen)
+        }
+    }
+
     @Test
     fun everyPrescriptionAndRefillStatusHasItsOwnLabel() {
         val rxLabels = PrescriptionStatus.entries.map { it.labelRes }

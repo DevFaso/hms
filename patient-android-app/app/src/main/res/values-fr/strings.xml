@@ -657,4 +657,8 @@
     <string name="refill_status_cancelled">Annulé</string>
     <string name="refill_status_unknown">Statut indisponible</string>
     <string name="request_refill">Demander un renouvellement</string>
+    <string name="ordered_at">Prescrit le</string>
+    <string name="refill_requested">Renouvellement demandé</string>
+    <string name="refill_request_failed">La demande de renouvellement n\'a pas pu être envoyée</string>
+    <string name="refill_already_open">Une demande de renouvellement pour ce médicament est déjà en cours d\'examen</string>
 </resources>

@@ -83,7 +83,7 @@ import com.bitnesttechs.hms.patient.core.models.TreatmentPlanDto
 import com.bitnesttechs.hms.patient.core.models.VitalSignDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
-import com.bitnesttechs.hms.patient.ui.theme.brandColor
+import com.bitnesttechs.hms.patient.ui.theme.onBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -243,7 +243,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
                         DetailItem(stringResource(R.string.result), lab.valueWithUnit, Icons.Default.Science),
                         DetailItem(stringResource(R.string.range), lab.referenceRange.takeUnless { lab.isPending }, Icons.Default.Info),
                         DetailItem(stringResource(R.string.status), stringResource(lab.statusLabelRes), Icons.Default.Warning),
-                        DetailItem(stringResource(R.string.collected), lab.collectedAt?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.ordered_at), lab.collectedAt?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.result_date), lab.resultedAt?.take(10), Icons.Default.CalendarMonth),
                         DetailItem(stringResource(R.string.ordered_by), lab.orderedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.performed_by), lab.performedBy, Icons.Default.Person),
@@ -254,7 +254,7 @@ private fun LabsTab(labs: List<LabResultDto>) {
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(lab.testName, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text(stringResource(lab.statusLabelRes), color = lab.tone.brandColor())
+                    Text(stringResource(lab.statusLabelRes), color = lab.tone.onBadge())
                 }
                 if (lab.isPending) {
                     SecondaryText(stringResource(R.string.lab_result_pending))
