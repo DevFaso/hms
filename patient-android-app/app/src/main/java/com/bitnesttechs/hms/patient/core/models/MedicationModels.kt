@@ -26,10 +26,28 @@ data class MedicationDto(
      * `/me/patient/refills`.
      */
     @Json(name = "refillable") val refillable: Boolean = true,
-    @Json(name = "refillRequestOpen") val refillRequestOpen: Boolean = false
+    @Json(name = "refillRequestOpen") val refillRequestOpen: Boolean = false,
+    /**
+     * The wire name of that request's status, so the app can tell "awaiting
+     * review" from "your care team put it on hold" without a second call.
+     */
+    @Json(name = "refillRequestStatus") val refillRequestStatus: String? = null
 ) {
     /** Backward compat alias */
     val name: String get() = medicationName
+
+    /**
+     * The state of the open refill on this prescription, or null when there
+     * is none. `refillRequestStatus` can name a CLOSED state (the newest
+     * request, whatever it was), so `refillRequestOpen` decides and the
+     * status only chooses the wording.
+     */
+    val openRefillStatus: RefillStatus?
+        get() {
+            if (!refillRequestOpen) return null
+            val status = RefillStatus.fromWire(refillRequestStatus)
+            return if (status.isOpen) status else RefillStatus.REQUESTED
+        }
 }
 
 /**

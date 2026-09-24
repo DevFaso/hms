@@ -668,4 +668,5 @@
     <string name="refill_requested_with_value">Requested: %1$s</string>
     <string name="refill_sent_for_review">Sent to the prescribing provider for review</string>
     <string name="refill_not_refillable">This prescription can no longer be refilled. Please contact your care team.</string>
+    <string name="refill_on_hold">Your care team has put this refill request on hold. They will follow up with you.</string>
 </resources>

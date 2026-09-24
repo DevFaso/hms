@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.medications
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -158,8 +159,9 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // refills page is the fallback for a prescription outside
                         // the medications window; either way the server re-checks.
                         val openRefill = medications.firstOrNull { it.id == rx.id }
-                            ?.refillRequestOpen
-                            ?: refills.any { it.prescriptionId == rx.id && it.statusEnum.isOpen }
+                            ?.let { if (it.refillRequestOpen) it.openRefillStatus else null }
+                            ?: refills.firstOrNull { it.prescriptionId == rx.id && it.statusEnum.isOpen }
+                                ?.statusEnum
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -202,8 +204,12 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                 // The backend gate is PrescriptionStatus.isRefillable(),
                                 // not a refill counter — this DTO has never carried one.
                                 if (rx.statusEnum.isRefillable) {
-                                    if (openRefill) {
-                                        Text(stringResource(R.string.refill_already_open),
+                                    if (openRefill != null) {
+                                        // REQUESTED is "awaiting review"; PAUSED is
+                                        // "your care team held it and will follow
+                                        // up" — the one message that explains the
+                                        // delay, so do not collapse the two.
+                                        Text(stringResource(openRefillMessage(openRefill)),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     } else {
@@ -467,6 +473,19 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
             }
         }
     )
+}
+
+/**
+ * The backend says two different things about an open refill
+ * (PatientPortalServiceImpl.requestMedicationRefill): REQUESTED is awaiting
+ * review, PAUSED was deliberately held with a follow-up promised.
+ */
+@StringRes
+internal fun openRefillMessage(status: RefillStatus): Int = when (status) {
+    RefillStatus.PAUSED -> R.string.refill_on_hold
+    RefillStatus.REQUESTED, RefillStatus.APPROVED, RefillStatus.DENIED,
+    RefillStatus.DISPENSED, RefillStatus.CANCELLED, RefillStatus.UNKNOWN ->
+        R.string.refill_already_open
 }
 
 @Composable

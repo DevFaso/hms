@@ -37,12 +37,18 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
         return viewModelScope.launch {
             isLoading.value = true
             try {
-                val m = async { api.getMedications().body()?.data ?: emptyList() }
-                val p = async { api.getPrescriptions().body()?.data ?: emptyList() }
-                val r = async { api.getRefills().body()?.data?.content ?: emptyList() }
-                medications.value = m.await()
-                prescriptions.value = p.await()
-                refills.value = r.await()
+                // Each list is replaced only when its OWN fetch produced one.
+                // `?: emptyList()` here meant that a refresh which failed — no
+                // connectivity, an expired session, or the reload on the
+                // refill-failure path — swapped the patient's medications for
+                // an empty tab. A successful fetch that returns nothing still
+                // empties it, which is the honest case.
+                val m = async { api.getMedications().body()?.data }
+                val p = async { api.getPrescriptions().body()?.data }
+                val r = async { api.getRefills().body()?.data?.content }
+                m.await()?.let { medications.value = it }
+                p.await()?.let { prescriptions.value = it }
+                r.await()?.let { refills.value = it }
             } catch (_: Exception) {}
             finally { isLoading.value = false }
         }
@@ -96,12 +102,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // dead prescription is merely under review.
                     val refreshed = prescriptions.value.firstOrNull { it.id == prescriptionId }
                     val stillRefillable = refreshed?.statusEnum?.isRefillable ?: true
-                    val hasOpen = medications.value.firstOrNull { it.id == prescriptionId }
-                        ?.refillRequestOpen
-                        ?: refills.value.any { it.prescriptionId == prescriptionId && it.statusEnum.isOpen }
+                    val openRefill = medications.value.firstOrNull { it.id == prescriptionId }
+                        ?.let { if (it.refillRequestOpen) it.openRefillStatus else null }
+                        ?: refills.value.firstOrNull {
+                            it.prescriptionId == prescriptionId && it.statusEnum.isOpen
+                        }?.statusEnum
                     _outcome.value = when {
                         !stillRefillable -> Outcome(R.string.refill_not_refillable)
-                        hasOpen -> Outcome(R.string.refill_already_open)
+                        openRefill != null -> Outcome(openRefillMessage(openRefill))
                         // Anything else: the server's own words are still
                         // better than nothing, even untranslated.
                         else -> Outcome(R.string.refill_request_failed, detail ?: "HTTP ${resp.code()}")
