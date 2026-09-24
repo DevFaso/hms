@@ -212,7 +212,14 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     // Only when there IS an interpretation: a released row
                     // whose status this build cannot name has none, and an
                     // empty Row still costs a gap in the spacedBy column.
-                    if (lab.isCritical || lab.isAbnormal || lab.isNormal) {
+                    // "Within normal range" additionally needs a range to have
+                    // been inside: resolveStatus falls through to
+                    // statusOf(abnormalFlag) and statusOf(null) is NORMAL, so on
+                    // a qualitative or ungraded row NORMAL means "nothing graded
+                    // this", and a culture narrative must not be told it is
+                    // within a range nobody configured.
+                    val showsNormal = lab.isNormal && lab.referenceRange != null
+                    if (lab.isCritical || lab.isAbnormal || showsNormal) {
                         Row(verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             when {
@@ -228,7 +235,7 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                                     Text(stringResource(R.string.lab_interpretation_abnormal),
                                         style = MaterialTheme.typography.bodySmall, color = toneContent)
                                 }
-                                lab.isNormal -> {
+                                showsNormal -> {
                                     Icon(Icons.Default.CheckCircle, null, tint = toneContent,
                                         modifier = Modifier.size(16.dp))
                                     Text(stringResource(R.string.lab_interpretation_normal),
