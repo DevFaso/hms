@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.medications
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.R
@@ -14,6 +15,11 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MedicationsViewModel @Inject constructor(private val api: ApiService) : ViewModel() {
+
+    private companion object {
+        const val TAG = "MedicationsViewModel"
+    }
+
     val medications = MutableStateFlow<List<MedicationDto>>(emptyList())
     val prescriptions = MutableStateFlow<List<PrescriptionDto>>(emptyList())
     val refills = MutableStateFlow<List<RefillDto>>(emptyList())
@@ -34,6 +40,15 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     }
 
     val loadFailed = MutableStateFlow(LoadFailures())
+
+    /**
+     * Prescription id → the open refill on it. Rebuilt at the end of every
+     * load rather than scanned per row: `/me/patient/prescriptions` is
+     * unpaged, so a long-standing patient's list is unbounded and a linear
+     * search of `medications` (and, on a miss, `refills`) per row per
+     * recomposition is O(n·m).
+     */
+    val openRefills = MutableStateFlow<Map<String, RefillStatus>>(emptyMap())
 
     /** A localized outcome: a string resource plus an optional detail argument. */
     data class Outcome(val resId: Int, val detail: String? = null)
@@ -81,6 +96,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 mResp.body()?.data?.let { medications.value = it }
                 pResp.body()?.data?.let { prescriptions.value = it }
                 rResp.body()?.data?.content?.let { refills.value = it }
+                rebuildOpenRefills()
                 reportLoadOutcome(
                     LoadFailures(
                         medications = !mResp.isSuccessful,
@@ -89,7 +105,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     ),
                     hadDataBefore
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // The patient is told what matters — the lists are stale — in
+                // their own language, but the reason must not vanish: a parse
+                // failure here IS a wire-contract break, the class of bug this
+                // whole change exists to fix.
+                Log.w(TAG, "Medications load failed", e)
                 reportLoadOutcome(
                     LoadFailures(medications = true, prescriptions = true, refills = true),
                     medications.value.isNotEmpty() ||
@@ -107,6 +128,29 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * a silent no-op. On a COLD open there is nothing stale to show, so the
      * empty states offer a retry rather than claiming old data is on screen.
      */
+    /**
+     * The medications pass runs second and OVERWRITES, including with nothing:
+     * `false` there is an answer, not a miss. Falling back to the refills page
+     * on it would let a row the patient has just cancelled — kept by `load()`
+     * when only that fetch failed — hide the button and tell them a withdrawn
+     * request is still with their care team. The opposite staleness merely
+     * costs a 400 the patient is then told about, so this is the safer way to
+     * be wrong.
+     */
+    private fun rebuildOpenRefills() {
+        val index = mutableMapOf<String, RefillStatus>()
+        for (refill in refills.value) {
+            val id = refill.prescriptionId ?: continue
+            if (refill.statusEnum.isOpen) index.putIfAbsent(id, refill.statusEnum)
+        }
+        for (medication in medications.value) {
+            val id = medication.id.takeIf { it.isNotBlank() } ?: continue
+            val open = medication.openRefillStatus
+            if (open != null) index[id] = open else index.remove(id)
+        }
+        openRefills.value = index
+    }
+
     private fun reportLoadOutcome(failures: LoadFailures, hadDataBefore: Boolean) {
         loadFailed.value = failures
         // `hadDataBefore` counts ANY list — including refills, whose tab may
@@ -188,8 +232,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     // `refillRequestOpen` cannot see: `latestRefillsFor` grades
                     // only the NEWEST request, so an older PAUSED one that the
                     // server's `findFirst…StatusIn` still counts reads as false.
-                    val openRefill = medications.value.firstOrNull { it.id == prescriptionId }
-                        ?.openRefillStatus
+                    val openRefill = openRefills.value[prescriptionId]
                         ?: refills.value.firstOrNull {
                             it.prescriptionId == prescriptionId && it.statusEnum.isOpen
                         }?.statusEnum

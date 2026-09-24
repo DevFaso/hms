@@ -41,6 +41,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     val refills by viewModel.refills.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loadFailed by viewModel.loadFailed.collectAsState()
+    val openRefills by viewModel.openRefills.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Medications", "Prescriptions", "Refills")
@@ -172,13 +173,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         // the opposite staleness merely costs a 400 they are
                         // then told about in their own language. This is the
                         // safer way to be wrong.
-                        val medicationRow = medications.firstOrNull { it.id == rx.id }
-                        val openRefill = if (medicationRow != null) {
-                            medicationRow.openRefillStatus
-                        } else {
-                            refills.firstOrNull { it.prescriptionId == rx.id && it.statusEnum.isOpen }
-                                ?.statusEnum
-                        }
+                        val openRefill = openRefills[rx.id]
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
@@ -429,19 +424,23 @@ private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
                 MedDetailRow(stringResource(R.string.status), stringResource(med.statusEnum.labelRes))
                 HorizontalDivider()
 
-                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                med.dosage?.let { MedDetailRow("Dosage", it) }
-                med.frequency?.let { MedDetailRow("Frequency", it) }
-                med.route?.let { MedDetailRow("Route", it) }
-                HorizontalDivider()
+                Text(stringResource(R.string.dosage_and_administration),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                med.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
+                med.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
+                med.route?.let { MedDetailRow(stringResource(R.string.route), it) }
 
-                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                med.startDate?.let { MedDetailRow("Start Date", it.take(10)) }
-                med.endDate?.let { MedDetailRow("End Date", it.take(10)) }
+                if (med.startDate != null || med.endDate != null) {
+                    HorizontalDivider()
+                    Text(stringResource(R.string.dates_section),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    med.startDate?.let { MedDetailRow(stringResource(R.string.start_date), it.take(10)) }
+                    med.endDate?.let { MedDetailRow(stringResource(R.string.end_date), it.take(10)) }
+                }
 
                 med.prescribedBy?.let {
                     HorizontalDivider()
-                    MedDetailRow("Prescribed By", it)
+                    MedDetailRow(stringResource(R.string.prescribed_by), it)
                 }
 
                 med.instructions?.takeIf { it.isNotBlank() }?.let {

@@ -684,4 +684,7 @@
     <string name="refill_updated_with_value">Mis à jour : %1$s</string>
     <string name="refill_provider_with_value">Soignant : %1$s</string>
     <string name="refill_notes_with_value">Notes : %1$s</string>
+    <string name="dosage_and_administration">Posologie et administration</string>
+    <string name="start_date">Date de début</string>
+    <string name="end_date">Date de fin</string>
 </resources>
