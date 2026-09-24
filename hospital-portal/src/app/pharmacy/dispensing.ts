@@ -26,11 +26,18 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
+import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
 @Component({
   selector: 'app-dispensing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PrescriptionClarificationComponent,
+  ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dispensing.scss',

@@ -21,6 +21,7 @@ import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
 @Component({
   selector: 'app-prescriptions',
@@ -32,6 +33,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
     CdsCardListComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
+    PrescriptionClarificationComponent,
   ],
   templateUrl: './prescriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,

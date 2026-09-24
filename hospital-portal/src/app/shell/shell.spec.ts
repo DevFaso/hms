@@ -358,6 +358,11 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/pharmacy/dispensing');
     expect(routes).toContain('/pharmacy/stock-routing');
+    // Gap G9: /prescriptions is withheld ON PURPOSE. The route guard admits
+    // the verifier and the pharmacist-verify ceremony lives there, but
+    // GET /prescriptions (and GET /prescriptions/{id}) do not admit the
+    // role, so the page would open on a "failed to load" toast. This
+    // expectation is the guard against "fixing" that into a 403.
     expect(routes).not.toContain('/prescriptions');
   });
 

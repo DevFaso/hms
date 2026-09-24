@@ -309,6 +309,19 @@ export interface WorkQueuePrescription {
   };
   /** Absent on a first fill with no refill allowance and no request history. */
   refill?: WorkQueueRefillContext;
+  /**
+   * True when the row is not a plain fill and the pharmacist should look
+   * before dispensing; {@link attentionReason} says which. Absent (rather
+   * than false) on payloads produced before the backend added the flag.
+   */
+  needsAttention?: boolean;
+  /**
+   * PENDING_STOCK, PARTNER_REJECTED, PARTNER_ACCEPTED,
+   * BACK_ORDER_OUTSTANDING or CLARIFICATION_RESOLVED; absent when nothing
+   * needs attention. Only CLARIFICATION_RESOLVED is acted on here (gap G5) —
+   * the rest belong to the back-order and partner-routing cues.
+   */
+  attentionReason?: string;
 }
 
 /**

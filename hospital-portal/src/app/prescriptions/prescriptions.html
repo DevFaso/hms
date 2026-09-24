@@ -199,6 +199,18 @@
                       <span class="material-symbols-outlined">verified_user</span>
                     </button>
                   }
+                  <!-- Gap G5 — the prescriber's half of the pharmacist's
+                       clarification. Renders only for a doctor on a
+                       PENDING_CLARIFICATION row; the component decides. -->
+                  <app-prescription-clarification
+                    mode="PRESCRIBER"
+                    [prescriptionId]="p.id"
+                    [status]="p.status"
+                    [medicationLabel]="p.medicationDisplayName || p.medicationName"
+                    [question]="p.clarificationReason ?? null"
+                    [askedAt]="p.clarificationRequestedAt ?? null"
+                    (changed)="load()"
+                  />
                   @if (canDispatchSms(p)) {
                     <button
                       class="action-link"
