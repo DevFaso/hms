@@ -477,6 +477,23 @@ describe('LabResultsComponent — read-back role gate', () => {
     expect(doctor.canReleaseResult({ id: 'r1', released: false } as LabResultResponse)).toBeFalse();
   });
 
+  it('re-reads the sign authority after a hospital-scope change', () => {
+    // `canSign` was a field computed once at construction, so a user who
+    // switched hospital kept the sign button they had at the hospital they
+    // left — and lost it where they did have it. The role context is the
+    // live answer; reading it once is reading the wrong hospital's.
+    const roles = ['ROLE_DOCTOR'];
+    const component = createWithRoles(roles);
+    expect(component.canSign()).toBeTrue();
+
+    // The scope change: the active role set becomes the one held at the
+    // newly selected hospital, where this user is a technician.
+    roles.length = 0;
+    roles.push('ROLE_LAB_TECHNICIAN');
+
+    expect(component.canSign()).toBeFalse();
+  });
+
   it('does not offer read-back to the lab roles the backend refuses', () => {
     // Read-back is the ordering clinician confirming what they were told;
     // lab attestation is a different act. A button that 403s teaches the

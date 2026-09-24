@@ -1,0 +1,215 @@
+<div class="release-worklist-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">published_with_changes</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_RELEASE.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_RELEASE.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      @if (page()) {
+        <span class="count-badge" data-testid="release-awaiting-count">
+          {{ 'LAB_RELEASE.AWAITING_COUNT' | translate: { count: totalAwaiting() } }}
+        </span>
+      }
+      <button
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        [title]="'COMMON.REFRESH' | translate"
+        data-testid="release-refresh"
+      >
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- What happened after the last release: the row is gone from the list
+       below, which on its own is indistinguishable from nothing having
+       happened at all. -->
+  @if (justReleased(); as done) {
+    <div class="released-banner" role="status" data-testid="release-just-released">
+      <span class="material-symbols-outlined">task_alt</span>
+      <span>
+        {{ 'LAB_RELEASE.JUST_RELEASED' | translate: { test: done.test, patient: done.patient } }}
+      </span>
+      <button
+        class="btn-dismiss"
+        (click)="dismissJustReleased()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="state-block" data-testid="release-loading">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error" role="alert" data-testid="release-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button class="btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="state-block" data-testid="release-empty">
+      <span class="material-symbols-outlined">inbox</span>
+      <p>{{ 'LAB_RELEASE.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="release-table">
+        <caption class="sr-only">
+          {{
+            'LAB_RELEASE.TABLE_CAPTION' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'LAB_RELEASE.COL_PATIENT' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_TEST' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_VALUE' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_FLAG' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_ARRIVED' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr [class.is-critical]="isCritical(row)" [attr.data-testid]="'release-row-' + row.id">
+              <td>
+                <span class="patient-name">{{ row.patientFullName }}</span>
+                @if (isCritical(row)) {
+                  <span class="critical-tag" data-testid="release-critical-tag">
+                    {{ 'LAB_RELEASE.CRITICAL' | translate }}
+                  </span>
+                }
+              </td>
+              <td>
+                <span class="test-name">{{ row.labTestName }}</span>
+                @if (row.labOrderCode) {
+                  <span class="order-code mono">{{ row.labOrderCode }}</span>
+                }
+              </td>
+              <td class="numeric">
+                {{ row.resultValue }}
+                @if (row.resultUnit) {
+                  <span class="unit">{{ row.resultUnit }}</span>
+                }
+              </td>
+              <td>
+                <span [class]="severityClass(row)">
+                  {{ 'LAB_RELEASE.FLAG_' + severityKey(row) | translate }}
+                </span>
+              </td>
+              <td>{{ row.resultDate ? (row.resultDate | date: 'short') : '—' }}</td>
+              <td class="actions-cell">
+                @if (canReleaseResult(row)) {
+                  <button
+                    class="btn-release"
+                    (click)="askRelease(row)"
+                    [disabled]="releasingId() !== null"
+                    [attr.data-testid]="'release-action-' + row.id"
+                  >
+                    <span class="material-symbols-outlined">published_with_changes</span>
+                    {{ 'LAB_RELEASE.RELEASE' | translate }}
+                  </button>
+                } @else if (releaseBelongsElsewhere(row)) {
+                  <span class="no-action" [attr.data-testid]="'release-elsewhere-' + row.id">
+                    {{ 'LAB_RELEASE.NOT_YOURS' | translate }}
+                  </span>
+                } @else {
+                  <!-- No role to release: say nothing rather than give the
+                       reason that belongs to the other case. -->
+                  <span class="no-action" [attr.data-testid]="'release-none-' + row.id">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <div class="pagination">
+        <button class="btn-page" (click)="previousPage()" [disabled]="pageIndex() === 0">
+          {{ 'COMMON.PREVIOUS' | translate }}
+        </button>
+        <span>{{
+          'LAB_RELEASE.PAGE_OF' | translate: { page: pageIndex() + 1, total: totalPages() }
+        }}</span>
+        <button class="btn-page" (click)="nextPage()" [disabled]="pageIndex() + 1 >= totalPages()">
+          {{ 'COMMON.NEXT' | translate }}
+        </button>
+      </div>
+    }
+  }
+
+  <!-- Release confirmation. Releasing is the laboratory attesting that a
+       number may be acted on, so it is never a single click; the dialog stays
+       open on a failure and names the refusal, and the row stays in the list.
+       Modal nested INSIDE the backdrop — the #442 lesson. -->
+  @if (releaseTarget(); as target) {
+    <div
+      class="form-overlay"
+      (click)="cancelRelease()"
+      (keydown.escape)="cancelRelease()"
+      tabindex="-1"
+      data-testid="release-confirm-modal"
+    >
+      <div
+        class="form-card"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="'LAB_RELEASE.CONFIRM_TITLE' | translate"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ 'LAB_RELEASE.CONFIRM_TITLE' | translate }}</h2>
+        <p>
+          {{
+            'LAB_RELEASE.CONFIRM_BODY'
+              | translate
+                : {
+                    test: target.labTestName,
+                    value: target.resultValue + (target.resultUnit ? ' ' + target.resultUnit : ''),
+                    patient: target.patientFullName,
+                  }
+          }}
+        </p>
+        <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
+
+        @if (releaseError(); as message) {
+          <p class="modal-error" role="alert" data-testid="release-confirm-error">{{ message }}</p>
+        }
+
+        <div class="modal-actions">
+          <button
+            class="btn-secondary"
+            (click)="cancelRelease()"
+            [disabled]="releasingId() !== null"
+          >
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="confirmRelease()"
+            [disabled]="releasingId() !== null"
+            data-testid="release-confirm-submit"
+          >
+            @if (releasingId()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+            }
+            {{ 'LAB_RELEASE.RELEASE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -557,7 +557,12 @@ export const routes: Routes = [
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
-            'ROLE_ADMIN',
+            // ROLE_ADMIN removed (B16): neither the SecurityConfig matcher on
+            // GET /lab-results nor the @PreAuthorize on the controller admits
+            // it, so the entry was a link to a 403. PHARMACIST is admitted by
+            // the read endpoint (E9 #69) but stays out here on purpose — this
+            // screen also loads /lab-orders and the critical queue, which
+            // refuse a pharmacist; they read results from the chart instead.
             'ROLE_SUPER_ADMIN',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
@@ -627,6 +632,30 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./lab/lab-approval-queue/lab-approval-queue').then(
             (m) => m.LabApprovalQueueComponent,
+          ),
+      },
+      // Release worklist (B14). Roles mirror the @PreAuthorize on
+      // GET /lab-results/pending-release exactly — the five laboratory roles.
+      // SUPER_ADMIN is absent because that annotation omits it: the endpoint
+      // answers 403, so a nav entry or guard admitting it would be a dead
+      // link. Scope-gated: the service refuses a global-view read outright
+      // ("A hospital scope is required for the release worklist").
+      {
+        path: 'lab-release-worklist',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: [
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-release-worklist/lab-release-worklist').then(
+            (m) => m.LabReleaseWorklistComponent,
           ),
       },
       {

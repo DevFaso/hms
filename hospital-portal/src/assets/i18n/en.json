@@ -2929,6 +2929,34 @@
     "READ_BACK_RECORDED": "Read back",
     "READ_BACK_MISMATCH": "Read-back MISMATCH — not acknowledged"
   },
+  "LAB_RELEASE": {
+    "TITLE": "Release Worklist",
+    "SUBTITLE": "Results waiting for the laboratory to release them",
+    "AWAITING_COUNT": "{{count}} awaiting release",
+    "TABLE_CAPTION": "Results awaiting release, oldest first",
+    "COL_PATIENT": "Patient",
+    "COL_TEST": "Test",
+    "COL_VALUE": "Value",
+    "COL_FLAG": "Flag",
+    "COL_ARRIVED": "Arrived",
+    "COL_ACTIONS": "Actions",
+    "FLAG_HIGH": "High",
+    "FLAG_LOW": "Low",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_UNSPECIFIED": "Not flagged",
+    "CRITICAL": "Critical",
+    "RELEASE": "Release",
+    "NOT_YOURS": "Released by the performing laboratory",
+    "CONFIRM_TITLE": "Release this result?",
+    "CONFIRM_BODY": "Release {{test}} = {{value}} for {{patient}}?",
+    "CONFIRM_NOTE": "Releasing attests that the result is correct and may be acted on. It is recorded against your name.",
+    "RELEASED": "Result released.",
+    "JUST_RELEASED": "{{test}} released for {{patient}}.",
+    "RELEASE_ERROR": "Could not release the result.",
+    "EMPTY": "Nothing is waiting for release.",
+    "LOAD_ERROR": "Could not load the release worklist.",
+    "PAGE_OF": "Page {{page}} of {{total}}"
+  },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
     "SUBTITLE": "Manage laboratory instruments and equipment",
@@ -3238,7 +3266,8 @@
     "SEARCH_PLACEHOLDER": "Search modules...",
     "SEARCH_CLEAR": "Clear search",
     "SEARCH_NO_RESULTS": "No module matches \"{{query}}\".",
-    "BREAK_GLASS_REVIEW": "Break-glass review"
+    "BREAK_GLASS_REVIEW": "Break-glass review",
+    "LAB_RELEASE_WORKLIST": "Release Worklist"
   },
   "NOTIFICATIONS": {
     "ALL": "All",

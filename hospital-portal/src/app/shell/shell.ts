@@ -740,6 +740,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-results',
         permission: 'View Lab',
         // Mirrors the /lab-results RoleGuard.
+        //
+        // ROLE_ADMIN removed (B16): the entry, the guard and the backend
+        // disagreed. GET /lab-results is gated twice — the SecurityConfig
+        // matcher and the controller's @PreAuthorize — and neither list
+        // contains ADMIN, so the row rendered for a role the API answers 403
+        // to. The guard lost it in the same change, so all three agree.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
@@ -749,7 +755,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_DIRECTOR',
           'ROLE_QUALITY_MANAGER',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -1099,6 +1104,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Lab Approval Queue',
         translationKey: 'NAV.LAB_APPROVAL_QUEUE',
         route: '/lab-approval-queue',
+      });
+    }
+    // Release worklist (B14). Exactly the @PreAuthorize on
+    // GET /lab-results/pending-release, which the route guard mirrors:
+    // the five laboratory roles and no super-admin, because that annotation
+    // has none and the endpoint 403s it.
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+      ])
+    ) {
+      items.push({
+        icon: 'published_with_changes',
+        label: 'Release Worklist',
+        translationKey: 'NAV.LAB_RELEASE_WORKLIST',
+        route: '/lab-release-worklist',
       });
     }
     if (

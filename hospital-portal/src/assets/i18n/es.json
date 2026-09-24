@@ -2929,6 +2929,34 @@
     "READ_BACK_RECORDED": "Relectura confirmada",
     "READ_BACK_MISMATCH": "DISCREPANCIA en la relectura — sin confirmar"
   },
+  "LAB_RELEASE": {
+    "TITLE": "Lista de validación",
+    "SUBTITLE": "Resultados pendientes de validación por el laboratorio",
+    "AWAITING_COUNT": "{{count}} pendientes de validación",
+    "TABLE_CAPTION": "Resultados pendientes de validación, los más antiguos primero",
+    "COL_PATIENT": "Paciente",
+    "COL_TEST": "Prueba",
+    "COL_VALUE": "Valor",
+    "COL_FLAG": "Indicador",
+    "COL_ARRIVED": "Recibido",
+    "COL_ACTIONS": "Acciones",
+    "FLAG_HIGH": "Alto",
+    "FLAG_LOW": "Bajo",
+    "FLAG_NORMAL": "Normal",
+    "FLAG_UNSPECIFIED": "Sin indicador",
+    "CRITICAL": "Crítico",
+    "RELEASE": "Validar",
+    "NOT_YOURS": "Lo valida el laboratorio ejecutor",
+    "CONFIRM_TITLE": "¿Validar este resultado?",
+    "CONFIRM_BODY": "¿Validar {{test}} = {{value}} para {{patient}}?",
+    "CONFIRM_NOTE": "La validación certifica que el resultado es correcto y puede utilizarse. Queda registrada a su nombre.",
+    "RELEASED": "Resultado validado.",
+    "JUST_RELEASED": "{{test}} validado para {{patient}}.",
+    "RELEASE_ERROR": "No se pudo validar el resultado.",
+    "EMPTY": "No hay resultados pendientes de validación.",
+    "LOAD_ERROR": "No se pudo cargar la lista de validación.",
+    "PAGE_OF": "Página {{page}} de {{total}}"
+  },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
     "SUBTITLE": "Gestionar instrumentos y equipos de laboratorio",
@@ -3238,7 +3266,8 @@
     "SEARCH_PLACEHOLDER": "Buscar módulos...",
     "SEARCH_CLEAR": "Borrar la búsqueda",
     "SEARCH_NO_RESULTS": "Ningún módulo coincide con «{{query}}».",
-    "BREAK_GLASS_REVIEW": "Revisión de accesos de emergencia"
+    "BREAK_GLASS_REVIEW": "Revisión de accesos de emergencia",
+    "LAB_RELEASE_WORKLIST": "Lista de validación"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

@@ -103,11 +103,22 @@ export class LabResultsComponent implements OnInit {
   comparison = signal<LabResultComparison | null>(null);
   comparisonLoading = signal(false);
 
-  readonly canSign = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_MIDWIFE',
-    'ROLE_LAB_SCIENTIST',
-  ]);
+  /** POST /lab-results/{id}/sign backend role list. */
+  private static readonly SIGN_ROLES = ['ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST'];
+
+  /**
+   * Whether to offer the signature control.
+   *
+   * <p>A method, not a field: `canSign` was evaluated once while the
+   * component was being constructed, so after a hospital-scope change — which
+   * changes the active role set — it still answered for the roles the user
+   * held at the hospital they had left. That is the same defect #723 fixed on
+   * the release button, and this is the same fix: read the role context live,
+   * every time the template asks.
+   */
+  canSign(): boolean {
+    return this.roleContext.hasAnyActiveRole(LabResultsComponent.SIGN_ROLES);
+  }
   /** POST /lab-results/{id}/release backend role list (LabResultAuthority.RELEASE_EXPRESSION). */
   private static readonly RELEASE_ROLES = [
     'ROLE_LAB_SCIENTIST',
