@@ -96,6 +96,16 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
+  it('keeps the rows and states the failure when a refresh over them fails', () => {
+    fixture.componentRef.setInput('results', [item()]);
+    fixture.componentRef.setInput('loadError', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-stale')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+  });
+
   it('renders the rows when there is no error', () => {
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);

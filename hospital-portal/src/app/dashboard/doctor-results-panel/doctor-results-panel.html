@@ -22,7 +22,7 @@
       <span class="rp-spinner"></span>
       <span>{{ 'common.loading' | translate }}</span>
     </div>
-  } @else if (loadError()) {
+  } @else if (loadError() && results().length === 0) {
     <div class="rp-error">
       <span class="material-symbols-outlined">error</span>
       <p>{{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}</p>
@@ -36,6 +36,19 @@
       <p>{{ 'DASHBOARD.ALL_RESULTS_REVIEWED' | translate }}</p>
     </div>
   } @else {
+    <!--
+      A failed refresh over rows that are still held: state it, keep them. An
+      error card where three critical results had been is worse than the rows
+      plus a notice.
+    -->
+    @if (loadError()) {
+      <p class="rp-stale" role="status">
+        {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
+        <button type="button" class="rp-retry" (click)="requestReload()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </p>
+    }
     <div class="rp-sections">
       <!-- Critical -->
       @if (criticalResults().length > 0) {

@@ -349,10 +349,17 @@ export class PatientChartComponent implements OnInit, OnChanges {
     return this.roleContext.globalView() ? null : this.hospitalId() || null;
   }
 
-  /** True when the lab reads carry no hospital scope at all (global view). */
-  readonly globalScope = computed(
-    () => this.roleContext.globalView() && this.roleContext.effectiveHospitalIdForRequest() == null,
-  );
+  /**
+   * True when the lab reads carry no hospital scope at all.
+   *
+   * Keyed on `labHospitalId()`, not on `globalView()`: a super-admin in
+   * global view is the usual case, but a clinical account whose assignments
+   * have all been deactivated resolves to no scope too, and then the reads go
+   * out unscoped — `fetchRows` takes its unfiltered branch — while the hint
+   * still claimed "this hospital's" and `isForeignLabRow` marked nothing.
+   * The two have to agree by construction, so they read the same value.
+   */
+  readonly globalScope = computed(() => this.labHospitalId() == null);
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so

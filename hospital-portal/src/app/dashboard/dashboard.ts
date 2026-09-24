@@ -2566,7 +2566,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
    *
    * The service no longer turns a failure into an empty array: a 403 or an
    * outage drawn as "all results reviewed" is how a released result reaches
-   * nobody. So the stale rows are cleared AND the panel is told why.
+   * nobody. So the panel is told, and — when it has rows — keeps drawing
+   * them under that notice rather than losing them to a transient failure.
    */
   loadResultReviewQueue(done?: () => void): void {
     const request = ++this.resultQueueRequest;
@@ -2586,7 +2587,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: () => {
         if (isCurrent()) {
-          this.resultQueue.set([]);
+          // The rows are NOT cleared. A transient 502 on a refresh used to
+          // take three critical results off the screen and leave an error
+          // card where they had been; the panel draws them with the failure
+          // stated above, exactly as the in-basket category does.
           this.resultQueueError.set(true);
           this.resultQueueLoading.set(false);
         }
