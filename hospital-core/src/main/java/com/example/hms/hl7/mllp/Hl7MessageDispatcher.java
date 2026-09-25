@@ -79,6 +79,13 @@ public class Hl7MessageDispatcher {
      */
     private static final String MERGE_EVENT = "A40";
 
+    /**
+     * Stands in for the message type in the dispatcher's correlation keys.
+     * MSH-9 is sender-controlled, so it cannot be part of the key; the
+     * {@code reasonKey} already separates the problems worth separating.
+     */
+    private static final String DISPATCHER_CORRELATION_TYPE = "MLLP-DISPATCH";
+
     private final Hl7v2MessageBuilder messageBuilder;
     private final MllpAllowedSenderService allowlist;
     private final MllpInboundLabService inboundLab;
@@ -109,8 +116,12 @@ public class Hl7MessageDispatcher {
             // No parsed header — record under a sentinel integration id
             // so the DLQ surface still shows the failure. The fallback
             // header is what we send back as the ACK envelope.
-            recordReject("MLLP:?/?", null, "UNKNOWN", hl7Body,
-                "Invalid MSH: " + ex.getMessage(), "invalid MSH");
+            // No parsed header, so no sender: the helper's own placeholder
+            // form, not a hand-written copy of it.
+            recordReject(MllpRecordingContext.integrationId(null, null),
+                null, "UNKNOWN", hl7Body,
+                "Invalid MSH: " + ex.getMessage(), "invalid MSH",
+                MllpRecordingContext.UNRESOLVED_SENDER_SCOPE);
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
             );
@@ -129,7 +140,8 @@ public class Hl7MessageDispatcher {
                 header.messageType(), hl7Body,
                 "sender " + header.sendingApplication() + "/" + header.sendingFacility()
                     + " not allowlisted",
-                "sender not allowlisted");
+                "sender not allowlisted",
+                MllpRecordingContext.UNRESOLVED_SENDER_SCOPE);
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
         }
@@ -153,7 +165,7 @@ public class Hl7MessageDispatcher {
         recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
             header.messageType(), hl7Body,
             "unsupported message type " + header.messageType(),
-            "unsupported message type");
+            "unsupported message type", integrationIdFor(header));
         return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
             "Unsupported message type " + header.messageType());
     }
@@ -171,7 +183,7 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ORU^R01", hl7Body,
                 "unparseable ORU^R01 or no OBX segments",
-                "unparseable message");
+                "unparseable ORU^R01", integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ORU^R01 or no OBX segments");
         }
@@ -191,7 +203,7 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
                 "unparseable " + header.messageType() + " — missing PID-3 or required segments",
-                "unparseable message");
+                "unparseable ADT", integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }
@@ -220,7 +232,7 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
                 "unparseable ADT^A40 — missing PID-3 or MRG-1",
-                "unparseable message");
+                "unparseable ADT^A40", integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ADT^A40 — missing PID-3 or MRG-1");
         }
@@ -251,10 +263,21 @@ public class Hl7MessageDispatcher {
      * solves the PHI volume as a side effect of solving the flood, which is
      * why the body can stay.
      *
-     * <p>{@code reasonKey} is separate from {@code reason} on purpose: the
-     * human-readable reason embeds the exception message and the concrete
-     * message type, which vary per message and would fragment the id back
-     * into one row per retry. The key is a fixed string per problem.
+     * <p>{@code reasonKey} is separate from {@code reason} on purpose, and
+     * {@code correlationScope} is separate from {@code integrationId} for the
+     * same reason: <b>nothing a sender controls may enter the correlation
+     * key.</b> The human-readable reason embeds the exception message and the
+     * concrete message type; MSH-9 is whatever the sender wrote; and on the
+     * not-allowlisted path MSH-3 and MSH-4 have not been checked against
+     * anything at all. Key on any of those and an adversary varies it per
+     * message — a different {@code ZZZ^Znn} each time — to mint a fresh id
+     * per row, which is a fresh permanently-unresolved dead letter holding a
+     * fresh copy of the body. The bound that lets the body stay would hold
+     * only against a well-behaved vendor, which is not who this is for. So
+     * the scope is the allowlisted sender's id where we have resolved one,
+     * and a single constant where we have not: every reject from every
+     * unrecognised sender collapses onto one row, which is all an
+     * unrecognised sender is entitled to.
      *
      * <p>The recorder itself runs in REQUIRES_NEW and swallows its own
      * exceptions; the extra try-catch here is belt-and-braces so a recorder
@@ -262,7 +285,7 @@ public class Hl7MessageDispatcher {
      */
     private void recordReject(String integrationId, UUID organizationId,
                               String messageType, String rawBody, String reason,
-                              String reasonKey) {
+                              String reasonKey, String correlationScope) {
         String resolvedType = messageType == null ? "UNKNOWN" : messageType;
         try {
             messageRecorder.recordMessage(
@@ -273,7 +296,7 @@ public class Hl7MessageDispatcher {
                 IntegrationMessageStatus.FAILED,
                 reason,
                 MllpRecordingContext.rejectionCorrelationId(
-                    integrationId, resolvedType, reasonKey));
+                    correlationScope, DISPATCHER_CORRELATION_TYPE, reasonKey));
         } catch (RuntimeException ex) {
             log.warn("Dispatcher recorder threw for integration={} type={} reason={}",
                 integrationId, messageType, reason, ex);

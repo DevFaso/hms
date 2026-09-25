@@ -35,6 +35,14 @@ public class IntegrationMessageRecorder {
     static final int MAX_PAYLOAD_CHARS = 64 * 1024;
     /** {@code correlation_id} is {@code VARCHAR(120)} (V89). */
     static final int MAX_CORRELATION_ID_CHARS = 120;
+    /**
+     * {@code message_type} is {@code VARCHAR(64)} (V89), and on the MLLP
+     * paths it is MSH-9 as the sender wrote it — unvalidated, and HL7 v2
+     * allows far more than 64 characters there. Truncate rather than let the
+     * insert throw: this recorder swallows its own failures by design, so an
+     * over-long value would silently drop the row instead of recording it.
+     */
+    static final int MAX_MESSAGE_TYPE_CHARS = 64;
     private static final int MAX_ERROR_CHARS = 2_000;
 
     private final IntegrationMessageEventRepository repository;
@@ -107,7 +115,7 @@ public class IntegrationMessageRecorder {
                 .integrationId(integrationId)
                 .organizationId(organizationId)
                 .direction(direction)
-                .messageType(messageType)
+                .messageType(truncate(messageType, MAX_MESSAGE_TYPE_CHARS))
                 .correlationId(resolvedCorrelationId)
                 .payload(truncate(payload, MAX_PAYLOAD_CHARS))
                 .status(status)

@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,14 +38,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MllpIntegrationIdSingleSourceTest {
 
     /**
-     * Every main-source file allowed to contain the {@code "MLLP:"} literal.
-     * Adding to this set is a decision, not a formality.
+     * Every main source file allowed to open a string literal with
+     * {@code MLLP:}, by path rather than by bare filename — a bare name would
+     * exempt a new file that merely reused it.
+     *
+     * <p>Adding to this set is a decision, not a formality.
      */
     private static final Set<String> ALLOWED = Set.of(
-        "MllpRecordingContext.java",
+        "com/example/hms/service/integration/message/MllpRecordingContext.java",
         // TEMPORARY — see the class javadoc. Remove when the lab stream moves
         // MllpInboundLabServiceImpl onto MllpRecordingContext.
-        "MllpInboundLabServiceImpl.java");
+        "com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java");
+
+    /**
+     * Matches a string literal that starts with {@code MLLP:}, however the id
+     * is then assembled — {@code "MLLP:" + app}, {@code "MLLP:%s/%s"} with
+     * {@code formatted}, a text block. Matching the exact literal
+     * {@code "MLLP:"} alone would be defeated by rewording, which is not much
+     * of a guard.
+     */
+    private static final Pattern MLLP_ID_LITERAL = Pattern.compile("\"MLLP:");
 
     @Test
     @DisplayName("Only the shared helper (and the known lab exception) builds an MLLP integration id")
@@ -64,12 +77,13 @@ class MllpIntegrationIdSingleSourceTest {
                 .toList();
             assertThat(javaFiles).isNotEmpty();
             for (Path file : javaFiles) {
-                String name = file.getFileName().toString();
-                if (ALLOWED.contains(name)) {
+                String relativePath = mainSources.relativize(file).toString().replace('\\', '/');
+                if (ALLOWED.contains(relativePath)) {
                     continue;
                 }
-                if (Files.readString(file, StandardCharsets.UTF_8).contains("\"MLLP:\"")) {
-                    offenders.add(name);
+                String code = withoutComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (MLLP_ID_LITERAL.matcher(code).find()) {
+                    offenders.add(relativePath);
                 }
             }
         }
@@ -79,5 +93,39 @@ class MllpIntegrationIdSingleSourceTest {
                 + "instead of concatenating it: a copy without the 120-char truncation drops the "
                 + "DLQ row for the very sender whose configuration is wrong")
             .isEmpty();
+    }
+
+    /**
+     * Comments out, so the scan sees code. Several classes describe the id's
+     * shape in their javadoc — {@code actorLabel="MLLP:{sendingApp}/..."} —
+     * and documentation is not a second implementation. Crude on purpose: it
+     * only has to be right about whether a literal is live code, and a string
+     * containing {@code //} would at worst hide the rest of one line from the
+     * scan, never invent an offender.
+     */
+    private static String withoutComments(String source) {
+        return source
+            .replaceAll("(?s)/\\*.*?\\*/", "")
+            .replaceAll("(?m)//.*$", "");
+    }
+
+    @Test
+    @DisplayName("Every exemption still names a file that exists and still needs one")
+    void theAllowSetDoesNotGoStale() throws IOException {
+        // An exemption for a file that has moved, been renamed, or stopped
+        // containing the literal is an exemption nobody notices has stopped
+        // applying - and the lab entry in particular is meant to be deleted,
+        // so it has to be visible when it becomes pointless.
+        Path mainSources = Paths.get("src", "main", "java");
+        for (String allowed : ALLOWED) {
+            Path file = mainSources.resolve(allowed);
+            assertThat(Files.isRegularFile(file))
+                .as("exempted file %s does not exist - remove it from ALLOWED", allowed)
+                .isTrue();
+            assertThat(MLLP_ID_LITERAL.matcher(
+                withoutComments(Files.readString(file, StandardCharsets.UTF_8))).find())
+                .as("%s no longer builds an MLLP id - remove it from ALLOWED", allowed)
+                .isTrue();
+        }
     }
 }

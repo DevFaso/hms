@@ -120,11 +120,19 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // permission, so it is not a partial answer either.
         // Both lookups, always, before the branch. `||` would short-circuit:
         // one query when the survivor is foreign, two when the survivor is
-        // local and the retiree is not - and the partial-ownership case above
-        // is precisely the one a sender probes, so leaving it a round-trip
-        // cheaper hands back in latency what the identical ACK denies. The
-        // general timing residual on this path is documented in
-        // MllpInboundOutcome; this part of it is free to close.
+        // local and the retiree is not - and the partial-ownership case is
+        // precisely the one a sender probes, so leaving it a round-trip
+        // cheaper hands back in latency what the identical ACK denies.
+        //
+        // This closes the smaller of two deltas on that probe, not the whole
+        // of it. A candidate identifier that exists nowhere returns above
+        // after two EMPI reads and never reaches these queries at all, while
+        // one that exists in another hospital reaches both of them - so the
+        // work still differs between "unknown" and "exists elsewhere" even
+        // though the ACK does not. That is the residual MllpInboundOutcome
+        // documents; it cannot be closed by reordering, because there is no
+        // patient id to look up until EMPI has resolved one. What is closed
+        // here is the part that was free.
         boolean survivorIsOurs = isRegisteredHere(survivingPatientId, hospitalId);
         boolean retireeIsOurs = isRegisteredHere(retiringPatientId, hospitalId);
         if (!survivorIsOurs || !retireeIsOurs) {

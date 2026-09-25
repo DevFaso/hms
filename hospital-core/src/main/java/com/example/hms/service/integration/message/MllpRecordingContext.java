@@ -32,6 +32,20 @@ public final class MllpRecordingContext {
     /** The width of {@code integration_message_event.integration_id}. */
     private static final int INTEGRATION_ID_MAX = 120;
 
+    /**
+     * The correlation scope to use for a reject from a sender that has not
+     * been resolved against the allowlist.
+     *
+     * <p>A constant, and that is the whole point: at that stage MSH-3 and
+     * MSH-4 are whatever the message claimed and have been checked against
+     * nothing, so keying a correlation id on them would let anyone mint one
+     * permanently-unresolved dead letter per message simply by varying what
+     * they claim to be. Every reject from every unrecognised sender collapses
+     * onto one row instead, which is all an unrecognised sender is entitled
+     * to.
+     */
+    public static final String UNRESOLVED_SENDER_SCOPE = "MLLP:unresolved-sender";
+
     private MllpRecordingContext() {}
 
     /**
