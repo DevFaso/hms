@@ -121,20 +121,20 @@ struct LabResultDTO: Codable, Identifiable {
     /// requiring that boundary also keeps units that contain digits
     /// (`x10^9/L`) working, which trailing-non-digit extraction would not.
     ///
-    /// A range with no unit token at all is accepted. `formatReferenceRange`
-    /// omits the unit only when NEITHER the range nor the result carries one,
-    /// so there is no unit to disagree about, and the ambiguity being guarded
-    /// against arises only when a test has SEVERAL unit-specific ranges.
-    /// Withholding the green there would be a large regression for no safety
-    /// gain.
+    /// An empty range is accepted: there is no unit to disagree about. There
+    /// is deliberately NO "ends in a digit, so it carries no unit" shortcut —
+    /// `cells/mm3`, `10^9/L` and `mmol/24h` all end in one, and such a
+    /// shortcut handed every CD4 count an unconditional pass. It would also be
+    /// unreachable: `formatReferenceRange` falls back to the RESULT's unit
+    /// when `ranges[0]` has none, so whenever the row has a unit the formatted
+    /// range carries one too.
     ///
     /// Deliberately the same rule, in the same words, as
     /// `LabResultDto.rangeIsInUnit` on Android.
     static func range(_ range: String, isIn unit: String) -> Bool {
         let haystack = Array(range.lowercased())
         let needle = Array(unit.lowercased())
-        guard let last = haystack.last else { return true }
-        if last.isNumber { return true }
+        guard !haystack.isEmpty else { return true }
         guard haystack.count >= needle.count,
               Array(haystack.suffix(needle.count)) == needle else { return false }
         let boundary = haystack.count - needle.count - 1
@@ -143,24 +143,30 @@ struct LabResultDTO: Codable, Identifiable {
         return !(character.isLetter || character.isNumber)
     }
 
-    /// The reference range to put in front of the patient, or nil when it is
-    /// not this result's.
-    ///
-    /// Withholding the green tick is not enough on its own: a patient reading
-    /// "5.4 mmol/L" against limits of "70 - 110 mg/dL" concludes something is
-    /// badly wrong from the number pair alone. Where the range is not theirs
-    /// the UI says so rather than showing it.
+    /// The reference range to put in front of the patient.
     var displayReferenceRange: String? {
         guard !isPending,
               let range = referenceRange,
-              !range.trimmingCharacters(in: .whitespaces).isEmpty,
-              referenceRangeApplies
+              !range.trimmingCharacters(in: .whitespaces).isEmpty
         else { return nil }
         return range
     }
 
-    /// True when there IS a range but it is not in this result's unit.
-    var referenceRangeUnitMismatch: Bool {
+    /// True when the displayed limits MAY not be in the result's units, so the
+    /// UI can caveat them.
+    ///
+    /// Deliberately a caveat rather than a suppression. `findMatchingRange`
+    /// falls back to `referenceRanges.get(0)` when no configured range matches
+    /// the result unit — and that is exactly the range `formatReferenceRange`
+    /// displays — so on the ordinary single-range test whose configured unit
+    /// string merely differs cosmetically from the result's (`µmol/L` vs
+    /// `umol/L`, `x10^9/L` vs `10^9/L`, `mm Hg` vs `mmHg`), the range shown IS
+    /// the range graded against and there is nothing wrong at all. The app
+    /// cannot tell that apart from the real multi-range mismatch, so hiding
+    /// the limits would blank correct data on what is probably the common
+    /// case. The green tick is still withheld either way: under-reassuring is
+    /// free, deleting a patient's reference range is not.
+    var referenceRangeUnitUncertain: Bool {
         guard !isPending,
               let range = referenceRange,
               !range.trimmingCharacters(in: .whitespaces).isEmpty

@@ -196,24 +196,29 @@ final class LabResultWireContractTests: XCTestCase {
                            "\(rowUnit) must not match \(shownRange)")
         }
 
-        // A unit that contains digits still matches itself, and a range with
-        // no unit token at all is the ordinary single-range case.
+        // A unit that contains digits still matches itself; a unit that ENDS
+        // in one is still compared rather than waved through.
         XCTAssertTrue(LabResultDTO.range("4 - 11 x10^9/L", isIn: "x10^9/L"))
-        XCTAssertTrue(LabResultDTO.range("3.9 - 6.1", isIn: "mmol/L"))
+        XCTAssertFalse(LabResultDTO.range("500 - 1500 cells/mm3", isIn: "10^9/L"))
+        XCTAssertTrue(LabResultDTO.range("0.5 - 1.5 10^9/L", isIn: "10^9/L"))
+        // Only a genuinely empty range is passed.
+        XCTAssertTrue(LabResultDTO.range("", isIn: "mmol/L"))
+        XCTAssertFalse(LabResultDTO.range("3.9 - 6.1", isIn: "mmol/L"))
     }
 
-    /// Withholding the tick is not enough: the number pair alone tells a
-    /// patient reading 5.4 mmol/L against "70 - 110 mg/dL" that something is
-    /// badly wrong.
-    func testAReferenceRangeInAnotherUnitIsNotShownAtAll() throws {
+    /// Shown, not hidden: `findMatchingRange` falls back to `ranges[0]`, so
+    /// the displayed range may well BE the graded one and the app cannot tell.
+    /// The tick is withheld either way, which is the free half of the guard.
+    func testAReferenceRangeInAnotherUnitIsShownWithACaveat() throws {
         let mismatched = try decode("""
         {
           "id": "m", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
           "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
         }
         """)
-        XCTAssertNil(mismatched.displayReferenceRange)
-        XCTAssertTrue(mismatched.referenceRangeUnitMismatch)
+        XCTAssertEqual(mismatched.displayReferenceRange, "70 - 110 mg/dL")
+        XCTAssertTrue(mismatched.referenceRangeUnitUncertain)
+        XCTAssertFalse(mismatched.isGradedNormal)
 
         let matched = try decode("""
         {
@@ -222,17 +227,18 @@ final class LabResultWireContractTests: XCTestCase {
         }
         """)
         XCTAssertEqual(matched.displayReferenceRange, "3.9 - 6.1 mmol/L")
-        XCTAssertFalse(matched.referenceRangeUnitMismatch)
+        XCTAssertFalse(matched.referenceRangeUnitUncertain)
+        XCTAssertTrue(matched.isGradedNormal)
 
         // A pending row has neither: the backend redacts the range, and there
-        // is nothing to explain away.
+        // is nothing to caveat.
         let pending = try decode("""
         {
           "id": "m3", "testName": "Glucose", "status": "PENDING", "released": false
         }
         """)
         XCTAssertNil(pending.displayReferenceRange)
-        XCTAssertFalse(pending.referenceRangeUnitMismatch)
+        XCTAssertFalse(pending.referenceRangeUnitUncertain)
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {

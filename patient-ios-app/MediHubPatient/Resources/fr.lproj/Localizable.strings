@@ -588,4 +588,4 @@
 "generic_name" = "Dénomination commune";
 "start_date" = "Date de début";
 "end_date" = "Date de fin";
-"lab_reference_range_unit_mismatch" = "Valeurs de référence non affichées — celles enregistrées ne sont pas dans les unités de ce résultat.";
+"lab_reference_range_unit_uncertain" = "Ces valeurs ne sont peut-être pas dans les mêmes unités que votre résultat.";

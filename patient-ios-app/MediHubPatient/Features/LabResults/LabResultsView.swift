@@ -63,8 +63,6 @@ struct LabResultSummaryRow: View {
                     if let value = result.valueWithUnit {
                         Text(value).font(.caption)
                     }
-                    // Only when the range is this result's own; the detail
-                    // sheet explains the omission, a list cell cannot.
                     if let range = result.displayReferenceRange {
                         Text(String(format: "reference_with_value".localized, range))
                             .font(.caption).foregroundColor(.secondary)
@@ -119,9 +117,9 @@ struct LabResultDetailSheet: View {
                         }
                         if let range = result.displayReferenceRange {
                             detailRow("reference_range".localized, range)
-                        } else if result.referenceRangeUnitMismatch {
-                            // Say why it is missing rather than drop it silently.
-                            Text("lab_reference_range_unit_mismatch".localized)
+                        }
+                        if result.referenceRangeUnitUncertain {
+                            Text("lab_reference_range_unit_uncertain".localized)
                                 .font(.caption).foregroundColor(.secondary)
                         }
                         if result.isCritical {
