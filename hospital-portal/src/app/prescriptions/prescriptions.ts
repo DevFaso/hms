@@ -653,9 +653,18 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
-  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  /**
+   * Re-fetch under the new cross-tenant scope when the chip emits.
+   *
+   * <p>The prescriber list comes too. `canReadStaff` is read live precisely so
+   * that a scope switch can change the answer, and it only ever ran at
+   * `ngOnInit`: someone who opened the page as a pharmacist and switched to
+   * their doctor role kept the empty prescriber dropdown they started with,
+   * because nothing re-asked.
+   */
   onScopeChange(_hospitalId: string | null): void {
     this.load();
+    this.loadPrescribers();
   }
 
   /**

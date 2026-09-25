@@ -1227,6 +1227,19 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(staffServiceSpy.list).toHaveBeenCalled();
   });
 
+  it('re-asks for the staff list on a scope change', async () => {
+    // canReadStaff is read live so a scope switch can change the answer, and
+    // it only ever ran at ngOnInit: someone who opened the page as a
+    // pharmacist and switched to their doctor role kept the empty prescriber
+    // dropdown they started with.
+    await setup({ roles: ['ROLE_DOCTOR'] });
+    const before = staffServiceSpy.list.calls.count();
+
+    component.onScopeChange('h-2');
+
+    expect(staffServiceSpy.list.calls.count()).toBe(before + 1);
+  });
+
   it('asks for the staff list as a physician, who IS a doctor', async () => {
     // Role audit C2. The JWT carries ROLE_PHYSICIAN and the backend adds
     // ROLE_DOCTOR before its matcher runs, so the request is served — a
