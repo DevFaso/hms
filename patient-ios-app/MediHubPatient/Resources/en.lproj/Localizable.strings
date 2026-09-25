@@ -668,3 +668,34 @@
 "history_tobacco_current" = "Current";
 "history_tobacco_former" = "Former";
 "history_tobacco_never" = "Never";
+
+/* Roles on a disclosure row: the key is disclosures_role_<lowercased role,
+   ROLE_ stripped>. Taken from the Android app's shipped role_* strings;
+   an unknown role still falls back to a humanised token in roleLabel. */
+"disclosures_role_accountant" = "Accountant";
+"disclosures_role_admin" = "Admin";
+"disclosures_role_anesthesiologist" = "Anesthesiologist";
+"disclosures_role_billing_specialist" = "Billing Specialist";
+"disclosures_role_claims_reviewer" = "Claims Reviewer";
+"disclosures_role_doctor" = "Doctor";
+"disclosures_role_hospital_admin" = "Hospital Admin";
+"disclosures_role_lab_director" = "Lab Director";
+"disclosures_role_lab_manager" = "Lab Manager";
+"disclosures_role_lab_scientist" = "Lab Scientist";
+"disclosures_role_lab_technician" = "Lab Technician";
+"disclosures_role_midwife" = "Midwife";
+"disclosures_role_nurse" = "Nurse";
+"disclosures_role_patient" = "Patient";
+"disclosures_role_pharmacist" = "Pharmacist";
+"disclosures_role_pharmacy_verifier" = "Pharmacy Verifier";
+"disclosures_role_physician" = "Physician";
+"disclosures_role_physiotherapist" = "Physiotherapist";
+"disclosures_role_quality_manager" = "Quality Manager";
+"disclosures_role_radiologist" = "Radiologist";
+"disclosures_role_receptionist" = "Receptionist";
+"disclosures_role_staff" = "Staff";
+"disclosures_role_super_admin" = "Super Admin";
+"disclosures_role_surgeon" = "Surgeon";
+"disclosures_role_technician" = "Technician";
+"disclosures_role_therapist" = "Therapist";
+"disclosures_role_user" = "User";

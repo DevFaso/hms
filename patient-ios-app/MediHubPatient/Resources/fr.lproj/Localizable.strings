@@ -668,3 +668,33 @@
 "history_tobacco_current" = "Actuelle";
 "history_tobacco_former" = "Ancienne";
 "history_tobacco_never" = "Jamais";
+
+/* Rôles sur une ligne de communication : la clé est disclosures_role_<rôle en
+   minuscules, sans ROLE_>. Reprend les chaînes role_* de l'application Android. */
+"disclosures_role_accountant" = "Comptable";
+"disclosures_role_admin" = "Administrateur";
+"disclosures_role_anesthesiologist" = "Anesthésiste";
+"disclosures_role_billing_specialist" = "Spécialiste de la facturation";
+"disclosures_role_claims_reviewer" = "Contrôleur(se) des remboursements";
+"disclosures_role_doctor" = "Médecin";
+"disclosures_role_hospital_admin" = "Administrateur hôpital";
+"disclosures_role_lab_director" = "Directeur(trice) de laboratoire";
+"disclosures_role_lab_manager" = "Responsable de laboratoire";
+"disclosures_role_lab_scientist" = "Biologiste de laboratoire";
+"disclosures_role_lab_technician" = "Technicien(ne) de laboratoire";
+"disclosures_role_midwife" = "Sage-femme";
+"disclosures_role_nurse" = "Infirmier(ère)";
+"disclosures_role_patient" = "Patient(e)";
+"disclosures_role_pharmacist" = "Pharmacien(ne)";
+"disclosures_role_pharmacy_verifier" = "Vérificateur(trice) en pharmacie";
+"disclosures_role_physician" = "Praticien(ne)";
+"disclosures_role_physiotherapist" = "Kinésithérapeute";
+"disclosures_role_quality_manager" = "Responsable qualité";
+"disclosures_role_radiologist" = "Radiologue";
+"disclosures_role_receptionist" = "Réceptionniste";
+"disclosures_role_staff" = "Personnel";
+"disclosures_role_super_admin" = "Super administrateur";
+"disclosures_role_surgeon" = "Chirurgien(ne)";
+"disclosures_role_technician" = "Technicien(ne)";
+"disclosures_role_therapist" = "Thérapeute";
+"disclosures_role_user" = "Utilisateur(trice)";
