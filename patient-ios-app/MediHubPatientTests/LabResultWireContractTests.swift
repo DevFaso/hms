@@ -218,7 +218,9 @@ final class LabResultWireContractTests: XCTestCase {
                                       ("ug/dL", "12 - 16 mcg/dL"),
                                       ("mcg/dL", "12 - 16 \u{00B5}g/dL"),
                                       ("IU/L", "10 - 40 UI/L"),
-                                      ("UI/L", "10 - 40 IU/L")] {
+                                      ("UI/L", "10 - 40 IU/L"),
+                                      ("mIU/L", "0.4 - 4.0 mUI/L"),
+                                      ("mUI/L", "0.4 - 4.0 mIU/L")] {
             XCTAssertTrue(LabResultDTO.range(shownRange, isIn: rowUnit),
                           "\(rowUnit) vs \(shownRange) must not be a mismatch")
         }

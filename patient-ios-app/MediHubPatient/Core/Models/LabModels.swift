@@ -181,8 +181,12 @@ struct LabResultDTO: Codable, Identifiable {
             // and common on hand-entered ranges.
             .replacingOccurrences(of: "mcg", with: "ug")
             // "UI" is the French spelling of IU. Bounded so it cannot eat the
-            // middle of another token.
-            .replacingOccurrences(of: "(?<![a-z])ui(?![a-z])", with: "iu",
+            // middle of another token, but with room for ONE SI prefix: a bare
+            // `(?<![a-z])ui` refused anything prefixed, so `mUI/L` vs `mIU/L`
+            // — the standard units for TSH, FSH, LH and insulin — read as a
+            // real mismatch while the unprefixed pair folded.
+            .replacingOccurrences(of: "(?<![a-z])([mkndpcuh]?)ui(?![a-z])",
+                                  with: "$1iu",
                                   options: .regularExpression)
         if folded.hasPrefix("x") || folded.hasPrefix("*") {
             folded.removeFirst()
