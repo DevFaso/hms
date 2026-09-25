@@ -187,7 +187,15 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
      * it will retry, because the ACK is AE, which HL7 senders treat as
      * transient — supersedes its own previous row rather than stacking a new
      * dead letter every time. One misconfigured feed is one dead letter,
-     * however long it runs, and it clears once the feed stops.
+     * however long it runs.
+     *
+     * <p>It does not clear by itself when the feed stops.
+     * {@code countUnresolvedDeadLetters} counts a {@code FAILED} row when no
+     * <em>later</em> row shares its correlation id, so the last one written
+     * stays counted until an operator resolves it. That is the intended
+     * shape — a refusal nobody has looked at is still outstanding — but it
+     * means the badge holds one entry per (sender, message type, reason) that
+     * a human has to clear, not a gauge that decays.
      *
      * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
      * own exceptions, so the row survives this transaction rolling back.

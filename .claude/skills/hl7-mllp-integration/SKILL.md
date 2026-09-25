@@ -45,8 +45,11 @@ columns are NULL.
 ## The recorder is mandatory
 
 Every dispatch path **must** call `IntegrationMessageRecorder.recordMessage`
-(RECEIVED on accept, FAILED on any reject) so the DLQ / replay surface is
-populated. The recorder runs in `REQUIRES_NEW` and swallows its own
+so the DLQ / replay surface is populated. `FAILED` on any reject — every
+reject, including the ordinary ones; a refusal filed as `RECEIVED` tells
+anyone filtering a hospital's healthy inbound traffic that it was processed
+without error. `RECEIVED` on accept where the path records accepts at all
+(the ORU path does; the ADT and A40 paths record rejections only). The recorder runs in `REQUIRES_NEW` and swallows its own
 exceptions; wrap calls in a belt-and-braces try/catch anyway so a
 recorder-bean failure can never poison the ACK.
 
@@ -86,11 +89,22 @@ Two rules follow, and both were real defects:
 `FAILED`) through `MllpRecordingContext`, which the sender cannot read. Do
 not put the raw message in it on a rejection path: the ACK is `AE`, senders
 retry `AE`, and a full PID per retry turns the record into an unbounded PHI
-sink. MSH-10 in the error message is enough to correlate. A *benign*
-not-found (an identifier we simply do not have) is recorded with status
-`RECEIVED` instead, so ordinary partner misalignment does not bury real
-dead letters behind the operator badge — the status is an operator signal
-only and never reaches the sender.
+sink. MSH-10 in the error message is enough to correlate.
+
+**Pass a stable `correlationId`** on a rejection, via
+`MllpRecordingContext.rejectionCorrelationId(integrationId, messageType,
+reason)` and the eight-argument `recordMessage`.
+`countUnresolvedDeadLetters` counts a `FAILED` row only when no *later* row
+shares its correlation id, and the ACK for a refusal is `AE`, which senders
+retry on a timer — so a random id per row puts one unresolved dead letter on
+the operator's badge per retry, thousands a day for one misconfigured feed.
+Derive the id from the sender, the message type and the reason and from
+**nothing per-message**: an MSH-10 or an identifier in there defeats it, and
+an identifier also puts PHI in an indexed column. Note what this does and
+does not buy: a feed retrying the same broken thing stays **one** dead
+letter however long it runs, but that row does not clear by itself when the
+feed stops — it is the newest row for its correlation id, so it stays
+counted until an operator resolves it.
 
 The gate lives in the inbound services rather than in `EmpiServiceImpl`
 because there is **no security context on an MLLP worker thread**: every
