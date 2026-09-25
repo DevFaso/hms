@@ -3138,6 +3138,111 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   operational consequence is that an analyzer posting over HTTP now needs an
   allowlist row, exactly as one posting over MLLP always has.
 
+- **The pharmacy and laboratory flows: what wave 2 left underneath it.** The
+  portal and both apps now carry the two flows end to end (#724-#729) and the
+  HTTP HL7 ingest door has a tenant boundary (#730). These are the items the
+  review rounds turned up while doing it. Each names the stream picking it up,
+  so an unassigned one is genuinely unowned.
+
+  *Wrong or unsafe, backend.*
+  - `PatientLabResultServiceImpl.fetchRows` takes a fallback branch when the
+    hospital is null that runs `findByLabOrder_Patient_Id` — every tenant's
+    rows for that patient, past `RecordAccessPolicy.readableHospitalIds` — and
+    `getLabResults` then skips `recordReach`, which is guarded on a non-null
+    hospital. Legitimate on the patient-portal path (it is the patient's own
+    data); a cross-tenant unaudited read on the staff path. #731 stopped the
+    chart from calling it that way, so the portal is no longer a caller, but
+    the endpoint is unchanged and the same token reaches it by curl or from
+    the mobile apps. Owned by `fix/patient-lab-read-requires-scope`.
+  - `DispenseServiceImpl.listByPrescription` and
+    `StockOutRoutingServiceImpl.listByPrescription` dereference
+    `requireActiveHospitalId()`, which is null for a super-admin in global
+    view, so both answer 500. A 500 is not a policy: either the read is
+    unscoped for that caller or they must pick a hospital first, and nothing
+    has decided which. Owned by `fix/pharmacy-queue-cue-and-null-scope`.
+  - `GET /prescriptions` and `GET /prescriptions/{id}` omit
+    ROLE_PHARMACY_VERIFIER, so the role wave 2 gave the ability to RAISE a
+    clarification cannot read the prescriber's answer, and has no prescriptions
+    nav entry because one would land it on a page that 403s. Owned by
+    `feat/prescription-read-surface`.
+
+  *Finished screens that cannot say what they should, because the DTO has no
+  field for it.*
+  - `LabResultResponseDTO` carries neither `sourceMessageControlId` nor
+    `observationResultStatus` (both are on the entity), so the release worklist
+    cannot distinguish an instrument result from a hand-entered one, or a
+    preliminary from a final. `released == false` is no substitute: every row
+    on that queue is unreleased, so the column would be constant. Unowned.
+  - `WorkQueuePrescriptionDTO` has no `clarificationResolvedAt`, and
+    `attentionReason()` reports one reason by precedence while
+    `resolveClarification` restores the PREVIOUS status — so a question raised
+    on a PENDING_STOCK or PARTNER_REJECTED order comes back flagged with that
+    status and the pharmacist finds the answer only by opening the dialog on
+    speculation. Owned by `fix/pharmacy-queue-cue-and-null-scope`.
+  - `PrescriptionResponseDTO` has no `quantity`, `quantityUnit` or
+    `refillsUsed`, so the prescriber's outstanding-quantity figure falls back
+    to a routing-decision snapshot and renders a bare number with no unit.
+    `WorkQueuePrescriptionDTO` already carries them for the pharmacist. Owned
+    by `feat/prescription-read-surface`.
+  - `GET /prescriptions` has no status filter, so the clinical inbox can say
+    "N orders await clarification" while the page shows a slice containing
+    none of them. #727 made the page deterministic and large enough to count
+    from; that is a mitigation, not the fix. Owned by
+    `feat/prescription-read-surface`.
+
+  *Still open from the original audit.*
+  - G15 — there is no "ready for collection" state, so the message telling a
+    patient their prescription is ready still goes out after they have
+    collected it. Unowned.
+  - `REQUIRES_EXTERNAL_FILL` and `TRANSMISSION_FAILED` are states nothing
+    writes. #727 surfaces them under Needs attention so a legacy row carrying
+    one is not stuck, but whether they should exist at all is undecided.
+    Unowned.
+  - `StockOutRoutingServiceImpl.appendNoShowReason` composes the English
+    literal `"Partner no-show: "` into the reason it PERSISTS, which reaches
+    French and Spanish prescribers verbatim — stored prose cannot be
+    translated at render time. Owned by
+    `fix/pharmacy-queue-cue-and-null-scope`.
+  - The portal's `RoleContextService.hasAnyActiveRole` applies no role
+    expansion, while `RoleGuard` and the shell nav go through
+    `role-equivalence.ts`. Every in-component role gate is therefore narrower
+    than the route hosting it: a physician or surgeon is refused controls the
+    backend would serve them. #724 and #725 each hit this and fixed their own
+    control. Unowned, and it is a portal-wide change.
+  - `canSeeCritical`, `canAcknowledge` and `canReadBack` in `lab-results.ts`
+    still take a role snapshot at construction, the shape #722 and #724 fixed
+    for the release and sign controls. Unowned.
+  - `dashboard.ts`'s `acknowledgeResult` deletes rows from the local array with
+    no persistence — there is no acknowledge endpoint — so a physician can
+    click three critical results away and be shown the green "All results
+    reviewed" card, with the rows returning on the next refresh. #731 closes
+    only the variant where the read had failed.
+  - The portal's `DispenseResponse` declares six fields `DispenseMapper` never
+    sends (`patientName`, `pharmacyName`, `dispensedById`, `dispensedByName`,
+    `verifiedById`, `verifiedByName`); the wire carries `dispensedBy` and
+    `verifiedBy` as bare UUIDs. Nothing renders them today, so no dispenser
+    name is shown anywhere. Unowned.
+  - `GlobalExceptionHandler.handleAccessDenied` discards the message on every
+    `AccessDeniedException` and returns the literal "Access denied", although
+    several services compose a useful sentence there that no client can show.
+    Unowned.
+  - `hospital-portal/src/app/pharmacy/stock-routing.ts` reads page 0, size 10,
+    with no sort — the same unordered-page defect #727 fixed on the
+    prescriptions list. Unowned.
+
+- **Two layers of this codebase disagree about role equivalence.**
+  `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
+  authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
+  `RoleValidator`'s per-hospital checks then match the stored ASSIGNMENT ROLE
+  CODE against `{DOCTOR, ROLE_DOCTOR}` and know no such equivalence, so a
+  surgeon passes the door and is refused by the service behind it — which is
+  why #724 had to withhold the Sign control while #725 had to grant the
+  resolve control, on endpoints that look identically annotated. Whether the
+  equivalence should exist one layer down is a product decision, and it
+  decides who may sign lab results, prescribe and co-sign. Until it is taken,
+  the rule for anyone adding a control is: read what the SERVICE does, not
+  only the annotation.
+
 - **The cross-tenant oracle is still open on the ADT and merge inbound
   paths.** `MllpInboundAdtServiceImpl` and `MllpInboundMergeServiceImpl` still
   answer `REJECTED_CROSS_TENANT` → AR when the referenced patient exists but
