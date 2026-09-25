@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -73,20 +74,20 @@ public interface IntegrationMessageEventRepository
     long countUnresolvedDeadLetters();
 
     /**
-     * Whether anything has been recorded under this correlation id
-     * <em>recently</em>.
+     * The most recent row recorded under this correlation id within a
+     * window, if there is one.
      *
-     * <p>Used by {@code IntegrationMessageRecorder} to store a rejected
-     * message's body once per problem per window instead of once per retry:
-     * the first occurrence in the window carries the payload, the retries
-     * behind it carry only the reason. The partial index on
-     * {@code correlation_id} (V89) serves this.
+     * <p>Used by {@code IntegrationMessageRecorder.recordRecurringFailure} to
+     * fold a retry storm into the row it is a storm of, instead of inserting
+     * a fresh row — and a fresh copy of the message — per attempt. The partial
+     * index on {@code correlation_id} (V89) serves this.
      *
-     * <p>The window is what keeps the bound from turning into amnesia. An
-     * all-history check would mean that a vendor whose January framing bug
-     * was diagnosed and cleared gets no body stored for a <em>different</em>
-     * June failure that lands on the same reason — an operator left with a
-     * dead letter and nothing to look at.
+     * <p>The window is what keeps the fold from turning into amnesia. Without
+     * one, a vendor whose January framing bug was diagnosed and cleared would
+     * have a <em>different</em> June failure landing on the same reason
+     * silently absorbed into the January row.
      */
-    boolean existsByCorrelationIdAndReceivedAtAfter(String correlationId, LocalDateTime after);
+    Optional<IntegrationMessageEvent>
+        findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
+            String correlationId, LocalDateTime after);
 }

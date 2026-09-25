@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -53,9 +54,10 @@ public class IntegrationMessageRecorder {
      */
     static final int MAX_MESSAGE_TYPE_CHARS = 64;
     /**
-     * How long one stored body serves for a repeating problem. Long enough
-     * that a retry timer cannot multiply the copies, short enough that a
-     * problem which comes back after being cleared brings its own evidence.
+     * How long one row serves for a repeating problem. Long enough that a
+     * retry timer cannot multiply the copies, short enough that a problem
+     * which comes back after being cleared brings its own row and its own
+     * evidence.
      */
     static final Duration BODY_DEDUPE_WINDOW = Duration.ofHours(24);
     private static final int MAX_ERROR_CHARS = 2_000;
@@ -148,42 +150,53 @@ public class IntegrationMessageRecorder {
     }
 
     /**
-     * Record a rejection that a sender will keep retrying, storing the
-     * message body <b>only the first time</b> this correlation id is seen.
+     * Record a rejection that a sender will keep retrying, <b>folding the
+     * retry into the row it is a retry of</b> rather than inserting a new one.
      *
-     * <p>A stable correlation id keeps a retry storm to one <em>counted</em>
-     * dead letter, because {@code countUnresolvedDeadLetters} discounts a row
-     * once a later one shares its id. It does nothing about what is stored:
-     * {@link #recordMessage} inserts on every call, so a vendor retrying an
-     * unparseable message every thirty seconds would write thousands of full
+     * <p>A stable correlation id alone keeps a retry storm to one
+     * <em>counted</em> dead letter, because
+     * {@code countUnresolvedDeadLetters} discounts a row once a later one
+     * shares its id. It does nothing about what is stored: {@link
+     * #recordMessage} inserts on every call, so a vendor retrying an
+     * unparseable message every thirty seconds writes thousands of full
      * copies of it a day — PID and all — into a table with no retention,
-     * while the badge read 1. A bounded badge over unbounded PHI is worse
+     * while the badge reads 1. A bounded badge over unbounded PHI is worse
      * than the visible version, because it says the problem is handled.
      *
-     * <p>So: first occurrence keeps the body, which is the evidence an
-     * operator needs for a message nobody could parse; every later occurrence
-     * records the same reason with no payload. The attempt trail stays, the
-     * badge stays at one entry, and the stored bodies are bounded by the
-     * number of distinct problems rather than by the sender's retry timer.
+     * <p>Storing the body on the <em>first</em> occurrence and nothing after
+     * was the first attempt at that and was worse than it looked: the count
+     * surfaces the <em>newest</em> row per id, so the one dead letter an
+     * operator is pointed at would be precisely the one with no payload, and
+     * the row holding the message would be buried under every retry since.
+     * The two mechanisms pulled in opposite directions.
      *
-     * <p>"First" means first within {@link #BODY_DEDUPE_WINDOW}, not first
-     * ever. An all-history check would bound the storage and lose the
-     * evidence: a vendor whose framing bug was diagnosed and cleared in
-     * January, shipping a different failure in June that lands on the same
-     * reason, would leave an operator a dead letter with nothing to look at.
-     * One body per problem per day is bounded and still diagnosable.
+     * <p>So a repeat within {@link #BODY_DEDUPE_WINDOW} updates the existing
+     * row in place: {@code attemptCount} goes up, {@code lastAttemptedAt} and
+     * the reason are refreshed, and the payload is replaced by the latest
+     * one. One row per problem per window, it is the row the badge counts, it
+     * holds a body, and that body is current rather than a day stale. Rows,
+     * stored bodies and counted dead letters are all bounded by the number of
+     * distinct problems instead of by the sender's retry timer.
      *
-     * <p>Two honest limits. Rows are still one per attempt — small ones now,
-     * but the table still grows, and retention remains an open question for
-     * whoever owns this surface. And the check is a read followed by a write
-     * with no lock, so two retries racing inside the same instant can both
-     * store a body; bounded by the concurrency, not by the retry count, which
-     * is the point.
+     * <p>The window keeps the fold from becoming amnesia: a vendor whose
+     * framing bug was diagnosed and cleared in January, shipping a different
+     * failure in June that lands on the same reason, gets a new row rather
+     * than a quiet increment on the old one.
      *
-     * <p>A null {@code correlationId} means there is nothing to deduplicate
-     * against and the payload is stored as normal.
+     * <p><b>Not transactional, deliberately</b>, unlike everything else here.
+     * Its caller is the MLLP dispatcher, which has no transaction of its own,
+     * so each repository call takes its own — which is what makes the lookup
+     * safe to fail. Inside a {@code REQUIRES_NEW} of its own, a lookup that
+     * threw would mark the transaction rollback-only and take the row and its
+     * body down with it, on the one path where the body is the only evidence
+     * there is. Do not call this from inside a transaction that must not see
+     * these writes.
+     *
+     * <p>The read and the write are not atomic, so two retries arriving
+     * together can both insert; bounded by the concurrency rather than by the
+     * retry count, which is the point. A null {@code correlationId} means
+     * there is nothing to fold into and the row is inserted as normal.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IntegrationMessageEvent recordRecurringFailure(
         String integrationId,
         UUID organizationId,
@@ -193,23 +206,55 @@ public class IntegrationMessageRecorder {
         String errorMessage,
         String correlationId
     ) {
-        String payloadToStore = payload;
-        if (correlationId != null && payload != null) {
+        if (correlationId != null) {
             try {
-                if (repository.existsByCorrelationIdAndReceivedAtAfter(
-                        correlationId, LocalDateTime.now().minus(BODY_DEDUPE_WINDOW))) {
-                    payloadToStore = null;
+                Optional<IntegrationMessageEvent> earlier = repository
+                    .findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
+                        correlationId, LocalDateTime.now().minus(BODY_DEDUPE_WINDOW));
+                if (earlier.isPresent()) {
+                    return foldIntoExisting(earlier.get(), payload, errorMessage);
                 }
             } catch (RuntimeException ex) {
-                // Best-effort like the rest of this class. Keeping the body on
-                // a failed check is the safe direction: an extra copy beats
+                // Best-effort like the rest of this class, and the safe
+                // direction is to write a fresh row: an extra copy beats
                 // losing the only one.
-                log.warn("[INTEGRATION-MESSAGE] Could not check for an earlier occurrence of {}",
-                    correlationId, ex);
+                log.warn("[INTEGRATION-MESSAGE] Could not fold a recurrence of {}; "
+                    + "recording it as a new row", correlationId, ex);
             }
         }
         return recordMessage(integrationId, organizationId, direction, messageType,
-            payloadToStore, IntegrationMessageStatus.FAILED, errorMessage, correlationId);
+            payload, IntegrationMessageStatus.FAILED, errorMessage, correlationId);
+    }
+
+    /**
+     * One more attempt at a problem already on the board.
+     *
+     * <p>No {@code @Transactional}, and not by omission: this is reached by
+     * self-invocation from {@link #recordRecurringFailure}, where an
+     * annotation would be silently inert anyway. The row was read in its own
+     * transaction and is detached, so the save is a merge that takes a
+     * transaction of its own — which is what keeps a failure here from
+     * poisoning anything the caller is doing.
+     *
+     * <p>Never throws: a failure is logged and the caller gets null, exactly
+     * as a failed insert does. Private, so nothing else can come to depend on
+     * the propagation it does not have.
+     */
+    private IntegrationMessageEvent foldIntoExisting(
+        IntegrationMessageEvent existing, String payload, String errorMessage) {
+        try {
+            existing.setAttemptCount(existing.getAttemptCount() + 1);
+            existing.setLastAttemptedAt(LocalDateTime.now());
+            existing.setErrorMessage(truncate(errorMessage, MAX_ERROR_CHARS));
+            if (payload != null) {
+                existing.setPayload(truncate(payload, MAX_PAYLOAD_CHARS));
+            }
+            return repository.save(existing);
+        } catch (RuntimeException ex) {
+            log.error("[INTEGRATION-MESSAGE] Failed to fold a recurrence into {}",
+                existing.getId(), ex);
+            return null;
+        }
     }
 
     /**
