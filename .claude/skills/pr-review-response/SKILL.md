@@ -434,15 +434,12 @@ list is cross-cutting muscle memory.
 - **Cross-tenant guard must DENY on null/empty active hospital
   context, not allow.** *(Superseded in part: the raw-context null check
   below is not reliable for an unpinned super-admin — follow "Resolving the
-  tenant" in the `multi-tenancy-scoping` skill.)* A super-admin without an explicit
-  `X-Hospital-Id` header has `HospitalContextHolder.getActiveHospitalId()
-  == null`. A guard that only rejects when both the stored
-  hospitalId AND the current context's hospitalId are non-null lets
-  any super-admin call see any tenant's data — the inverse of the
-  "invisible cross-tenant rejection" contract. Pattern:
-  `if (activeHospitalId == null) return Optional.empty();` first,
-  then the equality check. Caught on `FhirBulkExportService.getJob`
-  in PR #351.
+  tenant" in the `multi-tenancy-scoping` skill.)* A guard that only
+  rejects when both the stored hospitalId AND the resolved one are
+  non-null reads "no tenant" as "unscoped, allow" — the inverse of the
+  "invisible cross-tenant rejection" contract. Refuse on "no tenant"
+  first, then compare. Caught on `FhirBulkExportService.getJob` in
+  PR #351.
 - **Aggregate queries must group by a stable key, not display
   name.** Hospital names are not unique in the schema (only `code`
   is unique); a rename also splits the same tenant across old/new

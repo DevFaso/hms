@@ -188,7 +188,10 @@ to honor. Caught in PR #343 Copilot review.
 `reasonCode[0].text → chiefComplaint` (only when currently
 blank). Tenant scope via `EncounterRepository.findByIdAndHospital_Id`
 with a defence-in-depth hospital-equality check on the loaded
-entity (missing scope or mismatch → 403). New
+entity (missing scope or mismatch → 403 — *superseded: a mismatch must
+answer exactly like a miss; see the cross-tenant gate in the
+`multi-tenancy-scoping` skill. The branch is unreachable here because the
+lookup is already scoped.*). New
 `AuditEventType.ENCOUNTER_UPDATE` with `entityType="ENCOUNTER"`.
 Note: the constant is `ENCOUNTER_UPDATE` not `ENCOUNTER_UPDATED`
 (naming-convention bug caught in PR #350 review — fix slated for
@@ -206,7 +209,11 @@ separator; duplicate text is a no-op). `PUT /Observation/vital-*`
 returns `422 BUSINESSRULE` because the 1:N `PatientVitalSign` →
 Observation expansion has no single-row write target. Tenant
 scope: `LabResult.labOrder.hospital.id` must match the active
-hospital (missing or mismatched → 403). Audit:
+hospital (missing or mismatched → 403). *Superseded: this is a known
+oracle — an unknown id gets 404 and a foreign one 403 — and ownership of
+a lab result is ordering **or** performing hospital (`LabOrder.isHandledBy`),
+not one column; see the cross-tenant gate in the `multi-tenancy-scoping`
+skill. Do not copy.* Audit:
 `LAB_RESULT_UPDATED` with `entityType="LAB_RESULT"`.
 
 ### Audit naming convention

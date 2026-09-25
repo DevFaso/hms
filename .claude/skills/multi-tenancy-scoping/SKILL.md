@@ -90,8 +90,9 @@ recorded as a code defect.
 
 ### Resolving the tenant, and what this skill will not promise
 
-Two invariants hold on every path, for a request that names a **specific
-entity** (a read, write or delete by id):
+Two invariants that should hold for a request naming a **specific
+entity** (a read, write or delete by id). They are a target, not a
+description of today — not every endpoint follows them yet:
 
 - **Resolve the tenant through the endpoint's own resolver**, not a
   hand-rolled null check on the raw hospital context.
@@ -100,24 +101,36 @@ entity** (a read, write or delete by id):
   before anything is looked up, the refusal is identical for every
   identifier the caller could name, so it confirms nothing.
 
-List and aggregate surfaces are different and must not be "fixed" by this
-rule: there, a super-admin's "no tenant" can mean *global view* by design
-— `ControllerAuthUtils.resolveHospitalScope` returns `null` for exactly
-that, and the row-32 KPI dashboards return an empty rollup. A list names no
-identifier, so answering it confirms none.
+This does not apply to the super-admin cross-tenant flows this skill
+sanctions above (the `*Unscoped` repository variants, EMPI merge, the
+`/super-admin` detail endpoints): those are deliberately unscoped, and a
+refusal there would break them.
+
+List and aggregate surfaces are different: for a **super-admin**, "no
+tenant" can mean *global view* by design. But **a null scope never means
+global on its own.** `ControllerAuthUtils.resolveHospitalScope` also
+returns `null` for a hospital admin or clinician whose scope does not
+resolve, and a list that read that null as "return everything" would hand
+them every tenant's rows — full PHI, not just existence. Treat null as
+global only after confirming the caller is a super-admin; for anyone else it
+is a refusal.
 
 What the resolvers return for a super-admin with no tenant pinned is **not
 consistent, and this skill deliberately does not state a value.** There are
 two resolvers with different super-admin semantics —
-`RoleValidator.requireActiveHospitalId()` and
-`ControllerAuthUtils.resolveHospitalScope`, the second honouring only
-`?hospitalId` and ignoring `X-Hospital-Id` — and the raw context
+`RoleValidator.requireActiveHospitalId()`, and
+`ControllerAuthUtils.resolveHospitalScope`, which ignores `X-Hospital-Id`
+and instead honours a caller-supplied `hospitalId` (the query parameter,
+or the request body on its four-argument overload) — and the raw context
 (`HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`) is
 populated differently by auth path: from the JWT's `hospital_id` claim on
-the Keycloak path, from live assignments on the password path. That
-inconsistency is recorded as code debt. Until it is resolved, rely on the
-endpoint's own resolver and test the unpinned-super-admin case on that
-endpoint, rather than reasoning from a rule written here.
+the Keycloak path, from live assignments on the password path. A helper
+that encodes one pin rule does exist — `HospitalContext.pinnedHospitalId()`
+— and roughly a dozen services use it, but not every resolver does, and
+some services still inline their own check. That inconsistency is recorded
+as code debt. Until it is resolved, rely on the endpoint's own resolver and
+test the unpinned-super-admin case on that endpoint, rather than reasoning
+from a rule written here.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -141,8 +154,10 @@ There is no cross-tenant-specific refusal event.
 
 The MLLP inbound paths have no principal on the worker thread and record a
 refusal on an `integration_message_event` row instead. The ADT and A40
-refusals carry no message body and a correlation id keyed on (sender,
-message type, reason); the ORU^R01 refusal still stores the full raw
+refusals carry no message body and a correlation id keyed on the sender,
+a **fixed** per-path type (`"ADT"`, `"ADT^A40"`) and the reason — never
+MSH-9 or the trigger event, because nothing a sender controls may key a
+correlation id; the ORU^R01 refusal still stores the full raw
 message with a random id per row, which the `hl7-mllp-integration` skill
 forbids. That path is outstanding.
 
@@ -280,9 +295,8 @@ reliably, for the reason given under "Resolving the tenant".
 
 The exception: read-only aggregate dashboards (row 32 KPI) where
 the documented behaviour is "super-admin without X-Hospital-Id
-returns an empty rollup". Those flow through
-`RoleValidator.requireActiveHospitalId()` which deliberately
-returns `null` for the empty-rollup case.
+returns an empty rollup". (Which resolver they use is not stated
+here — see "Resolving the tenant" above.)
 
 ### Aggregate queries must group by a stable key, not display name
 
