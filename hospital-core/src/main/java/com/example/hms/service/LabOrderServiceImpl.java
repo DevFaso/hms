@@ -528,12 +528,13 @@ public class LabOrderServiceImpl implements LabOrderService {
             // on this GET, so the answer to match is the chart's OTHER lab
             // block, which throws the camelCase key through PatientChartAccess.
             //
-            // Not yet identical, though: PatientLabResultServiceImpl still has
-            // this same hole on its own null-scope branch, and a super-admin in
-            // global view — the only principal that reaches either guard —
-            // still gets that patient's results from every tenant, unaccounted.
-            // #735 closes it. Until that lands the two blocks disagree, and the
-            // caller who can tell is exactly the one this guard is for.
+            // Matching that key is the intent; it does not depend on the other
+            // block already refusing. This guard is right whether or not
+            // PatientLabResultServiceImpl refuses the same input — an
+            // unaccounted cross-tenant read is not made acceptable by a sibling
+            // still serving one, and the two agreeing is a property to reach,
+            // not a precondition. (At the time of writing it does still serve
+            // one; that is a defect there, not a reason to keep this one.)
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
         Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
