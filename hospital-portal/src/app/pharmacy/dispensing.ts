@@ -53,6 +53,9 @@ export const QUEUE_ATTENTION_REASONS: readonly { reason: string; labelKey: strin
  * pharmacist should look at is the point; a value added to the backend after
  * this build shipped is exactly the case a hard-coded list gets wrong.
  */
+/** The reason whose label already says the prescriber answered. */
+const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOLVED';
+
 export const UNRECOGNISED_ATTENTION = {
   labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
 };
@@ -406,6 +409,21 @@ export class DispensingComponent implements OnInit, OnDestroy {
     if (!rx.needsAttention && !rx.attentionReason) return null;
     const match = QUEUE_ATTENTION_REASONS.find((r) => r.reason === rx.attentionReason);
     return match ? match.labelKey : UNRECOGNISED_ATTENTION.labelKey;
+  }
+
+  /**
+   * Whether the row needs its own "the prescriber has answered" line.
+   *
+   * <p>False when the attention reason is ALREADY the clarification: with
+   * nothing of higher precedence to report the backend derives both from the
+   * same timestamp, and the row would say it twice. The line earns its place
+   * exactly when a status or a back order has taken the single reason — which
+   * is the case the cue exists for.
+   */
+  showsAnswerCue(rx: WorkQueuePrescription): boolean {
+    return (
+      !!rx.clarificationResolvedAt && this.attentionKey(rx) !== CLARIFICATION_RESOLVED_LABEL_KEY
+    );
   }
 
   /**

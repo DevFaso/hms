@@ -683,6 +683,22 @@ describe('DispensingComponent — clarification control on the work queue', () =
     expect(answered.textContent).toContain('PHARMACY.ATTENTION.PRESCRIBER_ANSWERED');
   });
 
+  it('says it once when the attention reason is the clarification itself', async () => {
+    // With nothing of higher precedence the backend derives both fields from
+    // the same timestamp, and that label already reads "the prescriber has
+    // answered — read the answer first".
+    await render(['ROLE_PHARMACIST'], {
+      needsAttention: true,
+      attentionReason: 'CLARIFICATION_RESOLVED',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]').textContent,
+    ).toContain('PHARMACY.ATTENTION.CLARIFICATION_RESOLVED');
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]')).toBeNull();
+  });
+
   it('passes the answer timestamp to the clarification control', async () => {
     await render(['ROLE_PHARMACIST'], {
       status: 'PENDING_STOCK',

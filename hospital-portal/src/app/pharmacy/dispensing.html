@@ -287,8 +287,10 @@
                        restores the status the question was asked from, so on
                        a PENDING_STOCK or PARTNER_REJECTED order the single
                        attention reason reports that status and the answer had
-                       no cue on the row at all. -->
-                  @if (rx.clarificationResolvedAt) {
+                       no cue on the row at all. Suppressed when the reason
+                       above is the clarification itself, which already says
+                       so. -->
+                  @if (showsAnswerCue(rx)) {
                     <span
                       class="attention-note attention-note--answered"
                       [attr.data-testid]="'rx-answered-' + rx.id"

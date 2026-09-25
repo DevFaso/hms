@@ -81,7 +81,15 @@ export class StockRoutingComponent implements OnInit {
   }
 
   loadDecisions(): void {
-    if (!this.prescriptionId.trim()) return;
+    if (!this.prescriptionId.trim()) {
+      // Clear the failure too: leaving it would keep a red "could not be
+      // loaded" panel — with a Retry that returns here and does nothing — on
+      // screen for a prescription the user has just cleared.
+      this.decisions.set([]);
+      this.decisionsTotalPages = 0;
+      this.decisionsError.set(false);
+      return;
+    }
     this.decisionsLoading.set(true);
     this.decisionsError.set(false);
     this.svc

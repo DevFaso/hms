@@ -183,7 +183,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO routeToPartner(UUID prescriptionId, RoutingDecisionRequestDTO dto) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
@@ -254,7 +254,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO printForPatient(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -292,7 +292,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO backOrder(UUID prescriptionId, LocalDate estimatedRestockDate) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId, hospitalId);
+        Prescription prescription = findPrescriptionForWrite(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -340,7 +340,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can receive partner responses");
@@ -390,7 +390,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can confirm dispense");
@@ -434,7 +434,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
-        enforceDecisionHospitalScope(decision, hospitalId);
+        enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (reason == null || reason.isBlank()) {
             throw new BusinessException("Recording a partner no-show needs a reason.");
@@ -488,11 +488,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     // ── Private helpers ──
 
     /**
-     * A null {@code hospitalId} is a real super-admin in GLOBAL view, not a
-     * missing check: {@code requireActiveHospitalId} returns null for exactly
-     * that caller, who has no single hospital to be in scope for. The row is
-     * therefore not narrowed rather than rejected — the stance of
-     * {@code DispenseServiceImpl.enforceHospitalScope},
+     * Scope for a READ. A null {@code hospitalId} is a real super-admin in
+     * GLOBAL view, not a missing check: {@code requireActiveHospitalId}
+     * returns null for exactly that caller, who has no single hospital to be
+     * in scope for. The row is therefore not narrowed rather than rejected —
+     * the stance of {@code DispenseServiceImpl.enforceHospitalScope},
      * {@code PrescriptionClarificationService.findInScope} and the rest of the
      * hospital-scoped read surface. Dereferencing it answered the global-view
      * super-admin with a 500 on every routing read.
@@ -509,9 +509,28 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     }
 
     /**
+     * Scope for a WRITE, which is a different question from a read.
+     *
+     * <p>Reading across tenants is what a super-admin in global view is for.
+     * ROUTING a prescription, recording a partner's answer or cancelling a
+     * partner's claim is an act on one hospital's order, and letting an
+     * unscoped caller do it would be a new permission rather than a bug fix —
+     * it is also not what happened before, since the unguarded dereference
+     * refused every one of these with a 500. The refusal is kept and only its
+     * shape is fixed: pick a hospital first, and the same 404 the rest of this
+     * surface answers with.
+     */
+    private Prescription findPrescriptionForWrite(UUID prescriptionId, UUID hospitalId) {
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        return findPrescription(prescriptionId, hospitalId);
+    }
+
+    /**
      * Same global-view stance as {@link #findPrescription} for the HOSPITAL
      * check. A decision with no prescription is refused whoever is asking:
-     * every caller of this method goes on to act on that prescription.
+     * every caller of this method goes on to read or act on that prescription.
      */
     private void enforceDecisionHospitalScope(PrescriptionRoutingDecision decision, UUID hospitalId) {
         if (decision.getPrescription() == null) {
@@ -522,6 +541,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                     || !hospitalId.equals(decision.getPrescription().getHospital().getId()))) {
             throw new ResourceNotFoundException("routing.decision.notfound");
         }
+    }
+
+    /** Write counterpart of {@link #enforceDecisionHospitalScope}; see
+     * {@link #findPrescriptionForWrite} for why a write is not a read. */
+    private void enforceDecisionHospitalScopeForWrite(PrescriptionRoutingDecision decision, UUID hospitalId) {
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("routing.decision.notfound");
+        }
+        enforceDecisionHospitalScope(decision, hospitalId);
     }
 
     /**

@@ -913,20 +913,21 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
-        @DisplayName("a global-view super-admin may record one: no hospital, no narrowing")
-        void globalViewSuperAdminIsNotRefused() {
+        @DisplayName("a global-view super-admin is refused: cancelling a partner's claim is a write")
+        void globalViewSuperAdminIsRefused() {
             PrescriptionRoutingDecision decision = accepted();
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
 
+            // Reading across tenants is what global view is for; acting on one
+            // hospital's order is not. The refusal is what happened before too
+            // — as a 500 from the unguarded dereference. Only its shape changes.
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
             when(routingDecisionRepository.findById(decision.getId())).thenReturn(Optional.of(decision));
-            when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(routingMapper.toResponseDTO(decision))
-                    .thenReturn(RoutingDecisionResponseDTO.builder().status("CANCELLED").build());
 
-            service.partnerNoShow(decision.getId(), "never came");
-
-            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+            verify(prescriptionRepository, never()).save(any());
         }
     }
 
@@ -952,6 +953,18 @@ class StockOutRoutingServiceImplTest {
 
             assertThat(service.listByPrescription(prescriptionId, pageable).getContent())
                     .containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("a write is still refused without a hospital, as a 404 rather than a 500")
+        void writesStillNeedAHospital() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).save(any());
         }
 
         @Test

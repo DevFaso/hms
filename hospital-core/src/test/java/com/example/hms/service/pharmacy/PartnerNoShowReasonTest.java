@@ -63,10 +63,51 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
-    @DisplayName("the column is 1024 characters and a long reason is truncated, not rejected")
-    void truncatesToTheColumnWidth() {
+    @DisplayName("the column is 1024 characters and the EXISTING reason gives way, never the marker")
+    void truncatesTheExistingReasonRatherThanTheMarker() {
         String stored = PartnerNoShowReason.compose("x".repeat(1000), "y".repeat(500));
 
+        // Truncating the tail would have sliced through the marker and the
+        // no-show would have vanished from the API on a CANCELLED decision.
         assertThat(stored).hasSize(1024);
+        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
+        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("y".repeat(500));
+    }
+
+    @Test
+    @DisplayName("words too long for the column on their own keep the marker and lose the tail")
+    void truncatesTheWordsOnlyWhenTheyAloneOverflow() {
+        String stored = PartnerNoShowReason.compose("Nearest partner has stock", "z".repeat(1200));
+
+        assertThat(stored).hasSize(1024).startsWith("[PARTNER_NO_SHOW] ");
+        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a routing reason that merely mentions a no-show is not one")
+    void onlyASegmentStartCounts() {
+        // Free text the pharmacist typed at route-to-partner time. Treating it
+        // as the fact would put a translated "the partner never delivered" on
+        // a decision nobody recorded one for, and strip their sentence out.
+        String typed = "Partner no-show last month, so routing elsewhere";
+
+        assertThat(PartnerNoShowReason.isNoShow(typed)).isFalse();
+        assertThat(PartnerNoShowReason.withoutNoShow(typed)).isEqualTo(typed);
+
+        String midSentence = "Rerouted because Partner no-show: was recorded before";
+        assertThat(PartnerNoShowReason.isNoShow(midSentence)).isFalse();
+        assertThat(PartnerNoShowReason.withoutNoShow(midSentence)).isEqualTo(midSentence);
+    }
+
+    @Test
+    @DisplayName("but a real no-show after such a reason still decodes")
+    void stillDecodesAfterAReasonThatMentionsIt() {
+        String stored = PartnerNoShowReason.compose(
+                "Partner no-show last month, so routing elsewhere", "again, nobody came");
+
+        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
+        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("again, nobody came");
+        assertThat(PartnerNoShowReason.withoutNoShow(stored))
+                .isEqualTo("Partner no-show last month, so routing elsewhere");
     }
 }

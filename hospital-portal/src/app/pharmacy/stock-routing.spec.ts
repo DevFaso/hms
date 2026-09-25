@@ -228,6 +228,23 @@ describe('StockRoutingComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="routing-history-error"]')).toBeNull();
   });
 
+  it('clears a stale history failure when the prescription field is cleared', () => {
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(
+      throwError(() => ({ status: 500 })),
+    );
+    component.prescriptionId = 'rx-1';
+    component.loadDecisions();
+    expect(component.decisionsError()).toBeTrue();
+
+    // Otherwise the red panel — and a Retry that returns early and does
+    // nothing — stay on screen for a prescription nobody is looking at.
+    component.prescriptionId = '';
+    component.loadDecisions();
+
+    expect(component.decisionsError()).toBeFalse();
+    expect(component.decisions()).toEqual([]);
+  });
+
   it('should return expected badge classes', () => {
     expect(component.statusBadgeClass('PENDING')).toBe('badge-warning');
     expect(component.statusBadgeClass('COMPLETED')).toBe('badge-success');
