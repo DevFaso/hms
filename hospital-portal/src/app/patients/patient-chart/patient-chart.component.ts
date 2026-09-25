@@ -295,10 +295,14 @@ export class PatientChartComponent implements OnInit, OnChanges {
     const previous = this.watchedLabScope;
     this.watchedLabScope = key;
     if (previous === undefined || previous === key) return;
-    this.labResults.set([]);
-    this.labOrders.set([]);
+    // Every section is scoped now that `hospitalId()` follows the chip, so
+    // dropping only the lab state would leave the other three showing the
+    // previous hospital's rows — flagged foreign by `isForeignRow`, which
+    // re-derives the scope live — while a write from those same forms went to
+    // the new one. `refreshAfterAccessChange` is the existing "what this chart
+    // may show has changed" path; this is the same event.
     this.labsLoadedFor.set(null);
-    if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    this.refreshAfterAccessChange();
   });
 
   /** undefined until the watcher has run once; then the last scope seen. */
@@ -339,16 +343,13 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * component now mounts a chip on the Labs tab, so a super-admin could pick
    * hospital B, switch to Allergies, and send `hospitalId=A` as a query
    * param under an `X-Hospital-Id: B` header. One request naming two
-   * hospitals is the divergence `labHospitalId()` was written against; there
-   * is no reason for the rest of the chart to keep it.
+   * hospitals is the divergence `labHospitalId()` was written against, so the
+   * rest of the chart reads the SAME function — not a parallel chain with a
+   * fallback of its own, which would have gone on sending the primary
+   * assignment as a param under no header in global view.
    */
   private hospitalId(): string {
-    return (
-      this.roleContext.effectiveHospitalIdForRequest() ??
-      this.roleContext.activeHospitalId ??
-      this.auth.getHospitalId() ??
-      ''
-    );
+    return this.labHospitalId() ?? '';
   }
 
   /**
@@ -976,6 +977,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labResults.set([]);
     this.labOrders.set([]);
     this.labsLoadedFor.set(null);
+    this.labResultsError.set(false);
+    this.labOrdersError.set(false);
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

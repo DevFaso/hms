@@ -1380,6 +1380,7 @@
           [loadError]="resultQueueError()"
           [loading]="resultQueueLoading()"
           [acknowledging]="acknowledgingResults()"
+          [canAct]="canActOnResults()"
           (patientSelected)="openPatientSnapshot($event)"
           (resultAcknowledged)="acknowledgeResult($event)"
           (reloadRequested)="loadResultReviewQueue()"

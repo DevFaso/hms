@@ -80,7 +80,8 @@
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
-              <!--
+              @if (canAct()) {
+                <!--
                 A CRITICAL result cannot be dismissed: `LabResultServiceImpl
                 .acknowledgeResult` refuses one that was notified and not read
                 back, and `CriticalValueNotificationService` stamps
@@ -93,17 +94,18 @@
                 The page takes no deep link, so the tooltip names the row to
                 look for rather than leaving them to scan the whole list.
               -->
-              <a
-                routerLink="/lab-results"
-                class="rp-action"
-                [title]="
-                  'DASHBOARD.READ_BACK_FOR'
-                    | translate: { test: r.testName, patient: r.patientName }
-                "
-                (click)="$event.stopPropagation()"
-              >
-                <span class="material-symbols-outlined">record_voice_over</span>
-              </a>
+                <a
+                  routerLink="/lab-results"
+                  class="rp-action"
+                  [title]="
+                    'DASHBOARD.READ_BACK_FOR'
+                      | translate: { test: r.testName, patient: r.patientName }
+                  "
+                  (click)="$event.stopPropagation()"
+                >
+                  <span class="material-symbols-outlined">record_voice_over</span>
+                </a>
+              }
             </div>
           }
         </div>
@@ -139,14 +141,16 @@
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
-              <button
-                class="rp-ack-btn"
-                [disabled]="acknowledging().includes(r.id)"
-                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
-              >
-                <span class="material-symbols-outlined">done</span>
-              </button>
+              @if (canAct()) {
+                <button
+                  class="rp-ack-btn"
+                  [disabled]="acknowledging().includes(r.id)"
+                  [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
+                  (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+                >
+                  <span class="material-symbols-outlined">done</span>
+                </button>
+              }
             </div>
           }
         </div>
@@ -182,14 +186,16 @@
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
-              <button
-                class="rp-ack-btn"
-                [disabled]="acknowledging().includes(r.id)"
-                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
-              >
-                <span class="material-symbols-outlined">done</span>
-              </button>
+              @if (canAct()) {
+                <button
+                  class="rp-ack-btn"
+                  [disabled]="acknowledging().includes(r.id)"
+                  [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
+                  (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+                >
+                  <span class="material-symbols-outlined">done</span>
+                </button>
+              }
             </div>
           }
         </div>

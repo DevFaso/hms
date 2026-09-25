@@ -296,7 +296,7 @@
       unscoped meant it vanished the moment it was used: pick the wrong tenant
       and there was no way back, and no way back to "all hospitals" either.
     -->
-    <app-hospital-scope-chip [disableUrlSync]="true" />
+    <app-hospital-scope-chip [disableUrlSync]="true" [preserveScope]="true" />
   }
   @if (section() === 'labs' && canViewLabs() && !labsScoped()) {
     <!--

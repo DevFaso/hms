@@ -106,12 +106,27 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
+  it('offers neither action to an account the endpoints refuse', () => {
+    // MeController serves this queue to a surgeon; LabResultController's
+    // acknowledge and read-back, and the /lab-results route guard, do not.
+    fixture.componentRef.setInput('results', [item()]);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('canAct', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.rp-ack-btn')).toBeNull();
+    expect(fixture.nativeElement.querySelector('a[href="/lab-results"]')).toBeNull();
+    // The list itself is still readable.
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+  });
+
   it('offers read-back, not a dismiss, on a critical row', () => {
     // LabResultServiceImpl.acknowledgeResult refuses a critical result that
     // was notified and not read back, and every critical result is notified
     // at creation — so a plain ✓ there is a guaranteed 400.
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('canAct', true);
     fixture.detectChanges();
 
     const section = fixture.nativeElement.querySelector('.rp-critical');
@@ -125,6 +140,7 @@ describe('DoctorResultsPanelComponent', () => {
   it('disables the dismiss while its acknowledgement is in flight', () => {
     fixture.componentRef.setInput('results', [{ ...item(), abnormalFlag: 'ABNORMAL' }]);
     fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('canAct', true);
     fixture.componentRef.setInput('acknowledging', ['r-1']);
     fixture.detectChanges();
 

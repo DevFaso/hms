@@ -262,6 +262,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   acknowledgingResults = signal<string[]>([]);
   /**
+   * Whether this account may acknowledge or read back at all.
+   *
+   * The queue is served to DOCTOR / PHYSICIAN / SURGEON, but
+   * `LabResultController`'s acknowledge and read-back name only DOCTOR,
+   * NURSE, MIDWIFE, the lab roles and SUPER_ADMIN — and the `/lab-results`
+   * route guard matches. A surgeon gets the list; the actions would be a 403
+   * and a bounced route, so they are not offered.
+   */
+  canActOnResults = computed(() =>
+    this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN']),
+  );
+  /**
    * Which review-queue read is the current one.
    *
    * Two independent triggers can overlap — the panel's Retry and the
@@ -2635,7 +2647,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loadResultReviewQueue(done?: () => void): void {
     const request = ++this.resultQueueRequest;
     const isCurrent = (): boolean => request === this.resultQueueRequest;
-    this.resultQueueError.set(false);
+    // NOT cleared here. Clearing on start hid the stale banner for the whole
+    // request window, so a Retry that failed thirty seconds later showed the
+    // rows as current for thirty seconds. Only a response clears it.
     // Set BEFORE the request: clearing the error while `resultQueue` is still
     // empty otherwise drew "all results reviewed" for the whole request
     // window, on the first load and again on every Retry.
@@ -2644,6 +2658,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (items) => {
         if (isCurrent()) {
           this.resultQueue.set(items);
+          this.resultQueueError.set(false);
           this.resultQueueLoading.set(false);
         }
         done?.();

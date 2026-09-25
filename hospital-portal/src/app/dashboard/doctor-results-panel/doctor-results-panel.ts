@@ -42,6 +42,18 @@ export class DoctorResultsPanelComponent {
   loading = input(false);
   /** Ids with an acknowledge in flight; their ✓ is disabled until it lands. */
   acknowledging = input<string[]>([]);
+  /**
+   * Whether this account may act on a row at all.
+   *
+   * `MeController` serves this queue to ROLE_DOCTOR, ROLE_PHYSICIAN and
+   * ROLE_SURGEON, but `LabResultController`'s `/acknowledge` and
+   * `/critical-read-back` name only DOCTOR, NURSE, MIDWIFE, the lab roles and
+   * SUPER_ADMIN, and the `/lab-results` route guard matches them. A surgeon
+   * therefore sees the queue and is refused both actions — so they are not
+   * offered: a ✓ that answers 403 and a link that `RoleGuard` bounces are
+   * worse than a read-only list.
+   */
+  canAct = input(false);
   patientSelected = output<string>();
   resultAcknowledged = output<string>();
   reloadRequested = output<void>();
