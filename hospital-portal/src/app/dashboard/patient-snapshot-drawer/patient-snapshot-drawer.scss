@@ -401,3 +401,26 @@
   font-size: 12px;
   color: #0f172a;
 }
+
+/* The drawer with no snapshot in it: loading, a refusal, or a failure. */
+.drawer-status {
+  margin: 0 0 1rem;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* The same treatment as the shared scope hint, so the two read as one thing. */
+.drawer-status-scope {
+  border-left: 4px solid var(--primary);
+}
+
+/* The palette the rest of this drawer uses for a red state (code status). */
+.drawer-status-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-left: 4px solid #991b1b;
+}

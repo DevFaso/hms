@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
+import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 
 const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
@@ -13,7 +14,7 @@ const LOCALE_MAP: Record<string, string> = {
 @Component({
   selector: 'app-doctor-results-panel',
   standalone: true,
-  imports: [RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule, HospitalScopeHintComponent],
   templateUrl: './doctor-results-panel.html',
   styleUrl: './doctor-results-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,6 +41,16 @@ export class DoctorResultsPanelComponent {
    * The same window opened on the first load of the page.
    */
   loading = input(false);
+  /**
+   * A hospital is in scope, so the queue could be read at all.
+   *
+   * `GET /me/results/review-queue` filters by the hospital the caller is
+   * acting in and answers 404 when none resolves, so an unscoped physician —
+   * or a super-admin in global view — must be shown the scope hint, not the
+   * green "all results reviewed" card. That card over a queue that was never
+   * read is how a released CRITICAL result reaches nobody.
+   */
+  scoped = input(true);
   /** Ids with an acknowledge in flight; their ✓ is disabled until it lands. */
   acknowledging = input<string[]>([]);
   patientSelected = output<string>();

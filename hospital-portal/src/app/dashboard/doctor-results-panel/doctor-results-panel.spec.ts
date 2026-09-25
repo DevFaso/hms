@@ -141,4 +141,43 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
+  /*
+   * ── Scope (PR #742) ──
+   * The queue is filtered to the hospital the caller is acting in and the
+   * endpoint answers 404 when none resolves, so an unscoped caller never had
+   * a queue read at all. The green "all results reviewed" card over that is a
+   * false all-clear on a worklist that exists to stop a critical result
+   * reaching nobody.
+   */
+
+  it('renders the scope hint, not "all reviewed", when no hospital is in scope', () => {
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('scoped', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('DASHBOARD.ALL_RESULTS_REVIEWED');
+  });
+
+  it('prefers the scope hint over the error card, because the read never went out', () => {
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', true);
+    fixture.componentRef.setInput('scoped', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('DASHBOARD.RESULTS_LOAD_ERROR');
+  });
+
+  it('draws the rows normally once a hospital is in scope', () => {
+    fixture.componentRef.setInput('results', [item()]);
+    fixture.componentRef.setInput('scoped', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+  });
 });

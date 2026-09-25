@@ -1379,6 +1379,7 @@
           [results]="resultQueue()"
           [loadError]="resultQueueError()"
           [loading]="resultQueueLoading()"
+          [scoped]="hasHospitalScope()"
           [acknowledging]="acknowledgingResults()"
           (patientSelected)="openPatientSnapshot($event)"
           (resultAcknowledged)="acknowledgeResult($event)"
@@ -1525,6 +1526,9 @@
     <app-patient-snapshot-drawer
       [snapshot]="patientSnapshot()"
       [isOpen]="snapshotDrawerOpen()"
+      [loading]="snapshotLoading()"
+      [loadError]="snapshotError()"
+      (retryRequested)="retryPatientSnapshot()"
       (closed)="closePatientSnapshot()"
     />
   }

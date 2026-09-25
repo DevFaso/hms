@@ -4,8 +4,10 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
 import { Router, RouterLink, Routes } from '@angular/router';
@@ -74,6 +76,7 @@ import { LabService } from '../services/lab.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleContextService } from '../core/role-context.service';
 import {
   CredentialRenewalComponent,
   CredentialRenewalTarget,
@@ -165,12 +168,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly pharmacyService = inject(PharmacyService);
   private readonly refillApproval = inject(RefillApprovalService);
   private readonly imagingService = inject(ImagingService);
+  private readonly roleContext = inject(RoleContextService);
 
   /**
    * Bumps every time the active language changes. Reading this signal inside a
    * `computed()` makes the array re-evaluate so localized labels follow the
    * language switch without forcing a component re-mount.
    */
+  /**
+   * False for a super-admin in global view, and for any account whose
+   * hospital has not resolved. The review queue and the snapshot drawer are
+   * both refused by the backend in that state, so both say so.
+   */
+  readonly hasHospitalScope = this.roleContext.hasHospitalScope;
+
   private readonly langTick = signal(0);
   private langSub?: Subscription;
   private wsEventsSub?: Subscription;
@@ -272,6 +283,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private resultQueueRequest = 0;
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
+  /** A snapshot read is in flight; the drawer says so rather than opening blank. */
+  snapshotLoading = signal(false);
+  /**
+   * Why the drawer has no snapshot, when it has none.
+   *
+   * `GET /me/patients/{id}/snapshot` is scoped now, and refuses with a 404
+   * when no hospital resolves. The drawer used to close itself on any
+   * failure, which is the same anti-pattern as an empty list: a refusal
+   * rendered as nothing at all, indistinguishable from a mis-click. NO_SCOPE
+   * is decided on the client before the request, because the backend's 404 is
+   * deliberately the same answer it gives for a patient that does not exist —
+   * so the status code cannot tell the two apart, and only the client knows
+   * it never had a scope to send.
+   */
+  snapshotError = signal<'NO_SCOPE' | 'FAILED' | null>(null);
+  /** The patient the drawer is showing (or failed to show), so Retry can ask again. */
+  private snapshotPatientId: string | null = null;
+  /** Which snapshot read is the current one; a stale answer must not open a drawer. */
+  private snapshotRequest = 0;
   specialization = signal<string | null>(null);
   departmentName = signal<string | null>(null);
   /** Name of the caller's active hospital, shown as a chip in the clinician hero. */
@@ -1979,6 +2009,58 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // LIFECYCLE
   // ────────────────────────────────────────────────────────────
 
+  /**
+   * The effective hospital as the last scope reaction saw it.
+   *
+   * `undefined` means "no reaction has run yet", which a nullable hospital id
+   * cannot express — `null` is a real value here (a super-admin in global
+   * view). Same sentinel, for the same reason, as `HospitalScopeGateService`.
+   */
+  private lastScopeHospitalId: string | null | undefined;
+
+  constructor() {
+    // The review queue and the snapshot drawer are hospital-scoped reads on a
+    // page that is NOT behind the route-level scope gate — the dashboard
+    // renders for a super-admin in global view and for every role, so it
+    // cannot be gated, and the outlet is never rebuilt under it. The reaction
+    // therefore belongs to the component.
+    //
+    // First run is skipped: `ngOnInit`'s `loadDashboardData` already issues
+    // the read, and reacting here too would fire two on every page load.
+    effect(() => {
+      const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
+      const previous = this.lastScopeHospitalId;
+      this.lastScopeHospitalId = hospitalId;
+      if (previous === undefined || previous === hospitalId) return;
+      untracked(() => this.onHospitalScopeChanged());
+    });
+  }
+
+  /**
+   * The scope picker moved: everything on this page that was read for ONE
+   * hospital now belongs to the hospital that was just left.
+   *
+   * The rows are dropped before the new read is issued rather than when it
+   * lands. Elsewhere on this page a failed refresh deliberately keeps the rows
+   * it already has; here that rule inverts, because these rows are another
+   * tenant's and a slow — or failing — read would leave them on screen under
+   * the new hospital's heading, which is precisely the stale worklist this
+   * exists to prevent.
+   */
+  private onHospitalScopeChanged(): void {
+    // Invalidate any read in flight: a response issued under the old scope
+    // must not write its rows in after the switch.
+    this.resultQueueRequest++;
+    this.resultQueue.set([]);
+    this.resultQueueError.set(false);
+    this.resultQueueLoading.set(false);
+    // The open snapshot is one patient's record at the hospital just left.
+    this.closePatientSnapshot();
+    if (this.isDoctor() && this.roleContext.hasHospitalScope()) {
+      this.loadResultReviewQueue();
+    }
+  }
+
   ngOnInit(): void {
     this.initGreeting();
     this.initProfile();
@@ -2557,13 +2639,50 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Open the snapshot drawer on a patient, with an explicit state for every
+   * way it can fail to fill.
+   *
+   * `getPatientSnapshot` carries no `catchError` (deliberately — see the
+   * service), and the endpoint answers 404 with no hospital scope, so the old
+   * `error: () => close the drawer` turned an authorization refusal into a
+   * drawer that flickered and vanished. A clinician clicking a patient and
+   * seeing nothing happen has no way to tell a refusal from a dead button.
+   */
   openPatientSnapshot(patientId: string): void {
+    const request = ++this.snapshotRequest;
+    const isCurrent = (): boolean => request === this.snapshotRequest;
+    this.snapshotPatientId = patientId;
     this.snapshotDrawerOpen.set(true);
     this.patientSnapshot.set(null);
+    this.snapshotError.set(null);
+    if (!this.roleContext.hasHospitalScope()) {
+      // Decline to read, as the chart's labs section does: the request would
+      // be refused, and "not found" is not what happened.
+      this.snapshotLoading.set(false);
+      this.snapshotError.set('NO_SCOPE');
+      return;
+    }
+    this.snapshotLoading.set(true);
     this.dashboardService.getPatientSnapshot(patientId).subscribe({
-      next: (s) => this.patientSnapshot.set(s),
-      error: () => this.snapshotDrawerOpen.set(false),
+      next: (s) => {
+        if (!isCurrent()) return;
+        this.patientSnapshot.set(s);
+        this.snapshotLoading.set(false);
+      },
+      error: () => {
+        if (!isCurrent()) return;
+        this.snapshotLoading.set(false);
+        this.snapshotError.set('FAILED');
+      },
     });
+  }
+
+  /** The drawer's Retry: the same read, on the patient it is already open on. */
+  retryPatientSnapshot(): void {
+    const patientId = this.snapshotPatientId;
+    if (!patientId) return;
+    this.openPatientSnapshot(patientId);
   }
 
   /**
@@ -2633,6 +2752,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * them under that notice rather than losing them to a transient failure.
    */
   loadResultReviewQueue(done?: () => void): void {
+    // No scope, no read: the endpoint answers 404, and a 404 drawn as
+    // "the results could not be loaded" sends a physician looking for an
+    // outage. The panel renders the scope hint instead. `done()` still runs —
+    // it is the dashboard's pending-load counter, not this read's result.
+    if (!this.roleContext.hasHospitalScope()) {
+      this.resultQueueRequest++;
+      this.resultQueue.set([]);
+      this.resultQueueError.set(false);
+      this.resultQueueLoading.set(false);
+      done?.();
+      return;
+    }
     const request = ++this.resultQueueRequest;
     const isCurrent = (): boolean => request === this.resultQueueRequest;
     // NOT cleared here. Clearing on start hid the stale banner for the whole
@@ -2666,8 +2797,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   closePatientSnapshot(): void {
+    // Invalidate the read in flight too: without it, a snapshot arriving after
+    // the drawer was closed re-populated it for the next patient opened.
+    this.snapshotRequest++;
     this.snapshotDrawerOpen.set(false);
     this.patientSnapshot.set(null);
+    this.snapshotLoading.set(false);
+    this.snapshotError.set(null);
+    this.snapshotPatientId = null;
   }
 
   // ────────────────────────────────────────────────────────────

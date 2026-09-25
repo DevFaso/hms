@@ -17,7 +17,14 @@
     queue, and swapping a populated, readable list for a spinner every time is
     worse than letting the rows stand until the new ones land.
   -->
-  @if (loading() && results().length === 0) {
+  <!--
+    No hospital in scope FIRST, ahead of loading, error and empty: the queue
+    was never read. The green "all results reviewed" card below would be a
+    false all-clear, and the error card would blame an outage.
+  -->
+  @if (!scoped()) {
+    <app-hospital-scope-hint />
+  } @else if (loading() && results().length === 0) {
     <div class="rp-loading" aria-live="polite">
       <span class="rp-spinner"></span>
       <span>{{ 'common.loading' | translate }}</span>

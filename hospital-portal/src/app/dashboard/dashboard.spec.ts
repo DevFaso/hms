@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
@@ -16,6 +16,13 @@ import {
   PatientTrackerWsService,
   PatientTrackerEvent,
 } from '../services/patient-tracker-ws.service';
+import { RoleContextService } from '../core/role-context.service';
+import {
+  ClinicalDashboard,
+  DashboardService,
+  DoctorResultQueueItem,
+  PatientSnapshot,
+} from '../services/dashboard.service';
 
 /**
  * Every route literal the dashboard links to (tiles, quick actions, fetch
@@ -1379,5 +1386,222 @@ describe('result review queue - acknowledge and failure state', () => {
     expect(c.resultQueue().length).toBe(0);
     // Still failed: only a read that succeeds may say otherwise.
     expect(c.resultQueueError()).toBeTrue();
+  });
+});
+
+/**
+ * -- The review queue and the snapshot drawer are hospital-scoped (PR #742) --
+ *
+ * `GET /me/results/review-queue` now filters by the hospital the caller is
+ * acting in, and `GET /me/patients/{id}/snapshot` answers 404 rather than
+ * reading patient-wide. Both used to be read once, on mount, by a page that
+ * is NOT behind the route-level scope gate: the dashboard renders for every
+ * role and for a super-admin in global view, so the outlet is never rebuilt
+ * under it and the reaction has to live in the component.
+ *
+ * The clinical failure these cover: a released CRITICAL result at the
+ * clinician's other hospital appearing in no worklist they are watching,
+ * while the escalation sweep goes on chasing it.
+ */
+describe('dashboard - review queue and snapshot follow the hospital scope', () => {
+  let fixture: ComponentFixture<DashboardComponent>;
+  let component: DashboardComponent;
+  let dashboardService: jasmine.SpyObj<DashboardService>;
+  let roleContext: RoleContextService;
+
+  /**
+   * Every read the doctor dashboard issues on load, stubbed wholesale so the
+   * fixture can be rendered: the reaction under test is a view effect, and it
+   * only runs on change detection.
+   */
+  const DOCTOR_READS: (keyof DashboardService)[] = [
+    'getClinicalDashboard',
+    'getCriticalStrip',
+    'getWorklist',
+    'getPatientFlow',
+    'getInbox',
+    'getRecentPatients',
+    'getResultReviewQueue',
+    'getPatientSnapshot',
+  ];
+
+  function build(hospitalId: string | null): void {
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getHospitalId.and.returnValue(hospitalId);
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles: ['ROLE_DOCTOR'],
+      staffId: 's1',
+      active: true,
+    } as never);
+
+    const trackerWs = jasmine.createSpyObj<PatientTrackerWsService>('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    trackerWs.getEvents.and.returnValue(new Subject<PatientTrackerEvent>().asObservable());
+
+    dashboardService = jasmine.createSpyObj<DashboardService>('DashboardService', DOCTOR_READS);
+    for (const read of DOCTOR_READS) {
+      (dashboardService[read] as jasmine.Spy).and.returnValue(of([]));
+    }
+    dashboardService.getClinicalDashboard.and.returnValue(of({} as ClinicalDashboard));
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        { provide: DashboardService, useValue: dashboardService },
+        { provide: PatientTrackerWsService, useValue: trackerWs },
+      ],
+    });
+
+    // The REAL RoleContextService, never a stub: the reaction under test is a
+    // signal effect, and a stub whose pick is a plain variable cannot drive it.
+    roleContext = TestBed.inject(RoleContextService);
+    roleContext.activeHospitalId = hospitalId;
+
+    fixture = TestBed.createComponent(DashboardComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  /** The chip pinning a different hospital, as the super-admin picker does. */
+  function pickHospital(id: string): void {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.scopeToHospital(id);
+    fixture.detectChanges();
+  }
+
+  it('reads the queue once on load and again when the hospital changes', () => {
+    build('h-a');
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
+
+    pickHospital('h-b');
+
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the other hospital rows on the scope change, not when the new read lands', () => {
+    build('h-a');
+    component.resultQueue.set([
+      {
+        id: 'r-1',
+        patientName: 'Awa Traore',
+        patientId: 'p-1',
+        testName: 'Potassium',
+        resultValue: '6.8',
+        abnormalFlag: 'CRITICAL',
+        resultedAt: '2026-09-20T09:30:00Z',
+      },
+    ]);
+    // The new read never lands: the old rows must still be gone.
+    dashboardService.getResultReviewQueue.and.returnValue(
+      new Subject<DoctorResultQueueItem[]>().asObservable(),
+    );
+
+    pickHospital('h-b');
+
+    expect(component.resultQueue()).toEqual([]);
+    expect(component.resultQueueError()).toBeFalse();
+  });
+
+  it('does not read the queue at all with no hospital in scope', () => {
+    build(null);
+
+    expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
+    expect(component.hasHospitalScope()).toBeFalse();
+    // Not an error either: the panel renders the scope hint, not a failure.
+    expect(component.resultQueueError()).toBeFalse();
+  });
+
+  it('closes the open snapshot on a scope change, because it is the other hospital record', () => {
+    build('h-a');
+    component.openPatientSnapshot('p-1');
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+
+    pickHospital('h-b');
+
+    expect(component.snapshotDrawerOpen()).toBeFalse();
+    expect(component.patientSnapshot()).toBeNull();
+  });
+
+  it('declines the snapshot read with no scope and says which remedy applies', () => {
+    build(null);
+
+    component.openPatientSnapshot('p-1');
+
+    expect(dashboardService.getPatientSnapshot).not.toHaveBeenCalled();
+    // The drawer stays OPEN: closing it renders a refusal as a dead button.
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('NO_SCOPE');
+  });
+
+  it('keeps the drawer open and states the failure when the snapshot read fails', () => {
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 404 })));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('FAILED');
+    expect(component.patientSnapshot()).toBeNull();
+    expect(component.snapshotLoading()).toBeFalse();
+  });
+
+  it('re-reads the same patient from the drawer Retry', () => {
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 500 })));
+    component.openPatientSnapshot('p-1');
+
+    dashboardService.getPatientSnapshot.and.returnValue(
+      of({ patientId: 'p-1' } as PatientSnapshot),
+    );
+    component.retryPatientSnapshot();
+
+    expect(dashboardService.getPatientSnapshot).toHaveBeenCalledTimes(2);
+    expect(dashboardService.getPatientSnapshot.calls.mostRecent().args).toEqual(['p-1']);
+    expect(component.snapshotError()).toBeNull();
+  });
+
+  it('ignores a snapshot that arrives after the drawer was closed', () => {
+    build('h-a');
+    const slow = new Subject<PatientSnapshot>();
+    dashboardService.getPatientSnapshot.and.returnValue(slow.asObservable());
+    component.openPatientSnapshot('p-1');
+    component.closePatientSnapshot();
+
+    slow.next({ patientId: 'p-1' } as PatientSnapshot);
+
+    expect(component.snapshotDrawerOpen()).toBeFalse();
+    expect(component.patientSnapshot()).toBeNull();
   });
 });
