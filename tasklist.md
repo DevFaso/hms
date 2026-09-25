@@ -3175,6 +3175,37 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     nav entry because one would land it on a page that 403s. Owned by
     `feat/prescription-read-surface`.
 
+  - **The same unscoped-fallback shape exists in three more services, and two
+    of them are worse.** Found while fixing the lab-result read; all three are
+    `hospitalId != null ? scoped : unscoped` with the disclosure recording
+    guarded on the same null.
+    - `LabOrderServiceImpl.searchLabOrders` — `LabOrderCustomRepositoryImpl
+      .buildPredicates` simply omits the hospital predicate when the id is
+      null, so a staff caller with no resolvable scope gets every tenant's lab
+      ORDERS for the patient, and `recordPerformedHereReach(page, null)`
+      accounts nothing. This is the other half of the chart's Labs tab: with
+      only `fix/patient-lab-read-requires-scope` merged, the tab refuses the
+      results and still serves the orders. Owned by
+      `fix/lab-order-search-requires-scope`.
+    - `PatientMedicationServiceImpl.getMedicationsForPatient` — byte-for-byte
+      the same fallback, but ONE method serves both the staff controller and
+      the portal, so there is no flag to branch on. Fixing it means splitting
+      the service interface and touching the portal service and its tests. Not
+      the same fix, and bigger than it looks. Unowned.
+    - `PatientVitalSignServiceImpl.getRecentVitals` and `getLatestSnapshot` —
+      same shape, also shared between staff and portal, and with **no
+      `PatientChartAccess` gate and no reach recording at all**. The worst of
+      the three and the least like the others. Unowned.
+
+  - **`PatientChartAccess.require(patientId, null)` throws for any principal
+    the context does not mark a super-admin — which is every patient.** So a
+    portal patient with no `hospitalId` and no active registration already
+    gets a 404 from `getMyLabResults`, and the health summary swallows it into
+    a silently empty list via `safeLabResults`. The patient-portal branch of
+    the lab read is therefore dead code today, which is worth knowing before
+    anyone "simplifies" it away. `PatientChartAccess` is shared by fourteen
+    services, so this is its own job and not a side fix. Unowned.
+
   *Finished screens that cannot say what they should, because the DTO has no
   field for it.*
   - `LabResultResponseDTO` carries neither `sourceMessageControlId` nor
