@@ -252,7 +252,11 @@ public class MeController {
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
-    @Operation(summary = "Get lab/imaging results review queue")
+    @Operation(summary = "Get lab/imaging results review queue",
+               description = "Scoped to the hospital the caller is acting at. A caller with a staff row but no "
+                   + "hospital scope — a super-admin in global view — is refused with 404 rather than served "
+                   + "that clinician's orders from every hospital, because a cross-hospital disclosure cannot be "
+                   + "recorded without an acting hospital to record it against.")
     @GetMapping("/results/review-queue")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
     public ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> getResultReviewQueue(Authentication auth) {
@@ -261,7 +265,10 @@ public class MeController {
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
-    @Operation(summary = "Get compact patient snapshot for drawer")
+    @Operation(summary = "Get compact patient snapshot for drawer",
+               description = "Requires a hospital scope. A caller whose scope does not resolve is refused with 404, "
+                   + "with the same answer a missing patient gives, rather than served the patient's record from "
+                   + "every tenant with no disclosure recorded.")
     @GetMapping("/patients/{patientId}/snapshot")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> getPatientSnapshot(

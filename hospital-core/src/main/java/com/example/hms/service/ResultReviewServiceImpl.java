@@ -88,6 +88,14 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final PrescriptionRepository prescriptionRepository;
     private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
+    private final com.example.hms.utility.RoleValidator roleValidator;
+
+    /**
+     * Resolvable message key, not a sentence, and the key this codebase already
+     * throws for a staff id it will not resolve — so a refusal is
+     * indistinguishable from one.
+     */
+    private static final String MSG_STAFF_NOT_FOUND = "staff.notfound";
 
     @Override
     public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId) {
@@ -102,8 +110,57 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // The queue is built for the physician making the request.
         Locale locale = LocaleContextHolder.getLocale();
 
-        // Get completed lab orders (results available) ordered by this physician
-        List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
+        // The queue is one clinician's order history, and it was read with no
+        // hospital scope at all: findByOrderingStaff_Id returns every hospital's
+        // orders for this staff id, and with them every patient name, id and
+        // released value on them.
+        //
+        // That it leaks is not obvious, so it is worth writing down. A user has
+        // exactly ONE Staff row for the whole platform — uq_staff_user on
+        // (user_id) in the entity plus the uq_staff_user_id index V8 created
+        // after deleting the duplicates; uq_staff_user_hospital is subsumed by
+        // it and cannot make a second row. Multi-hospital membership is
+        // UserRoleHospitalAssignment, not a second staff row. Meanwhile
+        // buildLabOrder takes the ORDER's hospital from the encounter (or the
+        // requested hospitalId) and never compares it to staff.getHospital().
+        // So the one staff id of a clinician assigned at two hospitals owns
+        // orders at both, and this finder unions them — including orders from
+        // a hospital whose assignment has since been revoked, because the staff
+        // row outlives the assignment.
+        //
+        // Scoped to the acting hospital instead. Scope is a property of the
+        // CALLER: deriving it from staff.getHospital() would pin the queue to
+        // the clinician's home hospital whatever they are acting as, which is
+        // neither what they asked for nor something any disclosure could be
+        // accounted against.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // requireActiveHospitalId returns null ONLY on its super-admin
+            // branches and throws BusinessException for everyone else, so this
+            // is a real super-admin in global view — reachable here because
+            // RoleExpansion grants them ROLE_DOCTOR before the @PreAuthorize on
+            // GET /me/results/review-queue runs.
+            //
+            // Refused rather than served unscoped, the same line #739 drew on
+            // getLabOrdersByStaffId, which is this same read by another name: a
+            // queue filtered to one person is that person's record, not a
+            // worklist, and there is no acting hospital for a RECORD_SHARE row
+            // to name. A super-admin who wants a clinician's queue picks a
+            // hospital first.
+            //
+            // After the staff lookup on purpose: that lookup is on the CALLER's
+            // own user id and discloses nothing, and leaving it first keeps the
+            // ordinary case — a super-admin with no staff row, who has no
+            // clinical queue at all — answering [] exactly as before, so only
+            // the leaking shape changes.
+            log.warn("Result review queue refused: no hospital scope resolved for staff {}", staffId);
+            throw new com.example.hms.exception.ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId);
+        }
+
+        // Lab orders this physician placed AT THE HOSPITAL THEY ARE ACTING AT,
+        // whose results are available.
+        List<LabOrder> completedOrders =
+                labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, hospitalId);
         List<DoctorResultQueueItemDTO> queue = new ArrayList<>();
 
         // Sonar S135 — replaced the outer for-loop (which had two `continue`

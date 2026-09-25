@@ -47,6 +47,13 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * each own one DTO field and are short, individually testable, and swallow
  * their own DB errors so a flaky non-essential section can't blank the whole
  * snapshot. {@code getSnapshot} is now a thin assembler.
+ *
+ * <p>Every section reads within the acting hospital's readable set (allergies
+ * are patient-wide by design, E9 #56). There is no unscoped branch:
+ * {@link #getSnapshot} refuses a null hospital scope before it reads anything,
+ * so the patient-wide finders these builders used to fall back to are removed
+ * rather than merely unreachable — the guard cannot be bypassed by a later
+ * caller reintroducing a null.
  */
 @Slf4j
 @Service
@@ -73,28 +80,79 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private static final String FLAG_NORMAL = "NORMAL";
     private static final String FLAG_REVIEW = "REVIEW";
 
+    /**
+     * Resolvable message key, not a sentence, and the same one
+     * {@code PatientChartAccess}, {@code PatientLabResultServiceImpl} and
+     * {@code LabOrderServiceImpl} throw: a scopeless read of one patient's
+     * record is refused identically wherever the chart asks for it, and says
+     * nothing about whether the patient exists.
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+
     @Override
     public PatientSnapshotDTO getSnapshot(UUID patientId, UUID hospitalId) {
         log.info("Building patient snapshot for: {}", patientId);
 
-        Patient patient = patientRepository.findByIdUnscoped(patientId)
-                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Patient not found: " + patientId));
+        if (hospitalId == null) {
+            // One patient's whole record — allergies, diagnoses, medications,
+            // vitals, labs, pending orders, notes and care team — asked for
+            // with no acting hospital.
+            //
+            // Every section below used to take a patient-wide branch on this
+            // null: the readable set was never computed, the registration check
+            // three lines down was skipped, and `account()` no-ops on a null
+            // acting hospital, so not one foreign row was disclosed. The drawer
+            // returned the patient's record from every tenant, unaccounted.
+            //
+            // Unlike the sibling reads this closes, the null here is NOT only a
+            // super-admin's. MeController resolves it with
+            // `resolveHospitalId(auth).orElse(null)`, so an ordinary clinician
+            // whose scope fails to resolve — no pinned X-Hospital-Id and no
+            // active assignment the fallback can find, e.g. a JWT outliving the
+            // assignment it was minted from — lands on the same branch.
+            //
+            // The accounting half cannot be patched in place: a RECORD_SHARE row
+            // pairs a SOURCE hospital with an ACTING one, and in global view
+            // there is no acting hospital for the disclosure to name. Unscoped
+            // and accounted is not a state this endpoint can be in.
+            //
+            // Refusing is also what makes closing the two lab reads worth
+            // anything. GET /lab-orders?patientId= and
+            // GET /patients/{id}/lab-results now refuse a scopeless caller; this
+            // drawer served the same rows (labOrderRepository.findByPatient_Id
+            // in buildPendingOrders, the very finder those PRs abandon) to the
+            // same caller through a different door.
+            //
+            // 404, and the same key the refusal takes when the patient really
+            // is missing, three lines down: a caller who could not establish
+            // scope learns nothing about whether the patient exists.
+            //
+            // Logged, because the response is deliberately opaque and a
+            // scope-resolution failure and a genuine missing patient are very
+            // different operational events. The patient id only — it is already
+            // the subject of the request, and nothing about the caller's tenancy
+            // belongs in a line a 404 spike is triaged from.
+            log.warn("Patient snapshot refused: no hospital scope resolved for patient {}", patientId);
+            throw new com.example.hms.exception.ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        }
 
-        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(
+                        MSG_PATIENT_NOT_FOUND, patientId));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new com.example.hms.exception.BusinessException("Patient is not registered at this hospital.");
         }
 
-        // E9 #60 — the snapshot follows the patient: with an acting hospital every
-        // section reads the policy's readable set (allergies stay patient-wide,
-        // #56) and every foreign row surfaced is accounted once for the whole
-        // snapshot. Without one (super-admin global view) the patient-wide reads
-        // stay. A foreign encounter in a sensitive category (D3) is withheld.
+        // E9 #60 — the snapshot follows the patient: every section reads the
+        // policy's readable set (allergies stay patient-wide, #56) and every
+        // foreign row surfaced is accounted once for the whole snapshot. A
+        // foreign encounter in a sensitive category (D3) is withheld.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
-        Set<UUID> readable = hospitalId == null ? null
-                : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // rows the D3 rule withholds; the ledger row names the session.
-        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
         Map<String, Long> reach = new HashMap<>();
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
@@ -113,10 +171,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .recentNotes(buildRecentNotes(encounters))
                 .careTeam(buildCareTeam(encounters))
                 .build();
-        if (hospitalId != null) {
-            reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
-                    "Cross-hospital patient snapshot read on the treatment relationship");
-        }
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, reach,
+                "Cross-hospital patient snapshot read on the treatment relationship");
         return snapshot;
     }
 
@@ -130,9 +186,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private List<Encounter> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable, Map<String, Long> reach,
                                            boolean unlocked) {
         try {
-            List<Encounter> rows = readable == null
-                    ? encounterRepository.findByPatient_Id(patientId)
-                    : encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
+            List<Encounter> rows = encounterRepository
+                    .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
                         .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
                         .toList();
             account(reach, hospitalId, rows.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
@@ -181,9 +236,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                               Set<UUID> readable, Map<String, Long> reach, boolean unlocked) {
         List<String> diagnoses = new ArrayList<>();
         try {
-            List<com.example.hms.model.PatientProblem> problems = readable == null
-                    ? patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE)
-                    : patientProblemRepository.findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
+            List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
+                    .findByPatient_IdAndHospital_IdIn(patientId, readable).stream()
                         .filter(p -> p.getStatus() == ProblemStatus.ACTIVE)
                         .filter(p -> CrossHospitalRows.maySurface(p.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(p), unlocked))
                         .toList();
@@ -230,9 +284,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                                                           Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
-            List<com.example.hms.model.Prescription> rows = (readable == null
-                    ? prescriptionRepository.findByPatient_Id(patientId, PageRequest.of(0, 10))
-                    : prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10)))
+            List<com.example.hms.model.Prescription> rows = prescriptionRepository
+                    .findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10))
                     .getContent();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
@@ -250,9 +303,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                                                 Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.VitalItem> vitals = new ArrayList<>();
         try {
-            List<PatientVitalSign> rows = readable == null
-                    ? patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 5))
-                    : patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, PageRequest.of(0, 5));
+            List<PatientVitalSign> rows = patientVitalSignRepository
+                    .findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId, readable, PageRequest.of(0, 5));
             account(reach, hospitalId, rows.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList());
             rows.forEach(v -> vitals.add(PatientSnapshotDTO.VitalItem.builder()
                             .type("VITALS")
@@ -282,9 +334,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         try {
             // Paged at the DB so the patient's full lab history is never loaded
             // to trim to 10 after the fact.
-            List<LabResult> rows = readable == null
-                    ? labResultRepository.findByLabOrder_Patient_Id(patientId, PageRequest.of(0, 10)).getContent()
-                    : labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, PageRequest.of(0, 10));
+            List<LabResult> rows = labResultRepository
+                    .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patientId, readable, PageRequest.of(0, 10));
             account(reach, hospitalId, rows.stream()
                     .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
                     .toList());
@@ -315,9 +366,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                                                  Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.OrderItem> pendingOrders = new ArrayList<>();
         try {
-            List<com.example.hms.model.LabOrder> rows = readable == null
-                    ? labOrderRepository.findByPatient_Id(patientId)
-                    : labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            List<com.example.hms.model.LabOrder> rows =
+                    labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
             account(reach, hospitalId, rows.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList());
             rows.stream()
                     .filter(o -> o.getStatus() == com.example.hms.enums.LabOrderStatus.PENDING
