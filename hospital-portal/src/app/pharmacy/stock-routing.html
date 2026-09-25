@@ -6,6 +6,11 @@
     </div>
   </div>
 
+  <!-- The reads on this page answer in global view; the writes behind them
+       still require a hospital, so the hint says which and the controls are
+       disabled rather than offered and refused. -->
+  <app-hospital-scope-hint />
+
   <!-- Prescription lookup -->
   <div class="form-card form-card-accent">
     <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>
@@ -75,10 +80,20 @@
         <div class="routing-options">
           <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
           <div class="option-buttons">
-            <button class="btn btn-warning" (click)="openBackOrderForm()" [disabled]="saving()">
+            <button
+              class="btn btn-warning"
+              (click)="openBackOrderForm()"
+              [disabled]="saving() || !scopeReady()"
+              data-testid="open-back-order"
+            >
               {{ 'PHARMACY.BACK_ORDER' | translate }}
             </button>
-            <button class="btn btn-secondary" (click)="printForPatient()" [disabled]="saving()">
+            <button
+              class="btn btn-secondary"
+              (click)="printForPatient()"
+              [disabled]="saving() || !scopeReady()"
+              data-testid="print-for-patient"
+            >
               {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
             </button>
           </div>
@@ -119,7 +134,8 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
-                          [disabled]="saving() || !partner.hasOnFormulary"
+                          [disabled]="saving() || !partner.hasOnFormulary || !scopeReady()"
+                          [attr.data-testid]="'route-here-' + partner.pharmacyId"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
                         </button>
@@ -162,7 +178,11 @@
         <button class="btn btn-secondary" (click)="closePartnerForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn btn-primary" (click)="submitRouteToPartner()" [disabled]="saving()">
+        <button
+          class="btn btn-primary"
+          (click)="submitRouteToPartner()"
+          [disabled]="saving() || !scopeReady()"
+        >
           @if (saving()) {
             <span class="spinner"></span>
           }
@@ -191,7 +211,11 @@
         <button class="btn btn-secondary" (click)="closeBackOrderForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn btn-warning" (click)="submitBackOrder()" [disabled]="saving()">
+        <button
+          class="btn btn-warning"
+          (click)="submitBackOrder()"
+          [disabled]="saving() || !scopeReady()"
+        >
           @if (saving()) {
             <span class="spinner"></span>
           }
@@ -202,7 +226,35 @@
   }
 
   <!-- Routing decisions history -->
-  @if (decisions().length > 0) {
+  @if (decisionsError()) {
+    <div class="form-card form-card-accent">
+      <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
+      <div class="history-error" role="alert" data-testid="routing-history-error">
+        <p>{{ 'PHARMACY.ROUTING_HISTORY_FAILED' | translate }}</p>
+        <button
+          type="button"
+          class="btn btn-sm"
+          (click)="loadDecisions()"
+          data-testid="routing-history-retry"
+        >
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    </div>
+  } @else if (decisionsLoading() && decisions().length === 0) {
+    <!-- First load and Retry only: the rows are cleared and the error reset,
+         so without this the card vanishes and an order whose history is
+         merely loading reads as one that was never routed. Turning a page
+         keeps the table mounted — unmounting it would destroy the focused
+         Next button under the reader's cursor on every click. -->
+    <div class="form-card form-card-accent">
+      <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
+      <p class="muted" role="status" data-testid="routing-history-loading">
+        <span class="spinner" aria-hidden="true"></span>
+        {{ 'COMMON.LOADING' | translate }}
+      </p>
+    </div>
+  } @else if (decisions().length > 0) {
     <div class="form-card form-card-accent">
       <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
       <table class="data-table">
@@ -230,21 +282,40 @@
                   {{ d.status | enumLabel: 'status' }}
                 </span>
               </td>
-              <td>{{ d.reason || '—' }}</td>
+              <td>
+                <!-- The no-show is a flag, not stored prose: the server used
+                     to compose "Partner no-show: " in English into the reason
+                     column, and stored text cannot be translated at render
+                     time. The pharmacist's own words are kept as typed. -->
+                @if (d.partnerNoShow) {
+                  <span class="no-show-flag" [attr.data-testid]="'routing-no-show-' + d.id">{{
+                    'PHARMACY.PARTNER_NO_SHOW' | translate
+                  }}</span>
+                }
+                @if (d.noShowReason) {
+                  <span class="cell-sub">{{ d.noShowReason }}</span>
+                }
+                @if (d.reason) {
+                  <span class="cell-sub">{{ d.reason }}</span>
+                }
+                @if (!d.partnerNoShow && !d.noShowReason && !d.reason) {
+                  —
+                }
+              </td>
               <td>{{ d.decidedAt | date: 'short' }}</td>
               <td>
                 @if (d.status === 'PENDING' && d.routingType === 'PARTNER') {
                   <button
                     class="btn btn-sm btn-success"
                     (click)="respondToPartner(d.id, true)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.ACCEPT' | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-danger"
                     (click)="respondToPartner(d.id, false)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.REJECT' | translate }}
                   </button>
@@ -253,7 +324,7 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="confirmPartnerDispense(d.id)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.CONFIRM_DISPENSE' | translate }}
                   </button>

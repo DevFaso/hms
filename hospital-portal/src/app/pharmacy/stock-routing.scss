@@ -264,3 +264,31 @@ textarea.form-control {
     transform: rotate(360deg);
   }
 }
+
+// A routing decision's details stack: the translated no-show flag first, then
+// whatever free text was typed.
+.no-show-flag {
+  display: block;
+  font-weight: 600;
+  color: #92400e; // amber, 7.19:1 on white
+}
+
+.cell-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+// The routing history could not be loaded — said out loud, never rendered as
+// an empty history.
+.history-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+}

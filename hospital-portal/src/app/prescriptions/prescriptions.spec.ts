@@ -1417,6 +1417,35 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-routing-history"]')!.textContent).not.toContain('BACKORDER');
   });
 
+  it("says a partner never delivered in the reader's language, not in stored English", async () => {
+    // The server used to compose "Partner no-show: " into the reason column
+    // and a French or Spanish prescriber read it in English. It now arrives
+    // as a flag plus whatever the pharmacist actually typed.
+    const rx = makeRx({ status: 'SIGNED' });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            status: 'CANCELLED',
+            partnerNoShow: true,
+            noShowReason: 'nobody at the counter',
+            reason: 'Nearest partner has stock',
+          }),
+        ]),
+      ),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    const history = el('[data-testid="rx-routing-history"]')!;
+    expect(el('[data-testid="rx-routing-no-show-rd-1"]')).not.toBeNull();
+    expect(history.textContent).toContain('PRESCRIPTIONS.HISTORY.PARTNER_NO_SHOW');
+    expect(history.textContent).toContain('nobody at the counter');
+    expect(history.textContent).not.toContain('Partner no-show:');
+  });
+
   it('hides the history from a role the endpoints refuse, instead of 403-ing at them', async () => {
     // The prescriptions ROUTE admits nurses; neither history endpoint does.
     const rx = makeRx({ status: 'DISPENSED' });
