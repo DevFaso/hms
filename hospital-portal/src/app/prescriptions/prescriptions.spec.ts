@@ -728,7 +728,14 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
             isSuperAdmin: signal(opts.superAdmin ?? false),
             globalView: signal(opts.globalView ?? false),
             activeHospitalId: opts.globalView ? null : 'h-1',
-            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            // Mirrors RoleContextService.hasAnyActiveRole: when an active
+            // role is set, only THAT role counts. A stub answering off the
+            // whole held set makes every active-role gate on this page
+            // permissive, and untestable.
+            hasAnyActiveRole: (wanted: string[]) => {
+              const active = roles.length === 1 ? roles[0] : null;
+              return active ? wanted.includes(active) : wanted.some((r) => roles.includes(r));
+            },
             get activeRoles() {
               return roles;
             },
@@ -1216,6 +1223,16 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   it('still asks for the staff list as a prescriber', async () => {
     await setup({ roles: ['ROLE_DOCTOR'] });
+
+    expect(staffServiceSpy.list).toHaveBeenCalled();
+  });
+
+  it('asks for the staff list as a physician, who IS a doctor', async () => {
+    // Role audit C2. The JWT carries ROLE_PHYSICIAN and the backend adds
+    // ROLE_DOCTOR before its matcher runs, so the request is served — a
+    // literal role check here would leave the prescriber dropdown empty for
+    // exactly the population that writes prescriptions.
+    await setup({ roles: ['ROLE_PHYSICIAN'] });
 
     expect(staffServiceSpy.list).toHaveBeenCalled();
   });

@@ -29,6 +29,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
@@ -191,10 +192,26 @@ export class PrescriptionsComponent implements OnInit {
     'ROLE_QUALITY_MANAGER',
   ];
 
-  /** Read live, not captured: the active role changes on a scope switch. */
-  protected readonly canReadStaff = computed(() =>
-    this.roleContext.hasAnyActiveRole(PrescriptionsComponent.STAFF_READ_ROLES),
-  );
+  /**
+   * Read live, not captured: the active role changes on a scope switch.
+   *
+   * <p>NOT `hasAnyActiveRole`, which matches the stored role name literally.
+   * The list above holds POST-expansion names, and a prescriber's JWT carries
+   * `ROLE_PHYSICIAN` or `ROLE_SURGEON` — the backend adds `ROLE_DOCTOR` before
+   * its own matcher runs, so those two are served, and a literal check here
+   * would leave the create form's prescriber dropdown permanently empty for
+   * exactly the people who write prescriptions. `roleSatisfies` /
+   * `expandRoleEquivalents` are the shared rule (role audit C2).
+   */
+  protected readonly canReadStaff = computed(() => {
+    const active = this.roleContext.activeRole;
+    if (active) {
+      return roleSatisfies(PrescriptionsComponent.STAFF_READ_ROLES, active);
+    }
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
+      PrescriptionsComponent.STAFF_READ_ROLES.includes(r),
+    );
+  });
 
   private loadPrescribers(): void {
     if (!this.canReadStaff()) {
