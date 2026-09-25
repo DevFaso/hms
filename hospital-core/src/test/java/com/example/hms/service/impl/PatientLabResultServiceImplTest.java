@@ -38,6 +38,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import java.util.Map;
 import java.util.Set;
 import static org.mockito.Mockito.lenient;
@@ -573,5 +575,48 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(1).getHospitalName()).isEqualTo("Hôpital B");
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // -- No hospital scope: the staff path refuses, the portal path does not --
+
+    /**
+     * The staff read with no resolvable hospital scope must NOT fall through to
+     * the patient-only query, which returns every hospital's rows with neither
+     * RecordAccessPolicy nor a cross-hospital disclosure row. It refuses, with
+     * the same 404 PatientChartAccess throws, and it refuses BEFORE reading.
+     */
+    @Test void staffView_withNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
+        LabOrder foreignOrder = new LabOrder(); foreignOrder.setHospital(other);
+        LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
+        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, null, 10))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(labResultRepository, never()).findByLabOrder_Patient_Id(any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /** The patient reading their own results: no hospital scope is legitimate. */
+    @Test void portalView_withNoHospitalScope_stillReturnsThePatientsOwnResults() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
+        LabOrder order = new LabOrder(); order.setHospital(other);
+        LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(order);
+        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(own));
+
+        List<PatientLabResultResponseDTO> results =
+            service.getLabResultsForPatientPortal(patientId, null, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getValue).containsExactly("5.1");
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
+            .containsExactly(otherHospitalId);
+        // Nothing to disclose against: there is no acting hospital.
+        verifyNoInteractions(reachRecorder);
     }
 }
