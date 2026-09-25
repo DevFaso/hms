@@ -1040,7 +1040,7 @@ class PatientSnapshotServiceImplTest {
         foreignOrder.setHospital(other);
         foreignOrder.setStatus(LabOrderStatus.PENDING);
         // Stubbed so the test would SEE the leak if a patient-wide branch ever
-        // ran again: this is the very finder #739 abandoned on the lab side.
+        // ran again: this is the very finder #739 (open) abandons on the lab side.
         lenient().when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(foreignOrder));
         // A whole, usable patient, all lenient: none of it may be touched once
         // the guard fires, but it has to be there so that reverting the guard
