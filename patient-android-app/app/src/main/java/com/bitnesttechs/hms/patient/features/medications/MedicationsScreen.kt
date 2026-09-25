@@ -82,11 +82,50 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 }
             }
 
-            if (isLoading) {
+            // Only when there is nothing to show yet, which is the rule the
+            // lab screen already follows. Every mutation calls awaitFreshLoad,
+            // which cancels the in-flight load and relaunches it, so with a
+            // bare `isLoading` here the patient tapped "Request refill" and
+            // watched their whole medication list disappear and come back.
+            val nothingLoadedYet =
+                medications.isEmpty() && prescriptions.isEmpty() && refills.isEmpty()
+            if (isLoading && nothingLoadedYet) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = BrandBlue)
                 }
                 return@Column
+            }
+
+            // Above the per-tab LazyColumns, not inside them: as a list item
+            // this row scrolls away, so a patient fifty rows down would get no
+            // spinner, no message and no retry.
+            if (!nothingLoadedYet && (isLoading || loadFailed.any)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Weighted: the French string is long enough to fill the
+                    // row and collapse the button to nothing.
+                    Text(
+                        stringResource(
+                            if (isLoading) R.string.refreshing else R.string.refresh_failed
+                        ),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = BrandBlue,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        TextButton(onClick = { viewModel.load() }) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
             }
 
             when (selectedTab) {

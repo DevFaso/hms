@@ -74,156 +74,162 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
             return@Scaffold
         }
 
-        LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (results.isEmpty()) {
-                item {
-                    Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Science, null, Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            // An empty list is not the same thing as a list
-                            // that could not be loaded.
-                            Text(
-                                stringResource(
-                                    if (loadFailed) R.string.load_failed else R.string.no_lab_results
-                                ),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            if (loadFailed) {
-                                Spacer(Modifier.height(8.dp))
-                                TextButton(onClick = { viewModel.load() }) {
-                                    Text(stringResource(R.string.retry))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // With results already on screen the full-screen spinner is
-            // suppressed, so without this row a refresh — whether it is running
-            // or has just failed — produced no feedback at all: the empty state
-            // never runs and the toolbar action looks inert.
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            // Outside the LazyColumn on purpose: as an item at offset 0 it
+            // scrolled away, so on a list of fifty results a failed toolbar
+            // refresh showed no spinner, no message and no retry unless the
+            // patient happened to be at the top. The full-screen spinner is
+            // suppressed once there are results, so this row is the only
+            // feedback a refresh has.
             if (results.isNotEmpty() && (isLoading || loadFailed)) {
-                item {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        // Weighted: the French string is long enough to fill
-                        // the row and collapse "Réessayer" to nothing.
-                        Text(
-                            stringResource(
-                                if (isLoading) R.string.refreshing else R.string.refresh_failed
-                            ),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Weighted: the French string is long enough to fill the
+                    // row and collapse the button to nothing.
+                    Text(
+                        stringResource(
+                            if (isLoading) R.string.refreshing else R.string.refresh_failed
+                        ),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isLoading) {
+                        // In the banner, not over the list: a refresh must not
+                        // blank the results it is refreshing.
+                        CircularProgressIndicator(
+                            color = BrandBlue,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
                         )
-                        if (isLoading) {
-                            // In the banner, not over the list: a refresh must
-                            // not blank the results it is refreshing.
-                            CircularProgressIndicator(
-                                color = BrandBlue,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        } else {
-                            TextButton(onClick = { viewModel.load() }) {
-                                Text(stringResource(R.string.retry))
-                            }
+                    } else {
+                        TextButton(onClick = { viewModel.load() }) {
+                            Text(stringResource(R.string.retry))
                         }
                     }
                 }
             }
-            items(results) { lab ->
-                val toneFill = lab.tone.badgeFill()
-                val toneContent = lab.tone.onBadge()
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable { selectedResult = lab },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when {
-                            lab.isCritical -> CriticalRed.copy(alpha = 0.05f)
-                            lab.isAbnormal -> WarningAmber.copy(alpha = 0.05f)
-                            else -> MaterialTheme.colorScheme.surface
-                        }
-                    ),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // A pending row is never a green tick: the lab has not
-                        // released it and there is nothing to be reassured by.
-                        // Nor is a released row whose status this build cannot
-                        // name — UNKNOWN is exactly the case where the app does
-                        // not know whether the value is normal.
-                        //
-                        // A released NORMAL row that nothing graded is not an
-                        // all-clear either: resolveStatus falls through to
-                        // statusOf(null) = NORMAL, so "graded normal" and
-                        // "nothing graded this" are the same word on the wire.
-                        // The tick, the green and the word "Normal" are all
-                        // withheld for it — see LabResultDto.isGradedNormal and
-                        // statusLabelRes, which reads "Reported" instead.
-                        Icon(
-                            when {
-                                lab.isPending -> Icons.Default.HourglassEmpty
-                                lab.displayStatus == LabResultStatus.UNKNOWN -> Icons.Default.HelpOutline
-                                lab.isAbnormal || lab.isCritical -> Icons.Default.Warning
-                                // Neutral rather than an all-clear when nothing
-                                // graded the row.
-                                lab.isGradedNormal -> Icons.Default.CheckCircle
-                                else -> Icons.Default.Science
-                            },
-                            contentDescription = null,
-                            tint = toneContent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(lab.testName, style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                StatusBadge(
-                                    text = stringResource(lab.statusLabelRes),
-                                    color = toneFill,
-                                    contentColor = toneContent
+
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (results.isEmpty()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Science, null, Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                // An empty list is not the same thing as a list
+                                // that could not be loaded.
+                                Text(
+                                    stringResource(
+                                        if (loadFailed) R.string.load_failed else R.string.no_lab_results
+                                    ),
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            if (lab.isPending) {
-                                Text(stringResource(R.string.lab_result_pending),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            } else {
-                                lab.valueWithUnit?.let {
-                                    Text(stringResource(R.string.lab_result_with_value, it),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium)
+                                if (loadFailed) {
+                                    Spacer(Modifier.height(8.dp))
+                                    TextButton(onClick = { viewModel.load() }) {
+                                        Text(stringResource(R.string.retry))
+                                    }
                                 }
-                                lab.displayReferenceRange?.let {
-                                    Text(stringResource(R.string.lab_reference_with_value, it),
+                            }
+                        }
+                    }
+                }
+                items(results) { lab ->
+                    val toneFill = lab.tone.badgeFill()
+                    val toneContent = lab.tone.onBadge()
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { selectedResult = lab },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                lab.isCritical -> CriticalRed.copy(alpha = 0.05f)
+                                lab.isAbnormal -> WarningAmber.copy(alpha = 0.05f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        ),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            // A pending row is never a green tick: the lab has not
+                            // released it and there is nothing to be reassured by.
+                            // Nor is a released row whose status this build cannot
+                            // name — UNKNOWN is exactly the case where the app does
+                            // not know whether the value is normal.
+                            //
+                            // A released NORMAL row that nothing graded is not an
+                            // all-clear either: resolveStatus falls through to
+                            // statusOf(null) = NORMAL, so "graded normal" and
+                            // "nothing graded this" are the same word on the wire.
+                            // The tick, the green and the word "Normal" are all
+                            // withheld for it — see LabResultDto.isGradedNormal and
+                            // statusLabelRes, which reads "Reported" instead.
+                            Icon(
+                                when {
+                                    lab.isPending -> Icons.Default.HourglassEmpty
+                                    lab.displayStatus == LabResultStatus.UNKNOWN -> Icons.Default.HelpOutline
+                                    lab.isAbnormal || lab.isCritical -> Icons.Default.Warning
+                                    // Neutral rather than an all-clear when nothing
+                                    // graded the row.
+                                    lab.isGradedNormal -> Icons.Default.CheckCircle
+                                    else -> Icons.Default.Science
+                                },
+                                contentDescription = null,
+                                tint = toneContent,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(lab.testName, style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                    StatusBadge(
+                                        text = stringResource(lab.statusLabelRes),
+                                        color = toneFill,
+                                        contentColor = toneContent
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                if (lab.isPending) {
+                                    Text(stringResource(R.string.lab_result_pending),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    lab.valueWithUnit?.let {
+                                        Text(stringResource(R.string.lab_result_with_value, it),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium)
+                                    }
+                                    lab.displayReferenceRange?.let {
+                                        Text(stringResource(R.string.lab_reference_with_value, it),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                lab.displayDate?.let {
+                                    Text(stringResource(R.string.lab_date_with_value, it.take(10)),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            lab.displayDate?.let {
-                                Text(stringResource(R.string.lab_date_with_value, it.take(10)),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ChevronRight, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                         }
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Default.ChevronRight, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                 }
+                item { Spacer(Modifier.height(16.dp)) }
             }
-            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 

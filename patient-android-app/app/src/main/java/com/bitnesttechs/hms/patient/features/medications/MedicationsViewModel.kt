@@ -147,10 +147,22 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     val hadDataBefore = medications.value.isNotEmpty() ||
                         prescriptions.value.isNotEmpty() ||
                         refills.value.isNotEmpty()
-                    mResp?.body()?.data?.let { medications.value = it }
-                    pResp?.body()?.data?.let { prescriptions.value = it }
-                    rResp?.body()?.data?.content?.let { refills.value = it }
-                    rebuildOpenRefills()
+                    // One generation of data, or none of it. The three
+                    // lists and the index derived from them are published by
+                    // a single non-suspending call: awaitFreshLoad cancels
+                    // this load mid-flight, and cancellation can only be
+                    // observed at a suspension point, so it lands at one of
+                    // the awaits above and never between two of these writes.
+                    // Assigning them here one at a time was what allowed a
+                    // cancelled load to publish medications and prescriptions
+                    // but not refills, leaving openRefills indexed against one
+                    // generation and the lists against another until the
+                    // replacement load finished.
+                    publishLoaded(
+                        medications = mResp?.body()?.data ?: medications.value,
+                        prescriptions = pResp?.body()?.data ?: prescriptions.value,
+                        refills = rResp?.body()?.data?.content ?: refills.value
+                    )
                     reportLoadOutcome(
                         LoadFailures(
                             medications = mResp?.isSuccessful != true,
@@ -188,11 +200,22 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     }
 
     /**
-     * Keeping the previous lists removed the only signal a refresh had failed
-     * — the screen used to empty. Say so instead, so an expired session is not
-     * a silent no-op. On a COLD open there is nothing stale to show, so the
-     * empty states offer a retry rather than claiming old data is on screen.
+     * The one place the loaded lists reach the UI. Deliberately NOT a suspend
+     * function and deliberately called once: see the comment at the call site
+     * — atomicity here rests on there being no suspension point between the
+     * first write and the last, so nothing that suspends may be added.
      */
+    private fun publishLoaded(
+        medications: List<MedicationDto>,
+        prescriptions: List<PrescriptionDto>,
+        refills: List<RefillDto>
+    ) {
+        this.medications.value = medications
+        this.prescriptions.value = prescriptions
+        this.refills.value = refills
+        rebuildOpenRefills()
+    }
+
     /**
      * The medications pass runs second and OVERWRITES, including with nothing:
      * `false` there is an answer, not a miss. Falling back to the refills page
@@ -216,6 +239,12 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
         openRefills.value = index
     }
 
+    /**
+     * Keeping the previous lists removed the only signal a refresh had failed
+     * — the screen used to empty. Say so instead, so an expired session is not
+     * a silent no-op. On a COLD open there is nothing stale to show, so the
+     * empty states offer a retry rather than claiming old data is on screen.
+     */
     private fun reportLoadOutcome(failures: LoadFailures, hadDataBefore: Boolean) {
         loadFailed.value = failures
         // `hadDataBefore` counts ANY list — including refills, whose tab may
