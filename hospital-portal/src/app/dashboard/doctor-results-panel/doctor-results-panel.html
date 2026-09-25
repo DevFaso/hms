@@ -44,8 +44,13 @@
     @if (loadError()) {
       <p class="rp-stale" role="status" [attr.aria-busy]="loading()">
         {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
-        <!-- Reachable during an in-flight read; see the in-basket twin. -->
-        <button type="button" class="rp-retry" [disabled]="loading()" (click)="requestReload()">
+        <!--
+          Reachable during an in-flight read, and left enabled: the
+          request-sequence guard in `loadResultReviewQueue` makes an overlap
+          safe, and disabling it would remove the only escape from a request
+          that never settles. See the in-basket twin.
+        -->
+        <button type="button" class="rp-retry" (click)="requestReload()">
           {{ (loading() ? 'common.loading' : 'COMMON.RETRY') | translate }}
         </button>
       </p>

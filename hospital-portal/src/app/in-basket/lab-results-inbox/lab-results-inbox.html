@@ -60,10 +60,14 @@
         <!--
           Reachable while a read is in flight, unlike the one in the error
           card: this branch renders whenever rows are held, and `loadError` is
-          no longer cleared at request start. Four clicks on a slow link were
-          four requests to an endpoint that is an unbounded N+1.
+          no longer cleared at request start. Left ENABLED all the same — the
+          `queueRequest` latest-wins guard is what makes an overlap safe, and
+          disabling every control in this state (the ↻ already is) removed the
+          only way out of a request that never settles: there is no timeout
+          interceptor, so `loading` would stay true for ever. The label says a
+          read is running.
         -->
-        <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
+        <button type="button" class="btn-secondary" (click)="load()">
           {{ (loading() ? 'common.loading' : 'COMMON.RETRY') | translate }}
         </button>
       </p>

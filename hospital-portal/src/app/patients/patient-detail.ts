@@ -456,7 +456,18 @@ export class PatientDetailComponent implements OnInit {
    * of its own, so the tab hosts the cross-tenant chip and forwards the
    * selection; a change re-fetches under the new X-Hospital-Id.
    */
-  readonly documentsScope = signal<string | null>(null);
+  /**
+   * The scope the Documents tab's list was loaded for.
+   *
+   * Seeded from the LIVE scope, not null. `DocumentsTabComponent` reloads only
+   * when this input actually changes, and the value itself is never sent —
+   * the interceptor scopes the request — so a seed of null while the session
+   * is pinned to B meant the chip's "All hospitals" emitted null, matched the
+   * seed, and reloaded nothing: the chip then read "all" over B's documents.
+   * (Before `preserveScope`, the chip's own `enableGlobalView()` on mount hid
+   * this by forcing the two into agreement.)
+   */
+  readonly documentsScope = signal<string | null>(this.roleContext.effectiveHospitalIdForRequest());
 
   onDocumentsScopeChange(hospitalId: string | null): void {
     this.documentsScope.set(hospitalId);
