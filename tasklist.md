@@ -3425,6 +3425,37 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `fix/ios-missing-localized-keys`; recorded because the fallback pattern
   exists elsewhere.
 
+- **`resolveHospitalId` silently scopes a super-admin to an incidental clinical
+  assignment, and the 404 then lies to them.** The resolver falls through
+  `pinnedHospitalId()` to the caller's **newest** active assignment
+  (`findAllDetailedByUserId` is `ORDER BY a.createdAt DESC`) and does so for a
+  super-admin as well. So a platform administrator who happens to hold any
+  clinical assignment is pinned to it without being told, and never reaches the
+  global-view guards that several endpoints document. The sharp case: that
+  administrator opens the patient-snapshot drawer on a patient registered only
+  at hospital B and receives a 404 that is *by design* indistinguishable from
+  "no such patient" — because scope silently resolved to A, their own
+  incidental assignment. The refusal is working exactly as specified and
+  telling them something false.
+
+  This is a shared resolver, so it reaches well beyond the two endpoints where
+  it was found; `fix/snapshot-and-review-queue-scope` corrected the Swagger and
+  javadoc claims there, but the behaviour is untouched and is the real item.
+  Deciding it means deciding what a platform administrator's default scope
+  should be, which is a product question. Unowned.
+
+- **The patient-snapshot drawer applies the cross-hospital sensitivity test to
+  four of its sections and not the rest.** `SensitivityClassifier` has
+  `effectiveCategory` overloads for `Encounter`, `Admission`, `Consultation`,
+  `PatientProblem` and `NursingNote` only, so medications, vitals, lab results
+  and pending orders are scoped but never tested by
+  `CrossHospitalRows.maySurface`. A foreign **sensitive** prescription or lab
+  result therefore surfaces on the same drawer where a foreign sensitive
+  encounter is withheld — the filter is doing half its job and the shape of the
+  half is invisible to the reader. Pre-existing; the javadoc on
+  `PatientSnapshotServiceImpl` now states which sections are tested and which
+  are not rather than reading as a guarantee. Unowned.
+
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
   authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
