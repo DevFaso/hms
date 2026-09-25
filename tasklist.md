@@ -3338,11 +3338,52 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   `RoleGuard` and the shell nav go through `role-equivalence.ts`, so every
   in-component role gate is narrower than the route that hosts it.
 
-- **The co-sign path picks a doctor's oldest staff profile.** The
-  staff-profile lookup behind co-signature resolves by taking the first
-  profile it finds, so a doctor credentialed at two hospitals is matched to the
-  older one and refused at the newer. #717 fixed the clarification path only;
-  the co-sign path still needs the profile chosen by the active hospital.
+- **~~The co-sign path picks a doctor's oldest staff profile.~~ This bullet was
+  wrong, and the real defect was worse.** A doctor cannot have two staff
+  profiles: `Staff.user` is `@OneToOne(unique = true)`, the entity carries
+  `uq_staff_user` on `user_id`, and V8 created `uq_staff_user_id` and never
+  dropped it. **One staff row per user, globally.** Multi-hospital membership
+  is `UserRoleHospitalAssignment`, which `resolveAssignmentForStaff` in the
+  same file already relies on. So there was never an "older profile" to be
+  matched to.
+
+  What was actually true on the co-sign path: its own javadoc said the
+  co-signer "must hold a prescribing role at the prescription's hospital", and
+  **nothing checked it**. `findFirstByUserIdOrderByCreatedAtAsc` accepted a
+  staff row anywhere, so ROLE_DOCTOR somewhere plus a staff row somewhere was
+  the entire gate. That is an authorization gap, not an over-refusal — the
+  opposite failure from the one recorded here. Closed by
+  `fix/cosign-staff-profile-by-hospital`, which anchors on the prescription's
+  hospital and requires an active DOCTOR/PHYSICIAN/SURGEON assignment there.
+
+  Recorded this way rather than deleted because the wrong version of this
+  bullet nearly produced a wrong fix: the first round of that PR copied #717's
+  shape and would have REFUSED the legitimate cross-hospital co-signer.
+
+- **#717's `resolveDoctorAtHospital` over-refuses today, and it was copied as
+  a model.** `PrescriptionClarificationService` looks the co-signer up with
+  `findByUserIdAndHospitalId(userId, rxHospitalId)`. Since a doctor has exactly
+  one staff row, a doctor whose row is filed at hospital A is refused a
+  clarification at hospital B even holding an active doctor assignment there.
+  `EncounterServiceImpl:620` (`cosignEncounterNote`) has the identical shape.
+  Both are merged and live. The right credential is an active assignment at the
+  anchoring hospital, with the staff row used only as the FK to record — which
+  is what the co-sign fix now does, so the two paths are currently divergent
+  and should not stay that way. Unowned.
+
+- **`PrescriptionServiceImpl.resolveStaffContext` (prescription CREATE) shares
+  the first-profile query**, and `determineHospitalId` then derives the order's
+  hospital from `staff.getHospital()`, so an order can be filed at the wrong
+  hospital or die on `prescription.encounter.staff.hospital.mismatch`. A
+  different anchor question from co-signature — there is no prescription
+  hospital yet and the active scope can be null — so not the same fix. Unowned.
+
+- **`resolveAssignmentForStaff` blunts half of the role widening** that the
+  co-sign PR applied: it looks up `DOCTOR`/`ROLE_DOCTOR` only, so a surgeon
+  still cannot WRITE an order at a hospital other than their staff row's, now
+  failing with a confusing 400 rather than a clear refusal. Pre-existing, and
+  true for nurse and midwife too. Belongs with the role-equivalence decision
+  below. Unowned.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
