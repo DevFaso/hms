@@ -508,9 +508,32 @@ public class LabOrderServiceImpl implements LabOrderService {
             // somebody's record rather than a worklist; getLabOrdersByPatientId
             // and getLabOrdersByStaffId are refused for the same reason.
             //
-            // 404 on the patient, matching PatientLabResultServiceImpl so the
-            // chart's two lab blocks answer a scopeless caller identically, and
-            // so the refusal says nothing about whether the rows exist.
+            // Which makes this a line, not a wall, and that is worth saying
+            // plainly: the worklist below is still unscoped and still
+            // unaccounted, so a super-admin in global view can page it (the lab
+            // screens already ask for 500 a page) and filter to one patient on
+            // the client — the same rows, still no RECORD_SHARE row. Closing
+            // that means deciding what a platform-wide worklist is allowed to
+            // be, which is a product question this change does not answer. What
+            // it removes is the endpoint that served one patient's cross-tenant
+            // record directly, on request, to the chart.
+            //
+            // 404 on the patient, so the refusal says nothing about whether the
+            // rows exist.
+            //
+            // patient.notFound, not the patient.notfound this class throws in
+            // buildLabOrder: both keys exist and messages_en resolves them
+            // differently ("...with ID: {0}" vs "Patient not found"). The
+            // lowercase one is only reachable on the create/update path, never
+            // on this GET, so the answer to match is the chart's OTHER lab
+            // block, which throws the camelCase key through PatientChartAccess.
+            //
+            // Not yet identical, though: PatientLabResultServiceImpl still has
+            // this same hole on its own null-scope branch, and a super-admin in
+            // global view — the only principal that reaches either guard —
+            // still gets that patient's results from every tenant, unaccounted.
+            // #735 closes it. Until that lands the two blocks disagree, and the
+            // caller who can tell is exactly the one this guard is for.
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
         Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
