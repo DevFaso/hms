@@ -109,7 +109,7 @@ public final class EncounterReaderRoles {
      * The roles that read
      * {@code GET /encounters/&#123;encounterId&#125;/notes/history} — the
      * annotation on {@code EncounterController.getEncounterNoteHistory},
-     * plus the two doctor equivalents.
+     * which has no {@code ROLE_PATIENT} to subtract.
      *
      * <p>That annotation admits no patient, so nothing is the subject here
      * today and the set is the whole of the readership. It exists anyway so
