@@ -2075,6 +2075,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.inboxCounts.set(null);
     this.onCallStatus.set(null);
     this.roomedPatients.set([]);
+    // The hero's own labels. `hospitalName` most of all: `loadDashboardData`
+    // only re-reads it when a hospital resolves, so on a switch to global view
+    // the hero would go on naming the hospital just left, directly above the
+    // hint asking the reader to pick one. `departmentName` is the clinician's
+    // department AT that hospital and travels with it.
+    this.hospitalName.set(null);
+    this.departmentName.set(null);
     this.criticalStrip.set(null);
     this.worklistItems.set([]);
     this.patientFlowData.set({});
@@ -2431,6 +2438,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (h) => this.hospitalName.set(h.name ?? null),
         error: () => this.hospitalName.set(null),
       });
+    } else {
+      // No scope to name. Leaving the previous value standing put "Hôpital A"
+      // in the hero beside "select a hospital to continue" — the header
+      // contradicting the page under it. The unnamed hero is the honest one.
+      this.hospitalName.set(null);
     }
 
     // Clinical dashboard (doctor / nurse / midwife)

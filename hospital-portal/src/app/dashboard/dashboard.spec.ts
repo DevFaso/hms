@@ -1580,6 +1580,22 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(trackerWs.connect).toHaveBeenCalledWith('h-b');
   });
 
+  it('does not leave the hero naming the hospital the reader just left', () => {
+    // The hero sat above the scope hint, so global view read "Hôpital A"
+    // directly over "select a hospital to continue".
+    build('h-a');
+    component.hospitalName.set('Hopital A');
+    component.departmentName.set('Pediatrie');
+
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.enableGlobalView();
+    fixture.detectChanges();
+
+    expect(component.hasHospitalScope()).toBeFalse();
+    expect(component.hospitalName()).toBeNull();
+    expect(component.departmentName()).toBeNull();
+  });
+
   it('does not read the queue at all with no hospital in scope', () => {
     build(null);
 
