@@ -117,6 +117,31 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('.rp-error')).not.toBeNull();
   });
 
+  it('offers read-back, not a dismiss, on a critical row', () => {
+    // LabResultServiceImpl.acknowledgeResult refuses a critical result that
+    // was notified and not read back, and every critical result is notified
+    // at creation — so a plain ✓ there is a guaranteed 400.
+    fixture.componentRef.setInput('results', [item()]);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.detectChanges();
+
+    const section = fixture.nativeElement.querySelector('.rp-critical');
+    expect(section).not.toBeNull();
+    expect(section.querySelector('.rp-ack-btn')).toBeNull();
+    expect(section.querySelector('a[href="/lab"]')).not.toBeNull();
+  });
+
+  it('disables the dismiss while its acknowledgement is in flight', () => {
+    fixture.componentRef.setInput('results', [{ ...item(), abnormalFlag: 'ABNORMAL' }]);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('acknowledging', ['r-1']);
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('.rp-ack-btn') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.disabled).toBeTrue();
+  });
+
   it('renders the rows when there is no error', () => {
     fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);

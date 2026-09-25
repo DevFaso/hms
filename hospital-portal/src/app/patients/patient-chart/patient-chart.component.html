@@ -299,6 +299,16 @@
       to use a control that is not on their screen is a dead end.
     -->
     @if (canPickHospitalScope()) {
+      <!--
+        The chip, then the hint. `<app-hospital-scope-hint>` says "select a
+        hospital to continue", and on this page there is nothing to select
+        with: /patients/:id does not carry `requiresHospitalScope`, so the
+        shell's chip is absent. The Documents tab hit the same wall and
+        embedded the chip for exactly this reason (patient-detail.html) —
+        same precedent here, rather than sending the clinician to another page
+        to pick and come back.
+      -->
+      <app-hospital-scope-chip [disableUrlSync]="true" />
       <app-hospital-scope-hint />
     } @else {
       <p class="labs-hint" role="status" data-testid="labs-no-hospital">

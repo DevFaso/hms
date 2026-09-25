@@ -80,13 +80,24 @@
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
-              <button
-                class="rp-ack-btn"
-                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
-                (click)="acknowledgeResult(r.id); $event.stopPropagation()"
+              <!--
+                A CRITICAL result cannot be dismissed: `LabResultServiceImpl
+                .acknowledgeResult` refuses one that was notified and not read
+                back, and `CriticalValueNotificationService` stamps
+                `criticalNotifiedAt` on every critical result at creation — so
+                a ✓ here is a guaranteed 400 and the escalation sweep goes on
+                paging. The read-back ceremony lives on the /lab bench; this
+                sends the physician there instead of offering a control that
+                cannot work.
+              -->
+              <a
+                routerLink="/lab"
+                class="rp-action"
+                [title]="'DASHBOARD.READ_BACK_REQUIRED' | translate"
+                (click)="$event.stopPropagation()"
               >
-                <span class="material-symbols-outlined">done</span>
-              </button>
+                <span class="material-symbols-outlined">record_voice_over</span>
+              </a>
             </div>
           }
         </div>
@@ -124,6 +135,7 @@
               </a>
               <button
                 class="rp-ack-btn"
+                [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >
@@ -166,6 +178,7 @@
               </a>
               <button
                 class="rp-ack-btn"
+                [disabled]="acknowledging().includes(r.id)"
                 [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >

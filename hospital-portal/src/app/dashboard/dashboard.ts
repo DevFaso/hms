@@ -255,6 +255,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** A read is in flight; the panel shows a spinner, not an empty state. */
   resultQueueLoading = signal(false);
   /**
+   * Result ids with an acknowledge in flight. The row is only removed once
+   * the server has taken it, so without this a physician on a slow link
+   * clicks ✓ repeatedly and sends the same POST several times.
+   */
+  acknowledgingResults = signal<string[]>([]);
+  /**
    * Which review-queue read is the current one.
    *
    * Two independent triggers can overlap — the panel's Retry and the
@@ -2581,9 +2587,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * that actually succeeds clears it.
    */
   acknowledgeResult(resultId: string): void {
+    if (this.acknowledgingResults().includes(resultId)) return;
+    this.acknowledgingResults.update((ids) => [...ids, resultId]);
+    const settle = (): void =>
+      this.acknowledgingResults.update((ids) => ids.filter((id) => id !== resultId));
     this.labService.acknowledgeResult(resultId).subscribe({
-      next: () => this.resultQueue.update((q) => q.filter((r) => r.id !== resultId)),
-      error: () => this.toast.error(this.t('DASHBOARD.ACKNOWLEDGE_FAILED')),
+      next: () => {
+        this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
+        settle();
+      },
+      error: () => {
+        this.toast.error(this.t('DASHBOARD.ACKNOWLEDGE_FAILED'));
+        settle();
+      },
     });
   }
 

@@ -38,6 +38,7 @@ import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
@@ -61,6 +62,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    HospitalScopeChipComponent,
     HospitalScopeHintComponent,
     RestrictedRowsComponent,
   ],
