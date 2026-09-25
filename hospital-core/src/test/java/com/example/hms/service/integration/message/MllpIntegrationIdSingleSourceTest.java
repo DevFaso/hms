@@ -110,10 +110,16 @@ class MllpIntegrationIdSingleSourceTest {
     /**
      * Comments out, so the scan sees code. Several classes describe the id's
      * shape in their javadoc — {@code actorLabel="MLLP:{sendingApp}/..."} —
-     * and documentation is not a second implementation. Crude on purpose: it
-     * only has to be right about whether a literal is live code, and a string
-     * containing {@code //} would at worst hide the rest of one line from the
-     * scan, never invent an offender.
+     * and documentation is not a second implementation.
+     *
+     * <p>Crude on purpose, and crude in a known direction: it does not parse
+     * Java, so a {@code //} inside a string literal hides the rest of that
+     * line. It will therefore never invent an offender, but it can miss one
+     * written on the same line as a URL. Worth knowing before trusting this
+     * as a boundary rather than as a tripwire for the copy-paste case it was
+     * written for — the real guarantee is
+     * {@code IntegrationMessageRecorder} truncating {@code integration_id}
+     * itself, which no copy can evade.
      */
     private static String withoutComments(String source) {
         return source

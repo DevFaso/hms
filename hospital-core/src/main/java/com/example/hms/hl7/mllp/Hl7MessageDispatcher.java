@@ -1,7 +1,6 @@
 package com.example.hms.hl7.mllp;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
-import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
@@ -155,10 +154,18 @@ public class Hl7MessageDispatcher {
                 "sender " + header.sendingApplication() + "/" + header.sendingFacility()
                     + " not allowlisted",
                 "sender not allowlisted",
-                // The claimed sender, normalised. Not trusted — but its own
-                // scope, so a de-allowlisted production partner's dead letter
-                // cannot be superseded by a port scan claiming to be someone
-                // else.
+                // The claimed sender, normalised. This bounds the honest
+                // case: a de-allowlisted production partner retrying on a
+                // timer stays one entry rather than thousands, and junk
+                // arriving under other names lands elsewhere.
+                //
+                // It is not a guarantee against a chosen victim. MSH-3/MSH-4
+                // are unverified here, so an attacker who knows a partner's
+                // pair can claim it, share its correlation id, and both
+                // supersede its counted row and suppress its stored body for
+                // the window. Fixing that needs an identity this path does
+                // not have; what is ruled out is the accidental version,
+                // where every unrecognised sender collided by construction.
                 integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
@@ -221,7 +228,13 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
                 "unparseable " + header.messageType() + " — missing PID-3 or required segments",
-                "unparseable ADT", integrationIdFor(header));
+                // The trigger belongs in the key: it is one of the five in
+                // ACCEPTED_ADT_EVENTS, checked before we got here, so it
+                // cannot be used to mint entries - and without it a malformed
+                // A01 and a structurally different malformed A08 from one
+                // sender share a key, so the second is recorded with no body
+                // and the operator has a dead letter and nothing to read.
+                "unparseable ADT^" + header.triggerEvent(), integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }

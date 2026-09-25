@@ -255,7 +255,14 @@ class Hl7MessageDispatcherTest {
             eq("UNKNOWN"),
             eq(bad),
             contains("Invalid MSH"),
-            any());
+            // isNull(), not any(): a correlation id here would be shared by
+            // every sender on the platform, because there is no parsed header
+            // to distinguish them. That silences one sender's dead letter with
+            // another's traffic and, since the body is stored on a
+            // correlation id's first occurrence in a window, stops any
+            // unparseable-MSH body being stored at all. any() is what let an
+            // earlier revision ship exactly that.
+            isNull());
     }
 
     @Test
@@ -320,6 +327,28 @@ class Hl7MessageDispatcherTest {
         // what matters is that the dispatcher does not start withholding it -
         // for a message nobody could parse it is the only evidence there is.
         assertThat(bodies.getAllValues()).containsExactly(malformedOru, malformedOruAgain);
+    }
+
+    @Test
+    void twoDifferentMalformedAdtTriggersKeepTheirOwnEvidence() {
+        // The trigger is in the correlation key because it is one of five
+        // values checked before routing. Without it a malformed A01 and a
+        // structurally different malformed A08 from one sender share a key,
+        // so the second is recorded with no body and the operator has a dead
+        // letter and nothing to read.
+        allowSender();
+        String a01 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A01|C-1|P|2.5\r";
+        String a08 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|C-2|P|2.5\r";
+
+        dispatcher.dispatch(a01, "10.0.0.51:1");
+        dispatcher.dispatch(a08, "10.0.0.51:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), any(), any(), ids.capture());
+        assertThat(ids.getAllValues().get(0))
+            .isNotNull()
+            .isNotEqualTo(ids.getAllValues().get(1));
     }
 
     @Test

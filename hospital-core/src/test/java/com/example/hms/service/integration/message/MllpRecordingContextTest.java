@@ -110,6 +110,20 @@ class MllpRecordingContextTest {
     }
 
     @Test
+    @DisplayName("No scope means no correlation id, not a global one")
+    void aMissingScopeMeansNoDedupeAtAll() {
+        // The trap this closes: concatenating a null scope yields the literal
+        // "null" and therefore a perfectly stable, perfectly GLOBAL id - a
+        // shared scope arrived at by accident. Shared is the one thing a
+        // correlation scope must never be: the newest row wins the dead-letter
+        // count and the first row of a window owns the stored body, so one
+        // shared id lets any sender silence another's entry and suppress its
+        // evidence.
+        assertThat(MllpRecordingContext.rejectionCorrelationId(null, "T", "r")).isNull();
+        assertThat(MllpRecordingContext.rejectionCorrelationId("  ", "T", "r")).isNull();
+    }
+
+    @Test
     @DisplayName("A hospital that cannot be read degrades the row instead of losing it")
     void anUnreadableOrganizationDegradesTheRowRatherThanLosingIt() {
         // MllpAllowedSenderServiceImpl.resolveHospital initialises the

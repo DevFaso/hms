@@ -129,6 +129,10 @@ public final class MllpRecordingContext {
      * allowlist matches it, a genuine partner that has been de-allowlisted
      * still collapses to one entry however it cases its headers.
      *
+     * <p>A null or blank scope returns null, meaning "no dedupe": the
+     * recorder mints a random id and every occurrence keeps its own counted
+     * row and its own stored body.
+     *
      * <p>Derived from the sender, the message type and the reason, and from
      * <b>nothing per-message</b>: no MSH-10, no identifier, no timestamp.
      * Anything per-message here would defeat the whole point, and an
@@ -142,6 +146,14 @@ public final class MllpRecordingContext {
      */
     public static String rejectionCorrelationId(String integrationId, String messageType,
                                                 String reason) {
+        // No scope, no id. Concatenating a null scope would produce the
+        // literal "null" and therefore a perfectly stable, perfectly global
+        // correlation id - the shared-scope defect this method's javadoc
+        // warns about, arrived at by accident instead of on purpose. The
+        // caller that passes null wants the recorder to mint a random one.
+        if (!StringUtils.hasText(integrationId)) {
+            return null;
+        }
         String key = "mllp-reject|" + integrationId + "|" + messageType + "|" + reason;
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
