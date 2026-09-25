@@ -204,6 +204,23 @@ final class LabResultWireContractTests: XCTestCase {
         // Only a genuinely empty range is passed.
         XCTAssertTrue(LabResultDTO.range("", isIn: "mmol/L"))
         XCTAssertFalse(LabResultDTO.range("3.9 - 6.1", isIn: "mmol/L"))
+
+        // findMatchingRange falls back to ranges[0] on any textual
+        // disagreement, so the range on screen IS the graded one whenever the
+        // difference is only cosmetic. Those must not be caveated.
+        for (rowUnit, shownRange) in [("mmHg", "90 - 120 mm Hg"),
+                                      ("umol/L", "12 - 16 \u{00B5}mol/L"),
+                                      ("\u{00B5}mol/L", "12 - 16 umol/L"),
+                                      ("\u{03BC}mol/L", "12 - 16 umol/L"),
+                                      ("10^9/L", "4 - 11 x10^9/L"),
+                                      ("x10^9/L", "4 - 11 10^9/L"),
+                                      ("G/DL", "12 - 16 g/dL")] {
+            XCTAssertTrue(LabResultDTO.range(shownRange, isIn: rowUnit),
+                          "\(rowUnit) vs \(shownRange) must not be a mismatch")
+        }
+
+        // An SI prefix is never cosmetic: mg and g are a thousandfold apart.
+        XCTAssertFalse(LabResultDTO.range("70 - 110 mg/dL", isIn: "g/dL"))
     }
 
     /// Shown, not hidden: `findMatchingRange` falls back to `ranges[0]`, so

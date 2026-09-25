@@ -132,15 +132,45 @@ struct LabResultDTO: Codable, Identifiable {
     /// Deliberately the same rule, in the same words, as
     /// `LabResultDto.rangeIsInUnit` on Android.
     static func range(_ range: String, isIn unit: String) -> Bool {
-        let haystack = Array(range.lowercased())
-        let needle = Array(unit.lowercased())
-        guard !haystack.isEmpty else { return true }
+        guard !range.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
+        let haystack = Array(normalizedUnit(range))
+        let needle = Array(normalizedUnit(unit))
+        guard !needle.isEmpty else { return true }
         guard haystack.count >= needle.count,
               Array(haystack.suffix(needle.count)) == needle else { return false }
         let boundary = haystack.count - needle.count - 1
         guard boundary >= 0 else { return true }
         let character = haystack[boundary]
-        return !(character.isLetter || character.isNumber)
+        // A DIGIT before the unit is the numbers/unit junction — "90-120mmhg"
+        // — so the whole unit is there. A LETTER means the suffix cut a longer
+        // unit in half: `g/dl` inside `mg/dl`, `u/l` inside `mu/l`. The one
+        // letter that is not part of a unit is the `x` of the `x10^9/L`
+        // multiplication marker; no real unit ends `…xg/dL`.
+        return !character.isLetter || character == "x"
+    }
+
+    /// Enough normalisation that a purely COSMETIC difference between the
+    /// configured range's unit and the result's does not read as a real one.
+    ///
+    /// `findMatchingRange` compares `trim().equalsIgnoreCase(...)` and falls
+    /// back to `ranges[0]`, so `mm Hg` vs `mmHg`, `µmol/L` vs `umol/L` and
+    /// `x10^9/L` vs `10^9/L` all end up grading against the range on screen —
+    /// the app must not caveat those. Case, whitespace, the two micro signs
+    /// and a leading multiplication marker are therefore folded away. What is
+    /// deliberately NOT folded is an SI prefix: `mg` and `g` are a
+    /// thousandfold apart and that is the disagreement worth flagging.
+    ///
+    /// Deliberately the same rule, in the same words, as
+    /// `LabResultDto.normalizedUnit` on Android.
+    static func normalizedUnit(_ raw: String) -> String {
+        var folded = raw.lowercased()
+            .replacingOccurrences(of: "\u{00B5}", with: "u") // MICRO SIGN
+            .replacingOccurrences(of: "\u{03BC}", with: "u") // GREEK SMALL LETTER MU
+            .filter { !$0.isWhitespace }
+        if folded.hasPrefix("x") || folded.hasPrefix("*") {
+            folded.removeFirst()
+        }
+        return folded
     }
 
     /// The reference range to put in front of the patient.
