@@ -92,8 +92,9 @@ public final class PrescriptionReaderRoles {
      * True when {@code auth} holds {@code ROLE_PATIENT} and no clinical
      * reader role. A {@code null} authentication is not patient-only: the
      * handler sits behind {@code @PreAuthorize}, so an unauthenticated call
-     * cannot reach it, and the service is also called from clinical paths
-     * (clarification request/resolve) whose answer must not change.
+     * cannot reach it, and the guarded read is also the read-back of
+     * {@code resolve-clarification}, a ROLE_DOCTOR-only path whose answer must
+     * not change.
      */
     public static boolean isPatientOnly(Authentication auth) {
         if (auth == null) {

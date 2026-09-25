@@ -101,7 +101,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
         callerPatient.setId(callerPatientId);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(patientRepository.findAllByUserId(callerUserId)).thenReturn(List.of(callerPatient));
+        when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(true);
     }
 
     @AfterEach
@@ -165,6 +165,11 @@ class PrescriptionServiceImplPatientOwnershipTest {
         assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining(NOT_FOUND_KEY);
+        // The refusal must be "this is not yours", not "the guard never asked":
+        // a guard that stopped consulting the repository and refused everyone
+        // would satisfy the assertion above.
+        org.mockito.Mockito.verify(patientRepository)
+            .existsByIdAndUserId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(callerUserId));
 
         UUID missing = UUID.randomUUID();
         when(prescriptionRepository.findById(missing)).thenReturn(Optional.empty());
@@ -177,7 +182,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @DisplayName("a patient whose account has no patient record reads nothing")
     void unlinkedPatientAccountIsNotFound() {
         authenticateAs("ROLE_PATIENT");
-        when(patientRepository.findAllByUserId(callerUserId)).thenReturn(List.of());
+        when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(false);
         UUID id = prescriptionFor(callerPatient);
 
         assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
@@ -356,10 +361,10 @@ class PrescriptionServiceImplPatientOwnershipTest {
         // tenant already carries duplicate clinical.patients.user_id rows, so the
         // single-result finder would throw there. The owner must still read their
         // own prescription, and still be refused a stranger's.
-        Patient duplicate = new Patient();
-        duplicate.setId(UUID.randomUUID());
-        when(patientRepository.findAllByUserId(callerUserId))
-            .thenReturn(List.of(duplicate, callerPatient));
+        // The membership query answers the same however many rows the account
+        // owns, which is the point: no IncorrectResultSizeDataAccessException,
+        // and no arbitrary pick that could refuse the owner.
+        when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(true);
         authenticateAs("ROLE_PATIENT");
 
         UUID own = prescriptionFor(callerPatient);

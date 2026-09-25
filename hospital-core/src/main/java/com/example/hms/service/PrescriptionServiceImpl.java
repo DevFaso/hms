@@ -199,20 +199,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID subjectPatientId = prescription.getPatient() != null
             ? prescription.getPatient().getId()
             : null;
-        // findAllByUserId, not findByUserId: the single-result form throws
+        // existsByIdAndUserId, not findByUserId: the single-result finder throws
         // IncorrectResultSizeDataAccessException on a tenant that still carries
         // duplicate clinical.patients.user_id rows (V113 falls back to a plain
         // index rather than failing the deploy), which would answer a 500 where
-        // this method promises a 404 or the record. Matching against every row
-        // the account owns also keeps the answer RIGHT on such a tenant: the
-        // owner still reads their prescription instead of being refused by an
-        // arbitrary pick.
+        // this method promises a 404 or the record. The membership form cannot,
+        // it stays right however many rows the account owns, and it decides the
+        // question without materialising a Patient and decrypting its PHI.
         boolean theirs = subjectPatientId != null
             && authUtils.resolveUserId(auth)
-                .map(patientRepository::findAllByUserId)
-                .orElseGet(java.util.List::of)
-                .stream()
-                .anyMatch(p -> subjectPatientId.equals(p.getId()));
+                .map(userId -> patientRepository.existsByIdAndUserId(subjectPatientId, userId))
+                .orElse(false);
         if (!theirs) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }

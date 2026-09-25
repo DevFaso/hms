@@ -23,14 +23,22 @@ public interface PrescriptionService {
     /**
      * The same read WITHOUT the patient-ownership guard, for the read-back a
      * write endpoint returns after it has already authorised and committed the
-     * write ({@code pharmacist-verify}, {@code request-clarification},
-     * {@code resolve-clarification}).
+     * write.
      *
-     * <p>Those endpoints admit roles the read does not — {@code
-     * ROLE_PHARMACY_VERIFIER} above all — so putting them through the guard
-     * would let an actor who also happens to be a patient commit the write and
-     * then be told 404 by the response to it, with a retry refused as already
-     * done. Hospital scope still applies. Do not call this from a read path.
+     * <p>Exactly two callers, and
+     * {@code PrescriptionAfterWriteCallerGuardTest} fails if that changes:
+     * {@code pharmacist-verify} and {@code request-clarification}. Both admit
+     * {@code ROLE_SUPER_ADMIN}, which the by-id read does not, so putting them
+     * through the guard would let an actor who also happens to be a patient
+     * commit the write and then be told 404 by the response to it, with a
+     * retry refused as already done.
+     *
+     * <p>{@code resolve-clarification} is deliberately NOT a caller: it is
+     * {@code ROLE_DOCTOR}-only, so the guard is a no-op for every principal
+     * that can reach it and routing it here would widen the unguarded surface
+     * for nothing. Do not add a caller without that kind of reason, and never
+     * from a read path — hospital scope still applies here, ownership does
+     * not.
      */
     PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale);
 

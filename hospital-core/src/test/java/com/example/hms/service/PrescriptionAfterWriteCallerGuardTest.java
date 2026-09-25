@@ -45,15 +45,15 @@ class PrescriptionAfterWriteCallerGuardTest {
 
     /**
      * The write endpoints that may skip the guard: the two that admit roles the
-     * by-id read does not. {@code /{id}/resolve-clarification} is deliberately
-     * NOT here — it is ROLE_DOCTOR-only, so the guard is a no-op for it and it
-     * stays on the guarded read.
+     * by-id read does not. {@code POST /{id}/resolve-clarification} is
+     * deliberately NOT here — it is ROLE_DOCTOR-only, so the guard is a no-op
+     * for it and it stays on the guarded read.
      */
     private static final Set<String> ALLOWED_WRITE_PATHS = Set.of(
-        "/{id}/pharmacist-verify",
-        "/{id}/request-clarification");
+        "POST /{id}/pharmacist-verify",
+        "POST /{id}/request-clarification");
 
-    /** Any Spring handler mapping, with its path literal when it has one. */
+    /** Any Spring handler mapping, with its verb and its path literal when it has one. */
     private static final Pattern MAPPING = Pattern.compile(
         "@(Get|Post|Put|Patch|Delete|Request)Mapping\\s*(?:\\(\\s*(?:value\\s*=\\s*)?\"([^\"]*)\")?");
 
@@ -102,7 +102,7 @@ class PrescriptionAfterWriteCallerGuardTest {
     void theByIdReadStaysGuarded() throws IOException {
         assertThat(handlerPathsCalling(GUARDED))
             .as("GET /prescriptions/{id} must go through the ownership guard")
-            .contains("/{id}");
+            .contains("GET /{id}");
     }
 
     /**
@@ -117,7 +117,11 @@ class PrescriptionAfterWriteCallerGuardTest {
         Matcher mapping = MAPPING.matcher(source);
         while (mapping.find()) {
             starts.add(mapping.start());
-            paths.add(mapping.group(2) == null ? "" : mapping.group(2));
+            // Keyed by verb as well as path: GET, PUT and DELETE all map
+            // "/{id}" here, and collapsing them would let one handler's call
+            // satisfy an assertion about another.
+            paths.add(mapping.group(1).toUpperCase(java.util.Locale.ROOT)
+                + " " + (mapping.group(2) == null ? "" : mapping.group(2)));
         }
         assertThat(starts).as("the controller must still declare handlers").isNotEmpty();
 
@@ -128,10 +132,14 @@ class PrescriptionAfterWriteCallerGuardTest {
                 calling.add(paths.get(i));
             }
         }
-        // Anything before the first mapping is field and constructor territory;
-        // a call there would be charged to no handler at all, so say so loudly.
-        assertThat(source.substring(0, starts.get(0)))
-            .as("%s must not be called outside a handler", call)
+        // The first match is the class-level @RequestMapping, so the region
+        // before it is imports and class javadoc; everything from there to the
+        // first method mapping is field and constructor territory. A call in
+        // either belongs to no handler, and test 1's exact-equality check would
+        // report it as a phantom path rather than saying what it is.
+        int firstHandler = starts.size() > 1 ? starts.get(1) : source.length();
+        assertThat(source.substring(0, firstHandler))
+            .as("%s must not be called from a field initialiser or the constructor", call)
             .doesNotContain(call + "(");
         return calling;
     }
