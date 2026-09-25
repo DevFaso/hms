@@ -3151,15 +3151,24 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     `getLabResults` then skips `recordReach`, which is guarded on a non-null
     hospital. Legitimate on the patient-portal path (it is the patient's own
     data); a cross-tenant unaudited read on the staff path. #731 stopped the
-    chart from calling it that way, so the portal is no longer a caller, but
-    the endpoint is unchanged and the same token reaches it by curl or from
-    the mobile apps. Owned by `fix/patient-lab-read-requires-scope`.
-  - `DispenseServiceImpl.listByPrescription` and
-    `StockOutRoutingServiceImpl.listByPrescription` dereference
-    `requireActiveHospitalId()`, which is null for a super-admin in global
-    view, so both answer 500. A 500 is not a policy: either the read is
-    unscoped for that caller or they must pick a hospital first, and nothing
-    has decided which. Owned by `fix/pharmacy-queue-cue-and-null-scope`.
+    the chart from calling it that way, so the portal is no longer a caller, but
+    the endpoint is unchanged. The exposure is a STAFF token with no resolvable
+    hospital context — not the patient apps, which hold ROLE_PATIENT and go
+    through `/me/patient/lab-results`, a path that endpoint's `@PreAuthorize`
+    excludes. Owned by `fix/patient-lab-read-requires-scope`.
+  - Three reads dereference `requireActiveHospitalId()`, which is null for a
+    super-admin in global view, so all three answer 500:
+    `DispenseServiceImpl.listByPrescription`,
+    `StockOutRoutingServiceImpl.listByPrescription`, and
+    `StockOutRoutingServiceImpl.listByPatient` via
+    `enforceDecisionHospitalScope` — the last behind
+    `GET /stock-out-routing/decisions/patient/{id}`, which permits SUPER_ADMIN.
+    A 500 is not a policy, and the answer is already settled elsewhere in the
+    same class: `DispenseServiceImpl.enforceHospitalScope` treats a null
+    hospital as an unscoped read for `listByPatient` and `listByPharmacy`. So
+    this is three call sites out of step with a decision this codebase has
+    already taken, not an open question. Owned by
+    `fix/pharmacy-queue-cue-and-null-scope`.
   - `GET /prescriptions` and `GET /prescriptions/{id}` omit
     ROLE_PHARMACY_VERIFIER, so the role wave 2 gave the ability to RAISE a
     clarification cannot read the prescriber's answer, and has no prescriptions
@@ -3212,11 +3221,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   - `canSeeCritical`, `canAcknowledge` and `canReadBack` in `lab-results.ts`
     still take a role snapshot at construction, the shape #722 and #724 fixed
     for the release and sign controls. Unowned.
-  - `dashboard.ts`'s `acknowledgeResult` deletes rows from the local array with
-    no persistence — there is no acknowledge endpoint — so a physician can
-    click three critical results away and be shown the green "All results
-    reviewed" card, with the rows returning on the next refresh. #731 closes
-    only the variant where the read had failed.
+  - `dashboard.ts`'s `acknowledgeResult` deletes rows from the local array and
+    persists nothing, so a physician can click three critical results away and
+    be shown the green "All results reviewed" card, with the rows returning on
+    the next refresh. #731 closes only the variant where the read had failed.
+    **The endpoint exists** — `POST /lab-results/{id}/acknowledge`
+    (`LabResultController:155`, admitting DOCTOR/NURSE/MIDWIFE and the lab
+    roles) — and `lab.service.ts:619` already wraps it as `acknowledgeResult`.
+    So this is a client defect with a one-line fix, not backend work; an
+    earlier draft of this bullet said there was no endpoint and was wrong.
+    Owned by `fix/portal-lab-chart-scope-and-followups`.
   - The portal's `DispenseResponse` declares six fields `DispenseMapper` never
     sends (`patientName`, `pharmacyName`, `dispensedById`, `dispensedByName`,
     `verifiedById`, `verifiedByName`); the wire carries `dispensedBy` and
