@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.exception.BusinessException;
+
 /**
  * How "the partner never delivered" is carried on a routing decision's
  * {@code reason} column, and how it is read back out.
@@ -143,12 +145,42 @@ public final class PartnerNoShowReason {
         if (authored == null || authored.isBlank()) {
             return authored;
         }
-        String defused = authored.replace(MARKER, "\"" + MARKER + "\"")
-                .replace(LEGACY_PREFIX, "\"" + LEGACY_PREFIX + "\"");
-        // Two characters per occurrence, and the request is validated at the
-        // column's own 1024 — so a full-length reason mentioning a no-show
-        // would overflow the insert and answer the route with a 500.
-        return defused.length() > MAX_LENGTH ? defused.substring(0, MAX_LENGTH) : defused;
+        String defused = authored.replace(MARKER, quoted(MARKER))
+                .replace(LEGACY_PREFIX, quoted(LEGACY_PREFIX));
+        if (defused.length() > MAX_LENGTH) {
+            // Two characters per occurrence, and the request is already
+            // validated at the column's own 1024 — so quoting can push a
+            // full-length reason over it. Truncating here would silently eat
+            // the end of a sentence the pharmacist wrote, with nothing on
+            // screen to say so; the refusal names the remedy instead.
+            throw new BusinessException(
+                    "This routing reason is too long once the reserved phrase in it is quoted. "
+                            + "Shorten it by at least "
+                            + (defused.length() - MAX_LENGTH)
+                            + " characters, or reword it without \"" + LEGACY_PREFIX + "\".");
+        }
+        return defused;
+    }
+
+    /**
+     * What a stored reason should look like on screen when it is NOT a no-show.
+     *
+     * <p>The marker is an implementation detail, and a reason can carry it two
+     * ways: quoted, because {@link #defuseAuthoredReason} neutralised what
+     * somebody typed, or bare, on a row written before any of this existed
+     * whose status does not corroborate it. Neither should reach a prescriber.
+     */
+    public static String forDisplay(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return stored;
+        }
+        return stored.replace(quoted(MARKER), "").replace(quoted(LEGACY_PREFIX), "")
+                .replace(MARKER, "").replace(LEGACY_PREFIX, "")
+                .trim();
+    }
+
+    private static String quoted(String token) {
+        return "\"" + token + "\"";
     }
 
     /** The first index at which {@code token} begins a segment, or -1. */

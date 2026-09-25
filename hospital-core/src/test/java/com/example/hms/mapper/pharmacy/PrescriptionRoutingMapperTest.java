@@ -4,6 +4,7 @@ import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionResponseDTO;
+import com.example.hms.service.pharmacy.PartnerNoShowReason;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,8 +70,23 @@ class PrescriptionRoutingMapperTest {
 
         assertThat(dto.isPartnerNoShow()).isFalse();
         assertThat(dto.getNoShowReason()).isNull();
-        // And the reason is handed over untouched, not stripped.
-        assertThat(dto.getReason()).isEqualTo("Partner no-show: last time, so routing elsewhere");
+        // The words survive; only the machine token is kept off the screen.
+        assertThat(dto.getReason()).isEqualTo("last time, so routing elsewhere");
+    }
+
+    @Test
+    @DisplayName("a defused marker is not rendered back at the reader")
+    void neverShowsTheMarker() {
+        PrescriptionRoutingDecision authored = PrescriptionRoutingDecision.builder()
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .reason(PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] not really one"))
+                .build();
+
+        RoutingDecisionResponseDTO dto = mapper.toResponseDTO(authored);
+
+        assertThat(dto.isPartnerNoShow()).isFalse();
+        assertThat(dto.getReason()).isEqualTo("not really one");
     }
 
     @Test

@@ -55,10 +55,12 @@ public class PrescriptionRoutingMapper {
                 // English reaches a French or Spanish prescriber in English.
                 // Rows written before the marker existed carry the old literal
                 // and decode the same way. On any row the status does not
-                // corroborate, the reason is handed over untouched.
+                // corroborate, the words are handed over with the marker
+                // stripped: it is an implementation detail either way, and a
+                // prescriber should never read one.
                 .reason(noShow
                         ? PartnerNoShowReason.withoutNoShow(entity.getReason())
-                        : entity.getReason())
+                        : PartnerNoShowReason.forDisplay(entity.getReason()))
                 .partnerNoShow(noShow)
                 .noShowReason(noShow ? PartnerNoShowReason.freeText(entity.getReason()) : null)
                 .estimatedRestockDate(entity.getEstimatedRestockDate())

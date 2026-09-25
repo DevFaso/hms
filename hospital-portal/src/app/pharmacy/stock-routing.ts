@@ -46,22 +46,32 @@ export class StockRoutingComponent implements OnInit {
    * worklist, and `catchError` sits INSIDE so a failure ends that attempt
    * rather than the stream.
    */
-  private readonly decisionRequests = new Subject<void>();
+  private readonly decisionRequests = new Subject<boolean>();
 
   constructor() {
     this.decisionRequests
       .pipe(
-        switchMap(() =>
-          this.svc
-            .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
-            .pipe(
-              map((res) => ({ page: res.data, failed: false })),
-              catchError(() => of({ page: null, failed: true })),
-            ),
+        switchMap((load) =>
+          // `false` is a cancel: switchMap drops whatever is in flight and
+          // this emits nothing to act on. Clearing the field or checking a
+          // different prescription has to CANCEL the old read, not merely
+          // outrun it — otherwise the previous order's history lands under
+          // the new id, which is what the reset in checkStock is for.
+          load
+            ? this.svc
+                .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
+                .pipe(
+                  map((res) => ({ page: res.data, failed: false, cancelled: false })),
+                  catchError(() => of({ page: null, failed: true, cancelled: false })),
+                )
+            : of({ page: null, failed: false, cancelled: true }),
         ),
         takeUntilDestroyed(),
       )
-      .subscribe(({ page, failed }) => {
+      .subscribe(({ page, failed, cancelled }) => {
+        if (cancelled) {
+          return;
+        }
         this.decisionsLoading.set(false);
         if (failed || !page) {
           // Never swallowed into an empty table: the history section is absent
@@ -116,9 +126,13 @@ export class StockRoutingComponent implements OnInit {
     this.stockResult.set(null);
     // The history belongs to the PREVIOUS prescription until this one answers.
     // Leaving its rows — or its red panel — on screen attributes one order's
-    // routing to another, which is the worst thing this screen could say.
+    // routing to another, which is the worst thing this screen could say. Any
+    // read still in flight for that previous order is cancelled outright:
+    // clearing the signals is not enough if the old response is yet to land.
+    this.decisionRequests.next(false);
     this.decisions.set([]);
     this.decisionsTotalPages = 0;
+    this.decisionsLoading.set(false);
     this.decisionsError.set(false);
     this.svc.checkStock(this.prescriptionId).subscribe({
       next: (res) => {
@@ -138,14 +152,16 @@ export class StockRoutingComponent implements OnInit {
       // Clear the failure too: leaving it would keep a red "could not be
       // loaded" panel — with a Retry that returns here and does nothing — on
       // screen for a prescription the user has just cleared.
+      this.decisionRequests.next(false);
       this.decisions.set([]);
       this.decisionsTotalPages = 0;
+      this.decisionsLoading.set(false);
       this.decisionsError.set(false);
       return;
     }
     this.decisionsLoading.set(true);
     this.decisionsError.set(false);
-    this.decisionRequests.next();
+    this.decisionRequests.next(true);
   }
 
   // ── Route to partner ──

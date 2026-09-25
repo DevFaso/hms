@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The no-show fact is a code, not a sentence: a sentence composed in English
@@ -121,16 +122,43 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
-    @DisplayName("defusing a full-length reason does not overflow the column")
-    void defusingStaysWithinTheColumn() {
-        // The request is validated at the column's own 1024, and each defused
-        // token grows by two characters — an insert away from a 500.
+    @DisplayName("defusing a full-length reason is refused, not silently shortened")
+    void defusingRefusesRatherThanEatingWords() {
+        // The request is validated at the column's own 1024 and quoting adds
+        // two characters, so this would overflow the insert. Truncating would
+        // drop the end of a sentence the pharmacist wrote with nothing on
+        // screen to say so.
         String full = "Partner no-show: " + "x".repeat(1024 - "Partner no-show: ".length());
-
         assertThat(full).hasSize(1024);
-        assertThat(PartnerNoShowReason.defuseAuthoredReason(full)).hasSize(1024);
-        assertThat(PartnerNoShowReason.isNoShow(
-                PartnerNoShowReason.defuseAuthoredReason(full))).isFalse();
+
+        assertThatThrownBy(() -> PartnerNoShowReason.defuseAuthoredReason(full))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("Shorten it by at least 2 characters");
+    }
+
+    @Test
+    @DisplayName("a reason that still fits once quoted is defused, not refused")
+    void defusingAcceptsWhatFits() {
+        String fits = "Partner no-show: nobody at the counter";
+
+        String defused = PartnerNoShowReason.defuseAuthoredReason(fits);
+
+        assertThat(defused).hasSizeLessThanOrEqualTo(1024);
+        assertThat(PartnerNoShowReason.isNoShow(defused)).isFalse();
+    }
+
+    @Test
+    @DisplayName("the marker never reaches a reader, quoted or bare")
+    void forDisplayStripsTheToken() {
+        assertThat(PartnerNoShowReason.forDisplay(
+                PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] not really")))
+                .isEqualTo("not really");
+        // A row written before any of this, whose status does not corroborate.
+        assertThat(PartnerNoShowReason.forDisplay("Partner no-show: noted on the call"))
+                .isEqualTo("noted on the call");
+        assertThat(PartnerNoShowReason.forDisplay("Nearest partner has stock"))
+                .isEqualTo("Nearest partner has stock");
+        assertThat(PartnerNoShowReason.forDisplay(null)).isNull();
     }
 
     @Test

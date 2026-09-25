@@ -288,6 +288,52 @@ describe('StockRoutingComponent', () => {
     expect(component.decisions()).toEqual([]);
   });
 
+  it("cancels the previous order's history read when a new prescription is checked", () => {
+    // Clearing the signals is not enough: if rx-1's read is still out when
+    // rx-2 is checked, its rows would land under rx-2's id.
+    const slow = new Subject<any>();
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(slow);
+    component.prescriptionId = 'rx-1';
+    component.loadDecisions();
+
+    // rx-2's own stock check fails, so it never starts a history read of its
+    // own — the only thing that could clear rx-1's is the cancel.
+    pharmacySvc.checkStock.and.returnValue(throwError(() => ({ status: 500 })));
+    component.prescriptionId = 'rx-2';
+    component.checkStock();
+    fixture.detectChanges();
+
+    // rx-1 answers late. It has been cancelled, so nothing of it is rendered.
+    slow.next(decisionsResponse);
+    slow.complete();
+
+    expect(component.decisions()).toEqual([]);
+    expect(component.decisionsError()).toBeFalse();
+    expect(component.decisionsLoading()).toBeFalse();
+  });
+
+  it('says the history is loading rather than showing no history at all', () => {
+    const slow = new Subject<any>();
+    pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(slow);
+    component.prescriptionId = 'rx-1';
+    component.loadDecisions();
+    fixture.detectChanges();
+
+    // Rows are empty and the error is reset while the request is out; without
+    // a loading branch the card vanishes and the order reads as never routed.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-history-loading"]'),
+    ).not.toBeNull();
+
+    slow.next(decisionsResponse);
+    slow.complete();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-history-loading"]'),
+    ).toBeNull();
+  });
+
   it('should return expected badge classes', () => {
     expect(component.statusBadgeClass('PENDING')).toBe('badge-warning');
     expect(component.statusBadgeClass('COMPLETED')).toBe('badge-success');

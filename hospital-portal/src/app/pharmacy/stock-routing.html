@@ -217,6 +217,17 @@
         </button>
       </div>
     </div>
+  } @else if (decisionsLoading()) {
+    <!-- Without this the card vanishes while a Retry is in flight — the rows
+         are already cleared and the error is reset — and an order whose
+         history is merely loading reads as one that was never routed. -->
+    <div class="form-card form-card-accent">
+      <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
+      <p class="muted" role="status" data-testid="routing-history-loading">
+        <span class="spinner" aria-hidden="true"></span>
+        {{ 'COMMON.LOADING' | translate }}
+      </p>
+    </div>
   } @else if (decisions().length > 0) {
     <div class="form-card form-card-accent">
       <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
