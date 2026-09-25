@@ -50,6 +50,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private static final String STATUS_CRITICAL = "CRITICAL";
     private static final String STATUS_PENDING = "PENDING";
 
+    /**
+     * Resolvable message key, not a sentence, and deliberately the same one
+     * {@code PatientChartAccess} throws — a refused staff read must be
+     * indistinguishable from "no such patient".
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+
     private final LabResultRepository labResultRepository;
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
@@ -70,14 +77,26 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     }
 
     /**
-     * @param redactUnreleased B3 — true on the patient-facing path: an
+     * @param portalView true on the patient-facing path — the patient (or an
+     *        authorized proxy) reading their own results, resolved from the
+     *        authenticated principal by {@code PatientPortalServiceImpl}. It
+     *        governs two things.
+     *
+     *        <p>B3 — redaction: an
      *        unreleased row keeps its identity (test, order, hospital) and
      *        {@code PENDING} but loses the value, unit, reference range,
      *        notes and performer. A preliminary value is the lab's until
      *        it is released; the patient learns only that one is coming.
+     *
+     *        <p>And scope: a {@code null} {@code hospitalId} is legitimate
+     *        ONLY here. The portal has no hospital scope to offer and the
+     *        patient owns every row, so the patient-only query is the right
+     *        one. On the staff path a null scope means the scope did not
+     *        resolve, and {@link #fetchRows} refuses rather than widening —
+     *        see the comment there.
      */
     private List<PatientLabResultResponseDTO> getLabResults(UUID patientId, UUID hospitalId, int limit,
-                                                            boolean redactUnreleased) {
+                                                            boolean portalView) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
         // See PatientChartAccess — cross-hospital safe, and adds the hospital
@@ -94,8 +113,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // rows to return one, and a fixed +1 still came up short whenever a
         // page held more than one pair.
 
-        List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit);
-        List<LabResult> visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+        List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit, portalView);
+        List<LabResult> visible = resolvePairs(results, portalView, effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
         // identical query, and on the unscoped path that means loading the
@@ -103,8 +122,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         if (visible.size() < effectiveLimit
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
-            results = fetchRows(patient, hospitalId, MAX_LIMIT);
-            visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+            results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
+            visible = resolvePairs(results, portalView, effectiveLimit);
         }
 
         if (hospitalId != null) {
@@ -118,15 +137,20 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         }
 
         return visible.stream()
-            .map(result -> toResponse(result, redactUnreleased))
+            .map(result -> toResponse(result, portalView))
             .toList();
     }
 
     /**
      * The newest {@code window} rows for this patient, within the readable
      * hospitals when a hospital scope is in play.
+     *
+     * <p>With no hospital scope there are exactly two cases and they are not
+     * the same: the portal, where the patient owns every row and the
+     * patient-only query is correct, and a staff read whose scope failed to
+     * resolve, which is refused.
      */
-    private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window) {
+    private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
         Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
         List<LabResult> results;
         if (hospitalId != null) {
@@ -139,8 +163,50 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
             results = labResultRepository
                 .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
+        } else if (!portalView) {
+            // A staff read with no hospital scope. This used to fall through to
+            // the patient-only query below, which returns EVERY hospital's rows
+            // for the patient: RecordAccessPolicy.readableHospitalIds never ran,
+            // and getLabResults' cross-hospital disclosure row is guarded on the
+            // same null, so the widened read was not even accounted.
+            //
+            // PatientChartAccess.require already denies a null scope for anyone
+            // but a super-admin, so what reached here was a super-admin in
+            // global view — including one acting as an inherited clinical role,
+            // since RoleExpansion grants that list before any @PreAuthorize
+            // runs. There is no scope for such a caller to be measured against,
+            // so widening is the only thing the old code could do. It refuses
+            // instead: pick a hospital (the scope picker) and the read is
+            // scoped, readable-checked and disclosed like every other.
+            //
+            // The chart's Labs tab used to send NO hospitalId in global view,
+            // which would have turned this refusal into an error card with a
+            // Retry that re-issued the same request forever. #731 closed that
+            // first: the Labs section now declines to read without a scope and
+            // renders the scope hint, so the two changes meet correctly and a
+            // super-admin is asked to pick a hospital rather than shown a
+            // failure. If a future caller reintroduces an unscoped read, it
+            // gets a 404 here — deliberately, because an unaccounted
+            // cross-tenant read is not an acceptable way to keep a tab
+            // populated.
+            //
+            // 404, not 403, and the same key PatientChartAccess throws: a
+            // caller who could not establish scope learns nothing about whether
+            // the patient or the rows exist.
+            //
+            // Logged, though. The response is deliberately opaque, which makes
+            // a scope-resolution failure indistinguishable from a genuine
+            // missing patient in the logs too — and those are very different
+            // operational events. The patient id only: it is already the
+            // subject of this request, and nothing about the caller's own
+            // tenancy belongs in a line that a 404 spike will be triaged from.
+            log.warn("Staff lab-result read refused: no hospital scope resolved for patient {}",
+                patient.getId());
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
         } else {
-            // Fallback: patient-only query (no hospital scope) — common for patient portal
+            // Patient portal only: the caller IS the patient (or a proxy the
+            // portal already authorized), the portal has no hospital scope to
+            // offer, and every row belongs to them. Patient-only query.
             results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
                 .sorted((a, b) -> {
                     if (a.getResultDate() == null && b.getResultDate() == null) return 0;
