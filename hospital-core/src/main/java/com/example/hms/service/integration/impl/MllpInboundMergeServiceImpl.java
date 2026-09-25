@@ -123,8 +123,16 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
         // with any candidate identifier and read off whether that candidate
         // exists in another hospital. Partial ownership is not partial
         // permission, so it is not a partial answer either.
-        if (!isRegisteredHere(survivingPatientId, hospitalId)
-                || !isRegisteredHere(retiringPatientId, hospitalId)) {
+        // Both lookups, always, before the branch. `||` would short-circuit:
+        // one query when the survivor is foreign, two when the survivor is
+        // local and the retiree is not - and the partial-ownership case above
+        // is precisely the one a sender probes, so leaving it a round-trip
+        // cheaper hands back in latency what the identical ACK denies. The
+        // general timing residual on this path is documented in
+        // MllpInboundOutcome; this part of it is free to close.
+        boolean survivorIsOurs = isRegisteredHere(survivingPatientId, hospitalId);
+        boolean retireeIsOurs = isRegisteredHere(retiringPatientId, hospitalId);
+        if (!survivorIsOurs || !retireeIsOurs) {
             // Same outcome as the unknown identifier above — same ACK code,
             // same ACK text. The reason survives on the integration message
             // row, which the sender cannot read. Nor, today, can the
