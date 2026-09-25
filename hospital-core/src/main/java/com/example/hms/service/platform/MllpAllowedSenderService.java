@@ -16,6 +16,14 @@ public interface MllpAllowedSenderService {
      * if no active allowlist entry matches — the dispatcher must reject
      * such messages with AR.
      */
+    /**
+     * The receiving hospital for an allowlisted {@code (MSH-3, MSH-4)} pair.
+     *
+     * <p>The returned hospital, and its organization, are initialised before
+     * the lookup's transaction closes, so an MLLP worker thread can read both
+     * identifiers off it. Anything else on it is still lazy and still
+     * detached.
+     */
     Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility);
 
     /**

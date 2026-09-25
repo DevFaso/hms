@@ -51,19 +51,21 @@ public final class MllpRecordingContext {
     /**
      * The receiving hospital's organization, or null when it cannot be read.
      *
-     * <p>Call this only where a null answer is acceptable — from inside the
-     * recorder's own try-catch, never on a path a legitimate message takes.
-     * {@code Hospital.organization} is LAZY and {@code Organization} takes its
-     * id from a field-access {@code @Id}, so reading it initialises the proxy.
-     * The hospital arrives from
-     * {@code MllpAllowedSenderService.resolveHospital}, whose read-only
-     * transaction has already closed, and an inbound service's own transaction
-     * is a different session that does not re-attach it —
-     * {@code MllpAllowedSenderService} documents the same trap for
-     * {@code Hospital.getId()}. Evaluated on the accepted path, a
-     * {@code LazyInitializationException} here would abort a message that was
-     * perfectly legitimate. Here the worst case is a DLQ row with a null
-     * organization, which the column already allows.
+     * <p>{@code Hospital.organization} is LAZY, {@code Organization} takes its
+     * id from a field-access {@code @Id}, and the hospital reaches an MLLP
+     * worker thread detached from a read-only transaction that has already
+     * closed — so reading this would throw, were it not for
+     * {@code MllpAllowedSenderServiceImpl.resolveHospital} initialising the
+     * organization before handing the hospital out. That is where the problem
+     * is solved; this method just reads the result.
+     *
+     * <p>The catch is therefore not the normal path and must not become one.
+     * It exists because the alternative is worse: on the ADT and A40 paths
+     * this is called while building the row that is the only record of why a
+     * message was refused, and losing that row to an initialisation bug
+     * upstream would take the reason with it. A null organization is a
+     * degraded row; no row is no evidence. The WARN is how you find out the
+     * initialisation has regressed.
      */
     public static UUID organizationId(Hospital hospital) {
         if (hospital == null) {

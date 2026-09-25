@@ -72,8 +72,14 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             log.warn("MLLP ADT rejected — PID-3 unknown to EMPI (sender={}/{} hospital={} event={})",
                 sendingApplication, sendingFacility,
                 receivingHospital.getId(), parsed.triggerEvent());
+            // RECORDED, but not as a dead letter. A partner feed naming
+            // patients we have not been told about is a normal condition on
+            // this path — ADT never auto-provisions — and one actionable
+            // FAILED row per message would bury the rejections that do need
+            // somebody. The reason is still on the row, and still absent from
+            // the ACK, so this changes nothing a sender can observe.
             recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "PID-3 not found");
+                messageControlId, "PID-3 not found", IntegrationMessageStatus.RECEIVED);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -90,8 +96,12 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             // inconsistency, treat as not-found rather than crashing.
             log.warn("MLLP ADT — PID-3 resolved to patientId={} but no Patient row exists",
                 patientId);
+            // FAILED, unlike the plain unknown MRN above: an alias with no
+            // patient behind it is our own data inconsistency, and somebody
+            // has to look at it.
             recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "EMPI alias without a patient row");
+                messageControlId, "EMPI alias without a patient row",
+                IntegrationMessageStatus.FAILED);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
         Patient patient = patientOpt.get();
@@ -117,7 +127,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 patient.getId(), receivingHospital.getId(),
                 sendingApplication, sendingFacility);
             recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "cross-tenant rejection");
+                messageControlId, "cross-tenant rejection", IntegrationMessageStatus.FAILED);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -174,12 +184,21 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
      * replayable, which is correct: a cross-tenant message must not be
      * replayed, it must be reconfigured.
      *
+     * <p>{@code status} is the caller's judgement about whether an operator
+     * has to act, and it is the only thing separating a dead letter from a
+     * note: {@code FAILED} is what
+     * {@code IntegrationMessageEventRepository.countUnresolvedDeadLetters}
+     * counts and what the super-admin badge shows, {@code RECEIVED} records
+     * the same reason without demanding attention. Nothing about the choice
+     * reaches the ACK, so it cannot be read by the sender.
+     *
      * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
      * own exceptions, so the row survives this transaction rolling back.
      */
     private void recordReject(ParsedAdtMessage parsed, Hospital receivingHospital,
                               String sendingApplication, String sendingFacility,
-                              String messageControlId, String reason) {
+                              String messageControlId, String reason,
+                              IntegrationMessageStatus status) {
         try {
             messageRecorder.recordMessage(
                 MllpRecordingContext.integrationId(sendingApplication, sendingFacility),
@@ -187,7 +206,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 IntegrationMessageDirection.INBOUND,
                 messageTypeOf(parsed),
                 null,
-                IntegrationMessageStatus.FAILED,
+                status,
                 withControlId(reason, messageControlId));
         } catch (RuntimeException ex) {
             log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",

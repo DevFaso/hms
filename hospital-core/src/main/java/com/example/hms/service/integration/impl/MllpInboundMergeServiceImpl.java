@@ -88,8 +88,13 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // identifiers stay out of it altogether: an MRN is PHI.
             log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility, hospitalId);
+            // RECORDED, but not as a dead letter — see the same decision on
+            // the ADT path. Two systems disagreeing about who exists is a
+            // normal condition; a FAILED row per message would bury the
+            // refusals that need somebody. Nothing about this reaches the ACK.
             recordReject(receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "identifier not found");
+                messageControlId, "identifier not found",
+                IntegrationMessageStatus.RECEIVED);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -131,7 +136,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 + "registered at hospital={} (sender={}/{})",
                 hospitalId, sendingApplication, sendingFacility);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "cross-tenant rejection");
+                messageControlId, "cross-tenant rejection",
+                IntegrationMessageStatus.FAILED);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -180,12 +186,18 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
      * small row, no PID. MSH-10 is the sender's own message id, not patient
      * data, and is what correlates the refusal with the sender's queue.
      *
+     * <p>{@code status} decides dead letter or note: {@code FAILED} is what
+     * the super-admin DLQ badge counts, {@code RECEIVED} records the same
+     * reason without demanding attention. The sender cannot observe either
+     * way — the ACK is the same.
+     *
      * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
      * own exceptions, so the row survives this transaction rolling back.
      */
     private void recordReject(Hospital receivingHospital,
                               String sendingApplication, String sendingFacility,
-                              String messageControlId, String reason) {
+                              String messageControlId, String reason,
+                              IntegrationMessageStatus status) {
         try {
             messageRecorder.recordMessage(
                 MllpRecordingContext.integrationId(sendingApplication, sendingFacility),
@@ -193,7 +205,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 IntegrationMessageDirection.INBOUND,
                 MESSAGE_TYPE,
                 null,
-                IntegrationMessageStatus.FAILED,
+                status,
                 StringUtils.hasText(messageControlId)
                     ? reason + " (MSH-10 " + messageControlId.trim() + ")" : reason);
         } catch (RuntimeException ex) {

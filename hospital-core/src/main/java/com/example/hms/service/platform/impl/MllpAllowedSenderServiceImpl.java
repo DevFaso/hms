@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -34,7 +35,37 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
     @Override
     @Transactional(readOnly = true)
     public Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility) {
-        return lookup(sendingApplication, sendingFacility).map(MllpAllowedSender::getHospital);
+        return lookup(sendingApplication, sendingFacility)
+            .map(MllpAllowedSender::getHospital)
+            .map(MllpAllowedSenderServiceImpl::initialiseForUseAfterThisTransaction);
+    }
+
+    /**
+     * Everything an MLLP caller reads off this hospital, read here, while
+     * there is still a session to read it in.
+     *
+     * <p>{@code MllpAllowedSender.hospital} is LAZY and so is
+     * {@code Hospital.organization}, both entities take their identifier from
+     * a field-access {@code @Id} in {@code BaseEntity}, and
+     * {@code open-in-view} is false. So {@code getId()} on either one is a
+     * proxy initialisation, and every caller of this method runs on an MLLP
+     * worker thread after this read-only transaction has closed — a different
+     * session, which does not re-attach a detached proxy.
+     * {@link #resolveHospitalId} exists because of exactly that, and the
+     * inbound services need the organization for the same reason: it is what
+     * an {@code integration_message_event} row is filed under, so without
+     * this every rejection row would land with a null organization and the
+     * per-organization DLQ view would never show one.
+     *
+     * <p>Initialising is cheap — one extra select on a lookup that is already
+     * cached per message — and it removes the trap rather than documenting it.
+     * {@code Hibernate.initialize(null)} is a no-op, so a hospital with no
+     * organization needs no special case.
+     */
+    private static Hospital initialiseForUseAfterThisTransaction(Hospital hospital) {
+        Hibernate.initialize(hospital);
+        Hibernate.initialize(hospital.getOrganization());
+        return hospital;
     }
 
     @Override

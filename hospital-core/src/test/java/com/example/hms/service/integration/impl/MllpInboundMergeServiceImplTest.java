@@ -215,7 +215,11 @@ class MllpInboundMergeServiceImplTest {
             eq("MLLP:LIS/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
-            eq(IntegrationMessageStatus.FAILED),
+            // RECEIVED, not FAILED: two systems disagreeing about who exists
+            // is a normal condition, and it must not drive the DLQ badge. The
+            // cross-tenant refusal above stays FAILED, and the ACK is the same
+            // for both.
+            eq(IntegrationMessageStatus.RECEIVED),
             eq("identifier not found (MSH-10 MSG-A40-1)"));
     }
 

@@ -203,8 +203,38 @@ class MllpInboundAdtServiceImplTest {
             eq("MLLP:REG/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(),
-            eq(IntegrationMessageStatus.FAILED),
+            // RECEIVED, not FAILED. A partner feed naming patients we have
+            // not been told about is normal, and one dead letter per message
+            // would bury the refusals that need somebody. The reason is still
+            // on the row, and still not in the ACK.
+            eq(IntegrationMessageStatus.RECEIVED),
             eq("PID-3 not found (MSH-10 MSG-1)"));
+    }
+
+    @Test
+    @DisplayName("Only the cross-tenant refusal is a dead letter; the benign unknown MRN is not")
+    void onlyTheCrossTenantRefusalCountsAsADeadLetter() {
+        // The two rows differ in exactly one field, and it is the one that
+        // drives countUnresolvedDeadLetters and the super-admin badge. The
+        // ACK is identical for both, so the difference is invisible to the
+        // sender and visible only to an operator.
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
+            .thenReturn(Optional.empty());
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.empty());
+
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M1");
+        service.processAdt(adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M2");
+
+        ArgumentCaptor<IntegrationMessageStatus> statuses =
+            ArgumentCaptor.forClass(IntegrationMessageStatus.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+            any(), any(), any(), any(), any(), statuses.capture(), any());
+        assertThat(statuses.getAllValues())
+            .containsExactly(IntegrationMessageStatus.RECEIVED, IntegrationMessageStatus.FAILED);
     }
 
     @Test

@@ -1,0 +1,86 @@
+package com.example.hms.service.integration.message;
+
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * What an {@code integration_message_event} row gets filed under.
+ *
+ * <p>Both of these are small, and both have already been got wrong once: the
+ * truncation was missing from two of the three copies this class replaced, and
+ * an over-long {@code integration_id} does not fail loudly — the insert throws
+ * inside {@link IntegrationMessageRecorder}, which swallows it by design, and
+ * the row simply never appears. On the ADT and A40 paths that row is the only
+ * record of why a message was refused.
+ */
+class MllpRecordingContextTest {
+
+    @Test
+    @DisplayName("The id is MLLP:<MSH-3>/<MSH-4>, trimmed, with a placeholder for a blank side")
+    void theIdIsTheSenderPair() {
+        assertThat(MllpRecordingContext.integrationId("MINDRAY", "LAB-A"))
+            .isEqualTo("MLLP:MINDRAY/LAB-A");
+        assertThat(MllpRecordingContext.integrationId("  MINDRAY  ", "  LAB-A  "))
+            .isEqualTo("MLLP:MINDRAY/LAB-A");
+        assertThat(MllpRecordingContext.integrationId(null, "  "))
+            .isEqualTo("MLLP:?/?");
+    }
+
+    @Test
+    @DisplayName("An HL7-legal but over-long sender pair is truncated to the column width")
+    void anOverLongSenderPairIsTruncated() {
+        // HL7 v2.5 permits 180 characters in each of MSH-3 and MSH-4;
+        // integration_message_event.integration_id is VARCHAR(120) NOT NULL.
+        // Without the cap the insert fails, the recorder swallows it, and the
+        // DLQ entry for the very sender whose configuration is wrong is the
+        // one that goes missing.
+        String longApp = "A".repeat(180);
+        String longFacility = "F".repeat(180);
+
+        String id = MllpRecordingContext.integrationId(longApp, longFacility);
+
+        assertThat(id).hasSize(120).startsWith("MLLP:AAA");
+    }
+
+    @Test
+    @DisplayName("The organization is the hospital's, and null when it has none")
+    void theOrganizationIsTheHospitals() {
+        UUID organizationId = UUID.randomUUID();
+        Organization organization = new Organization();
+        organization.setId(organizationId);
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        hospital.setOrganization(organization);
+
+        assertThat(MllpRecordingContext.organizationId(hospital)).isEqualTo(organizationId);
+
+        hospital.setOrganization(null);
+        assertThat(MllpRecordingContext.organizationId(hospital)).isNull();
+        assertThat(MllpRecordingContext.organizationId(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("A hospital that cannot be read degrades the row instead of losing it")
+    void anUnreadableOrganizationDegradesTheRowRatherThanLosingIt() {
+        // MllpAllowedSenderServiceImpl.resolveHospital initialises the
+        // organization inside its transaction, so this should never happen.
+        // If it regresses, the rejection row must still be written: a null
+        // organization is a degraded row, no row is no evidence of why a
+        // message was refused.
+        Hospital unreadable = new Hospital() {
+            @Override
+            public Organization getOrganization() {
+                throw new org.hibernate.LazyInitializationException("detached proxy");
+            }
+        };
+        unreadable.setId(UUID.randomUUID());
+
+        assertThat(MllpRecordingContext.organizationId(unreadable)).isNull();
+    }
+}
