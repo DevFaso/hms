@@ -2628,6 +2628,38 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void cosignInTheUnscopedViewCredentialsAgainstThePrescriptionsHospital() {
+        // The positive half, and the only test that can tell the two candidate
+        // anchors apart: no active scope, but an assignment at the ORDER's
+        // hospital, and the co-signature goes through. An implementation that
+        // anchored on the acting scope would ask isDoctor(user, null) here and
+        // refuse.
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff cosigner = Staff.builder().build();
+        cosigner.setId(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        when(roleValidator.isDoctor(cosignerUserId, rx.getHospital().getId())).thenReturn(true);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+            .thenReturn(Optional.of(cosigner));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.cosignPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getCosignedBy()).isSameAs(cosigner);
+        assertThat(rx.getCosignedAt()).isNotNull();
+        verify(roleValidator, never()).isDoctor(cosignerUserId, null);
+    }
+
+    @Test
     void cosignInTheUnscopedViewStillAnchorsOnThePrescriptionsHospital() {
         // No active hospital scope: the prescription's own hospital is the
         // only defined anchor, and the assignment there still has to hold.
