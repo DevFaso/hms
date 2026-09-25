@@ -11,8 +11,9 @@ import java.util.Set;
  *
  * <p>{@code GET /prescriptions/{id}} admits four clinical roles plus
  * {@code ROLE_PATIENT}, so on that endpoint "holds ROLE_PATIENT and no
- * clinical reader role" is the same thing as "a pure patient principal". Two
- * decisions hang off it and they must not drift apart:
+ * clinical reader role" is the same thing as "a pure patient principal" —
+ * which is exactly why the set below must mirror the annotation and not
+ * exceed it. Two decisions hang off it and they must not drift apart:
  * <ol>
  *   <li>the patient's copy omits the pharmacist-to-prescriber clarification
  *       exchange ({@code PrescriptionController.getById}), and</li>
@@ -21,9 +22,12 @@ import java.util.Set;
  * </ol>
  *
  * <p>A clinician who happens to be a patient at the hospital is not
- * patient-only — the clinical role wins, as it already did for the redaction
- * — and neither is a super-admin. Which roles count, and why the set does not
- * simply mirror the annotation, is on the constant below.
+ * patient-only: the clinical role wins, as it already did for the redaction.
+ * A super-admin is not patient-only either on the password path, where
+ * {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS} grants
+ * {@code ROLE_DOCTOR} alongside {@code ROLE_PATIENT}. Which roles count, and
+ * why the set mirrors the annotation exactly rather than reaching wider, is on
+ * the constant below.
  *
  * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
  * which answers a similar-sounding question with a different staff set: it
@@ -35,27 +39,31 @@ public final class PrescriptionReaderRoles {
 
     /**
      * The roles that read a prescription as a clinician rather than as its
-     * subject.
+     * subject: exactly the non-patient roles {@code GET /prescriptions/{id}}
+     * admits, no more.
      *
-     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named alongside
-     * {@code ROLE_DOCTOR}, and {@code ROLE_SUPER_ADMIN} outright, because
-     * {@link com.example.hms.security.RoleExpansion} runs on the password/JWT
-     * path but {@code KeycloakJwtAuthenticationConverter} maps realm roles
-     * straight to authorities. Without them a surgeon or a super-admin who is
-     * also a patient at the hospital would read a colleague’s prescription
-     * over one login and get a 404 over the other.
+     * <p>Mirroring the annotation is the whole rule, and
+     * {@code PrescriptionReaderRolesMatchTheAnnotationTest} fails if the two
+     * ever disagree. Anything wider re-opens the door this guard closed: a
+     * principal holding a role the annotation does NOT admit reaches the
+     * handler only through {@code ROLE_PATIENT}, and exempting it would let it
+     * read a stranger’s prescription — and see the clarification exchange —
+     * on the strength of the patient role that let it in. That is the mistake
+     * the {@code ROLE_PHARMACY_VERIFIER} exemption made; the write endpoints
+     * that admit roles this read does not get their read-back from
+     * {@code PrescriptionService.getPrescriptionAfterWrite} instead.
      *
-     * <p>{@code ROLE_PHARMACY_VERIFIER} is deliberately NOT here. It is not a
-     * reader of {@code GET /prescriptions/{id}} — the annotation does not
-     * admit it — and exempting it would let a pharmacy verifier who is also
-     * a patient read a stranger’s prescription through the patient door. The
-     * write endpoints that do admit it return their read-back through
-     * {@code PrescriptionService.getPrescriptionAfterWrite}, which skips the
-     * ownership guard because the write was already authorised.
+     * <p>A consequence worth knowing, and NOT fixed here: on the OIDC path
+     * {@code KeycloakJwtAuthenticationConverter} maps realm roles straight to
+     * authorities, so {@link com.example.hms.security.RoleExpansion}’s
+     * doctor-equivalence never runs. A surgeon or physician who is also a
+     * patient therefore reads a colleague’s prescription over a password login
+     * (expanded to {@code ROLE_DOCTOR}) and is refused it over SSO. That is a
+     * refusal, not a grant, so it fails in the safe direction; the fix belongs
+     * on the OIDC path or in the annotation, not in an exemption here.
      */
     public static final Set<String> CLINICAL_READER_ROLES = Set.of(
-        "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
-        "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST", "ROLE_SUPER_ADMIN");
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
 
     private PrescriptionReaderRoles() {
     }

@@ -206,8 +206,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @Test
     @DisplayName("every clinical reader still reads any prescription at their hospital")
     void clinicalRolesAreUnaffected() {
-        for (String role : List.of("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
-                "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
+        for (String role : List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST")) {
             SecurityContextHolder.clearContext();
             authenticateAs(role);
             UUID id = prescriptionFor(otherPatient());
@@ -304,21 +303,46 @@ class PrescriptionServiceImplPatientOwnershipTest {
     }
 
     @Test
-    @DisplayName("a surgeon who is also a patient is a clinician on the OIDC path too")
-    void surgeonWhoIsAlsoAPatientIsUnaffectedOverOidc() {
-        authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
+    @DisplayName("a surgeon who is also a patient reads colleagues over a password login")
+    void surgeonWhoIsAlsoAPatientIsUnaffectedOnThePasswordPath() {
+        // RoleExpansion collapses SURGEON to DOCTOR on this path, so the
+        // principal that actually reaches the handler is a doctor.
+        authenticateAs(com.example.hms.security.RoleExpansion
+            .expand(List.of("ROLE_SURGEON", "ROLE_PATIENT")).toArray(new String[0]));
         UUID id = prescriptionFor(otherPatient());
 
         assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
     }
 
     @Test
-    @DisplayName("a super-admin is unaffected on the OIDC path, where RoleExpansion does not run")
-    void unexpandedSuperAdminIsUnaffected() {
+    @DisplayName("and is refused them over SSO, where the expansion never runs")
+    void surgeonOverOidcIsRefusedBecauseTheExpansionDoesNotRunThere() {
+        // Documented, not desired: KeycloakJwtAuthenticationConverter maps realm
+        // roles straight through, so this principal reaches the handler only via
+        // ROLE_PATIENT and the annotation never saw a clinician. A refusal is the
+        // safe direction; widening the exemption to roles the annotation does not
+        // admit is what round 2 removed. The fix belongs on the OIDC path.
+        authenticateViaOidcAs("ROLE_SURGEON", "ROLE_PATIENT");
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
+    }
+
+    @Test
+    @DisplayName("an unexpanded super-admin is refused too, for the same reason")
+    void unexpandedSuperAdminIsRefused() {
+        // Same OIDC gap as the surgeon above, and the same answer: this read does
+        // not admit ROLE_SUPER_ADMIN, so the principal is here on ROLE_PATIENT
+        // alone. The super-admin's own surface is GET /prescriptions, which does
+        // admit the role.
         authenticateViaOidcAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT");
         UUID id = prescriptionFor(otherPatient());
 
-        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
+        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
     }
 
     @Test

@@ -63,9 +63,18 @@ class PrescriptionAfterWriteCallerGuardTest {
                 if (!source.contains(UNGUARDED + "(")) {
                     continue;
                 }
-                // The declaration and the implementation are not calls.
+                // The declaration and the @Override are not calls — but the
+                // file is not skipped wholesale: a second mention inside
+                // PrescriptionServiceImpl would be a delegation from some new
+                // read, which is the very drift this test exists to catch.
                 if (file.endsWith(Path.of("service", "PrescriptionService.java"))
                     || file.endsWith(Path.of("service", "PrescriptionServiceImpl.java"))) {
+                    int mentions = source.split(UNGUARDED + "\\(", -1).length - 1;
+                    if (mentions > 1) {
+                        offenders.add(file + " mentions " + UNGUARDED + " " + mentions
+                            + " times; only its own declaration may, so one of them is a"
+                            + " delegation that skips the ownership guard.");
+                    }
                     continue;
                 }
                 if (!file.endsWith(CONTROLLER)) {
@@ -116,6 +125,34 @@ class PrescriptionAfterWriteCallerGuardTest {
             }
         }
         return calling;
+    }
+
+    @Test
+    @DisplayName("the clinical-reader set is exactly the endpoint's non-patient roles")
+    void theRoleSetMirrorsTheAnnotation() throws IOException {
+        String source = withoutComments(Files.readString(CONTROLLER, StandardCharsets.UTF_8));
+
+        int handler = source.indexOf("@GetMapping(\"/{id}\")");
+        assertThat(handler).as("GET /prescriptions/{id} must still exist").isNotNegative();
+        Matcher preAuthorize = Pattern.compile("@PreAuthorize\\(\"([^\"]*)\"\\)")
+            .matcher(source.substring(handler));
+        assertThat(preAuthorize.find()).as("the by-id read must still be annotated").isTrue();
+
+        Set<String> admitted = new TreeSet<>();
+        Matcher role = Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(preAuthorize.group(1));
+        while (role.find()) {
+            admitted.add(role.group(1));
+        }
+        assertThat(admitted).as("the annotation must still admit the patient")
+            .contains("ROLE_PATIENT");
+        admitted.remove("ROLE_PATIENT");
+
+        assertThat(new TreeSet<>(PrescriptionReaderRoles.CLINICAL_READER_ROLES))
+            .as("a role the annotation does not admit reaches this handler only through "
+                + "ROLE_PATIENT, so exempting it would let it read a stranger's prescription "
+                + "on the strength of the patient role that let it in; a role the annotation "
+                + "admits but the set omits would be refused its own colleagues' orders")
+            .isEqualTo(admitted);
     }
 
     /**

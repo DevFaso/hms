@@ -177,11 +177,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
      * for every {@code /me/patient/*} read, through the same resolver.
      *
-     * <p>A no-op for every clinical role, including a clinician who is also a
-     * patient at the hospital and a super-admin on either auth path — see
-     * {@link PrescriptionReaderRoles}. The write endpoints that admit roles
-     * this read does not go through {@link #getPrescriptionAfterWrite}
-     * instead.
+     * <p>A no-op for every role this read admits, including a clinician who is
+     * also a patient at the hospital — see {@link PrescriptionReaderRoles},
+     * which mirrors the endpoint’s own annotation and records what that costs
+     * on the OIDC path. The write endpoints that admit roles this read does not
+     * go through {@link #getPrescriptionAfterWrite} instead.
      */
     private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
         org.springframework.security.core.Authentication auth =
