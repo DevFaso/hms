@@ -20,12 +20,14 @@ import { RoleContextService } from '../core/role-context.service';
  *    chip's "All hospitals" over a pinned session emitted null, matched the
  *    seed and reloaded nothing.
  *
- * This file guards the SECOND of those, which is component state. The first
- * is a template binding — `[preserveScope]="true"` on the chip — and what it
- * relies on is covered where that contract lives, in
- * `hospital-scope-chip.component.spec.ts`; deleting the binding here would
- * still slip through, and rendering the whole Documents tab to catch it costs
- * more than it is worth.
+ * This file guards the SECOND of those, which is component state.
+ *
+ * The first is NOT guarded anywhere. `hospital-scope-chip.component.spec.ts`
+ * covers what `preserveScope` does, but it sets the flag on its own fixture,
+ * so it can never observe whether `patient-detail.html` passes it — deleting
+ * that attribute restores the pin-dropping bug with a fully green suite. What
+ * would close it is a render of the Documents tab asserting the pin survives
+ * the mount.
  */
 describe('PatientDetailComponent — documents scope', () => {
   function roleContext(): RoleContextService {

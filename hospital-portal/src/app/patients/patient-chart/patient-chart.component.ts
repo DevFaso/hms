@@ -346,15 +346,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * giving those sections their own unscoped empty states, which is a change
    * to them, not a one-line substitution made from the labs section.
    *
-   * It can still return `''`, for an account with no assignment at all. The
-   * READ paths pass `|| undefined` so the param is simply omitted; the two
-   * WRITE paths do not, and must not: `PatientDiagnosisRequestDTO` and
-   * `DoctorPatientChartUpdateRequestDTO` both mark `hospitalId` `@NotNull`
-   * behind a `@Valid` body, so omitting it is rejected by bean validation
-   * BEFORE `resolveHospitalScope` can derive the hospital from the token —
-   * which is strictly worse for the account that has one in its token and
-   * none in this signal. Both write forms fail for a truly unscoped account
-   * either way, and the fix for that is a scope, not a serialization trick.
+   * It can still return `''`, for a session that holds no hospital anywhere.
+   * What each caller does with that follows its DTO, not a blanket rule:
+   *
+   *  - the READS pass `|| undefined`, so the param is simply omitted;
+   *  - the ALLERGY write does too, because `PatientAllergyRequestDTO` marks
+   *    the field nullable and defaults to the authenticated hospital;
+   *  - the DIAGNOSIS and CHART-UPDATE writes send it as-is, and must:
+   *    both DTOs mark `hospitalId` `@NotNull` behind a `@Valid` body, so
+   *    omitting it is rejected by bean validation before
+   *    `resolveHospitalScope` is ever reached. Those two forms fail for a
+   *    truly unscoped account either way, and the fix is a scope, not a
+   *    serialization trick.
    *
    * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
    */
@@ -409,8 +412,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * while every other read on the same chart is accounted.
    *
    * Rather than account for it from the client, the section declines to read
-   * and points at the scope chip. One click, and both reads are scoped and
-   * audited like everything else.
+   * and says so. It names no control: there is no hospital selector on this
+   * route — see the template comment on that branch.
    */
   readonly labsScoped = this.roleContext.hasHospitalScope;
 
