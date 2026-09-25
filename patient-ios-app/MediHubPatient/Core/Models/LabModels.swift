@@ -232,8 +232,14 @@ struct LabResultDTO: Codable, Identifiable {
     /// the limits would blank correct data on what is probably the common
     /// case. The green tick is still withheld either way: under-reassuring is
     /// free, deleting a patient's reference range is not.
+    /// NORMAL rows only — and that gate is the whole justification. "Losing a
+    /// reassurance line" is a safe way to be wrong; telling a patient whose
+    /// potassium is 6.8 that the limits beside their CRITICAL badge "may not
+    /// be in the same units" hands them a reason to discount it, which is the
+    /// opposite trade. A mmol/L row against a definition configured mEq/L —
+    /// numerically identical, textually unfoldable — is exactly that case.
     var referenceRangeUnitUncertain: Bool {
-        guard !isPending,
+        guard isNormal,
               let range = referenceRange,
               !range.trimmingCharacters(in: .whitespaces).isEmpty
         else { return false }

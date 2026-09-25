@@ -270,6 +270,20 @@ final class LabResultWireContractTests: XCTestCase {
         """)
         XCTAssertNil(pending.displayReferenceRange)
         XCTAssertFalse(pending.referenceRangeUnitUncertain)
+
+        // NEVER on an abnormal or critical row: "these limits may not be in
+        // your units" under a CRITICAL badge is a reason to discount it.
+        for graded in ["CRITICAL", "ABNORMAL", "ABNORMAL_HIGH", "ABNORMAL_LOW"] {
+            let alarming = try decode("""
+            {
+              "id": "m4", "testName": "Potassium", "value": "6.8", "unit": "mmol/L",
+              "referenceRange": "70 - 110 mg/dL", "status": "\(graded)", "released": true
+            }
+            """)
+            XCTAssertFalse(alarming.referenceRangeUnitUncertain,
+                           "\(graded) must not be caveated")
+            XCTAssertEqual(alarming.displayReferenceRange, "70 - 110 mg/dL")
+        }
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
