@@ -10,6 +10,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.service.pharmacy.PartnerNoShowReason;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.prescription.PrescriptionTransmission;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
@@ -305,10 +306,20 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }
 
+    /**
+     * The routing decision's {@code reason} shares its column with the
+     * no-show marker, so a client's note is defused on the way in exactly as
+     * {@code routeToPartner} defuses its own. Without it a note reading
+     * {@code " | [PARTNER_NO_SHOW] …"} would land at a segment start, and
+     * once {@code supersedeOpenDecisions} cancels that PARTNER decision the
+     * prescriber's history would read "The partner never delivered" about a
+     * dispatch nobody recorded one for. Only the server may assert the fact,
+     * and that has to hold at EVERY write into the column, not just one.
+     */
     private static String dispatchReason(Pharmacy pharmacy, String note) {
         String reason = "Dispatched by SMS to " + pharmacy.getPharmacyType() + " " + pharmacy.getName();
         if (note != null && !note.isBlank()) {
-            reason += ". Note: " + note.trim();
+            reason += ". Note: " + PartnerNoShowReason.defuseAuthoredReason(note.trim());
         }
         return reason.length() > 1024 ? reason.substring(0, 1024) : reason;
     }

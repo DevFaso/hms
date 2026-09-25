@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import org.springframework.data.domain.Page;
@@ -13,7 +14,33 @@ public interface PrescriptionService {
 
     PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale);
 
+    /**
+     * The guarded read: hospital scope, and a patient principal may only read
+     * their own prescription. This is the one to call for a READ.
+     */
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
+
+    /**
+     * The same read WITHOUT the patient-ownership guard, for the read-back a
+     * write endpoint returns after it has already authorised and committed the
+     * write.
+     *
+     * <p>Exactly two callers, and
+     * {@code PrescriptionAfterWriteCallerGuardTest} fails if that changes:
+     * {@code pharmacist-verify} and {@code request-clarification}. Both admit
+     * {@code ROLE_SUPER_ADMIN}, which the by-id read does not, so putting them
+     * through the guard would let an actor who also happens to be a patient
+     * commit the write and then be told 404 by the response to it, with a
+     * retry refused as already done.
+     *
+     * <p>{@code resolve-clarification} is deliberately NOT a caller: it is
+     * {@code ROLE_DOCTOR}-only, so the guard is a no-op for every principal
+     * that can reach it and routing it here would widen the unguarded surface
+     * for nothing. Do not add a caller without that kind of reason, and never
+     * from a read path — hospital scope still applies here, ownership does
+     * not.
+     */
+    PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale);
 
     /**
      * Sign a prescription (P2 #16).
@@ -36,7 +63,16 @@ public interface PrescriptionService {
      */
     PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
 
-    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale);
+    /**
+     * The prescription list, hospital-scoped.
+     *
+     * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}
+     *                 values. {@code null} or empty means every status, which is what
+     *                 the endpoint did before the parameter existed.
+     */
+    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                       List<PrescriptionStatus> statuses,
+                                       Pageable pageable, Locale locale);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 

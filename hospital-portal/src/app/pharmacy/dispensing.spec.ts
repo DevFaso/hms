@@ -637,6 +637,80 @@ describe('DispensingComponent — clarification control on the work queue', () =
     ).toBeNull();
   });
 
+  it('flags a row that needs a second look, in words rather than an enum name', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      needsAttention: true,
+      attentionReason: 'PENDING_STOCK',
+    });
+
+    const cue = fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]');
+    expect(cue).not.toBeNull();
+    expect(cue.textContent).toContain('PHARMACY.ATTENTION.PENDING_STOCK');
+  });
+
+  it('leaves a plain fill unflagged', async () => {
+    await render(['ROLE_PHARMACIST']);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]')).toBeNull();
+  });
+
+  it('still flags a row whose attention reason this build has never heard of', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      needsAttention: true,
+      attentionReason: 'SOMETHING_ADDED_LATER',
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]').textContent,
+    ).toContain('PHARMACY.ATTENTION.UNRECOGNISED');
+  });
+
+  it('says the prescriber has answered even when the status wins the attention reason', async () => {
+    // resolveClarification restores the status the question was asked from,
+    // and the single attentionReason reports that status by precedence — so
+    // without its own cue the answer was invisible on the queue.
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      needsAttention: true,
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    const answered = fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]');
+    expect(answered).not.toBeNull();
+    expect(answered.textContent).toContain('PHARMACY.ATTENTION.PRESCRIBER_ANSWERED');
+  });
+
+  it('says it once when the attention reason is the clarification itself', async () => {
+    // With nothing of higher precedence the backend derives both fields from
+    // the same timestamp, and that label already reads "the prescriber has
+    // answered — read the answer first".
+    await render(['ROLE_PHARMACIST'], {
+      needsAttention: true,
+      attentionReason: 'CLARIFICATION_RESOLVED',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]').textContent,
+    ).toContain('PHARMACY.ATTENTION.CLARIFICATION_RESOLVED');
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]')).toBeNull();
+  });
+
+  it('passes the answer timestamp to the clarification control', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    const control = fixture.debugElement.query(By.directive(PrescriptionClarificationComponent))
+      .componentInstance as PrescriptionClarificationComponent;
+    expect(control.clarificationResolvedAt()).toBe('2026-09-24T09:00:00');
+  });
+
   it('reloads the queue when a clarification is raised', async () => {
     await render(['ROLE_PHARMACIST']);
     const before = pharmacySvc.getDispenseWorkQueue.calls.count();

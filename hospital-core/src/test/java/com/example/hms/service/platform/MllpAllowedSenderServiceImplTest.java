@@ -47,14 +47,19 @@ class MllpAllowedSenderServiceImplTest {
 
     private Hospital hospital;
     private UUID hospitalId;
+    private UUID organizationId;
 
     @BeforeEach
     void setUp() {
         service = new MllpAllowedSenderServiceImpl(senderRepository, hospitalRepository, mapper);
         hospitalId = UUID.randomUUID();
+        organizationId = UUID.randomUUID();
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setId(organizationId);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Allowlisted Hospital");
+        hospital.setOrganization(organization);
     }
 
     private MllpAllowedSender persisted(UUID id, String app, String facility, boolean active) {
@@ -89,6 +94,37 @@ class MllpAllowedSenderServiceImplTest {
 
         Optional<Hospital> result = service.resolveHospital("Roche_Cobas", "lab_a");
         assertThat(result).contains(hospital);
+    }
+
+    @Test
+    @DisplayName("resolveHospital hands back a hospital whose organization can still be read")
+    void resolveHospitalInitialisesTheOrganization() {
+        // Every MLLP caller reads the organization off this hospital on a
+        // worker thread, after this read-only transaction has closed, to file
+        // the integration_message_event row under it. Hospital.organization is
+        // LAZY and Organization takes its id from a field-access @Id, so it
+        // has to be initialised here or every one of those rows lands with a
+        // null organization and the per-organization DLQ view never shows one.
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        Optional<Hospital> resolved = service.resolveHospital("Roche_Cobas", "lab_a");
+
+        assertThat(resolved).isPresent();
+        assertThat(resolved.get().getOrganization()).isNotNull();
+        assertThat(resolved.get().getOrganization().getId()).isEqualTo(organizationId);
+    }
+
+    @Test
+    @DisplayName("resolveHospital tolerates a hospital with no organization")
+    void resolveHospitalWithoutAnOrganization() {
+        // Hibernate.initialize(null) is a no-op, and organization_id is
+        // nullable; the initialisation must not turn that into an NPE.
+        hospital.setOrganization(null);
+        when(senderRepository.findBySendingApplicationAndSendingFacilityAndActiveTrue("ROCHE_COBAS", "LAB_A"))
+            .thenReturn(Optional.of(persisted(UUID.randomUUID(), "ROCHE_COBAS", "LAB_A", true)));
+
+        assertThat(service.resolveHospital("Roche_Cobas", "lab_a")).contains(hospital);
     }
 
     @Test

@@ -8,7 +8,10 @@ import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.empi.EmpiService;
+import com.example.hms.enums.integration.IntegrationMessageDirection;
+import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.service.integration.impl.MllpInboundAdtServiceImpl;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +28,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,6 +41,7 @@ class MllpInboundAdtServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private MllpInboundAdtVisitProjectionService visitProjection;
+    @Mock private IntegrationMessageRecorder messageRecorder;
 
     @InjectMocks private MllpInboundAdtServiceImpl service;
 
@@ -144,7 +150,7 @@ class MllpInboundAdtServiceImplTest {
     }
 
     @Test
-    @DisplayName("REJECTED_CROSS_TENANT — patient is not registered at the allowlisted hospital")
+    @DisplayName("A cross-tenant patient answers REJECTED_NOT_FOUND, like an MRN nobody has")
     void rejectedWhenNotRegisteredAtHospital() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
@@ -152,10 +158,125 @@ class MllpInboundAdtServiceImplTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.empty());
 
+        // NOT a cross-tenant outcome of its own: that one mapped to AR while
+        // an unknown MRN mapped to AE, and the difference was a read
+        // primitive over every MRN in every other hospital. The
+        // indistinguishability is asserted on the ACK itself in
+        // AdtCrossTenantAckTest; this pins the outcome the ACK is built from.
         assertThat(service.processAdt(
             adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1"))
-            .isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+            .isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(patientRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("The cross-tenant reason IS recorded — on the integration message row, without the body")
+    void crossTenantReasonIsRecordedOnTheIntegrationRow() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.empty());
+
+        service.processAdt(adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1", "MSG-1");
+
+        // isNull() on the payload is load-bearing: one probe must not park a
+        // full PID in the DLQ.
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("cross-tenant rejection (MSH-10 MSG-1)"),
+            any());
+    }
+
+    @Test
+    @DisplayName("An unknown MRN records its own, different reason on the same surface")
+    void unknownMrnRecordsADifferentReason() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
+            .thenReturn(Optional.empty());
+
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "MSG-1");
+
+        // The operator can still tell the two apart. The sender cannot.
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REG/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A08"), isNull(),
+            // FAILED, like every refusal here. A refused message is a refused
+            // message; the badge is kept honest by the correlation id, not by
+            // filing this as healthy inbound traffic.
+            eq(IntegrationMessageStatus.FAILED),
+            eq("PID-3 not found (MSH-10 MSG-1)"),
+            any());
+    }
+
+    @Test
+    @DisplayName("A retried refusal supersedes its own row instead of stacking a new dead letter")
+    void aRetriedRefusalReusesItsCorrelationId() {
+        // countUnresolvedDeadLetters counts a FAILED row only when no later
+        // row shares its correlationId. The ACK here is AE, which senders
+        // retry on a timer, so a per-row random id would put one unresolved
+        // dead letter on the badge per retry - thousands a day for one
+        // misconfigured feed. Same sender, same reason, different message:
+        // same id.
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
+            .thenReturn(Optional.empty());
+
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M1");
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M2");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), ids.capture());
+        assertThat(ids.getAllValues().get(0))
+            .isNotNull()
+            .isEqualTo(ids.getAllValues().get(1));
+    }
+
+    @Test
+    @DisplayName("A different reason is a different dead letter, so one cannot hide the other")
+    void adifferentReasonGetsItsOwnCorrelationId() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-X"))
+            .thenReturn(Optional.empty());
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.empty());
+
+        service.processAdt(adt("MRN-X", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M1");
+        service.processAdt(adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1", "M2");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<IntegrationMessageStatus> statuses =
+            ArgumentCaptor.forClass(IntegrationMessageStatus.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+            any(), any(), any(), any(), any(), statuses.capture(), any(), ids.capture());
+
+        // An unknown identifier and a cross-tenant refusal are both refusals
+        // and both actionable; they must not collapse onto one another.
+        assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
+        assertThat(statuses.getAllValues())
+            .containsExactly(IntegrationMessageStatus.FAILED, IntegrationMessageStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("An accepted in-tenant update records no rejection row")
+    void anAcceptedUpdateRecordsNoRejection() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+
+        assertThat(service.processAdt(adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1)),
+            hospital, "REG", "HOSP1", "MSG-1"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+
+        verify(messageRecorder, never()).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

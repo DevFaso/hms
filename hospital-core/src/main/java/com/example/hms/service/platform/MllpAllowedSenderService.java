@@ -13,8 +13,14 @@ public interface MllpAllowedSenderService {
     /**
      * Resolve the receiving Hospital for an inbound HL7 v2 sender pair
      * (MSH-3 sending application, MSH-4 sending facility). Returns empty
-     * if no active allowlist entry matches — the dispatcher must reject
-     * such messages with AR.
+     * if no active allowlist entry matches — the dispatcher rejects such
+     * messages with AR, which is a transport-level refusal and does not
+     * depend on any tenant's data.
+     *
+     * <p>The returned hospital, and its organization, are initialised before
+     * the lookup's transaction closes, so an MLLP worker thread can read both
+     * identifiers off it. Anything else on it is still lazy and still
+     * detached.
      */
     Optional<Hospital> resolveHospital(String sendingApplication, String sendingFacility);
 

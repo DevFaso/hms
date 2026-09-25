@@ -2828,22 +2828,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // that needs a read-back cannot be identified from `abnormalFlag`;
         // the server's answer is what identifies it, and the message says
         // where the ceremony lives.
-        // 404 is the hospital mismatch, not a missing row. The premise this
-        // comment used to give — "the queue is built from ONE Staff record
-        // (the earliest)" — is wrong twice over: #742 verified that
-        // `uq_staff_user_id` gives a user exactly ONE Staff row
+        // 404 has two causes and the message names both: the result is gone
+        // (`findById(...).orElseThrow`, which runs FIRST) or it belongs to
+        // another hospital (`requireResultInActiveHospital`). The second is
+        // the common one here — the acknowledge is checked against the ACTIVE
+        // hospital, while a panel left over from before a scope change can
+        // still offer rows released at another one — but insisting on it
+        // would send someone whose row was deleted to switch hospitals and
+        // try again, from every hospital.
+        //
+        // NOT, as this comment said until #745: "the queue is built from ONE
+        // Staff record (the earliest)". That premise is wrong twice over —
+        // #742 verified `uq_staff_user_id` gives a user exactly one Staff row
         // platform-wide, and the queue is now read through
-        // `findByOrderingStaff_IdAndHospital_Id`. What remains true is that a
-        // row can be refused: the acknowledge is checked against the active
-        // hospital, and a result released at another hospital the clinician
-        // works at is still reachable from a stale panel. A generic "could
-        // not be acknowledged" sends them looking for the wrong thing.
+        // `findByOrderingStaff_IdAndHospital_Id`. The conclusion survives the
+        // premise; the premise does not survive being checked.
         this.toast.error(
           this.t(
             err?.status === 400
               ? 'DASHBOARD.READ_BACK_REQUIRED'
               : err?.status === 404
-                ? 'DASHBOARD.ACKNOWLEDGE_WRONG_HOSPITAL'
+                ? 'DASHBOARD.ACKNOWLEDGE_NOT_AVAILABLE'
                 : 'DASHBOARD.ACKNOWLEDGE_FAILED',
           ),
         );

@@ -322,6 +322,20 @@ export interface WorkQueuePrescription {
    * the rest belong to the back-order and partner-routing cues.
    */
   attentionReason?: string;
+  /**
+   * When the prescriber answered the pharmacist's question, if the pharmacy
+   * has not acted on that answer yet; absent otherwise.
+   *
+   * <p>A SECOND fact about the row, not a competing reason:
+   * `attentionReason` reports one reason by precedence and resolving a
+   * clarification restores the status the question was asked from, so an
+   * answer on a PENDING_STOCK or PARTNER_REJECTED order is masked by that
+   * status. This is the only reliable "the prescriber answered" cue.
+   *
+   * <p>Carries no clinical text — the projection is served to roles that
+   * `GET /prescriptions/{id}` refuses. The words are fetched in the dialog.
+   */
+  clarificationResolvedAt?: string;
 }
 
 /**
@@ -381,7 +395,16 @@ export interface RoutingDecisionResponse {
   targetPharmacyName?: string;
   decidedByUserId: string;
   patientId: string;
+  /** Why the decision was taken, as it was typed — free text only. */
   reason?: string;
+  /**
+   * The decision was cancelled because the partner never delivered. A flag,
+   * not a stored sentence: the sentence used to be composed in English on the
+   * server and rendered verbatim to French and Spanish prescribers.
+   */
+  partnerNoShow?: boolean;
+  /** The pharmacist's own words about the no-show; absent when they typed none. */
+  noShowReason?: string;
   estimatedRestockDate?: string;
   /**
    * The quantity this routing is for — the REMAINDER on a partially filled

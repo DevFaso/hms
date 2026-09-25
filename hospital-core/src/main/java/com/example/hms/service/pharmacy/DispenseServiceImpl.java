@@ -356,6 +356,13 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     private Prescription loadAndValidatePrescription(DispenseRequestDTO dto, UUID hospitalId) {
+        // A null hospital is a super-admin in GLOBAL view. Recording a fill is
+        // an act on one hospital's order, not a cross-tenant read, so it is
+        // refused — which is what happened before too, as a 500 from the
+        // dereference below. Same stance and same 404 as the routing writes.
+        if (hospitalId == null) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
@@ -601,11 +608,26 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        // Validate the prescription belongs to the caller's hospital before returning any history
+        // Validate the prescription belongs to the caller's hospital before
+        // returning any history. A null hospital is a real super-admin in
+        // GLOBAL view: they have no single hospital to be in scope for, and
+        // the read is genuinely unscoped for them — the same stance as
+        // enforceHospitalScope below, PrescriptionClarificationService
+        // .findInScope and the rest of the hospital-scoped read surface.
+        // Dereferencing it instead answered that caller with a 500.
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
-        if (prescription.getHospital() == null
-                || !hospitalId.equals(prescription.getHospital().getId())) {
+        // Null alone is not the licence: requireActiveHospitalId also returns
+        // null from its step-4 fallback on the AUTHORITIES, which RoleValidator
+        // warns can be inflated. Only the discrete JWT claim may read across
+        // tenants; anyone else without a hospital is refused, as they
+        // effectively were by the 500 this replaces.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        if (hospitalId != null
+                && (prescription.getHospital() == null
+                    || !hospitalId.equals(prescription.getHospital().getId()))) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
         return dispenseRepository.findByPrescriptionId(prescriptionId, pageable)
@@ -639,6 +661,12 @@ public class DispenseServiceImpl implements DispenseService {
     public DispenseResponseDTO cancelDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+        // Cancelling reverses a stock lot and rewrites the prescription's
+        // status: it is a write on one hospital's records, and it takes the
+        // same answer as every other write here. enforceHospitalScope alone
+        // tolerates a null and would have let a global-view caller undo
+        // another tenant's fill — more reachable now that the reads succeed.
+        requireHospitalScopeForWrite();
         enforceHospitalScope(dispense.getPharmacy());
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
@@ -961,7 +989,8 @@ public class DispenseServiceImpl implements DispenseService {
                     .user(staffUser)
                     .build();
         }
-        String attentionReason = attentionReason(p, lastPharmacyAction, backOrderOutstanding);
+        LocalDateTime unactedAnswer = unactedClarificationAnswer(p, lastPharmacyAction);
+        String attentionReason = attentionReason(p, unactedAnswer, backOrderOutstanding);
         return WorkQueuePrescriptionDTO.builder()
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
@@ -978,6 +1007,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .lastRefusedBy(lastRefusedBy(p, latestDecision))
                 .needsAttention(attentionReason != null)
                 .attentionReason(attentionReason)
+                .clarificationResolvedAt(unactedAnswer)
                 .build();
     }
 
@@ -995,7 +1025,7 @@ public class DispenseServiceImpl implements DispenseService {
      * routing decision after the resolution clears it; without that the row
      * would be flagged for the rest of its life.
      */
-    private static String attentionReason(Prescription p, LocalDateTime lastPharmacyAction,
+    private static String attentionReason(Prescription p, LocalDateTime unactedAnswer,
                                           boolean backOrderOutstanding) {
         if (p.getStatus() != null && NEEDS_ATTENTION_STATUSES.contains(p.getStatus())) {
             return p.getStatus().name();
@@ -1003,9 +1033,41 @@ public class DispenseServiceImpl implements DispenseService {
         if (backOrderOutstanding) {
             return ATTENTION_BACK_ORDER_OUTSTANDING;
         }
+        if (unactedAnswer != null) {
+            return ATTENTION_CLARIFICATION_RESOLVED;
+        }
+        return null;
+    }
+
+    /**
+     * When the prescriber answered, or null when there is no answer the
+     * pharmacy has yet to act on.
+     *
+     * <p>Reported separately from {@link #attentionReason} because that field
+     * carries ONE reason by precedence and {@code resolveClarification}
+     * restores the status the question was asked from: a question raised on a
+     * PENDING_STOCK or PARTNER_REJECTED order comes back flagged with that
+     * status, and the answer — the thing the pharmacist has been waiting for —
+     * had no cue on the row at all. It is a second fact about the row, not a
+     * competing reason, so it gets its own field and the precedence above is
+     * left alone.
+     *
+     * <p>Cleared once the pharmacy acts on it (a dispense or a routing
+     * decision after the resolution), exactly as the attention reason is;
+     * without that the row would be flagged for the rest of its life.
+     *
+     * <p>The words of the exchange are deliberately NOT on this projection:
+     * the question and the answer are encrypted clinical narrative, the
+     * work-queue endpoint admits PHARMACY_VERIFIER and HOSPITAL_ADMIN, and
+     * {@code GET /prescriptions/{id}} — the read that returns the text — does
+     * not. The cue says an answer is waiting; the dialog fetches it under the
+     * role gate that governs it.
+     */
+    private static LocalDateTime unactedClarificationAnswer(Prescription p,
+                                                            LocalDateTime lastPharmacyAction) {
         LocalDateTime resolvedAt = p.getClarificationResolvedAt();
         if (resolvedAt != null && (lastPharmacyAction == null || resolvedAt.isAfter(lastPharmacyAction))) {
-            return ATTENTION_CLARIFICATION_RESOLVED;
+            return resolvedAt;
         }
         return null;
     }
@@ -1050,6 +1112,19 @@ public class DispenseServiceImpl implements DispenseService {
                 .build();
     }
 
+    /**
+     * A write acts on one hospital's records, so it needs one pinned. Reading
+     * across tenants is what a global view is for; undoing a fill in it is
+     * not. The refusal matches {@code loadAndValidatePrescription} and the
+     * routing writes' {@code findPrescriptionForWrite}: a 404, not a 500 and
+     * not a silent cross-tenant act.
+     */
+    private void requireHospitalScopeForWrite() {
+        if (roleValidator.requireActiveHospitalId() == null) {
+            throw new ResourceNotFoundException("dispense.notfound");
+        }
+    }
+
     private void enforceHospitalScope(Pharmacy pharmacy) {
         enforceHospitalScope(pharmacy, roleValidator.requireActiveHospitalId());
     }
@@ -1072,6 +1147,11 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy, UUID hospitalId) {
+        // Pre-existing null-tolerance, now qualified the same way as the
+        // routing reads: an unscoped view belongs to a real super-admin.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException("pharmacy.notfound");
+        }
         if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("pharmacy.notfound");

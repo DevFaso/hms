@@ -85,6 +85,19 @@
     @if (loadError()) {
       <p class="stale-banner" role="status">
         {{ 'inBasket.labResultsError' | translate }}
+        <!--
+          Reachable while a read is in flight, unlike the one in the error
+          card: this branch renders whenever rows are held, and `loadError` is
+          no longer cleared at request start. Left ENABLED all the same — the
+          `queueRequest` latest-wins guard is what makes an overlap safe, and
+          disabling every control in this state (the ↻ already is) removed the
+          only way out of a request that never settles: there is no timeout
+          interceptor, so `loading` would stay true for ever. It gets no
+          busy affordance either — `aria-busy` on this `role="status"` would
+          tell assistive tech to WITHHOLD the region's updates, which is the
+          opposite of announcing one. A spinner on the button is the right
+          answer and is not in this PR.
+        -->
         <button type="button" class="btn-secondary" (click)="load()">
           {{ 'COMMON.RETRY' | translate }}
         </button>

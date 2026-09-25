@@ -25,6 +25,23 @@ export interface PrescriptionResponse {
   frequency: string;
   duration: string;
   notes: string;
+  /**
+   * What was ordered (gap G13), so a remainder can be rendered with its unit
+   * instead of as a bare number. Optional: the columns are nullable and
+   * pre-date the pharmacy module, so a legacy row carries neither.
+   */
+  quantity?: number | null;
+  quantityUnit?: string | null;
+  /**
+   * How many refills the prescriber granted, how many are left, and how many
+   * have actually been released back to the pharmacy. `refillsUsed` is the
+   * one the remainder arithmetic needs: the expected LIFETIME quantity is
+   * `quantity * (1 + refillsUsed)`, which is what `DispenseServiceImpl`
+   * compares the sum of the fills against.
+   */
+  refillsAllowed?: number | null;
+  refillsRemaining?: number | null;
+  refillsUsed?: number | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -190,6 +207,12 @@ export class PrescriptionService {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
+    /**
+     * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
+     * repeated `status` query parameter per value. Omitted or empty means
+     * every status, which is what the endpoint did before the filter existed.
+     */
+    statuses?: string[];
   }): Observable<PrescriptionResponse[]> {
     // An explicit size and sort. Without them the derived query's order is
     // arbitrary, so "the first page" is not even the newest prescriptions:
@@ -197,9 +220,8 @@ export class PrescriptionService {
     // clarification could find none of them here. Sorting by updatedAt was
     // tried and dropped — it reorders the page for everyone and still loses
     // the row on a busy day, because every sign, edit and fill bumps that
-    // column. This makes the page deterministic and large enough to count
-    // from; the real fix is a status filter on GET /prescriptions, which is
-    // filed as backend work.
+    // column. The size and sort make the page deterministic; `statuses`
+    // makes a bucket COMPLETE, which is what the counts actually need.
     let params = new HttpParams()
       .set('size', PrescriptionService.LIST_PAGE_SIZE)
       .set('sort', 'createdAt,desc');
@@ -207,6 +229,9 @@ export class PrescriptionService {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);
       if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
+      for (const status of filters.statuses ?? []) {
+        params = params.append('status', status);
+      }
     }
     return this.http
       .get<{ content: PrescriptionResponse[] }>(this.baseUrl, { params })

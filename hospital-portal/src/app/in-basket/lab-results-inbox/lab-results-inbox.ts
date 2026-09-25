@@ -228,18 +228,22 @@ export class LabResultsInboxComponent {
   }
 
   load(): void {
-    // The ↻ and both Retry controls are hidden without a scope, but a guard
-    // here is what makes that a property of the component rather than of one
-    // template: the endpoint answers 404, and a 404 drawn as "the queue could
-    // not be loaded" sends a clinician looking for an outage.
+    // No scope, no read. The template renders the scope hint in place of the
+    // whole category in that state, so neither the ↻ nor either Retry is on
+    // screen — but the guard belongs here, so declining is a property of the
+    // component and not of one template: the endpoint answers 404, and a 404
+    // drawn as "the queue could not be loaded" sends a clinician looking for
+    // an outage.
     if (!this.hasHospitalScope()) return;
-    // Only the latest read may write. Disabling the controls is not enough on
-    // its own — the ↻ is disabled while a read is in flight, but the two
-    // Retry controls live in branches that are only rendered once `loading`
-    // is already false, so a second read can always be started. A slow
-    // failure landing after a fast success drew the stale banner over current
-    // rows; a slow success landing last overwrote newer ones. Same guard the
-    // chart's two lab reads and the dashboard's copy of this queue carry.
+    // Only the latest read may write, and that is the ONLY thing standing
+    // between overlapping reads and a wrong screen: the ↻ is disabled while a
+    // read is in flight, but both Retry controls are deliberately left
+    // clickable, because disabling every control in this state would leave no
+    // way out of a request that never settles (there is no timeout
+    // interceptor). A slow failure landing after a fast success drew the
+    // stale banner over current rows; a slow success landing last overwrote
+    // newer ones. Same guard the chart's two lab reads and the dashboard's
+    // copy of this queue carry.
     const request = ++this.queueRequest;
     const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);

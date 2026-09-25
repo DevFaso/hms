@@ -52,16 +52,14 @@ enum MedicationStatus: String, CaseIterable {
     /// App-side fallback for a status this build does not know yet.
     case unknown = "__UNKNOWN__"
 
-    /// A medication with no status at all is treated as current: the backend
-    /// only omits it when `@JsonInclude(NON_NULL)` drops a null, and
-    /// `resolveStatus` never returns one.
+    /// An absent status is `.unknown`, like the other three enums here.
+    /// `resolveStatus` never returns null today, but if that ever stops being
+    /// true the failure mode of assuming ACTIVE is a discontinued or finished
+    /// course badged green — the exact bug this mapping exists to prevent —
+    /// while "Status unavailable" costs nothing.
     init(wire: String?) {
         let trimmed = (wire ?? "").trimmingCharacters(in: .whitespaces).uppercased()
-        if trimmed.isEmpty {
-            self = .active
-        } else {
-            self = MedicationStatus(rawValue: trimmed) ?? .unknown
-        }
+        self = MedicationStatus(rawValue: trimmed) ?? .unknown
     }
 
     var labelKey: String {

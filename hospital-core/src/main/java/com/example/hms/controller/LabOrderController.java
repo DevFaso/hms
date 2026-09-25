@@ -100,8 +100,14 @@ public class LabOrderController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'SUPER_ADMIN')")
-    @Operation(summary = "List Lab Orders", description = "Retrieves paginated list of lab orders")
+    @Operation(summary = "List Lab Orders",
+               description = "Retrieves a paginated list of lab orders. Filtering by patientId requires a hospital "
+                   + "scope: a caller with none — a super-admin in global view — is refused rather than served that "
+                   + "patient's orders from every hospital, because a cross-hospital disclosure cannot be recorded "
+                   + "without an acting hospital to record it against. The unfiltered worklist is unaffected.")
     @ApiResponse(responseCode = "200", description = "Lab orders retrieved successfully")
+    @ApiResponse(responseCode = "404",
+                 description = "patientId was supplied and no hospital scope could be established")
     public ResponseEntity<ApiResponseWrapper<Page<LabOrderResponseDTO>>> getAllLabOrders(
         @PageableDefault(size = 20) Pageable pageable,
         @RequestParam(required = false) UUID patientId,

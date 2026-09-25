@@ -26,6 +26,20 @@ import { PrescriptionService } from '../../services/prescription.service';
 export type ClarificationMode = 'PHARMACY' | 'PRESCRIBER';
 
 /**
+ * The two ways of saying "there is an exchange here you cannot read".
+ *
+ * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
+ * reads it, so a typo fails the gate instead of rendering the raw key; a key
+ * chosen in a `.ts` branch is invisible to it otherwise.
+ */
+const HIDDEN_ANSWER = {
+  /** An answer IS waiting: clarificationResolvedAt says so. */
+  stated: { labelKey: 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' },
+  /** One may be: the row is flagged, but the timestamp has been cleared. */
+  hedged: { labelKey: 'PRESCRIPTIONS.CLARIFICATION.ANSWER_MAY_NOT_BE_VISIBLE' },
+};
+
+/**
  * The pharmacist-to-prescriber clarification exchange (gap G5), as one
  * control that can be dropped into a row's action cell.
  *
@@ -145,6 +159,12 @@ export class PrescriptionClarificationComponent {
   /** PHARMACY mode: {@code attentionReason} straight off the work-queue row. */
   readonly attentionReason = input<string | null>(null);
 
+  /**
+   * PHARMACY mode: when the prescriber answered, if the pharmacy has not
+   * acted on the answer yet. The reliable cue — see {@link hasAnswer}.
+   */
+  readonly clarificationResolvedAt = input<string | null>(null);
+
   /** PRESCRIBER mode: the pharmacist's question, already on the list row. */
   readonly question = input<string | null>(null);
   readonly askedAt = input<string | null>(null);
@@ -222,21 +242,22 @@ export class PrescriptionClarificationComponent {
   /**
    * True once the prescriber has answered and the row is back on the queue.
    *
-   * <p>A CUE, not a fact: the backend reports one {@code attentionReason}
-   * by precedence (status, then an outstanding back order, then the
-   * clarification), and {@code resolveClarification} restores the previous
-   * status — so a question raised on a PENDING_STOCK or PARTNER_REJECTED
-   * order comes back flagged with that status and this is false even though
-   * an answer is waiting. Those rows still carry {@code needsAttention}, so
-   * the row is flagged for a second look either way, and the dialog reads
-   * the exchange on every open rather than only on this flag. A reliable
-   * cue needs {@code clarificationResolvedAt} on the work-queue projection —
-   * reported to the coordinator.
+   * <p>Read from {@code clarificationResolvedAt}, which the work-queue
+   * projection reports on its own, rather than from {@code attentionReason}:
+   * that field carries ONE reason by precedence (status, then an outstanding
+   * back order, then the clarification) and {@code resolveClarification}
+   * restores the status the question was asked from — so an answer on a
+   * PENDING_STOCK or PARTNER_REJECTED order used to come back flagged with
+   * that status and the answer was invisible from the queue.
+   *
+   * <p>The reason is still honoured, for a payload from a backend that
+   * predates the timestamp.
    */
   protected readonly hasAnswer = computed(
     () =>
       this.isPharmacy() &&
-      this.attentionReason() === PrescriptionClarificationComponent.RESOLVED_FLAG,
+      (!!this.clarificationResolvedAt() ||
+        this.attentionReason() === PrescriptionClarificationComponent.RESOLVED_FLAG),
   );
 
   protected readonly canRequest = computed(
@@ -314,20 +335,29 @@ export class PrescriptionClarificationComponent {
   protected readonly titleId = computed(() => `rx-clarify-title-${this.prescriptionId()}`);
 
   /**
-   * The row MAY be carrying an answer this user cannot read — may, not does.
+   * The row may be carrying an exchange this user cannot read, and which of
+   * the two sentences says so.
    *
-   * <p>The backend reports one {@code attentionReason} by precedence (status,
-   * then an outstanding back order, then the clarification), so any reason
-   * could be masking a resolved clarification and none of them proves one
-   * exists. A plain PENDING_STOCK row usually carries no exchange at all.
-   * The note is therefore worded as a conditional — "if an earlier question
-   * was raised" — rather than asserting a question and an answer that may
-   * never have been written. No reason at all means nothing to mask, so a
-   * first question on a freshly signed order gets no note.
+   * <p>{@code null} for a role that can read it, and for a row with nothing to
+   * hide. Otherwise a key:
+   *
+   * <ul>
+   *   <li>Stated, when {@code clarificationResolvedAt} is set: an answer IS
+   *       waiting, so a PHARMACY_VERIFIER — who may raise a question but is
+   *       not on {@code GET /prescriptions/{id}} — is told so plainly.</li>
+   *   <li>Hedged, on any other flagged row: the backend clears that timestamp
+   *       as soon as the pharmacy acts on the answer, so a row that was
+   *       answered and then partly filled carries a real exchange and no
+   *       timestamp. Saying nothing there invites a second question about
+   *       something already answered.</li>
+   * </ul>
    */
-  protected readonly mayHideAnswer = computed(
-    () => this.isPharmacy() && !this.canReadExchange() && !!this.attentionReason(),
-  );
+  protected readonly hiddenAnswerKey = computed(() => {
+    if (!this.isPharmacy() || this.canReadExchange()) return null;
+    if (this.hasAnswer()) return HIDDEN_ANSWER.stated.labelKey;
+    if (this.attentionReason()) return HIDDEN_ANSWER.hedged.labelKey;
+    return null;
+  });
 
   /**
    * There is an exchange on screen, or a reason there is not.
@@ -342,7 +372,7 @@ export class PrescriptionClarificationComponent {
     () =>
       this.isPharmacy() &&
       (this.loadingExchange() ||
-        (!!this.exchangeError() && !!this.attentionReason()) ||
+        (!!this.exchangeError() && (this.hasAnswer() || !!this.attentionReason())) ||
         !!this.fetchedQuestion() ||
         !!this.fetchedAnswer()),
   );

@@ -89,8 +89,15 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
 
+    /**
+     * Resolvable message key, not a sentence, and the key this codebase already
+     * throws for a staff id it will not resolve — so a refusal is
+     * indistinguishable from one.
+     */
+    private static final String MSG_STAFF_NOT_FOUND = "staff.notfound";
+
     @Override
-    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId) {
+    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId, UUID hospitalId) {
         log.info("Building result review queue for user: {}", userId);
 
         Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
@@ -102,8 +109,100 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // The queue is built for the physician making the request.
         Locale locale = LocaleContextHolder.getLocale();
 
-        // Get completed lab orders (results available) ordered by this physician
-        List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
+        // The queue is one clinician's order history, and it was read with no
+        // hospital scope at all: findByOrderingStaff_Id returns every hospital's
+        // orders for this staff id, and with them every patient name, id and
+        // released value on them.
+        //
+        // That it leaks is not obvious, so it is worth writing down. A user has
+        // exactly ONE Staff row for the whole platform — uq_staff_user on
+        // (user_id) in the entity plus the uq_staff_user_id index V8 created
+        // after deleting the duplicates; uq_staff_user_hospital is subsumed by
+        // it and cannot make a second row. Multi-hospital membership is
+        // UserRoleHospitalAssignment, not a second staff row. Meanwhile
+        // buildLabOrder takes the ORDER's hospital from the encounter (or the
+        // requested hospitalId) and never compares it to staff.getHospital().
+        // So the one staff id of a clinician assigned at two hospitals owns
+        // orders at both, and this finder unions them — including orders from
+        // a hospital whose assignment has since been revoked, because the staff
+        // row outlives the assignment.
+        //
+        // Scoped to the acting hospital instead. Scope is a property of the
+        // CALLER: deriving it from staff.getHospital() would pin the queue to
+        // the clinician's home hospital whatever they are acting as, which is
+        // neither what they asked for nor something any disclosure could be
+        // accounted against.
+        if (hospitalId == null) {
+            // The scope MeController resolved for the whole request, not a
+            // second resolution taken here. RoleValidator.requireActiveHospitalId
+            // would have been the obvious call. It is not wrong in the common
+            // case — for a non-super-admin, MeController's pinnedHospitalId()
+            // returns ctx.activeHospitalId and requireActiveHospitalId's step 2
+            // returns the same field, so whenever that field is set the two
+            // agree exactly. They diverge only where it is NOT set, and in two
+            // ways that both matter:
+            //
+            //  - a clinician with more than one active assignment and nothing
+            //    pinned: MeController falls back to the FIRST active assignment
+            //    and answers, while requireActiveHospitalId's fallback demands
+            //    exactly one and otherwise throws BusinessException — a 400 on
+            //    a results worklist where every sibling /me endpoint still
+            //    answers;
+            //  - a super-admin with no X-Hospital-Id who nonetheless holds an
+            //    assignment: MeController resolves that assignment's hospital,
+            //    requireActiveHospitalId returns null. Taking the parameter is
+            //    what keeps this queue and the patient snapshot on the same page
+            //    answering for the same principal instead of one serving and the
+            //    other refusing.
+            //
+            // So: one resolution per request, in the controller, because a
+            // second one can only ever agree or be worse.
+            //
+            // Null therefore means what it means everywhere else in this
+            // controller, and it is narrower than "a super-admin in global view":
+            // MeController's step 2 falls back to the caller's NEWEST active
+            // assignment and does so for a super-admin as well, so a platform
+            // admin who also holds a clinical assignment is silently scoped to it
+            // and never arrives here. What arrives is a caller with a staff row
+            // for whom NEITHER an X-Hospital-Id nor any active assignment
+            // resolves: a super-admin with no assignment at all, or an ordinary
+            // clinician whose scope failed — a JWT outliving the assignment it was
+            // minted from, an assignment with no hospital, a principal the
+            // username lookup misses. RoleExpansion is what lets a super-admin
+            // past the @PreAuthorize on GET /me/results/review-queue in the first
+            // place.
+            //
+            // Refused rather than served unscoped, the same line #739 (open at
+            // the time of writing, not merged) draws on getLabOrdersByStaffId,
+            // which is this same read by another name: a
+            // queue filtered to one person is that person's record, not a
+            // worklist, and there is no acting hospital for a RECORD_SHARE row
+            // to name. A caller who wants this queue picks a hospital first.
+            //
+            // After the staff lookup on purpose: that lookup is on the CALLER's
+            // own user id and discloses nothing, and leaving it first keeps the
+            // ordinary case — a super-admin with no staff row, who has no
+            // clinical queue at all — answering [] exactly as before, so only
+            // the leaking shape changes.
+            //
+            // And a refusal rather than an empty list, although the line above
+            // returns []. Those are different answers to different questions: no
+            // staff row means this caller has placed no orders, which [] states
+            // truthfully, whereas an unresolved scope means we cannot decide
+            // WHICH of their orders to show. dashboard.service.ts settled that
+            // for this exact endpoint when it deleted its catchError — "a 403 or
+            // an outage rendered as an empty queue is indistinguishable from
+            // nothing to review, which is exactly how a released result reaches
+            // nobody". An error a caller clears by picking a hospital beats a
+            // queue that silently claims there is nothing to review.
+            log.warn("Result review queue refused: no hospital scope resolved for staff {}", staffId);
+            throw new com.example.hms.exception.ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId);
+        }
+
+        // Lab orders this physician placed AT THE HOSPITAL THEY ARE ACTING AT,
+        // whose results are available.
+        List<LabOrder> completedOrders =
+                labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, hospitalId);
         List<DoctorResultQueueItemDTO> queue = new ArrayList<>();
 
         // Sonar S135 — replaced the outer for-loop (which had two `continue`

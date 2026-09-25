@@ -169,6 +169,27 @@
   line-height: 1.3;
 }
 
+/* Why this row is not a plain fill. Amber, the same cue as the prescriber's
+   own attention note in prescriptions.scss — 7.19:1 on white. */
+.attention-note {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #92400e;
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
+/* The prescriber has answered: a different thing from a problem, so the
+   brand teal rather than the amber warning. 5.98:1 on white. */
+.attention-note--answered {
+  color: var(--primary-deep);
+}
+
 .refill-note--quote {
   font-style: italic;
   max-width: 18rem;

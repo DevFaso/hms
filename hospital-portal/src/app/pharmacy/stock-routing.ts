@@ -1,8 +1,11 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -11,11 +14,13 @@ import {
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeHintComponent],
   templateUrl: './stock-routing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-routing.scss',
@@ -25,11 +30,79 @@ export class StockRoutingComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * Whether this caller has a hospital pinned, and therefore whether the
+   * write controls on this page can do anything.
+   *
+   * <p>The reads on this screen answer for a super-admin in global view —
+   * that is what the backend half of this PR fixed — but every WRITE behind
+   * them (route to a partner, print for the patient, place a back order,
+   * record a partner's answer) deliberately still refuses without a scope.
+   * Rendering them live would turn one honest error into four buttons that
+   * always fail. Same gate as the MTM review screen.
+   */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
 
   // Prescription lookup
   prescriptionId = '';
   checking = signal(false);
   stockResult = signal<StockCheckResult | null>(null);
+
+  /**
+   * One in-flight history read at a time; a newer one cancels its predecessor.
+   *
+   * <p>Independent subscriptions raced, and this screen made that race
+   * destructive: page forward, or re-check a different prescription, while an
+   * earlier read is still out, and the earlier failure would land last —
+   * clearing a history the newer request had already loaded and painting the
+   * red panel over it. While the error handler only cleared the spinner the
+   * race was harmless; it is not any more. Same shape as the lab release
+   * worklist, and `catchError` sits INSIDE so a failure ends that attempt
+   * rather than the stream.
+   */
+  private readonly decisionRequests = new Subject<boolean>();
+
+  constructor() {
+    this.decisionRequests
+      .pipe(
+        switchMap((load) =>
+          // `false` is a cancel: switchMap drops whatever is in flight and
+          // this emits nothing to act on. Clearing the field or checking a
+          // different prescription has to CANCEL the old read, not merely
+          // outrun it — otherwise the previous order's history lands under
+          // the new id, which is what the reset in checkStock is for.
+          load
+            ? this.svc
+                .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
+                .pipe(
+                  map((res) => ({ page: res.data, failed: false, cancelled: false })),
+                  catchError(() => of({ page: null, failed: true, cancelled: false })),
+                )
+            : of({ page: null, failed: false, cancelled: true }),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ page, failed, cancelled }) => {
+        if (cancelled) {
+          return;
+        }
+        this.decisionsLoading.set(false);
+        if (failed || !page) {
+          // Never swallowed into an empty table: the history section is absent
+          // when there is nothing recorded, so a failure that only cleared the
+          // spinner read as "this order was never routed" — which is exactly
+          // what a pharmacist decides the next route from.
+          this.decisions.set([]);
+          this.decisionsTotalPages = 0;
+          this.decisionsError.set(true);
+          return;
+        }
+        this.decisions.set(page.content);
+        this.decisionsTotalPages = page.totalPages;
+      });
+  }
 
   ngOnInit(): void {
     // P-05: when navigated to via /pharmacy/stock-routing/:prescriptionId, skip the
@@ -45,6 +118,7 @@ export class StockRoutingComponent implements OnInit {
   // Routing decisions history
   decisions = signal<RoutingDecisionResponse[]>([]);
   decisionsLoading = signal(false);
+  decisionsError = signal(false);
   decisionsPage = 0;
   decisionsTotalPages = 0;
 
@@ -66,6 +140,16 @@ export class StockRoutingComponent implements OnInit {
     this.decisionsPage = 0;
     this.checking.set(true);
     this.stockResult.set(null);
+    // The history belongs to the PREVIOUS prescription until this one answers.
+    // Leaving its rows — or its red panel — on screen attributes one order's
+    // routing to another, which is the worst thing this screen could say. Any
+    // read still in flight for that previous order is cancelled outright:
+    // clearing the signals is not enough if the old response is yet to land.
+    this.decisionRequests.next(false);
+    this.decisions.set([]);
+    this.decisionsTotalPages = 0;
+    this.decisionsLoading.set(false);
+    this.decisionsError.set(false);
     this.svc.checkStock(this.prescriptionId).subscribe({
       next: (res) => {
         this.stockResult.set(res.data);
@@ -80,18 +164,20 @@ export class StockRoutingComponent implements OnInit {
   }
 
   loadDecisions(): void {
-    if (!this.prescriptionId.trim()) return;
+    if (!this.prescriptionId.trim()) {
+      // Clear the failure too: leaving it would keep a red "could not be
+      // loaded" panel — with a Retry that returns here and does nothing — on
+      // screen for a prescription the user has just cleared.
+      this.decisionRequests.next(false);
+      this.decisions.set([]);
+      this.decisionsTotalPages = 0;
+      this.decisionsLoading.set(false);
+      this.decisionsError.set(false);
+      return;
+    }
     this.decisionsLoading.set(true);
-    this.svc
-      .listRoutingDecisionsByPrescription(this.prescriptionId, this.decisionsPage, 10)
-      .subscribe({
-        next: (res) => {
-          this.decisions.set(res.data.content);
-          this.decisionsTotalPages = res.data.totalPages;
-          this.decisionsLoading.set(false);
-        },
-        error: () => this.decisionsLoading.set(false),
-      });
+    this.decisionsError.set(false);
+    this.decisionRequests.next(true);
   }
 
   // ── Route to partner ──
