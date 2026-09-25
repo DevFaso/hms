@@ -42,7 +42,7 @@
       plus a notice.
     -->
     @if (loadError()) {
-      <p class="rp-stale" role="status" [attr.aria-busy]="loading()">
+      <p class="rp-stale" role="status">
         {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
         <!--
           Reachable during an in-flight read, and left enabled: the

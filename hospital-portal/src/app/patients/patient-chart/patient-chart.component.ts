@@ -346,10 +346,17 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * giving those sections their own unscoped empty states, which is a change
    * to them, not a one-line substitution made from the labs section.
    *
-   * It can still return `''` — an account with no assignment at all — so
-   * every caller passes `|| undefined` rather than letting an empty string
-   * reach a `UUID` field, where it fails Jackson before the controller's own
-   * "hospital context is required" can say anything useful.
+   * It can still return `''`, for an account with no assignment at all. The
+   * READ paths pass `|| undefined` so the param is simply omitted; the two
+   * WRITE paths do not, and must not: `PatientDiagnosisRequestDTO` and
+   * `DoctorPatientChartUpdateRequestDTO` both mark `hospitalId` `@NotNull`
+   * behind a `@Valid` body, so omitting it is rejected by bean validation
+   * BEFORE `resolveHospitalScope` can derive the hospital from the token —
+   * which is strictly worse for the account that has one in its token and
+   * none in this signal. Both write forms fail for a truly unscoped account
+   * either way, and the fix for that is a scope, not a serialization trick.
+   *
+   * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
    */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
@@ -653,7 +660,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.problemSaving.set(true);
     const req: PatientDiagnosisRequest = {
       ...this.problemForm,
-      hospitalId: this.hospitalId() || undefined,
+      hospitalId: this.hospitalId(),
       onsetDate: this.problemForm.onsetDate || undefined,
     };
     const id = this.editingProblemId();
@@ -755,10 +762,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     }
     this.updateSaving.set(true);
     this.patientService
-      .createChartUpdate(this.patientId, {
-        ...this.updateForm,
-        hospitalId: this.hospitalId() || undefined,
-      })
+      .createChartUpdate(this.patientId, { ...this.updateForm, hospitalId: this.hospitalId() })
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('CHART.UPDATE_CREATED'));

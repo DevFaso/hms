@@ -164,8 +164,7 @@ export interface PatientProblem {
 }
 
 export interface PatientDiagnosisRequest {
-  /** Optional on the wire — see ChartUpdateRequest.hospitalId. */
-  hospitalId?: string;
+  hospitalId: string;
   problemDisplay: string;
   problemCode?: string;
   icdVersion?: string;
@@ -220,13 +219,7 @@ export interface ChartUpdate {
 }
 
 export interface ChartUpdateRequest {
-  /**
-   * Optional on the wire: an account with no active assignment resolves to no
-   * hospital, and omitting the field gets the controller's own "hospital
-   * context is required" message, where an empty string would fail Jackson's
-   * `UUID` bind first and say nothing useful.
-   */
-  hospitalId?: string;
+  hospitalId: string;
   updateReason: string;
   summary?: string;
   notifyCareTeam?: boolean;
