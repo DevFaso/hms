@@ -39,7 +39,6 @@ import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
@@ -57,14 +56,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    EnumLabelPipe,
-    HospitalScopeHintComponent,
-    RestrictedRowsComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',

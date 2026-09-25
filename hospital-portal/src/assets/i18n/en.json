@@ -7288,6 +7288,7 @@
     "LABS": "Labs",
     "LAB_AWAITING_RELEASE": "Awaiting release by the laboratory",
     "LAB_IN_HOUSE": "In-house laboratory",
+    "LAB_NO_HOSPITAL": "Lab results are shown one hospital at a time, and none is in scope for this account. Pick one from the hospital selector on a page that offers it, or ask an administrator to check your hospital assignment.",
     "LAB_ORDERED_AT": "Ordered",
     "LAB_ORDERED_BY": "Ordered by",
     "LAB_ORDERS": "Lab orders",
