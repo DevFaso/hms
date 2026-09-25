@@ -40,6 +40,8 @@ export class DoctorResultsPanelComponent {
    * The same window opened on the first load of the page.
    */
   loading = input(false);
+  /** Ids with an acknowledge in flight; their ✓ is disabled until it lands. */
+  acknowledging = input<string[]>([]);
   patientSelected = output<string>();
   resultAcknowledged = output<string>();
   reloadRequested = output<void>();

@@ -73,6 +73,9 @@ export class LabResultsInboxComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** Which read of the queue is the current one; see load(). */
+  private queueRequest = 0;
+
   /** Exposed for the "showing N of M" line. */
   readonly maxVisible = MAX_VISIBLE_RESULTS;
 
@@ -170,17 +173,31 @@ export class LabResultsInboxComponent implements OnInit {
   }
 
   load(): void {
+    // Only the latest read may write. Disabling the controls is not enough on
+    // its own — the ↻ is disabled while a read is in flight, but the two
+    // Retry controls live in branches that are only rendered once `loading`
+    // is already false, so a second read can always be started. A slow
+    // failure landing after a fast success drew the stale banner over current
+    // rows; a slow success landing last overwrote newer ones. Same guard the
+    // chart's two lab reads and the dashboard's copy of this queue carry.
+    const request = ++this.queueRequest;
+    const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);
-    this.loadError.set(false);
+    // `loadError` is NOT cleared here. Clearing on start blanked the stale
+    // notice for the whole request window, so a Retry that failed seconds
+    // later showed held rows as current in between. Only a response clears it.
     this.dashboardService
       .getResultReviewQueue()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (items) => {
+          if (!isCurrent()) return;
           this.results.set(items ?? []);
+          this.loadError.set(false);
           this.loading.set(false);
         },
         error: () => {
+          if (!isCurrent()) return;
           this.loadError.set(true);
           this.loading.set(false);
         },
