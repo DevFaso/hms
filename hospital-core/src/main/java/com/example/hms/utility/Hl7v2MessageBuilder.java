@@ -321,10 +321,14 @@ public class Hl7v2MessageBuilder {
             // to the width of the columns they meet. Rejected, not truncated:
             // a cut MRN or visit number could match a different patient or
             // visit, and an over-width visit number would otherwise fail its
-            // VARCHAR(255) write when the transaction flushes. See Hl7FieldBounds.
+            // VARCHAR(255) write when the transaction flushes. For PV1-3 only
+            // the first component is bounded, because it is the only part
+            // anything reads: a long room, bed or description later in the
+            // field is a legitimate location. See Hl7FieldBounds.
             if (!Hl7FieldBounds.fits(mrnParts[0], Hl7FieldBounds.MRN_MAX)
                     || !Hl7FieldBounds.fits(visitNumber, Hl7FieldBounds.VISIT_NUMBER_MAX)
-                    || !Hl7FieldBounds.fits(assignedLocation, Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
+                    || !Hl7FieldBounds.fits(firstComponent(assignedLocation),
+                        Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
                 return null;
             }
 

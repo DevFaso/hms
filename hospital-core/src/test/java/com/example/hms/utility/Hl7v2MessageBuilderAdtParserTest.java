@@ -280,6 +280,18 @@ class Hl7v2MessageBuilderAdtParserTest {
         }
 
         @Test
+        @DisplayName("A long PV1-3 is fine when its point of care fits - only that component is read")
+        void aLongLocationWithAShortPointOfCareIsRead() {
+            String location = "WARD-A^ROOM-12^BED-3^HOSP1^^^MAIN^2^" + "D".repeat(300);
+
+            ParsedAdtMessage parsed = builder.parseAdtMessage(
+                adtWith("MRN-1", location, "VISIT-1"), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.assignedLocation()).isEqualTo(location);
+        }
+
+        @Test
         @DisplayName("One character over on PV1-19 is refused, not truncated")
         void anOverWidthVisitNumberIsRefused() {
             assertThat(builder.parseAdtMessage(

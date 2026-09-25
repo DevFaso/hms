@@ -118,7 +118,8 @@ Every sender-controlled field that is matched, keyed or stored is held to
 the width of its column **once, where it is first read** — the limits live
 in `Hl7FieldBounds`. MSH-3/4/9/10 are checked in
 `Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
-allowlist); PID-3, MRG-1, PV1-3 and PV1-19 in the ADT and A40 parsers;
+allowlist); PID-3, MRG-1, PV1-19 and PV1-3's first component (the only
+part read) in the ADT and A40 parsers;
 OBR-2 in `MllpInboundLabServiceImpl`, because the ORU parser is shared with
 paths where OBR-2 is not an accession.
 

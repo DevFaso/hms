@@ -16,7 +16,7 @@ package com.example.hms.utility;
  * <p><b>Over-width is refused, never truncated.</b> Each of these fields is
  * matched or keyed on: MSH-10 is the idempotency key, MSH-3/MSH-4 match the
  * allowlist, OBR-2 an accession, PID-3/MRG-1 an EMPI alias, PV1-19 a visit,
- * PV1-3 a department. A truncated value can collide with another one - two
+ * the first component of PV1-3 a department. A truncated value can collide with another one - two
  * control ids sharing a prefix would read as a replay of each other - so
  * cutting one short changes what a legitimate message means. Each limit is
  * the width of the column the field is matched against or written to, so a
@@ -61,8 +61,9 @@ public final class Hl7FieldBounds {
     public static final int VISIT_NUMBER_MAX = 255;
 
     /**
-     * PV1-3: its first component is matched against a department code and
-     * quoted into the A02 transfer audit description.
+     * PV1-3's first component, the point of care: the only part read. It is
+     * matched against a department code or name and quoted into the A02
+     * transfer audit description; the rest of the field is not bounded.
      */
     public static final int ASSIGNED_LOCATION_MAX = 255;
 
