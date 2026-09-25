@@ -23,8 +23,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.context.MessageSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -41,7 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -70,12 +68,8 @@ import static org.mockito.Mockito.when;
  * answer to confirm that an id is real.
  */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("EncounterServiceImpl: who may read an encounter, its AVS and its note history")
 class EncounterServiceImplReadAccessControlTest {
-
-    /** The real {@code encounter.notfound} bundle string, {0} and all. */
-    private static final String NOT_FOUND_TEMPLATE = "Encounter with ID {0} was not found.";
 
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientRepository patientRepository;
@@ -126,19 +120,21 @@ class EncounterServiceImplReadAccessControlTest {
         strangerPatient = new Patient();
         strangerPatient.setId(UUID.randomUUID());
 
-        // Deliberately NOT wiring MessageUtil's static MessageSource: that is
-        // process-global and would leak into every other test in the JVM. The
-        // rendered sentence is whatever MessageUtil produces; what these tests
-        // assert is that the refusal and the absence produce the SAME one,
-        // plus the same key and the requested id as the only argument.
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
-            .thenAnswer(call -> java.text.MessageFormat.format(
-                NOT_FOUND_TEMPLATE, (Object[]) call.getArgument(1)));
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(callerPatient));
-        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
+        // No MessageSource stub: encounterNotFound() carries the KEY and the
+        // id, and ResourceNotFoundException renders it through the static
+        // MessageUtil — the injected MessageSource is never consulted on
+        // these three paths. Wiring MessageUtil's static source from a test
+        // would leak into every other test in the JVM, so these assertions
+        // compare the two answers to each other rather than to a fixed
+        // sentence.
+        //
+        // lenient() only on the shared fixtures a given case may not reach;
+        // the suite is otherwise strict, so a dead stub inside a test fails it.
+        lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(callerPatient));
+        lenient().when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
-        when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(), any()))
+        lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(), any()))
             .thenReturn(new AfterVisitSummaryDTO());
     }
 
@@ -190,14 +186,14 @@ class EncounterServiceImplReadAccessControlTest {
         if (checkedOut) {
             encounter.setCheckoutTimestamp(LocalDateTime.of(2026, 9, 25, 10, 0));
         }
-        when(encounterRepository.findById(encounter.getId())).thenReturn(Optional.of(encounter));
+        lenient().when(encounterRepository.findById(encounter.getId())).thenReturn(Optional.of(encounter));
         return encounter;
     }
 
     /** An id no encounter carries, for the side-by-side indistinguishability assertion. */
     private UUID missingEncounterId() {
         UUID id = UUID.randomUUID();
-        when(encounterRepository.findById(id)).thenReturn(Optional.empty());
+        lenient().when(encounterRepository.findById(id)).thenReturn(Optional.empty());
         return id;
     }
 
@@ -279,7 +275,7 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a patient account with no linked patient row is refused, not 500'd")
         void patientWithoutPatientRowIsRefused() {
-            when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
+            lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, true);
 
@@ -315,22 +311,44 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
-        @DisplayName("a caller with no resolvable hospital is refused, not told 'hospital context required'")
-        void noResolvableHospitalIsAnOrdinaryNotFound() {
-            // requireActiveHospitalId() throws BusinessException for a
-            // non-super-admin with no scope. The guard runs only after the row
-            // is found, so letting it out would answer a real id differently
-            // from a fictional one.
-            when(roleValidator.requireActiveHospitalId())
+        @DisplayName("a clinician at two hospitals with no chosen scope keeps the actionable refusal")
+        void noResolvableHospitalKeepsItsActionableMessage() {
+            // requireActiveHospitalId() throws for a non-super-admin whose
+            // scope cannot be resolved — a clinician with two active
+            // assignments and no X-Hospital-Id. The scope is resolved BEFORE
+            // any lookup, so telling them plainly to pick a hospital reveals
+            // nothing about the id: a real id and a fictional one answer the
+            // same way.
+            lenient().when(roleValidator.requireActiveHospitalId())
                 .thenThrow(new BusinessException("Hospital context required."));
             authenticateAs("ROLE_DOCTOR");
             Encounter here = encounterAt(hospital, strangerPatient, true);
             UUID missing = missingEncounterId();
 
-            ResourceNotFoundException refusal = captureNotFound(() -> service.getAfterVisitSummary(here.getId()));
+            assertThatThrownBy(() -> service.getAfterVisitSummary(here.getId()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+            assertThatThrownBy(() -> service.getAfterVisitSummary(missing))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+        }
+
+        @Test
+        @DisplayName("a super-admin who has pinned one hospital is bounded by it")
+        void superAdminPinnedToOneHospitalIsBounded() {
+            // requireActiveHospitalId() honours an X-Hospital-Id override for
+            // a super-admin (the scope chip, #566). The guard no longer takes
+            // its own super-admin decision from the authorities collection, so
+            // a pinned super-admin is scoped like every other caller.
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            authenticateAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
+            Encounter elsewhere = encounterAt(otherHospital, strangerPatient, true);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal = captureNotFound(() -> service.getAfterVisitSummary(elsewhere.getId()));
             ResourceNotFoundException absent = captureNotFound(() -> service.getAfterVisitSummary(missing));
 
-            assertIndistinguishable(refusal, here.getId(), absent, missing);
+            assertIndistinguishable(refusal, elsewhere.getId(), absent, missing);
         }
 
         @ParameterizedTest(name = "{0} at another hospital is refused")
@@ -378,8 +396,7 @@ class EncounterServiceImplReadAccessControlTest {
         void superAdminReadsCrossTenant() {
             // RoleExpansion.SUPER_ADMIN_INHERITS also grants ROLE_PATIENT on
             // the password path: the super-admin role must win over it.
-            when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
             authenticateAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, true);
 
@@ -440,7 +457,7 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a patient account with no linked patient row is refused, not 500'd")
         void patientWithoutPatientRowIsRefused() {
-            when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
+            lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, false);
 
@@ -525,8 +542,7 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a super-admin reads across tenants, as the global view intends")
         void superAdminReadsCrossTenant() {
-            when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
             authenticateAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
 
@@ -561,7 +577,7 @@ class EncounterServiceImplReadAccessControlTest {
         void clinicianAtTheHospitalStillReads() {
             authenticateAs("ROLE_DOCTOR");
             Encounter here = encounterAt(hospital, strangerPatient, false);
-            when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(here.getId()))
+            lenient().when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(here.getId()))
                 .thenReturn(List.of());
 
             assertThat(service.getEncounterNoteHistory(here.getId(), locale)).isEmpty();
@@ -570,11 +586,10 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a super-admin reads the trail across tenants")
         void superAdminReadsCrossTenant() {
-            when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
             authenticateAs("ROLE_SUPER_ADMIN");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
-            when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(elsewhere.getId()))
+            lenient().when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(elsewhere.getId()))
                 .thenReturn(List.of());
 
             assertThat(service.getEncounterNoteHistory(elsewhere.getId(), locale)).isEmpty();

@@ -12,16 +12,21 @@ import java.util.Set;
  * for the encounter reads, and one place the role sets those reads admit are
  * written down.
  *
- * <p>Two encounter reads admit {@code ROLE_PATIENT}, and they admit different
- * role sets around it, so there are two constants and one predicate rather
- * than one set used twice. Using a union would reopen exactly the defect a
- * union caused on {@code GET /prescriptions/{id}}: a role that is NOT admitted
- * by an endpoint must not be allowed to reclassify a caller who got in through
- * the patient door. A {@code ROLE_PATIENT} + {@code ROLE_RECEPTIONIST}
+ * <p>Three encounter reads go through one gate and admit three different role
+ * sets, so there is a constant per endpoint and a single predicate that takes
+ * one of them — never a union. A union would reopen exactly the defect one
+ * caused on {@code GET /prescriptions/{id}}: a role that is NOT admitted by an
+ * endpoint must not be allowed to reclassify a caller who got in through the
+ * patient door. A {@code ROLE_PATIENT} + {@code ROLE_RECEPTIONIST}
  * principal is refused {@code GET /encounters/&#123;id&#125;} as a receptionist
  * (the annotation does not admit the role) but admitted as a patient, so on
  * that endpoint they are a patient and only their own encounter is theirs to
  * read. The same principal on {@code /avs} is a front-desk reader.
+ *
+ * <p>{@code /notes/history} admits no patient at all today, so it has no
+ * subject; its set is here so that read shares the gate, and the ownership
+ * test arrives automatically if {@code ROLE_PATIENT} is ever added to its
+ * annotation.
  *
  * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
  * which answers a similar-sounding question against a fixed staff set that
@@ -34,7 +39,7 @@ public final class EncounterReaderRoles {
 
     /**
      * {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named alongside
-     * {@code ROLE_DOCTOR} in both sets because
+     * {@code ROLE_DOCTOR} in all three sets because
      * {@link com.example.hms.security.RoleExpansion} runs on the
      * password/JWT path but {@code KeycloakJwtAuthenticationConverter} maps
      * realm roles straight to authorities. Without them, a surgeon who is
@@ -88,6 +93,26 @@ public final class EncounterReaderRoles {
             SecurityConstants.ROLE_RECEPTIONIST,
             SecurityConstants.ROLE_SUPER_ADMIN));
 
+    /**
+     * The roles that read
+     * {@code GET /encounters/&#123;encounterId&#125;/notes/history} — the
+     * annotation on {@code EncounterController.getEncounterNoteHistory},
+     * plus the two doctor equivalents.
+     *
+     * <p>That annotation admits no patient, so nothing is the subject here
+     * today and the set is the whole of the readership. It exists anyway so
+     * the read goes through the same gate as the other two: adding
+     * {@code ROLE_PATIENT} to the annotation would then bring the ownership
+     * test with it, instead of handing every patient the full note audit
+     * trail — chief complaint, assessment, plan, author, timestamps — of
+     * every encounter at their hospital.
+     */
+    public static final Set<String> NOTE_HISTORY_NON_SUBJECT_ROLES = union(
+        DOCTOR_EQUIVALENTS,
+        Set.of(SecurityConstants.ROLE_NURSE,
+            SecurityConstants.ROLE_MIDWIFE,
+            SecurityConstants.ROLE_SUPER_ADMIN));
+
     private EncounterReaderRoles() {
     }
 
@@ -107,9 +132,10 @@ public final class EncounterReaderRoles {
      * must not change.
      *
      * @param auth            the current authentication, may be {@code null}
-     * @param nonSubjectRoles {@link #DETAIL_NON_SUBJECT_ROLES} or
-     *                        {@link #AVS_NON_SUBJECT_ROLES} — the set for the
-     *                        endpoint being served, never a union of both
+     * @param nonSubjectRoles {@link #DETAIL_NON_SUBJECT_ROLES},
+     *                        {@link #AVS_NON_SUBJECT_ROLES} or
+     *                        {@link #NOTE_HISTORY_NON_SUBJECT_ROLES} — the set
+     *                        for the endpoint being served, never a union
      */
     public static boolean isPatientOnly(Authentication auth, Set<String> nonSubjectRoles) {
         if (auth == null) {
