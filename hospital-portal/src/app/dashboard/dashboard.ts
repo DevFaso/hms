@@ -2605,9 +2605,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // that needs a read-back cannot be identified from `abnormalFlag`;
         // the server's answer is what identifies it, and the message says
         // where the ceremony lives.
+        // 404 is the hospital mismatch, not a missing row: the queue is built
+        // from ONE Staff record (the earliest) while the acknowledge is
+        // checked against the active hospital, so a doctor with records at
+        // two hospitals can be refused every row in the panel. A generic
+        // "could not be acknowledged" sends them looking for the wrong thing.
         this.toast.error(
           this.t(
-            err?.status === 400 ? 'DASHBOARD.READ_BACK_REQUIRED' : 'DASHBOARD.ACKNOWLEDGE_FAILED',
+            err?.status === 400
+              ? 'DASHBOARD.READ_BACK_REQUIRED'
+              : err?.status === 404
+                ? 'DASHBOARD.ACKNOWLEDGE_WRONG_HOSPITAL'
+                : 'DASHBOARD.ACKNOWLEDGE_FAILED',
           ),
         );
         settle();

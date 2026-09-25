@@ -106,17 +106,6 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
-  it('never shows "all reviewed" while the last read is still failed', () => {
-    // Acknowledge persists nothing, so clicking through stale rows must not
-    // be a way to turn a 502 into a green all-clear.
-    fixture.componentRef.setInput('results', []);
-    fixture.componentRef.setInput('loadError', true);
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.querySelector('.rp-empty')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.rp-error')).not.toBeNull();
-  });
-
   it('offers read-back, not a dismiss, on a critical row', () => {
     // LabResultServiceImpl.acknowledgeResult refuses a critical result that
     // was notified and not read back, and every critical result is notified

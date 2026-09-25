@@ -90,11 +90,16 @@
                 (LabResultsComponent.openReadBack) — NOT /lab, which is the
                 orders bench and has no such control — so this sends the
                 physician there instead of offering one that cannot work.
+                The page takes no deep link, so the tooltip names the row to
+                look for rather than leaving them to scan the whole list.
               -->
               <a
                 routerLink="/lab-results"
                 class="rp-action"
-                [title]="'DASHBOARD.READ_BACK_REQUIRED' | translate"
+                [title]="
+                  'DASHBOARD.READ_BACK_FOR'
+                    | translate: { test: r.testName, patient: r.patientName }
+                "
                 (click)="$event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">record_voice_over</span>

@@ -330,8 +330,25 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.refreshAfterAccessChange();
   }
 
+  /**
+   * The scope EVERY read and write on this chart works in.
+   *
+   * Was `activeHospitalId ?? auth.getHospitalId()`, the primary assignment.
+   * That is not what the auth interceptor sends: it sends
+   * `effectiveHospitalIdForRequest()`, which the scope chip moves — and this
+   * component now mounts a chip on the Labs tab, so a super-admin could pick
+   * hospital B, switch to Allergies, and send `hospitalId=A` as a query
+   * param under an `X-Hospital-Id: B` header. One request naming two
+   * hospitals is the divergence `labHospitalId()` was written against; there
+   * is no reason for the rest of the chart to keep it.
+   */
   private hospitalId(): string {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+    return (
+      this.roleContext.effectiveHospitalIdForRequest() ??
+      this.roleContext.activeHospitalId ??
+      this.auth.getHospitalId() ??
+      ''
+    );
   }
 
   /**
