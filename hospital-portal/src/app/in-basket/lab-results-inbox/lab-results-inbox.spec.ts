@@ -3,7 +3,7 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { LabResultsInboxComponent } from './lab-results-inbox';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
@@ -254,6 +254,28 @@ describe('LabResultsInboxComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
     expect(fixture.nativeElement.querySelector('.stale-banner')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
+  });
+
+  it('ignores a slow read that lands after a newer one', () => {
+    // Both Retry controls are reachable from the error states, so two reads
+    // can overlap: a slow failure landing last drew the stale banner over
+    // current rows.
+    setup([]);
+    const slow = new Subject<DoctorResultQueueItem[]>();
+    dashboardService.getResultReviewQueue.and.returnValue(slow.asObservable());
+    component.load();
+
+    dashboardService.getResultReviewQueue.and.returnValue(of([item()]));
+    component.load();
+    fixture.detectChanges();
+    expect(component.results().length).toBe(1);
+
+    // The first read finally fails — and must write nothing.
+    slow.error(new Error('504'));
+    fixture.detectChanges();
+
+    expect(component.loadError()).toBeFalse();
+    expect(component.results().length).toBe(1);
   });
 
   it('draws no truncation line on a short queue', () => {

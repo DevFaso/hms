@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  untracked,
   output,
   signal,
   ChangeDetectionStrategy,
@@ -45,8 +46,12 @@ type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 /** How many lab rows the section asks for; the backend caps `limit` at 100. */
 const LAB_PAGE_SIZE = 25;
 
-/** Cache key for "no hospital scope at all"; never a real hospital id. */
-const GLOBAL_SCOPE_KEY = 'GLOBAL';
+/**
+ * Cache key for "no hospital scope at all"; never a real hospital id. Nothing
+ * is read under it — `labsScoped()` refuses — but it keeps the key total, so
+ * gaining a scope always reads as a change.
+ */
+const UNSCOPED_KEY = 'UNSCOPED';
 
 @Component({
   selector: 'app-patient-chart',
@@ -281,10 +286,22 @@ export class PatientChartComponent implements OnInit, OnChanges {
     const previous = this.watchedLabScope;
     this.watchedLabScope = key;
     if (previous === undefined || previous === key) return;
-    this.labResults.set([]);
-    this.labOrders.set([]);
-    this.labsLoadedFor.set(null);
-    if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    // Only the labs section: it is the one keyed on this scope. The other
+    // three read `hospitalId()`, the primary assignment, which no chip moves.
+    //
+    // `untracked` because the work below reads signals it also writes
+    // (`labResults`, `labOrders`, and `section()` inside `loadLabs`). Without
+    // it those reads become dependencies of this effect and it re-runs on its
+    // own writes — held off only by the early return above, which is a
+    // coincidence rather than a guarantee.
+    untracked(() => {
+      this.labResults.set([]);
+      this.labOrders.set([]);
+      this.labResultsError.set(false);
+      this.labOrdersError.set(false);
+      this.labsLoadedFor.set(null);
+      if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    });
   });
 
   /** undefined until the watcher has run once; then the last scope seen. */
@@ -316,6 +333,25 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.refreshAfterAccessChange();
   }
 
+  /**
+   * The scope EVERY read and write on this chart works in.
+   *
+   * Was `activeHospitalId ?? auth.getHospitalId()`, the primary assignment.
+   * That is not what the auth interceptor sends: it sends
+   * `effectiveHospitalIdForRequest()`, which the scope chip moves — and this
+   * component now mounts a chip on the Labs tab, so a super-admin could pick
+   * hospital B, switch to Allergies, and send `hospitalId=A` as a query
+   * param under an `X-Hospital-Id: B` header. One request naming two
+   * hospitals is the divergence `labHospitalId()` was written against.
+   *
+   * The rest of the chart keeps the PRIMARY assignment, deliberately. Pointing
+   * it at the effective id made an unscoped account send no hospital at all on
+   * allergies, problems and updates, and all three of those backends refuse a
+   * null scope outright (`BusinessException("Hospital context is required")`)
+   * — so three sections that used to work started answering 400. Aligning
+   * them is a change to those sections, with their own empty states, not a
+   * one-line substitution made from the labs section.
+   */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
   }
@@ -352,16 +388,25 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   /**
-   * True when the lab reads carry no hospital scope at all.
+   * The labs section needs a hospital scope, and REFUSES to read without one.
    *
-   * Keyed on `labHospitalId()`, not on `globalView()`: a super-admin in
-   * global view is the usual case, but a clinical account whose assignments
-   * have all been deactivated resolves to no scope too, and then the hint
-   * claimed "this hospital's" while `isForeignLabRow` marked nothing. The
-   * hint and the marker have to agree with the reads by construction, so all
-   * three read the same value.
+   * With no scope the client sends neither `hospitalId` nor `X-Hospital-Id`;
+   * `ControllerAuthUtils.resolveHospitalScope` then hands
+   * `PatientLabResultServiceImpl.getLabResults` a null, which takes its
+   * `findByLabOrder_Patient_Id` branch — every tenant's rows, bypassing
+   * `RecordAccessPolicy.readableHospitalIds` — and skips
+   * `reachRecorder.recordReach` entirely, because that is guarded on a
+   * non-null hospital. `/lab-orders` does the same: no predicate at all. So
+   * an account HOLDING ROLE_SUPER_ADMIN and acting as its inherited clinical
+   * role (the chart gate asks `hasAnyActiveRole`, which passes) could read a
+   * patient's labs across every hospital with no cross-hospital reach row,
+   * while every other read on the same chart is accounted.
+   *
+   * Rather than account for it from the client, the section declines to read
+   * and points at the scope chip. One click, and both reads are scoped and
+   * audited like everything else.
    */
-  readonly globalScope = computed(() => this.labHospitalId() == null);
+  readonly labsScoped = computed(() => this.labHospitalId() != null);
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
@@ -370,7 +415,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * between them left cross-tenant orders on screen and re-read nothing.
    */
   private labsScopeKey(): string {
-    return this.labHospitalId() ?? GLOBAL_SCOPE_KEY;
+    return this.labHospitalId() ?? UNSCOPED_KEY;
   }
 
   /**
@@ -387,9 +432,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
     // now is only correct because the watcher happens to clear them in the
     // same pass. Reading the stored key makes the invariant structural — a
     // row can never be compared against a scope it was not fetched under,
-    // which is what inverted the marker before.
+    // which is what inverted the marker before. The key is either null or a
+    // real hospital id: `loadLabs()` returns before writing it when unscoped,
+    // so the sentinel never reaches this comparison.
     const scope = this.labsLoadedFor();
-    return !!row.hospitalId && !!scope && scope !== GLOBAL_SCOPE_KEY && row.hospitalId !== scope;
+    return !!row.hospitalId && !!scope && row.hospitalId !== scope;
   }
 
   setSection(section: ChartSection): void {
@@ -742,6 +789,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * Retry rather than being retried silently on every visit.
    */
   private loadStaleLabs(): void {
+    if (!this.labsScoped()) return;
     if (this.labsLoadedFor() !== this.labsScopeKey()) {
       this.loadLabs();
       return;
@@ -751,6 +799,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   loadLabs(): void {
+    if (!this.labsScoped()) return;
     this.labsLoadedFor.set(this.labsScopeKey());
     if (this.canViewLabResults()) this.fetchLabResults();
     if (this.canViewLabOrders()) this.fetchLabOrders();
@@ -924,6 +973,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labResults.set([]);
     this.labOrders.set([]);
     this.labsLoadedFor.set(null);
+    this.labResultsError.set(false);
+    this.labOrdersError.set(false);
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

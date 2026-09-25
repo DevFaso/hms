@@ -70,6 +70,8 @@ import { EncounterService } from '../services/encounter.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
+import { LabService } from '../services/lab.service';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
@@ -157,6 +159,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly portalService = inject(PatientPortalService);
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly labService = inject(LabService);
   private readonly translate = inject(TranslateService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly pharmacyService = inject(PharmacyService);
@@ -252,6 +255,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resultQueueError = signal(false);
   /** A read is in flight; the panel shows a spinner, not an empty state. */
   resultQueueLoading = signal(false);
+  /**
+   * Result ids with an acknowledge in flight. The row is only removed once
+   * the server has taken it, so without this a physician on a slow link
+   * clicks ✓ repeatedly and sends the same POST several times.
+   */
+  acknowledgingResults = signal<string[]>([]);
   /**
    * Which review-queue read is the current one.
    *
@@ -2557,13 +2566,62 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Acknowledge a result from the review panel.
+   *
+   * This used to filter the row out of the local array and nothing else,
+   * although `POST /lab-results/{id}/acknowledge` exists, `LabService`
+   * already wraps it, and the queue item's id IS the `LabResult` id
+   * (`ResultReviewServiceImpl.toQueueItem` builds it from
+   * `result.getId()`). So a physician acknowledging a CRITICAL row watched it
+   * disappear while `LabResult.acknowledged` stayed false and the critical
+   * escalation sweep went on paging for it.
+   *
+   * The row is removed only once the server has taken it; a failure leaves it
+   * on screen and says so, because a control that silently does nothing is
+   * worse than one that reports a problem.
+   *
+   * `resultQueueError` is deliberately NOT cleared here. Clearing it once the
+   * last row was dismissed let a physician turn a 502 into the green "all
+   * results reviewed" card by clicking through stale rows — the exact
+   * all-clear removing `catchError` was meant to make impossible. Only a read
+   * that actually succeeds clears it.
+   */
   acknowledgeResult(resultId: string): void {
-    this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
-    // The stale notice described the rows that were on screen. Once the
-    // physician has cleared them it describes nothing, and leaving it set
-    // flipped an emptied panel into a full "could not be loaded" card —
-    // telling them the queue failed when they had just worked through it.
-    this.resultQueueError.set(false);
+    if (this.acknowledgingResults().includes(resultId)) return;
+    this.acknowledgingResults.update((ids) => [...ids, resultId]);
+    const settle = (): void =>
+      this.acknowledgingResults.update((ids) => ids.filter((id) => id !== resultId));
+    this.labService.acknowledgeResult(resultId).subscribe({
+      next: () => {
+        this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
+        settle();
+      },
+      error: (err: HttpErrorResponse) => {
+        // 400 is the read-back refusal, and it reaches far more rows than the
+        // Critical section: `CriticalValueNotificationService.isCritical`
+        // stamps `criticalNotifiedAt` for a reference-range severity of HIGH
+        // too, while the queue grades that row merely ABNORMAL. So the row
+        // that needs a read-back cannot be identified from `abnormalFlag`;
+        // the server's answer is what identifies it, and the message says
+        // where the ceremony lives.
+        // 404 is the hospital mismatch, not a missing row: the queue is built
+        // from ONE Staff record (the earliest) while the acknowledge is
+        // checked against the active hospital, so a doctor with records at
+        // two hospitals can be refused every row in the panel. A generic
+        // "could not be acknowledged" sends them looking for the wrong thing.
+        this.toast.error(
+          this.t(
+            err?.status === 400
+              ? 'DASHBOARD.READ_BACK_REQUIRED'
+              : err?.status === 404
+                ? 'DASHBOARD.ACKNOWLEDGE_WRONG_HOSPITAL'
+                : 'DASHBOARD.ACKNOWLEDGE_FAILED',
+          ),
+        );
+        settle();
+      },
+    });
   }
 
   /**
@@ -2577,7 +2635,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loadResultReviewQueue(done?: () => void): void {
     const request = ++this.resultQueueRequest;
     const isCurrent = (): boolean => request === this.resultQueueRequest;
-    this.resultQueueError.set(false);
+    // NOT cleared here. Clearing on start hid the stale banner for the whole
+    // request window, so a Retry that failed thirty seconds later showed the
+    // rows as current for thirty seconds. Only a response clears it.
     // Set BEFORE the request: clearing the error while `resultQueue` is still
     // empty otherwise drew "all results reviewed" for the whole request
     // window, on the first load and again on every Retry.
@@ -2586,6 +2646,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (items) => {
         if (isCurrent()) {
           this.resultQueue.set(items);
+          this.resultQueueError.set(false);
           this.resultQueueLoading.set(false);
         }
         done?.();
