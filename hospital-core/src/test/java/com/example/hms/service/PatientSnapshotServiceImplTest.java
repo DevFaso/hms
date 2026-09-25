@@ -1133,7 +1133,7 @@ class PatientSnapshotServiceImplTest {
      * caller may pass the reach unconditionally.
      */
     @Test
-    void aScopedReadAlwaysRecordsTheReachRow() {
+    void aScopedReadAlwaysOffersTheReachToTheRecorder() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
