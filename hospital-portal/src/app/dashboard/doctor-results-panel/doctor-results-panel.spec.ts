@@ -128,7 +128,9 @@ describe('DoctorResultsPanelComponent', () => {
     const section = fixture.nativeElement.querySelector('.rp-critical');
     expect(section).not.toBeNull();
     expect(section.querySelector('.rp-ack-btn')).toBeNull();
-    expect(section.querySelector('a[href="/lab"]')).not.toBeNull();
+    // /lab-results, NOT /lab: the read-back ceremony lives in
+    // LabResultsComponent; /lab is the orders bench and has no such control.
+    expect(section.querySelector('a[href="/lab-results"]')).not.toBeNull();
   });
 
   it('disables the dismiss while its acknowledgement is in flight', () => {

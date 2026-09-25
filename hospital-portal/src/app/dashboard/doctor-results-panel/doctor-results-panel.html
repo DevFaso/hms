@@ -86,12 +86,13 @@
                 back, and `CriticalValueNotificationService` stamps
                 `criticalNotifiedAt` on every critical result at creation — so
                 a ✓ here is a guaranteed 400 and the escalation sweep goes on
-                paging. The read-back ceremony lives on the /lab bench; this
-                sends the physician there instead of offering a control that
-                cannot work.
+                paging. The read-back ceremony lives on /lab-results
+                (LabResultsComponent.openReadBack) — NOT /lab, which is the
+                orders bench and has no such control — so this sends the
+                physician there instead of offering one that cannot work.
               -->
               <a
-                routerLink="/lab"
+                routerLink="/lab-results"
                 class="rp-action"
                 [title]="'DASHBOARD.READ_BACK_REQUIRED' | translate"
                 (click)="$event.stopPropagation()"

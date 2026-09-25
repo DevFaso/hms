@@ -71,6 +71,7 @@ import { PharmacyService } from '../services/pharmacy.service';
 import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
 import { LabService } from '../services/lab.service';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
@@ -2596,8 +2597,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
         settle();
       },
-      error: () => {
-        this.toast.error(this.t('DASHBOARD.ACKNOWLEDGE_FAILED'));
+      error: (err: HttpErrorResponse) => {
+        // 400 is the read-back refusal, and it reaches far more rows than the
+        // Critical section: `CriticalValueNotificationService.isCritical`
+        // stamps `criticalNotifiedAt` for a reference-range severity of HIGH
+        // too, while the queue grades that row merely ABNORMAL. So the row
+        // that needs a read-back cannot be identified from `abnormalFlag`;
+        // the server's answer is what identifies it, and the message says
+        // where the ceremony lives.
+        this.toast.error(
+          this.t(
+            err?.status === 400 ? 'DASHBOARD.READ_BACK_REQUIRED' : 'DASHBOARD.ACKNOWLEDGE_FAILED',
+          ),
+        );
         settle();
       },
     });

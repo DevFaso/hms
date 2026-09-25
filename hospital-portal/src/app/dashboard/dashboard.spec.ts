@@ -1336,6 +1336,37 @@ describe('Dashboard patient lab tile styling', () => {
       expect(TestBed.inject(ToastService).error).toHaveBeenCalled();
     });
 
+    it('names the read-back ceremony when the server refuses with a 400', () => {
+      // The refusal reaches far more rows than the Critical section: a
+      // reference-range severity of HIGH stamps criticalNotifiedAt too, while
+      // the queue grades that row merely ABNORMAL. The server's answer is the
+      // only reliable way to tell.
+      const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+      labServiceSpy.acknowledgeResult.and.returnValue(throwError(() => ({ status: 400 }) as never));
+      const c = buildDashboard(labServiceSpy);
+      c.resultQueue.set([queueItem('r-1')]);
+
+      c.acknowledgeResult('r-1');
+
+      expect(c.resultQueue().map((r) => r.id)).toEqual(['r-1']);
+      expect(TestBed.inject(ToastService).error).toHaveBeenCalledWith(
+        'DASHBOARD.READ_BACK_REQUIRED',
+      );
+    });
+
+    it('ignores a second click while the first acknowledgement is in flight', () => {
+      const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+      labServiceSpy.acknowledgeResult.and.returnValue(new Subject<void>().asObservable());
+      const c = buildDashboard(labServiceSpy);
+      c.resultQueue.set([queueItem('r-1')]);
+
+      c.acknowledgeResult('r-1');
+      c.acknowledgeResult('r-1');
+
+      expect(labServiceSpy.acknowledgeResult).toHaveBeenCalledTimes(1);
+      expect(c.acknowledgingResults()).toEqual(['r-1']);
+    });
+
     it('does not let a failed read be cleared by working through its stale rows', () => {
       const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
       labServiceSpy.acknowledgeResult.and.returnValue(of(undefined));
