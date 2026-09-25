@@ -353,8 +353,7 @@ class EncounterServiceImplReadAccessControlTest {
 
         @ParameterizedTest(name = "{0} at another hospital is refused")
         @ValueSource(strings = {
-            "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
-            "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST"})
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST"})
         @DisplayName("every non-subject role in the AVS set is refused an AVS at another hospital")
         void everyRoleIsRefusedCrossTenant(String role) {
             authenticateAs(role);
@@ -369,8 +368,7 @@ class EncounterServiceImplReadAccessControlTest {
 
         @ParameterizedTest(name = "{0} at the encounter's hospital still reads it")
         @ValueSource(strings = {
-            "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON",
-            "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST"})
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST"})
         @DisplayName("every non-subject role in the AVS set still reads any AVS at its own hospital")
         void everyNonSubjectRoleStillReads(String role) {
             authenticateAs(role);
@@ -490,7 +488,7 @@ class EncounterServiceImplReadAccessControlTest {
 
         @ParameterizedTest(name = "{0} at another hospital is refused")
         @ValueSource(strings = {
-            "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
             "ROLE_RADIOLOGIST", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST"})
         @DisplayName("every non-subject role in the detail set is refused an encounter at another hospital")
         void everyRoleIsRefusedCrossTenant(String role) {
@@ -506,7 +504,7 @@ class EncounterServiceImplReadAccessControlTest {
 
         @ParameterizedTest(name = "{0} at the encounter's hospital still reads it")
         @ValueSource(strings = {
-            "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
             "ROLE_RADIOLOGIST", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST"})
         @DisplayName("every non-subject role in the detail set still reads any encounter at its own hospital")
         void everyNonSubjectRoleStillReads(String role) {
@@ -540,6 +538,48 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
+        @DisplayName("a surgeon who is also a patient, over OIDC, is a patient here — the role is not admitted")
+        void surgeonWhoIsAlsoAPatientOverOidcIsStillJustAPatient() {
+            // The detail annotation admits ROLE_DOCTOR, not ROLE_SURGEON, and
+            // KeycloakJwtAuthenticationConverter does not run RoleExpansion —
+            // so over OIDC this principal reaches the handler through the
+            // patient door alone. Naming ROLE_SURGEON in the non-subject set
+            // (the usual fix for the missing expansion, and the right one for
+            // a set that GRANTS access) would reclassify them as a clinician
+            // and hand them every encounter at the hospital.
+            authenticateViaOidcAs("ROLE_PATIENT", "ROLE_SURGEON");
+            Encounter strangers = encounterAt(hospital, strangerPatient, false);
+            UUID missing = missingEncounterId();
+
+            ResourceNotFoundException refusal =
+                captureNotFound(() -> service.getEncounterById(strangers.getId(), locale));
+            ResourceNotFoundException absent = captureNotFound(() -> service.getEncounterById(missing, locale));
+
+            assertIndistinguishable(refusal, strangers.getId(), absent, missing);
+        }
+
+        @Test
+        @DisplayName("that same surgeon-patient still reads their own encounter")
+        void surgeonWhoIsAlsoAPatientStillReadsTheirOwn() {
+            authenticateViaOidcAs("ROLE_PATIENT", "ROLE_SURGEON");
+            Encounter mine = encounterAt(hospital, callerPatient, false);
+
+            assertThat(service.getEncounterById(mine.getId(), locale)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("a surgeon who is also a patient reads as a clinician on the password path")
+        void surgeonWhoIsAlsoAPatientOnThePasswordPathReadsAsAClinician() {
+            // RoleExpansion has already given them ROLE_DOCTOR by the time any
+            // guard runs, so dropping ROLE_SURGEON from the set costs a real
+            // surgeon nothing on the login the annotation actually admits.
+            authenticateAs("ROLE_PATIENT", "ROLE_SURGEON", "ROLE_DOCTOR");
+            Encounter strangers = encounterAt(hospital, strangerPatient, false);
+
+            assertThat(service.getEncounterById(strangers.getId(), locale)).isNotNull();
+        }
+
+        @Test
         @DisplayName("a super-admin reads across tenants, as the global view intends")
         void superAdminReadsCrossTenant() {
             lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
@@ -559,7 +599,7 @@ class EncounterServiceImplReadAccessControlTest {
     class NoteHistory {
 
         @ParameterizedTest(name = "{0} at another hospital is refused")
-        @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE"})
+        @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE"})
         @DisplayName("every role in the note-history set is refused a trail at another hospital")
         void everyRoleIsRefusedCrossTenant(String role) {
             authenticateAs(role);

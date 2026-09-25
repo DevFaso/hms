@@ -1347,10 +1347,18 @@ public class EncounterServiceImpl implements EncounterService {
      * super-admin in global view resolves to {@code null} and reads across
      * tenants; a super-admin who has pinned one hospital with the scope chip
      * is bounded by it, exactly as {@code list} and
-     * {@code readEncountersForPatient} already are. The super-admin decision
-     * is therefore left to that one method — which takes it from the discrete
-     * {@code isSuperAdmin} claim — rather than taken again here from the
-     * inflatable authorities collection.
+     * {@code readEncountersForPatient} already are.
+     *
+     * <p>The super-admin decision is therefore taken in one place instead of
+     * twice. Its step 1 reads the discrete {@code isSuperAdmin} claim, which
+     * {@code RoleValidator}'s own javadoc calls the only safe signal for a
+     * cross-tenant decision. Be clear about the limit, though: its <b>step 4
+     * safety net</b> still returns {@code null} on {@code isSuperAdminFromAuth()}
+     * for requests that reach a service without {@code HospitalContext}
+     * populated, so an inflated authorities collection can still resolve to an
+     * unbounded read there. That is the delegate's behaviour on every caller,
+     * not something this guard adds or can fix locally; closing it means
+     * hardening step 4 for all of them.
      *
      * <p>Which roles count as "not the subject" differs per endpoint — see
      * {@link EncounterReaderRoles}, and never pass a union of its sets.

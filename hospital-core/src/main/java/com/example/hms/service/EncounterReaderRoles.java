@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.config.SecurityConstants;
-import com.example.hms.security.RoleExpansion;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 
@@ -38,34 +37,47 @@ import java.util.Set;
 public final class EncounterReaderRoles {
 
     /**
-     * {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named alongside
-     * {@code ROLE_DOCTOR} in all three sets because
-     * {@link com.example.hms.security.RoleExpansion} runs on the
-     * password/JWT path but {@code KeycloakJwtAuthenticationConverter} maps
-     * realm roles straight to authorities. Without them, a surgeon who is
-     * also a patient at the hospital would read a colleague's encounter over
-     * one login and get a 404 over the other.
+     * The clinical core shared by all three sets.
      *
-     * <p>{@code ROLE_SUPER_ADMIN} is named outright for the same reason, and
-     * for a second one: {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants a
-     * super-admin {@code ROLE_PATIENT}, so on the password path every
-     * super-admin looks like a patient unless the super-admin role itself
-     * wins first.
+     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are deliberately NOT
+     * here, and the usual reason for naming them is what makes it wrong. On a
+     * set that GRANTS access, naming them matters, because
+     * {@link com.example.hms.security.RoleExpansion} maps them to
+     * {@code ROLE_DOCTOR} on the password path and
+     * {@code KeycloakJwtAuthenticationConverter} does not. This set REMOVES
+     * subject status, so naming them inverts into an escalation: none of the
+     * three annotations admits a surgeon, so over Keycloak a
+     * {@code ROLE_SURGEON} + {@code ROLE_PATIENT} principal passes
+     * {@code @PreAuthorize} through the patient door alone — and would then be
+     * reclassified here as a clinician and read every record at the hospital.
+     * Over the password path the same principal already holds
+     * {@code ROLE_DOCTOR} by expansion, so nothing legitimate is lost: what is
+     * lost is exactly the escalation.
+     *
+     * <p>Hence the invariant for every set below, and for any set added later:
+     * <b>exactly the endpoint's {@code @PreAuthorize} minus
+     * {@code ROLE_PATIENT}</b>. Nothing added, nothing inferred. A role the
+     * annotation does not admit cannot be a legitimate non-subject reader, and
+     * putting it here can only let it in through the patient door.
+     *
+     * <p>{@code ROLE_SUPER_ADMIN} is named because all three annotations DO
+     * admit it, and it must win over the {@code ROLE_PATIENT} that
+     * {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants every super-admin on
+     * the password path.
      */
-    private static final Set<String> DOCTOR_EQUIVALENTS = Set.of(
-        SecurityConstants.ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, SecurityConstants.ROLE_SURGEON);
+    private static final Set<String> CLINICAL_CORE = Set.of(SecurityConstants.ROLE_DOCTOR);
 
     /**
      * The roles that read {@code GET /encounters/&#123;id&#125;} as a
      * clinician rather than as its subject — exactly
      * {@code EncounterController.ENCOUNTER_DETAIL_ROLES} minus
-     * {@code ROLE_PATIENT}, plus the two doctor equivalents.
+     * {@code ROLE_PATIENT}.
      *
      * <p>{@code ROLE_RECEPTIONIST} is deliberately absent: the detail read
      * does not admit it.
      */
     public static final Set<String> DETAIL_NON_SUBJECT_ROLES = union(
-        DOCTOR_EQUIVALENTS,
+        CLINICAL_CORE,
         Set.of(SecurityConstants.ROLE_NURSE,
             SecurityConstants.ROLE_MIDWIFE,
             SecurityConstants.ROLE_RADIOLOGIST,
@@ -77,7 +89,7 @@ public final class EncounterReaderRoles {
      * The roles that read {@code GET /encounters/&#123;id&#125;/avs} as
      * somebody other than its subject — exactly the annotation on
      * {@code EncounterController.getAfterVisitSummary} minus
-     * {@code ROLE_PATIENT}, plus the two doctor equivalents.
+     * {@code ROLE_PATIENT}.
      *
      * <p>{@code ROLE_RECEPTIONIST} IS here: the front desk completes the
      * check-out that produces the after-visit summary
@@ -87,7 +99,7 @@ public final class EncounterReaderRoles {
      * the AVS read does not admit them.
      */
     public static final Set<String> AVS_NON_SUBJECT_ROLES = union(
-        DOCTOR_EQUIVALENTS,
+        CLINICAL_CORE,
         Set.of(SecurityConstants.ROLE_NURSE,
             SecurityConstants.ROLE_MIDWIFE,
             SecurityConstants.ROLE_RECEPTIONIST,
@@ -108,7 +120,7 @@ public final class EncounterReaderRoles {
      * every encounter at their hospital.
      */
     public static final Set<String> NOTE_HISTORY_NON_SUBJECT_ROLES = union(
-        DOCTOR_EQUIVALENTS,
+        CLINICAL_CORE,
         Set.of(SecurityConstants.ROLE_NURSE,
             SecurityConstants.ROLE_MIDWIFE,
             SecurityConstants.ROLE_SUPER_ADMIN));
