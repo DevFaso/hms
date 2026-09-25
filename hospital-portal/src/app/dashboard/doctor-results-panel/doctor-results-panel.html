@@ -9,6 +9,25 @@
         </span>
       }
     </div>
+    <!--
+      The picker sits in the card head rather than inside the no-scope branch
+      below: the dashboard is not `requiresHospitalScope`, so the shell draws
+      no scope bar above it, and a chip that lived only in that branch would
+      vanish on the first pick, leaving no way to switch hospital or return to
+      global view from here. It hides itself for anyone but a super-admin.
+
+      It is not literally always on screen: the whole panel sits inside the
+      dashboard's `activeView() === 'doctor'` block, which is gated on
+      `!loading()`, and a pick reloads the page's data — so the chip is
+      recreated (and re-fetches its label) on each pick and is absent while
+      the reload is in flight. Hoisting it out of the panel is a dashboard
+      layout change, reported rather than made here.
+
+      `preserveScope` keeps the session's pick rather than resetting to global
+      view on mount; `disableUrlSync` governs the separate WRITE path, and is
+      on because the dashboard does not read `?hospitalId=`.
+    -->
+    <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
@@ -17,7 +36,14 @@
     queue, and swapping a populated, readable list for a spinner every time is
     worse than letting the rows stand until the new ones land.
   -->
-  @if (loading() && results().length === 0) {
+  <!--
+    No hospital in scope FIRST, ahead of loading, error and empty: the queue
+    was never read. The green "all results reviewed" card below would be a
+    false all-clear, and the error card would blame an outage.
+  -->
+  @if (!scoped()) {
+    <app-hospital-scope-hint />
+  } @else if (loading() && results().length === 0) {
     <div class="rp-loading" aria-live="polite">
       <span class="rp-spinner"></span>
       <span>{{ 'common.loading' | translate }}</span>
