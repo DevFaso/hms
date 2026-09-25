@@ -40,17 +40,33 @@ public final class PrescriptionReaderRoles {
 
     /**
      * The roles that read a prescription as a clinician rather than as its
-     * subject: exactly the non-patient roles {@code GET /prescriptions/{id}}
-     * admits, no more and no fewer.
+     * subject.
      *
-     * <p>Mirroring the annotation is the whole rule, and
-     * {@code PrescriptionAfterWriteCallerGuardTest.theRoleSetMirrorsTheAnnotation}
+     * <p><b>The invariant, and it is the whole of it: this set is its
+     * endpoint’s {@code @PreAuthorize} list minus {@code ROLE_PATIENT}, with
+     * nothing added.</b> "Nothing added" is the operative half, because this
+     * set does not GRANT access — the annotation already did that, before this
+     * code runs — it REMOVES subject status, deciding who is not a patient and
+     * therefore skips the ownership check. Roles named for role-expansion
+     * parity are right in a set that opens a door and wrong in one that closes
+     * one: {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} were briefly named
+     * here for that reason and it was backwards, because a principal holding
+     * one of them plus {@code ROLE_PATIENT} enters through the PATIENT door on
+     * the Keycloak path (no expansion there) and naming the role would then
+     * have waived the very guard that principal needs.
+     *
+     * <p>{@code ROLE_SUPER_ADMIN} needs no exception either, and this is worth
+     * checking rather than assuming: {@code SUPER_ADMIN_INHERITS} does include
+     * {@code ROLE_PATIENT}, but it includes {@code ROLE_DOCTOR} in the same
+     * breath, and that is already in this set — so an expanded super-admin is
+     * a clinical reader without being named. Unexpanded, on the OIDC path, they
+     * hold no {@code ROLE_PATIENT} either unless the realm grants it, and if it
+     * does they are refused, like the surgeon, in the safe direction.
+     *
+     * <p>{@code PrescriptionAfterWriteCallerGuardTest.theRoleSetMirrorsTheAnnotation}
      * fails if the two ever disagree — in either direction, because each is a
-     * different defect. Wider than the annotation re-opens the door this guard
-     * closed: a principal holding a role the annotation does NOT admit reaches
-     * the handler only through {@code ROLE_PATIENT}, so exempting it would let
-     * it read a stranger’s prescription on the strength of the patient role
-     * that let it in. Narrower refuses a clinician their colleagues’ orders.
+     * different defect. Wider re-opens the door this guard closed, as above.
+     * Narrower refuses a clinician their colleagues’ orders.
      *
      * <p>{@code ROLE_PHARMACY_VERIFIER} is in the set because #737 added it to
      * the annotation, and for the reason that PR gave: the role may RAISE a
@@ -59,14 +75,11 @@ public final class PrescriptionReaderRoles {
      * patient of the hospital reads as a clinician here, as a pharmacist
      * already did.
      *
-     * <p>A consequence worth knowing, and NOT fixed here: on the OIDC path
-     * {@code KeycloakJwtAuthenticationConverter} maps realm roles straight to
-     * authorities, so {@link com.example.hms.security.RoleExpansion}’s
-     * doctor-equivalence never runs. A surgeon or physician who is also a
-     * patient therefore reads a colleague’s prescription over a password login
-     * (expanded to {@code ROLE_DOCTOR}) and is refused it over SSO. That is a
-     * refusal, not a grant, so it fails in the safe direction; the fix belongs
-     * on the OIDC path or in the annotation, not in an exemption here.
+     * <p>The cost of that, stated rather than hidden: a surgeon who is also a
+     * patient reads a colleague’s prescription over a password login and is
+     * refused it over SSO. The fix belongs on the OIDC path or in the
+     * annotation — both of which change who the ANNOTATION admits, which this
+     * set would then follow — never in an exemption here.
      */
     public static final Set<String> CLINICAL_READER_ROLES = Set.of(
         "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
