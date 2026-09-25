@@ -170,7 +170,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      *
      * <p>404, not 403, and the same message as a prescription that does not
      * exist: the answer must not tell a patient that an id is real — including
-     * when the principal itself cannot be resolved to a patient row. The
+     * when the principal itself cannot be resolved to a patient row, and
+     * without a data defect turning the refusal into a stack trace. The
      * subject comes from the authenticated principal
      * ({@code user id → Patient}), never from anything in the request — the
      * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
@@ -195,14 +196,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // owner their own prescription. ControllerAuthUtils.resolveUserId
         // reads the appUserId claim too, and is what
         // PatientPortalServiceImpl.resolvePatientId already uses.
-        UUID callerPatientId = authUtils.resolveUserId(auth)
-            .flatMap(patientRepository::findByUserId)
-            .map(Patient::getId)
-            .orElse(null);
         UUID subjectPatientId = prescription.getPatient() != null
             ? prescription.getPatient().getId()
             : null;
-        if (callerPatientId == null || !callerPatientId.equals(subjectPatientId)) {
+        // findAllByUserId, not findByUserId: the single-result form throws
+        // IncorrectResultSizeDataAccessException on a tenant that still carries
+        // duplicate clinical.patients.user_id rows (V113 falls back to a plain
+        // index rather than failing the deploy), which would answer a 500 where
+        // this method promises a 404 or the record. Matching against every row
+        // the account owns also keeps the answer RIGHT on such a tenant: the
+        // owner still reads their prescription instead of being refused by an
+        // arbitrary pick.
+        boolean theirs = subjectPatientId != null
+            && authUtils.resolveUserId(auth)
+                .map(patientRepository::findAllByUserId)
+                .orElseGet(java.util.List::of)
+                .stream()
+                .anyMatch(p -> subjectPatientId.equals(p.getId()));
+        if (!theirs) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
     }

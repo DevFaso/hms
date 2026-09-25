@@ -101,7 +101,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
         callerPatient.setId(callerPatientId);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(callerPatient));
+        when(patientRepository.findAllByUserId(callerUserId)).thenReturn(List.of(callerPatient));
     }
 
     @AfterEach
@@ -177,7 +177,7 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @DisplayName("a patient whose account has no patient record reads nothing")
     void unlinkedPatientAccountIsNotFound() {
         authenticateAs("ROLE_PATIENT");
-        when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
+        when(patientRepository.findAllByUserId(callerUserId)).thenReturn(List.of());
         UUID id = prescriptionFor(callerPatient);
 
         assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
@@ -319,5 +319,27 @@ class PrescriptionServiceImplPatientOwnershipTest {
         UUID id = prescriptionFor(otherPatient());
 
         assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("duplicate patient rows for one account answer correctly, not with a 500")
+    void duplicatePatientRowsDoNotBlowUp() {
+        // V113 falls back to a plain index rather than failing the deploy when a
+        // tenant already carries duplicate clinical.patients.user_id rows, so the
+        // single-result finder would throw there. The owner must still read their
+        // own prescription, and still be refused a stranger's.
+        Patient duplicate = new Patient();
+        duplicate.setId(UUID.randomUUID());
+        when(patientRepository.findAllByUserId(callerUserId))
+            .thenReturn(List.of(duplicate, callerPatient));
+        authenticateAs("ROLE_PATIENT");
+
+        UUID own = prescriptionFor(callerPatient);
+        assertThat(service.getPrescriptionById(own, Locale.ENGLISH).getId()).isEqualTo(own);
+
+        UUID strangers = prescriptionFor(otherPatient());
+        assertThatThrownBy(() -> service.getPrescriptionById(strangers, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
     }
 }

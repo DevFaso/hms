@@ -1,0 +1,131 @@
+package com.example.hms.service;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * {@code PrescriptionService.getPrescriptionAfterWrite} is a public read that
+ * deliberately skips the patient-ownership guard, and until this test the only
+ * thing stopping a read path from calling it was a javadoc sentence.
+ *
+ * <p>That is the drift this repo has been bitten by before — hence the
+ * {@code SchedulerLockCoverageTest} idiom of pinning the fact in a test rather
+ * than in a comment. A future GET that reaches for the shorter-named method
+ * would silently reopen exactly the leak the guard closed, with nothing failing.
+ *
+ * <p>Source-scanning, not reflection: what matters is which handler contains the
+ * call, and that is a fact about the source, not about the loaded class. The
+ * complement is asserted too — the by-id read must keep calling the guarded
+ * {@code getPrescriptionById} — so relaxing the guard by swapping the call is a
+ * failure and not merely an unpinned change.
+ */
+@DisplayName("Only the prescription write handlers may skip the ownership guard")
+class PrescriptionAfterWriteCallerGuardTest {
+
+    private static final Path MAIN = Path.of("src", "main", "java", "com", "example", "hms");
+    private static final Path CONTROLLER =
+        MAIN.resolve(Path.of("controller", "PrescriptionController.java"));
+
+    private static final String UNGUARDED = "getPrescriptionAfterWrite";
+    private static final String GUARDED = "getPrescriptionById";
+
+    /** The three endpoints that have already authorised and committed a write. */
+    private static final Set<String> ALLOWED_WRITE_PATHS = Set.of(
+        "/{id}/pharmacist-verify",
+        "/{id}/request-clarification",
+        "/{id}/resolve-clarification");
+
+    /** Any Spring handler mapping, with its path literal when it has one. */
+    private static final Pattern MAPPING = Pattern.compile(
+        "@(Get|Post|Put|Patch|Delete|Request)Mapping\\s*(?:\\(\\s*(?:value\\s*=\\s*)?\"([^\"]*)\")?");
+
+    @Test
+    @DisplayName("no file but the controller calls it, and only from the three write handlers")
+    void onlyTheWriteHandlersCallTheUnguardedRead() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String source = withoutComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (!source.contains(UNGUARDED + "(")) {
+                    continue;
+                }
+                // The declaration and the implementation are not calls.
+                if (file.endsWith(Path.of("service", "PrescriptionService.java"))
+                    || file.endsWith(Path.of("service", "PrescriptionServiceImpl.java"))) {
+                    continue;
+                }
+                if (!file.endsWith(CONTROLLER)) {
+                    offenders.add(file + " calls " + UNGUARDED
+                        + "; only the prescription write handlers may.");
+                }
+            }
+        }
+        assertThat(offenders)
+            .as("%s skips the patient-ownership guard; a read that calls it reopens the leak",
+                UNGUARDED)
+            .isEmpty();
+
+        assertThat(handlerPathsCalling(UNGUARDED))
+            .as("the unguarded read belongs to the write handlers and nowhere else")
+            .isEqualTo(new TreeSet<>(ALLOWED_WRITE_PATHS));
+    }
+
+    @Test
+    @DisplayName("the by-id read still calls the guarded method")
+    void theByIdReadStaysGuarded() throws IOException {
+        assertThat(handlerPathsCalling(GUARDED))
+            .as("GET /prescriptions/{id} must go through the ownership guard")
+            .contains("/{id}");
+    }
+
+    /**
+     * The mapping path of every handler in the controller whose body mentions
+     * {@code call}. Each mapping annotation opens a handler; the text up to the
+     * next mapping annotation is its body.
+     */
+    private Set<String> handlerPathsCalling(String call) throws IOException {
+        String source = withoutComments(Files.readString(CONTROLLER, StandardCharsets.UTF_8));
+        List<Integer> starts = new ArrayList<>();
+        List<String> paths = new ArrayList<>();
+        Matcher mapping = MAPPING.matcher(source);
+        while (mapping.find()) {
+            starts.add(mapping.start());
+            paths.add(mapping.group(2) == null ? "" : mapping.group(2));
+        }
+        assertThat(starts).as("the controller must still declare handlers").isNotEmpty();
+
+        Set<String> calling = new TreeSet<>();
+        for (int i = 0; i < starts.size(); i++) {
+            int end = i + 1 < starts.size() ? starts.get(i + 1) : source.length();
+            if (source.substring(starts.get(i), end).contains(call + "(")) {
+                calling.add(paths.get(i));
+            }
+        }
+        return calling;
+    }
+
+    /**
+     * Comments out, so that naming the method in prose — as
+     * {@code PrescriptionReaderRoles} does, explaining why the exemption lives
+     * on the write path — is not read as calling it.
+     */
+    private static String withoutComments(String source) {
+        return source
+            .replaceAll("(?s)/\\*.*?\\*/", " ")
+            .replaceAll("(?m)//.*$", " ");
+    }
+}

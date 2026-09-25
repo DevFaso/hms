@@ -89,6 +89,19 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByUserId(UUID userId);
 
     /**
+     * Every patient row linked to one user account.
+     *
+     * <p>{@link #findByUserId} is a single-result query, and
+     * {@code V113__patients_user_id_integrity.sql} deliberately falls back to a
+     * plain index instead of failing the deploy when a tenant already carries
+     * duplicate {@code user_id} rows. On such a tenant the single-result form
+     * throws {@code IncorrectResultSizeDataAccessException}. Authorisation
+     * checks that ask "is this record the caller’s" use this instead, so a
+     * data defect degrades to a correct answer rather than a 500.
+     */
+    List<Patient> findAllByUserId(UUID userId);
+
+    /**
      * Fetches a Patient by primary key WITHOUT tenant-scope filtering.
      * <p>
      * Since E9 #57 the tenant-scoped {@code findById} (via
