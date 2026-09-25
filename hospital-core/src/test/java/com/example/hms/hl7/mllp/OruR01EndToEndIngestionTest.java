@@ -358,9 +358,9 @@ class OruR01EndToEndIngestionTest {
         // goes through the eight-argument recorder call with a stable
         // correlation id. The lab service's own rows above still use the
         // seven-argument form and are unchanged by this PR.
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:MINDRAY/LAB-A"), any(),
             eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
-            eq(malformed), eq(IntegrationMessageStatus.FAILED), any(), any());
+            eq(malformed), any(), any());
     }
 }

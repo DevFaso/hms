@@ -33,6 +33,26 @@ class MllpRecordingContextTest {
     }
 
     @Test
+    @DisplayName("The sender pair is upper-cased, because that is how the allowlist matches it")
+    void theSenderPairIsNormalisedLikeTheAllowlistMatchesIt() {
+        // MllpAllowedSenderServiceImpl.lookup matches on
+        // trim().toUpperCase(ROOT), so all three of these resolve to the same
+        // allowlisted sender. If they produced three integration ids they
+        // would produce three "stable" correlation ids too, and one sender
+        // could defeat the dedupe - and split its own DLQ rows - purely by
+        // varying the case of its own headers.
+        assertThat(MllpRecordingContext.integrationId("mindray", "lab-a"))
+            .isEqualTo("MLLP:MINDRAY/LAB-A")
+            .isEqualTo(MllpRecordingContext.integrationId("MinDray", " LAB-a "))
+            .isEqualTo(MllpRecordingContext.integrationId("MINDRAY", "LAB-A"));
+
+        assertThat(MllpRecordingContext.rejectionCorrelationId(
+                MllpRecordingContext.integrationId("mindray", "lab-a"), "T", "r"))
+            .isEqualTo(MllpRecordingContext.rejectionCorrelationId(
+                MllpRecordingContext.integrationId("MINDRAY", "LAB-A"), "T", "r"));
+    }
+
+    @Test
     @DisplayName("An HL7-legal but over-long sender pair is truncated to the column width")
     void anOverLongSenderPairIsTruncated() {
         // HL7 v2.5 permits 180 characters in each of MSH-3 and MSH-4;

@@ -177,6 +177,69 @@ class IntegrationMessageRecorderTest {
     }
 
     @Test
+    void aRecurringFailureStoresItsBodyOnceAndItsReasonEveryTime() {
+        // The point of the method: a stable correlation id bounds what the
+        // DLQ badge counts, not what the table stores. Without this a vendor
+        // retrying an unparseable message every thirty seconds writes
+        // thousands of full copies of it - PID and all - while the badge
+        // reads 1, which is worse than the visible version.
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.existsByCorrelationId("corr-1")).thenReturn(false, true, true);
+
+        for (int i = 0; i < 3; i++) {
+            recorder.recordRecurringFailure(
+                "MLLP:REG/HOSP-B", UUID.randomUUID(),
+                IntegrationMessageDirection.INBOUND, "ADT^A01",
+                "MSH|the whole message", "unparseable ADT^A01", "corr-1");
+        }
+
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository, org.mockito.Mockito.times(3)).save(cap.capture());
+        assertThat(cap.getAllValues().get(0).getPayload()).isEqualTo("MSH|the whole message");
+        assertThat(cap.getAllValues().get(1).getPayload()).isNull();
+        assertThat(cap.getAllValues().get(2).getPayload()).isNull();
+        // Every occurrence still records the reason and is still FAILED, so
+        // the attempt trail survives and the badge behaves as before.
+        assertThat(cap.getAllValues()).allSatisfy(e -> {
+            assertThat(e.getErrorMessage()).isEqualTo("unparseable ADT^A01");
+            assertThat(e.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
+            assertThat(e.getCorrelationId()).isEqualTo("corr-1");
+        });
+    }
+
+    @Test
+    void aFailedLookupKeepsTheBodyRatherThanRiskingTheOnlyCopy() {
+        // Best-effort like the rest of this class, and the safe direction is
+        // an extra copy rather than no evidence at all.
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.existsByCorrelationId("corr-2")).thenThrow(new RuntimeException("DB down"));
+
+        recorder.recordRecurringFailure(
+            "MLLP:REG/HOSP-B", UUID.randomUUID(),
+            IntegrationMessageDirection.INBOUND, "ADT^A01",
+            "MSH|the whole message", "unparseable ADT^A01", "corr-2");
+
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository).save(cap.capture());
+        assertThat(cap.getValue().getPayload()).isEqualTo("MSH|the whole message");
+    }
+
+    @Test
+    void withNoCorrelationIdThereIsNothingToDeduplicateAgainst() {
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        recorder.recordRecurringFailure(
+            "MLLP:REG/HOSP-B", UUID.randomUUID(),
+            IntegrationMessageDirection.INBOUND, "ADT^A01",
+            "MSH|the whole message", "unparseable ADT^A01", null);
+
+        verify(repository, org.mockito.Mockito.never()).existsByCorrelationId(any());
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository).save(cap.capture());
+        assertThat(cap.getValue().getPayload()).isEqualTo("MSH|the whole message");
+    }
+
+    @Test
     void recordReplaySwallowsPersistenceFailures() {
         UUID originalId = UUID.randomUUID();
         IntegrationMessageEvent original = IntegrationMessageEvent.builder()

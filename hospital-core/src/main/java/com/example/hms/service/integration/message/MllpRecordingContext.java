@@ -3,6 +3,7 @@ package com.example.hms.service.integration.message;
 import com.example.hms.model.Hospital;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,24 +33,24 @@ public final class MllpRecordingContext {
     /** The width of {@code integration_message_event.integration_id}. */
     private static final int INTEGRATION_ID_MAX = 120;
 
-    /**
-     * The correlation scope to use for a reject from a sender that has not
-     * been resolved against the allowlist.
-     *
-     * <p>A constant, and that is the whole point: at that stage MSH-3 and
-     * MSH-4 are whatever the message claimed and have been checked against
-     * nothing, so keying a correlation id on them would let anyone mint one
-     * permanently-unresolved dead letter per message simply by varying what
-     * they claim to be. Every reject from every unrecognised sender collapses
-     * onto one row instead, which is all an unrecognised sender is entitled
-     * to.
-     */
-    public static final String UNRESOLVED_SENDER_SCOPE = "MLLP:unresolved-sender";
 
     private MllpRecordingContext() {}
 
     /**
-     * {@code MLLP:<MSH-3>/<MSH-4>}, truncated to fit the column.
+     * {@code MLLP:<MSH-3>/<MSH-4>}, normalised and truncated to fit the
+     * column.
+     *
+     * <p><b>Upper-cased, because the allowlist is.</b>
+     * {@code MllpAllowedSenderServiceImpl.lookup} matches on
+     * {@code trim().toUpperCase(ROOT)} against values V62 stores in canonical
+     * upper case, so one allowlisted sender can present its own MSH-3/MSH-4
+     * in any casing it likes and still resolve. Trimming alone would then let
+     * that sender mint unlimited distinct integration ids — and therefore
+     * unlimited distinct "stable" correlation ids — by varying its own case,
+     * which both splits its DLQ rows and defeats the dedupe that keeps a
+     * retry storm to one counted entry. Normalising here the same way the
+     * allowlist does is what makes "one sender, one id" true rather than
+     * aspirational.
      *
      * <p>The truncation is not cosmetic: the column is
      * {@code VARCHAR(120) NOT NULL} and HL7 v2.5 permits 180 characters in
@@ -58,8 +59,8 @@ public final class MllpRecordingContext {
      * swallows by design.
      */
     public static String integrationId(String sendingApplication, String sendingFacility) {
-        String raw = "MLLP:" + placeholderIfBlank(sendingApplication)
-            + "/" + placeholderIfBlank(sendingFacility);
+        String raw = "MLLP:" + normalised(sendingApplication)
+            + "/" + normalised(sendingFacility);
         return raw.length() > INTEGRATION_ID_MAX ? raw.substring(0, INTEGRATION_ID_MAX) : raw;
     }
 
@@ -113,6 +114,21 @@ public final class MllpRecordingContext {
      * timer, so without this one misconfigured feed would post thousands of
      * unresolved dead letters a day and bury the refusals nobody has seen.
      *
+     * <p><b>Never key this on something shared between senders.</b> The
+     * newest row wins the count, so a scope that several senders fall into is
+     * a denial-of-visibility primitive: anyone able to reach the port could
+     * silence a real partner's dead letter by sending junk after it. A global
+     * "unresolved sender" bucket was written and reverted for exactly that.
+     *
+     * <p>A sender that is not on the allowlist still gets its own scope, from
+     * the MSH-3/MSH-4 it claims. Untrusted is not the same as unusable: the
+     * worst an attacker does by varying what it claims is create additional
+     * entries, which is noisy and loses nothing, whereas sharing a scope
+     * destroys somebody else's. And because
+     * {@link #integrationId(String, String)} normalises the pair the way the
+     * allowlist matches it, a genuine partner that has been de-allowlisted
+     * still collapses to one entry however it cases its headers.
+     *
      * <p>Derived from the sender, the message type and the reason, and from
      * <b>nothing per-message</b>: no MSH-10, no identifier, no timestamp.
      * Anything per-message here would defeat the whole point, and an
@@ -130,7 +146,8 @@ public final class MllpRecordingContext {
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    private static String placeholderIfBlank(String value) {
-        return StringUtils.hasText(value) ? value.trim() : "?";
+    /** Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does. */
+    private static String normalised(String value) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }
 }

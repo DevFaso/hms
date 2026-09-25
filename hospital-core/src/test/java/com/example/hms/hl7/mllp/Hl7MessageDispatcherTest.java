@@ -249,12 +249,11 @@ class Hl7MessageDispatcherTest {
     void recorderInvokedOnInvalidMshReject() {
         String bad = "GARBAGE|||";
         dispatcher.dispatch(bad, "10.0.0.99:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:?/?"), isNull(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("UNKNOWN"),
             eq(bad),
-            eq(IntegrationMessageStatus.FAILED),
             contains("Invalid MSH"),
             any());
     }
@@ -266,12 +265,11 @@ class Hl7MessageDispatcherTest {
                    + "PID|1||abc\rOBR|1|ACC-1||GLU|||20260428073000\r"
                    + "OBX|1|NM|GLU||5.6|mmol/L|||N\r";
         dispatcher.dispatch(oru, "10.0.0.1:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:ROGUE/UNKNOWN"), isNull(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ORU^R01"),
             eq(oru),
-            eq(IntegrationMessageStatus.FAILED),
             contains("not allowlisted"),
             any());
     }
@@ -282,12 +280,11 @@ class Hl7MessageDispatcherTest {
         String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
                             + "PID|1||p\r";
         dispatcher.dispatch(malformedOru, "10.0.0.10:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:S/F"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ORU^R01"),
             eq(malformedOru),
-            eq(IntegrationMessageStatus.FAILED),
             contains("unparseable"),
             any());
     }
@@ -311,14 +308,17 @@ class Hl7MessageDispatcherTest {
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
-            any(), any(), any(), any(), bodies.capture(), any(), any(), ids.capture());
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
 
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
             .isEqualTo(ids.getAllValues().get(1));
-        // Deliberately still recorded here, unlike on the inbound services'
-        // refusal paths - see Hl7MessageDispatcher.recordReject.
+        // The dispatcher hands the body over both times; storing it once per
+        // problem is the recorder's job (recordRecurringFailure), pinned in
+        // IntegrationMessageRecorderTest against a real repository stub. Here
+        // what matters is that the dispatcher does not start withholding it -
+        // for a message nobody could parse it is the only evidence there is.
         assertThat(bodies.getAllValues()).containsExactly(malformedOru, malformedOruAgain);
     }
 
@@ -333,8 +333,8 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(unsupported, "10.0.0.51:1");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
-        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
-            any(), any(), any(), any(), any(), any(), any(), ids.capture());
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
+            any(), any(), any(), any(), any(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
     }
 
@@ -343,12 +343,11 @@ class Hl7MessageDispatcherTest {
         allowSender();
         String unknown = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
         dispatcher.dispatch(unknown, "10.0.0.51:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:X/Y"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ZZZ^Z99"),
             eq(unknown),
-            eq(IntegrationMessageStatus.FAILED),
             contains("unsupported message type"),
             any());
     }
@@ -358,12 +357,11 @@ class Hl7MessageDispatcherTest {
         allowSender();
         String adtNoPid = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A01|CTRL-X|P|2.5\r";
         dispatcher.dispatch(adtNoPid, "10.0.0.51:1");
-        verify(messageRecorder).recordMessage(
+        verify(messageRecorder).recordRecurringFailure(
             eq("MLLP:REGISTRATION/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A01"),
             eq(adtNoPid),
-            eq(IntegrationMessageStatus.FAILED),
             contains("unparseable"),
             any());
     }

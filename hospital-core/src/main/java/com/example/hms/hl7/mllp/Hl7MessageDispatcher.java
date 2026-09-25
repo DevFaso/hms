@@ -121,7 +121,10 @@ public class Hl7MessageDispatcher {
             recordReject(MllpRecordingContext.integrationId(null, null),
                 null, "UNKNOWN", hl7Body,
                 "Invalid MSH: " + ex.getMessage(), "invalid MSH",
-                MllpRecordingContext.UNRESOLVED_SENDER_SCOPE);
+                // No parsed header, so no claimed sender either: every
+                // unreadable-MSH rejection genuinely is the same problem from
+                // the same unknown party.
+                MllpRecordingContext.integrationId(null, null));
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
             );
@@ -141,7 +144,11 @@ public class Hl7MessageDispatcher {
                 "sender " + header.sendingApplication() + "/" + header.sendingFacility()
                     + " not allowlisted",
                 "sender not allowlisted",
-                MllpRecordingContext.UNRESOLVED_SENDER_SCOPE);
+                // The claimed sender, normalised. Not trusted — but its own
+                // scope, so a de-allowlisted production partner's dead letter
+                // cannot be superseded by a port scan claiming to be someone
+                // else.
+                integrationIdFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
         }
@@ -252,16 +259,28 @@ public class Hl7MessageDispatcher {
      * and an operator diagnosing a vendor's framing has nothing else to look
      * at. Do not "tidy" it away.
      *
-     * <p>What bounds it instead is {@code reasonKey}. Three of these paths
-     * answer AE, which HL7 senders treat as transient and retry on a timer,
-     * so with a random correlation id per row a vendor shipping a malformed
-     * feed would stack one unresolved dead letter — each holding a full copy
-     * of the message — on every retry.
+     * <p>Three of these paths answer AE, which HL7 senders treat as
+     * transient and retry on a timer. A stable {@code correlationScope} +
+     * {@code reasonKey} keeps that storm to <b>one counted dead letter</b>
+     * per (sender, problem), because
      * {@code countUnresolvedDeadLetters} discounts a {@code FAILED} row once
-     * a later row shares its correlation id, so a stable id collapses the
-     * whole retry storm to one row per (sender, message type, problem). That
-     * solves the PHI volume as a side effect of solving the flood, which is
-     * why the body can stay.
+     * a later row shares its correlation id.
+     *
+     * <p><b>The body is stored once per problem, not once per retry.</b>
+     * That is {@code recordRecurringFailure}, not the correlation id on its
+     * own: a stable id only stops the retries being <em>counted</em>, and
+     * every one of them still inserts a row, so keying alone would have left
+     * a vendor writing thousands of full copies of a message — PID and all —
+     * into a table with no retention while the badge read 1. A bounded badge
+     * over unbounded PHI is worse than the visible version, because it claims
+     * the problem is handled. So the first occurrence carries the body, which
+     * is the evidence an operator needs for a message nobody could parse, and
+     * later occurrences carry the reason alone.
+     *
+     * <p>What is bounded: counted dead letters (one per sender and problem)
+     * and stored bodies (one per sender and problem). What is not: the row
+     * count, still one small row per attempt, on a table with no retention
+     * policy. That last one is reported, not solved here.
      *
      * <p>{@code reasonKey} is separate from {@code reason} on purpose, and
      * {@code correlationScope} is separate from {@code integrationId} for the
@@ -271,13 +290,19 @@ public class Hl7MessageDispatcher {
      * not-allowlisted path MSH-3 and MSH-4 have not been checked against
      * anything at all. Key on any of those and an adversary varies it per
      * message — a different {@code ZZZ^Znn} each time — to mint a fresh id
-     * per row, which is a fresh permanently-unresolved dead letter holding a
-     * fresh copy of the body. The bound that lets the body stay would hold
-     * only against a well-behaved vendor, which is not who this is for. So
-     * the scope is the allowlisted sender's id where we have resolved one,
-     * and a single constant where we have not: every reject from every
-     * unrecognised sender collapses onto one row, which is all an
-     * unrecognised sender is entitled to.
+     * per row, which is a fresh counted dead letter. So the scope is the
+     * <b>resolved</b> allowlisted sender's id, and only ever that.
+     *
+     * <p>Where no sender has been resolved — an unreadable MSH, a pair that
+     * is not on the allowlist — {@code correlationScope} is null and the
+     * recorder mints a random id per row, as it always did. A shared constant
+     * was tried and reverted: it made every unrecognised sender's refusal
+     * supersede every other one, so anyone who could reach the port could
+     * silence a real partner's dead letter by sending junk after it. Between
+     * a stranger being able to flood the badge and a stranger being able to
+     * empty it, flooding is the one that does not lose information, and
+     * per-sender bounding is meaningless when the sender is exactly what has
+     * not been established.
      *
      * <p>The recorder itself runs in REQUIRES_NEW and swallows its own
      * exceptions; the extra try-catch here is belt-and-braces so a recorder
@@ -288,12 +313,11 @@ public class Hl7MessageDispatcher {
                               String reasonKey, String correlationScope) {
         String resolvedType = messageType == null ? "UNKNOWN" : messageType;
         try {
-            messageRecorder.recordMessage(
+            messageRecorder.recordRecurringFailure(
                 integrationId, organizationId,
                 IntegrationMessageDirection.INBOUND,
                 resolvedType,
                 rawBody,
-                IntegrationMessageStatus.FAILED,
                 reason,
                 MllpRecordingContext.rejectionCorrelationId(
                     correlationScope, DISPATCHER_CORRELATION_TYPE, reasonKey));

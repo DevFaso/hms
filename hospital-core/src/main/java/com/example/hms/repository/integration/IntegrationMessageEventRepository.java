@@ -71,4 +71,14 @@ public interface IntegrationMessageEventRepository
         + "  AND later.lastAttemptedAt > m.lastAttemptedAt"
         + ")")
     long countUnresolvedDeadLetters();
+
+    /**
+     * Whether anything has already been recorded under this correlation id.
+     *
+     * <p>Used by {@code IntegrationMessageRecorder} to store a rejected
+     * message's body once per problem instead of once per retry: the first
+     * occurrence carries the payload, later ones carry only the reason. The
+     * partial index on {@code correlation_id} (V89) serves this.
+     */
+    boolean existsByCorrelationId(String correlationId);
 }

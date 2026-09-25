@@ -36,6 +36,14 @@ public class IntegrationMessageRecorder {
     /** {@code correlation_id} is {@code VARCHAR(120)} (V89). */
     static final int MAX_CORRELATION_ID_CHARS = 120;
     /**
+     * {@code integration_id} is {@code VARCHAR(120) NOT NULL} (V89). Callers
+     * that build it through {@code MllpRecordingContext} are already bounded,
+     * but the guard belongs here too: this is the column whose overflow drops
+     * a row silently, and a caller that has not been migrated to the helper
+     * — there is still one — would otherwise hit exactly that.
+     */
+    static final int MAX_INTEGRATION_ID_CHARS = 120;
+    /**
      * {@code message_type} is {@code VARCHAR(64)} (V89), and on the MLLP
      * paths it is MSH-9 as the sender wrote it — unvalidated, and HL7 v2
      * allows far more than 64 characters there. Truncate rather than let the
@@ -112,7 +120,7 @@ public class IntegrationMessageRecorder {
                 ? UUID.randomUUID().toString()
                 : truncate(correlationId, MAX_CORRELATION_ID_CHARS);
             IntegrationMessageEvent event = IntegrationMessageEvent.builder()
-                .integrationId(integrationId)
+                .integrationId(truncate(integrationId, MAX_INTEGRATION_ID_CHARS))
                 .organizationId(organizationId)
                 .direction(direction)
                 .messageType(truncate(messageType, MAX_MESSAGE_TYPE_CHARS))
@@ -130,6 +138,63 @@ public class IntegrationMessageRecorder {
             log.error("[INTEGRATION-MESSAGE] Failed to record message for {}", integrationId, ex);
             return null;
         }
+    }
+
+    /**
+     * Record a rejection that a sender will keep retrying, storing the
+     * message body <b>only the first time</b> this correlation id is seen.
+     *
+     * <p>A stable correlation id keeps a retry storm to one <em>counted</em>
+     * dead letter, because {@code countUnresolvedDeadLetters} discounts a row
+     * once a later one shares its id. It does nothing about what is stored:
+     * {@link #recordMessage} inserts on every call, so a vendor retrying an
+     * unparseable message every thirty seconds would write thousands of full
+     * copies of it a day — PID and all — into a table with no retention,
+     * while the badge read 1. A bounded badge over unbounded PHI is worse
+     * than the visible version, because it says the problem is handled.
+     *
+     * <p>So: first occurrence keeps the body, which is the evidence an
+     * operator needs for a message nobody could parse; every later occurrence
+     * records the same reason with no payload. The attempt trail stays, the
+     * badge stays at one entry, and the stored bodies are bounded by the
+     * number of distinct problems rather than by the sender's retry timer.
+     *
+     * <p>Two honest limits. Rows are still one per attempt — small ones now,
+     * but the table still grows, and retention remains an open question for
+     * whoever owns this surface. And the check is a read followed by a write
+     * with no lock, so two retries racing inside the same instant can both
+     * store a body; bounded by the concurrency, not by the retry count, which
+     * is the point.
+     *
+     * <p>A null {@code correlationId} means there is nothing to deduplicate
+     * against and the payload is stored as normal.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public IntegrationMessageEvent recordRecurringFailure(
+        String integrationId,
+        UUID organizationId,
+        IntegrationMessageDirection direction,
+        String messageType,
+        String payload,
+        String errorMessage,
+        String correlationId
+    ) {
+        String payloadToStore = payload;
+        if (correlationId != null && payload != null) {
+            try {
+                if (repository.existsByCorrelationId(correlationId)) {
+                    payloadToStore = null;
+                }
+            } catch (RuntimeException ex) {
+                // Best-effort like the rest of this class. Keeping the body on
+                // a failed check is the safe direction: an extra copy beats
+                // losing the only one.
+                log.warn("[INTEGRATION-MESSAGE] Could not check for an earlier occurrence of {}",
+                    correlationId, ex);
+            }
+        }
+        return recordMessage(integrationId, organizationId, direction, messageType,
+            payloadToStore, IntegrationMessageStatus.FAILED, errorMessage, correlationId);
     }
 
     /**

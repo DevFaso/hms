@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -40,15 +41,26 @@ class MllpIntegrationIdSingleSourceTest {
     /**
      * Every main source file allowed to open a string literal with
      * {@code MLLP:}, by path rather than by bare filename — a bare name would
-     * exempt a new file that merely reused it.
+     * exempt a new file that merely reused it — mapped to the <b>witness</b>
+     * that justifies the exemption.
      *
-     * <p>Adding to this set is a decision, not a formality.
+     * <p>The witness is what makes a temporary exemption temporary. Checking
+     * only that the file still contains <em>some</em> {@code "MLLP:} literal
+     * would not do it: {@code MllpInboundLabServiceImpl} has two, the id
+     * builder and an unrelated audit {@code actorLabel}, so migrating the
+     * builder — the exact event that is supposed to end the exemption — would
+     * leave the other one satisfying the check and the hole open for good.
+     *
+     * <p>Adding to this map is a decision, not a formality.
      */
-    private static final Set<String> ALLOWED = Set.of(
+    private static final Map<String, String> ALLOWED = Map.of(
         "com/example/hms/service/integration/message/MllpRecordingContext.java",
-        // TEMPORARY — see the class javadoc. Remove when the lab stream moves
-        // MllpInboundLabServiceImpl onto MllpRecordingContext.
-        "com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java");
+        "public static String integrationId(",
+        // TEMPORARY — see the class javadoc. When the lab stream moves
+        // MllpInboundLabServiceImpl onto MllpRecordingContext this method goes
+        // and theAllowSetDoesNotGoStale fails until the entry is deleted too.
+        "com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java",
+        "private String buildIntegrationId(");
 
     /**
      * Matches a string literal that starts with {@code MLLP:}, however the id
@@ -78,7 +90,7 @@ class MllpIntegrationIdSingleSourceTest {
             assertThat(javaFiles).isNotEmpty();
             for (Path file : javaFiles) {
                 String relativePath = mainSources.relativize(file).toString().replace('\\', '/');
-                if (ALLOWED.contains(relativePath)) {
+                if (ALLOWED.containsKey(relativePath)) {
                     continue;
                 }
                 String code = withoutComments(Files.readString(file, StandardCharsets.UTF_8));
@@ -117,15 +129,16 @@ class MllpIntegrationIdSingleSourceTest {
         // applying - and the lab entry in particular is meant to be deleted,
         // so it has to be visible when it becomes pointless.
         Path mainSources = Paths.get("src", "main", "java");
-        for (String allowed : ALLOWED) {
+        for (Map.Entry<String, String> exemption : ALLOWED.entrySet()) {
+            String allowed = exemption.getKey();
             Path file = mainSources.resolve(allowed);
             assertThat(Files.isRegularFile(file))
                 .as("exempted file %s does not exist - remove it from ALLOWED", allowed)
                 .isTrue();
-            assertThat(MLLP_ID_LITERAL.matcher(
-                withoutComments(Files.readString(file, StandardCharsets.UTF_8))).find())
-                .as("%s no longer builds an MLLP id - remove it from ALLOWED", allowed)
-                .isTrue();
+            assertThat(Files.readString(file, StandardCharsets.UTF_8))
+                .as("%s no longer declares %s, so its exemption has expired - "
+                        + "remove it from ALLOWED", allowed, exemption.getValue())
+                .contains(exemption.getValue());
         }
     }
 }
