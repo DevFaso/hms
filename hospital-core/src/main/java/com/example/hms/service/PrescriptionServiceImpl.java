@@ -482,24 +482,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * Gap G12 - the {@code status} query parameter as the repository wants it,
-     * or null for "every status".
+     * Gap G12 - the {@code status} query parameter as the repository wants it.
      *
-     * <p>An empty list is "no filter", not "no status can match":
+     * <p>EMPTY means "every status", not "no status can match":
      * {@code ?status=} on a URL arrives here as a single-element list holding
      * null, and silently returning an empty page for it would be the same class
      * of lie the filter exists to remove. Duplicates collapse; order is
      * irrelevant to an IN clause.
      */
     private List<PrescriptionStatus> normaliseStatusFilter(List<PrescriptionStatus> statuses) {
-        if (statuses == null || statuses.isEmpty()) {
-            return null;
+        if (statuses == null) {
+            return List.of();
         }
-        List<PrescriptionStatus> filter = statuses.stream()
+        return statuses.stream()
             .filter(java.util.Objects::nonNull)
             .distinct()
             .toList();
-        return filter.isEmpty() ? null : filter;
     }
 
     /**
@@ -510,13 +508,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Page<Prescription> patientRows(UUID patientId, UUID hospitalId,
                                            List<PrescriptionStatus> filter, Pageable pageable) {
         if (hospitalId == null) {
-            return filter == null
+            return filter.isEmpty()
                 ? prescriptionRepository.findByPatient_Id(patientId, pageable)
                 : prescriptionRepository.findByPatient_IdAndStatusIn(patientId, filter, pageable);
         }
         UUID requesterUserId = authService.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        Page<Prescription> rows = filter == null
+        Page<Prescription> rows = filter.isEmpty()
             ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
             : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
@@ -528,11 +526,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Page<Prescription> staffRows(UUID staffId, UUID hospitalId,
                                          List<PrescriptionStatus> filter, Pageable pageable) {
         if (hospitalId == null) {
-            return filter == null
+            return filter.isEmpty()
                 ? prescriptionRepository.findByStaff_Id(staffId, pageable)
                 : prescriptionRepository.findByStaff_IdAndStatusIn(staffId, filter, pageable);
         }
-        return filter == null
+        return filter.isEmpty()
             ? prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
             : prescriptionRepository.findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospitalId, filter, pageable);
     }
@@ -540,11 +538,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Page<Prescription> encounterRows(UUID encounterId, UUID hospitalId,
                                              List<PrescriptionStatus> filter, Pageable pageable) {
         if (hospitalId == null) {
-            return filter == null
+            return filter.isEmpty()
                 ? prescriptionRepository.findByEncounter_Id(encounterId, pageable)
                 : prescriptionRepository.findByEncounter_IdAndStatusIn(encounterId, filter, pageable);
         }
-        return filter == null
+        return filter.isEmpty()
             ? prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
             : prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospitalId, filter, pageable);
     }
@@ -552,11 +550,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /** No id filter: the whole tenant, or the whole platform for a super-admin in global view. */
     private Page<Prescription> tenantRows(UUID hospitalId, List<PrescriptionStatus> filter, Pageable pageable) {
         if (hospitalId == null) {
-            return filter == null
+            return filter.isEmpty()
                 ? prescriptionRepository.findAll(pageable)
                 : prescriptionRepository.findByStatusIn(filter, pageable);
         }
-        return filter == null
+        return filter.isEmpty()
             ? prescriptionRepository.findByHospital_Id(hospitalId, pageable)
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
