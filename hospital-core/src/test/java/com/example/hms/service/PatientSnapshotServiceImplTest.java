@@ -1042,10 +1042,16 @@ class PatientSnapshotServiceImplTest {
         // Stubbed so the test would SEE the leak if a patient-wide branch ever
         // ran again: this is the very finder #739 abandoned on the lab side.
         lenient().when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(foreignOrder));
-        // A bare mock, not stubPatient(): the guard must fire before the patient
-        // row is even loaded, so none of its fields may be needed.
-        lenient().when(patientRepository.findByIdUnscoped(patientId))
-                .thenReturn(Optional.of(mock(Patient.class)));
+        // A whole, usable patient, all lenient: none of it may be touched once
+        // the guard fires, but it has to be there so that reverting the guard
+        // produces the LEAK (a snapshot carrying the foreign order) rather than
+        // an NPE on a half-built mock, which would prove nothing.
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
 
         // The key, not the resolved message: getMessage() is already resolved,
         // so only getMessageKey() pins that the refusal is a resolvable key and
