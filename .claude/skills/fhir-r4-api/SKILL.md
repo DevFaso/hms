@@ -79,6 +79,28 @@ pieces that unlock the full SMART app launch flow. When extending,
 keep `.well-known/smart-configuration` aligned with the Keycloak OIDC
 issuer (`app.auth.oidc.issuer-uri`).
 
+## Who reaches `/fhir/**` (the role gate)
+
+`SecurityConfig` admits the servlet to `FHIR_READER_AUTHORITIES` only — the
+chart-reader set of `EncounterController.ENCOUNTER_LIST_ROLES`, plus
+`ROLE_PHYSICIAN` / `ROLE_SURGEON` named explicitly (`RoleExpansion` does not
+run on the Keycloak path) and the machine role `ROLE_FHIR_CLIENT`. `POST
+$export` has its own matcher ahead of it with the `SUPER_ADMIN` +
+`HOSPITAL_ADMIN` pair its service admits. `GET /fhir/metadata` and
+`GET /fhir/.well-known/smart-configuration` stay `permitAll`.
+
+Until that matcher existed, `/fhir/**` rode `anyRequest().authenticated()`
+and a patient's mobile-app token reached every provider. Two rules follow:
+
+- **A new FHIR operation that needs a role outside the reader set gets its
+  own matcher above the `/fhir/**` one** (first match wins, and the reader
+  matcher is terminal) — never a wider reader set.
+- **A role gate is not a tenant gate.** Admission says nothing about which
+  hospital's rows a reader may see; this matcher must never be widened or
+  narrowed to stand in for tenant scoping.
+
+`FhirRoleGateIT` runs the real filter chain for both principal shapes.
+
 ## FHIR write API (Patient — row 20 foundation)
 
 Gated by `app.fhir.write.enabled` (env `FHIR_WRITE_ENABLED`,

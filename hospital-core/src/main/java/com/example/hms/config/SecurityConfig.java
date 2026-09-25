@@ -58,6 +58,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
@@ -67,6 +68,9 @@ import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
+
+    /** The machine role for FHIR clients — see {@link #FHIR_READER_AUTHORITIES}. */
+    static final String FHIR_CLIENT_AUTHORITY = "ROLE_FHIR_CLIENT";
 
     private static final Logger SEC_LOG = LoggerFactory.getLogger(SecurityConfig.class);
 
@@ -118,6 +122,41 @@ public class SecurityConfig {
      * admin to the hospital they are acting in.
      */
     static final String API_HOSPITAL_POSTURE = "/hospitals/*/record-access-posture";
+
+    /**
+     * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
+     * It serves server-to-server clients and SMART EHR launches, and it answers
+     * with the whole chart — Encounter, Condition, MedicationRequest,
+     * Immunization, Observation, DiagnosticReport, DocumentReference — so it
+     * admits exactly the roles that read the chart elsewhere: the
+     * {@code ENCOUNTER_LIST_ROLES} set of {@code EncounterController}.
+     *
+     * <p>Until this matcher existed {@code /fhir/**} fell through to
+     * {@code anyRequest().authenticated()}, so a patient's mobile-app bearer
+     * token, a receptionist or a billing clerk reached every provider.
+     *
+     * <p>Named explicitly rather than left to {@code RoleExpansion}: the
+     * expansion runs on the password path only, so {@code ROLE_PHYSICIAN} and
+     * {@code ROLE_SURGEON} would be refused over Keycloak if only
+     * {@code ROLE_DOCTOR} were listed. {@code ROLE_FHIR_CLIENT} is the machine
+     * role {@code IdleSessionGate} already names for FHIR clients; no account
+     * holds it yet, and it is listed so a service account can be given it
+     * without also being given a clinician's role.
+     */
+    static final String[] FHIR_READER_AUTHORITIES = {
+        ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE,
+        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST,
+        ROLE_SUPER_ADMIN, FHIR_CLIENT_AUTHORITY
+    };
+
+    /**
+     * {@code $export} (system and Patient level) is a POST, and its service
+     * ({@code FhirBulkExportService.requireBulkExportRole}) and the status
+     * controller admit SUPER_ADMIN and HOSPITAL_ADMIN. The matcher carries the
+     * same pair, ahead of the {@code /fhir/**} reader matcher, so the hospital
+     * admin keeps the export and gains no clinical read.
+     */
+    static final String[] FHIR_BULK_EXPORT_PATHS = {"/fhir/$export", "/fhir/Patient/$export"};
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -399,6 +438,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/fhir/metadata").permitAll()
                 // SMART-on-FHIR App Launch 1.0 discovery — public per spec.
                 .requestMatchers(HttpMethod.GET, "/fhir/.well-known/smart-configuration").permitAll()
+                // Everything else on the FHIR servlet: the chart-reader roles only
+                // (FHIR_READER_AUTHORITIES). $export first, because it also
+                // admits HOSPITAL_ADMIN; first match wins.
+                .requestMatchers(HttpMethod.POST, FHIR_BULK_EXPORT_PATHS)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers("/fhir", "/fhir/**").hasAnyAuthority(FHIR_READER_AUTHORITIES)
                 // CDS Hooks discovery — public per HL7 CDS Hooks 1.0 spec
                 // (decision-support clients enumerate services before auth).
                 .requestMatchers(HttpMethod.GET, "/cds-services").permitAll()

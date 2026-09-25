@@ -36,7 +36,14 @@ design until terminology binding (gap #5) and the inbound MLLP listener
 
 - `GET /fhir/metadata` is public (per the FHIR R4 spec — clients fetch the
   CapabilityStatement before authenticating).
-- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere.
+- Every other `/fhir/**` endpoint requires the same Bearer JWT used elsewhere,
+  **and one of the chart-reader roles** (`SecurityConfig.FHIR_READER_AUTHORITIES`):
+  `DOCTOR`, `PHYSICIAN`, `SURGEON`, `NURSE`, `MIDWIFE`, `RADIOLOGIST`,
+  `ANESTHESIOLOGIST`, `PHYSIOTHERAPIST`, `SUPER_ADMIN`, or the machine role
+  `FHIR_CLIENT`. A patient token, and every non-clinical staff role, gets 403.
+  `POST $export` admits `SUPER_ADMIN` and `HOSPITAL_ADMIN` instead (the pair its
+  service admits). An integration client should be given `ROLE_FHIR_CLIENT`
+  rather than a clinician's role.
 - All reads go through the existing JPA repositories, so the tenant scope
   applied via `HospitalContextHolder` and the `tenantContext` SpEL bean is
   preserved without any extra plumbing.
