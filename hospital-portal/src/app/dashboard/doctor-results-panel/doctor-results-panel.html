@@ -23,6 +23,15 @@
     false all-clear, and the error card would blame an outage.
   -->
   @if (!scoped()) {
+    <!--
+      The chip belongs beside the hint here: the dashboard is not
+      `requiresHospitalScope` (it renders for every role and for a super-admin
+      in global view), so the shell draws no scope bar above it and the hint
+      would name a remedy with no control on screen. `preserveScope` keeps the
+      session's pick and leaves the URL alone; the chip hides itself for
+      anyone but a super-admin.
+    -->
+    <app-hospital-scope-chip [preserveScope]="true" />
     <app-hospital-scope-hint />
   } @else if (loading() && results().length === 0) {
     <div class="rp-loading" aria-live="polite">

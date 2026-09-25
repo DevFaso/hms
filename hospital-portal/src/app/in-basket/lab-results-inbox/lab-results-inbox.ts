@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
@@ -13,6 +14,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { RoleContextService } from '../../core/role-context.service';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
 
@@ -82,7 +84,7 @@ const KNOWN_FLAGS: string[] = ['CRITICAL', ...ABNORMAL_FLAGS, 'NORMAL'];
 @Component({
   selector: 'app-lab-results-inbox',
   standalone: true,
-  imports: [RouterLink, TranslateModule, HospitalScopeHintComponent],
+  imports: [RouterLink, TranslateModule, HospitalScopeChipComponent, HospitalScopeHintComponent],
   templateUrl: './lab-results-inbox.html',
   styleUrl: './lab-results-inbox.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -218,7 +220,10 @@ export class LabResultsInboxComponent {
         this.loading.set(false);
         return;
       }
-      this.load();
+      // `untracked`: only the SCOPE may re-run this. Without it every signal
+      // the read touches becomes a dependency of the effect, and a read that
+      // also writes one of them re-enters and re-issues the request.
+      untracked(() => this.load());
     });
   }
 

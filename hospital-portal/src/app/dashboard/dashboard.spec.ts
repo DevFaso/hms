@@ -1534,6 +1534,26 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(component.resultQueueError()).toBeFalse();
   });
 
+  it('clears the rest of the hospital-scoped panels on the switch, not only the queue', () => {
+    // B's review queue beside A's critical strip under one heading is the same
+    // lie in a different card.
+    build('h-a');
+    component.criticalStrip.set({ unacknowledgedCritical: 3 } as never);
+    component.worklistItems.set([{ id: 'w-1' } as never]);
+    component.recentPatients.set([{ id: 'p-9' } as never]);
+    // Nothing lands: the clearing must happen ON the switch, not when the new
+    // reads answer.
+    for (const read of DOCTOR_READS) {
+      (dashboardService[read] as jasmine.Spy).and.returnValue(new Subject<never>().asObservable());
+    }
+
+    pickHospital('h-b');
+
+    expect(component.criticalStrip()).toBeNull();
+    expect(component.worklistItems()).toEqual([]);
+    expect(component.recentPatients()).toEqual([]);
+  });
+
   it('does not read the queue at all with no hospital in scope', () => {
     build(null);
 
@@ -1567,7 +1587,7 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
 
   it('keeps the drawer open and states the failure when the snapshot read fails', () => {
     build('h-a');
-    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 404 })));
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 503 })));
 
     component.openPatientSnapshot('p-1');
 
@@ -1575,6 +1595,19 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(component.snapshotError()).toBe('FAILED');
     expect(component.patientSnapshot()).toBeNull();
     expect(component.snapshotLoading()).toBeFalse();
+  });
+
+  it('tells a scoped 404 apart from an outage, because only one is worth retrying', () => {
+    // #742 refuses rather than reading patient-wide, so a 404 on a read that
+    // DID carry a scope means the patient is not reachable here. A Retry on
+    // that can only reproduce the same answer.
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 404 })));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('NOT_HERE');
   });
 
   it('re-reads the same patient from the drawer Retry', () => {

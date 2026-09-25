@@ -25,10 +25,12 @@ export class PatientSnapshotDrawerComponent {
    * 404 when no scope resolves. The host used to close the drawer on any
    * failure, so a refusal looked like a dead button; and rendering it as an
    * empty drawer would be the same authorization-failure-as-no-data the house
-   * rules out. NO_SCOPE is a different sentence from FAILED because it has a
-   * different remedy: pick a hospital, rather than try again.
+   * rules out. Three sentences, because there are three remedies: NO_SCOPE is
+   * "pick a hospital", NOT_HERE (a 404 on a scoped read) is "this patient is
+   * not reachable here", and only FAILED is worth trying again — so only
+   * FAILED draws a Retry.
    */
-  loadError = input<'NO_SCOPE' | 'FAILED' | null>(null);
+  loadError = input<'NO_SCOPE' | 'NOT_HERE' | 'FAILED' | null>(null);
   closed = output<void>();
   /** The Retry in the failure state; the host re-reads the same patient. */
   retryRequested = output<void>();

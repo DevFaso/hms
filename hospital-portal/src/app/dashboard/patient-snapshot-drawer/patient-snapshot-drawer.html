@@ -301,6 +301,10 @@
         <p class="drawer-status drawer-status-scope" role="status" data-testid="snapshot-no-scope">
           {{ 'DASHBOARD.SNAPSHOT_NO_HOSPITAL' | translate }}
         </p>
+      } @else if (loadError() === 'NOT_HERE') {
+        <p class="drawer-status drawer-status-scope" role="status" data-testid="snapshot-not-here">
+          {{ 'DASHBOARD.SNAPSHOT_NOT_HERE' | translate }}
+        </p>
       } @else if (loadError() === 'FAILED') {
         <p class="drawer-status drawer-status-error" role="alert" data-testid="snapshot-error">
           {{ 'DASHBOARD.SNAPSHOT_LOAD_ERROR' | translate }}

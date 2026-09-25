@@ -369,6 +369,22 @@ describe('LabResultsInboxComponent', () => {
     expect(fixture.nativeElement.querySelector('.btn-refresh')).toBeNull();
   });
 
+  it('offers the picker beside the hint, because this page has no scope bar above it', () => {
+    // `/in-basket` is not `requiresHospitalScope` — it renders for every
+    // clinical role and for a super-admin in global view — so the shell draws
+    // no chip above it. A hint naming a control that is nowhere on screen is
+    // not a remedy.
+    setup([item()], null);
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.markSuperAdminGlobalDefaults();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="hospital-scope-chip"]'),
+    ).not.toBeNull();
+  });
+
   it('reads as soon as a hospital is picked, and clears the hint', () => {
     setup([item({ testName: 'Potassium' })], null);
     expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();

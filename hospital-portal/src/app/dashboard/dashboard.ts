@@ -171,17 +171,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly roleContext = inject(RoleContextService);
 
   /**
-   * Bumps every time the active language changes. Reading this signal inside a
-   * `computed()` makes the array re-evaluate so localized labels follow the
-   * language switch without forcing a component re-mount.
-   */
-  /**
    * False for a super-admin in global view, and for any account whose
    * hospital has not resolved. The review queue and the snapshot drawer are
    * both refused by the backend in that state, so both say so.
    */
   readonly hasHospitalScope = this.roleContext.hasHospitalScope;
 
+  /**
+   * Bumps every time the active language changes. Reading this signal inside a
+   * `computed()` makes the array re-evaluate so localized labels follow the
+   * language switch without forcing a component re-mount.
+   */
   private readonly langTick = signal(0);
   private langSub?: Subscription;
   private wsEventsSub?: Subscription;
@@ -291,13 +291,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * `GET /me/patients/{id}/snapshot` is scoped now, and refuses with a 404
    * when no hospital resolves. The drawer used to close itself on any
    * failure, which is the same anti-pattern as an empty list: a refusal
-   * rendered as nothing at all, indistinguishable from a mis-click. NO_SCOPE
-   * is decided on the client before the request, because the backend's 404 is
-   * deliberately the same answer it gives for a patient that does not exist —
-   * so the status code cannot tell the two apart, and only the client knows
-   * it never had a scope to send.
+   * rendered as nothing at all, indistinguishable from a mis-click.
+   *
+   * Three states, because they have three remedies and only one of them is
+   * "try again":
+   *
+   * - NO_SCOPE is decided on the client BEFORE the request. The backend's 404
+   *   for an unresolved scope is deliberately the same answer it gives for a
+   *   patient that does not exist, so the status code cannot tell them apart
+   *   and only the client knows it never had a scope to send. Remedy: pick a
+   *   hospital.
+   * - NOT_HERE is a 404 from a read that DID carry a scope: the patient is not
+   *   reachable in this hospital, because #742 refuses rather than reading
+   *   patient-wide. Retrying can only reproduce it, so no Retry is offered.
+   * - FAILED is everything else — an outage, a 5xx, a dropped connection —
+   *   and is the only one worth retrying.
    */
-  snapshotError = signal<'NO_SCOPE' | 'FAILED' | null>(null);
+  snapshotError = signal<'NO_SCOPE' | 'NOT_HERE' | 'FAILED' | null>(null);
   /** The patient the drawer is showing (or failed to show), so Retry can ask again. */
   private snapshotPatientId: string | null = null;
   /** Which snapshot read is the current one; a stale answer must not open a drawer. */
@@ -2054,11 +2064,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.resultQueue.set([]);
     this.resultQueueError.set(false);
     this.resultQueueLoading.set(false);
+    // Every other panel the backend resolves from the acting hospital. The
+    // review queue is the one this change is about, but leaving the rest
+    // behind would put hospital B's queue beside hospital A's critical strip
+    // under one heading — the same lie in a different card.
+    this.kpis.set([]);
+    this.alerts.set([]);
+    this.inboxCounts.set(null);
+    this.onCallStatus.set(null);
+    this.roomedPatients.set([]);
+    this.criticalStrip.set(null);
+    this.worklistItems.set([]);
+    this.patientFlowData.set({});
+    this.inboxItems.set([]);
+    this.recentPatients.set([]);
+    this.todayAppointments.set([]);
     // The open snapshot is one patient's record at the hospital just left.
     this.closePatientSnapshot();
-    if (this.isDoctor() && this.roleContext.hasHospitalScope()) {
-      this.loadResultReviewQueue();
-    }
+    // The same read the page's own Refresh button issues, which re-reads the
+    // review queue among the rest — so it is NOT also requested separately.
+    this.loadDashboardData();
   }
 
   ngOnInit(): void {
@@ -2670,15 +2695,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.patientSnapshot.set(s);
         this.snapshotLoading.set(false);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         if (!isCurrent()) return;
         this.snapshotLoading.set(false);
-        this.snapshotError.set('FAILED');
+        this.snapshotError.set(err?.status === 404 ? 'NOT_HERE' : 'FAILED');
       },
     });
   }
 
-  /** The drawer's Retry: the same read, on the patient it is already open on. */
+  /**
+   * The drawer's Retry: the same read, on the patient it is already open on.
+   * Reachable only from FAILED — neither refusal offers one, because asking
+   * again returns the same answer.
+   */
   retryPatientSnapshot(): void {
     const patientId = this.snapshotPatientId;
     if (!patientId) return;

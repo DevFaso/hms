@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 
 const LOCALE_MAP: Record<string, string> = {
@@ -14,7 +15,7 @@ const LOCALE_MAP: Record<string, string> = {
 @Component({
   selector: 'app-doctor-results-panel',
   standalone: true,
-  imports: [RouterLink, TranslateModule, HospitalScopeHintComponent],
+  imports: [RouterLink, TranslateModule, HospitalScopeChipComponent, HospitalScopeHintComponent],
   templateUrl: './doctor-results-panel.html',
   styleUrl: './doctor-results-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

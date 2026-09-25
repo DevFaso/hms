@@ -177,6 +177,16 @@ describe('PatientSnapshotDrawerComponent — states with no snapshot', () => {
     expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
   });
 
+  it('says the patient is not reachable here on a scoped 404, with no retry', () => {
+    fixture.componentRef.setInput('loadError', 'NOT_HERE');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-not-here"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DASHBOARD.SNAPSHOT_NOT_HERE');
+    // Asking again returns the same 404.
+    expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
+  });
+
   it('states a failure and offers a retry', () => {
     fixture.componentRef.setInput('loadError', 'FAILED');
     fixture.detectChanges();

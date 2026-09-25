@@ -34,21 +34,31 @@
   </header>
 
   <!--
-    Loading and failure only REPLACE the table when there is nothing to
-    replace. A refresh of a populated worklist must not blank the rows the
-    physician is working from, and a refresh that then fails must not leave
-    them with an error card where twelve critical results used to be — the
-    rows are still held, so they are still drawn, with the failure stated
-    above them.
-  -->
-  <!--
     No hospital in scope FIRST, ahead of every other state: the endpoint
     answers 404, so the category never read. This must not fall through to
     the error card ("the queue could not be loaded" sends a clinician looking
     for an outage) nor to the empty state, which would claim there is nothing
     to review — the one rendering this worklist exists to prevent.
+
+    After that: loading and failure only REPLACE the table when there is
+    nothing to replace. A refresh of a populated worklist must not blank the
+    rows the physician is working from, and a refresh that then fails must not
+    leave them with an error card where twelve critical results used to be —
+    the rows are still held, so they are still drawn, with the failure stated
+    above them.
   -->
   @if (!hasHospitalScope()) {
+    <!--
+      The chip, with the hint. This page is not `requiresHospitalScope` — it
+      renders for every clinical role and for a super-admin in global view —
+      so the shell draws no scope bar above it, and a hint saying "select a
+      hospital" with no picker anywhere on screen names a remedy the reader
+      cannot reach. `preserveScope` is what #731 objected to the chart doing
+      without: it keeps the session's pick instead of resetting the scope on
+      mount and never touches the URL. The chip renders itself away for
+      anyone but a super-admin.
+    -->
+    <app-hospital-scope-chip [preserveScope]="true" />
     <app-hospital-scope-hint />
   } @else if (loading() && results().length === 0) {
     <div class="loading-spinner" aria-live="polite">
