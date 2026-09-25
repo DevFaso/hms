@@ -179,17 +179,29 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             // instead: pick a hospital (the scope picker) and the read is
             // scoped, readable-checked and disclosed like every other.
             //
-            // The chart's Labs tab deliberately sends NO hospitalId in global
-            // view (patient-chart.component.ts, labHospitalId() — "unscoped,
-            // both reads are unscoped together and the backend resolves"), so
-            // until that page asks for a scope instead, a super-admin in global
-            // view gets an error card there rather than another tenant's rows.
-            // That is the intended trade: an unaccounted cross-tenant read is
-            // not an acceptable way to keep a tab populated.
+            // The chart's Labs tab used to send NO hospitalId in global view,
+            // which would have turned this refusal into an error card with a
+            // Retry that re-issued the same request forever. #731 closed that
+            // first: the Labs section now declines to read without a scope and
+            // renders the scope hint, so the two changes meet correctly and a
+            // super-admin is asked to pick a hospital rather than shown a
+            // failure. If a future caller reintroduces an unscoped read, it
+            // gets a 404 here — deliberately, because an unaccounted
+            // cross-tenant read is not an acceptable way to keep a tab
+            // populated.
             //
             // 404, not 403, and the same key PatientChartAccess throws: a
             // caller who could not establish scope learns nothing about whether
             // the patient or the rows exist.
+            //
+            // Logged, though. The response is deliberately opaque, which makes
+            // a scope-resolution failure indistinguishable from a genuine
+            // missing patient in the logs too — and those are very different
+            // operational events. The patient id only: it is already the
+            // subject of this request, and nothing about the caller's own
+            // tenancy belongs in a line that a 404 spike will be triaged from.
+            log.warn("Staff lab-result read refused: no hospital scope resolved for patient {}",
+                patient.getId());
             throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
         } else {
             // Patient portal only: the caller IS the patient (or a proxy the
