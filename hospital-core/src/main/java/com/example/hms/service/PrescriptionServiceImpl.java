@@ -255,13 +255,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     + status + ".");
         }
 
-        UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
-        }
-        Staff cosigner = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-            .orElseThrow(() -> new AccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
+        Staff cosigner = resolveCosignerAtHospital(prescription);
 
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
@@ -276,6 +270,41 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} co-signed by staff {}", prescription.getId(), cosigner.getId());
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * The co-signer's staff profile, resolved at the PRESCRIPTION's hospital.
+     *
+     * <p>A clinician credentialed at two hospitals has two staff profiles, so
+     * "the first profile found" matched them to the older one and refused them
+     * at the newer. The anchor is the prescription's own hospital rather than
+     * the acting scope: the co-signature attests to an order that belongs to
+     * that hospital and will be filled there, so the second clinician must be
+     * credentialed there. When a hospital scope is active the block above has
+     * already proved the two are the same hospital; when the caller is in the
+     * unscoped (global) view the prescription's hospital is the only defined
+     * anchor, and reading the scope there would leave nothing to check.
+     *
+     * <p>Same shape as {@code PrescriptionClarificationService
+     * .resolveDoctorAtHospital} and the encounter-note co-sign; AccessDenied
+     * rather than BusinessException because this is an authorization failure.
+     */
+    private Staff resolveCosignerAtHospital(Prescription prescription) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
+        }
+        UUID rxHospitalId = prescription.getHospital() != null
+            ? prescription.getHospital().getId()
+            : null;
+        if (rxHospitalId == null) {
+            throw new AccessDeniedException(
+                "Only a clinician at the prescribing hospital can co-sign a prescription.");
+        }
+        return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
+            .orElseThrow(() -> new AccessDeniedException(
+                "Only a clinician with a staff profile at the prescribing hospital can "
+                    + "co-sign a prescription."));
     }
 
     /**

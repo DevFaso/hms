@@ -2494,7 +2494,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
         when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
-        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+        when(staffRepository.findByUserIdAndHospitalId(cosignerUserId, rx.getHospital().getId()))
             .thenReturn(Optional.of(cosigner));
         when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
         when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
@@ -2517,7 +2517,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
         when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
-        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(prescriberUserId))
+        when(staffRepository.findByUserIdAndHospitalId(prescriberUserId, rx.getHospital().getId()))
             .thenReturn(Optional.of(rx.getStaff()));
 
         UUID rxId = rx.getId();
@@ -2525,6 +2525,90 @@ class PrescriptionServiceImplTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("own prescriber");
         assertThat(rx.getCosignedAt()).isNull();
+    }
+
+    @Test
+    void cosignResolvesTheProfileAtThePrescriptionsHospitalNotTheOldestOne() {
+        // A clinician credentialed at two hospitals has two staff profiles.
+        // "The first profile found" matched them to the older hospital and
+        // refused them at the newer one, where the order actually lives.
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff profileAtOlderHospital = Staff.builder().build();
+        profileAtOlderHospital.setId(UUID.randomUUID());
+        Staff profileAtThisHospital = Staff.builder().build();
+        profileAtThisHospital.setId(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        lenient().when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+            .thenReturn(Optional.of(profileAtOlderHospital));
+        when(staffRepository.findByUserIdAndHospitalId(cosignerUserId, rx.getHospital().getId()))
+            .thenReturn(Optional.of(profileAtThisHospital));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.cosignPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getCosignedBy()).isSameAs(profileAtThisHospital);
+        assertThat(rx.getCosignedAt()).isNotNull();
+    }
+
+    @Test
+    void cosignRefusesAClinicianWithNoProfileAtThePrescriptionsHospital() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff profileElsewhere = Staff.builder().build();
+        profileElsewhere.setId(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        lenient().when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+            .thenReturn(Optional.of(profileElsewhere));
+        when(staffRepository.findByUserIdAndHospitalId(cosignerUserId, rx.getHospital().getId()))
+            .thenReturn(Optional.empty());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            .hasMessageContaining("prescribing hospital");
+        assertThat(rx.getCosignedAt()).isNull();
+        assertThat(rx.getCosignedBy()).isNull();
+    }
+
+    @Test
+    void cosignInTheUnscopedViewStillAnchorsOnThePrescriptionsHospital() {
+        // No active hospital scope: the prescription's own hospital is the
+        // only defined anchor, and it still has to hold.
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff cosigner = Staff.builder().build();
+        cosigner.setId(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        when(staffRepository.findByUserIdAndHospitalId(cosignerUserId, rx.getHospital().getId()))
+            .thenReturn(Optional.of(cosigner));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.cosignPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getCosignedBy()).isSameAs(cosigner);
     }
 
     @Test
