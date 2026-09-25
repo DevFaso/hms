@@ -57,19 +57,31 @@ boundary and becomes a read primitive. On HTTP that means the same status
 and the same body as a miss — 404, not 403 beside a 404. On HL7 v2 it
 means the same ACK code *and the same ACK text*: the MLLP paths return
 `REJECTED_NOT_FOUND` and there is deliberately no cross-tenant outcome to
-return, because a constant that exists only to produce a different answer
-is how this was reintroduced twice (see the `hl7-mllp-integration` skill).
+return, because a constant whose only job is to produce a different answer
+is how the oracle got in (see the `hl7-mllp-integration` skill for the
+MLLP-specific rules). **"Same body" means the same body**: identical status,
+identical message text, identical `OperationOutcome` diagnostics. Two 404s
+whose messages differ ("not found" vs "not found at the active hospital
+scope") are still an oracle.
 
-**404 and 403 answer different questions, and the file says both.** The rule
-above is about *exists, but not yours* — that must be indistinguishable from
-*does not exist*, because the caller named a real identifier and the answer
-would confirm it. A **403 is correct where nothing was named**: a caller with
-no tenant pinned at all (a super-admin with no `X-Hospital-Id`) is being told
-to pin one, which reveals nothing about any identifier, and that is the
-write-side pattern on `EncounterFhirWriteService` and
-`ObservationFhirWriteService` further down this file. Deny-on-null and
-collapse-on-mismatch are the two halves, not alternatives: reject the unpinned
-caller loudly, and refuse the wrong-tenant identifier invisibly.
+**Where a 403 is still right.** The rule above is about *exists, but not
+yours*, and it applies whether the operation is a read or a write. A 403 is
+correct only where the caller named nothing that could be confirmed: a caller
+with **no tenant pinned at all** (a super-admin with no `X-Hospital-Id`) is
+being told to pin one, which reveals nothing about any identifier. Write
+paths may reject that case loudly with a 403 up front; read paths return
+empty or 404 for it instead (see *Cross-tenant guard must DENY on null* below
+and the row-32 KPI exception). **A mismatch between a pinned tenant and the
+stored one is never a 403**, on a read or a write.
+
+The simplest way to get this right is to make the lookup itself tenant-scoped,
+so a foreign identifier and an unknown one are the same row-not-found:
+`EncounterFhirWriteService` does exactly this with
+`findByIdAndHospital_Id(id, hospitalId)`, and both cases get one 404.
+**`ObservationFhirWriteService` is a known violation — do not copy it**: it
+loads the `LabResult` unscoped, answers 404 when the id is unknown and 403
+("does not belong to the active hospital scope") when it belongs to another
+tenant, so a pinned caller can probe which lab result ids exist elsewhere.
 
 Two traps, both of which were real defects here:
 
@@ -79,9 +91,16 @@ Two traps, both of which were real defects here:
 - **Partial ownership is not partial permission.** An operation naming two
   entities where the caller owns one must answer exactly as if it owned
   neither — otherwise the caller pairs something it legitimately owns with
-  any candidate identifier and reads the answer off. Evaluate both
-  ownership checks before branching, too: `||` short-circuits, and the
-  probe case is the one that would otherwise be a round-trip cheaper.
+  any candidate identifier and reads the answer off.
+
+Identical answers are identical in **content, not in time**. An identifier
+that exists nowhere usually fails fast at the first lookup, while one that
+exists in another tenant goes on to the ownership check, so the work differs
+even when the response does not. Evaluating both ownership checks before
+branching (rather than letting `||` short-circuit) closes the smaller part of
+that gap; it does not make the path constant-time, and the residual should be
+written down on any new surface rather than assumed away. The MLLP A40 path
+is the worked example, in the `hl7-mllp-integration` skill.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -89,19 +108,32 @@ home tenant.
 
 ## Audit cross-tenant attempts
 
-Every cross-tenant rejection MUST emit an audit event via
-`CrossTenantReadAudit`. This is the primary surface for detecting
-misconfigured senders + permission-creep bugs. Live in
-`security/audit/CrossTenantReadAudit.java`.
+`CrossTenantReadAudit` (`security/audit/CrossTenantReadAudit.java`) is
+**not** a rejection audit, whatever its name suggests. It records one thing:
+a *successful* super-admin read that spans tenants — it returns early unless
+the caller is a super-admin, and writes `DATA_ACCESS` with status `SUCCESS`.
+Calling it on a refusal records nothing for an ordinary user and records a
+successful cross-tenant read for a super-admin, which is worse than nothing.
+An earlier version of this section said every cross-tenant rejection MUST
+emit it; that was never true of the class, and following it would have
+produced either silence or a false audit row.
 
-Known exception, stated so it is not copied as the pattern: **none of the
-three MLLP inbound paths** — ORU^R01, ADT and A40 — emit a
-`CrossTenantReadAudit`. There is no
-security context on an MLLP worker thread and so no principal to attribute
-the attempt to — which is also why those paths enforce the tenant boundary
-themselves rather than relying on the service guards. They record the
-refusal on the `integration_message_event` row instead. If you add a
-surface with a real principal, emit the event.
+There is no general "cross-tenant refusal" audit event today. Refusals are
+visible where the surface records them:
+
+- The MLLP inbound paths (ORU^R01, ADT, A40) have no principal on the worker
+  thread and record the refusal on an `integration_message_event` row. They do
+  not record it identically: the ADT and A40 refusals carry no message body
+  and a stable correlation id per (sender, reason), while the ORU^R01
+  refusal still stores the full raw message with a random id per row — so
+  a retrying sender adds a dead letter, and a copy of the message, per
+  attempt. That gap is open.
+- HTTP surfaces refuse with the same 404 as a miss and write nothing specific
+  to the refusal.
+
+If you need refusals to be detectable — for enumeration, or for a
+misconfigured integration — that is a new event type to design, not a call
+to `CrossTenantReadAudit`.
 
 ## Schema-per-tenant (v2.0 path, off by default)
 
@@ -191,13 +223,17 @@ they're not authorised in.
 **Correct pattern:**
 
 ```java
+// ONE message for both cases. Two different 404 texts — "not found" vs
+// "not found at the active hospital scope" — are still an oracle: the
+// status matches and the body tells them apart.
+String notFoundMessage = "Patient/" + patientId + " not found";
 Patient patient = patientRepository.findById(patientId)
-    .orElseThrow(() -> notFound("Patient/" + patientId + " not found"));
+    .orElseThrow(() -> notFound(notFoundMessage));
 boolean registered = registrationRepository
     .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
     .isPresent();
 if (!registered) {
-    throw notFound("Patient/" + patientId + " not found at the active hospital scope.");
+    throw notFound(notFoundMessage);
 }
 // only NOW safe to render
 return patientMapper.toFhir(patient);
@@ -205,7 +241,9 @@ return patientMapper.toFhir(patient);
 
 The 404 is intentional — cross-tenant rejection collapses to "no
 such patient" so the existence of patients belonging to other
-tenants stays invisible.
+tenants stays invisible. That only holds if the *body* is the same
+too: an earlier version of this snippet used a different message for
+each branch and would have leaked through the diagnostics.
 
 Caught on `PatientEverythingService.everythingForPatient` in PR
 #351 (FHIR `$everything`). The same pattern applies to any other
@@ -235,12 +273,15 @@ if (!stored.getHospitalId().equals(activeHospitalId)) {
 }
 ```
 
-Caught on `FhirBulkExportService.getJob` in PR #351. The same
-write-side pattern (throwing 403 instead of 404) lands on
-`EncounterFhirWriteService` and `ObservationFhirWriteService` from
-PR #350 (those rejected on null up-front via
-`HospitalContextHolder.getContextOrEmpty().getActiveHospitalId() == null`
-→ `ForbiddenOperationException`).
+Caught on `FhirBulkExportService.getJob` in PR #351. The write
+services from PR #350 (`EncounterFhirWriteService`,
+`ObservationFhirWriteService`) take the other permitted shape for the
+**null** case: they reject up front with a 403
+(`ForbiddenOperationException`) when no hospital is pinned. That 403 is
+for the null pin only. A *mismatch* is still a 404 on a write —
+`EncounterFhirWriteService` gets that right by scoping its lookup, and
+`ObservationFhirWriteService` does not (see the known violation named
+above).
 
 The exception: read-only aggregate dashboards (row 32 KPI) where
 the documented behaviour is "super-admin without X-Hospital-Id
