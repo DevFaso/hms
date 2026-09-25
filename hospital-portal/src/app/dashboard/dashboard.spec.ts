@@ -9,6 +9,7 @@ import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
+import { LabService } from '../services/lab.service';
 import { signal } from '@angular/core';
 import { of, Subject, throwError } from 'rxjs';
 import {
@@ -1244,5 +1245,139 @@ describe('Dashboard patient lab tile styling', () => {
     expect(rule?.[1]).toContain('#fef3c7');
     expect(rule?.[1]).toContain('#b45309');
     expect(rule?.[1]).not.toContain('#d1fae5');
+  });
+});
+
+/**
+ * B6/B7 follow-up: the review-queue panel's acknowledge control used to
+ * filter the row locally and call nothing, although the endpoint exists —
+ * and clearing the failure flag along with the last row let a physician
+ * click a 502 into the green "all results reviewed" card.
+ */
+describe('result review queue - acknowledge and failure state', () => {
+  function buildDashboard(labServiceSpy: jasmine.SpyObj<LabService>) {
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles: ['ROLE_DOCTOR'],
+      staffId: 's1',
+      active: true,
+    } as never);
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => true, hasAnyPermission: () => true },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        { provide: LabService, useValue: labServiceSpy },
+      ],
+    });
+    return TestBed.createComponent(DashboardComponent).componentInstance;
+  }
+
+  function queueItem(id: string) {
+    return {
+      id,
+      patientName: 'Awa Traore',
+      patientId: 'p-1',
+      testName: 'Potassium',
+      resultValue: '6.8',
+      abnormalFlag: 'CRITICAL',
+      resultedAt: '2026-09-20T09:30:00Z',
+    };
+  }
+
+  it('acknowledges against the server before removing the row', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(of(undefined));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1'), queueItem('r-2')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(labServiceSpy.acknowledgeResult).toHaveBeenCalledWith('r-1');
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-2']);
+  });
+
+  it('keeps the row when the server refuses the acknowledgement', () => {
+    // A control that silently drops a CRITICAL row while the escalation
+    // sweep goes on paging for it is worse than one that reports a problem.
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(throwError(() => new Error('500')));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-1']);
+    expect(TestBed.inject(ToastService).error).toHaveBeenCalled();
+  });
+
+  it('names the read-back ceremony when the server refuses with a 400', () => {
+    // The refusal reaches far more rows than the Critical section: a
+    // reference-range severity of HIGH stamps criticalNotifiedAt too, while
+    // the queue grades that row merely ABNORMAL. The server's answer is the
+    // only reliable way to tell.
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(throwError(() => ({ status: 400 }) as never));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-1']);
+    expect(TestBed.inject(ToastService).error).toHaveBeenCalledWith('DASHBOARD.READ_BACK_REQUIRED');
+  });
+
+  it('ignores a second click while the first acknowledgement is in flight', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(new Subject<void>().asObservable());
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+    c.acknowledgeResult('r-1');
+
+    expect(labServiceSpy.acknowledgeResult).toHaveBeenCalledTimes(1);
+    expect(c.acknowledgingResults()).toEqual(['r-1']);
+  });
+
+  it('does not let a failed read be cleared by working through its stale rows', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(of(undefined));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+    c.resultQueueError.set(true);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().length).toBe(0);
+    // Still failed: only a read that succeeds may say otherwise.
+    expect(c.resultQueueError()).toBeTrue();
   });
 });
