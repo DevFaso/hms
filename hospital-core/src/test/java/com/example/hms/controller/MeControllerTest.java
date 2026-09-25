@@ -776,12 +776,26 @@ class MeControllerTest {
                 DoctorResultQueueItemDTO.builder().testName("CBC").patientName("Pat C").build());
         when(resultReviewService.getResultReviewQueue(eq(testUserId), any())).thenReturn(items);
 
-        ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response =
-                controller.getResultReviewQueue(doctorAuth);
+        // The queue is scoped now, so the controller has to hand it the hospital
+        // it resolved — the same one it gives getPatientSnapshot. any() would
+        // match null and stay green if that regressed, turning the endpoint into
+        // a blanket 404 for everyone.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(testHospitalId)
+                .permittedHospitalIds(Set.of(testHospitalId))
+                .build());
+        ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response;
+        try {
+            response = controller.getResultReviewQueue(doctorAuth);
+        } finally {
+            HospitalContextHolder.clear();
+        }
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, requireBody(response).getData().size());
-        verify(resultReviewService).getResultReviewQueue(eq(testUserId), any());
+        org.mockito.ArgumentCaptor<UUID> scope = org.mockito.ArgumentCaptor.forClass(UUID.class);
+        verify(resultReviewService).getResultReviewQueue(eq(testUserId), scope.capture());
+        assertEquals(testHospitalId, scope.getValue());
     }
 
     // ========== GET /api/me/patients/{patientId}/snapshot ==========

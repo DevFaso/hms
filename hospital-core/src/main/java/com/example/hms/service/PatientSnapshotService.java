@@ -23,8 +23,14 @@ public interface PatientSnapshotService {
      *        refused
      * @return compact snapshot DTO
      * @throws com.example.hms.exception.ResourceNotFoundException (404) when
-     *         {@code hospitalId} is {@code null}, or the patient does not exist
-     *         — deliberately the same answer to both
+     *         {@code hospitalId} is {@code null}, when the patient does not
+     *         exist, and when the caller may not read them at
+     *         {@code hospitalId} — deliberately the same answer to all three
+     * @throws com.example.hms.exception.ChartRestrictedException (403) for a
+     *         restricted chart. The drawer goes through the same
+     *         {@code PatientChartAccess} rule as the chart tabs, so it refuses
+     *         one as loudly as they do; before that it opened on registration
+     *         alone
      */
     PatientSnapshotDTO getSnapshot(UUID patientId, UUID hospitalId);
 }

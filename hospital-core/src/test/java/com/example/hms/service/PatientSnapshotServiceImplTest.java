@@ -1040,9 +1040,15 @@ class PatientSnapshotServiceImplTest {
         LabOrder foreignOrder = new LabOrder();
         foreignOrder.setHospital(other);
         foreignOrder.setStatus(LabOrderStatus.PENDING);
-        // Stubbed so the test would SEE the leak if a patient-wide branch ever
-        // ran again: this is the very finder #739 (open) abandons on the lab side.
+        // The finder that used to serve this — the one #739 (open) abandons on
+        // the lab side. It is no longer referenced by the service at all, so the
+        // `never()` on it below is a guard against it coming BACK, not evidence
+        // about today: what fails when the guard is removed is the missing
+        // throw, and the scoped finder stubbed next is what would then carry the
+        // foreign row into the snapshot.
         lenient().when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(foreignOrder));
+        lenient().when(labOrderRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), any()))
+                .thenReturn(List.of(foreignOrder));
         // A whole, usable patient, all lenient: none of it may be touched once
         // the guard fires, but it has to be there so that reverting the guard
         // produces the LEAK (a snapshot carrying the foreign order) rather than

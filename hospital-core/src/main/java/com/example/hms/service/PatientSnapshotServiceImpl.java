@@ -47,12 +47,23 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * their own DB errors so a flaky non-essential section can't blank the whole
  * snapshot. {@code getSnapshot} is now a thin assembler.
  *
- * <p>Every section reads within the acting hospital's readable set (allergies
- * are patient-wide by design, E9 #56). There is no unscoped branch:
- * {@link #getSnapshot} refuses a null hospital scope before it reads anything,
- * so the patient-wide finders these builders used to fall back to are removed
- * rather than merely unreachable — the guard cannot be bypassed by a later
- * caller reintroducing a null.
+ * <p>{@link #getSnapshot} refuses a null hospital scope before it reads
+ * anything, and the patient-wide finders the builders used to fall back to on
+ * that null are removed rather than merely unreachable, so a later caller
+ * cannot reintroduce one.
+ *
+ * <p>Two reads are still patient-wide, both deliberately, and both are stated
+ * here rather than left for the next reader to discover:
+ * <ul>
+ *   <li>allergies — by design (E9 #56): an allergy is a property of the
+ *       patient, not of the hospital that recorded it;</li>
+ *   <li>the legacy {@code clinical.patient_diagnoses} rows in
+ *       {@link #buildActiveDiagnoses} — <b>not</b> by design. That V14 table
+ *       has no {@code hospital_id} column at all, so there is nothing to scope
+ *       it by, nothing to test with {@code CrossHospitalRows.maySurface}, and
+ *       nothing to name in the reach. Closing it needs a migration, which this
+ *       change does not take.</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -199,11 +210,18 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return snapshot;
     }
 
-    /** E9 #60 — one row per foreign hospital surfaced, merged into the snapshot's reach. */
+    /**
+     * E9 #60 — one row per foreign hospital surfaced, merged into the snapshot's
+     * reach.
+     *
+     * <p>No null check on the acting hospital any more. It used to be the thing
+     * that made an unscoped read silently unaccounted, and it is now
+     * unreachable: {@link #getSnapshot} refuses a null before any section runs.
+     * Leaving it would be the same surviving null branch this class removed six
+     * times over.
+     */
     private static void account(Map<String, Long> reach, UUID actingHospitalId, List<UUID> sourceHospitalIds) {
-        if (actingHospitalId != null) {
-            CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(sourceHospitalIds, actingHospitalId));
-        }
+        CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(sourceHospitalIds, actingHospitalId));
     }
 
     private List<Encounter> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable, Map<String, Long> reach,
@@ -268,6 +286,14 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             problems.stream()
                     .map(p -> formatDiagnosis(p.getProblemCode(), p.getProblemDisplay()))
                     .forEach(diagnoses::add);
+            // KNOWN, and the one patient-wide clinical read left in this class.
+            // clinical.patient_diagnoses (V14) carries no hospital_id, so these
+            // rows cannot be filtered to `readable`, cannot be tested by
+            // CrossHospitalRows.maySurface (a foreign row in a sensitive
+            // category surfaces) and cannot be accounted into `reach`. Deriving
+            // a hospital from diagnosedBy.getHospital() is not the answer: the
+            // column is nullable, and the SUBJECT's hospital is not the
+            // caller's scope. Scoping it needs a migration.
             List<PatientDiagnosis> legacy = patientDiagnosisRepository
                     .findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, DIAGNOSIS_STATUS_ACTIVE);
             legacy.stream()
