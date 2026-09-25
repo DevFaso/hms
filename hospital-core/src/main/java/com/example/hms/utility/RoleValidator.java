@@ -20,6 +20,15 @@ import java.util.UUID;
 public class RoleValidator {
     private static final String HOSPITAL_ADMIN_ROLE = "HOSPITAL_ADMIN";
 
+    /**
+     * What a caller with no resolvable hospital is told. Public so a guard
+     * that refuses the same condition for its own reason — the encounter
+     * reads refuse a {@code null} scope the verified super-admin flag does not
+     * back — says it in the same words, and a rewording here reaches both.
+     */
+    public static final String HOSPITAL_CONTEXT_REQUIRED =
+        "Hospital context required. Please select an active hospital or include X-Hospital-Id header.";
+
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
@@ -205,7 +214,7 @@ public class RoleValidator {
         if (isSuperAdminFromAuth()) {
             return null; // super-admin can see cross-hospital
         }
-        throw new BusinessException("Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
+        throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
     }
 
     /** Active assignment for (currentUser, currentHospital) if uniquely determined */
