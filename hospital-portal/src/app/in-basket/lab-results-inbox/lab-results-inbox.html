@@ -55,7 +55,7 @@
     <p class="empty-state">{{ 'inBasket.labResultsEmpty' | translate }}</p>
   } @else {
     @if (loadError()) {
-      <p class="stale-banner" role="status">
+      <p class="stale-banner" role="status" [attr.aria-busy]="loading()">
         {{ 'inBasket.labResultsError' | translate }}
         <!--
           Reachable while a read is in flight, unlike the one in the error
@@ -64,7 +64,7 @@
           four requests to an endpoint that is an unbounded N+1.
         -->
         <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
-          {{ 'COMMON.RETRY' | translate }}
+          {{ (loading() ? 'common.loading' : 'COMMON.RETRY') | translate }}
         </button>
       </p>
     }

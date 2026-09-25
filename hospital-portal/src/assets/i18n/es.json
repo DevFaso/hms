@@ -1684,7 +1684,7 @@
     "ACK": "Ack",
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGE_FAILED": "No se pudo confirmar la recepción del resultado.",
-    "ACKNOWLEDGE_WRONG_HOSPITAL": "Este resultado no está disponible en su hospital actual. Puede pertenecer a otro hospital o ya no existir.",
+    "ACKNOWLEDGE_NOT_AVAILABLE": "Este resultado no está disponible en su hospital actual. Puede pertenecer a otro hospital o ya no existir.",
     "ACTIVE_ADMISSIONS": "Admisiones Activas",
     "ACTIVE_ALERTS": "Alertas Activas",
     "ACTIVE_CONDITIONS": "Active Conditions",

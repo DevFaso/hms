@@ -1684,7 +1684,7 @@
     "ACK": "Reçu",
     "ACKNOWLEDGE": "Accuser Réception",
     "ACKNOWLEDGE_FAILED": "Impossible d'accuser réception du résultat.",
-    "ACKNOWLEDGE_WRONG_HOSPITAL": "Ce résultat n'est pas disponible dans votre hôpital actuel. Il appartient peut-être à un autre hôpital, ou n'existe plus.",
+    "ACKNOWLEDGE_NOT_AVAILABLE": "Ce résultat n'est pas disponible dans votre hôpital actuel. Il appartient peut-être à un autre hôpital, ou n'existe plus.",
     "ACTIVE_ADMISSIONS": "Admissions Actives",
     "ACTIVE_ALERTS": "Alertes Actives",
     "ACTIVE_CONDITIONS": "Conditions Actives",

@@ -2618,7 +2618,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             err?.status === 400
               ? 'DASHBOARD.READ_BACK_REQUIRED'
               : err?.status === 404
-                ? 'DASHBOARD.ACKNOWLEDGE_WRONG_HOSPITAL'
+                ? 'DASHBOARD.ACKNOWLEDGE_NOT_AVAILABLE'
                 : 'DASHBOARD.ACKNOWLEDGE_FAILED',
           ),
         );

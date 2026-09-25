@@ -42,11 +42,11 @@
       plus a notice.
     -->
     @if (loadError()) {
-      <p class="rp-stale" role="status">
+      <p class="rp-stale" role="status" [attr.aria-busy]="loading()">
         {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
         <!-- Reachable during an in-flight read; see the in-basket twin. -->
         <button type="button" class="rp-retry" [disabled]="loading()" (click)="requestReload()">
-          {{ 'COMMON.RETRY' | translate }}
+          {{ (loading() ? 'common.loading' : 'COMMON.RETRY') | translate }}
         </button>
       </p>
     }

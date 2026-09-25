@@ -334,8 +334,18 @@
       <!-- Super-admin only (display:none otherwise): the tab is hospital-pinned
            and the chart has no other scope selector, so "select a hospital
            first" must be actionable right here. -->
+      <!--
+        `preserveScope` is not optional: without it `ngOnInit` runs
+        `applyUrlScopeSync`, /patients/:id carries no `?hospitalId=`, and the
+        chip answers by calling `enableGlobalView()` — so merely opening this
+        tab dropped a pin the super-admin had made elsewhere, and
+        `disableUrlSync` made sure nothing wrote it back. The Labs tab then
+        reported no hospital in scope. `shell.html` passes it for the same
+        reason.
+      -->
       <app-hospital-scope-chip
         [disableUrlSync]="true"
+        [preserveScope]="true"
         (scopeChange)="onDocumentsScopeChange($event)"
       />
       <app-documents-tab [patientId]="patient()!.id" [hospitalScope]="documentsScope()" />
