@@ -253,6 +253,14 @@ class LabModelsTest {
         val pending = mismatched.copy(released = false, status = "PENDING")
         assertNull(pending.displayReferenceRange)
         assertFalse(pending.referenceRangeUnitUncertain)
+
+        // NEVER on an abnormal or critical row: "these limits may not be in
+        // your units" under a CRITICAL badge is a reason to discount it.
+        for (graded in listOf("CRITICAL", "ABNORMAL", "ABNORMAL_HIGH", "ABNORMAL_LOW")) {
+            val alarming = mismatched.copy(value = "6.8", status = graded)
+            assertFalse("$graded must not be caveated", alarming.referenceRangeUnitUncertain)
+            assertEquals("70 - 110 mg/dL", alarming.displayReferenceRange)
+        }
     }
 
     /**
