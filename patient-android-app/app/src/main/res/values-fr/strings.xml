@@ -689,4 +689,5 @@
     <string name="end_date">Date de fin</string>
     <string name="lab_reference_range_unit_uncertain">Ces valeurs ne sont peut-être pas dans les mêmes unités que votre résultat.</string>
     <string name="units">Unités</string>
+    <string name="refreshing">Actualisation…</string>
 </resources>

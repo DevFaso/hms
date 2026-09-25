@@ -9,9 +9,12 @@ import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 @HiltViewModel
@@ -123,6 +126,14 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                     ),
                     hadDataBefore
                 )
+            } catch (e: CancellationException) {
+                // NOT a failure, and not ours to swallow. `awaitFreshLoad`
+                // cancels the in-flight load on purpose, and
+                // CancellationException is a RuntimeException — so the generic
+                // catch below reported an all-tabs failure and a "Could not
+                // refresh" snackbar for the whole duration of a perfectly good
+                // refill. Rethrowing also keeps structured concurrency honest.
+                throw e
             } catch (e: Exception) {
                 // The patient is told what matters — the lists are stale — in
                 // their own language, but the reason must not vanish: a parse
@@ -194,8 +205,10 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * full round-trips before their confirmation snackbar — six GETs if they
      * tap Request refill while the cold-open load is still running.
      * `cancelAndJoin` lets its `finally` settle `isLoading` before the fresh
-     * one raises it again, and a cancelled load never reaches
-     * `reportLoadOutcome`, so it cannot overwrite the new one's. Bypassing
+     * one raises it again, and the CancellationException rethrow in `load()`
+     * keeps the cancelled one away from `reportLoadOutcome` — without that
+     * rethrow the generic `catch (e: Exception)` caught it and announced a
+     * failure mid-refill. Bypassing
      * the dedupe outright is what this avoids: two concurrent loads are
      * exactly what the guard exists to prevent. `viewModelScope` is
      * main-dispatched, so the cancel and the relaunch cannot interleave with
@@ -206,9 +219,19 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
         load().join()
     }
 
+    /**
+     * One mutation at a time. `awaitFreshLoad` cancels whatever load is in
+     * flight, including a fresh one another mutation is joining — so two
+     * refills tapped in quick succession had the second cancel the first's
+     * read, and the first then chose its refusal message from pre-mutation
+     * data. That is the precise failure `awaitFreshLoad` exists to eliminate.
+     */
+    private val mutationLock = Mutex()
+
     /** Withdraws a refill request the provider has not acted on yet. */
     fun cancelRefill(refillId: String) {
         viewModelScope.launch {
+            mutationLock.withLock {
             try {
                 val resp = api.cancelRefill(refillId)
                 if (resp.isSuccessful) {
@@ -232,11 +255,13 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_cancel_failed, e.message)
             }
+            }
         }
     }
 
     fun requestRefill(prescriptionId: String, pharmacy: String?, notes: String?) {
         viewModelScope.launch {
+            mutationLock.withLock {
             try {
                 val resp = api.requestRefill(
                     RefillRequest(
@@ -296,6 +321,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 }
             } catch (e: Exception) {
                 _outcome.value = Outcome(R.string.refill_request_failed, e.message)
+            }
             }
         }
     }

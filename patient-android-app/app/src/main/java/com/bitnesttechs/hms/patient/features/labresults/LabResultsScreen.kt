@@ -103,21 +103,26 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                     }
                 }
             }
-            // A failed refresh over results that ARE on screen renders nothing
-            // at all otherwise: the empty state never runs, so the patient
-            // reads stale results with no sign the reload failed.
-            if (loadFailed && results.isNotEmpty()) {
+            // With results already on screen the full-screen spinner is
+            // suppressed, so without this row a refresh — whether it is running
+            // or has just failed — produced no feedback at all: the empty state
+            // never runs and the toolbar action looks inert.
+            if (results.isNotEmpty() && (isLoading || loadFailed)) {
                 item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         // Weighted: the French string is long enough to fill
                         // the row and collapse "Réessayer" to nothing.
-                        Text(stringResource(R.string.refresh_failed),
+                        Text(
+                            stringResource(
+                                if (isLoading) R.string.refreshing else R.string.refresh_failed
+                            ),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         if (isLoading) {
-                            // In the banner, not over the list: the retry must
-                            // not blank the results it is retrying for.
+                            // In the banner, not over the list: a refresh must
+                            // not blank the results it is refreshing.
                             CircularProgressIndicator(
                                 color = BrandBlue,
                                 strokeWidth = 2.dp,

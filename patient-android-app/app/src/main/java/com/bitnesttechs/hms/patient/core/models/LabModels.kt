@@ -127,12 +127,20 @@ data class LabResultDto(
      * …)`. On a test configured with two unit-specific ranges, the row can be
      * graded NORMAL in mmol/L and displayed against the mg/dL limits.
      *
-     * NOT complete cover, and it cannot be from here: when `ranges[0]` has no
-     * unit of its own, `formatReferenceRange` stamps the RESULT's unit onto
-     * its numbers, so the displayed string always carries this row's unit,
-     * this check always passes, and the limits are mislabelled with a unit
-     * they were never expressed in. That is a server-side defect and is filed
-     * as one; nothing the app can see distinguishes it.
+     * NOT complete cover, and it cannot be from here. Two server-side gaps,
+     * both filed as such, neither visible to the app:
+     *
+     *  * when `ranges[0]` has no unit of its own, `formatReferenceRange`
+     *    stamps the RESULT's unit onto its numbers, so the displayed string
+     *    always carries this row's unit, this check always passes, and the
+     *    limits are mislabelled with a unit they were never expressed in;
+     *  * conversely the DTO's `unit` is `resolveUnit()` — the result's unit
+     *    ELSE the DEFINITION's — while grading uses `result.getResultUnit()`
+     *    alone. On a manually entered result with no recorded unit the
+     *    backend graded against `ranges[0]` (a blank unit matches nothing, so
+     *    `findMatchingRange` falls back), yet the app compares the
+     *    definition's unit against the range's and may caveat a correctly
+     *    graded row.
      */
     val referenceRangeApplies: Boolean
         get() {

@@ -689,4 +689,5 @@
     <string name="end_date">End date</string>
     <string name="lab_reference_range_unit_uncertain">These limits may not be in the same units as your result.</string>
     <string name="units">Units</string>
+    <string name="refreshing">Refreshing…</string>
 </resources>
