@@ -53,14 +53,14 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                                          String sendingFacility,
                                          String messageControlId) {
         if (parsed == null || !StringUtils.hasText(parsed.mrn())) {
-            log.warn("MLLP ADT rejected — missing PID-3 MRN (sender={}/{} hospital={})",
-                sendingApplication, sendingFacility,
+            log.warn("MLLP ADT rejected — missing PID-3 MRN (sender={} hospital={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
                 receivingHospital != null ? receivingHospital.getId() : null);
             return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || receivingHospital.getId() == null) {
-            log.warn("MLLP ADT rejected — no resolved hospital (sender={}/{})",
-                sendingApplication, sendingFacility);
+            log.warn("MLLP ADT rejected — no resolved hospital (sender={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility));
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -69,8 +69,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             empiService.findIdentityByAlias(EmpiAliasType.MRN, mrn);
         if (identity.isEmpty() || identity.get().getPatientId() == null) {
             // No MRN in the log line: PID-3 is PHI wherever the log ends up.
-            log.warn("MLLP ADT rejected — PID-3 unknown to EMPI (sender={}/{} hospital={} event={})",
-                sendingApplication, sendingFacility,
+            log.warn("MLLP ADT rejected — PID-3 unknown to EMPI (sender={} hospital={} event={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
                 receivingHospital.getId(), parsed.triggerEvent());
             recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "PID-3 not found");
@@ -126,9 +126,9 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             .isPresent();
         if (!registered) {
             log.warn("MLLP ADT cross-tenant reject — patient={} not registered at hospital={} "
-                + "(sender={}/{})",
+                + "(sender={})",
                 patient.getId(), receivingHospital.getId(),
-                sendingApplication, sendingFacility);
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility));
             recordReject(parsed, receivingHospital, sendingApplication, sendingFacility,
                 messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -137,13 +137,13 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         boolean changed = applyDemographics(patient, parsed);
         if (changed) {
             patientRepository.save(patient);
-            log.info("MLLP ADT applied — patient={} event={} sender={}/{} hospital={}",
+            log.info("MLLP ADT applied — patient={} event={} sender={} hospital={}",
                 patient.getId(), parsed.triggerEvent(),
-                sendingApplication, sendingFacility, receivingHospital.getId());
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), receivingHospital.getId());
         } else {
-            log.info("MLLP ADT no-op — patient={} event={} (no demographic changes) sender={}/{} hospital={}",
+            log.info("MLLP ADT no-op — patient={} event={} (no demographic changes) sender={} hospital={}",
                 patient.getId(), parsed.triggerEvent(),
-                sendingApplication, sendingFacility, receivingHospital.getId());
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), receivingHospital.getId());
         }
 
         // Visit-sync projection runs AFTER the demographic write but
@@ -164,9 +164,9 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
             // happens after this method returns. The ACK we send back
             // reflects that the outer transaction is expected to
             // commit — the projection failure does not block that.
-            log.warn("ADT visit-sync projection threw for patient={} hospital={} event={} sender={}/{} — demographics already written; ACK will still be sent",
+            log.warn("ADT visit-sync projection threw for patient={} hospital={} event={} sender={} — demographics already written; ACK will still be sent",
                 patient.getId(), receivingHospital.getId(), parsed.triggerEvent(),
-                sendingApplication, sendingFacility, ex);
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), ex);
         }
 
         return MllpInboundOutcome.ACCEPTED;
@@ -245,8 +245,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                     MllpRecordingContext.senderScope(sendingApplication, sendingFacility),
                     CORRELATION_TYPE, reason));
         } catch (RuntimeException ex) {
-            log.warn("MLLP ADT message recorder threw for sender={}/{} reason={}",
-                sendingApplication, sendingFacility, reason, ex);
+            log.warn("MLLP ADT message recorder threw for sender={} reason={}",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), reason, ex);
         }
     }
 

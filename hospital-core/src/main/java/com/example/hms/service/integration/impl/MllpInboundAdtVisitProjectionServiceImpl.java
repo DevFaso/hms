@@ -22,6 +22,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
 import java.time.LocalDateTime;
@@ -181,8 +182,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         }
 
         admissionRepository.save(row);
-        log.info("ADT visit-sync reconciled — admission={} visit={} sender={}/{} hospital={} event={} result={} msgCtrlId={}",
-            row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+        log.info("ADT visit-sync reconciled — admission={} visit={} sender={} hospital={} event={} result={} msgCtrlId={}",
+            row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            ctx.hospitalId,
             ctx.parsed.triggerEvent(), result, ctx.controlId);
         return Optional.of(result);
     }
@@ -325,8 +327,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         Encounter row = encounter.get();
         row.setExternalMessageControlId(ctx.controlId);
         encounterRepository.save(row);
-        log.info("ADT visit-sync reconciled — encounter={} visit={} sender={}/{} hospital={} event={} msgCtrlId={}",
-            row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+        log.info("ADT visit-sync reconciled — encounter={} visit={} sender={} hospital={} event={} msgCtrlId={}",
+            row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            ctx.hospitalId,
             ctx.parsed.triggerEvent(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_RECONCILED);
     }
@@ -393,8 +396,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         admission = admissionRepository.save(admission);
         emitAutoCreateAudit(admission, ctx);
 
-        log.info("ADT visit-sync auto-created admission={} visit={} sender={}/{} hospital={} patient={} provider={} msgCtrlId={}",
-            admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+        log.info("ADT visit-sync auto-created admission={} visit={} sender={} hospital={} patient={} provider={} msgCtrlId={}",
+            admission.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            ctx.hospitalId,
             ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
     }
@@ -553,8 +557,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         encounter = encounterRepository.save(encounter);
         emitEncounterAutoCreateAudit(encounter, ctx);
 
-        log.info("ADT A04 auto-created encounter={} visit={} sender={}/{} hospital={} patient={} staff={} msgCtrlId={}",
-            encounter.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+        log.info("ADT A04 auto-created encounter={} visit={} sender={} hospital={} patient={} staff={} msgCtrlId={}",
+            encounter.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            ctx.hospitalId,
             ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
     }
@@ -673,8 +678,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         // conflict-resolution runbook for what to do with the warning
         // (typically: enable per-hospital auto-create OR provision an
         // Admission in-app and stamp external_visit_number manually).
-        log.warn("ADT visit-sync NO_MATCH — visit={} sender={}/{} hospital={} patient={} event={} (no existing Admission or Encounter; auto-create either off or gates failed)",
-            ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+        log.warn("ADT visit-sync NO_MATCH — visit={} sender={} hospital={} patient={} event={} (no existing Admission or Encounter; auto-create either off or gates failed)",
+            ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac), ctx.hospitalId,
             ctx.patient.getId(), ctx.parsed.triggerEvent());
     }
 

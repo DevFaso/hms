@@ -18,6 +18,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 
 import java.time.LocalDateTime;
@@ -82,8 +83,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         String integrationId = buildIntegrationId(sendingApplication, sendingFacility);
 
         if (observations == null || observations.isEmpty()) {
-            log.warn("MLLP ORU^R01 rejected — no OBX segments (sender={}/{} hospital={})",
-                sendingApplication, sendingFacility, hospitalId);
+            log.warn("MLLP ORU^R01 rejected — no OBX segments (sender={} hospital={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId);
             recordInboundMessage(integrationId, organizationId, rawMessageBody,
                 IntegrationMessageStatus.FAILED, "no OBX segments");
             return MllpInboundOutcome.REJECTED_INVALID;
@@ -96,16 +97,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             if (observation == null
                 || !StringUtils.hasText(observation.placerOrderNumber())
                 || !StringUtils.hasText(observation.resultValue())) {
-                log.warn("MLLP ORU^R01 rejected — an OBX is missing OBR-2 or its value (sender={}/{} hospital={})",
-                    sendingApplication, sendingFacility, hospitalId);
+                log.warn("MLLP ORU^R01 rejected — an OBX is missing OBR-2 or its value (sender={} hospital={})",
+                    MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "missing OBR-2 placer or OBX value");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
         }
         if (receivingHospital == null || hospitalId == null) {
-            log.warn("MLLP ORU^R01 rejected — no resolved hospital (sender={}/{})",
-                sendingApplication, sendingFacility);
+            log.warn("MLLP ORU^R01 rejected — no resolved hospital (sender={})",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility));
             recordInboundMessage(integrationId, organizationId, rawMessageBody,
                 IntegrationMessageStatus.FAILED, "no resolved hospital");
             return MllpInboundOutcome.REJECTED_INVALID;
@@ -129,7 +130,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
                     senderApp, senderFac, controlId);
             if (existing.isPresent()) {
-                log.info("MLLP ORU^R01 replay — sender={}/{} controlId={} already persisted (labResult {}); ACCEPTED without re-insert",
+                log.info("MLLP ORU^R01 replay — sender={} controlId={} already persisted (labResult {}); ACCEPTED without re-insert",
                     senderApp, senderFac, controlId, existing.get().getId());
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.RECEIVED, "duplicate (sender, MSH-10); replayed");
@@ -148,8 +149,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             }
             Optional<LabSpecimen> specimen = specimenRepository.findByAccessionNumber(placer);
             if (specimen.isEmpty()) {
-                log.warn("MLLP ORU^R01 placer={} unknown — sender={}/{} hospital={}",
-                    placer, sendingApplication, sendingFacility, hospitalId);
+                log.warn("MLLP ORU^R01 placer={} unknown — sender={} hospital={}",
+                    placer, MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "accession " + placer + " not found");
                 return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -176,9 +177,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 // order was routed to — the performing lab's analyser is a
                 // legitimate sender, and comparing on the ordering hospital
                 // alone meant an outsourced order could never be resulted.
-                log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}/{}, placer={})",
+                log.warn("MLLP ORU^R01 cross-tenant: order hospital={} but sender hospital={} (sender={}, placer={})",
                     order.getHospital().getId(), hospitalId,
-                    sendingApplication, sendingFacility, placer);
+                    MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), placer);
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
                     IntegrationMessageStatus.FAILED, "cross-tenant rejection");
                 return MllpInboundOutcome.REJECTED_NOT_FOUND;
@@ -218,9 +219,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 advanceToResulted(order);
             }
         }
-        log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={}/{} hospital={} msgCtrlId={}",
+        log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={} hospital={} msgCtrlId={}",
             saved.size(), ordersByPlacer.keySet(),
-            sendingApplication, sendingFacility, hospitalId, controlId);
+            MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId, controlId);
         recordInboundMessage(integrationId, organizationId, rawMessageBody,
             IntegrationMessageStatus.RECEIVED, null);
         for (LabResult savedResult : saved) {

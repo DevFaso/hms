@@ -202,13 +202,6 @@ public final class MllpRecordingContext {
     }
 
     /**
-     * Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does: trim and
-     * upper-case. The allowlist matches that way against values V62 stores
-     * canonically, so one sender may present its MSH-3/MSH-4 in any casing
-     * and still resolve — and everything derived from the pair has to agree
-     * with that, or one sender becomes several.
-     */
-    /**
      * The sender pair as it is safe to quote into a log line: normalised, and
      * capped at the width the HL7 fields actually allow.
      *
@@ -216,7 +209,16 @@ public final class MllpRecordingContext {
      * them verbatim with no length check — and the refusal paths log them on
      * every message, including the ones an <em>unallowlisted</em> sender
      * reaches. Capping MSH-10 and leaving these uncapped would have closed
-     * one sink and left the one next to it in the same line.
+     * one sink and left the one beside it in the same line.
+     *
+     * <p><b>What the cap does and does not buy.</b> It bounds volume: a
+     * sender cannot turn one refusal into kilobytes of its own prose in the
+     * log. It does <em>not</em> prevent forgery within the line — 180
+     * characters is ample to append text that reads like the fixed suffixes
+     * around it. What stops a forged <em>second line</em> is that CR and LF
+     * cannot survive {@code Hl7MessageInspector}, which cuts the MSH segment
+     * at the first one; that is a property of the parser, not of this cap,
+     * and an earlier version of this javadoc credited the cap with it.
      */
     public static String senderLabel(String sendingApplication, String sendingFacility) {
         return capped(normalised(sendingApplication)) + "/" + capped(normalised(sendingFacility));
@@ -226,6 +228,13 @@ public final class MllpRecordingContext {
         return value.length() > HL7_FIELD_MAX ? value.substring(0, HL7_FIELD_MAX) : value;
     }
 
+    /**
+     * Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does: trim and
+     * upper-case. The allowlist matches that way against values V62 stores
+     * canonically, so one sender may present its MSH-3/MSH-4 in any casing
+     * and still resolve — and everything derived from the pair has to agree
+     * with that, or one sender becomes several.
+     */
     private static String normalised(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }

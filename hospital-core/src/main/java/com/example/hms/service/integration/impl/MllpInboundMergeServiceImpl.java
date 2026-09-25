@@ -196,8 +196,14 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            log.warn("MLLP A40 refused by the merge service — sender={} hospital={}: {}",
-                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId, ex.getMessage());
+            // MSH-10 matters more here than anywhere else on this path:
+            // this is the only refusal that writes no
+            // integration_message_event row, so without it an operator has
+            // nothing to correlate the sender's complaint against.
+            log.warn("MLLP A40 refused by the merge service — sender={} hospital={} "
+                + "msgCtrlId={}: {}",
+                MllpRecordingContext.senderLabel(sendingApplication, sendingFacility),
+                hospitalId, safeControlId(messageControlId), ex.getMessage());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 

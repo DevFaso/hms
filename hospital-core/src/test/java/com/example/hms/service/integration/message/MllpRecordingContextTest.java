@@ -69,6 +69,28 @@ class MllpRecordingContextTest {
     }
 
     @Test
+    @DisplayName("The sender label is capped, so a log line cannot be padded by its sender")
+    void theSenderLabelIsCapped() {
+        // MSH-3 and MSH-4 are read verbatim by Hl7MessageInspector with no
+        // length check, and every MLLP refusal logs them - including the
+        // not-allowlisted branch, which anyone reaching the port hits. Without
+        // a cap here, collapsing capped(normalised(x)) back to normalised(x)
+        // would reopen that with a green suite, which is why this exists.
+        String longApp = "A".repeat(400);
+        String longFacility = "F".repeat(400);
+
+        String label = MllpRecordingContext.senderLabel(longApp, longFacility);
+
+        // 180 each - what HL7 v2.5 allows in those fields - plus the slash.
+        assertThat(label).hasSize(180 + 1 + 180);
+        assertThat(label).isEqualTo("A".repeat(180) + "/" + "F".repeat(180));
+        // Normalised the same way as the id, so one sender stays one sender.
+        assertThat(MllpRecordingContext.senderLabel(" mindray ", "lab-a"))
+            .isEqualTo("MINDRAY/LAB-A");
+        assertThat(MllpRecordingContext.senderLabel(null, "  ")).isEqualTo("?/?");
+    }
+
+    @Test
     @DisplayName("The organization is the hospital's, and null when it has none")
     void theOrganizationIsTheHospitals() {
         UUID organizationId = UUID.randomUUID();

@@ -144,8 +144,14 @@ public class Hl7MessageDispatcher {
         Optional<Hospital> hospital = allowlist.resolveHospital(
             header.sendingApplication(), header.sendingFacility());
         if (hospital.isEmpty()) {
-            log.warn("[MLLP {}] AR — sender {}/{} not allowlisted (msgType={})",
-                remoteAddress, header.sendingApplication(), header.sendingFacility(),
+            // The one log line on this surface an UNALLOWLISTED sender
+            // reaches, so the one where capping MSH-3/MSH-4 matters most:
+            // nothing has vouched for them and they are logged verbatim on
+            // every message they send.
+            log.warn("[MLLP {}] AR — sender {} not allowlisted (msgType={})",
+                remoteAddress,
+                MllpRecordingContext.senderLabel(
+                    header.sendingApplication(), header.sendingFacility()),
                 header.messageType());
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
