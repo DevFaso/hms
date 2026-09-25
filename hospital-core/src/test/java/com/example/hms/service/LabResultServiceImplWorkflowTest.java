@@ -72,6 +72,7 @@ class LabResultServiceImplWorkflowTest {
     // dependency is injected as null — a trap the next reflex test springs.
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;
@@ -164,10 +165,14 @@ class LabResultServiceImplWorkflowTest {
             .build();
 
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(current));
-        when(labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(
-                labOrder.getPatient().getId(),
-                labTestDefinition.getId())
+        // A caller pinned to the order's hospital reads the trend through the
+        // scoped finder; the unscoped one is a verified super-admin's only.
+        when(labResultRepository.findTrendReadableAt(
+                org.mockito.ArgumentMatchers.eq(labOrder.getPatient().getId()),
+                org.mockito.ArgumentMatchers.eq(labTestDefinition.getId()),
+                any(),
+                org.mockito.ArgumentMatchers.eq(hospitalId),
+                any())
         ).thenReturn(List.of(current, previous));
         when(labResultMapper.toResponseDTO(current)).thenReturn(baseResponse);
         when(labResultMapper.toTrendPointDTO(current)).thenReturn(currentPoint);

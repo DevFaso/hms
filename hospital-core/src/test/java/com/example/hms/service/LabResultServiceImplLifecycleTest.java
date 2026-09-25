@@ -71,6 +71,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @InjectMocks
     private LabResultServiceImpl service;

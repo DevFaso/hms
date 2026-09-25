@@ -67,6 +67,7 @@ class LabResultServiceImplPerformingHospitalTest {
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -244,8 +245,7 @@ class LabResultServiceImplPerformingHospitalTest {
     void resultIsReadableByBothHospitalsAndNotByAThird() {
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
-        when(labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(any(), any()))
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());

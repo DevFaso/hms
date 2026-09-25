@@ -222,6 +222,38 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         UUID labTestDefinitionId
     );
 
+    /**
+     * A patient's newest results for one test that a hospital may read: the
+     * orders placed at any of {@code readableHospitalIds} (the acting hospital
+     * plus the treatment-relationship set), and the orders this hospital's
+     * laboratory performed for somebody else (B1). The unscoped finder above
+     * returns every hospital's rows and is only for a verified super-admin in
+     * global view.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND r.labOrder.labTestDefinition.id = :labTestDefinitionId
+          AND (r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+        ORDER BY r.resultDate DESC
+    """)
+    List<LabResult> findTrendReadableAt(@Param("patientId") UUID patientId,
+                                        @Param("labTestDefinitionId") UUID labTestDefinitionId,
+                                        @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                        @Param("actingHospitalId") UUID actingHospitalId,
+                                        Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
