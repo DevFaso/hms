@@ -287,35 +287,22 @@
   }
 
   <!-- ══ Labs (B6) ══ -->
-  @if (section() === 'labs' && canViewLabs() && canPickHospitalScope()) {
-    <!--
-      The chip stays mounted whether or not a scope is set. /patients/:id does
-      not carry `requiresHospitalScope`, so the shell's chip is absent here and
-      this is the only picker on the page — the Documents tab embedded one for
-      exactly that reason (patient-detail.html). Rendering it only while
-      unscoped meant it vanished the moment it was used: pick the wrong tenant
-      and there was no way back, and no way back to "all hospitals" either.
-    -->
-    <app-hospital-scope-chip [disableUrlSync]="true" [preserveScope]="true" />
-  }
   @if (section() === 'labs' && canViewLabs() && !labsScoped()) {
     <!--
       No hospital scope: both lab reads would go out unscoped, read across
       every tenant and write no cross-hospital reach row. The section declines
-      to read — see labsScoped() — and says what can be done about it.
+      to read — see labsScoped() — and says so.
 
-      "Pick a hospital" only helps someone who HAS the picker, which is a
-      super-admin and nobody else. A clinical account whose scope has not
-      resolved lands here too, and telling it to use a control that is not on
-      its screen is a dead end.
+      Deliberately NOT `<app-hospital-scope-hint>` plus an embedded chip. That
+      chip clears the session's pin on mount unless `preserveScope` is passed,
+      re-runs a hospital lookup on every tab switch, and would be the only
+      picker on a page whose other three sections do not follow it — three
+      problems in exchange for saving a navigation. A picker on the chart is
+      worth doing properly, as its own change.
     -->
-    @if (canPickHospitalScope()) {
-      <app-hospital-scope-hint />
-    } @else {
-      <p class="labs-hint" role="status" data-testid="labs-no-hospital">
-        {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
-      </p>
-    }
+    <p class="labs-hint" role="status" data-testid="labs-no-hospital">
+      {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
+    </p>
   }
   @if (section() === 'labs' && canViewLabs() && labsScoped()) {
     <!--

@@ -183,7 +183,9 @@ export class LabResultsInboxComponent implements OnInit {
     const request = ++this.queueRequest;
     const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);
-    this.loadError.set(false);
+    // `loadError` is NOT cleared here. Clearing on start blanked the stale
+    // notice for the whole request window, so a Retry that failed seconds
+    // later showed held rows as current in between. Only a response clears it.
     this.dashboardService
       .getResultReviewQueue()
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -191,6 +193,7 @@ export class LabResultsInboxComponent implements OnInit {
         next: (items) => {
           if (!isCurrent()) return;
           this.results.set(items ?? []);
+          this.loadError.set(false);
           this.loading.set(false);
         },
         error: () => {

@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  untracked,
   output,
   signal,
   ChangeDetectionStrategy,
@@ -38,8 +39,6 @@ import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
@@ -57,15 +56,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    TranslateModule,
-    EnumLabelPipe,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
-    RestrictedRowsComponent,
-  ],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
@@ -295,14 +286,22 @@ export class PatientChartComponent implements OnInit, OnChanges {
     const previous = this.watchedLabScope;
     this.watchedLabScope = key;
     if (previous === undefined || previous === key) return;
-    // Every section is scoped now that `hospitalId()` follows the chip, so
-    // dropping only the lab state would leave the other three showing the
-    // previous hospital's rows — flagged foreign by `isForeignRow`, which
-    // re-derives the scope live — while a write from those same forms went to
-    // the new one. `refreshAfterAccessChange` is the existing "what this chart
-    // may show has changed" path; this is the same event.
-    this.labsLoadedFor.set(null);
-    this.refreshAfterAccessChange();
+    // Only the labs section: it is the one keyed on this scope. The other
+    // three read `hospitalId()`, the primary assignment, which no chip moves.
+    //
+    // `untracked` because the work below reads signals it also writes
+    // (`labResults`, `labOrders`, and `section()` inside `loadLabs`). Without
+    // it those reads become dependencies of this effect and it re-runs on its
+    // own writes — held off only by the early return above, which is a
+    // coincidence rather than a guarantee.
+    untracked(() => {
+      this.labResults.set([]);
+      this.labOrders.set([]);
+      this.labResultsError.set(false);
+      this.labOrdersError.set(false);
+      this.labsLoadedFor.set(null);
+      if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    });
   });
 
   /** undefined until the watcher has run once; then the last scope seen. */
@@ -343,13 +342,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * component now mounts a chip on the Labs tab, so a super-admin could pick
    * hospital B, switch to Allergies, and send `hospitalId=A` as a query
    * param under an `X-Hospital-Id: B` header. One request naming two
-   * hospitals is the divergence `labHospitalId()` was written against, so the
-   * rest of the chart reads the SAME function — not a parallel chain with a
-   * fallback of its own, which would have gone on sending the primary
-   * assignment as a param under no header in global view.
+   * hospitals is the divergence `labHospitalId()` was written against.
+   *
+   * The rest of the chart keeps the PRIMARY assignment, deliberately. Pointing
+   * it at the effective id made an unscoped account send no hospital at all on
+   * allergies, problems and updates, and all three of those backends refuse a
+   * null scope outright (`BusinessException("Hospital context is required")`)
+   * — so three sections that used to work started answering 400. Aligning
+   * them is a change to those sections, with their own empty states, not a
+   * one-line substitution made from the labs section.
    */
   private hospitalId(): string {
-    return this.labHospitalId() ?? '';
+    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
   }
 
   /**
@@ -403,14 +407,6 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * audited like everything else.
    */
   readonly labsScoped = computed(() => this.labHospitalId() != null);
-
-  /**
-   * Whether this account has the scope chip at all. `hospital-scope-chip`
-   * renders only for a super-admin, so the "pick a hospital" hint is
-   * actionable only for them; anyone else with no scope has no assignment to
-   * pick from and needs to be told that instead.
-   */
-  readonly canPickHospitalScope = computed(() => this.roleContext.isSuperAdmin());
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
