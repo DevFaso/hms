@@ -183,14 +183,22 @@ public class IntegrationMessageRecorder {
      * failure in June that lands on the same reason, gets a new row rather
      * than a quiet increment on the old one.
      *
-     * <p><b>Not transactional, deliberately</b>, unlike everything else here.
-     * Its caller is the MLLP dispatcher, which has no transaction of its own,
-     * so each repository call takes its own — which is what makes the lookup
-     * safe to fail. Inside a {@code REQUIRES_NEW} of its own, a lookup that
-     * threw would mark the transaction rollback-only and take the row and its
-     * body down with it, on the one path where the body is the only evidence
-     * there is. Do not call this from inside a transaction that must not see
-     * these writes.
+     * <p><b>Not transactional, deliberately — and therefore not isolated.</b>
+     * Unlike {@link #recordMessage}, this gives you no {@code REQUIRES_NEW}:
+     * it reaches the insert by self-invocation, so that annotation is inert,
+     * and every repository call simply joins whatever transaction the caller
+     * has. Its caller is the MLLP dispatcher, which has none, so each call
+     * takes its own — which is exactly what makes the lookup safe to fail.
+     * Inside a {@code REQUIRES_NEW} of its own, a lookup that threw would
+     * mark the transaction rollback-only and take the row and its body down
+     * with it, on the one path where the body is the only evidence there is.
+     *
+     * <p><b>Do not call this from a transactional caller.</b> The row would
+     * roll back with them, on a path whose whole point is surviving a
+     * rollback. The inbound services stay on {@link #recordMessage} for that
+     * reason: they are {@code @Transactional}, so they need the isolation
+     * more than they need the fold — their rejection rows carry no payload,
+     * which is the expensive half.
      *
      * <p>The read and the write are not atomic, so two retries arriving
      * together can both insert; bounded by the concurrency rather than by the
@@ -208,11 +216,17 @@ public class IntegrationMessageRecorder {
     ) {
         if (correlationId != null) {
             try {
+                // FAILED only. A replay copies the original's correlation
+                // id onto its REPLAYED row, and folding a retry into that
+                // would rewrite an audit row with another message's body and
+                // leave countUnresolvedDeadLetters - which counts FAILED - at
+                // zero for a feed that is still failing.
                 Optional<IntegrationMessageEvent> earlier = repository
-                    .findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
-                        correlationId, LocalDateTime.now().minus(BODY_DEDUPE_WINDOW));
+                    .findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+                        correlationId, IntegrationMessageStatus.FAILED,
+                        LocalDateTime.now().minus(BODY_DEDUPE_WINDOW));
                 if (earlier.isPresent()) {
-                    return foldIntoExisting(earlier.get(), payload, errorMessage);
+                    return foldIntoExisting(earlier.get(), messageType, payload, errorMessage);
                 }
             } catch (RuntimeException ex) {
                 // Best-effort like the rest of this class, and the safe
@@ -241,10 +255,18 @@ public class IntegrationMessageRecorder {
      * the propagation it does not have.
      */
     private IntegrationMessageEvent foldIntoExisting(
-        IntegrationMessageEvent existing, String payload, String errorMessage) {
+        IntegrationMessageEvent existing, String messageType, String payload,
+        String errorMessage) {
         try {
             existing.setAttemptCount(existing.getAttemptCount() + 1);
             existing.setLastAttemptedAt(LocalDateTime.now());
+            // The type travels with the payload and the reason. Some scopes
+            // deliberately span message types - a de-allowlisted sender's
+            // whole feed is one problem - so without this a row could read
+            // ORU^R01 while holding an ADT^A08's body and error, and an
+            // operator filtering by message_type would get a row that
+            // contradicts itself.
+            existing.setMessageType(truncate(messageType, MAX_MESSAGE_TYPE_CHARS));
             existing.setErrorMessage(truncate(errorMessage, MAX_ERROR_CHARS));
             if (payload != null) {
                 existing.setPayload(truncate(payload, MAX_PAYLOAD_CHARS));

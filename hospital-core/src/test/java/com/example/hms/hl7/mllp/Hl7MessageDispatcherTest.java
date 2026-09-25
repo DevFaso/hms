@@ -351,6 +351,22 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
+    void aBlankClaimedSenderGetsNoSharedScope() {
+        // "?" is what a blank MSH-3/MSH-4 normalises to, and it belongs to
+        // everyone who sends one - so scoping on it would put every
+        // blank-header frame into one row that any of them can overwrite,
+        // which is the shared-scope defect in a different costume. No scope,
+        // no dedupe, one counted row each.
+        when(allowlist.resolveHospital(anyString(), anyString())).thenReturn(Optional.empty());
+        String blankSender = "MSH|^~\\&|||HMS|HOSP1|20260428||ORU^R01|MSG-B|P|2.5\r";
+
+        dispatcher.dispatch(blankSender, "10.0.0.70:1");
+
+        verify(messageRecorder).recordRecurringFailure(
+            any(), any(), any(), any(), any(), contains("not allowlisted"), isNull());
+    }
+
+    @Test
     void differentDispatcherProblemsDoNotCollapseOntoOneDeadLetter() {
         allowSender();
         String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"

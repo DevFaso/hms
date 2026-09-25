@@ -194,14 +194,14 @@ class IntegrationMessageRecorderTest {
             .attemptCount(1)
             .build();
         existing.setId(UUID.randomUUID());
-        when(repository.findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
-            eq("corr-1"), any())).thenReturn(Optional.of(existing));
+        when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            eq("corr-1"), eq(IntegrationMessageStatus.FAILED), any())).thenReturn(Optional.of(existing));
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         recorder.recordRecurringFailure(
             "MLLP:REG/HOSP-B", UUID.randomUUID(),
-            IntegrationMessageDirection.INBOUND, "ADT^A01",
-            "MSH|the latest copy", "unparseable ADT^A01", "corr-1");
+            IntegrationMessageDirection.INBOUND, "ADT^A08",
+            "MSH|the latest copy", "unparseable ADT^A08", "corr-1");
 
         ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
         verify(repository).save(cap.capture());
@@ -210,6 +210,9 @@ class IntegrationMessageRecorderTest {
         // the current one rather than a stale first.
         assertThat(folded.getId()).isEqualTo(existing.getId());
         assertThat(folded.getPayload()).isEqualTo("MSH|the latest copy");
+        // The type travels with the body: a scope can span types, and a row
+        // reading ORU^R01 while holding an ADT^A08 contradicts itself.
+        assertThat(folded.getMessageType()).isEqualTo("ADT^A08");
         assertThat(folded.getAttemptCount()).isEqualTo(2);
         assertThat(folded.getStatus()).isEqualTo(IntegrationMessageStatus.FAILED);
         assertThat(folded.getCorrelationId()).isEqualTo("corr-1");
@@ -217,8 +220,8 @@ class IntegrationMessageRecorderTest {
 
     @Test
     void aFirstOccurrenceInTheWindowIsAnOrdinaryInsert() {
-        when(repository.findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
-            eq("corr-new"), any())).thenReturn(Optional.empty());
+        when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            eq("corr-new"), eq(IntegrationMessageStatus.FAILED), any())).thenReturn(Optional.empty());
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         recorder.recordRecurringFailure(
@@ -241,8 +244,8 @@ class IntegrationMessageRecorderTest {
         // recordRecurringFailure is not itself transactional: inside a
         // REQUIRES_NEW, a lookup that threw would mark the transaction
         // rollback-only and take the insert below down with it.
-        when(repository.findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
-            eq("corr-2"), any())).thenThrow(new RuntimeException("DB down"));
+        when(repository.findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            eq("corr-2"), eq(IntegrationMessageStatus.FAILED), any())).thenThrow(new RuntimeException("DB down"));
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         recorder.recordRecurringFailure(
@@ -265,7 +268,8 @@ class IntegrationMessageRecorderTest {
             "MSH|the whole message", "unparseable ADT^A01", null);
 
         verify(repository, org.mockito.Mockito.never())
-            .findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(any(), any());
+            .findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+                any(), any(), any());
         ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
         verify(repository).save(cap.capture());
         assertThat(cap.getValue().getPayload()).isEqualTo("MSH|the whole message");

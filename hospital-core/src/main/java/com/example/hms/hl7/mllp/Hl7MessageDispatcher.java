@@ -15,6 +15,7 @@ import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -166,7 +167,12 @@ public class Hl7MessageDispatcher {
                 // the window. Fixing that needs an identity this path does
                 // not have; what is ruled out is the accidental version,
                 // where every unrecognised sender collided by construction.
-                integrationIdFor(header));
+                //
+                // Blank is not an identity at all: integrationId() maps an
+                // empty MSH-3/MSH-4 to "?", so scoping on it would put every
+                // blank-header frame from everywhere into one bucket and
+                // reopen that accidental version for anyone who sends one.
+                claimedSenderScope(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
         }
@@ -328,9 +334,13 @@ public class Hl7MessageDispatcher {
      * per-sender bounding is meaningless when the sender is exactly what has
      * not been established.
      *
-     * <p>The recorder itself runs in REQUIRES_NEW and swallows its own
-     * exceptions; the extra try-catch here is belt-and-braces so a recorder
-     * bean failure can never poison the ACK we send back.
+     * <p>{@code recordRecurringFailure} swallows its own exceptions; the
+     * extra try-catch here is belt-and-braces so a recorder bean failure can
+     * never poison the ACK we send back. Note it does <em>not</em> run in
+     * {@code REQUIRES_NEW}, unlike {@code recordMessage} — it cannot, because
+     * a lookup failing inside its own transaction would take the row down
+     * with it. That is safe here only because this dispatcher has no
+     * transaction of its own for the row to be rolled back with.
      */
     private void recordReject(String integrationId, UUID organizationId,
                               String messageType, String rawBody, String reason,
@@ -359,6 +369,21 @@ public class Hl7MessageDispatcher {
      * truncation that used to live here lives in {@link MllpRecordingContext}
      * with the reason it exists.
      */
+    /**
+     * The scope for a sender that claimed an identity we could not verify, or
+     * null when it did not really claim one.
+     *
+     * <p>A correlation scope must belong to exactly one sender. An empty
+     * MSH-3 or MSH-4 normalises to {@code "?"}, which belongs to everyone who
+     * sends a blank header — so those get no scope, no dedupe, and one
+     * counted row each, rather than a shared row they can all overwrite.
+     */
+    private static String claimedSenderScope(Hl7MessageHeader header) {
+        boolean claimed = StringUtils.hasText(header.sendingApplication())
+            && StringUtils.hasText(header.sendingFacility());
+        return claimed ? integrationIdFor(header) : null;
+    }
+
     private static String integrationIdFor(Hl7MessageHeader header) {
         return MllpRecordingContext.integrationId(
             header.sendingApplication(), header.sendingFacility());

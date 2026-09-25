@@ -86,8 +86,17 @@ public interface IntegrationMessageEventRepository
      * one, a vendor whose January framing bug was diagnosed and cleared would
      * have a <em>different</em> June failure landing on the same reason
      * silently absorbed into the January row.
+     *
+     * <p>{@code status} is why this is not simply "the newest row":
+     * {@code recordReplay} copies a row's correlation id onto the
+     * {@code REPLAYED} row it writes, so a finder that ignored status would
+     * let the vendor's next retry fold into the operator's replay — rewriting
+     * an audit row with a different message's body and, because
+     * {@code countUnresolvedDeadLetters} counts only {@code FAILED}, leaving
+     * the badge at zero for a feed that is still failing. Callers pass
+     * {@code FAILED}.
      */
     Optional<IntegrationMessageEvent>
-        findFirstByCorrelationIdAndReceivedAtAfterOrderByReceivedAtDesc(
-            String correlationId, LocalDateTime after);
+        findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
+            String correlationId, IntegrationMessageStatus status, LocalDateTime after);
 }
