@@ -179,6 +179,14 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             // instead: pick a hospital (the scope picker) and the read is
             // scoped, readable-checked and disclosed like every other.
             //
+            // The chart's Labs tab deliberately sends NO hospitalId in global
+            // view (patient-chart.component.ts, labHospitalId() — "unscoped,
+            // both reads are unscoped together and the backend resolves"), so
+            // until that page asks for a scope instead, a super-admin in global
+            // view gets an error card there rather than another tenant's rows.
+            // That is the intended trade: an unaccounted cross-tenant read is
+            // not an acceptable way to keep a tab populated.
+            //
             // 404, not 403, and the same key PatientChartAccess throws: a
             // caller who could not establish scope learns nothing about whether
             // the patient or the rows exist.

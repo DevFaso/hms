@@ -594,14 +594,33 @@ class PatientLabResultServiceImplTest {
         // Stubbed so the test would SEE the leak if the fallback ever ran again.
         lenient().when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(foreign));
 
+        // The key matters as much as the type. ResourceNotFoundException is
+        // @ResponseStatus(NOT_FOUND), so the type pins 404-not-403; the key
+        // pins that the refusal is indistinguishable from "no such patient",
+        // and that it stays a resolvable key rather than the prose that once
+        // rendered as "[Missing translation] Patient not found with ID: ...".
         assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, null, 10))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
 
         verify(labResultRepository, never()).findByLabOrder_Patient_Id(any());
         verifyNoInteractions(reachRecorder);
     }
 
-    /** The patient reading their own results: no hospital scope is legitimate. */
+    /**
+     * The patient reading their own results: no hospital scope is legitimate,
+     * and refusing the staff case must not take this branch with it.
+     *
+     * <p>NOT end-to-end portal coverage, deliberately. {@code patientChartAccess}
+     * is stubbed to admit the null scope, but the real
+     * {@code PatientChartAccess.require} throws on a null scope for any
+     * principal the context does not mark a super-admin — a patient included —
+     * so a portal caller with no resolvable hospital is refused one frame
+     * earlier than this, and has been since before this change. That is a
+     * separate defect in the portal's use of the STAFF chart-access gate; what
+     * this test pins is the branch inside this service.
+     */
     @Test void portalView_withNoHospitalScope_stillReturnsThePatientsOwnResults() {
         UUID otherHospitalId = UUID.randomUUID();
         Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
