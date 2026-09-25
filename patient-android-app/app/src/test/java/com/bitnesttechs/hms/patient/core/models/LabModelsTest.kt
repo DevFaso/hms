@@ -285,7 +285,9 @@ class LabModelsTest {
             "ug/dL" to "12 - 16 mcg/dL",
             "mcg/dL" to "12 - 16 \u00b5g/dL",
             "IU/L" to "10 - 40 UI/L",
-            "UI/L" to "10 - 40 IU/L"
+            "UI/L" to "10 - 40 IU/L",
+            "mIU/L" to "0.4 - 4.0 mUI/L",
+            "mUI/L" to "0.4 - 4.0 mIU/L"
         )
         for ((rowUnit, shownRange) in equivalent) {
             val lab = row.copy(unit = rowUnit, referenceRange = shownRange)

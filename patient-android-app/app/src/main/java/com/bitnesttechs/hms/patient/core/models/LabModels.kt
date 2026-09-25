@@ -232,7 +232,7 @@ data class LabResultDto(
             .replace("mcg", "ug")
             // "UI" is the French spelling of IU. Bounded so it cannot eat the
             // middle of another token.
-            .replace(UI_TOKEN, "iu")
+            .replace(UI_TOKEN) { "${it.groupValues[1]}iu" }
             .removePrefix("x")
             .removePrefix("*")
 
@@ -297,5 +297,13 @@ enum class LabResultStatus {
  */
 enum class StatusTone { POSITIVE, ATTENTION, NEGATIVE, NEUTRAL }
 
-/** `ui` only where it stands alone as a token — see `normalizedUnit`. */
-private val UI_TOKEN = Regex("(?<![a-z])ui(?![a-z])")
+/**
+ * `ui` where it stands alone as a token, optionally behind one SI prefix —
+ * see `normalizedUnit`.
+ *
+ * The prefix group is what makes `mUI/L` fold to `miu/l`: a bare
+ * `(?<![a-z])ui` refused anything with a prefix, so `mUI/L` vs `mIU/L` — the
+ * standard units for TSH, FSH, LH and insulin — read as a real mismatch
+ * while the unprefixed pair folded, which is the worst of both.
+ */
+private val UI_TOKEN = Regex("(?<![a-z])([mkndpcuh])?ui(?![a-z])")

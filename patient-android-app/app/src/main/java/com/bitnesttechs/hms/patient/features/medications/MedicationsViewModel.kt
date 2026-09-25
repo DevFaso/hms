@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -100,32 +101,65 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
                 // `isSuccessful == false` with a null body, so the catch below
                 // never sees it and an expired session would have looked like
                 // an empty medication list. Every call reports its own outcome.
-                val m = async { api.getMedications() }
-                val p = async { api.getPrescriptions() }
-                val r = async { api.getRefills() }
-                val mResp = m.await()
-                val pResp = p.await()
-                val rResp = r.await()
-                // Snapshot BEFORE the assignments below: "showing what was
-                // last loaded" is only true of data that was on screen
-                // already, and a cold open whose medications call succeeds
-                // would otherwise satisfy the check with rows it just
-                // fetched.
-                val hadDataBefore = medications.value.isNotEmpty() ||
-                    prescriptions.value.isNotEmpty() ||
-                    refills.value.isNotEmpty()
-                mResp.body()?.data?.let { medications.value = it }
-                pResp.body()?.data?.let { prescriptions.value = it }
-                rResp.body()?.data?.content?.let { refills.value = it }
-                rebuildOpenRefills()
-                reportLoadOutcome(
-                    LoadFailures(
-                        medications = !mResp.isSuccessful,
-                        prescriptions = !pResp.isSuccessful,
-                        refills = !rResp.isSuccessful
-                    ),
-                    hadDataBefore
-                )
+                // supervisorScope, not a bare `async`: a plain async is an
+                // UNSUPERVISED child, so the first call to throw cancelled the
+                // parent and the other awaits resumed with a
+                // CancellationException — which the rethrow below then let
+                // escape, skipping the failure report entirely and showing an
+                // offline patient "No active medications" with no retry. The
+                // same propagation could reach the default handler and take
+                // the process down on an ordinary network error. Under a
+                // supervisor each failure surfaces at its own await and
+                // nowhere else.
+                supervisorScope {
+                    val m = async { api.getMedications() }
+                    val p = async { api.getPrescriptions() }
+                    val r = async { api.getRefills() }
+                    // Spelled out three times rather than through a generic
+                    // helper: the three response types differ and the house
+                    // rule is no `<T>` helpers.
+                    val mResp = try {
+                        m.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Medications fetch failed", e); null
+                    }
+                    val pResp = try {
+                        p.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Prescriptions fetch failed", e); null
+                    }
+                    val rResp = try {
+                        r.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Refills fetch failed", e); null
+                    }
+                    // Snapshot BEFORE the assignments below: "showing what was
+                    // last loaded" is only true of data that was on screen
+                    // already, and a cold open whose medications call succeeds
+                    // would otherwise satisfy the check with rows it just
+                    // fetched.
+                    val hadDataBefore = medications.value.isNotEmpty() ||
+                        prescriptions.value.isNotEmpty() ||
+                        refills.value.isNotEmpty()
+                    mResp?.body()?.data?.let { medications.value = it }
+                    pResp?.body()?.data?.let { prescriptions.value = it }
+                    rResp?.body()?.data?.content?.let { refills.value = it }
+                    rebuildOpenRefills()
+                    reportLoadOutcome(
+                        LoadFailures(
+                            medications = mResp?.isSuccessful != true,
+                            prescriptions = pResp?.isSuccessful != true,
+                            refills = rResp?.isSuccessful != true
+                        ),
+                        hadDataBefore
+                    )
+                }
             } catch (e: CancellationException) {
                 // NOT a failure, and not ours to swallow. `awaitFreshLoad`
                 // cancels the in-flight load on purpose, and
