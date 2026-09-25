@@ -52,8 +52,12 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  * that null are removed rather than merely unreachable, so a later caller
  * cannot reintroduce one.
  *
- * <p>Two reads are still patient-wide, both deliberately, and both are stated
- * here rather than left for the next reader to discover:
+ * <p><b>This is not a clean bill of health, and the list below is the whole
+ * truth rather than the flattering part of it.</b> Hospital scope and
+ * sensitivity (D3) are two different filters, and the sections do not all get
+ * both.
+ *
+ * <p>Patient-wide — not scoped at all:
  * <ul>
  *   <li>allergies — by design (E9 #56): an allergy is a property of the
  *       patient, not of the hospital that recorded it;</li>
@@ -64,6 +68,25 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  *       nothing to name in the reach. Closing it needs a migration, which this
  *       change does not take.</li>
  * </ul>
+ *
+ * <p>Scoped to the readable set, but <b>with no sensitivity test</b>: active
+ * medications, recent vitals, latest labs and pending orders.
+ * {@code SensitivityClassifier} has {@code effectiveCategory} overloads for
+ * {@code Encounter}, {@code Admission}, {@code Consultation},
+ * {@code PatientProblem} and {@code NursingNote} only, so there is nothing to
+ * pass {@code CrossHospitalRows.maySurface} for a {@code Prescription},
+ * {@code PatientVitalSign}, {@code LabResult} or {@code LabOrder}. The
+ * consequence, stated plainly because the omission is invisible at the call
+ * site: a foreign row in a sensitive category (HIV, behavioural health,
+ * substance use, reproductive health) is <b>withheld</b> when it is an
+ * encounter or a problem and <b>surfaces</b> when it is a prescription, a
+ * vital, a lab result or an order. That is pre-existing — building those
+ * overloads is its own change — but it is not a guarantee this class makes,
+ * and nothing here should be read as one.
+ *
+ * <p>Scoped AND sensitivity-tested: encounters (and the notes and care team
+ * derived from them) and the {@code patient_problems} half of the active
+ * diagnoses.
  */
 @Slf4j
 @Service

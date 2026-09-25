@@ -135,14 +135,28 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         if (hospitalId == null) {
             // The scope MeController resolved for the whole request, not a
             // second resolution taken here. RoleValidator.requireActiveHospitalId
-            // would have been the obvious call and is the wrong one: it reads
-            // HospitalContext.activeHospitalId, which JwtTokenProvider fills from
-            // primaryHospitalId when nothing is pinned, while the controller uses
-            // pinnedHospitalId() and then the caller's first active assignment.
-            // A multi-hospital clinician with nothing pinned would get a queue
-            // for one hospital beside a patient snapshot for another, on the same
-            // page, with nothing on screen saying so. It also throws
-            // BusinessException where every sibling /me endpoint still answers.
+            // would have been the obvious call. It is not wrong in the common
+            // case — for a non-super-admin, MeController's pinnedHospitalId()
+            // returns ctx.activeHospitalId and requireActiveHospitalId's step 2
+            // returns the same field, so whenever that field is set the two
+            // agree exactly. They diverge only where it is NOT set, and in two
+            // ways that both matter:
+            //
+            //  - a clinician with more than one active assignment and nothing
+            //    pinned: MeController falls back to the FIRST active assignment
+            //    and answers, while requireActiveHospitalId's fallback demands
+            //    exactly one and otherwise throws BusinessException — a 400 on
+            //    a results worklist where every sibling /me endpoint still
+            //    answers;
+            //  - a super-admin with no X-Hospital-Id who nonetheless holds an
+            //    assignment: MeController resolves that assignment's hospital,
+            //    requireActiveHospitalId returns null. Taking the parameter is
+            //    what keeps this queue and the patient snapshot on the same page
+            //    answering for the same principal instead of one serving and the
+            //    other refusing.
+            //
+            // So: one resolution per request, in the controller, because a
+            // second one can only ever agree or be worse.
             //
             // Null therefore means what it means everywhere else in this
             // controller: a super-admin in global view — reachable here because
