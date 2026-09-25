@@ -3230,6 +3230,27 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
     with no sort — the same unordered-page defect #727 fixed on the
     prescriptions list. Unowned.
 
+- **The reference range a patient is shown is not always the range their
+  result was graded against, and can be labelled with a unit it was never
+  expressed in.** `PatientLabResultServiceImpl.formatReferenceRange` always
+  formats `ranges.get(0)`, while `LabResultMapper.determineSeverityFlag` grades
+  against `findMatchingRange(resultUnit, ...)`. On a test configured with two
+  unit-specific ranges those are different rows, so a value graded NORMAL in
+  mmol/L can be displayed beside the mg/dL limits. Worse, when `ranges[0]`
+  carries no unit of its own, `formatReferenceRange` stamps the RESULT's unit
+  onto its numbers as a fallback — so the patient reads limits that were never
+  expressed in that unit, and the mismatch becomes undetectable from the client
+  because the displayed string now always contains the row's unit.
+
+  Both patient apps mitigated what they could in #732/#733: they withhold the
+  green tick and the word "Normal" unless the displayed range is in the row's
+  own unit. That heuristic cannot see the fallback case, by construction. The
+  durable fix is server-side — format the range that was actually graded
+  against, and never label a range with a unit that did not come with it — and
+  it is not a cosmetic one: a patient reading 5.4 mmol/L against limits of
+  70-110 mg/dL draws a conclusion, and self-interpretation is the whole point
+  of showing a range. Unowned.
+
 - **Two layers of this codebase disagree about role equivalence.**
   `RoleExpansion` grants a physician or surgeon ROLE_DOCTOR while the
   authorities are built, so both clear a `hasAnyRole('DOCTOR')` annotation.
