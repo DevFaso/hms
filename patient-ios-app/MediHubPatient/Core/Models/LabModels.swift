@@ -98,20 +98,34 @@ struct LabResultDTO: Codable, Identifiable {
     /// …)`. On a test configured with two unit-specific ranges, the row can be
     /// graded NORMAL in mmol/L and displayed against the mg/dL limits.
     ///
-    /// NOT complete cover, and it cannot be from here. Two server-side gaps,
-    /// both filed as such, neither visible to the app:
+    /// Read the limits of this before relying on it. It is a heuristic over
+    /// one formatted string, and the payload carries no signal for what it is
+    /// really asking, so it is wrong in BOTH directions. All three gaps are
+    /// server-side and filed as such; none is visible to the app.
     ///
-    ///  * when `ranges[0]` has no unit of its own, `formatReferenceRange`
-    ///    stamps the RESULT's unit onto its numbers, so the displayed string
-    ///    always carries this row's unit, this check always passes, and the
-    ///    limits are mislabelled with a unit they were never expressed in;
-    ///  * conversely the DTO's `unit` is `resolveUnit()` — the result's unit
-    ///    ELSE the DEFINITION's — while grading uses `result.getResultUnit()`
-    ///    alone. On a manually entered result with no recorded unit the
-    ///    backend graded against `ranges[0]` (a blank unit matches nothing, so
-    ///    `findMatchingRange` falls back), yet the app compares the
-    ///    definition's unit against the range's and may caveat a correctly
-    ///    graded row.
+    ///  * **It misses the headline case whenever `ranges[0]` has no unit.**
+    ///    `formatReferenceRange` then stamps the RESULT's unit onto ranges[0]'s
+    ///    numbers. A glucose with `ranges[0] = {70, 110, null}` and
+    ///    `ranges[1] = {3.9, 6.1, "mmol/L"}` resulted at 5.4 mmol/L is graded
+    ///    against ranges[1] but displayed as "70 - 110 mmol/L" — the check
+    ///    passes, the tick stays, and the limits now carry a unit they were
+    ///    never expressed in. This guard catches the two-range mismatch only
+    ///    when ranges[0] carries its own, different, unit.
+    ///  * **On the single-range configuration it is a false positive by
+    ///    construction.** `findMatchingRange` falls back to `ranges[0]`, which
+    ///    is what is displayed, so with one configured range the range shown
+    ///    IS always the graded one whatever the unit text says. Every
+    ///    notational pair outside the fold below — `U/L` vs `IU/L`,
+    ///    `cells/mm3` vs `/mm3`, `mm/h` vs `mm/hr`, `K/uL` vs `10^3/uL`,
+    ///    `ng/mL` vs `ug/L` — costs a healthy patient their "Within normal
+    ///    range" line and gains them a unit warning.
+    ///  * **It may compare the wrong unit.** The DTO's `unit` is
+    ///    `resolveUnit()` — the result's unit ELSE the DEFINITION's — while
+    ///    grading uses `result.getResultUnit()` alone.
+    ///
+    /// The fix is for the DTO to say which range was graded against (or to
+    /// serve `abnormalFlag`); until then this is a best guess that errs
+    /// towards under-reassuring.
     var referenceRangeApplies: Bool {
         let unit = (self.unit ?? "").trimmingCharacters(in: .whitespaces)
         guard !unit.isEmpty else { return true }
@@ -154,9 +168,10 @@ struct LabResultDTO: Codable, Identifiable {
         // digit of the numbers. Anything else means the suffix cut a longer
         // unit in half — a letter for `g/dl` inside `mg/dl`, a `/` for `l`
         // inside `mmol/l`, which an "only reject letters" rule waved through.
-        // The single exception is the `x` of the `x10^9/L` multiplication
-        // marker; no real unit ends `…xg/dL`.
-        return character.isNumber || character == "x"
+        // The exceptions are the multiplication markers of `x10^9/L` and
+        // `*10^9/L`, which `normalizedUnit` strips off the needle but leaves
+        // in the range; no real unit ends `…xg/dL`.
+        return character.isNumber || character == "x" || character == "*"
     }
 
     /// Enough normalisation that a purely COSMETIC difference between the

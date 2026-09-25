@@ -199,6 +199,9 @@ final class LabResultWireContractTests: XCTestCase {
         // A unit that contains digits still matches itself; a unit that ENDS
         // in one is still compared rather than waved through.
         XCTAssertTrue(LabResultDTO.range("4 - 11 x10^9/L", isIn: "x10^9/L"))
+        // Both multiplication markers: a range and a result BOTH recorded as
+        // *10^9/L are byte-identical units, and only `x` was excepted.
+        XCTAssertTrue(LabResultDTO.range("4 - 11 *10^9/L", isIn: "*10^9/L"))
         XCTAssertFalse(LabResultDTO.range("500 - 1500 cells/mm3", isIn: "10^9/L"))
         XCTAssertTrue(LabResultDTO.range("0.5 - 1.5 10^9/L", isIn: "10^9/L"))
         // Only a genuinely empty range is passed.
