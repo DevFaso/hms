@@ -750,7 +750,8 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       'en',
       {
         PRESCRIPTIONS: {
-          PHARMACY: { AT: 'at {{pharmacy}}', OUTSTANDING_VALUE: '{{value}} {{unit}}' },
+          PHARMACY: { AT: 'at {{pharmacy}}' },
+          QUANTITY_VALUE: '{{value}} {{unit}}',
           REFILLS_VALUE: '{{remaining}} of {{allowed}} remaining',
         },
       },
