@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -244,11 +245,19 @@ class ResultReviewServiceImplTest {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
-        UUID otherHospitalId = UUID.randomUUID();
         LabOrder foreign = mock(LabOrder.class);
-        // Stubbed so the test would SEE the leak if the unscoped finder ran again.
+        lenient().when(foreign.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(foreign.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        lenient().when(foreign.getPatient()).thenReturn(mock(Patient.class));
+        // Both finders, and the scoped one stubbed on isNull() — which is the
+        // argument the service would actually pass with the guard reverted.
+        // Stubbing it on some other hospital id, as an earlier draft did, left
+        // the reverted call unstubbed and returning [], so the test could only
+        // ever falsify the missing throw and the "would see the leak" claim was
+        // untrue. It is true now: revert the guard and this foreign order is
+        // read and mapped.
         lenient().when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(foreign));
-        lenient().when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, otherHospitalId))
+        lenient().when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(eq(staffId), isNull()))
                 .thenReturn(List.of(foreign));
 
         // The key, not the resolved message: getMessage() is already resolved,
