@@ -239,6 +239,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        // Resolved BEFORE the workflow-state checks: their messages tell the
+        // caller whether an order requires a co-signature, whether it already
+        // has one and what status it is in, and someone with no prescribing
+        // assignment here has no business reading that back.
+        Staff cosigner = resolveCosignerAtHospital(prescription);
+
         if (!prescription.isRequiresCosign()) {
             throw new BusinessException(
                 "This prescription does not declare a co-signature requirement.");
@@ -255,14 +261,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     + status + ".");
         }
 
-        UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
-        }
-        Staff cosigner = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-            .orElseThrow(() -> new AccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
-
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
                 && prescriber.getId().equals(cosigner.getId())) {
@@ -276,6 +274,69 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} co-signed by staff {}", prescription.getId(), cosigner.getId());
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * The co-signer, credentialed at the PRESCRIPTION's hospital.
+     *
+     * <p>The method's own contract says the co-signer "must hold a prescribing
+     * role at the prescription's hospital", but nothing checked it: the lookup
+     * was {@code findFirstByUserIdOrderByCreatedAtAsc}, "any staff profile this
+     * user has, anywhere". Holding {@code ROLE_DOCTOR} somewhere plus a staff
+     * row somewhere was enough to put a co-signature on an order at a hospital
+     * the caller has no active assignment at.
+     *
+     * <p>Where the credential lives matters here. {@code staff.user_id} is
+     * UNIQUE (entity {@code uq_staff_user}, and V8 de-duplicated and indexed
+     * it), so a clinician has exactly ONE staff row no matter how many
+     * hospitals they work at; multi-hospital membership is modelled by
+     * {@link UserRoleHospitalAssignment}. Anchoring the CREDENTIAL check on a
+     * staff row at the prescription's hospital would therefore refuse the
+     * legitimate cross-hospital co-signer — one staff row filed at hospital A,
+     * an active doctor assignment at hospital B — which is exactly the person
+     * this is meant to admit. So: the assignment answers "are you a prescriber
+     * here", the staff row is only the FK {@code cosignedBy} records.
+     *
+     * <p>The anchor is the prescription's own hospital, not the acting scope.
+     * The co-signature attests to an order that belongs to that hospital and
+     * will be filled there. With a scope active the check at the top of
+     * {@code cosignPrescription} has already proved the two are the same
+     * hospital; in the unscoped (global) view the prescription's hospital is
+     * the only defined anchor, so reading the scope would leave nothing to
+     * check.
+     *
+     * <p>Doctor/physician/surgeon, because {@code RoleExpansion} makes a
+     * physician and a surgeon a doctor before the controller's
+     * {@code hasAuthority('ROLE_DOCTOR')} runs, while the per-hospital
+     * {@code RoleValidator} checks match the stored assignment code and do not
+     * know that. Naming only DOCTOR here would refuse people the annotation
+     * admits.
+     *
+     * <p>AccessDenied rather than BusinessException: this is an authorization
+     * failure, so 403 rather than 400 — the clarification path's stance.
+     */
+    private Staff resolveCosignerAtHospital(Prescription prescription) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
+        }
+        // Prescription.hospital is optional=false on a NOT NULL column, so this
+        // is never null in practice; a null would make every check below false
+        // and refuse, which is the safe direction anyway.
+        UUID rxHospitalId = prescription.getHospital() != null
+            ? prescription.getHospital().getId()
+            : null;
+        boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
+            || roleValidator.isPhysician(currentUserId, rxHospitalId)
+            || roleValidator.isSurgeon(currentUserId, rxHospitalId);
+        if (!prescriberHere) {
+            throw new AccessDeniedException(
+                "Only a clinician with an active prescribing assignment at the prescribing "
+                    + "hospital can co-sign a prescription.");
+        }
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
+            .orElseThrow(() -> new AccessDeniedException(
+                "Only a clinician with a staff profile can co-sign a prescription."));
     }
 
     /**
