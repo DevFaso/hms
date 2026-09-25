@@ -214,13 +214,22 @@ final class LabResultWireContractTests: XCTestCase {
                                       ("\u{03BC}mol/L", "12 - 16 umol/L"),
                                       ("10^9/L", "4 - 11 x10^9/L"),
                                       ("x10^9/L", "4 - 11 10^9/L"),
-                                      ("G/DL", "12 - 16 g/dL")] {
+                                      ("G/DL", "12 - 16 g/dL"),
+                                      ("ug/dL", "12 - 16 mcg/dL"),
+                                      ("mcg/dL", "12 - 16 \u{00B5}g/dL"),
+                                      ("IU/L", "10 - 40 UI/L"),
+                                      ("UI/L", "10 - 40 IU/L")] {
             XCTAssertTrue(LabResultDTO.range(shownRange, isIn: rowUnit),
                           "\(rowUnit) vs \(shownRange) must not be a mismatch")
         }
 
         // An SI prefix is never cosmetic: mg and g are a thousandfold apart.
         XCTAssertFalse(LabResultDTO.range("70 - 110 mg/dL", isIn: "g/dL"))
+        // Nor is a denominator: a row in L against a range in mmol/L is the
+        // mislabelling this exists to catch, and "only reject letters" let it
+        // through on the `/`.
+        XCTAssertFalse(LabResultDTO.range("0.6 - 1.2 mmol/L", isIn: "L"))
+        XCTAssertFalse(LabResultDTO.range("0 - 2 mg/kg", isIn: "kg"))
     }
 
     /// Shown, not hidden: `findMatchingRange` falls back to `ranges[0]`, so

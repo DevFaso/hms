@@ -141,12 +141,14 @@ struct LabResultDTO: Codable, Identifiable {
         let boundary = haystack.count - needle.count - 1
         guard boundary >= 0 else { return true }
         let character = haystack[boundary]
-        // A DIGIT before the unit is the numbers/unit junction — "90-120mmhg"
-        // — so the whole unit is there. A LETTER means the suffix cut a longer
-        // unit in half: `g/dl` inside `mg/dl`, `u/l` inside `mu/l`. The one
-        // letter that is not part of a unit is the `x` of the `x10^9/L`
-        // multiplication marker; no real unit ends `…xg/dL`.
-        return !character.isLetter || character == "x"
+        // `formatReferenceRange` emits "<numbers> <unit>", so once the spaces
+        // are folded away the character before a WHOLE unit is always the last
+        // digit of the numbers. Anything else means the suffix cut a longer
+        // unit in half — a letter for `g/dl` inside `mg/dl`, a `/` for `l`
+        // inside `mmol/l`, which an "only reject letters" rule waved through.
+        // The single exception is the `x` of the `x10^9/L` multiplication
+        // marker; no real unit ends `…xg/dL`.
+        return character.isNumber || character == "x"
     }
 
     /// Enough normalisation that a purely COSMETIC difference between the
@@ -167,6 +169,13 @@ struct LabResultDTO: Codable, Identifiable {
             .replacingOccurrences(of: "\u{00B5}", with: "u") // MICRO SIGN
             .replacingOccurrences(of: "\u{03BC}", with: "u") // GREEK SMALL LETTER MU
             .filter { !$0.isWhitespace }
+            // "mcg" is the safety-preferred spelling of µg — the same unit,
+            // and common on hand-entered ranges.
+            .replacingOccurrences(of: "mcg", with: "ug")
+            // "UI" is the French spelling of IU. Bounded so it cannot eat the
+            // middle of another token.
+            .replacingOccurrences(of: "(?<![a-z])ui(?![a-z])", with: "iu",
+                                  options: .regularExpression)
         if folded.hasPrefix("x") || folded.hasPrefix("*") {
             folded.removeFirst()
         }
