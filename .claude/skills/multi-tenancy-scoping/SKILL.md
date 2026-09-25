@@ -43,9 +43,45 @@ boolean registered = registrationRepository
     .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
     .isPresent();
 if (!registered) {
-    // REJECT_CROSS_TENANT — emit AR, do not proceed
+    // Refuse — with the SAME answer the caller gets for something that
+    // does not exist anywhere. Never a distinguishable "not yours".
 }
 ```
+
+**A cross-tenant refusal must be indistinguishable from "no such thing".**
+This is the same contract as *The 404 is intentional* further down, and it
+applies to every transport, not just HTTP reads: if a caller can tell
+"exists, but not yours" from "does not exist", it can walk an identifier
+space and enumerate what other tenants hold, and the gate stops being a
+boundary and becomes a read primitive. On HTTP that means the same status
+and the same body as a miss — 404, not 403 beside a 404. On HL7 v2 it
+means the same ACK code *and the same ACK text*: the MLLP paths return
+`REJECTED_NOT_FOUND` and there is deliberately no cross-tenant outcome to
+return, because a constant that exists only to produce a different answer
+is how this was reintroduced twice (see the `hl7-mllp-integration` skill).
+
+**404 and 403 answer different questions, and the file says both.** The rule
+above is about *exists, but not yours* — that must be indistinguishable from
+*does not exist*, because the caller named a real identifier and the answer
+would confirm it. A **403 is correct where nothing was named**: a caller with
+no tenant pinned at all (a super-admin with no `X-Hospital-Id`) is being told
+to pin one, which reveals nothing about any identifier, and that is the
+write-side pattern on `EncounterFhirWriteService` and
+`ObservationFhirWriteService` further down this file. Deny-on-null and
+collapse-on-mismatch are the two halves, not alternatives: reject the unpinned
+caller loudly, and refuse the wrong-tenant identifier invisibly.
+
+Two traps, both of which were real defects here:
+
+- **An accept leaks as readily as a reject.** A no-op or already-done
+  branch that answers success *before* the gate runs tells the caller the
+  entity exists. Gate first, then decide what the request means.
+- **Partial ownership is not partial permission.** An operation naming two
+  entities where the caller owns one must answer exactly as if it owned
+  neither — otherwise the caller pairs something it legitimately owns with
+  any candidate identifier and reads the answer off. Evaluate both
+  ownership checks before branching, too: `||` short-circuits, and the
+  probe case is the one that would otherwise be a round-trip cheaper.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -57,6 +93,15 @@ Every cross-tenant rejection MUST emit an audit event via
 `CrossTenantReadAudit`. This is the primary surface for detecting
 misconfigured senders + permission-creep bugs. Live in
 `security/audit/CrossTenantReadAudit.java`.
+
+Known exception, stated so it is not copied as the pattern: **none of the
+three MLLP inbound paths** — ORU^R01, ADT and A40 — emit a
+`CrossTenantReadAudit`. There is no
+security context on an MLLP worker thread and so no principal to attribute
+the attempt to — which is also why those paths enforce the tenant boundary
+themselves rather than relying on the service guards. They record the
+refusal on the `integration_message_event` row instead. If you add a
+surface with a real principal, emit the event.
 
 ## Schema-per-tenant (v2.0 path, off by default)
 
