@@ -201,7 +201,8 @@ class MllpInboundMergeServiceImplTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 MSG-A40-1)"));
+            eq("cross-tenant rejection (MSH-10 MSG-A40-1)"),
+            any());
     }
 
     @Test
@@ -215,12 +216,12 @@ class MllpInboundMergeServiceImplTest {
             eq("MLLP:LIS/HOSP1"), any(),
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
-            // RECEIVED, not FAILED: two systems disagreeing about who exists
-            // is a normal condition, and it must not drive the DLQ badge. The
-            // cross-tenant refusal above stays FAILED, and the ACK is the same
-            // for both.
-            eq(IntegrationMessageStatus.RECEIVED),
-            eq("identifier not found (MSH-10 MSG-A40-1)"));
+            // FAILED, like the cross-tenant refusal above. What stops a
+            // retrying sender flooding the badge is the correlation id, not
+            // the status.
+            eq(IntegrationMessageStatus.FAILED),
+            eq("identifier not found (MSH-10 MSG-A40-1)"),
+            any());
     }
 
     @Test
@@ -232,7 +233,7 @@ class MllpInboundMergeServiceImplTest {
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
         verify(messageRecorder, never()).recordMessage(
-            any(), any(), any(), any(), any(), any(), any());
+            any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     /* ── Unknown identifiers ─────────────────────────────────────────── */

@@ -88,13 +88,8 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // identifiers stay out of it altogether: an MRN is PHI.
             log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility, hospitalId);
-            // RECORDED, but not as a dead letter — see the same decision on
-            // the ADT path. Two systems disagreeing about who exists is a
-            // normal condition; a FAILED row per message would bury the
-            // refusals that need somebody. Nothing about this reaches the ACK.
             recordReject(receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "identifier not found",
-                IntegrationMessageStatus.RECEIVED);
+                messageControlId, "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -144,8 +139,7 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 + "registered at hospital={} (sender={}/{})",
                 hospitalId, sendingApplication, sendingFacility);
             recordReject(receivingHospital, sendingApplication, sendingFacility,
-                messageControlId, "cross-tenant rejection",
-                IntegrationMessageStatus.FAILED);
+                messageControlId, "cross-tenant rejection");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
@@ -194,28 +188,33 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
      * small row, no PID. MSH-10 is the sender's own message id, not patient
      * data, and is what correlates the refusal with the sender's queue.
      *
-     * <p>{@code status} decides dead letter or note: {@code FAILED} is what
-     * the super-admin DLQ badge counts, {@code RECEIVED} records the same
-     * reason without demanding attention. The sender cannot observe either
-     * way — the ACK is the same.
+     * <p>{@code FAILED}, like every refusal on this surface, with the badge
+     * kept honest by a correlation id derived from the sender, the message
+     * type and the reason rather than from anything per-message — see the
+     * same method on {@code MllpInboundAdtServiceImpl} for why a retried
+     * refusal must supersede its own row instead of stacking a new dead
+     * letter.
      *
      * <p>Best-effort: the recorder is {@code REQUIRES_NEW} and swallows its
      * own exceptions, so the row survives this transaction rolling back.
      */
     private void recordReject(Hospital receivingHospital,
                               String sendingApplication, String sendingFacility,
-                              String messageControlId, String reason,
-                              IntegrationMessageStatus status) {
+                              String messageControlId, String reason) {
+        String integrationId =
+            MllpRecordingContext.integrationId(sendingApplication, sendingFacility);
         try {
             messageRecorder.recordMessage(
-                MllpRecordingContext.integrationId(sendingApplication, sendingFacility),
+                integrationId,
                 MllpRecordingContext.organizationId(receivingHospital),
                 IntegrationMessageDirection.INBOUND,
                 MESSAGE_TYPE,
                 null,
-                status,
+                IntegrationMessageStatus.FAILED,
                 StringUtils.hasText(messageControlId)
-                    ? reason + " (MSH-10 " + messageControlId.trim() + ")" : reason);
+                    ? reason + " (MSH-10 " + messageControlId.trim() + ")" : reason,
+                MllpRecordingContext.rejectionCorrelationId(
+                    integrationId, MESSAGE_TYPE, reason));
         } catch (RuntimeException ex) {
             log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);

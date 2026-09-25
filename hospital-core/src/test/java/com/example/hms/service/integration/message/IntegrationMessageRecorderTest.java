@@ -117,6 +117,66 @@ class IntegrationMessageRecorderTest {
     }
 
     @Test
+    void theCallerSuppliedCorrelationIdIsUsedVerbatim() {
+        // What makes a retried MLLP refusal supersede its own dead letter
+        // instead of stacking a new one: countUnresolvedDeadLetters discounts
+        // a FAILED row only when a later row shares its correlationId.
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        recorder.recordMessage(
+            "MLLP:REG/HOSP-B", UUID.randomUUID(),
+            IntegrationMessageDirection.INBOUND, "ADT^A08", null,
+            IntegrationMessageStatus.FAILED, "cross-tenant rejection",
+            "11111111-2222-3333-4444-555555555555");
+
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository).save(cap.capture());
+        assertThat(cap.getValue().getCorrelationId())
+            .isEqualTo("11111111-2222-3333-4444-555555555555");
+    }
+
+    @Test
+    void aNullCorrelationIdKeepsTheRandomPerRowBehaviour() {
+        // The overload is purely additive: passing null must be
+        // indistinguishable from calling the seven-argument form, which every
+        // other caller on this codebase still uses.
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        recorder.recordMessage(
+            "partner.nhis", UUID.randomUUID(),
+            IntegrationMessageDirection.OUTBOUND, "PROBE", null,
+            IntegrationMessageStatus.FAILED, "stub-mode probe", null);
+        recorder.recordMessage(
+            "partner.nhis", UUID.randomUUID(),
+            IntegrationMessageDirection.OUTBOUND, "PROBE", null,
+            IntegrationMessageStatus.FAILED, "stub-mode probe", null);
+
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository, org.mockito.Mockito.times(2)).save(cap.capture());
+        assertThat(cap.getAllValues().get(0).getCorrelationId())
+            .isNotNull()
+            .isNotEqualTo(cap.getAllValues().get(1).getCorrelationId());
+    }
+
+    @Test
+    void anOverLongCorrelationIdIsTruncatedToTheColumn() {
+        // correlation_id is VARCHAR(120) (V89). A caller cannot make the
+        // insert fail - the recorder swallows failures, so that would silently
+        // drop the row it was asked to write.
+        when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        recorder.recordMessage(
+            "MLLP:REG/HOSP-B", UUID.randomUUID(),
+            IntegrationMessageDirection.INBOUND, "ADT^A08", null,
+            IntegrationMessageStatus.FAILED, "cross-tenant rejection",
+            "c".repeat(400));
+
+        ArgumentCaptor<IntegrationMessageEvent> cap = ArgumentCaptor.forClass(IntegrationMessageEvent.class);
+        verify(repository).save(cap.capture());
+        assertThat(cap.getValue().getCorrelationId()).hasSize(120);
+    }
+
+    @Test
     void recordReplaySwallowsPersistenceFailures() {
         UUID originalId = UUID.randomUUID();
         IntegrationMessageEvent original = IntegrationMessageEvent.builder()

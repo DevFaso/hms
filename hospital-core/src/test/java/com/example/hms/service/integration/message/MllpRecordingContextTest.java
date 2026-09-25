@@ -66,6 +66,30 @@ class MllpRecordingContextTest {
     }
 
     @Test
+    @DisplayName("The rejection correlation id is stable per problem and carries nothing per-message")
+    void theRejectionCorrelationIdIsStablePerProblem() {
+        String first = MllpRecordingContext.rejectionCorrelationId(
+            "MLLP:REG/HOSP-B", "ADT^A08", "cross-tenant rejection");
+        String again = MllpRecordingContext.rejectionCorrelationId(
+            "MLLP:REG/HOSP-B", "ADT^A08", "cross-tenant rejection");
+
+        // Same problem, same id: countUnresolvedDeadLetters then treats each
+        // retry as superseding the last rather than as a new dead letter.
+        assertThat(first).isEqualTo(again);
+        // It is a UUID, so it fits correlation_id VARCHAR(120) and looks like
+        // every other row's id.
+        assertThat(UUID.fromString(first)).hasToString(first);
+
+        // Different problems stay apart, or one refusal hides another.
+        assertThat(first).isNotEqualTo(MllpRecordingContext.rejectionCorrelationId(
+            "MLLP:REG/HOSP-B", "ADT^A08", "PID-3 not found"));
+        assertThat(first).isNotEqualTo(MllpRecordingContext.rejectionCorrelationId(
+            "MLLP:REG/HOSP-B", "ADT^A40", "cross-tenant rejection"));
+        assertThat(first).isNotEqualTo(MllpRecordingContext.rejectionCorrelationId(
+            "MLLP:OTHER/HOSP-B", "ADT^A08", "cross-tenant rejection"));
+    }
+
+    @Test
     @DisplayName("A hospital that cannot be read degrades the row instead of losing it")
     void anUnreadableOrganizationDegradesTheRowRatherThanLosingIt() {
         // MllpAllowedSenderServiceImpl.resolveHospital initialises the

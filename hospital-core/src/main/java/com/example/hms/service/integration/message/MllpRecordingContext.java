@@ -2,6 +2,7 @@ package com.example.hms.service.integration.message;
 
 import com.example.hms.model.Hospital;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +85,35 @@ public final class MllpRecordingContext {
                 + "the integration message row will be filed without one", ex);
             return null;
         }
+    }
+
+    /**
+     * A correlation id that is the same for every occurrence of the same
+     * problem, and different for different problems.
+     *
+     * <p>{@code countUnresolvedDeadLetters} counts a {@code FAILED} row only
+     * when no later row shares its {@code correlationId}, so this is what
+     * decides whether a retried refusal supersedes its own previous row or
+     * stacks a new dead letter on the operator's badge. The ACK for a refused
+     * MLLP message is AE, which senders treat as transient and retry on a
+     * timer, so without this one misconfigured feed would post thousands of
+     * unresolved dead letters a day and bury the refusals nobody has seen.
+     *
+     * <p>Derived from the sender, the message type and the reason, and from
+     * <b>nothing per-message</b>: no MSH-10, no identifier, no timestamp.
+     * Anything per-message here would defeat the whole point, and an
+     * identifier here would put PHI in an indexed column. Reasons are the
+     * fixed strings the call sites pass, never text built from a message.
+     *
+     * <p>A name-based UUID rather than a readable key: it is deterministic,
+     * always fits the {@code VARCHAR(120)} column, and is the same shape as
+     * the random ids every other row carries, so nothing downstream has to
+     * learn a second format.
+     */
+    public static String rejectionCorrelationId(String integrationId, String messageType,
+                                                String reason) {
+        String key = "mllp-reject|" + integrationId + "|" + messageType + "|" + reason;
+        return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private static String placeholderIfBlank(String value) {

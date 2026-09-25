@@ -206,7 +206,8 @@ class AdtCrossTenantAckTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A08"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"));
+            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"),
+            any());
     }
 
     /* ── ADT^A40 ─────────────────────────────────────────────────────── */
@@ -268,7 +269,8 @@ class AdtCrossTenantAckTest {
             eq(IntegrationMessageDirection.INBOUND),
             eq("ADT^A40"), isNull(),
             eq(IntegrationMessageStatus.FAILED),
-            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"));
+            eq("cross-tenant rejection (MSH-10 CTRL-SAME)"),
+            any());
     }
 
     @Test
