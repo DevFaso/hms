@@ -3202,6 +3202,38 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
       `PatientChartAccess` gate and no reach recording at all**. The worst of
       the three and the least like the others. Unowned.
 
+  - **Two more live cross-tenant reads of the same rows, behind different
+    doors.** Found while closing the lab-order one, and the first is worse than
+    anything above it.
+    - `PatientSnapshotServiceImpl:93` — `readable = hospitalId == null ? null
+      : ...` and every section then takes the null branch, including
+      `labOrderRepository.findByPatient_Id` at :318, while `account()` no-ops
+      on a null acting hospital so nothing is disclosed either. Live at
+      `GET /me/patients/{id}/snapshot`. Two things make it worse than the reads
+      already guarded: the controller uses `resolveHospitalId(auth)
+      .orElse(null)`, so an ORDINARY CLINICIAN whose scope fails lands there,
+      not only a super-admin; and it serves the same rows the lab guards now
+      refuse, so a caller turned away at `/lab-orders?patientId=X` can open the
+      snapshot drawer and get them. Owned by
+      `fix/snapshot-and-review-queue-scope`.
+    - `ResultReviewServiceImpl:106` — `findByOrderingStaff_Id(staffId)` with no
+      hospital scope at all, live at `GET /me/results/review-queue`. Owned by
+      the same branch.
+
+  - **`buildLabOrder` never binds the ordering staff to the order's hospital.**
+    It takes the hospital from the encounter or the requested id, looks Staff
+    up independently, and authorizes `canOrderLabTests` on the USER — who holds
+    assignments at several hospitals. So one staff id owns orders at several
+    hospitals and `findByOrderingStaff_Id` unions them. This is the root cause
+    under the staff-filtered leak above, and it is a WRITE-path change with its
+    own blast radius rather than a guard on each reader that inherits it.
+    Note for whoever takes it: deriving a read's scope from the staff row is
+    wrong twice over — it manufactures an acting hospital the caller never
+    scoped to, so the disclosure row would name a hospital they are not acting
+    at, and it would drop exactly the orders placed elsewhere, which are the
+    rows that make it cross-tenant. Scope is the caller's property, never the
+    subject's. Unowned.
+
   - **`PatientChartAccess.require(patientId, null)` throws for any principal
     the context does not mark a super-admin — which is every patient.** So a
     portal patient with no `hospitalId` and no active registration already
