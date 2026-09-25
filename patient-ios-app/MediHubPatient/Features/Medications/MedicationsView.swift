@@ -29,9 +29,30 @@ struct MedicationsView: View {
             .pickerStyle(.segmented)
             .padding()
 
-            if vm.isLoading {
+            // Only when there is nothing to show yet, which is the rule
+            // LabResultsView already follows. requestRefill and cancelRefill
+            // both await load(), so a bare `vm.isLoading` here made the
+            // patient's whole medication list disappear and come back every
+            // time they asked for a refill.
+            let nothingLoadedYet =
+                vm.medications.isEmpty && vm.prescriptions.isEmpty && vm.refills.isEmpty
+            if vm.isLoading && nothingLoadedYet {
                 ProgressView().padding()
             } else {
+                // Above the lists rather than over them: pull-to-refresh has
+                // its own indicator, but the reload a refill triggers has
+                // none, and that is the one that used to blank the tab.
+                if vm.isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.mini)
+                        Text("refreshing".localized)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
                 switch selectedTab {
                 case 0: medicationsList
                 case 1: prescriptionsList
