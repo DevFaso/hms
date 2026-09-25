@@ -103,6 +103,14 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    /**
+     * Not optional: getPrescriptionById dereferences this whenever the thread's
+     * SecurityContext holds a patient-only principal. No test here sets one
+     * today, so @InjectMocks would leave it null and the next patient-context
+     * case added to this class would NPE instead of answering 404.
+     */
+    @Mock
+    private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     /** Server clock, as the service takes it from config/TimeConfig. */
     @org.mockito.Spy
     private java.time.Clock clock = java.time.Clock.fixed(

@@ -75,6 +75,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /** Resolves a user id from either principal shape; see {@link #requireOwnPrescriptionWhenPatient}. */
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     /**
      * From config/TimeConfig, as {@code PrescriptionClarificationService}
      * takes it: the two halves of a clarification are stamped by the same
@@ -128,6 +130,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
+        Prescription prescription = findWithinHospitalScope(id);
+        requireOwnPrescriptionWhenPatient(prescription);
+        return prescriptionMapper.toResponseDTO(prescription);
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale) {
+        // No ownership guard: the caller has just been authorised for, and has
+        // committed, a write on this prescription. See the interface javadoc.
+        return prescriptionMapper.toResponseDTO(findWithinHospitalScope(id));
+    }
+
+    private Prescription findWithinHospitalScope(UUID id) {
         Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -139,8 +155,64 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Return 404 (not 403) to avoid info leakage
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        return prescription;
+    }
 
-        return prescriptionMapper.toResponseDTO(prescription);
+    /**
+     * A patient may read their own prescription and no one else's.
+     *
+     * <p>The hospital scope above is not this check. It bounded the leak — a
+     * patient could only reach prescriptions at the hospital their own
+     * assignment resolves to — but within that hospital any prescription id
+     * returned somebody else's medication, dose, frequency, duration and
+     * instructions. Stripping the clarification exchange in the controller is
+     * about the pharmacist's notes, not about whose prescription it is.
+     *
+     * <p>404, not 403, and the same message as a prescription that does not
+     * exist: the answer must not tell a patient that an id is real — including
+     * when the principal itself cannot be resolved to a patient row, and
+     * without a data defect turning the refusal into a stack trace. The
+     * subject comes from the authenticated principal
+     * ({@code user id → Patient}), never from anything in the request — the
+     * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
+     * for every {@code /me/patient/*} read, through the same resolver.
+     *
+     * <p>A no-op for every role this read admits, including a clinician who is
+     * also a patient at the hospital — see {@link PrescriptionReaderRoles},
+     * which mirrors the endpoint’s own annotation and records what that costs
+     * on the OIDC path. The write endpoints that admit roles this read does not
+     * go through {@link #getPrescriptionAfterWrite} instead.
+     */
+    private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (!PrescriptionReaderRoles.isPatientOnly(auth)) {
+            return;
+        }
+        // authUtils, not authService.getCurrentUserId(): the latter resolves
+        // only a CustomUserDetails principal and throws 401 on a
+        // JwtAuthenticationToken, so on the OIDC path it would refuse the
+        // owner their own prescription. ControllerAuthUtils.resolveUserId
+        // reads the appUserId claim too, and is what
+        // PatientPortalServiceImpl.resolvePatientId already uses.
+        UUID subjectPatientId = prescription.getPatient() != null
+            ? prescription.getPatient().getId()
+            : null;
+        // existsByIdAndUserId, not findByUserId: the single-result finder throws
+        // IncorrectResultSizeDataAccessException on a tenant that still carries
+        // duplicate clinical.patients.user_id rows (V113 falls back to a plain
+        // index rather than failing the deploy), which would answer a 500 where
+        // this method promises a 404 or the record. The membership form cannot,
+        // it stays right however many rows the account owns, and it decides the
+        // question without materialising a Patient and decrypting its PHI.
+        boolean theirs = subjectPatientId != null
+            && authUtils.resolveUserId(auth)
+                .map(userId -> patientRepository.existsByIdAndUserId(subjectPatientId, userId))
+                .orElse(false);
+        if (!theirs) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
     }
 
     /**

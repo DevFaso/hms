@@ -108,7 +108,7 @@ class PrescriptionControllerTest {
             if ("SUPER_ADMIN".equals(role)) {
                 continue; // expanded into ROLE_DOCTOR by RoleExpansion before any check runs
             }
-            assertThat(PrescriptionController.CLINICAL_READER_ROLES)
+            assertThat(com.example.hms.service.PrescriptionReaderRoles.CLINICAL_READER_ROLES)
                     .as("%s may ask a question and must therefore read the answer", role)
                     .contains("ROLE_" + role);
         }
