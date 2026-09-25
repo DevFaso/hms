@@ -166,124 +166,18 @@ final class LabResultWireContractTests: XCTestCase {
         XCTAssertFalse(comma.isGradedNormal)
         XCTAssertEqual(comma.tone, .neutral)
 
-        // formatReferenceRange formats ranges[0] while determineSeverityFlag
-        // grades against findMatchingRange(unit, …): a row resulted in mmol/L
-        // against a first range in mg/dL is an all-clear beside limits it is
-        // nowhere near.
-        let wrongUnit = try decode("""
+        // The units on the range are NOT compared with the row's: the app
+        // cannot tell whether the range shown is the one that graded this
+        // result, and the check that tried was removed. See
+        // LabResultDTO.displayReferenceRange.
+        let otherUnit = try decode("""
         {
           "id": "z5", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
           "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
         }
         """)
-        XCTAssertFalse(wrongUnit.isGradedNormal)
-        XCTAssertEqual(wrongUnit.tone, .neutral)
-
-        let matchingUnit = try decode("""
-        {
-          "id": "z6", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
-          "referenceRange": "3.9 - 6.1 mmol/L", "status": "NORMAL", "released": true
-        }
-        """)
-        XCTAssertTrue(matchingUnit.isGradedNormal)
-
-        // A substring test would pass all three of these: g/dL is inside
-        // mg/dL, mol/L inside mmol/L, U/L inside mU/L.
-        for (rowUnit, shownRange) in [("g/dL", "70 - 110 mg/dL"),
-                                      ("mol/L", "3.9 - 6.1 mmol/L"),
-                                      ("U/L", "10 - 40 mU/L")] {
-            XCTAssertFalse(LabResultDTO.range(shownRange, isIn: rowUnit),
-                           "\(rowUnit) must not match \(shownRange)")
-        }
-
-        // A unit that contains digits still matches itself; a unit that ENDS
-        // in one is still compared rather than waved through.
-        XCTAssertTrue(LabResultDTO.range("4 - 11 x10^9/L", isIn: "x10^9/L"))
-        // Both multiplication markers: a range and a result BOTH recorded as
-        // *10^9/L are byte-identical units, and only `x` was excepted.
-        XCTAssertTrue(LabResultDTO.range("4 - 11 *10^9/L", isIn: "*10^9/L"))
-        XCTAssertFalse(LabResultDTO.range("500 - 1500 cells/mm3", isIn: "10^9/L"))
-        XCTAssertTrue(LabResultDTO.range("0.5 - 1.5 10^9/L", isIn: "10^9/L"))
-        // Only a genuinely empty range is passed.
-        XCTAssertTrue(LabResultDTO.range("", isIn: "mmol/L"))
-        XCTAssertFalse(LabResultDTO.range("3.9 - 6.1", isIn: "mmol/L"))
-
-        // findMatchingRange falls back to ranges[0] on any textual
-        // disagreement, so the range on screen IS the graded one whenever the
-        // difference is only cosmetic. Those must not be caveated.
-        for (rowUnit, shownRange) in [("mmHg", "90 - 120 mm Hg"),
-                                      ("umol/L", "12 - 16 \u{00B5}mol/L"),
-                                      ("\u{00B5}mol/L", "12 - 16 umol/L"),
-                                      ("\u{03BC}mol/L", "12 - 16 umol/L"),
-                                      ("10^9/L", "4 - 11 x10^9/L"),
-                                      ("x10^9/L", "4 - 11 10^9/L"),
-                                      ("G/DL", "12 - 16 g/dL"),
-                                      ("ug/dL", "12 - 16 mcg/dL"),
-                                      ("mcg/dL", "12 - 16 \u{00B5}g/dL"),
-                                      ("IU/L", "10 - 40 UI/L"),
-                                      ("UI/L", "10 - 40 IU/L"),
-                                      ("mIU/L", "0.4 - 4.0 mUI/L"),
-                                      ("mUI/L", "0.4 - 4.0 mIU/L")] {
-            XCTAssertTrue(LabResultDTO.range(shownRange, isIn: rowUnit),
-                          "\(rowUnit) vs \(shownRange) must not be a mismatch")
-        }
-
-        // An SI prefix is never cosmetic: mg and g are a thousandfold apart.
-        XCTAssertFalse(LabResultDTO.range("70 - 110 mg/dL", isIn: "g/dL"))
-        // Nor is a denominator: a row in L against a range in mmol/L is the
-        // mislabelling this exists to catch, and "only reject letters" let it
-        // through on the `/`.
-        XCTAssertFalse(LabResultDTO.range("0.6 - 1.2 mmol/L", isIn: "L"))
-        XCTAssertFalse(LabResultDTO.range("0 - 2 mg/kg", isIn: "kg"))
-    }
-
-    /// Shown, not hidden: `findMatchingRange` falls back to `ranges[0]`, so
-    /// the displayed range may well BE the graded one and the app cannot tell.
-    /// The tick is withheld either way, which is the free half of the guard.
-    func testAReferenceRangeInAnotherUnitIsShownWithACaveat() throws {
-        let mismatched = try decode("""
-        {
-          "id": "m", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
-          "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
-        }
-        """)
-        XCTAssertEqual(mismatched.displayReferenceRange, "70 - 110 mg/dL")
-        XCTAssertTrue(mismatched.referenceRangeUnitUncertain)
-        XCTAssertFalse(mismatched.isGradedNormal)
-
-        let matched = try decode("""
-        {
-          "id": "m2", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
-          "referenceRange": "3.9 - 6.1 mmol/L", "status": "NORMAL", "released": true
-        }
-        """)
-        XCTAssertEqual(matched.displayReferenceRange, "3.9 - 6.1 mmol/L")
-        XCTAssertFalse(matched.referenceRangeUnitUncertain)
-        XCTAssertTrue(matched.isGradedNormal)
-
-        // A pending row has neither: the backend redacts the range, and there
-        // is nothing to caveat.
-        let pending = try decode("""
-        {
-          "id": "m3", "testName": "Glucose", "status": "PENDING", "released": false
-        }
-        """)
-        XCTAssertNil(pending.displayReferenceRange)
-        XCTAssertFalse(pending.referenceRangeUnitUncertain)
-
-        // NEVER on an abnormal or critical row: "these limits may not be in
-        // your units" under a CRITICAL badge is a reason to discount it.
-        for graded in ["CRITICAL", "ABNORMAL", "ABNORMAL_HIGH", "ABNORMAL_LOW"] {
-            let alarming = try decode("""
-            {
-              "id": "m4", "testName": "Potassium", "value": "6.8", "unit": "mmol/L",
-              "referenceRange": "70 - 110 mg/dL", "status": "\(graded)", "released": true
-            }
-            """)
-            XCTAssertFalse(alarming.referenceRangeUnitUncertain,
-                           "\(graded) must not be caveated")
-            XCTAssertEqual(alarming.displayReferenceRange, "70 - 110 mg/dL")
-        }
+        XCTAssertTrue(otherUnit.isGradedNormal)
+        XCTAssertEqual(otherUnit.displayReferenceRange, "70 - 110 mg/dL")
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {

@@ -85,131 +85,37 @@ struct LabResultDTO: Codable, Identifiable {
         let range = (referenceRange ?? "").trimmingCharacters(in: .whitespaces)
         guard !range.isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
-        guard Double(raw) != nil else { return false }
-        return referenceRangeApplies
+        return Double(raw) != nil
     }
 
-    /// Whether the reference range on the wire is the one THIS result was
-    /// measured against.
-    ///
-    /// The range SHOWN and the range GRADED AGAINST are not necessarily the
-    /// same: `formatReferenceRange` always formats `ranges[0]`, while
-    /// `determineSeverityFlag` grades against `findMatchingRange(resultUnit,
-    /// …)`. On a test configured with two unit-specific ranges, the row can be
-    /// graded NORMAL in mmol/L and displayed against the mg/dL limits.
-    ///
-    /// Read the limits of this before relying on it. It is a heuristic over
-    /// one formatted string, and the payload carries no signal for what it is
-    /// really asking, so it is wrong in BOTH directions. All three gaps are
-    /// server-side and filed as such; none is visible to the app.
-    ///
-    ///  * **It misses the headline case whenever `ranges[0]` has no unit.**
-    ///    `formatReferenceRange` then stamps the RESULT's unit onto ranges[0]'s
-    ///    numbers. A glucose with `ranges[0] = {70, 110, null}` and
-    ///    `ranges[1] = {3.9, 6.1, "mmol/L"}` resulted at 5.4 mmol/L is graded
-    ///    against ranges[1] but displayed as "70 - 110 mmol/L" — the check
-    ///    passes, the tick stays, and the limits now carry a unit they were
-    ///    never expressed in. This guard catches the two-range mismatch only
-    ///    when ranges[0] carries its own, different, unit.
-    ///  * **On the single-range configuration it is a false positive by
-    ///    construction.** `findMatchingRange` falls back to `ranges[0]`, which
-    ///    is what is displayed, so with one configured range the range shown
-    ///    IS always the graded one whatever the unit text says. Every
-    ///    notational pair outside the fold below — `U/L` vs `IU/L`,
-    ///    `cells/mm3` vs `/mm3`, `mm/h` vs `mm/hr`, `K/uL` vs `10^3/uL`,
-    ///    `ng/mL` vs `ug/L` — costs a healthy patient their "Within normal
-    ///    range" line and gains them a unit warning.
-    ///  * **It may compare the wrong unit.** The DTO's `unit` is
-    ///    `resolveUnit()` — the result's unit ELSE the DEFINITION's — while
-    ///    grading uses `result.getResultUnit()` alone.
-    ///
-    /// The fix is for the DTO to say which range was graded against (or to
-    /// serve `abnormalFlag`); until then this is a best guess that errs
-    /// towards under-reassuring.
-    var referenceRangeApplies: Bool {
-        let unit = (self.unit ?? "").trimmingCharacters(in: .whitespaces)
-        guard !unit.isEmpty else { return true }
-        let range = (referenceRange ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return Self.range(range, isIn: unit)
-    }
-
-    /// Whether a formatted reference range is expressed in `unit`.
-    ///
-    /// A SUBSTRING test is not enough: `g/dL` is a substring of `mg/dL`,
-    /// `mol/L` of `mmol/L`, `U/L` of `mU/L` — so the very mismatch this guards
-    /// against would pass it. `formatReferenceRange` appends `" " + unit`, so
-    /// the unit is the suffix and the character before it is a separator;
-    /// requiring that boundary also keeps units that contain digits
-    /// (`x10^9/L`) working, which trailing-non-digit extraction would not.
-    ///
-    /// An empty range is accepted: there is no unit to disagree about. There
-    /// is deliberately NO "ends in a digit, so it carries no unit" shortcut —
-    /// `cells/mm3`, `10^9/L` and `mmol/24h` all end in one, and such a
-    /// shortcut handed every CD4 count an unconditional pass. It would also be
-    /// unreachable: `formatReferenceRange` falls back to the RESULT's unit
-    /// when `ranges[0]` has none, so whenever the row has a unit the formatted
-    /// range carries one too.
-    ///
-    /// Deliberately the same rule, in the same words, as
-    /// `LabResultDto.rangeIsInUnit` on Android.
-    static func range(_ range: String, isIn unit: String) -> Bool {
-        guard !range.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
-        let haystack = Array(normalizedUnit(range))
-        let needle = Array(normalizedUnit(unit))
-        guard !needle.isEmpty else { return true }
-        guard haystack.count >= needle.count,
-              Array(haystack.suffix(needle.count)) == needle else { return false }
-        let boundary = haystack.count - needle.count - 1
-        guard boundary >= 0 else { return true }
-        let character = haystack[boundary]
-        // `formatReferenceRange` emits "<numbers> <unit>", so once the spaces
-        // are folded away the character before a WHOLE unit is always the last
-        // digit of the numbers. Anything else means the suffix cut a longer
-        // unit in half — a letter for `g/dl` inside `mg/dl`, a `/` for `l`
-        // inside `mmol/l`, which an "only reject letters" rule waved through.
-        // The exceptions are the multiplication markers of `x10^9/L` and
-        // `*10^9/L`, which `normalizedUnit` strips off the needle but leaves
-        // in the range; no real unit ends `…xg/dL`.
-        return character.isNumber || character == "x" || character == "*"
-    }
-
-    /// Enough normalisation that a purely COSMETIC difference between the
-    /// configured range's unit and the result's does not read as a real one.
-    ///
-    /// `findMatchingRange` compares `trim().equalsIgnoreCase(...)` and falls
-    /// back to `ranges[0]`, so `mm Hg` vs `mmHg`, `µmol/L` vs `umol/L` and
-    /// `x10^9/L` vs `10^9/L` all end up grading against the range on screen —
-    /// the app must not caveat those. Case, whitespace, the two micro signs
-    /// and a leading multiplication marker are therefore folded away. What is
-    /// deliberately NOT folded is an SI prefix: `mg` and `g` are a
-    /// thousandfold apart and that is the disagreement worth flagging.
-    ///
-    /// Deliberately the same rule, in the same words, as
-    /// `LabResultDto.normalizedUnit` on Android.
-    static func normalizedUnit(_ raw: String) -> String {
-        var folded = raw.lowercased()
-            .replacingOccurrences(of: "\u{00B5}", with: "u") // MICRO SIGN
-            .replacingOccurrences(of: "\u{03BC}", with: "u") // GREEK SMALL LETTER MU
-            .filter { !$0.isWhitespace }
-            // "mcg" is the safety-preferred spelling of µg — the same unit,
-            // and common on hand-entered ranges.
-            .replacingOccurrences(of: "mcg", with: "ug")
-            // "UI" is the French spelling of IU. Bounded so it cannot eat the
-            // middle of another token, but with room for ONE SI prefix: a bare
-            // `(?<![a-z])ui` refused anything prefixed, so `mUI/L` vs `mIU/L`
-            // — the standard units for TSH, FSH, LH and insulin — read as a
-            // real mismatch while the unprefixed pair folded.
-            .replacingOccurrences(of: "(?<![a-z])([mkndpcuh]?)ui(?![a-z])",
-                                  with: "$1iu",
-                                  options: .regularExpression)
-        if folded.hasPrefix("x") || folded.hasPrefix("*") {
-            folded.removeFirst()
-        }
-        return folded
-    }
 
     /// The reference range to put in front of the patient.
+    ///
+    /// Shown as the backend sends it. **The app cannot tell whether it is the
+    /// range this result was graded against**, and an earlier version of this
+    /// file tried to: it compared the unit trailing the formatted range with
+    /// the row's own, withheld the green tick when they differed, and caveated
+    /// the limits. That was removed rather than patched further, after three
+    /// review rounds, because two server-side facts make it unfixable from
+    /// here:
+    ///
+    ///  * `PatientLabResultServiceImpl.formatReferenceRange` always formats
+    ///    `ranges[0]`, and when `ranges[0]` carries no unit it stamps the
+    ///    RESULT's unit onto its numbers — so the very case the check was
+    ///    written for (a unitless `ranges[0]` beside a `mmol/L` `ranges[1]`,
+    ///    resulted in mmol/L) reads as agreeing, and the check passes;
+    ///  * `LabResultMapper.findMatchingRange` falls back to `ranges[0]` when
+    ///    nothing matches, and `ranges[0]` is what is displayed — so on the
+    ///    ordinary single-range test the range shown IS the graded one
+    ///    whatever the units say, and every notational pair (`U/L` vs `IU/L`,
+    ///    `cells/mm3` vs `/mm3`, `mm/h` vs `mm/hr`, `K/uL` vs `10^3/uL`) cost
+    ///    a healthy patient their "Within normal range" line for nothing.
+    ///
+    /// A caveat that mostly fires on correct data teaches people to ignore
+    /// caveats, including the one that matters. The fix is for the DTO to name
+    /// the range that was graded against, or to serve `abnormalFlag`; that is
+    /// filed as backend debt. Do not reintroduce a client-side unit comparison
+    /// without one of those.
     var displayReferenceRange: String? {
         guard !isPending,
               let range = referenceRange,
@@ -218,33 +124,6 @@ struct LabResultDTO: Codable, Identifiable {
         return range
     }
 
-    /// True when the displayed limits MAY not be in the result's units, so the
-    /// UI can caveat them.
-    ///
-    /// Deliberately a caveat rather than a suppression. `findMatchingRange`
-    /// falls back to `referenceRanges.get(0)` when no configured range matches
-    /// the result unit — and that is exactly the range `formatReferenceRange`
-    /// displays — so on the ordinary single-range test whose configured unit
-    /// string merely differs cosmetically from the result's (`µmol/L` vs
-    /// `umol/L`, `x10^9/L` vs `10^9/L`, `mm Hg` vs `mmHg`), the range shown IS
-    /// the range graded against and there is nothing wrong at all. The app
-    /// cannot tell that apart from the real multi-range mismatch, so hiding
-    /// the limits would blank correct data on what is probably the common
-    /// case. The green tick is still withheld either way: under-reassuring is
-    /// free, deleting a patient's reference range is not.
-    /// NORMAL rows only — and that gate is the whole justification. "Losing a
-    /// reassurance line" is a safe way to be wrong; telling a patient whose
-    /// potassium is 6.8 that the limits beside their CRITICAL badge "may not
-    /// be in the same units" hands them a reason to discount it, which is the
-    /// opposite trade. A mmol/L row against a definition configured mEq/L —
-    /// numerically identical, textually unfoldable — is exactly that case.
-    var referenceRangeUnitUncertain: Bool {
-        guard isNormal,
-              let range = referenceRange,
-              !range.trimmingCharacters(in: .whitespaces).isEmpty
-        else { return false }
-        return !referenceRangeApplies
-    }
 
     /// What the badge shows: a pending row never borrows a grading.
     var displayStatus: LabResultStatus { isPending ? .pending : statusEnum }

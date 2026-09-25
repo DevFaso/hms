@@ -67,13 +67,6 @@ struct LabResultSummaryRow: View {
                         Text(String(format: "reference_with_value".localized, range))
                             .font(.caption).foregroundColor(.secondary)
                     }
-                    if result.referenceRangeUnitUncertain {
-                        // The row is where the alarming juxtaposition appears —
-                        // "5.4 mmol/L" directly above "70 - 110 mg/dL" — so the
-                        // caveat belongs here too, not only in the sheet behind it.
-                        Text("lab_reference_range_unit_uncertain".localized)
-                            .font(.caption2).foregroundColor(.secondary)
-                    }
                 }
             }
             Spacer()
@@ -124,10 +117,6 @@ struct LabResultDetailSheet: View {
                         }
                         if let range = result.displayReferenceRange {
                             detailRow("reference_range".localized, range)
-                        }
-                        if result.referenceRangeUnitUncertain {
-                            Text("lab_reference_range_unit_uncertain".localized)
-                                .font(.caption).foregroundColor(.secondary)
                         }
                         if result.isCritical {
                             Label("lab_interpretation_critical".localized,

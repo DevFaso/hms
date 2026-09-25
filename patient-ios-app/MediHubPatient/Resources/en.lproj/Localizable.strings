@@ -588,4 +588,3 @@
 "generic_name" = "Generic name";
 "start_date" = "Start date";
 "end_date" = "End date";
-"lab_reference_range_unit_uncertain" = "These limits may not be in the same units as your result.";
