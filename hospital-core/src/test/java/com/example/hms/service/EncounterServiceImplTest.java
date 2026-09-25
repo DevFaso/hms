@@ -121,6 +121,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.service.PatientTrackerEventPublisher trackerEventPublisher;
     @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
     @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -137,11 +138,21 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterById_success() {
         UUID id = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
         Encounter encounter = new Encounter();
         encounter.setId(id);
+        // The encounter needs a hospital, and the caller needs to be at it:
+        // the read guard refuses an encounter it cannot place, as the write
+        // guard requireEncounterInScope already did. Encounter.hospital is
+        // nullable = false, so the old fixture's hospital-less encounter was
+        // a shape the database cannot hold.
+        encounter.setHospital(hospital);
         EncounterResponseDTO dto = new EncounterResponseDTO();
         dto.setId(id);
 
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(encounterRepository.findById(id)).thenReturn(Optional.of(encounter));
         when(encounterMapper.toEncounterResponseDTO(encounter)).thenReturn(dto);
 
@@ -152,11 +163,19 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterById_notFound() {
         UUID id = UUID.randomUUID();
+        // A caller who could otherwise read: with no scope and no verified
+        // super-admin flag the read is refused BEFORE the lookup, and this
+        // test is about the answer the lookup gives.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         when(encounterRepository.findById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
+        // No messageSource stub: the read now builds its not-found through
+        // encounterNotFound(id), which carries the KEY and the id rather than
+        // resolved prose — the rule the write paths already follow.
         assertThatThrownBy(() -> service.getEncounterById(id, locale))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("encounter.notfound");
     }
 
     // ---------- deleteEncounter ----------
@@ -345,13 +364,20 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterNoteHistory_success() {
         UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital noteHistoryHospital = new Hospital();
+        noteHistoryHospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setHospital(noteHistoryHospital);
 
         EncounterNoteHistory history = new EncounterNoteHistory();
         history.setId(UUID.randomUUID());
         EncounterNoteHistoryResponseDTO histDto = EncounterNoteHistoryResponseDTO.builder()
             .id(history.getId()).build();
 
-        when(encounterRepository.existsById(encounterId)).thenReturn(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(encounterId))
             .thenReturn(List.of(history));
         when(encounterMapper.toEncounterNoteHistoryResponseDTO(history)).thenReturn(histDto);
@@ -363,11 +389,13 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterNoteHistory_encounterNotFound() {
         UUID encounterId = UUID.randomUUID();
-        when(encounterRepository.existsById(encounterId)).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getEncounterNoteHistory(encounterId, locale))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("encounter.notfound");
     }
 
     // ---------- toDto (EncounterTreatment) ----------
