@@ -137,12 +137,16 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // not one foreign row was disclosed. The drawer returned the
             // patient's record from every tenant, unaccounted.
             //
-            // Unlike the sibling reads this closes, the null here is NOT only a
-            // super-admin's. MeController resolves it with
-            // `resolveHospitalId(auth).orElse(null)`, so an ordinary clinician
-            // whose scope fails to resolve — no pinned X-Hospital-Id and no
-            // active assignment the fallback can find, e.g. a JWT outliving the
-            // assignment it was minted from — lands on the same branch.
+            // Unlike the sibling reads this closes, the null here is NOT a
+            // super-admin's, or not only. MeController resolves it with
+            // `resolveHospitalId(auth).orElse(null)`, whose step 2 falls back to
+            // the caller's NEWEST active assignment — for a super-admin too, so a
+            // platform admin holding any clinical assignment is silently scoped to
+            // it and never lands here. Who does: a caller for whom neither an
+            // X-Hospital-Id nor any active assignment resolves. An ordinary
+            // clinician reaches that (a JWT outliving the assignment it was minted
+            // from, an assignment with no hospital, a principal the username
+            // lookup misses), which is why this is not just a global-view guard.
             //
             // The accounting half cannot be patched in place: a RECORD_SHARE row
             // pairs a SOURCE hospital with an ACTING one, and in global view

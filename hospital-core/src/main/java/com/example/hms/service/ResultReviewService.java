@@ -25,7 +25,10 @@ public interface ResultReviewService {
      *        inside the service would let this read and the patient snapshot on
      *        the same page disagree about which hospital the caller is at.
      * @throws com.example.hms.exception.ResourceNotFoundException (404) when the
-     *         caller has a staff row and {@code hospitalId} is {@code null}
+     *         caller has a staff row and {@code hospitalId} is {@code null} — which
+     *         the controller's resolution reaches only when neither an
+     *         {@code X-Hospital-Id} nor any active assignment resolves, NOT merely
+     *         because the caller is a super-admin in global view
      */
     List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId, UUID hospitalId);
 

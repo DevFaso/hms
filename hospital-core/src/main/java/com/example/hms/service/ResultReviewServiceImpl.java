@@ -159,18 +159,25 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             // second one can only ever agree or be worse.
             //
             // Null therefore means what it means everywhere else in this
-            // controller: a super-admin in global view — reachable here because
-            // RoleExpansion grants them ROLE_DOCTOR before the @PreAuthorize on
-            // GET /me/results/review-queue runs — or an ordinary clinician whose
-            // scope did not resolve at all.
+            // controller, and it is narrower than "a super-admin in global view":
+            // MeController's step 2 falls back to the caller's NEWEST active
+            // assignment and does so for a super-admin as well, so a platform
+            // admin who also holds a clinical assignment is silently scoped to it
+            // and never arrives here. What arrives is a caller with a staff row
+            // for whom NEITHER an X-Hospital-Id nor any active assignment
+            // resolves: a super-admin with no assignment at all, or an ordinary
+            // clinician whose scope failed — a JWT outliving the assignment it was
+            // minted from, an assignment with no hospital, a principal the
+            // username lookup misses. RoleExpansion is what lets a super-admin
+            // past the @PreAuthorize on GET /me/results/review-queue in the first
+            // place.
             //
             // Refused rather than served unscoped, the same line #739 (open at
             // the time of writing, not merged) draws on getLabOrdersByStaffId,
             // which is this same read by another name: a
             // queue filtered to one person is that person's record, not a
             // worklist, and there is no acting hospital for a RECORD_SHARE row
-            // to name. A super-admin who wants a clinician's queue picks a
-            // hospital first.
+            // to name. A caller who wants this queue picks a hospital first.
             //
             // After the staff lookup on purpose: that lookup is on the CALLER's
             // own user id and discloses nothing, and leaving it first keeps the
