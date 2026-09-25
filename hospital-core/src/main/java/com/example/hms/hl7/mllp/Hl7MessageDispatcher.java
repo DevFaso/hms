@@ -150,12 +150,17 @@ public class Hl7MessageDispatcher {
             // every message they send.
             log.warn("[MLLP {}] AR — sender {} not allowlisted (msgType={})",
                 remoteAddress,
-                senderScopeSafeLabel(header),
+                senderLabelFor(header),
                 header.messageType());
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
-                "sender " + header.sendingApplication() + "/" + header.sendingFacility()
-                    + " not allowlisted",
+                // Capped like the log line above it. This lands in
+                // integration_message_event.error_message, which the recorder
+                // truncates at 2,000 chars - so an unauthenticated sender with
+                // a 2,100-char MSH-3 would fill the operator-visible reason
+                // with its own prose and push " not allowlisted" off the end,
+                // leaving a dead letter whose stated reason it wrote.
+                "sender " + senderLabelFor(header) + " not allowlisted",
                 "sender not allowlisted",
                 // The claimed sender, normalised. This bounds the honest
                 // case: a de-allowlisted production partner retrying on a
@@ -215,7 +220,7 @@ public class Hl7MessageDispatcher {
         List<ParsedObservation> observations = messageBuilder.parseOruR01(hl7Body);
         if (observations == null || observations.isEmpty()) {
             log.warn("[MLLP {}] ORU^R01 from {} unparseable or without OBX segments",
-                remoteAddress, senderScopeSafeLabel(header));
+                remoteAddress, senderLabelFor(header));
             // Service was never invoked, so record here. The successful
             // and post-service-reject paths are recorded inside the
             // service itself so the integration row carries the
@@ -238,7 +243,7 @@ public class Hl7MessageDispatcher {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
             log.warn("[MLLP {}] {} from {} unparseable (missing PID-3 / segments)",
-                remoteAddress, header.messageType(), senderScopeSafeLabel(header));
+                remoteAddress, header.messageType(), senderLabelFor(header));
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
                 "unparseable " + header.messageType() + " — missing PID-3 or required segments",
@@ -274,7 +279,7 @@ public class Hl7MessageDispatcher {
         Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
         if (parsed == null) {
             log.warn("[MLLP {}] ADT^A40 from {} unparseable (missing PID-3 or MRG-1)",
-                remoteAddress, senderScopeSafeLabel(header));
+                remoteAddress, senderLabelFor(header));
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
                 "unparseable ADT^A40 — missing PID-3 or MRG-1",
@@ -392,12 +397,6 @@ public class Hl7MessageDispatcher {
      * characters, and two senders agreeing on the first 120 would then share
      * a scope by construction. See {@code MllpRecordingContext.senderScope}.
      */
-    /** The sender pair, capped, for a log line. See MllpRecordingContext. */
-    private static String senderScopeSafeLabel(Hl7MessageHeader header) {
-        return MllpRecordingContext.senderLabel(
-            header.sendingApplication(), header.sendingFacility());
-    }
-
     private static String senderScopeFor(Hl7MessageHeader header) {
         return MllpRecordingContext.senderScope(
             header.sendingApplication(), header.sendingFacility());
@@ -414,6 +413,16 @@ public class Hl7MessageDispatcher {
      * <p>This is the value that goes in the <b>column</b>. For a correlation
      * scope use {@link #senderScopeFor} instead — see why there.
      */
+    /**
+     * The sender pair, capped, for a log line or a bounded column — not a
+     * correlation scope. {@link #senderScopeFor} is the scope and must stay
+     * untruncated; this one must not, because its sinks have widths.
+     */
+    private static String senderLabelFor(Hl7MessageHeader header) {
+        return MllpRecordingContext.senderLabel(
+            header.sendingApplication(), header.sendingFacility());
+    }
+
     private static String integrationIdFor(Hl7MessageHeader header) {
         return MllpRecordingContext.integrationId(
             header.sendingApplication(), header.sendingFacility());

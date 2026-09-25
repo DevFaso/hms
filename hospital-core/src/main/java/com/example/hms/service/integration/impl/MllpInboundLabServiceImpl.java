@@ -224,7 +224,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         }
         log.info("MLLP ORU^R01 persisted {} observation(s) — orders={} sender={} hospital={} msgCtrlId={}",
             saved.size(), ordersByPlacer.keySet(),
-            MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId, controlId);
+            MllpRecordingContext.senderLabel(sendingApplication, sendingFacility), hospitalId,
+            MllpRecordingContext.messageControlId(controlId));
         recordInboundMessage(integrationId, organizationId, rawMessageBody,
             IntegrationMessageStatus.RECEIVED, null);
         for (LabResult savedResult : saved) {
@@ -418,7 +419,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .eventType(AuditEventType.LAB_RESULT_UPDATED)
                 .status(AuditStatus.SUCCESS)
                 .eventDescription("ORU^R01 ingested via " + integrationId
-                    + (controlId != null ? " (msgCtrlId=" + controlId + ")" : ""))
+                    + (controlId != null ? " (msgCtrlId=" + MllpRecordingContext.messageControlId(controlId) + ")" : ""))
                 .entityType("LabResult")
                 .resourceId(saved.getId() != null ? saved.getId().toString() : null)
                 .build();
@@ -443,7 +444,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 .status(AuditStatus.SUCCESS)
                 .userName(released.getActorLabel())
                 .eventDescription(AUTO_RELEASE_DISPLAY + " on analyzer flag N via " + integrationId
-                    + (controlId != null ? " (msgCtrlId=" + controlId + ")" : ""))
+                    + (controlId != null ? " (msgCtrlId=" + MllpRecordingContext.messageControlId(controlId) + ")" : ""))
                 .entityType("LabResult")
                 .resourceId(released.getId() != null ? released.getId().toString() : null)
                 .build();

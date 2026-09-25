@@ -183,7 +183,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         admissionRepository.save(row);
         log.info("ADT visit-sync reconciled — admission={} visit={} sender={} hospital={} event={} result={} msgCtrlId={}",
-            row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            row.getId(), MllpRecordingContext.cappedField(ctx.visitNumber),
+            MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
             ctx.parsed.triggerEvent(), result,
             MllpRecordingContext.messageControlId(ctx.controlId));
@@ -221,7 +222,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(
                     "ADT^A03 discharge — visit=%s sender=%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
-                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
+                    MllpRecordingContext.cappedField(ctx.visitNumber),
+                    MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
                     ctx.patient.getId(), dischargeAt, MllpRecordingContext.messageControlId(ctx.controlId)));
         }
         return VisitProjectionResult.ADMISSION_DISCHARGED;
@@ -256,7 +258,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             AuditEventType.ADMISSION_TRANSFERRED, row, ctx,
             String.format(
                 "ADT^A02 transfer — visit=%s sender=%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
-                ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
+                MllpRecordingContext.cappedField(ctx.visitNumber),
+                    MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
                 ctx.patient.getId(),
                 destination == null ? "" : destination,
                 resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
@@ -329,7 +332,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         row.setExternalMessageControlId(ctx.controlId);
         encounterRepository.save(row);
         log.info("ADT visit-sync reconciled — encounter={} visit={} sender={} hospital={} event={} msgCtrlId={}",
-            row.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            row.getId(), MllpRecordingContext.cappedField(ctx.visitNumber),
+            MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
             ctx.parsed.triggerEvent(),
             MllpRecordingContext.messageControlId(ctx.controlId));
@@ -399,7 +403,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         emitAutoCreateAudit(admission, ctx);
 
         log.info("ADT visit-sync auto-created admission={} visit={} sender={} hospital={} patient={} provider={} msgCtrlId={}",
-            admission.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            admission.getId(), MllpRecordingContext.cappedField(ctx.visitNumber),
+            MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
             ctx.patient.getId(), ac.provider().getId(),
             MllpRecordingContext.messageControlId(ctx.controlId));
@@ -561,7 +566,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         emitEncounterAutoCreateAudit(encounter, ctx);
 
         log.info("ADT A04 auto-created encounter={} visit={} sender={} hospital={} patient={} staff={} msgCtrlId={}",
-            encounter.getId(), ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
+            encounter.getId(), MllpRecordingContext.cappedField(ctx.visitNumber),
+            MllpRecordingContext.senderLabel(ctx.app, ctx.fac),
             ctx.hospitalId,
             ctx.patient.getId(), ac.provider().getId(),
             MllpRecordingContext.messageControlId(ctx.controlId));
@@ -639,8 +645,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(encounter.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A04 auto-create — visit=%s sender=%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    MllpRecordingContext.cappedField(ctx.visitNumber),
+                    MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
+                    ctx.patient.getId(), MllpRecordingContext.messageControlId(ctx.controlId)))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -663,8 +670,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(admission.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A01 auto-create — visit=%s sender=%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    MllpRecordingContext.cappedField(ctx.visitNumber),
+                    MllpRecordingContext.cappedSenderPair(ctx.app, ctx.fac), ctx.hospitalId,
+                    ctx.patient.getId(), MllpRecordingContext.messageControlId(ctx.controlId)))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -683,7 +691,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         // (typically: enable per-hospital auto-create OR provision an
         // Admission in-app and stamp external_visit_number manually).
         log.warn("ADT visit-sync NO_MATCH — visit={} sender={} hospital={} patient={} event={} (no existing Admission or Encounter; auto-create either off or gates failed)",
-            ctx.visitNumber, MllpRecordingContext.senderLabel(ctx.app, ctx.fac), ctx.hospitalId,
+            MllpRecordingContext.cappedField(ctx.visitNumber),
+            MllpRecordingContext.senderLabel(ctx.app, ctx.fac), ctx.hospitalId,
             ctx.patient.getId(), ctx.parsed.triggerEvent());
     }
 

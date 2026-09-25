@@ -235,6 +235,15 @@ public final class MllpRecordingContext {
             + "/" + capped(trimmedOrPlaceholder(sendingFacility));
     }
 
+    /**
+     * Any other HL7 field, bounded before it reaches a log line or a length-
+     * limited column. PV1-19, OBR-2 and their neighbours are read verbatim
+     * too; the sender pair and MSH-10 are only the ones that came up first.
+     */
+    public static String cappedField(String value) {
+        return value == null ? null : capped(value.trim());
+    }
+
     private static String trimmedOrPlaceholder(String value) {
         return StringUtils.hasText(value) ? value.trim() : "?";
     }
