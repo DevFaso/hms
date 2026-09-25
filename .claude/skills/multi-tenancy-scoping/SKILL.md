@@ -43,116 +43,81 @@ boolean registered = registrationRepository
     .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
     .isPresent();
 if (!registered) {
-    // Refuse — with the SAME answer the caller gets for something that
+    // Refuse with EXACTLY the answer the caller gets for something that
     // does not exist anywhere. Never a distinguishable "not yours".
 }
 ```
 
-**A cross-tenant refusal must be indistinguishable from "no such thing".**
-This is the same contract as *The 404 is intentional* further down, and it
-applies to every transport, not just HTTP reads: if a caller can tell
-"exists, but not yours" from "does not exist", it can walk an identifier
-space and enumerate what other tenants hold, and the gate stops being a
-boundary and becomes a read primitive. On HTTP that means the same status
-and the same body as a miss — 404, not 403 beside a 404. On HL7 v2 it
-means the same ACK code *and the same ACK text*: the MLLP paths return
-`REJECTED_NOT_FOUND` and there is deliberately no cross-tenant outcome to
-return. The lesson from how it happened is sharper than "don't add one":
-the `REJECTED_CROSS_TENANT` constant was added **once** and then carried
-along into each new handler that needed a cross-tenant branch, because it
-was there to be reached for. #715 stopped the ORU^R01 path returning it;
-the constant itself was deleted only in #738. A constant whose only job is
-to produce a distinguishable answer does not get re-added — it gets
-reused. (The `hl7-mllp-integration` skill has the MLLP-specific rules.)
+**A cross-tenant refusal must be indistinguishable from "no such thing."**
+If a caller can tell *exists, but not yours* from *does not exist*, it can
+walk an identifier space and enumerate what other tenants hold, and the gate
+becomes a read primitive instead of a boundary. That holds on every
+transport: on HTTP a mismatch is the same 404 as a miss, never a 403 beside
+a 404; on HL7 v2 it is the same ACK code and the same ACK text.
 
-**"Same body" means the same body**: identical status, identical message
-text, identical `OperationOutcome` diagnostics. No particular wording is
-the leak — the *difference* is. A single message used for both branches
-("not found at the active hospital scope", say) is fine; two 404s whose
-messages differ between the unknown and the foreign case are still an
-oracle.
-
-**No tenant pinned is a different case.** The rule above is about
-*exists, but not yours*, on reads and writes alike. A caller with **no tenant
-pinned at all** — a super-admin in global view, with no `X-Hospital-Id` —
-names nothing that could be confirmed, and the rule for it is:
-
-> **Resolve the pin with `RoleValidator.requireActiveHospitalId()`, and
-> refuse a null result before any lookup.**
-
-Two parts, both load-bearing:
-
-- **Resolve it through `RoleValidator`, not the raw context.**
-  `HospitalContextHolder.getActiveHospitalId()` is *not* null for a
-  super-admin in global view: the resolver fills it from the JWT's
-  `hospital_id` claim for every caller. Only
-  `RoleValidator.requireActiveHospitalId()` drops that primary for a
-  super-admin without a header override (see the PR #341 finding below).
-  A null check on the raw context silently acts on the super-admin's home
-  hospital instead of refusing.
-- **Refuse before anything is looked up.** That ordering is the security
-  property. Decided before a lookup, the answer is identical for every
-  identifier the caller could name, so it confirms nothing.
-
-The **status** for a null pin is therefore not security-relevant, and this
-codebase uses the convention of the surface: REST controllers throw
-`BusinessException("Hospital context is required ...")`, which
-`GlobalExceptionHandler` maps to **400** (`EncounterController`,
-`PatientController`, `InBasketController`, `NurseTaskController`,
-`MedicationCatalogController`, and others); FHIR write services throw a
-**403** `ForbiddenOperationException` with an `OperationOutcome`, and FHIR
-`$export` kickoff a **400**. For new code, match the surface you are on.
-What must never vary is the ordering — and **a mismatch between a pinned
-tenant and the stored one is never a 400 or a 403**, on a read or a write:
-it is the same 404, with the same body, as a miss.
-
-The row-32 KPI aggregate dashboards are the one sanctioned exception to
-refusing a null pin: a super-admin in global view gets an empty rollup by
-design, because an aggregate names no identifier and "nothing" is a
-truthful answer to it.
-
-**Known violation — do not copy:** `LabResultServiceImpl`'s
-`requireResultInActiveHospital` reads a null resolved pin as "super-admin,
-unscoped" and *allows* the request (`if (activeHospitalId != null && ...)`),
-on get, update, delete and read-back of `/lab-results/{id}`. That is the
-"null pin as unscoped, allow" defect described under *Cross-tenant guard
-must DENY on null* below, not an example of a 404 done right.
-
-The simplest way to get this right is to make the lookup itself tenant-scoped,
-so a foreign identifier and an unknown one are the same row-not-found:
-`EncounterFhirWriteService` does exactly this with
-`findByIdAndHospital_Id(id, hospitalId)`, and both cases get one 404 with one
-message. Copy the **lookup**, not the whole method: after it, the service
-keeps a defensive `throw forbidden(...)` for a hospital mismatch on the
-loaded row. That branch is unreachable — the scoped query cannot return
-another tenant's row — and must not be generalised into a mismatch-means-403
-pattern anywhere a lookup is not already scoped.
-**`ObservationFhirWriteService` is a known violation — do not copy it**: it
-loads the `LabResult` unscoped, answers 404 when the id is unknown and 403
-("does not belong to the active hospital scope") when it belongs to another
-tenant, so a pinned caller can probe which lab result ids exist elsewhere.
-
-Two traps, both of which were real defects here:
-
-- **An accept leaks as readily as a reject.** A no-op or already-done
-  branch that answers success *before* the gate runs tells the caller the
-  entity exists. Gate first, then decide what the request means.
+- **Same body means same body** — same status, same message text, same
+  `OperationOutcome` diagnostics. No particular wording is the leak; a
+  *difference* between the two branches is.
+- **No distinguishing constant.** The MLLP paths once returned a dedicated
+  `REJECTED_CROSS_TENANT` outcome that mapped to AR. It was added once and
+  then carried into each new handler that needed a cross-tenant branch,
+  because it was there to be reached for; #715 stopped the ORU^R01 path
+  using it and #738 deleted it. A constant whose only job is a
+  distinguishable answer does not get re-added — it gets reused. (The
+  `hl7-mllp-integration` skill has the MLLP rules.)
+- **An accept leaks as readily as a reject.** A no-op or already-done branch
+  that answers success before the gate runs tells the caller the entity
+  exists. Gate first, then decide what the request means.
 - **Partial ownership is not partial permission.** An operation naming two
   entities where the caller owns one must answer exactly as if it owned
   neither — otherwise the caller pairs something it legitimately owns with
-  any candidate identifier and reads the answer off.
+  a candidate identifier and reads the answer off. Evaluate both ownership
+  checks before branching rather than letting `||` short-circuit. That
+  closes part of the timing gap, not all of it: an identifier that exists
+  nowhere usually fails at the first lookup while a foreign one reaches the
+  ownership check, so the two differ in work even when they match in
+  content. Write that residual down on a new surface rather than assume it
+  away.
+- **Check ownership the way the entity defines it.** For a patient that is
+  `PatientHospitalRegistration`; for a lab result it is ordering **or**
+  performing hospital (`LabOrder.isHandledBy`), so an equality check on one
+  hospital column would refuse a performing lab the results it owns.
 
-Identical answers are identical in **content, not in time**. An identifier
-that exists nowhere usually fails fast at the first lookup, while one that
-exists in another tenant goes on to the ownership check, so the work differs
-even when the response does not. Evaluating both ownership checks before
-branching (rather than letting `||` short-circuit) closes the smaller part of
-that gap; it does not make the path constant-time, and the residual should be
-written down on any new surface rather than assumed away. The worked
-example is the MLLP A40 merge path: the comment above the registration
-checks in `MllpInboundMergeServiceImpl` and the javadoc on
-`MllpInboundOutcome` both state which part of the gap is closed and which
-part cannot be.
+**Known violation — do not copy:** `ObservationFhirWriteService` answers 404
+for an unknown lab result and 403 ("does not belong to the active hospital
+scope") for another tenant's, which is exactly the oracle above. It is
+recorded as a code defect.
+
+### Resolving the tenant, and what this skill will not promise
+
+Two invariants hold on every path, for a request that names a **specific
+entity** (a read, write or delete by id):
+
+- **Resolve the tenant through the endpoint's own resolver**, not a
+  hand-rolled null check on the raw hospital context.
+- **Refuse before any lookup** when that resolver yields no tenant, and
+  never read "no tenant" as "unscoped, allow" for that entity. Decided
+  before anything is looked up, the refusal is identical for every
+  identifier the caller could name, so it confirms nothing.
+
+List and aggregate surfaces are different and must not be "fixed" by this
+rule: there, a super-admin's "no tenant" can mean *global view* by design
+— `ControllerAuthUtils.resolveHospitalScope` returns `null` for exactly
+that, and the row-32 KPI dashboards return an empty rollup. A list names no
+identifier, so answering it confirms none.
+
+What the resolvers return for a super-admin with no tenant pinned is **not
+consistent, and this skill deliberately does not state a value.** There are
+two resolvers with different super-admin semantics —
+`RoleValidator.requireActiveHospitalId()` and
+`ControllerAuthUtils.resolveHospitalScope`, the second honouring only
+`?hospitalId` and ignoring `X-Hospital-Id` — and the raw context
+(`HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`) is
+populated differently by auth path: from the JWT's `hospital_id` claim on
+the Keycloak path, from live assignments on the password path. That
+inconsistency is recorded as code debt. Until it is resolved, rely on the
+endpoint's own resolver and test the unpinned-super-admin case on that
+endpoint, rather than reasoning from a rule written here.
 
 `PatientHospitalRegistration` is the authoritative table. A patient can
 be registered at multiple hospitals over time; never assume a single
@@ -162,42 +127,24 @@ home tenant.
 
 `CrossTenantReadAudit` (`security/audit/CrossTenantReadAudit.java`) is
 **not** a rejection audit, whatever its name suggests. It records one thing:
-a *successful* super-admin read that spans tenants — it returns early unless
-the caller is a super-admin, and writes `DATA_ACCESS` with status `SUCCESS`.
-Calling it on a refusal records nothing for an ordinary user and records a
-successful cross-tenant read for a super-admin, which is worse than nothing.
-An earlier version of this section said every cross-tenant rejection MUST
-emit it; that was never true of the class, and following it would have
-produced either silence or a false audit row.
+a *successful* super-admin read spanning tenants — it returns early for any
+other caller and writes `DATA_ACCESS` with status `SUCCESS`. This section
+used to say every cross-tenant rejection MUST emit it; followed literally,
+that records nothing for an ordinary user and a false successful-read row
+for a super-admin. No rejection path emits it, and none should.
 
-**No rejection path in this codebase emits `CrossTenantReadAudit`**, and
-none should. To audit a refusal, use the general audit API:
-`AuditEventLogService.logEvent` with `AuditStatus.FAILURE` — which is what
-`ReceptionServiceImpl` does for a denied encounter status update, and what
-`PartnerExchangeService.auditUnmatched` does with
-`SECURITY_ALERT_TRIGGERED`. What does not exist is a *cross-tenant-specific*
-refusal event or any surface that records cross-tenant refusals
-consistently. Today they are visible only where a surface happens to
-record them:
+To audit a refusal, use the general audit API:
+`AuditEventLogService.logEvent` with `AuditStatus.FAILURE`, as
+`ReceptionServiceImpl` does for a denied status update and
+`PartnerExchangeService.auditUnmatched` does with `SECURITY_ALERT_TRIGGERED`.
+There is no cross-tenant-specific refusal event.
 
-- The MLLP inbound paths (ORU^R01, ADT, A40) have no principal on the worker
-  thread and record the refusal on an `integration_message_event` row. They do
-  not record it identically: the ADT and A40 refusals carry no message body
-  and a stable correlation id per (sender, reason), while the ORU^R01
-  refusal still stores the full raw message with a random id per row — so
-  a retrying sender adds a dead letter, and a copy of the message, per
-  attempt, which is exactly what the `hl7-mllp-integration` skill forbids.
-  ORU^R01 is the outstanding path; bringing it in line belongs with the
-  redesign that bounds sender-controlled fields where they are parsed, not
-  with this document.
-- HTTP surfaces that follow the contract refuse with the same 404 as a miss
-  and write nothing specific to the refusal. Not every HTTP surface follows
-  it yet — `ObservationFhirWriteService` and `LabResultServiceImpl` are the
-  known violations named above.
-
-If you need refusals to be detectable — for enumeration, or for a
-misconfigured integration — that is a new event type to design, not a call
-to `CrossTenantReadAudit`.
+The MLLP inbound paths have no principal on the worker thread and record a
+refusal on an `integration_message_event` row instead. The ADT and A40
+refusals carry no message body and a correlation id keyed on (sender,
+message type, reason); the ORU^R01 refusal still stores the full raw
+message with a random id per row, which the `hl7-mllp-integration` skill
+forbids. That path is outstanding.
 
 ## Schema-per-tenant (v2.0 path, off by default)
 
@@ -287,17 +234,15 @@ they're not authorised in.
 **Correct pattern:**
 
 ```java
-// ONE message for both cases. Two different 404 texts — "not found" vs
-// "not found at the active hospital scope" — are still an oracle: the
-// status matches and the body tells them apart.
-String notFoundMessage = "Patient/" + patientId + " not found";
+// ONE message for both branches: two different 404 texts are still an
+// oracle - the status matches and the body tells them apart.
 Patient patient = patientRepository.findById(patientId)
-    .orElseThrow(() -> notFound(notFoundMessage));
+    .orElseThrow(() -> notFound("Patient/" + patientId + " not found"));
 boolean registered = registrationRepository
     .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
     .isPresent();
 if (!registered) {
-    throw notFound(notFoundMessage);
+    throw notFound("Patient/" + patientId + " not found");
 }
 // only NOW safe to render
 return patientMapper.toFhir(patient);
@@ -305,9 +250,7 @@ return patientMapper.toFhir(patient);
 
 The 404 is intentional — cross-tenant rejection collapses to "no
 such patient" so the existence of patients belonging to other
-tenants stays invisible. That only holds if the *body* is the same
-too: an earlier version of this snippet used a different message for
-each branch and would have leaked through the diagnostics.
+tenants stays invisible.
 
 Caught on `PatientEverythingService.everythingForPatient` in PR
 #351 (FHIR `$everything`). The same pattern applies to any other
@@ -315,45 +258,25 @@ new read path that takes a patient UUID from the URL.
 
 ### Cross-tenant guard must DENY on null/empty active hospital
 
-A super-admin without an explicit `X-Hospital-Id` header has
-`HospitalContextHolder.getActiveHospitalId() == null`. A guard
-written as "reject only when BOTH the stored hospitalId and the
-current context's hospitalId are non-null and unequal" lets any
-super-admin call see any tenant's data — the inverse of the
-intended invisible-cross-tenant-rejection contract.
-
-**Correct pattern:**
+A guard written as "reject only when BOTH the stored hospitalId and
+the resolved one are non-null and unequal" reads "no tenant" as
+"unscoped, allow" and lets any caller whose resolver yields nothing see
+any tenant's data — the inverse of the invisible-cross-tenant-rejection
+contract. Refuse on "no tenant" first, then compare.
 
 ```java
-// RoleValidator, NOT HospitalContextHolder: the raw context holds the JWT's
-// primary hospital even for a super-admin in global view, so a null check on
-// it never fires for the one caller this guard exists for.
-UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-if (activeHospitalId == null) {
-    // No tenant pin -> refuse, BEFORE any lookup, so the answer is the
-    // same whatever id the caller named. Status by surface convention:
-    // BusinessException (400) on REST, ForbiddenOperationException (403)
-    // on a FHIR write. See "No tenant pinned is a different case" above.
-    throw new BusinessException("Hospital context is required; supply X-Hospital-Id.");
+UUID tenant = /* the endpoint's own resolver - see "Resolving the
+                 tenant" above; do not hand-roll a raw-context check */;
+if (tenant == null) {
+    // No tenant -> refuse, BEFORE any lookup.
+    throw /* the refusal this surface uses */;
 }
-// Scope the lookup itself, so a foreign id and an unknown id are the
-// same row-not-found and get the same 404 with the same body.
-Stored stored = repository.findByIdAndHospital_Id(id, activeHospitalId)
-    .orElseThrow(() -> notFound(id + " not found"));
+// Then the ownership check, answering a mismatch exactly like a miss.
 ```
 
-This supersedes an earlier version of the snippet that returned
-`Optional.empty()` on a null pin "or throw 403 if write context", and a
-later one that checked the raw `HospitalContextHolder` — which never sees a
-null pin for a super-admin, so it refused nobody.
-
-The original defect was caught on `FhirBulkExportService.getJob` in
-PR #351: a guard that treated a null pin as "unscoped, allow". The FHIR
-write services from PR #350 (`EncounterFhirWriteService`,
-`ObservationFhirWriteService`) follow the rule above for the **null**
-case — a 403 up front, before any lookup. For a *mismatch* only
-`EncounterFhirWriteService` does, by scoping its lookup;
-`ObservationFhirWriteService` is the known violation named above.
+Caught on `FhirBulkExportService.getJob` in PR #351. This skill does not
+name any service as a model for the null case: none follows one rule
+reliably, for the reason given under "Resolving the tenant".
 
 The exception: read-only aggregate dashboards (row 32 KPI) where
 the documented behaviour is "super-admin without X-Hospital-Id

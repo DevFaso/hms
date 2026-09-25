@@ -271,6 +271,11 @@ null`, THEN check the stored vs current hospital equality. See
 the `multi-tenancy-scoping` skill for the full pattern. Caught
 on PR #351.
 
+> **Superseded in part:** the raw-context null check above is not reliable
+> for an unpinned super-admin — the value differs by auth path and by
+> resolver. Follow "Resolving the tenant" in the `multi-tenancy-scoping`
+> skill instead.
+
 ### Bulk-data spec: 400 on malformed `_since` / `_outputFormat`
 
 The FHIR Bulk Data Access spec requires the server to reject

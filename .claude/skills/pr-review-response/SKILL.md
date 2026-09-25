@@ -432,7 +432,9 @@ list is cross-cutting muscle memory.
   PR #351; the assumption that "`findById` is tenant-aware" was
   recorded incorrectly in earlier skills notes.
 - **Cross-tenant guard must DENY on null/empty active hospital
-  context, not allow.** A super-admin without an explicit
+  context, not allow.** *(Superseded in part: the raw-context null check
+  below is not reliable for an unpinned super-admin — follow "Resolving the
+  tenant" in the `multi-tenancy-scoping` skill.)* A super-admin without an explicit
   `X-Hospital-Id` header has `HospitalContextHolder.getActiveHospitalId()
   == null`. A guard that only rejects when both the stored
   hospitalId AND the current context's hospitalId are non-null lets
