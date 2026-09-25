@@ -477,9 +477,23 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         }
     }
 
+    /**
+     * Upper-cased as well as trimmed, matching
+     * {@code MllpRecordingContext.integrationId} and, behind it, the
+     * case-insensitive match the allowlist itself does. An allowlisted sender
+     * may legitimately present MSH-3/MSH-4 in any casing; if this door filed
+     * its rows under one spelling and the dispatcher's under another, the
+     * super-admin search - which compares {@code integrationId} for equality -
+     * would show an operator half that feed's messages.
+     *
+     * <p>Still its own copy rather than a call to the shared helper: the
+     * migration is a separate change owned by the lab stream, and
+     * {@code MllpIntegrationIdSingleSourceTest} holds the exemption open with
+     * a witness on this method's name so it cannot be forgotten.
+     */
     private String buildIntegrationId(String app, String fac) {
-        String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
-        String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
+        String safeApp = StringUtils.hasText(app) ? app.trim().toUpperCase(Locale.ROOT) : "?";
+        String safeFac = StringUtils.hasText(fac) ? fac.trim().toUpperCase(Locale.ROOT) : "?";
         return "MLLP:" + safeApp + "/" + safeFac;
     }
 
