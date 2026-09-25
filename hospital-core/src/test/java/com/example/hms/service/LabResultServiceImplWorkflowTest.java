@@ -110,6 +110,12 @@ class LabResultServiceImplWorkflowTest {
         resultAssignment = new UserRoleHospitalAssignment();
         resultAssignment.setId(UUID.randomUUID());
         resultAssignment.setHospital(hospital);
+
+        // The actor is pinned to the order's hospital. These tests used to
+        // leave the scope unstubbed, so the mock answered null and every
+        // guard read it as "super-admin, unscoped" - the very hole the
+        // null-scope rule closes. Tests about another scope stub their own.
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
     }
 
     @Test
@@ -516,6 +522,10 @@ class LabResultServiceImplWorkflowTest {
         // Super-admin path sidesteps hospital-context resolution — the guard
         // under test is about acknowledgement, not signing permissions.
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
+        // A verified super-admin in global view: no hospital pin, and the
+        // JWT flag that makes a null scope unscoped.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
         when(labResultMapper.toResponseDTO(any(LabResult.class)))
             .thenReturn(LabResultResponseDTO.builder().id(labResultId.toString()).build());

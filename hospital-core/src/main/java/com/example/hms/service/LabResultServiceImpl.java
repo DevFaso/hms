@@ -61,6 +61,9 @@ public class LabResultServiceImpl implements LabResultService {
 
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** The text {@code RoleValidator.requireActiveHospitalId()} refuses a caller with no hospital with. */
+    private static final String HOSPITAL_CONTEXT_REQUIRED =
+        "Hospital context required. Please select an active hospital or include X-Hospital-Id header.";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
@@ -479,7 +482,9 @@ public class LabResultServiceImpl implements LabResultService {
      * alone attach a result to it.
      */
     private void requireOrderInActiveHospital(LabOrder labOrder) {
-        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+        // isHandledBy(null) is true, so the null-scope rule has to be applied
+        // before it: only a verified super-admin may attach across tenants.
+        if (!labOrder.isHandledBy(actingHospitalOrVerifiedGlobalView(LAB_ORDER_NOT_FOUND))) {
             throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
     }
@@ -548,9 +553,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
-            // Super-admin: return all paged
+            // Verified super-admin in global view: return all paged
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
@@ -668,13 +673,19 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * The shared 404-not-403 tenancy comparison used by every other
-     * single-row path in this class (get/update/delete/compare). LabResult
-     * has no hospital column of its own — scope flows through
-     * labOrder.hospital. Null active scope = super-admin, unscoped.
+     * The shared 404-not-403 tenancy comparison used by every single-row path
+     * in this class (get/update/delete/acknowledge/read-back/release/sign/
+     * compare). LabResult has no hospital column of its own — scope flows
+     * through the order.
+     *
+     * <p>A null scope is served unscoped only for a VERIFIED super-admin (see
+     * {@link #actingHospitalOrVerifiedGlobalView}); anyone else with no
+     * hospital gets the same 404 as a result that does not exist, which is
+     * also the answer a third hospital gets, so the refusal discloses nothing
+     * about the id.
      */
     private void requireResultInActiveHospital(LabResult labResult) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId = actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND);
         // B1: the order is handled by its ordering hospital and by the
         // laboratory performing it (LabOrder.isHandledBy); a third hospital
         // gets the same 404 as before.
@@ -682,6 +693,44 @@ public class LabResultServiceImpl implements LabResultService {
                 && !labResult.getLabOrder().isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
+    }
+
+    /**
+     * {@code requireActiveHospitalId()}, without the road that lets an
+     * unverified principal read a null scope as "unscoped".
+     *
+     * <p>{@code requireActiveHospitalId()} returns null two ways. Step 1 is a
+     * real super-admin in global view: {@code HospitalContext.isSuperAdmin()},
+     * which is what {@link RoleValidator#isSuperAdminFromJwtClaim()} reads.
+     * Step 4 is a safety net that fires when that flag is FALSE but
+     * {@code isSuperAdminFromAuth()} matches the AUTHORITIES collection, which
+     * {@code RoleValidator}'s own javadoc warns can be inflated. Every guard
+     * here used to read either null as "super-admin, unscoped, allow", so the
+     * step-4 principal could get, amend, delete, acknowledge, read back,
+     * release and sign any tenant's result. Now only the verified flag makes
+     * a null scope unscoped (the stance of the pharmacy services and #746);
+     * anyone else is refused with {@code refusalKey}, a not-found answer the
+     * caller's path already gives, so the refusal is not an oracle.
+     */
+    private UUID actingHospitalOrVerifiedGlobalView(String refusalKey) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new ResourceNotFoundException(refusalKey);
+        }
+        return activeHospitalId;
+    }
+
+    /**
+     * The list-path form of {@link #actingHospitalOrVerifiedGlobalView}: there
+     * is no id to protect, so the refusal is the one a caller with no hospital
+     * already gets from {@code requireActiveHospitalId()}.
+     */
+    private UUID listScopeOrVerifiedGlobalView() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+        }
+        return activeHospitalId;
     }
 
     /**
@@ -1329,12 +1378,9 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult current = labResultRepository.findById(currentResultId)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
-        // Hospital scope enforcement
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && current.getLabOrder() != null
-                && !current.getLabOrder().isHandledBy(activeHospitalId)) {
-            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
-        }
+        // Hospital scope enforcement: the shared single-row comparison, which
+        // this used to copy inline, null-scope hole included.
+        requireResultInActiveHospital(current);
 
         LabOrder labOrder = current.getLabOrder();
         if (labOrder == null || labOrder.getPatient() == null || labOrder.getLabTestDefinition() == null) {
@@ -1414,7 +1460,10 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // Only a verified super-admin in global view may name the hospital in
+        // the request; for anyone else a null scope is refused, not filled in
+        // from the query string.
+        UUID activeHospitalId = listScopeOrVerifiedGlobalView();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         // B1: a critical value is the running laboratory's to see and chase —
         // it is the one that produced it. These two were the last lab-side
@@ -1427,7 +1476,10 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // Only a verified super-admin in global view may name the hospital in
+        // the request; for anyone else a null scope is refused, not filled in
+        // from the query string.
+        UUID activeHospitalId = listScopeOrVerifiedGlobalView();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<LabResult> candidates = labResultRepository.findHandledByHospitals(List.of(effectiveHospitalId));
         return surfaceCritical(candidates, r -> !r.isAcknowledged());
