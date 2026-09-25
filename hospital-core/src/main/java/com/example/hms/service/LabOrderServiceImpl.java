@@ -502,10 +502,11 @@ public class LabOrderServiceImpl implements LabOrderService {
             //
             // Narrow by design: the patient-less listing below is the platform
             // worklist the lab screens page through, and a super-admin seeing
-            // it whole is this service's documented behaviour (getAllLabOrders,
-            // getLabOrdersByStaffId and getLabOrdersByLabTestDefinitionId all
-            // read the same way). What is refused is the one shape that is a
-            // patient's record rather than a worklist.
+            // it whole stays this service's behaviour (getAllLabOrders and
+            // getLabOrdersByLabTestDefinitionId still read that way — neither
+            // is filtered to one person). What is refused is the shape that is
+            // somebody's record rather than a worklist; getLabOrdersByPatientId
+            // and getLabOrdersByStaffId are refused for the same reason.
             //
             // 404 on the patient, matching PatientLabResultServiceImpl so the
             // chart's two lab blocks answer a scopeless caller identically, and
@@ -575,9 +576,36 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByOrderingStaff_Id(staffId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // Same shape as the two patient reads, and it took checking to be sure,
+        // because the obvious reasoning says it cannot leak: a Staff ROW is
+        // pinned to one hospital (hospital_id NOT NULL, uq_staff_user_hospital
+        // on (user_id, hospital_id)), so a clinician working at two hospitals
+        // has two staff rows with two ids, and "this staff id's orders" looks
+        // like one tenant's data by construction.
+        //
+        // It is not. buildLabOrder takes the order's hospital from the ENCOUNTER
+        // or the requested hospitalId, looks the ordering Staff up independently
+        // by id, and authorizes canOrderLabTests(staff.getUser().getId(),
+        // hospital.getId()) — on the USER, who may hold assignments at several
+        // hospitals. Nothing anywhere compares staff.getHospital() to the
+        // order's hospital. So one staff id can own orders at more than one
+        // hospital, and this fallback unions them with no acting hospital to
+        // account the disclosure against — one clinician's order history across
+        // tenants, and with it every patient on it.
+        //
+        // Deriving the scope from the staff row instead was the tempting
+        // alternative and it is wrong twice over. It would manufacture an
+        // acting hospital the caller never scoped to, so the RECORD_SHARE row
+        // would name a hospital the caller is not acting at — falsifying the
+        // accounting rather than completing it; scope is a property of the
+        // CALLER, never of the subject being asked about. And it would not even
+        // answer the question: filtering to staff.getHospital() drops exactly
+        // the orders that staff placed elsewhere, which are the rows that make
+        // this cross-tenant in the first place.
+        //
+        // staff.notfound, the key this class already throws for a staff id it
+        // will not resolve, so the refusal is indistinguishable from one.
+        throw new ResourceNotFoundException("staff.notfound", staffId);
     }
 
     @Override

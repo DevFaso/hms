@@ -587,6 +587,43 @@ class LabOrderServiceImplPerformingHospitalTest {
             .containsExactly(mapped);
     }
 
+    /**
+     * A staff id looks single-tenant — a Staff row is pinned to one hospital by
+     * {@code uq_staff_user_hospital} — but {@code buildLabOrder} never binds
+     * {@code orderingStaff.hospital} to the order's hospital, so one staff id
+     * can own orders at several. Unscoped, this unioned them with no acting
+     * hospital to account the disclosure against.
+     */
+    @Test
+    void byStaffWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        UUID staffId = UUID.randomUUID();
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.getLabOrdersByStaffId(staffId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("staff.notfound");
+
+        verify(labOrderRepository, never()).findByOrderingStaff_Id(any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /** A scoped staff read is untouched: the predicate still carries the hospital. */
+    @Test
+    void byStaffWithAnActiveHospitalStaysScoped() {
+        UUID staffId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, performing.getId()))
+            .thenReturn(List.of(order));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.getLabOrdersByStaffId(staffId, Locale.ENGLISH)).containsExactly(mapped);
+    }
+
     @Test
     void byStatusReadsOrdersHandledByTheActiveHospital() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
