@@ -25,6 +25,14 @@ package com.example.hms.service.integration;
  * constant that used to make the two distinguishable is gone so the
  * distinction cannot be reintroduced by returning it.
  *
+ * <p>Acknowledged residual: the answers are identical in content, not in
+ * time. A cross-tenant refusal does more work before answering than an
+ * unknown identifier does — one or two extra reads and a recorder insert —
+ * so a patient attacker with a stable socket could still separate the two
+ * statistically. Closing that needs constant-time handling of a database
+ * path, which is a different piece of work; what is closed here is the
+ * answer anyone can read off a single message.
+ *
  * <p>The reason is not lost: each path records it on the
  * {@code integration_message_event} row — a "cross-tenant rejection"
  * error message against the receiving hospital's organization — which
