@@ -75,6 +75,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /** Resolves a user id from either principal shape; see {@link #requireOwnPrescriptionWhenPatient}. */
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     /**
      * From config/TimeConfig, as {@code PrescriptionClarificationService}
      * takes it: the two halves of a clarification are stamped by the same
@@ -156,24 +158,35 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * about the pharmacist's notes, not about whose prescription it is.
      *
      * <p>404, not 403, and the same message as a prescription that does not
-     * exist: the answer must not tell a patient that an id is real. The
-     * subject is resolved from the authenticated principal
+     * exist: the answer must not tell a patient that an id is real — including
+     * when the principal itself cannot be resolved to a patient row. The
+     * subject comes from the authenticated principal
      * ({@code user id → Patient}), never from anything in the request — the
      * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
-     * for every {@code /me/patient/*} read.
+     * for every {@code /me/patient/*} read, through the same resolver.
      *
      * <p>A no-op for every clinical role, including a clinician who is also a
-     * patient at the hospital and a super-admin (who inherits
-     * {@code ROLE_DOCTOR}) — see {@link PrescriptionReaderRoles}.
+     * patient at the hospital, a pharmacy verifier reading an order back after
+     * verifying it, and a super-admin on either auth path — see
+     * {@link PrescriptionReaderRoles}.
      */
     private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
-        if (!PrescriptionReaderRoles.isPatientOnlyPrincipal()) {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (!PrescriptionReaderRoles.isPatientOnly(auth)) {
             return;
         }
-        UUID userId = authService.getCurrentUserId();
-        UUID callerPatientId = userId == null
-            ? null
-            : patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        // authUtils, not authService.getCurrentUserId(): the latter resolves
+        // only a CustomUserDetails principal and throws 401 on a
+        // JwtAuthenticationToken, so on the OIDC path it would refuse the
+        // owner their own prescription. ControllerAuthUtils.resolveUserId
+        // reads the appUserId claim too, and is what
+        // PatientPortalServiceImpl.resolvePatientId already uses.
+        UUID callerPatientId = authUtils.resolveUserId(auth)
+            .flatMap(patientRepository::findByUserId)
+            .map(Patient::getId)
+            .orElse(null);
         UUID subjectPatientId = prescription.getPatient() != null
             ? prescription.getPatient().getId()
             : null;

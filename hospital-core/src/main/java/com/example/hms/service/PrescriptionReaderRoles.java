@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Set;
 
@@ -10,10 +9,10 @@ import java.util.Set;
  * One definition of "the caller is the patient and nobody else" for the
  * prescription reads.
  *
- * <p>{@code GET /prescriptions/{id}} admits exactly five roles — the four
- * clinical readers below plus {@code ROLE_PATIENT} — so on that endpoint
- * "holds ROLE_PATIENT and none of the four" is the same thing as "a pure
- * patient principal". Two decisions hang off it and they must not drift
+ * <p>{@code GET /prescriptions/{id}} admits exactly five roles — four of
+ * the clinical readers below plus {@code ROLE_PATIENT} — so on that endpoint
+ * "holds ROLE_PATIENT and no clinical reader role" is the same thing as "a
+ * pure patient principal". Two decisions hang off it and they must not drift
  * apart:
  * <ol>
  *   <li>the patient's copy omits the pharmacist-to-prescriber clarification
@@ -22,18 +21,39 @@ import java.util.Set;
  *       ({@code PrescriptionServiceImpl.getPrescriptionById}).</li>
  * </ol>
  *
- * <p>A super-admin is never patient-only here even though
- * {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS} grants
- * {@code ROLE_PATIENT}: the same expansion grants {@code ROLE_DOCTOR}, which
- * is in the clinical set. Neither is a clinician who also happens to be a
+ * <p>A super-admin is never patient-only here, and the set names
+ * {@code ROLE_SUPER_ADMIN} outright rather than leaning on
+ * {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}: the
+ * expansion runs on the password/JWT path but
+ * {@code KeycloakJwtAuthenticationConverter} maps realm roles straight to
+ * authorities, so on the OIDC path a super-admin who is also a patient would
+ * otherwise read as patient-only. Neither is a clinician who happens to be a
  * patient at the hospital — the clinical role wins, as it already did for the
  * redaction.
+ *
+ * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
+ * which answers a similar-sounding question with a different staff set: it
+ * omits {@code ROLE_PHARMACIST}, so a pharmacist who is also a patient is
+ * "patient only" there and a clinical reader here. For a prescription
+ * decision, this class is the one to use.
  */
 public final class PrescriptionReaderRoles {
 
-    /** The reader roles of {@code GET /prescriptions/{id}} that are not the patient. */
+    /**
+     * The roles that read a prescription as a clinician rather than as its
+     * subject.
+     *
+     * <p>Wider than the five {@code GET /prescriptions/{id}} admits, on
+     * purpose: {@code PrescriptionServiceImpl.getPrescriptionById} is also the
+     * read-back of {@code /{id}/pharmacist-verify} and
+     * {@code /{id}/request-clarification}, which admit
+     * {@code ROLE_PHARMACY_VERIFIER} and {@code ROLE_SUPER_ADMIN}. Leaving
+     * those two out would let a pharmacy verifier who is also a patient commit
+     * the verification and then be told 404 by the read-back that follows it.
+     */
     public static final Set<String> CLINICAL_READER_ROLES = Set.of(
-        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
+        "ROLE_PHARMACY_VERIFIER", "ROLE_SUPER_ADMIN");
 
     private PrescriptionReaderRoles() {
     }
@@ -60,10 +80,5 @@ public final class PrescriptionReaderRoles {
             }
         }
         return patient;
-    }
-
-    /** The same rule against the authentication on the current thread. */
-    public static boolean isPatientOnlyPrincipal() {
-        return isPatientOnly(SecurityContextHolder.getContext().getAuthentication());
     }
 }

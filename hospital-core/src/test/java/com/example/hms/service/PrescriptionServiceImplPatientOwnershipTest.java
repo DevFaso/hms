@@ -66,6 +66,15 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /**
+     * Real, not mocked: identity resolution IS what this guard gets wrong when
+     * it gets it wrong. A mock here would let the service pass whichever
+     * resolver it used, including one that refuses an OIDC principal.
+     */
+    @org.mockito.Spy
+    private com.example.hms.controller.support.ControllerAuthUtils authUtils =
+        new com.example.hms.controller.support.ControllerAuthUtils(null);
+
     @org.mockito.Spy
     private java.time.Clock clock = java.time.Clock.fixed(
         java.time.Instant.parse("2026-09-25T09:00:00Z"), java.time.ZoneOffset.UTC);
@@ -92,7 +101,6 @@ class PrescriptionServiceImplPatientOwnershipTest {
         callerPatient.setId(callerPatientId);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(authService.getCurrentUserId()).thenReturn(callerUserId);
         when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(callerPatient));
     }
 
@@ -101,10 +109,32 @@ class PrescriptionServiceImplPatientOwnershipTest {
         SecurityContextHolder.clearContext();
     }
 
+    /** A password-path principal: {@code CustomUserDetails} carrying the HMS user id. */
     private void authenticateAs(String... roles) {
+        var authorities = List.of(roles).stream().map(SimpleGrantedAuthority::new).toList();
+        var principal = new com.example.hms.security.CustomUserDetails(
+            callerUserId, "caller", "pw", true, authorities);
         SecurityContextHolder.getContext().setAuthentication(
-            new UsernamePasswordAuthenticationToken("caller", "n",
-                List.of(roles).stream().map(SimpleGrantedAuthority::new).toList()));
+            new UsernamePasswordAuthenticationToken(principal, "n", authorities));
+    }
+
+    /**
+     * An OIDC principal: a {@code JwtAuthenticationToken} whose HMS user id is
+     * the {@code appUserId} claim, as {@code KeycloakJwtAuthenticationConverter}
+     * produces. {@code AuthService.getCurrentUserId()} throws on this shape,
+     * which is why the guard resolves through {@code ControllerAuthUtils}.
+     */
+    private void authenticateViaOidcAs(String... roles) {
+        var authorities = List.of(roles).stream().map(SimpleGrantedAuthority::new).toList();
+        org.springframework.security.oauth2.jwt.Jwt jwt =
+            org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t")
+                .header("alg", "RS256")
+                .claim("sub", "keycloak-subject")
+                .claim("appUserId", callerUserId.toString())
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.oauth2.server.resource.authentication
+                .JwtAuthenticationToken(jwt, authorities));
     }
 
     /** A prescription at the caller's hospital, written for {@code subject}. */
@@ -209,6 +239,44 @@ class PrescriptionServiceImplPatientOwnershipTest {
     @DisplayName("the clarification paths, which run unauthenticated in tests, are unaffected")
     void noAuthenticationIsNotAPatient() {
         SecurityContextHolder.clearContext();
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("an OIDC patient reads their own prescription (appUserId claim, not CustomUserDetails)")
+    void oidcPatientReadsTheirOwn() {
+        authenticateViaOidcAs("ROLE_PATIENT");
+        UUID id = prescriptionFor(callerPatient);
+
+        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("an OIDC patient is still refused somebody else's")
+    void oidcPatientRefusedAnothers() {
+        authenticateViaOidcAs("ROLE_PATIENT");
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThatThrownBy(() -> service.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining(NOT_FOUND_KEY);
+    }
+
+    @Test
+    @DisplayName("a pharmacy verifier who is also a patient still gets the verify read-back")
+    void pharmacyVerifierWhoIsAlsoAPatientIsUnaffected() {
+        authenticateAs("ROLE_PATIENT", "ROLE_PHARMACY_VERIFIER");
+        UUID id = prescriptionFor(otherPatient());
+
+        assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
+    }
+
+    @Test
+    @DisplayName("a super-admin is unaffected on the OIDC path, where RoleExpansion does not run")
+    void unexpandedSuperAdminIsUnaffected() {
+        authenticateViaOidcAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT");
         UUID id = prescriptionFor(otherPatient());
 
         assertThat(service.getPrescriptionById(id, Locale.ENGLISH).getId()).isEqualTo(id);
