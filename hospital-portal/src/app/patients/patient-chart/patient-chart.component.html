@@ -291,14 +291,36 @@
     <!--
       No hospital scope: both lab reads would go out unscoped, read across
       every tenant and write no cross-hospital reach row. The section declines
-      to read — see labsScoped() — and says so.
+      to read — see labsScoped() — and says so in its own words rather than
+      with `<app-hospital-scope-hint>`.
 
-      Deliberately NOT `<app-hospital-scope-hint>` plus an embedded chip. That
-      chip clears the session's pin on mount unless `preserveScope` is passed,
-      re-runs a hospital lookup on every tab switch, and would be the only
-      picker on a page whose other three sections do not follow it — three
-      problems in exchange for saving a navigation. A picker on the chart is
-      worth doing properly, as its own change.
+      The shared hint reads "select a hospital to continue", and on THIS route
+      there is nothing to select with: /patients/:id is not flagged
+      `requiresHospitalScope`, so `HospitalScopeGateService.showChip()` is
+      false and the shell's chip is absent, and the only chip on
+      patient-detail.html is inside the Documents tab. Worse, that chip is
+      super-admin-only, so a staff account with no active assignment could
+      never act on the instruction at all.
+
+      Mounting a chip here was tried and backed out: it clears the session's
+      pin unless `preserveScope` is passed, re-runs a hospital lookup on every
+      tab switch, and would be the only picker on a page whose other three
+      sections do not follow it. The real fix is to flag the route (which
+      would gate all four sections coherently) or give the chart a picker of
+      its own — both changes of their own, and both noted for the coordinator.
+      Until then this says what is true for both accounts that reach it.
+    -->
+    <!--
+      ONE message, and it names no control. Pointing a super-admin at the
+      Documents-tab chip was tried and is wrong twice over: that tab's own
+      gate does not expand doctor equivalents, so a ROLE_SUPER_ADMIN +
+      ROLE_SURGEON account acting as the surgeon never sees the tab at all;
+      and when the chip does work, the hospital it pins is followed by the
+      labs section alone — the chart's other three sections keep sending the
+      PRIMARY assignment, so the advice would produce `hospitalId=A` under
+      `X-Hospital-Id: B`, the divergence `labHospitalId()` exists to prevent.
+      Until the route has a picker of its own (see the PR), saying what is
+      true beats naming a control.
     -->
     <p class="labs-hint" role="status" data-testid="labs-no-hospital">
       {{ 'CHART.LAB_NO_HOSPITAL' | translate }}
