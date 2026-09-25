@@ -192,12 +192,14 @@ data class LabResultDto(
         val boundary = haystack.length - needle.length - 1
         if (boundary < 0) return true
         val preceding = haystack[boundary]
-        // A DIGIT before the unit is the numbers/unit junction — "90-120mmhg"
-        // — so the whole unit is there. A LETTER means the suffix cut a longer
-        // unit in half: `g/dl` inside `mg/dl`, `u/l` inside `mu/l`. The one
-        // letter that is not part of a unit is the `x` of the `x10^9/L`
-        // multiplication marker; no real unit ends `…xg/dL`.
-        return !preceding.isLetter() || preceding == 'x'
+        // `formatReferenceRange` emits "<numbers> <unit>", so once the spaces
+        // are folded away the character before a WHOLE unit is always the last
+        // digit of the numbers. Anything else means the suffix cut a longer
+        // unit in half — a letter for `g/dl` inside `mg/dl`, a `/` for `l`
+        // inside `mmol/l`, which an "only reject letters" rule waved through.
+        // The single exception is the `x` of the `x10^9/L` multiplication
+        // marker; no real unit ends `…xg/dL`.
+        return preceding.isDigit() || preceding == 'x'
     }
 
     /**
@@ -217,6 +219,12 @@ data class LabResultDto(
             .replace('\u00B5', 'u') // MICRO SIGN
             .replace('\u03BC', 'u') // GREEK SMALL LETTER MU
             .filterNot { it.isWhitespace() }
+            // "mcg" is the safety-preferred spelling of µg — the same unit,
+            // and common on hand-entered ranges.
+            .replace("mcg", "ug")
+            // "UI" is the French spelling of IU. Bounded so it cannot eat the
+            // middle of another token.
+            .replace(UI_TOKEN, "iu")
             .removePrefix("x")
             .removePrefix("*")
 
@@ -280,3 +288,6 @@ enum class LabResultStatus {
  * mapping is unit-testable and shared by every screen that shows a badge.
  */
 enum class StatusTone { POSITIVE, ATTENTION, NEGATIVE, NEUTRAL }
+
+/** `ui` only where it stands alone as a token — see `normalizedUnit`. */
+private val UI_TOKEN = Regex("(?<![a-z])ui(?![a-z])")

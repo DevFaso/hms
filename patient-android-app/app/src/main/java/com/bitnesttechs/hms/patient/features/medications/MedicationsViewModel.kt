@@ -9,6 +9,7 @@ import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -186,14 +187,22 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
      * `load()` deduplicates, so a mutation that simply joined it could be
      * handed a job whose GETs went out before its own POST — the caller would
      * then decide the button state, or pick the refusal message, from
-     * pre-mutation data. Joining the in-flight one first and then starting a
-     * fresh read is the correction rather than bypassing the dedupe outright:
-     * two concurrent loads are what the guard exists to prevent, and this
-     * keeps them sequential. `viewModelScope` is main-dispatched, so the
-     * check and the relaunch cannot interleave with another caller.
+     * pre-mutation data.
+     *
+     * The in-flight load is CANCELLED rather than waited out: its answers are
+     * about to be superseded, so letting it finish would cost the patient two
+     * full round-trips before their confirmation snackbar — six GETs if they
+     * tap Request refill while the cold-open load is still running.
+     * `cancelAndJoin` lets its `finally` settle `isLoading` before the fresh
+     * one raises it again, and a cancelled load never reaches
+     * `reportLoadOutcome`, so it cannot overwrite the new one's. Bypassing
+     * the dedupe outright is what this avoids: two concurrent loads are
+     * exactly what the guard exists to prevent. `viewModelScope` is
+     * main-dispatched, so the cancel and the relaunch cannot interleave with
+     * another caller.
      */
     private suspend fun awaitFreshLoad() {
-        loadJob?.takeIf { it.isActive }?.join()
+        loadJob?.cancelAndJoin()
         load().join()
     }
 

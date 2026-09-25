@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -44,6 +45,17 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back),
+                            tint = androidx.compose.ui.graphics.Color.White)
+                    }
+                },
+                actions = {
+                    // Without this the screen had no way to load twice, so the
+                    // "could not refresh" banner below could never appear —
+                    // `load()` only replaces the list from a non-null body, and
+                    // the Retry in the empty state needs `loadFailed` already.
+                    // DashboardScreen carries the same action.
+                    IconButton(onClick = { viewModel.load() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh),
                             tint = androidx.compose.ui.graphics.Color.White)
                     }
                 },

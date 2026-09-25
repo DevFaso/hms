@@ -281,7 +281,11 @@ class LabModelsTest {
             "\u03bcmol/L" to "12 - 16 umol/L",
             "10^9/L" to "4 - 11 x10^9/L",
             "x10^9/L" to "4 - 11 10^9/L",
-            "G/DL" to "12 - 16 g/dL"
+            "G/DL" to "12 - 16 g/dL",
+            "ug/dL" to "12 - 16 mcg/dL",
+            "mcg/dL" to "12 - 16 \u00b5g/dL",
+            "IU/L" to "10 - 40 UI/L",
+            "UI/L" to "10 - 40 IU/L"
         )
         for ((rowUnit, shownRange) in equivalent) {
             val lab = row.copy(unit = rowUnit, referenceRange = shownRange)
@@ -293,6 +297,14 @@ class LabModelsTest {
         val prefixed = row.copy(unit = "g/dL", referenceRange = "70 - 110 mg/dL")
         assertTrue(prefixed.referenceRangeUnitUncertain)
         assertFalse(prefixed.isGradedNormal)
+
+        // Nor is a denominator: a row in L against a range in mmol/L is the
+        // mislabelling this exists to catch, and "only reject letters" let it
+        // through on the `/`.
+        val denominator = row.copy(unit = "L", referenceRange = "0.6 - 1.2 mmol/L")
+        assertTrue(denominator.referenceRangeUnitUncertain)
+        val perKilo = row.copy(unit = "kg", referenceRange = "0 - 2 mg/kg")
+        assertTrue(perKilo.referenceRangeUnitUncertain)
     }
 
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */
