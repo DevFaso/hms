@@ -163,6 +163,10 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterById_notFound() {
         UUID id = UUID.randomUUID();
+        // A caller who could otherwise read: with no scope and no verified
+        // super-admin flag the read is refused BEFORE the lookup, and this
+        // test is about the answer the lookup gives.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         when(encounterRepository.findById(id)).thenReturn(Optional.empty());
 
         // No messageSource stub: the read now builds its not-found through
@@ -385,6 +389,7 @@ class EncounterServiceImplTest {
     @Test
     void getEncounterNoteHistory_encounterNotFound() {
         UUID encounterId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getEncounterNoteHistory(encounterId, locale))

@@ -390,15 +390,39 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
-        @DisplayName("a super-admin reads across tenants, as the global view intends")
+        @DisplayName("a verified super-admin reads across tenants, as the global view intends")
         void superAdminReadsCrossTenant() {
             // RoleExpansion.SUPER_ADMIN_INHERITS also grants ROLE_PATIENT on
             // the password path: the super-admin role must win over it.
             lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             authenticateAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, true);
 
             assertThat(service.getAfterVisitSummary(elsewhere.getId())).isNotNull();
+        }
+
+        @Test
+        @DisplayName("an unscoped read the verified flag does not back is refused, not opened")
+        void unverifiedSuperAdminIsRefused() {
+            // requireActiveHospitalId()'s step 4: null because the AUTHORITIES
+            // say super-admin, while HospitalContext says not. The earlier
+            // draft treated every null as "read across tenants", so this
+            // principal read every hospital's after-visit summaries.
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            authenticateAs("ROLE_SUPER_ADMIN");
+            Encounter elsewhere = encounterAt(otherHospital, strangerPatient, true);
+            UUID missing = missingEncounterId();
+
+            // Refused before the lookup, so a real id and a fictional one get
+            // the same answer.
+            assertThatThrownBy(() -> service.getAfterVisitSummary(elsewhere.getId()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+            assertThatThrownBy(() -> service.getAfterVisitSummary(missing))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
         }
 
         @Test
@@ -580,13 +604,31 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
-        @DisplayName("a super-admin reads across tenants, as the global view intends")
+        @DisplayName("a verified super-admin reads across tenants, as the global view intends")
         void superAdminReadsCrossTenant() {
             lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             authenticateAs("ROLE_SUPER_ADMIN", "ROLE_PATIENT", "ROLE_DOCTOR");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
 
             assertThat(service.getEncounterById(elsewhere.getId(), locale)).isNotNull();
+        }
+
+        @Test
+        @DisplayName("an unscoped read the verified flag does not back is refused, not opened")
+        void unverifiedSuperAdminIsRefused() {
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            authenticateAs("ROLE_SUPER_ADMIN");
+            Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
+            UUID missing = missingEncounterId();
+
+            assertThatThrownBy(() -> service.getEncounterById(elsewhere.getId(), locale))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+            assertThatThrownBy(() -> service.getEncounterById(missing, locale))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
         }
     }
 
@@ -624,9 +666,27 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
-        @DisplayName("a super-admin reads the trail across tenants")
+        @DisplayName("an unscoped read the verified flag does not back is refused, not opened")
+        void unverifiedSuperAdminIsRefused() {
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            authenticateAs("ROLE_SUPER_ADMIN");
+            Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
+            UUID missing = missingEncounterId();
+
+            assertThatThrownBy(() -> service.getEncounterNoteHistory(elsewhere.getId(), locale))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+            assertThatThrownBy(() -> service.getEncounterNoteHistory(missing, locale))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Hospital context required");
+        }
+
+        @Test
+        @DisplayName("a verified super-admin reads the trail across tenants")
         void superAdminReadsCrossTenant() {
             lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
             authenticateAs("ROLE_SUPER_ADMIN");
             Encounter elsewhere = encounterAt(otherHospital, strangerPatient, false);
             lenient().when(encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(elsewhere.getId()))

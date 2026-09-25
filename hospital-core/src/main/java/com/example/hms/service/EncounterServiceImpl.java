@@ -1321,10 +1321,14 @@ public class EncounterServiceImpl implements EncounterService {
      *                       nothing else, so ownership is the whole boundary
      * @param callerPatientId the subject's own patient row, {@code null} when
      *                       the account has none (refused, not waved through)
-     * @param hospitalId     the hospital bounding a non-subject caller;
-     *                       {@code null} only for a super-admin in global view
+     * @param hospitalId     the hospital bounding a non-subject caller
+     * @param crossTenant    true only for a verified super-admin in global
+     *                       view. An explicit decision, never inferred from a
+     *                       {@code null} hospital: a null that meant "open"
+     *                       is how the earlier draft failed open.
      */
-    private record EncounterReadScope(boolean subject, UUID callerPatientId, UUID hospitalId) {}
+    private record EncounterReadScope(boolean subject, UUID callerPatientId, UUID hospitalId,
+                                      boolean crossTenant) {}
 
     /**
      * Resolve the boundary for an encounter READ. Who the caller is decides
@@ -1344,29 +1348,43 @@ public class EncounterServiceImpl implements EncounterService {
      * <p><b>Everyone else is bounded by the hospital</b>
      * {@code requireActiveHospitalId()} resolves: the {@code X-Hospital-Id}
      * override, else the context, else a single active assignment. A
-     * super-admin in global view resolves to {@code null} and reads across
-     * tenants; a super-admin who has pinned one hospital with the scope chip
-     * is bounded by it, exactly as {@code list} and
-     * {@code readEncountersForPatient} already are.
+     * super-admin who has pinned one hospital with the scope chip is bounded
+     * by it, exactly as {@code list} and {@code readEncountersForPatient}
+     * already are.
      *
-     * <p>The super-admin decision is therefore taken in one place instead of
-     * twice. Its step 1 reads the discrete {@code isSuperAdmin} claim, which
-     * {@code RoleValidator}'s own javadoc calls the only safe signal for a
-     * cross-tenant decision. Be clear about the limit, though: its <b>step 4
-     * safety net</b> still returns {@code null} on {@code isSuperAdminFromAuth()}
-     * for requests that reach a service without {@code HospitalContext}
-     * populated, so an inflated authorities collection can still resolve to an
-     * unbounded read there. That is the delegate's behaviour on every caller,
-     * not something this guard adds or can fix locally; closing it means
-     * hardening step 4 for all of them.
+     * <p><b>Reading across tenants needs the verified flag, not a null.</b>
+     * {@code requireActiveHospitalId()} returns {@code null} on two roads.
+     * Step 1 is {@code HospitalContext.isSuperAdmin()} — what
+     * {@code isSuperAdminFromJwtClaim()} reads. Step 4 is a safety net that
+     * fires only when that flag is FALSE yet {@code isSuperAdminFromAuth()}
+     * matches: it reads the authorities collection, accepts a bare
+     * {@code SUPER_ADMIN} string as well as the prefixed one, and is the road
+     * {@code RoleValidator}'s own javadoc warns an impersonation context could
+     * take. Failing open on {@code null} let step 4 hand out every tenant's
+     * after-visit summary and note trail — the defect this method exists to
+     * close. So a {@code null} scope reads across tenants only when
+     * {@code isSuperAdminFromJwtClaim()} agrees, and is otherwise refused.
+     *
+     * <p>What that flag is, traced rather than assumed: on the password path
+     * it is the signed {@code isSuperAdmin} claim OR the authentication's
+     * authorities holding {@code ROLE_SUPER_ADMIN} — and those authorities are
+     * the signed {@code roles} claim plus {@code RoleExpansion}, which widens a
+     * super-admin but never grants {@code ROLE_SUPER_ADMIN} to anyone else.
+     * On the Keycloak path it is {@code hasAuthority(ROLE_SUPER_ADMIN)} over
+     * the Keycloak-signed token, and no class under {@code security.oidc}
+     * references impersonation. On both paths it therefore reduces to
+     * signed-token content today. It stops being safe the day anything writes
+     * a {@code ROLE_SUPER_ADMIN} authority that did not come from the token —
+     * a design fragility of the flag, not of this guard.
      *
      * <p>Which roles count as "not the subject" differs per endpoint — see
      * {@link EncounterReaderRoles}, and never pass a union of its sets.
      *
      * @param nonSubjectRoles the set belonging to the endpoint being served
      * @throws BusinessException when a non-subject caller has no resolvable
-     *         hospital — an actionable "select an active hospital", raised
-     *         before any row is read so it cannot serve as an existence oracle
+     *         hospital and is not a verified super-admin — an actionable
+     *         "select an active hospital", raised before any row is read so
+     *         it cannot serve as an existence oracle
      */
     private EncounterReadScope resolveEncounterReadScope(Set<String> nonSubjectRoles) {
         org.springframework.security.core.Authentication auth =
@@ -1383,9 +1401,20 @@ public class EncounterServiceImpl implements EncounterService {
                 .flatMap(patientRepository::findByUserId)
                 .map(Patient::getId)
                 .orElse(null);
-            return new EncounterReadScope(true, callerPatientId, null);
+            return new EncounterReadScope(true, callerPatientId, null, false);
         }
-        return new EncounterReadScope(false, null, roleValidator.requireActiveHospitalId());
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null) {
+            return new EncounterReadScope(false, null, hospitalId, false);
+        }
+        if (roleValidator.isSuperAdminFromJwtClaim()) {
+            return new EncounterReadScope(false, null, null, true);
+        }
+        // requireActiveHospitalId()'s step-4 null: the authorities say
+        // super-admin and the verified flag does not. Refused, before the
+        // lookup, with the same answer as any caller who has no hospital.
+        throw new BusinessException(
+            "Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
     }
 
     /**
@@ -1413,9 +1442,9 @@ public class EncounterServiceImpl implements EncounterService {
             }
             return;
         }
-        if (scope.hospitalId() == null) {
-            // Super-admin in global view; every other caller either resolved a
-            // hospital or was refused before the lookup.
+        if (scope.crossTenant()) {
+            // A verified super-admin in global view. A null hospitalId WITHOUT
+            // this bit falls through and is refused by the comparison below.
             return;
         }
         UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
