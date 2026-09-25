@@ -33,6 +33,9 @@ public final class MllpRecordingContext {
     /** The width of {@code integration_message_event.integration_id}. */
     private static final int INTEGRATION_ID_MAX = 120;
 
+    /** MSH-10 is 20 characters in HL7 v2.5, and unvalidated on the wire. */
+    private static final int CONTROL_ID_MAX = 20;
+
 
     private MllpRecordingContext() {}
 
@@ -159,6 +162,43 @@ public final class MllpRecordingContext {
     }
 
     /** Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does. */
+    /**
+     * MSH-10 as it is safe to quote back, capped at the 20 characters HL7 v2
+     * allows it.
+     *
+     * <p>It is unvalidated sender text and it lands in
+     * {@code error_message}, which an operator reads. Uncapped, a sender
+     * padding MSH-10 writes two kilobytes of its own prose per probe into a
+     * table with no retention, and can shape it to imitate the fixed reason
+     * prefixes next to it — "cross-tenant rejection (MSH-10 x) identifier not
+     * found" reads like two findings and is one attacker's string.
+     */
+    public static String messageControlId(String messageControlId) {
+        if (!StringUtils.hasText(messageControlId)) {
+            return null;
+        }
+        String trimmed = messageControlId.trim();
+        return trimmed.length() > CONTROL_ID_MAX ? trimmed.substring(0, CONTROL_ID_MAX) : trimmed;
+    }
+
+    /**
+     * The correlation scope for a sender pair: normalised like the
+     * {@link #integrationId} but <b>not truncated</b>.
+     *
+     * <p>Never stored, so it has no column to fit — and it must not borrow
+     * the id's 120-character clamp. HL7 v2.5 permits 180 characters in each
+     * of MSH-3 and MSH-4, so two senders agreeing on the first 120 would
+     * share a correlation id by construction, which is the shared-scope
+     * condition {@link #rejectionCorrelationId} calls a denial-of-visibility
+     * primitive: one supersedes the other's counted row and overwrites its
+     * stored body. The id is hashed into a UUID downstream, so length here
+     * costs nothing.
+     */
+    public static String senderScope(String sendingApplication, String sendingFacility) {
+        return "MLLP-SCOPE:" + normalised(sendingApplication)
+            + "/" + normalised(sendingFacility);
+    }
+
     private static String normalised(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }

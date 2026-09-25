@@ -342,11 +342,19 @@ class Hl7MessageDispatcherTest {
         dispatcher.dispatch(a08, "10.0.0.51:1");
 
         ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
         verify(messageRecorder, org.mockito.Mockito.times(2)).recordRecurringFailure(
-            any(), any(), any(), any(), any(), any(), ids.capture());
+            any(), any(), any(), any(), bodies.capture(), any(), ids.capture());
         assertThat(ids.getAllValues().get(0))
             .isNotNull()
             .isNotEqualTo(ids.getAllValues().get(1));
+        // Distinct ids are what stop the second body displacing the first, so
+        // assert the bodies too: the name of this test is about evidence
+        // surviving, and two different ids with the same body would satisfy
+        // the id assertion while proving nothing about it.
+        assertThat(bodies.getAllValues().get(0))
+            .isNotNull()
+            .isNotEqualTo(bodies.getAllValues().get(1));
     }
 
     @Test

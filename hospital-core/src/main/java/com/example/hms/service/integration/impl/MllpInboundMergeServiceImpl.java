@@ -219,14 +219,19 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                 MESSAGE_TYPE,
                 null,
                 IntegrationMessageStatus.FAILED,
-                StringUtils.hasText(messageControlId)
-                    ? reason + " (MSH-10 " + messageControlId.trim() + ")" : reason,
+                withControlId(reason, messageControlId),
                 MllpRecordingContext.rejectionCorrelationId(
                     integrationId, MESSAGE_TYPE, reason));
         } catch (RuntimeException ex) {
             log.warn("MLLP A40 message recorder threw for sender={}/{} reason={}",
                 sendingApplication, sendingFacility, reason, ex);
         }
+    }
+
+    /** MSH-10 quoted back through the cap — see {@code MllpRecordingContext}. */
+    private static String withControlId(String reason, String messageControlId) {
+        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
+        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
     }
 
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */

@@ -221,13 +221,19 @@ public class IntegrationMessageRecorder {
                 // would rewrite an audit row with another message's body and
                 // leave countUnresolvedDeadLetters - which counts FAILED - at
                 // zero for a feed that is still failing.
+                // The TRUNCATED id, because that is what was stored. Looking
+                // up the raw one would silently never match, the fold would
+                // never engage, and every retry would insert a fresh row with
+                // a full body - the exact failure this class truncates to
+                // avoid, arrived at from the other end.
                 Optional<IntegrationMessageEvent> earlier = repository
                     .findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
-                        correlationId, IntegrationMessageStatus.FAILED,
+                        truncate(correlationId, MAX_CORRELATION_ID_CHARS),
+                        IntegrationMessageStatus.FAILED,
                         LocalDateTime.now().minus(BODY_DEDUPE_WINDOW));
                 if (earlier.isPresent()) {
-                    IntegrationMessageEvent folded =
-                        foldIntoExisting(earlier.get(), messageType, payload, errorMessage);
+                    IntegrationMessageEvent folded = foldIntoExisting(
+                        earlier.get(), organizationId, messageType, payload, errorMessage);
                     if (folded != null) {
                         return folded;
                     }
@@ -258,15 +264,24 @@ public class IntegrationMessageRecorder {
      * transaction of its own — which is what keeps a failure here from
      * poisoning anything the caller is doing.
      *
-     * <p>Never throws. Returns null when the update could not be applied —
-     * a lost merge race, a row deleted underneath us — and the caller then
-     * inserts instead, because dropping the occurrence entirely would be the
-     * one outcome this path cannot afford. Private, so nothing else can come
-     * to depend on the propagation it does not have.
+     * <p>Never throws. Returns null when the update could not be applied at
+     * all — the connection is gone, a constraint refuses the row — and the
+     * caller then inserts instead, because dropping the occurrence entirely
+     * would be the one outcome this path cannot afford.
+     *
+     * <p>It is worth being exact about what that fallback is <em>not</em>:
+     * {@code IntegrationMessageEvent} carries no {@code @Version}, so two
+     * folds racing do not conflict, they last-write-wins, and a row deleted
+     * underneath is re-persisted by the merge. Nothing here detects a lost
+     * update. The fallback covers a save that fails, which is the only thing
+     * this layer can see.
+     *
+     * <p>Private, so nothing else can come to depend on the propagation it
+     * does not have.
      */
     private IntegrationMessageEvent foldIntoExisting(
-        IntegrationMessageEvent existing, String messageType, String payload,
-        String errorMessage) {
+        IntegrationMessageEvent existing, UUID organizationId, String messageType,
+        String payload, String errorMessage) {
         try {
             existing.setAttemptCount(safeIncrement(existing.getAttemptCount()));
             LocalDateTime now = LocalDateTime.now();
@@ -286,6 +301,12 @@ public class IntegrationMessageRecorder {
             // operator filtering by message_type would get a row that
             // contradicts itself.
             existing.setMessageType(truncate(messageType, MAX_MESSAGE_TYPE_CHARS));
+            // The organization travels too. A correlation scope is the sender,
+            // not the tenant, so re-pointing an allowlist entry from hospital
+            // A to hospital B would otherwise fold B's rejects into A's row
+            // and leave organization_id = A: B's operator sees nothing and
+            // A's sees a dead letter that is no longer theirs.
+            existing.setOrganizationId(organizationId);
             existing.setErrorMessage(truncate(errorMessage, MAX_ERROR_CHARS));
             if (payload != null) {
                 existing.setPayload(truncate(payload, MAX_PAYLOAD_CHARS));

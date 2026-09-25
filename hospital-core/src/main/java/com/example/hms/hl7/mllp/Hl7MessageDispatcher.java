@@ -193,7 +193,14 @@ public class Hl7MessageDispatcher {
         recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
             header.messageType(), hl7Body,
             "unsupported message type " + header.messageType(),
-            "unsupported message type", integrationIdFor(header));
+            // One row per sender for unsupported types, not one per type:
+            // MSH-9 is sender-controlled, so keying on it would let anyone
+            // mint entries. The cost is stated rather than hidden - a partner
+            // sending both SIU^S12 and ORM^O01 leaves one entry holding the
+            // latest of the two, and the other is visible only as an earlier
+            // attempt count. An unsupported type is a configuration fact
+            // about the sender, which is the thing worth one entry.
+            "unsupported message type", senderScopeFor(header));
         return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
             "Unsupported message type " + header.messageType());
     }
@@ -211,7 +218,7 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ORU^R01", hl7Body,
                 "unparseable ORU^R01 or no OBX segments",
-                "unparseable ORU^R01", integrationIdFor(header));
+                "unparseable ORU^R01", senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ORU^R01 or no OBX segments");
         }
@@ -235,9 +242,10 @@ public class Hl7MessageDispatcher {
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it
                 // cannot be used to mint entries - and without it a malformed
                 // A01 and a structurally different malformed A08 from one
-                // sender share a key, so the second is recorded with no body
-                // and the operator has a dead letter and nothing to read.
-                "unparseable ADT^" + header.triggerEvent(), integrationIdFor(header));
+                // sender would fold into one row, where the later one's body
+                // displaces the earlier one's and the operator can only ever
+                // see whichever arrived last.
+                "unparseable ADT^" + header.triggerEvent(), senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }
@@ -266,7 +274,7 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
                 "unparseable ADT^A40 — missing PID-3 or MRG-1",
-                "unparseable ADT^A40", integrationIdFor(header));
+                "unparseable ADT^A40", senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ADT^A40 — missing PID-3 or MRG-1");
         }
@@ -379,7 +387,18 @@ public class Hl7MessageDispatcher {
     private static String claimedSenderScope(Hl7MessageHeader header) {
         boolean claimed = StringUtils.hasText(header.sendingApplication())
             && StringUtils.hasText(header.sendingFacility());
-        return claimed ? integrationIdFor(header) : null;
+        return claimed ? senderScopeFor(header) : null;
+    }
+
+    /**
+     * The correlation scope, which is deliberately not
+     * {@link #integrationIdFor}: that one is clamped to its column's 120
+     * characters, and two senders agreeing on the first 120 would then share
+     * a scope by construction. See {@code MllpRecordingContext.senderScope}.
+     */
+    private static String senderScopeFor(Hl7MessageHeader header) {
+        return MllpRecordingContext.senderScope(
+            header.sendingApplication(), header.sendingFacility());
     }
 
     private static String integrationIdFor(Hl7MessageHeader header) {

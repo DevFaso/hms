@@ -230,9 +230,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
     }
 
     private static String withControlId(String reason, String messageControlId) {
-        return StringUtils.hasText(messageControlId)
-            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
-            : reason;
+        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
+        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
     }
 
     /**
