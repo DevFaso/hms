@@ -275,7 +275,7 @@ public class EncounterServiceImpl implements EncounterService {
     /**
      * Resolves a user id from either principal shape (CustomUserDetails or a
      * Keycloak {@code JwtAuthenticationToken}); see
-     * {@link #requireOwnEncounterWhenPatient}.
+     * {@link #requireOwnEncounter}.
      */
     private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     private final UserRepository userRepository;
@@ -543,9 +543,10 @@ public class EncounterServiceImpl implements EncounterService {
         // readable platform-wide by any clinician holding an encounter id.
         // No ownership half: this endpoint does not admit ROLE_PATIENT.
         Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
-        requireEncounterReadableAtCallerHospital(encounter, locale);
+            .orElseThrow(() -> encounterNotFound(encounterId));
+        // No subject branch: this endpoint does not admit ROLE_PATIENT, so
+        // the hospital boundary is the whole of it.
+        requireEncounterAtCallerHospital(encounter);
         return encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(encounterId).stream()
             .map(encounterMapper::toEncounterNoteHistoryResponseDTO)
             .toList();
@@ -1299,76 +1300,105 @@ public class EncounterServiceImpl implements EncounterService {
     @Transactional
     public EncounterResponseDTO getEncounterById(UUID id, Locale locale) {
         Encounter e = encounterRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> encounterNotFound(id));
 
-        requireEncounterReadableAtCallerHospital(e, locale);
-        requireOwnEncounterWhenPatient(e, EncounterReaderRoles.DETAIL_NON_SUBJECT_ROLES, locale);
+        requireEncounterReadable(e, EncounterReaderRoles.DETAIL_NON_SUBJECT_ROLES);
 
         return encounterMapper.toEncounterResponseDTO(e);
     }
 
     /**
-     * The hospital half of an encounter READ guard: the caller may read an
-     * encounter at the hospital their request resolves to, and a super-admin
-     * reads across tenants (or at the hospital an {@code X-Hospital-Id}
-     * override names, which {@code requireActiveHospitalId()} applies
-     * itself).
+     * The one gate for an encounter READ: who the caller is decides which
+     * boundary applies.
      *
-     * <p>404, not 403, and the same message a missing id gets: a caller
-     * outside the hospital learns nothing about whether the id is real. This
-     * is the read-side twin of {@link #requireEncounterInScope}, which does
-     * the same job for every mutating path.
+     * <p><b>A patient principal is bounded by ownership, not by a hospital.</b>
+     * Their own records follow them across tenants — {@code readEncountersForPatient}
+     * says so outright ("a patient reading their own, who has no acting
+     * hospital, keeps the unscoped read", E9 #59e), and a patient seen at a
+     * second hospital is an expected shape. Scoping them to the one hospital
+     * their JWT pins as primary would refuse them their own after-visit
+     * summary from the other one, on an endpoint whose own description
+     * promises "patients may access their own encounter's AVS".
      *
-     * <p>Refusing a NULL hospital rather than waving it through is that
-     * twin's rule too, for the same reason: an encounter we cannot place is
+     * <p><b>Everyone else is bounded by the hospital</b> their request
+     * resolves to; a super-admin reads across tenants, or at the hospital an
+     * {@code X-Hospital-Id} override names, which
+     * {@code requireActiveHospitalId()} applies itself.
+     *
+     * <p>Which roles count as "not the subject" differs per endpoint — see
+     * {@link EncounterReaderRoles}, and never pass a union of its two sets.
+     *
+     * @param nonSubjectRoles the set belonging to the endpoint being served
+     */
+    private void requireEncounterReadable(Encounter encounter, Set<String> nonSubjectRoles) {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (EncounterReaderRoles.isPatientOnly(auth, nonSubjectRoles)) {
+            requireOwnEncounter(encounter, auth);
+            return;
+        }
+        requireEncounterAtCallerHospital(encounter);
+    }
+
+    /**
+     * The hospital boundary for a caller who is not the subject. 404, not
+     * 403, and the same answer a missing id gets: a caller outside the
+     * hospital learns nothing about whether the id is real. This is the
+     * read-side twin of {@link #requireEncounterInScope}, which does the same
+     * job for every mutating path.
+     *
+     * <p>A caller with no resolvable hospital is refused with that same
+     * answer rather than with {@code requireActiveHospitalId()}'s
+     * {@code BusinessException}. Letting that exception out would be an
+     * existence oracle in itself: the guard runs only once the row has been
+     * found, so a real id would answer "hospital context required" and a
+     * fictional one 404.
+     *
+     * <p>Refusing a NULL hospital rather than waving it through is the write
+     * twin's rule, for the same reason: an encounter we cannot place is
      * exactly the one not to hand out. {@code Encounter.hospital} is
      * {@code nullable = false}, so no stored row reaches that branch; it is
      * there so a future nullable column, or an unsaved entity arriving from
      * some other path, cannot silently become platform-readable.
      */
-    private void requireEncounterReadableAtCallerHospital(Encounter encounter, Locale locale) {
+    private void requireEncounterAtCallerHospital(Encounter encounter) {
         if (roleValidator.isSuperAdminFromAuth()) {
             return;
         }
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID activeHospitalId;
+        try {
+            activeHospitalId = roleValidator.requireActiveHospitalId();
+        } catch (BusinessException noScope) {
+            // Ids only, never PHI, and never the caller's identity.
+            log.debug("Encounter read refused: no hospital scope resolved for encounter {}",
+                encounter.getId(), noScope);
+            throw encounterNotFound(encounter.getId());
+        }
         UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
         if (encounterHospitalId == null || !encounterHospitalId.equals(activeHospitalId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw encounterNotFound(encounter.getId());
         }
     }
 
     /**
-     * The ownership half: a patient principal may read their own encounter
-     * and no one else's.
+     * The ownership boundary: a patient principal may read their own
+     * encounter and no one else's.
      *
-     * <p>The hospital scope above is not this check. It bounds the read to
-     * the hospital the caller's own assignment resolves to, and within that
-     * hospital every encounter id returned somebody else's visit -- on the
-     * after-visit summary, their diagnoses, medications and discharge
+     * <p>Before this guard the reads enforced a hospital and nothing else, so
+     * within one hospital every encounter id returned somebody else's visit —
+     * on the after-visit summary, their diagnoses, medications and discharge
      * instructions.
      *
-     * <p>404, not 403, and the same message a missing id gets, including
-     * when the principal cannot be resolved to a patient row at all: the
-     * answer must not tell a patient that an id is real. The subject comes
-     * from the authenticated principal (user id to Patient), never from
-     * anything in the request -- the rule
-     * {@code PatientPortalServiceImpl.resolvePatientId} already follows for
-     * every {@code /me/patient} read, through the same resolver.
-     *
-     * <p>A no-op for every role in {@code nonSubjectRoles}, including a
-     * clinician who is also a patient at the hospital and a super-admin on
-     * either auth path. Which roles those are differs per endpoint -- see
-     * {@link EncounterReaderRoles}.
+     * <p>404, and the same answer a missing id gets, including when the
+     * principal cannot be resolved to a patient row at all: it must not tell
+     * a patient that an id is real. The subject comes from the authenticated
+     * principal (user id to Patient), never from anything in the request —
+     * the rule {@code PatientPortalServiceImpl.resolvePatientId} already
+     * follows for every {@code /me/patient} read, through the same resolver.
      */
-    private void requireOwnEncounterWhenPatient(Encounter encounter,
-                                                Set<String> nonSubjectRoles,
-                                                Locale locale) {
-        org.springframework.security.core.Authentication auth =
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (!EncounterReaderRoles.isPatientOnly(auth, nonSubjectRoles)) {
-            return;
-        }
+    private void requireOwnEncounter(Encounter encounter,
+                                     org.springframework.security.core.Authentication auth) {
         // authUtils, not roleValidator.getCurrentUserId(): the latter resolves
         // only a CustomUserDetails (or domain User) principal and returns null
         // on a JwtAuthenticationToken, so on the OIDC path it would refuse the
@@ -1381,7 +1411,7 @@ public class EncounterServiceImpl implements EncounterService {
             .orElse(null);
         UUID subjectPatientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
         if (callerPatientId == null || !callerPatientId.equals(subjectPatientId)) {
-            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            throw encounterNotFound(encounter.getId());
         }
     }
 
@@ -2092,20 +2122,13 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId) {
-        // No Locale parameter on this method; the not-found below already
-        // resolved against the default locale, and both guards must throw the
-        // IDENTICAL exception so a refusal cannot be told apart from an
-        // encounter that does not exist.
-        Locale locale = Locale.getDefault();
         Encounter encounter = encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+            .orElseThrow(() -> encounterNotFound(encounterId));
 
-        // Both guards run BEFORE the checked-out test on purpose: "Encounter
+        // The guard runs BEFORE the checked-out test on purpose: "Encounter
         // has not been checked out yet" is itself a statement that the id is
         // real, and the caller it would be told to had no right to the row.
-        requireEncounterReadableAtCallerHospital(encounter, locale);
-        requireOwnEncounterWhenPatient(encounter, EncounterReaderRoles.AVS_NON_SUBJECT_ROLES, locale);
+        requireEncounterReadable(encounter, EncounterReaderRoles.AVS_NON_SUBJECT_ROLES);
 
         if (encounter.getCheckoutTimestamp() == null) {
             throw new BusinessException("Encounter has not been checked out yet.");

@@ -164,10 +164,14 @@ class EncounterServiceImplTest {
     void getEncounterById_notFound() {
         UUID id = UUID.randomUUID();
         when(encounterRepository.findById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
+        // No messageSource stub: the read now builds its not-found through
+        // encounterNotFound(id), which carries the KEY and the id rather than
+        // resolved prose — the rule the write paths already follow.
         assertThatThrownBy(() -> service.getEncounterById(id, locale))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("encounter.notfound");
     }
 
     // ---------- deleteEncounter ----------
@@ -382,10 +386,11 @@ class EncounterServiceImplTest {
     void getEncounterNoteHistory_encounterNotFound() {
         UUID encounterId = UUID.randomUUID();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getEncounterNoteHistory(encounterId, locale))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(e -> ((ResourceNotFoundException) e).getMessageKey())
+            .isEqualTo("encounter.notfound");
     }
 
     // ---------- toDto (EncounterTreatment) ----------
