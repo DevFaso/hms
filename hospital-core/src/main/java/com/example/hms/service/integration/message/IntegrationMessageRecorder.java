@@ -85,7 +85,7 @@ public class IntegrationMessageRecorder {
         IntegrationMessageStatus status,
         String errorMessage
     ) {
-        return recordMessage(integrationId, organizationId, direction, messageType,
+        return persist(integrationId, organizationId, direction, messageType,
             payload, status, errorMessage, null);
     }
 
@@ -115,6 +115,33 @@ public class IntegrationMessageRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IntegrationMessageEvent recordMessage(
+        String integrationId,
+        UUID organizationId,
+        IntegrationMessageDirection direction,
+        String messageType,
+        String payload,
+        IntegrationMessageStatus status,
+        String errorMessage,
+        String correlationId
+    ) {
+        return persist(integrationId, organizationId, direction, messageType,
+            payload, status, errorMessage, correlationId);
+    }
+
+    /**
+     * The insert itself, with no propagation of its own.
+     *
+     * <p>Extracted so that nothing in this class self-invokes an annotated
+     * method. A {@code this} call does not pass back through the proxy, so
+     * the {@code REQUIRES_NEW} on the method being called would be silently
+     * inert — harmless where it happened, but exactly the kind of thing that
+     * is true until someone moves a caller. Now the annotation lives on the
+     * public entry points, the shared body has none, and what each caller
+     * gets is decided at the entry point it came through:
+     * {@link #recordMessage} gives a new transaction,
+     * {@link #recordRecurringFailure} deliberately does not.
+     */
+    private IntegrationMessageEvent persist(
         String integrationId,
         UUID organizationId,
         IntegrationMessageDirection direction,
@@ -185,9 +212,8 @@ public class IntegrationMessageRecorder {
      *
      * <p><b>Not transactional, deliberately — and therefore not isolated.</b>
      * Unlike {@link #recordMessage}, this gives you no {@code REQUIRES_NEW}:
-     * it reaches the insert by self-invocation, so that annotation is inert,
-     * and every repository call simply joins whatever transaction the caller
-     * has. Its caller is the MLLP dispatcher, which has none, so each call
+     * it goes straight to the unannotated {@link #persist}, so every
+     * repository call simply joins whatever transaction the caller has. Its caller is the MLLP dispatcher, which has none, so each call
      * takes its own — which is exactly what makes the lookup safe to fail.
      * Inside a {@code REQUIRES_NEW} of its own, a lookup that threw would
      * mark the transaction rollback-only and take the row and its body down
@@ -250,7 +276,7 @@ public class IntegrationMessageRecorder {
                     + "recording it as a new row", correlationId, ex);
             }
         }
-        return recordMessage(integrationId, organizationId, direction, messageType,
+        return persist(integrationId, organizationId, direction, messageType,
             payload, IntegrationMessageStatus.FAILED, errorMessage, correlationId);
     }
 
