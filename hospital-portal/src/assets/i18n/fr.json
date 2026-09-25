@@ -7378,7 +7378,7 @@
     "ATTENTION": {
       "PENDING_STOCK": "Rupture de stock — en commande",
       "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",
-      "PARTNER_ACCEPTED": "Chez une pharmacie partenaire — enregistrer une non-délivrance avant de délivrer ici",
+      "PARTNER_ACCEPTED": "Chez une pharmacie partenaire — non délivrable ici tant qu'elle la détient",
       "BACK_ORDER_OUTSTANDING": "Partiellement délivrée — la commande fournisseur est toujours ouverte",
       "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
       "PRESCRIBER_ANSWERED": "Le prescripteur a répondu",

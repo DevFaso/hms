@@ -14,11 +14,13 @@ import {
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeHintComponent],
   templateUrl: './stock-routing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-routing.scss',
@@ -28,6 +30,20 @@ export class StockRoutingComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * Whether this caller has a hospital pinned, and therefore whether the
+   * write controls on this page can do anything.
+   *
+   * <p>The reads on this screen answer for a super-admin in global view —
+   * that is what the backend half of this PR fixed — but every WRITE behind
+   * them (route to a partner, print for the patient, place a back order,
+   * record a partner's answer) deliberately still refuses without a scope.
+   * Rendering them live would turn one honest error into four buttons that
+   * always fail. Same gate as the MTM review screen.
+   */
+  readonly scopeReady = this.roleContext.hasHospitalScope;
 
   // Prescription lookup
   prescriptionId = '';

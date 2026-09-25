@@ -7378,7 +7378,7 @@
     "ATTENTION": {
       "PENDING_STOCK": "Out of stock — on back order",
       "PARTNER_REJECTED": "The partner pharmacy refused it — fill here or route elsewhere",
-      "PARTNER_ACCEPTED": "With a partner pharmacy — record a no-show before filling here",
+      "PARTNER_ACCEPTED": "With a partner pharmacy — not fillable here while it is",
       "BACK_ORDER_OUTSTANDING": "Partly filled — the supplier order is still open",
       "CLARIFICATION_RESOLVED": "The prescriber has answered — read the answer first",
       "PRESCRIBER_ANSWERED": "The prescriber has answered",

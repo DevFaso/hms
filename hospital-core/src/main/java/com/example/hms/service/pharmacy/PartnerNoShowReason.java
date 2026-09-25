@@ -101,7 +101,11 @@ public final class PartnerNoShowReason {
         while (head.endsWith("|")) {
             head = head.substring(0, head.length() - 1).trim();
         }
-        return head.isEmpty() ? null : head;
+        // The head is the routing reason, and it can carry a marker somebody
+        // typed and this class quoted. It goes through the same cleaning the
+        // non-no-show path gets: on a genuine no-show row the prescriber was
+        // otherwise shown a raw [PARTNER_NO_SHOW] token in the reason field.
+        return head.isEmpty() ? null : forDisplay(head);
     }
 
     /**

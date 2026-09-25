@@ -107,6 +107,20 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
+    @DisplayName("a quoted marker in the routing reason is not shown on a genuine no-show row")
+    void withoutNoShowCleansTheHeadToo() {
+        // The head is the routing reason and may carry a marker somebody
+        // typed and this class quoted; the prescriber must not read it.
+        String stored = PartnerNoShowReason.compose(
+                PartnerNoShowReason.defuseAuthoredReason("[PARTNER_NO_SHOW] out of stock"),
+                "nobody came");
+
+        assertThat(PartnerNoShowReason.isNoShow(stored)).isTrue();
+        assertThat(PartnerNoShowReason.withoutNoShow(stored)).isEqualTo("out of stock");
+        assertThat(PartnerNoShowReason.freeText(stored)).isEqualTo("nobody came");
+    }
+
+    @Test
     @DisplayName("words too long for the column are refused, not silently shortened")
     void refusesRatherThanEatingWords() {
         assertThatThrownBy(() -> PartnerNoShowReason.compose(null, "y".repeat(1200)))

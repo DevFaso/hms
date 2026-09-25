@@ -896,6 +896,24 @@ class DispenseServiceImplTest {
     class CancelDispense {
 
         @Test
+        @DisplayName("a global-view caller cannot undo another tenant's fill")
+        void refusesWithoutAHospital() {
+            // Cancelling reverses a stock lot and rewrites the prescription's
+            // status. enforceHospitalScope(Pharmacy) tolerates a null on its
+            // own, so this write sat outside the read/write split until now.
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.COMPLETED);
+            verify(dispenseRepository, never()).save(any());
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("should cancel and reverse stock")
         void shouldCancelAndReverseStock() {
             Dispense dispense = buildDispense(DispenseStatus.COMPLETED);

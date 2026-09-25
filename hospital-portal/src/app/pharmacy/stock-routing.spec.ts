@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -8,12 +9,16 @@ import { of, throwError, Subject } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { StockRoutingComponent } from './stock-routing';
+import { RoleContextService } from '../core/role-context.service';
 
 describe('StockRoutingComponent', () => {
   let component: StockRoutingComponent;
   let fixture: ComponentFixture<StockRoutingComponent>;
   let pharmacySvc: jasmine.SpyObj<PharmacyService>;
   let toastSvc: jasmine.SpyObj<ToastService>;
+  /** Only the scope gate is read here; a writable signal so a test can flip it. */
+  const hasHospitalScope = signal(true);
+  const roleContextStub = { hasHospitalScope } as unknown as RoleContextService;
 
   const stockCheckResponse = {
     data: {
@@ -83,6 +88,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: RoleContextService, useValue: roleContextStub },
         // P-05: component now reads :prescriptionId from the route — provide an
         // empty paramMap by default so the existing tests don't auto-trigger
         // checkStock(). The deep-link path is exercised by its own test below.
@@ -93,6 +99,7 @@ describe('StockRoutingComponent', () => {
       ],
     }).compileComponents();
 
+    hasHospitalScope.set(true);
     fixture = TestBed.createComponent(StockRoutingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -108,6 +115,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: RoleContextService, useValue: roleContextStub },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: convertToParamMap({ prescriptionId: 'rx-deep-1' }) } },
@@ -332,6 +340,31 @@ describe('StockRoutingComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="routing-history-loading"]'),
     ).toBeNull();
+  });
+
+  it('does not offer writes the backend will refuse without a hospital', () => {
+    // The reads answer in global view now, so the page renders where it used
+    // to 500 — and every write behind it still requires a scope. Offering
+    // them would turn one honest error into four dead controls.
+    hasHospitalScope.set(false);
+    component.prescriptionId = 'rx-1';
+    component.checkStock();
+    fixture.detectChanges();
+
+    const backOrder = fixture.nativeElement.querySelector('[data-testid="open-back-order"]');
+    const print = fixture.nativeElement.querySelector('[data-testid="print-for-patient"]');
+    expect(backOrder.disabled).toBeTrue();
+    expect(print.disabled).toBeTrue();
+
+    hasHospitalScope.set(true);
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="open-back-order"]').disabled,
+    ).toBeFalse();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="print-for-patient"]').disabled,
+    ).toBeFalse();
   });
 
   it('should return expected badge classes', () => {

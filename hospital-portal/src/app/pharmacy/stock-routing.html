@@ -6,6 +6,11 @@
     </div>
   </div>
 
+  <!-- The reads on this page answer in global view; the writes behind them
+       still require a hospital, so the hint says which and the controls are
+       disabled rather than offered and refused. -->
+  <app-hospital-scope-hint />
+
   <!-- Prescription lookup -->
   <div class="form-card form-card-accent">
     <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>
@@ -75,10 +80,20 @@
         <div class="routing-options">
           <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
           <div class="option-buttons">
-            <button class="btn btn-warning" (click)="openBackOrderForm()" [disabled]="saving()">
+            <button
+              class="btn btn-warning"
+              (click)="openBackOrderForm()"
+              [disabled]="saving() || !scopeReady()"
+              data-testid="open-back-order"
+            >
               {{ 'PHARMACY.BACK_ORDER' | translate }}
             </button>
-            <button class="btn btn-secondary" (click)="printForPatient()" [disabled]="saving()">
+            <button
+              class="btn btn-secondary"
+              (click)="printForPatient()"
+              [disabled]="saving() || !scopeReady()"
+              data-testid="print-for-patient"
+            >
               {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
             </button>
           </div>
@@ -119,6 +134,7 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
+                          [disabled]="!scopeReady()"
                           [disabled]="saving() || !partner.hasOnFormulary"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
@@ -162,7 +178,11 @@
         <button class="btn btn-secondary" (click)="closePartnerForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn btn-primary" (click)="submitRouteToPartner()" [disabled]="saving()">
+        <button
+          class="btn btn-primary"
+          (click)="submitRouteToPartner()"
+          [disabled]="saving() || !scopeReady()"
+        >
           @if (saving()) {
             <span class="spinner"></span>
           }
@@ -191,7 +211,11 @@
         <button class="btn btn-secondary" (click)="closeBackOrderForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn btn-warning" (click)="submitBackOrder()" [disabled]="saving()">
+        <button
+          class="btn btn-warning"
+          (click)="submitBackOrder()"
+          [disabled]="saving() || !scopeReady()"
+        >
           @if (saving()) {
             <span class="spinner"></span>
           }
@@ -282,14 +306,14 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="respondToPartner(d.id, true)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.ACCEPT' | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-danger"
                     (click)="respondToPartner(d.id, false)"
-                    [disabled]="saving()"
+                    [disabled]="saving() || !scopeReady()"
                   >
                     {{ 'PHARMACY.REJECT' | translate }}
                   </button>

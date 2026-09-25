@@ -661,6 +661,12 @@ public class DispenseServiceImpl implements DispenseService {
     public DispenseResponseDTO cancelDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+        // Cancelling reverses a stock lot and rewrites the prescription's
+        // status: it is a write on one hospital's records, and it takes the
+        // same answer as every other write here. enforceHospitalScope alone
+        // tolerates a null and would have let a global-view caller undo
+        // another tenant's fill — more reachable now that the reads succeed.
+        requireHospitalScopeForWrite();
         enforceHospitalScope(dispense.getPharmacy());
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
@@ -1104,6 +1110,19 @@ public class DispenseServiceImpl implements DispenseService {
                 // "the patient is coming to collect a refill".
                 .awaitingRefillPickup(latest != null && latest.getStatus() == RefillStatus.APPROVED)
                 .build();
+    }
+
+    /**
+     * A write acts on one hospital's records, so it needs one pinned. Reading
+     * across tenants is what a global view is for; undoing a fill in it is
+     * not. The refusal matches {@code loadAndValidatePrescription} and the
+     * routing writes' {@code findPrescriptionForWrite}: a 404, not a 500 and
+     * not a silent cross-tenant act.
+     */
+    private void requireHospitalScopeForWrite() {
+        if (roleValidator.requireActiveHospitalId() == null) {
+            throw new ResourceNotFoundException("dispense.notfound");
+        }
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy) {

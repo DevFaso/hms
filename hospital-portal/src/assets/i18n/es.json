@@ -7378,7 +7378,7 @@
     "ATTENTION": {
       "PENDING_STOCK": "Sin existencias — en pedido pendiente",
       "PARTNER_REJECTED": "La farmacia asociada la rechazó — dispense aquí o derive a otra",
-      "PARTNER_ACCEPTED": "En una farmacia asociada — registre una no entrega antes de dispensar aquí",
+      "PARTNER_ACCEPTED": "En una farmacia asociada — no se puede dispensar aquí mientras la tenga",
       "BACK_ORDER_OUTSTANDING": "Dispensada parcialmente — el pedido al proveedor sigue abierto",
       "CLARIFICATION_RESOLVED": "El prescriptor ha respondido — lea la respuesta primero",
       "PRESCRIBER_ANSWERED": "El prescriptor ha respondido",
