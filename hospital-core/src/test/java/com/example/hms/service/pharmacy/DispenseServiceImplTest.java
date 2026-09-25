@@ -467,10 +467,28 @@ class DispenseServiceImplTest {
         @DisplayName("should throw when prescription not found")
         void shouldThrowWhenPrescriptionNotFound() {
             DispenseRequestDTO dto = buildRequest();
+            // Scoped caller: the lookup is the thing under test here, so the
+            // hospital must be present or the null-scope guard answers first.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a super-admin in GLOBAL view is refused: recording a fill is a write")
+        void globalViewSuperAdminCannotRecordAFill() {
+            DispenseRequestDTO dto = buildRequest();
+
+            // Reading across tenants is what global view is for; booking a
+            // stock movement against one hospital's order is not. Refused
+            // before this change too — as a 500 from the dereference.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(dispenseRepository, never()).save(any());
         }
 
         @Test
@@ -814,11 +832,86 @@ class DispenseServiceImplTest {
 
             assertThat(result.getContent()).hasSize(1);
         }
+
+        @Test
+        @DisplayName("a super-admin in GLOBAL view has no hospital: the read is unscoped, not a 500")
+        void globalViewSuperAdminReadsUnscoped() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Dispense d = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO dto = DispenseResponseDTO.builder().id(dispenseId).build();
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+
+            // requireActiveHospitalId returns null for that caller, and the
+            // discrete JWT claim is what says the null is a real super-admin
+            // rather than an inflated authorities collection.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.findByPrescriptionId(prescriptionId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(d)));
+            when(dispenseMapper.toResponseDTO(d)).thenReturn(dto);
+
+            assertThat(service.listByPrescription(prescriptionId, pageable).getContent())
+                    .containsExactly(dto);
+        }
+
+        @Test
+        @DisplayName("a null hospital WITHOUT the JWT claim is refused, not served cross-tenant")
+        void inflatedAuthoritiesDoNotEarnAnUnscopedRead() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+
+            // The step-4 fallback in requireActiveHospitalId reads the
+            // AUTHORITIES, which RoleValidator warns can be inflated.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listByPrescription(prescriptionId, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("a scoped caller still gets 404 for a prescription at another hospital")
+        void scopedCallerStillNarrowed() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listByPrescription(prescriptionId, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
     }
 
     @Nested
     @DisplayName("cancelDispense")
     class CancelDispense {
+
+        @Test
+        @DisplayName("a global-view caller cannot undo another tenant's fill")
+        void refusesWithoutAHospital() {
+            // Cancelling reverses a stock lot and rewrites the prescription's
+            // status. enforceHospitalScope(Pharmacy) tolerates a null on its
+            // own, so this write sat outside the read/write split until now.
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.COMPLETED);
+            verify(dispenseRepository, never()).save(any());
+            verify(stockLotRepository, never()).save(any());
+        }
 
         @Test
         @DisplayName("should cancel and reverse stock")
@@ -1213,6 +1306,58 @@ class DispenseServiceImplTest {
             assertThat(rows.get(0).getAttentionReason()).isEqualTo("CLARIFICATION_RESOLVED");
             assertThat(rows.get(1).isNeedsAttention()).isFalse();
             assertThat(rows.get(1).getAttentionReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("an answer on a PENDING_STOCK row is reported although the status wins the reason")
+        void clarificationAnswerSurvivesTheAttentionPrecedence() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime resolvedAt = java.time.LocalDateTime.now(FIXED_CLOCK);
+            Prescription answeredOnBackOrder = new Prescription();
+            answeredOnBackOrder.setId(UUID.randomUUID());
+            // resolveClarification restores the status the question was asked
+            // from, so this is exactly what the pharmacist sees come back.
+            answeredOnBackOrder.setStatus(PrescriptionStatus.PENDING_STOCK);
+            answeredOnBackOrder.setClarificationResolvedAt(resolvedAt);
+            Prescription plain = new Prescription();
+            plain.setId(UUID.randomUUID());
+            plain.setStatus(PrescriptionStatus.SIGNED);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(answeredOnBackOrder, plain)));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable).getContent();
+
+            // The single attentionReason still reports the status, by
+            // precedence — and the answer is no longer invisible next to it.
+            assertThat(rows.get(0).getAttentionReason()).isEqualTo("PENDING_STOCK");
+            assertThat(rows.get(0).getClarificationResolvedAt()).isEqualTo(resolvedAt);
+            assertThat(rows.get(1).getClarificationResolvedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("the answer cue clears once the pharmacy has acted on it")
+        void clarificationAnswerCueClearsAfterAPharmacyAction() {
+            Pageable pageable = PageRequest.of(0, 20);
+            java.time.LocalDateTime resolvedAt = java.time.LocalDateTime.now(FIXED_CLOCK);
+            Prescription actedOn = new Prescription();
+            actedOn.setId(UUID.randomUUID());
+            actedOn.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+            actedOn.setClarificationResolvedAt(resolvedAt);
+            Dispense later = buildDispense(DispenseStatus.PARTIAL);
+            later.setPrescription(actedOn);
+            later.setDispensedAt(resolvedAt.plusHours(1));
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(actedOn)));
+            when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
+                    any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
+
+            assertThat(service.getWorkQueue(pageable).getContent().get(0).getClarificationResolvedAt())
+                    .isNull();
         }
 
         @Test

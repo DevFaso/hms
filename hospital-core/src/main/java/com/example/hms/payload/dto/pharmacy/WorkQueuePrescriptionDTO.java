@@ -61,6 +61,22 @@ public class WorkQueuePrescriptionDTO {
     private String attentionReason;
 
     /**
+     * When the prescriber answered the pharmacist's question, if the pharmacy
+     * has not yet acted on that answer; null otherwise.
+     *
+     * <p>Separate from {@link #attentionReason}, which reports ONE reason by
+     * precedence: resolving a clarification restores the status the question
+     * was asked from, so an answer on a PENDING_STOCK or PARTNER_REJECTED
+     * order is masked by that status and the pharmacist had no cue that the
+     * prescriber had replied. This field is the cue.
+     *
+     * <p>Carries no clinical text on purpose — the question and the answer are
+     * encrypted narrative and this projection is served to roles that
+     * {@code GET /prescriptions/{id}} refuses.
+     */
+    private LocalDateTime clarificationResolvedAt;
+
+    /**
      * Refill context for the dispensing decision. Null on a prescription that
      * has never had a refill request, which keeps the payload unchanged for
      * first fills.

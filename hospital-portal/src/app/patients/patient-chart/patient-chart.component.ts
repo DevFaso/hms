@@ -336,21 +336,30 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /**
    * The scope EVERY read and write on this chart works in.
    *
-   * Was `activeHospitalId ?? auth.getHospitalId()`, the primary assignment.
-   * That is not what the auth interceptor sends: it sends
-   * `effectiveHospitalIdForRequest()`, which the scope chip moves — and this
-   * component now mounts a chip on the Labs tab, so a super-admin could pick
-   * hospital B, switch to Allergies, and send `hospitalId=A` as a query
-   * param under an `X-Hospital-Id: B` header. One request naming two
-   * hospitals is the divergence `labHospitalId()` was written against.
+   * The PRIMARY assignment, and deliberately NOT `labHospitalId()`.
    *
-   * The rest of the chart keeps the PRIMARY assignment, deliberately. Pointing
-   * it at the effective id made an unscoped account send no hospital at all on
-   * allergies, problems and updates, and all three of those backends refuse a
-   * null scope outright (`BusinessException("Hospital context is required")`)
-   * — so three sections that used to work started answering 400. Aligning
-   * them is a change to those sections, with their own empty states, not a
-   * one-line substitution made from the labs section.
+   * Pointing it at the effective scope was tried in #731 and backed out: an
+   * account in global view then sent no hospital at all on allergies,
+   * problems and updates, and all three of those backends refuse a null scope
+   * outright (`BusinessException("Hospital context is required")`), so three
+   * sections that used to work started answering 400. Aligning them means
+   * giving those sections their own unscoped empty states, which is a change
+   * to them, not a one-line substitution made from the labs section.
+   *
+   * It can still return `''`, for a session that holds no hospital anywhere.
+   * What each caller does with that follows its DTO, not a blanket rule:
+   *
+   *  - the READS pass `|| undefined`, so the param is simply omitted;
+   *  - the ALLERGY write does too, because `PatientAllergyRequestDTO` marks
+   *    the field nullable and defaults to the authenticated hospital;
+   *  - the DIAGNOSIS and CHART-UPDATE writes send it as-is, and must:
+   *    both DTOs mark `hospitalId` `@NotNull` behind a `@Valid` body, so
+   *    omitting it is rejected by bean validation before
+   *    `resolveHospitalScope` is ever reached. Those two forms fail for a
+   *    truly unscoped account either way, and the fix is a scope, not a
+   *    serialization trick.
+   *
+   * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
    */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
@@ -403,10 +412,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * while every other read on the same chart is accounted.
    *
    * Rather than account for it from the client, the section declines to read
-   * and points at the scope chip. One click, and both reads are scoped and
-   * audited like everything else.
+   * and says so. It names no control: there is no hospital selector on this
+   * route — see the template comment on that branch.
    */
-  readonly labsScoped = computed(() => this.labHospitalId() != null);
+  readonly labsScoped = this.roleContext.hasHospitalScope;
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so

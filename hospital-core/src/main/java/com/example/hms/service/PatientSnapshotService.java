@@ -13,8 +13,24 @@ public interface PatientSnapshotService {
      * Build a compact patient summary aggregating demographics, allergies,
      * active medications, recent vitals, latest labs, pending orders and care team.
      *
+     * <p>A hospital scope is mandatory. Without one every section used to read
+     * patient-wide, the registration check was skipped and the cross-hospital
+     * disclosure was not recorded, so the drawer returned the patient's record
+     * from every tenant unaccounted. It now refuses before reading anything.
+     *
      * @param patientId the patient UUID
+     * @param hospitalId the hospital the caller is acting at; {@code null} is
+     *        refused
      * @return compact snapshot DTO
+     * @throws com.example.hms.exception.ResourceNotFoundException (404) when
+     *         {@code hospitalId} is {@code null}, when the patient does not
+     *         exist, and when the caller may not read them at
+     *         {@code hospitalId} — deliberately the same answer to all three
+     * @throws com.example.hms.exception.ChartRestrictedException (403) for a
+     *         restricted chart. The drawer goes through the same
+     *         {@code PatientChartAccess} rule as the chart tabs, so it refuses
+     *         one as loudly as they do; before that it opened on registration
+     *         alone
      */
     PatientSnapshotDTO getSnapshot(UUID patientId, UUID hospitalId);
 }

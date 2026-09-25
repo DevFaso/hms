@@ -1684,7 +1684,7 @@
     "ACK": "Reçu",
     "ACKNOWLEDGE": "Accuser Réception",
     "ACKNOWLEDGE_FAILED": "Impossible d'accuser réception du résultat.",
-    "ACKNOWLEDGE_WRONG_HOSPITAL": "Ce résultat appartient à un autre hôpital. Passez à cet hôpital pour en accuser réception.",
+    "ACKNOWLEDGE_NOT_AVAILABLE": "Ce résultat n'est pas disponible dans votre hôpital actuel. Il appartient peut-être à un autre hôpital, ou n'existe plus.",
     "ACTIVE_ADMISSIONS": "Admissions Actives",
     "ACTIVE_ALERTS": "Alertes Actives",
     "ACTIVE_CONDITIONS": "Conditions Actives",
@@ -5588,7 +5588,8 @@
       "ANSWER_HINT": "L'envoi de votre réponse renvoie l'ordonnance dans la file de travail de la pharmacie avec le statut qu'elle avait avant la question.",
       "ANSWER_INPUT_LABEL": "Votre réponse (facultative)",
       "ANSWER_LABEL": "Réponse du prescripteur",
-      "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : si une question a déjà été posée, ni celle-ci ni la réponse du prescripteur ne peuvent être affichées ici.",
+      "ANSWER_MAY_NOT_BE_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : si une question a déjà été posée, ni celle-ci ni la réponse du prescripteur ne peuvent être affichées ici.",
+      "ANSWER_NOT_VISIBLE": "Votre rôle actuel ne peut pas ouvrir le dossier de l'ordonnance : la réponse du prescripteur sur cette ordonnance ne peut pas être affichée ici.",
       "ANSWER_PLACEHOLDER": "Répondez au pharmacien, ou laissez vide si vous avez corrigé l'ordonnance elle-même.",
       "ASK": "Interroger le prescripteur",
       "ASKED_LABEL": "Posée le",
@@ -5755,10 +5756,12 @@
       "RESTOCK_ETA": "Réapprovisionnement prévu le {{date}}",
       "EMPTY": "Aucune délivrance ni orientation enregistrée pour cette ordonnance.",
       "ERROR": "L'historique de délivrance n'a pas pu être chargé.",
-      "SCOPE_REQUIRED": "Choisissez un hôpital dans le sélecteur de périmètre pour voir l'historique de délivrance.",
+      "PARTNER_NO_SHOW": "Le partenaire n'a jamais délivré",
       "PARTIAL_ERROR_DISPENSES": "Les délivrances n'ont pas pu être chargées : ceci n'est donc pas complet.",
       "PARTIAL_ERROR_ROUTINGS": "Les décisions d'orientation n'ont pas pu être chargées : ceci n'est donc pas complet."
     },
+    "QUANTITY_VALUE": "{{value}} {{unit}}",
+    "REFILLS_VALUE": "{{remaining}} sur {{allowed}} restant(s)",
     "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne."
   },
   "PROFILE": {
@@ -7288,7 +7291,7 @@
     "LABS": "Laboratoire",
     "LAB_AWAITING_RELEASE": "En attente de publication par le laboratoire",
     "LAB_IN_HOUSE": "Laboratoire interne",
-    "LAB_NO_HOSPITAL": "Les résultats de laboratoire nécessitent un périmètre hospitalier, qui n'a pas pu être déterminé pour ce compte. Si cela persiste, demandez à un administrateur de vérifier votre affectation.",
+    "LAB_NO_HOSPITAL": "Les résultats de laboratoire s'affichent pour un hôpital à la fois, et aucun n'est actuellement défini pour ce compte. Ils apparaîtront dès qu'un périmètre hospitalier sera défini ; un administrateur peut vérifier votre affectation si vous ne pouvez pas en définir un.",
     "LAB_ORDERED_AT": "Prescrit le",
     "LAB_ORDERED_BY": "Prescrit par",
     "LAB_ORDERS": "Demandes de laboratoire",
@@ -7372,6 +7375,15 @@
     "VERIF_UNCONFIRMED": "Non confirmée"
   },
   "PHARMACY": {
+    "ATTENTION": {
+      "PENDING_STOCK": "Rupture de stock — en commande",
+      "PARTNER_REJECTED": "La pharmacie partenaire a refusé — délivrer ici ou réacheminer",
+      "PARTNER_ACCEPTED": "Chez une pharmacie partenaire — non délivrable ici tant qu'elle la détient",
+      "BACK_ORDER_OUTSTANDING": "Partiellement délivrée — la commande fournisseur est toujours ouverte",
+      "CLARIFICATION_RESOLVED": "Le prescripteur a répondu — lire la réponse d'abord",
+      "PRESCRIBER_ANSWERED": "Le prescripteur a répondu",
+      "UNRECOGNISED": "À revoir — vérifier l'ordonnance avant de délivrer"
+    },
     "ACCEPT": "Accepter",
     "ADDRESS": "Adresse",
     "ADD_FIRST_ITEM": "Ajoutez votre premier article d'inventaire",
@@ -7527,6 +7539,7 @@
     "PARTNER": "Partenaire",
     "PARTNER_ACCEPTED": "Pharmacie partenaire a accepté",
     "PARTNER_DISPENSED": "Pharmacie partenaire a confirmé la dispensation",
+    "PARTNER_NO_SHOW": "Le partenaire n'a jamais délivré",
     "PARTNER_PHARMACIES": "Pharmacies partenaires",
     "PARTNER_REJECTED": "Pharmacie partenaire a rejeté",
     "PATIENT": "Patient",
@@ -7588,6 +7601,7 @@
     "ROUTE_TO_PARTNER": "Acheminer vers la pharmacie partenaire",
     "ROUTING_FAILED": "Échec de l'opération de routage",
     "ROUTING_HISTORY": "Historique de routage",
+    "ROUTING_HISTORY_FAILED": "L'historique de routage n'a pas pu être chargé.",
     "ROUTING_OPTIONS": "Options de routage",
     "ROUTING_REASON_HINT": "Raison optionnelle pour acheminer cette prescription",
     "RXNORM_CODE": "Code RxNorm",

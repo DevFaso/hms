@@ -31,6 +31,22 @@ import java.util.UUID;
  * are searchable + replayable by an operator. {@code attemptCount}
  * tracks how many times a message has been retried; the replay endpoint
  * increments it on each retry attempt.
+ *
+ * <p>So does the MLLP dispatcher, and it matters for reading a row. When a
+ * sender retries something we refused,
+ * {@code IntegrationMessageRecorder.recordRecurringFailure} folds the retry
+ * into the existing row rather than inserting another: {@code attemptCount}
+ * goes up and {@code receivedAt}, {@code lastAttemptedAt},
+ * {@code messageType}, {@code errorMessage}, {@code organizationId} and
+ * {@code payload} are all refreshed to the latest occurrence. Otherwise a
+ * vendor retrying on a timer would write thousands of rows a day — each
+ * holding a full copy of the message — into a table with no retention. Two
+ * consequences worth knowing at the surface: on such a row
+ * {@code attemptCount} mixes the sender's retries with any operator replays,
+ * and {@code receivedAt} is when the problem was last seen rather than when
+ * it first arrived. That is deliberate — the operator-facing search orders
+ * and filters on {@code receivedAt}, and a row frozen at the first attempt
+ * would drop out of "what is failing now" while still being counted.
  */
 @Entity
 @Table(name = "integration_message_event", schema = "clinical")

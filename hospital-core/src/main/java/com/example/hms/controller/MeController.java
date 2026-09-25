@@ -252,16 +252,32 @@ public class MeController {
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
-    @Operation(summary = "Get lab/imaging results review queue")
+    @Operation(summary = "Get lab/imaging results review queue",
+               description = "Scoped to the hospital the caller is acting at, resolved as X-Hospital-Id and then the "
+                   + "caller's newest active assignment. A caller with a staff row for whom neither resolves is "
+                   + "refused with 404 rather than served that clinician's orders from every hospital, because a "
+                   + "cross-hospital disclosure cannot be recorded without an acting hospital to record it against. "
+                   + "Note that a super-admin in global view who also holds a clinical assignment is scoped to it by "
+                   + "the fallback and is never refused.")
     @GetMapping("/results/review-queue")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
     public ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> getResultReviewQueue(Authentication auth) {
         UUID userId = resolveUserId(auth);
-        List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId);
+        // The same resolution getPatientSnapshot below uses: one scope for the
+        // whole controller, so two panels on one page cannot disagree about
+        // which hospital the caller is at.
+        UUID hospitalId = resolveHospitalId(auth).orElse(null);
+        List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 
-    @Operation(summary = "Get compact patient snapshot for drawer")
+    @Operation(summary = "Get compact patient snapshot for drawer",
+               description = "Requires a hospital scope, resolved as X-Hospital-Id and then the caller's newest "
+                   + "active assignment. A caller for whom neither resolves is refused with 404, with the same "
+                   + "answer a missing patient gives, rather than served the patient's record from every tenant "
+                   + "with no disclosure recorded. A restricted chart is refused with 403. Note that a super-admin "
+                   + "in global view who also holds a clinical assignment is scoped to it by the fallback and is "
+                   + "never refused.")
     @GetMapping("/patients/{patientId}/snapshot")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> getPatientSnapshot(
@@ -272,6 +288,19 @@ public class MeController {
     }
 
     /* ---------- Resolution chain ---------- */
+    /**
+     * The one scope resolution for this controller. Both {@code /results/review-queue}
+     * and {@code /patients/{id}/snapshot} refuse when it comes back empty, so what it
+     * does on the way there is part of their contract.
+     *
+     * <p>Worth being exact, because "a super-admin in global view is refused" is the
+     * obvious reading and it is wrong: step 2 falls back to the caller's <b>newest</b>
+     * active assignment ({@code findAllDetailedByUserId} is {@code ORDER BY createdAt
+     * DESC}), and it does that for a super-admin too. So a platform admin who also
+     * holds any clinical assignment is silently scoped to it rather than refused, and
+     * only one with no assignment at all — or an ordinary caller whose context carries
+     * no active hospital and who has no active assignment either — reaches the guards.
+     */
     private Optional<UUID> resolveHospitalId(Authentication auth) {
         // 1) The request context: live permitted set + X-Hospital-Id (E9 #55).
         //    A super-admin in global view carries no active hospital here on

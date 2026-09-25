@@ -1684,7 +1684,7 @@
     "ACK": "Ack",
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGE_FAILED": "The result could not be acknowledged.",
-    "ACKNOWLEDGE_WRONG_HOSPITAL": "This result belongs to another hospital. Switch to that hospital to acknowledge it.",
+    "ACKNOWLEDGE_NOT_AVAILABLE": "This result is not available under your current hospital. It may belong to another hospital, or no longer exist.",
     "ACTIVE_ADMISSIONS": "Active Admissions",
     "ACTIVE_ALERTS": "Active Alerts",
     "ACTIVE_CONDITIONS": "Active Conditions",
@@ -5588,7 +5588,8 @@
       "ANSWER_HINT": "Sending your answer returns the prescription to the pharmacy work queue with the status it had before the question.",
       "ANSWER_INPUT_LABEL": "Your answer (optional)",
       "ANSWER_LABEL": "Prescriber's answer",
-      "ANSWER_NOT_VISIBLE": "Your current role cannot open the prescription record, so if an earlier question was raised, neither it nor the prescriber's answer can be shown here.",
+      "ANSWER_MAY_NOT_BE_VISIBLE": "Your current role cannot open the prescription record, so if an earlier question was raised, neither it nor the prescriber's answer can be shown here.",
+      "ANSWER_NOT_VISIBLE": "Your current role cannot open the prescription record, so the prescriber's answer on this order cannot be shown here.",
       "ANSWER_PLACEHOLDER": "Answer the pharmacist, or leave this empty if you corrected the prescription itself.",
       "ASK": "Ask the prescriber",
       "ASKED_LABEL": "Asked",
@@ -5755,10 +5756,12 @@
       "RESTOCK_ETA": "Restock expected {{date}}",
       "EMPTY": "No fill and no routing recorded for this prescription yet.",
       "ERROR": "The dispensing history could not be loaded.",
-      "SCOPE_REQUIRED": "Pick a hospital from the scope chip to see the dispensing history.",
+      "PARTNER_NO_SHOW": "The partner never delivered",
       "PARTIAL_ERROR_DISPENSES": "The fills could not be loaded, so this is not the whole picture.",
       "PARTIAL_ERROR_ROUTINGS": "The routing decisions could not be loaded, so this is not the whole picture."
     },
+    "QUANTITY_VALUE": "{{value}} {{unit}}",
+    "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
   },
   "PROFILE": {
@@ -7288,7 +7291,7 @@
     "LABS": "Labs",
     "LAB_AWAITING_RELEASE": "Awaiting release by the laboratory",
     "LAB_IN_HOUSE": "In-house laboratory",
-    "LAB_NO_HOSPITAL": "Lab results need a hospital scope, which has not resolved for this account. If it persists, ask an administrator to check your hospital assignment.",
+    "LAB_NO_HOSPITAL": "Lab results are shown one hospital at a time, and no hospital is in scope for this account. They appear once a hospital scope is set; an administrator can check your hospital assignment if you cannot set one.",
     "LAB_ORDERED_AT": "Ordered",
     "LAB_ORDERED_BY": "Ordered by",
     "LAB_ORDERS": "Lab orders",
@@ -7372,6 +7375,15 @@
     "VERIF_UNCONFIRMED": "Unconfirmed"
   },
   "PHARMACY": {
+    "ATTENTION": {
+      "PENDING_STOCK": "Out of stock — on back order",
+      "PARTNER_REJECTED": "The partner pharmacy refused it — fill here or route elsewhere",
+      "PARTNER_ACCEPTED": "With a partner pharmacy — not fillable here while it is",
+      "BACK_ORDER_OUTSTANDING": "Partly filled — the supplier order is still open",
+      "CLARIFICATION_RESOLVED": "The prescriber has answered — read the answer first",
+      "PRESCRIBER_ANSWERED": "The prescriber has answered",
+      "UNRECOGNISED": "Needs a second look — check the order before filling"
+    },
     "ACCEPT": "Accept",
     "ADDRESS": "Address",
     "ADD_FIRST_ITEM": "Add your first inventory item",
@@ -7527,6 +7539,7 @@
     "PARTNER": "Partner",
     "PARTNER_ACCEPTED": "Partner pharmacy accepted",
     "PARTNER_DISPENSED": "Partner pharmacy confirmed dispense",
+    "PARTNER_NO_SHOW": "The partner never delivered",
     "PARTNER_PHARMACIES": "Partner Pharmacies",
     "PARTNER_REJECTED": "Partner pharmacy rejected",
     "PATIENT": "Patient",
@@ -7588,6 +7601,7 @@
     "ROUTE_TO_PARTNER": "Route to Partner Pharmacy",
     "ROUTING_FAILED": "Routing operation failed",
     "ROUTING_HISTORY": "Routing History",
+    "ROUTING_HISTORY_FAILED": "The routing history could not be loaded.",
     "ROUTING_OPTIONS": "Routing Options",
     "ROUTING_REASON_HINT": "Optional reason for routing this prescription",
     "RXNORM_CODE": "RxNorm Code",
