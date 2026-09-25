@@ -121,6 +121,19 @@ class PartnerNoShowReasonTest {
     }
 
     @Test
+    @DisplayName("defusing a full-length reason does not overflow the column")
+    void defusingStaysWithinTheColumn() {
+        // The request is validated at the column's own 1024, and each defused
+        // token grows by two characters — an insert away from a 500.
+        String full = "Partner no-show: " + "x".repeat(1024 - "Partner no-show: ".length());
+
+        assertThat(full).hasSize(1024);
+        assertThat(PartnerNoShowReason.defuseAuthoredReason(full)).hasSize(1024);
+        assertThat(PartnerNoShowReason.isNoShow(
+                PartnerNoShowReason.defuseAuthoredReason(full))).isFalse();
+    }
+
+    @Test
     @DisplayName("a real no-show recorded over a defused reason still decodes")
     void decodesOverADefusedReason() {
         String stored = PartnerNoShowReason.compose(

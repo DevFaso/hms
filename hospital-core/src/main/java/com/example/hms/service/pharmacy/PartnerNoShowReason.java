@@ -143,8 +143,12 @@ public final class PartnerNoShowReason {
         if (authored == null || authored.isBlank()) {
             return authored;
         }
-        return authored.replace(MARKER, "\"" + MARKER + "\"")
+        String defused = authored.replace(MARKER, "\"" + MARKER + "\"")
                 .replace(LEGACY_PREFIX, "\"" + LEGACY_PREFIX + "\"");
+        // Two characters per occurrence, and the request is validated at the
+        // column's own 1024 — so a full-length reason mentioning a no-show
+        // would overflow the insert and answer the route with a 500.
+        return defused.length() > MAX_LENGTH ? defused.substring(0, MAX_LENGTH) : defused;
     }
 
     /** The first index at which {@code token} begins a segment, or -1. */

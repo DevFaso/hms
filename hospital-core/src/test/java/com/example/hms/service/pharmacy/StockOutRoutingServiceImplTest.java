@@ -979,6 +979,18 @@ class StockOutRoutingServiceImplTest {
         }
 
         @Test
+        @DisplayName("checkStock refuses a hospital-less order rather than reporting zeros")
+        void checkStockRefusesAHospitalLessOrder() {
+            prescription.setHospital(null);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.checkStock(prescriptionId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+
+        @Test
         @DisplayName("a write is still refused without a hospital, as a 404 rather than a 500")
         void writesStillNeedAHospital() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);

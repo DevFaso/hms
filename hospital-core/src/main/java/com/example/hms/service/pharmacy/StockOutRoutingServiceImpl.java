@@ -129,9 +129,14 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // global view the caller's scope is null, and passing that down would
         // have answered "0 on hand, no partner pharmacies" with confidence —
         // a wrong clinical answer that the page then offers a back order on.
-        UUID orderHospitalId = prescription.getHospital() != null
-                ? prescription.getHospital().getId()
-                : hospitalId;
+        if (prescription.getHospital() == null) {
+            // Only reachable for a global-view super-admin, because the scoped
+            // path has already refused a hospital-less order. Answering it
+            // would mean feeding null into all three queries and reporting
+            // "0 on hand, no partners" about nothing.
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        UUID orderHospitalId = prescription.getHospital().getId();
 
         // Find the medication catalog item for this prescription
         MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, orderHospitalId);
