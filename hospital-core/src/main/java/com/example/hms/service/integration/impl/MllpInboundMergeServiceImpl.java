@@ -59,11 +59,15 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
         if (survivingMrn.equalsIgnoreCase(priorMrn)) {
             // Not an error worth alarming about, but not a merge either.
-            log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier ({}) "
-                + "sender={}/{} hospital={}",
-                survivingMrn, sendingApplication, sendingFacility, receivingHospital.getId());
+            // The identifier itself stays out of the log line: PID-3 is an
+            // MRN, and an MRN in a log is PHI wherever that log ends up.
+            log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier "
+                + "(sender={}/{} hospital={})",
+                sendingApplication, sendingFacility, receivingHospital.getId());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
+
+        UUID hospitalId = receivingHospital.getId();
 
         Optional<UUID> survivor = resolvePatient(survivingMrn);
         Optional<UUID> retiree = resolvePatient(priorMrn);
@@ -71,42 +75,70 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Deliberately NOT auto-provisioned. An unrecognised identifier in
             // a merge message means the two systems disagree about who exists,
             // and inventing the missing side would bake that disagreement in.
-            log.warn("MLLP A40 rejected — unknown identifier(s): surviving={} known={} "
-                + "prior={} known={} sender={}/{} hospital={}",
-                survivingMrn, survivor.isPresent(), priorMrn, retiree.isPresent(),
-                sendingApplication, sendingFacility, receivingHospital.getId());
+            // Which side was unknown stays out of the log line, and the
+            // identifiers stay out of it altogether: an MRN is PHI.
+            log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
+                sendingApplication, sendingFacility, hospitalId);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
         UUID survivingPatientId = survivor.get();
         UUID retiringPatientId = retiree.get();
 
+        // THE GATE — and it runs BEFORE any other answer that depends on what
+        // these two identifiers are to each other.
+        //
+        // EmpiServiceImpl's own tenant checks resolve the caller's hospital
+        // from the security context, and there is none on this thread:
+        // isVisibleToCaller reads a null active hospital as "unscoped, allow".
+        // Without this, an allowlisted sender could merge any two patients in
+        // the system. BOTH sides, not just one: merging a stranger's record
+        // INTO a local patient is as damaging as the reverse, and only
+        // checking the survivor would permit it.
+        //
+        // Order matters as much as the check. The already-merged no-op below
+        // answers AA, and answering it before this gate told a sender that two
+        // identifiers it does not own resolve to one patient somewhere else —
+        // the same oracle wearing an accept instead of a reject.
+        //
+        // And a sender that owns ONE of the two gets the answer a sender that
+        // owns neither gets. If "both registered" were distinguishable from
+        // "one registered", an allowlisted sender could pair its own local MRN
+        // with any candidate identifier and read off whether that candidate
+        // exists in another hospital. Partial ownership is not partial
+        // permission, so it is not a partial answer either.
+        //
+        // Both lookups, always, before the branch. `||` would short-circuit:
+        // one query when the survivor is foreign, two when the survivor is
+        // local and the retiree is not - and the partial-ownership case is
+        // precisely the one a sender probes, so leaving it a round-trip
+        // cheaper hands back in latency what the identical ACK denies. This
+        // closes the smaller of two deltas on that probe: a candidate that
+        // exists nowhere returns above after two EMPI reads and never reaches
+        // these queries at all. That larger residual cannot be closed by
+        // reordering - there is no patient id to look up until EMPI has
+        // resolved one - and is the timing caveat MllpInboundOutcome records.
+        boolean survivorIsOurs = isRegisteredHere(survivingPatientId, hospitalId);
+        boolean retireeIsOurs = isRegisteredHere(retiringPatientId, hospitalId);
+        if (!survivorIsOurs || !retireeIsOurs) {
+            // Same outcome as the unknown identifier above — same ACK code,
+            // same ACK text.
+            log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
+                + "registered at hospital={} (sender={}/{})",
+                hospitalId, sendingApplication, sendingFacility);
+            return MllpInboundOutcome.REJECTED_NOT_FOUND;
+        }
+
         if (survivingPatientId.equals(retiringPatientId)) {
             // Two different MRNs already resolving to one patient — the merge
             // this message asks for has effectively happened. Accepting keeps
             // a resend idempotent instead of parking a permanent AE in the
             // sender's queue for work that is already done.
-            log.info("MLLP A40 no-op — {} and {} already resolve to patient {} "
-                + "(sender={}/{} msgCtrlId={})",
-                survivingMrn, priorMrn, survivingPatientId,
-                sendingApplication, sendingFacility, messageControlId);
+            log.info("MLLP A40 no-op — both identifiers already resolve to patient {} "
+                + "(sender={}/{} hospital={} msgCtrlId={})",
+                survivingPatientId, sendingApplication, sendingFacility,
+                hospitalId, messageControlId);
             return MllpInboundOutcome.ACCEPTED;
-        }
-
-        // THE GATE. EmpiServiceImpl's own tenant checks resolve the caller's
-        // hospital from the security context, and there is none on this
-        // thread — isVisibleToCaller reads a null active hospital as
-        // "unscoped, allow". Without this, an allowlisted sender could merge
-        // any two patients in the system. BOTH sides, not just one: merging a
-        // stranger's record INTO a local patient is as damaging as the
-        // reverse, and only checking the survivor would permit it.
-        UUID hospitalId = receivingHospital.getId();
-        if (!isRegisteredHere(survivingPatientId, hospitalId)
-                || !isRegisteredHere(retiringPatientId, hospitalId)) {
-            log.warn("MLLP A40 cross-tenant reject — surviving={} prior={} not both registered "
-                + "at hospital={} (sender={}/{})",
-                survivingMrn, priorMrn, hospitalId, sendingApplication, sendingFacility);
-            return MllpInboundOutcome.REJECTED_CROSS_TENANT;
         }
 
         try {
@@ -121,16 +153,14 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            log.warn("MLLP A40 refused by the merge service — surviving={} prior={} "
-                + "sender={}/{} hospital={}: {}",
-                survivingMrn, priorMrn, sendingApplication, sendingFacility,
-                hospitalId, ex.getMessage());
+            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={}: {}",
+                sendingApplication, sendingFacility, hospitalId, ex.getMessage());
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
-        log.info("MLLP A40 applied — {} merged into {} (patients {} <- {}) "
+        log.info("MLLP A40 applied — patients {} <- {} "
             + "sender={}/{} hospital={} msgCtrlId={}",
-            priorMrn, survivingMrn, survivingPatientId, retiringPatientId,
+            survivingPatientId, retiringPatientId,
             sendingApplication, sendingFacility, hospitalId, messageControlId);
         return MllpInboundOutcome.ACCEPTED;
     }

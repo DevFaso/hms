@@ -230,7 +230,7 @@ document covers the full ADT decision tree.
 | ---------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | MRN              | PID-3        | Looked up via `EmpiService.findIdentityByAlias(MRN, …)`. **Unknown MRNs are rejected, never auto-created.**                       |
 | Patient row      | EMPI alias   | `PatientRepository.findByIdUnscoped` (bypasses tenant scope — MLLP worker has no `HospitalContext`).                              |
-| Cross-tenant     | sender ↔ hospital | The receiving hospital is the one allowlisted for the sender (MSH-3, MSH-4). The patient must already be `PatientHospitalRegistration`-bound to that hospital, otherwise the message is rejected with `REJECTED_CROSS_TENANT` → AR. |
+| Cross-tenant     | sender ↔ hospital | The receiving hospital is the one allowlisted for the sender (MSH-3, MSH-4). The patient must already be `PatientHospitalRegistration`-bound to that hospital, otherwise the message is rejected with `REJECTED_NOT_FOUND` → **AE**, the same answer an MRN no hospital has ever heard of gets. Deliberate: an AR here and an AE there let an allowlisted sender walk an identifier space and learn which MRNs exist in hospitals it cannot read. **The ACK does not say "cross-tenant" and never will.** On the ADT and A40 paths the reason is in the application log only — they write no `integration_message_event` row today; giving them one is a follow-up. An A40 refused because only *one* of its two patients is registered here answers identically, for the same reason. |
 
 ---
 

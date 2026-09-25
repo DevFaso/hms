@@ -158,7 +158,10 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, false);
         registeredHere(retiringPatientId, true);
 
-        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        // Owning ONE of the two sides is not a distinguishable answer: a
+        // sender could otherwise pair its own local MRN with any candidate
+        // identifier and read off whether that candidate exists elsewhere.
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
     }
 
@@ -171,7 +174,7 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, true);
         registeredHere(retiringPatientId, false);
 
-        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
     }
 
@@ -228,8 +231,27 @@ class MllpInboundMergeServiceImplTest {
         // leave a permanent AE in the sender's queue for work that is done.
         empiKnows(SURVIVING_MRN, survivingPatientId);
         empiKnows(PRIOR_MRN, survivingPatientId);
+        // The patient is registered here — without that this is not a resend
+        // of OUR merge, and the accept below would be the oracle in reverse
+        // (see the test that follows).
+        registeredHere(survivingPatientId, true);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+    }
+
+    @Test
+    void aResendForSomeoneElseSTenantIsNOTAcceptedBecauseTheAcceptWouldLeak() {
+        // The subtle half. Both identifiers resolve to one patient because
+        // some OTHER hospital merged them. Answering AA here told the sender
+        // that two identifiers it does not own belong to one person somewhere
+        // else — the same oracle as the AR, wearing an accept. The tenant gate
+        // runs BEFORE the already-merged check for exactly this reason.
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, survivingPatientId);
+        registeredHere(survivingPatientId, false);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
     }
 

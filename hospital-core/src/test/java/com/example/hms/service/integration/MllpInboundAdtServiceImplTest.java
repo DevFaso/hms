@@ -144,7 +144,7 @@ class MllpInboundAdtServiceImplTest {
     }
 
     @Test
-    @DisplayName("REJECTED_CROSS_TENANT — patient is not registered at the allowlisted hospital")
+    @DisplayName("A cross-tenant patient answers REJECTED_NOT_FOUND, like an MRN nobody has")
     void rejectedWhenNotRegisteredAtHospital() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
@@ -152,9 +152,14 @@ class MllpInboundAdtServiceImplTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.empty());
 
+        // NOT a cross-tenant outcome of its own: that one mapped to AR while
+        // an unknown MRN mapped to AE, and the difference was a read
+        // primitive over every MRN in every other hospital. The
+        // indistinguishability is asserted on the ACK itself in
+        // AdtCrossTenantAckTest; this pins the outcome the ACK is built from.
         assertThat(service.processAdt(
             adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1"))
-            .isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+            .isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(patientRepository, never()).save(any());
     }
 

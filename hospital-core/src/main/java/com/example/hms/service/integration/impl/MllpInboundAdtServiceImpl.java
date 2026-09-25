@@ -62,8 +62,9 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         Optional<EmpiIdentityResponseDTO> identity =
             empiService.findIdentityByAlias(EmpiAliasType.MRN, mrn);
         if (identity.isEmpty() || identity.get().getPatientId() == null) {
-            log.warn("MLLP ADT mrn={} unknown to EMPI — sender={}/{} hospital={} event={}",
-                mrn, sendingApplication, sendingFacility,
+            // No MRN in the log line: PID-3 is PHI wherever the log ends up.
+            log.warn("MLLP ADT rejected — PID-3 unknown to EMPI (sender={}/{} hospital={} event={})",
+                sendingApplication, sendingFacility,
                 receivingHospital.getId(), parsed.triggerEvent());
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
@@ -79,8 +80,8 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         if (patientOpt.isEmpty()) {
             // EMPI has the alias but the patient row is gone — data
             // inconsistency, treat as not-found rather than crashing.
-            log.warn("MLLP ADT mrn={} resolved to patientId={} but no Patient row exists",
-                mrn, patientId);
+            log.warn("MLLP ADT — PID-3 resolved to patientId={} but no Patient row exists",
+                patientId);
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
         Patient patient = patientOpt.get();
@@ -89,25 +90,34 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         // this patient registered. Reject otherwise — a sender at
         // hospital B cannot push demographic updates for a patient who
         // is only known to hospital A.
+        //
+        // The rejection is REJECTED_NOT_FOUND, exactly what an MRN no
+        // hospital has ever heard of returns, and the dispatcher builds
+        // one ACK for both. It used to be REJECTED_CROSS_TENANT → AR,
+        // and the difference between that AR and this AE was a read
+        // primitive: an allowlisted sender could send one A08 per
+        // candidate MRN and collect the MRNs that exist in hospitals it
+        // cannot see. Same fix the ORU^R01 path took in #715.
         boolean registered = registrationRepository
             .findByPatientIdAndHospitalId(patient.getId(), receivingHospital.getId())
             .isPresent();
         if (!registered) {
-            log.warn("MLLP ADT mrn={} patient={} not registered at hospital={} (sender={}/{})",
-                mrn, patient.getId(), receivingHospital.getId(),
+            log.warn("MLLP ADT cross-tenant reject — patient={} not registered at hospital={} "
+                + "(sender={}/{})",
+                patient.getId(), receivingHospital.getId(),
                 sendingApplication, sendingFacility);
-            return MllpInboundOutcome.REJECTED_CROSS_TENANT;
+            return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
         boolean changed = applyDemographics(patient, parsed);
         if (changed) {
             patientRepository.save(patient);
-            log.info("MLLP ADT applied — patient={} mrn={} event={} sender={}/{} hospital={}",
-                patient.getId(), mrn, parsed.triggerEvent(),
+            log.info("MLLP ADT applied — patient={} event={} sender={}/{} hospital={}",
+                patient.getId(), parsed.triggerEvent(),
                 sendingApplication, sendingFacility, receivingHospital.getId());
         } else {
-            log.info("MLLP ADT no-op — patient={} mrn={} event={} (no demographic changes) sender={}/{} hospital={}",
-                patient.getId(), mrn, parsed.triggerEvent(),
+            log.info("MLLP ADT no-op — patient={} event={} (no demographic changes) sender={}/{} hospital={}",
+                patient.getId(), parsed.triggerEvent(),
                 sendingApplication, sendingFacility, receivingHospital.getId());
         }
 
