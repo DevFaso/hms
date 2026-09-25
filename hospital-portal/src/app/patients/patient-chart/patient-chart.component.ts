@@ -415,13 +415,6 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly labsScoped = this.roleContext.hasHospitalScope;
 
   /**
-   * Whether this account has a hospital selector anywhere in the portal.
-   * `hospital-scope-chip` renders behind `@if (isSuperAdmin())`, so the
-   * unscoped message has to say something different to everyone else.
-   */
-  readonly hasHospitalPicker = this.roleContext.isSuperAdmin;
-
-  /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
    * global view and "pinned to my own hospital" are distinguishable — they
    * are the same string under `activeHospitalId`, which is how a chip toggle
