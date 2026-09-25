@@ -268,6 +268,14 @@ public class Hl7v2MessageBuilder {
             String[] prior = parseIdentifierList(field(mrg, 1));
             if (prior[0] == null || prior[0].isBlank()) return null;
 
+            // Held to the EMPI alias width here, so nothing downstream has to
+            // make either identifier safe. Rejected, not truncated: a cut MRN
+            // could resolve to a different patient. See Hl7FieldBounds.
+            if (!Hl7FieldBounds.fits(surviving[0], Hl7FieldBounds.MRN_MAX)
+                    || !Hl7FieldBounds.fits(prior[0], Hl7FieldBounds.MRN_MAX)) {
+                return null;
+            }
+
             return new ParsedMergeMessage(
                 surviving[0], surviving[1],
                 prior[0], prior[1]);
@@ -308,6 +316,17 @@ public class Hl7v2MessageBuilder {
             String visitNumber = firstComponent(field(pv1, 19));
             LocalDateTime admit = parseHl7DateTimeOrNull(field(pv1, 44));
             LocalDateTime discharge = parseHl7DateTimeOrNull(field(pv1, 45));
+
+            // The identifiers this message is matched and reconciled on, held
+            // to the width of the columns they meet. Rejected, not truncated:
+            // a cut MRN or visit number could match a different patient or
+            // visit, and an over-width visit number would otherwise fail its
+            // VARCHAR(255) write when the transaction flushes. See Hl7FieldBounds.
+            if (!Hl7FieldBounds.fits(mrnParts[0], Hl7FieldBounds.MRN_MAX)
+                    || !Hl7FieldBounds.fits(visitNumber, Hl7FieldBounds.VISIT_NUMBER_MAX)
+                    || !Hl7FieldBounds.fits(assignedLocation, Hl7FieldBounds.ASSIGNED_LOCATION_MAX)) {
+                return null;
+            }
 
             return new ParsedAdtMessage(
                 triggerEvent,

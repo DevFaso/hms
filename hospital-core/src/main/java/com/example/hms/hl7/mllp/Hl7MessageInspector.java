@@ -1,5 +1,7 @@
 package com.example.hms.hl7.mllp;
 
+import com.example.hms.utility.Hl7FieldBounds;
+
 /**
  * Light-weight MSH parser. Just enough to route the message and build
  * an ACK — the full body parsing is delegated to whatever domain handler
@@ -28,6 +30,10 @@ public final class Hl7MessageInspector {
 
         String[] f = split(mshSegment, fieldSep);
         // f[0]="MSH", f[1]=encoding chars; routing fields start at f[2].
+        requireWithin(field(f, 2), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-3");
+        requireWithin(field(f, 3), Hl7FieldBounds.SENDER_FIELD_MAX, "MSH-4");
+        requireWithin(field(f, 8), Hl7FieldBounds.MESSAGE_TYPE_MAX, "MSH-9");
+        requireWithin(field(f, 9), Hl7FieldBounds.MESSAGE_CONTROL_ID_MAX, "MSH-10");
         return new Hl7MessageHeader(
             String.valueOf(fieldSep),
             field(f, 1),
@@ -41,6 +47,23 @@ public final class Hl7MessageInspector {
             field(f, 10),
             field(f, 11)
         );
+    }
+
+    /**
+     * Refuse an over-width header field as an invalid MSH.
+     *
+     * <p>Decided before the allowlist and before any tenant data is read, so
+     * the refusal is the same for every sender and reveals nothing. The
+     * message names the field and the limit and <em>never</em> the value:
+     * MLLP echoes it into the AR and the dead-letter row, and the value is
+     * by definition the over-width thing being refused. The HTTP ORU ingest
+     * reads the header defensively, so there the same refusal is a body with
+     * no readable MSH, answered as that endpoint answers an unknown order.
+     */
+    private static void requireWithin(String value, int max, String field) {
+        if (!Hl7FieldBounds.fits(value, max)) {
+            throw new MllpProtocolException(field + " exceeds " + max + " characters");
+        }
     }
 
     private static int indexOfSegmentTerminator(String s, int from) {

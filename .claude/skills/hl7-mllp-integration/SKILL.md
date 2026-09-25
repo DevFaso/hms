@@ -112,6 +112,26 @@ guard that resolves the caller's hospital from it reads a null active
 hospital as "unscoped, allow". Do not add anything on this path that reads
 the security context.
 
+## Field widths
+
+Every sender-controlled field that is matched, keyed or stored is held to
+the width of its column **once, where it is first read** — the limits live
+in `Hl7FieldBounds`. MSH-3/4/9/10 are checked in
+`Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
+allowlist); PID-3, MRG-1, PV1-3 and PV1-19 in the ADT and A40 parsers;
+OBR-2 in `MllpInboundLabServiceImpl`, because the ORU parser is shared with
+paths where OBR-2 is not an accession.
+
+- **Refuse, never truncate.** These are identifiers: a truncated MSH-10
+  reads as a replay of any other id with the same prefix, a truncated MRN
+  or placer can match someone else. A limit is the column's width, not the
+  HL7 nominal length — senders exceed v2.5's 20-character MSH-10.
+- **Do not add per-sink wrappers** (capping or sanitising a field where it
+  is logged or recorded). That was tried and did not converge, and a setter
+  into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
+  a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
+- A refusal names the field and the limit, **never the value**.
+
 ## Audit on accept
 
 On successful ingest emit an `AuditEventLog` via `AuditEventLogService`.

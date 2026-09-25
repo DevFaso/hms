@@ -232,12 +232,13 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
-            log.warn("[MLLP {}] {} from {}/{} unparseable (missing PID-3 / segments)",
+            log.warn("[MLLP {}] {} from {}/{} unparseable (missing or over-width PID-3, PV1-3 or PV1-19)",
                 remoteAddress, header.messageType(),
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
-                "unparseable " + header.messageType() + " — missing PID-3 or required segments",
+                "unparseable " + header.messageType()
+                    + " — missing or over-width PID-3, PV1-3 or PV1-19",
                 // The trigger belongs in the key: it is one of the five in
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it
                 // cannot be used to mint entries - and without it a malformed
@@ -247,7 +248,8 @@ public class Hl7MessageDispatcher {
                 // see whichever arrived last.
                 "unparseable ADT^" + header.triggerEvent(), senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
+                "Unparseable " + header.messageType()
+                    + " — missing or over-width PID-3, PV1-3 or PV1-19");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
@@ -269,14 +271,14 @@ public class Hl7MessageDispatcher {
                                String remoteAddress, Hospital hospital) {
         Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
         if (parsed == null) {
-            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing PID-3 or MRG-1)",
+            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing or over-width PID-3 or MRG-1)",
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
-                "unparseable ADT^A40 — missing PID-3 or MRG-1",
+                "unparseable ADT^A40 — missing or over-width PID-3 or MRG-1",
                 "unparseable ADT^A40", senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable ADT^A40 — missing PID-3 or MRG-1");
+                "Unparseable ADT^A40 — missing or over-width PID-3 or MRG-1");
         }
         MllpInboundOutcome outcome = inboundMerge.processMerge(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),

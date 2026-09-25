@@ -504,4 +504,64 @@ class Hl7MessageDispatcherTest {
         assertThat(dispatcher.dispatch(A40, "10.0.0.64:1")).contains("MSA|AR|CTRL-A40");
         verifyNoInteractions(inboundMerge);
     }
+
+    /* ── Field widths (Hl7FieldBounds) ───────────────────────────────── */
+
+    @Test
+    void anOverWidthMsh10IsAnArBeforeTheAllowlistAndIsNeverEchoed() {
+        String overWidth = "Z".repeat(256);
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + overWidth + "|P|2.5\r"
+                   + "PID|1||MRN-001||DOE^JANE\r";
+
+        String ack = dispatcher.dispatch(adt, "10.0.0.70:1");
+
+        // The same answer for every sender - decided before the allowlist is
+        // consulted - and the refused value appears nowhere in it.
+        assertThat(ack)
+            .contains("MSA|AR|?")
+            .contains("Invalid MSH: MSH-10 exceeds 255 characters")
+            .doesNotContain("ZZZZ");
+        verifyNoInteractions(allowlist, inboundLab, inboundAdt, inboundMerge);
+    }
+
+    @Test
+    void anMsh10LongerThanTwentyCharactersReachesTheServiceAndTheAckWhole() {
+        allowSender();
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
+        String controlId = "20260428-REGISTRATION-000000000042";
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|" + controlId + "|P|2.5\r"
+                   + "PID|1||MRN-UNKNOWN||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.71:1")).contains("MSA|AE|" + controlId + "|");
+        verify(inboundAdt).processAdt(any(), eq(hospital),
+            eq("REGISTRATION"), eq("HOSP1"), eq(controlId));
+    }
+
+    @Test
+    void anOverWidthPid3IsAnAeAndNeverReachesTheAdtService() {
+        allowSender();
+        String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-W|P|2.5\r"
+                   + "PID|1||" + "M".repeat(256) + "||DOE^JANE\r";
+
+        assertThat(dispatcher.dispatch(adt, "10.0.0.72:1"))
+            .contains("MSA|AE|CTRL-W")
+            .contains("Unparseable ADT^A08 — missing or over-width PID-3, PV1-3 or PV1-19")
+            .doesNotContain("MMMM");
+        verifyNoInteractions(inboundAdt);
+    }
+
+    @Test
+    void anOverWidthMrg1IsAnAeAndNeverReachesTheMergeService() {
+        allowSender();
+        String a40 = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260826||ADT^A40|CTRL-W40|P|2.5\r"
+                   + "PID|1||MRN-SURVIVOR^^^HOSP1^MR||DOE^JANE\r"
+                   + "MRG|" + "R".repeat(256) + "^^^HOSP1^MR\r";
+
+        assertThat(dispatcher.dispatch(a40, "10.0.0.73:1"))
+            .contains("MSA|AE|CTRL-W40")
+            .contains("Unparseable ADT^A40 — missing or over-width PID-3 or MRG-1")
+            .doesNotContain("RRRR");
+        verifyNoInteractions(inboundMerge);
+    }
 }

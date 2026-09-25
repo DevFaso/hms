@@ -108,6 +108,15 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         // primitive: an allowlisted sender could send one A08 per
         // candidate MRN and collect the MRNs that exist in hospitals it
         // cannot see. Same fix the ORU^R01 path took in #715.
+        // OPEN QUESTION, not a decision (the same one is noted on
+        // MllpInboundMergeServiceImpl.isRegisteredHere): this accepts an
+        // INACTIVE registration - findByPatientIdAndHospitalId, not the
+        // ...AndActiveTrue variant - so a patient whose registration here was
+        // closed is still writable by this hospital's sender. There is an
+        // argument for it (corrections arrive after a transfer, and this only
+        // updates demographics on a record the hospital already holds) and
+        // one against (a closed registration is how a tenant says "not ours
+        // any more"). Never decided; surfaced rather than changed here.
         boolean registered = registrationRepository
             .findByPatientIdAndHospitalId(patient.getId(), receivingHospital.getId())
             .isPresent();
@@ -237,9 +246,17 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         }
     }
 
+    /**
+     * The reason with MSH-10 appended, as parsed. Not capped here:
+     * {@code Hl7MessageInspector} refuses an MSH-10 wider than the 255 of
+     * the columns it is stored in, and a shorter cap would make two control
+     * ids that share a prefix indistinguishable in the dead-letter row that
+     * exists to tell them apart.
+     */
     private static String withControlId(String reason, String messageControlId) {
-        String safeControlId = MllpRecordingContext.messageControlId(messageControlId);
-        return safeControlId != null ? reason + " (MSH-10 " + safeControlId + ")" : reason;
+        return StringUtils.hasText(messageControlId)
+            ? reason + " (MSH-10 " + messageControlId.trim() + ")"
+            : reason;
     }
 
     /**
