@@ -61,6 +61,14 @@ public class LabOrderServiceImpl implements LabOrderService {
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
 
     /**
+     * Resolvable message key, not a sentence, and the same one
+     * {@code PatientChartAccess} and {@code PatientLabResultServiceImpl} throw:
+     * a scopeless read of one patient's record is refused identically wherever
+     * the chart asks for it, and says nothing about whether the patient exists.
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+
+    /**
      * Ceiling on a single worklist page.
      *
      * <p>See {@link com.example.hms.utility.PageBounds}: 500 is well clear of
@@ -471,6 +479,39 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null && patientId != null) {
+            // One patient's record, asked for with no acting hospital.
+            //
+            // `buildPredicates` omits the hospital predicate entirely when the
+            // id is null, so this returned EVERY tenant's lab orders for the
+            // patient; and `recordPerformedHereReach` returns early on a null
+            // acting hospital, so not one of those foreign rows was accounted.
+            // That second half is not an oversight that could be patched here:
+            // a RECORD_SHARE row pairs a SOURCE hospital with an ACTING one,
+            // and in global view there is no acting hospital for the disclosure
+            // to be recorded against. Unscoped and accounted is not a state
+            // this endpoint can be in.
+            //
+            // Only a real super-admin in global view reaches this:
+            // requireActiveHospitalId returns null solely for the super-admin
+            // branch and throws BusinessException for everyone else. A scoped
+            // read is already whole — with an acting hospital the predicate
+            // admits only rows this hospital ordered or performs, and the
+            // performed-for-others rows are exactly the ones
+            // recordPerformedHereReach accounts.
+            //
+            // Narrow by design: the patient-less listing below is the platform
+            // worklist the lab screens page through, and a super-admin seeing
+            // it whole is this service's documented behaviour (getAllLabOrders,
+            // getLabOrdersByStaffId and getLabOrdersByLabTestDefinitionId all
+            // read the same way). What is refused is the one shape that is a
+            // patient's record rather than a worklist.
+            //
+            // 404 on the patient, matching PatientLabResultServiceImpl so the
+            // chart's two lab blocks answer a scopeless caller identically, and
+            // so the refusal says nothing about whether the rows exist.
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        }
         Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_WORKLIST_PAGE_SIZE));
         recordPerformedHereReach(page.getContent(), hospitalId);

@@ -526,6 +526,67 @@ class LabOrderServiceImplPerformingHospitalTest {
             .containsExactly(mapped);
     }
 
+    /**
+     * A patient-filtered search with no acting hospital used to drop the
+     * hospital predicate entirely and return every tenant's orders for that
+     * patient, unaccounted — recordPerformedHereReach returns early on a null
+     * acting hospital, and there is no acting hospital for a RECORD_SHARE row
+     * to name. It refuses instead, with the same patient.notFound key the
+     * results half of the chart's Labs tab throws.
+     */
+    @Test
+    void patientSearchWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest page = PageRequest.of(0, 20);
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the unscoped search ran again.
+        lenient().when(labOrderRepository.search(null, patient.getId(), null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(foreign)));
+
+        // The key, not the resolved message: getMessage() is already resolved,
+        // so only getMessageKey() pins that the refusal is indistinguishable
+        // from "no such patient" and stays a resolvable key.
+        assertThatThrownBy(() -> service.searchLabOrders(patient.getId(), null, null, page, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(labOrderRepository, never()).search(any(), any(), any(), any(), any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The platform worklist is NOT refused. Three lab screens page through
+     * {@code GET /lab-orders} with no patientId, and a super-admin seeing it
+     * whole is this service's documented behaviour; only the one shape that is
+     * a patient's record rather than a worklist is refused.
+     */
+    @Test
+    void patientlessSearchWithNoActiveHospitalStillListsThePlatformWorklist() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest page = PageRequest.of(0, 20);
+        when(labOrderRepository.search(null, null, null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(order)));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.searchLabOrders(null, null, null, page, Locale.ENGLISH).getContent())
+            .containsExactly(mapped);
+    }
+
+    /** A scoped patient search is untouched: the predicate carries the hospital. */
+    @Test
+    void patientSearchWithAnActiveHospitalStaysScoped() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        PageRequest page = PageRequest.of(0, 20);
+        when(labOrderRepository.search(performing.getId(), patient.getId(), null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(order)));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.searchLabOrders(patient.getId(), null, null, page, Locale.ENGLISH).getContent())
+            .containsExactly(mapped);
+    }
+
     @Test
     void byStatusReadsOrdersHandledByTheActiveHospital() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
