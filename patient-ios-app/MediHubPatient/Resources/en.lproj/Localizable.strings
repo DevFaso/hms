@@ -588,3 +588,4 @@
 "generic_name" = "Generic name";
 "start_date" = "Start date";
 "end_date" = "End date";
+"lab_reference_range_unit_mismatch" = "Reference range not shown — the one on file is not in this result's units.";

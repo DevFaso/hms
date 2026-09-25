@@ -86,16 +86,86 @@ struct LabResultDTO: Codable, Identifiable {
         guard !range.isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
         guard Double(raw) != nil else { return false }
-        // The range SHOWN and the range GRADED AGAINST are not necessarily the
-        // same one: `formatReferenceRange` always formats `ranges[0]`, while
-        // `determineSeverityFlag` grades against
-        // `findMatchingRange(resultUnit, …)`. On a test configured with two
-        // unit-specific ranges, the row can be graded NORMAL in mmol/L and
-        // displayed against the mg/dL limits — an all-clear beside a range the
-        // value is nowhere near. If the row has a unit, only claim the grading
-        // when the displayed range is in that unit.
+        return referenceRangeApplies
+    }
+
+    /// Whether the reference range on the wire is the one THIS result was
+    /// measured against.
+    ///
+    /// The range SHOWN and the range GRADED AGAINST are not necessarily the
+    /// same: `formatReferenceRange` always formats `ranges[0]`, while
+    /// `determineSeverityFlag` grades against `findMatchingRange(resultUnit,
+    /// …)`. On a test configured with two unit-specific ranges, the row can be
+    /// graded NORMAL in mmol/L and displayed against the mg/dL limits.
+    ///
+    /// NOT complete cover, and it cannot be from here: when `ranges[0]` has no
+    /// unit of its own, `formatReferenceRange` stamps the RESULT's unit onto
+    /// its numbers, so the displayed string always carries this row's unit,
+    /// this check always passes, and the limits are mislabelled with a unit
+    /// they were never expressed in. That is a server-side defect and is filed
+    /// as one; nothing the app can see distinguishes it.
+    var referenceRangeApplies: Bool {
         let unit = (self.unit ?? "").trimmingCharacters(in: .whitespaces)
-        return unit.isEmpty || range.localizedCaseInsensitiveContains(unit)
+        guard !unit.isEmpty else { return true }
+        let range = (referenceRange ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.range(range, isIn: unit)
+    }
+
+    /// Whether a formatted reference range is expressed in `unit`.
+    ///
+    /// A SUBSTRING test is not enough: `g/dL` is a substring of `mg/dL`,
+    /// `mol/L` of `mmol/L`, `U/L` of `mU/L` — so the very mismatch this guards
+    /// against would pass it. `formatReferenceRange` appends `" " + unit`, so
+    /// the unit is the suffix and the character before it is a separator;
+    /// requiring that boundary also keeps units that contain digits
+    /// (`x10^9/L`) working, which trailing-non-digit extraction would not.
+    ///
+    /// A range with no unit token at all is accepted. `formatReferenceRange`
+    /// omits the unit only when NEITHER the range nor the result carries one,
+    /// so there is no unit to disagree about, and the ambiguity being guarded
+    /// against arises only when a test has SEVERAL unit-specific ranges.
+    /// Withholding the green there would be a large regression for no safety
+    /// gain.
+    ///
+    /// Deliberately the same rule, in the same words, as
+    /// `LabResultDto.rangeIsInUnit` on Android.
+    static func range(_ range: String, isIn unit: String) -> Bool {
+        let haystack = Array(range.lowercased())
+        let needle = Array(unit.lowercased())
+        guard let last = haystack.last else { return true }
+        if last.isNumber { return true }
+        guard haystack.count >= needle.count,
+              Array(haystack.suffix(needle.count)) == needle else { return false }
+        let boundary = haystack.count - needle.count - 1
+        guard boundary >= 0 else { return true }
+        let character = haystack[boundary]
+        return !(character.isLetter || character.isNumber)
+    }
+
+    /// The reference range to put in front of the patient, or nil when it is
+    /// not this result's.
+    ///
+    /// Withholding the green tick is not enough on its own: a patient reading
+    /// "5.4 mmol/L" against limits of "70 - 110 mg/dL" concludes something is
+    /// badly wrong from the number pair alone. Where the range is not theirs
+    /// the UI says so rather than showing it.
+    var displayReferenceRange: String? {
+        guard !isPending,
+              let range = referenceRange,
+              !range.trimmingCharacters(in: .whitespaces).isEmpty,
+              referenceRangeApplies
+        else { return nil }
+        return range
+    }
+
+    /// True when there IS a range but it is not in this result's unit.
+    var referenceRangeUnitMismatch: Bool {
+        guard !isPending,
+              let range = referenceRange,
+              !range.trimmingCharacters(in: .whitespaces).isEmpty
+        else { return false }
+        return !referenceRangeApplies
     }
 
     /// What the badge shows: a pending row never borrows a grading.

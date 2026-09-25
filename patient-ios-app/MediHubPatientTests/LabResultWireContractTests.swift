@@ -186,6 +186,53 @@ final class LabResultWireContractTests: XCTestCase {
         }
         """)
         XCTAssertTrue(matchingUnit.isGradedNormal)
+
+        // A substring test would pass all three of these: g/dL is inside
+        // mg/dL, mol/L inside mmol/L, U/L inside mU/L.
+        for (rowUnit, shownRange) in [("g/dL", "70 - 110 mg/dL"),
+                                      ("mol/L", "3.9 - 6.1 mmol/L"),
+                                      ("U/L", "10 - 40 mU/L")] {
+            XCTAssertFalse(LabResultDTO.range(shownRange, isIn: rowUnit),
+                           "\(rowUnit) must not match \(shownRange)")
+        }
+
+        // A unit that contains digits still matches itself, and a range with
+        // no unit token at all is the ordinary single-range case.
+        XCTAssertTrue(LabResultDTO.range("4 - 11 x10^9/L", isIn: "x10^9/L"))
+        XCTAssertTrue(LabResultDTO.range("3.9 - 6.1", isIn: "mmol/L"))
+    }
+
+    /// Withholding the tick is not enough: the number pair alone tells a
+    /// patient reading 5.4 mmol/L against "70 - 110 mg/dL" that something is
+    /// badly wrong.
+    func testAReferenceRangeInAnotherUnitIsNotShownAtAll() throws {
+        let mismatched = try decode("""
+        {
+          "id": "m", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
+          "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertNil(mismatched.displayReferenceRange)
+        XCTAssertTrue(mismatched.referenceRangeUnitMismatch)
+
+        let matched = try decode("""
+        {
+          "id": "m2", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
+          "referenceRange": "3.9 - 6.1 mmol/L", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertEqual(matched.displayReferenceRange, "3.9 - 6.1 mmol/L")
+        XCTAssertFalse(matched.referenceRangeUnitMismatch)
+
+        // A pending row has neither: the backend redacts the range, and there
+        // is nothing to explain away.
+        let pending = try decode("""
+        {
+          "id": "m3", "testName": "Glucose", "status": "PENDING", "released": false
+        }
+        """)
+        XCTAssertNil(pending.displayReferenceRange)
+        XCTAssertFalse(pending.referenceRangeUnitMismatch)
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {
