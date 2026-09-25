@@ -166,6 +166,53 @@ export class PrescriptionsComponent implements OnInit {
 
   staffMembers = signal<StaffResponse[]>([]);
 
+  /**
+   * Roles `SecurityConfig`'s `GET /staff` matcher admits — first-match-wins
+   * and terminal, so this is the whole gate, not a hint.
+   *
+   * <p>This page's route is WIDER than that matcher: PHARMACIST and, since
+   * G9, PHARMACY_VERIFIER may open it and neither may read `/staff`. Firing
+   * the request anyway costs them a 403 on page open — silent in the UI
+   * (`SILENT_403_PATTERNS` covers `/staff`) but an unhandled error and a
+   * frontend-audit row all the same. The list only fills the prescriber
+   * dropdown in the create form, which those two roles cannot submit.
+   */
+  private static readonly STAFF_READ_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_QUALITY_MANAGER',
+  ];
+
+  /** Read live, not captured: the active role changes on a scope switch. */
+  protected readonly canReadStaff = computed(() =>
+    this.roleContext.hasAnyActiveRole(PrescriptionsComponent.STAFF_READ_ROLES),
+  );
+
+  private loadPrescribers(): void {
+    if (!this.canReadStaff()) {
+      this.staffMembers.set([]);
+      return;
+    }
+    this.staffService
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (s) => this.staffMembers.set(s ?? []),
+        // Said out loud rather than rendered as an empty dropdown: a
+        // prescriber who cannot find their own name would otherwise assume
+        // the list is simply short.
+        error: () => this.toast.error(this.translate.instant('STAFF.LOAD_FAILED')),
+      });
+  }
+
   // Patient picker
   patientQuery = signal('');
   patientSuggestions = signal<PatientResponse[]>([]);
@@ -208,7 +255,7 @@ export class PrescriptionsComponent implements OnInit {
     this.scopeUrl.applyUrlScopeSync(this.route);
 
     this.load();
-    this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
+    this.loadPrescribers();
     this.initPatientSearch();
     this.initPharmacyHistory();
 
@@ -1025,7 +1072,13 @@ export class PrescriptionsComponent implements OnInit {
       // where the pharmacy actually recorded it.
       if (dispensed > 0) {
         const remaining = Math.round((expected - dispensed) * 100) / 100;
-        return remaining > 0 ? remaining : null;
+        if (remaining === 0) return null;
+        // A NEGATIVE balance means the two halves disagree: the fills are
+        // fetched when the panel opens, `quantity`/`refillsUsed` came with
+        // the list, and a refill approved and filled in between leaves the
+        // row's `refillsUsed` behind. Reporting "nothing owed" there would
+        // hide a real remainder, so the server's own figure is used instead.
+        if (remaining > 0) return remaining;
       }
     }
     return this.routingSnapshotRemainder();
@@ -1056,9 +1109,14 @@ export class PrescriptionsComponent implements OnInit {
   private readonly fillsAreCountable = computed<boolean>(() => {
     if (this.dispensesTruncated()) return false;
     const orderUnit = this.selectedPrescription()?.quantityUnit?.trim().toLowerCase();
+    // A fill that declares no unit is taken to be in the order's. A fill that
+    // declares one the order does not — including an order that declares none
+    // at all, which is the legacy row this whole fallback exists for — is not
+    // subtractable, and licensing it there would be the "200 ml dispensed as
+    // 2 bottles" failure by another route.
     return this.countableFills().every((d) => {
       const fillUnit = d.unit?.trim().toLowerCase();
-      return !fillUnit || !orderUnit || fillUnit === orderUnit;
+      return !fillUnit || fillUnit === orderUnit;
     });
   });
 
@@ -1079,7 +1137,10 @@ export class PrescriptionsComponent implements OnInit {
    * a row of noise on every detail panel.
    */
   hasRefills(p: PrescriptionResponse): boolean {
-    return (p.refillsAllowed ?? 0) > 0;
+    // `refillsRemaining` is nullable. "0 of 2 remaining" for a row that does
+    // not say how many are left presents unknown as none, which is the
+    // confident-wrong number the rest of this panel works to avoid.
+    return (p.refillsAllowed ?? 0) > 0 && p.refillsRemaining != null;
   }
 
   viewDetail(p: PrescriptionResponse): void {

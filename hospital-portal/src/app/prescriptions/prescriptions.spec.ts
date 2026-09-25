@@ -582,6 +582,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
   let component: PrescriptionsComponent;
   let pharmacyService: jasmine.SpyObj<PharmacyService>;
   let prescriptionServiceSpy: jasmine.SpyObj<PrescriptionService>;
+  let staffServiceSpy: jasmine.SpyObj<StaffService>;
 
   function makeRx(over: Partial<PrescriptionResponse> = {}): PrescriptionResponse {
     return {
@@ -678,6 +679,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
+    staffServiceSpy = staffService;
 
     const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
     patientService.list.and.returnValue(of([]));
@@ -999,6 +1001,71 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       .toContain('comprimés');
   });
 
+  it('will not subtract a fill with a unit from an order that declares none', async () => {
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 200, quantityUnit: null });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            remainingQuantity: 100,
+            decidedAt: '2026-09-10T08:00:00',
+            createdAt: '2026-09-10T08:00:00',
+          }),
+        ]),
+      ),
+      dispenses: of(page([makeDispense({ quantityDispensed: 2, unit: 'flacon' })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity())
+      .withContext('a missing order unit is not a licence to subtract bottles from millilitres')
+      .toBe(100);
+  });
+
+  it('uses the server figure when the fills already exceed the quantity on the row', async () => {
+    // The fills are fetched when the panel opens; quantity/refillsUsed came
+    // with the list. A refill approved and filled in between leaves
+    // refillsUsed behind, and "nothing owed" would hide a real remainder.
+    const rx = makeRx({
+      status: 'PARTIALLY_FILLED',
+      quantity: 30,
+      quantityUnit: 'comprimés',
+      refillsUsed: 0,
+    });
+    await setup({
+      list: [rx],
+      routings: of(
+        page([
+          makeRouting({
+            remainingQuantity: 25,
+            decidedAt: '2026-09-10T08:00:00',
+            createdAt: '2026-09-10T08:00:00',
+          }),
+        ]),
+      ),
+      dispenses: of(page([makeDispense({ quantityDispensed: 35, unit: 'comprimés' })])),
+    });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.outstandingQuantity()).toBe(25);
+  });
+
+  it('hides the refills row when the row does not say how many are left', async () => {
+    const rx = makeRx({ status: 'SIGNED', refillsAllowed: 2, refillsRemaining: null });
+    await setup({ list: [rx] });
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.hasRefills(rx)).toBeFalse();
+    expect(el('[data-testid="rx-refills"]')).toBeNull();
+  });
+
   it('will not sum a fill list the server has more of', async () => {
     // The fills are fetched 20 at a time. Summing the page would understate
     // what has been dispensed and overstate what is owed — and this figure
@@ -1135,6 +1202,22 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     expect(component.hasRefills(rx)).toBeFalse();
     expect(el('[data-testid="rx-refills"]')).toBeNull();
+  });
+
+  it('does not ask for the staff list as a role the /staff matcher rejects', async () => {
+    // SecurityConfig's GET /staff matcher admits neither PHARMACIST nor
+    // PHARMACY_VERIFIER, and matchers are terminal. Firing it anyway is a 403
+    // on page open for every verifier the G9 nav entry sends here.
+    await setup({ roles: ['ROLE_PHARMACY_VERIFIER'] });
+
+    expect(staffServiceSpy.list).not.toHaveBeenCalled();
+    expect(component.staffMembers()).toEqual([]);
+  });
+
+  it('still asks for the staff list as a prescriber', async () => {
+    await setup({ roles: ['ROLE_DOCTOR'] });
+
+    expect(staffServiceSpy.list).toHaveBeenCalled();
   });
 
   /* ── G12: the status filter ───────────────────────────────────────── */

@@ -69,7 +69,13 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * associations back on a per-row lazy load.
      */
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    /**
+     * The SUPER_ADMIN cross-tenant counterpart of {@link #findAll(Pageable)},
+     * and it carries that override's {@code hospital} node for the same
+     * reason: the mapper reads {@code prescription.getHospital()} on every
+     * row, so leaving it out is 200 lazy loads on a full page.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByStatusIn(Collection<PrescriptionStatus> statuses, Pageable pageable);
 
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})

@@ -311,7 +311,7 @@
                 <span class="field-label">{{ 'PRESCRIPTIONS.REFILLS' | translate }}</span
                 ><span class="field-value" data-testid="rx-refills">{{
                   'PRESCRIPTIONS.REFILLS_VALUE'
-                    | translate: { remaining: rx.refillsRemaining ?? 0, allowed: rx.refillsAllowed }
+                    | translate: { remaining: rx.refillsRemaining, allowed: rx.refillsAllowed }
                 }}</span>
               </div>
             }
