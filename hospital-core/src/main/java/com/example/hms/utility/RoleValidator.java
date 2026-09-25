@@ -262,16 +262,34 @@ public class RoleValidator {
      * Prescribing is a clinical act: a hospital admin no longer passes (E9 #67,
      * D5), and midwives, who prescribe throughout the OB module, have parity
      * with nurses (E9 #69).
+     *
+     * <p>Physician and surgeon are named because {@code RoleExpansion}'s
+     * doctor-equivalence rule — a surgeon and a physician ARE doctors — runs on
+     * the authorities, so {@code hasAnyAuthority('ROLE_DOCTOR',...)} on
+     * {@code POST /prescriptions} already admits them, while the checks in this
+     * class match the stored ASSIGNMENT code and do not know that. Without the
+     * two arms the endpoint let them in and this predicate threw them out with
+     * {@code prescription.only.doctor.admin}.
      */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
+            || isPhysician(userId, hospitalId)
+            || isSurgeon(userId, hospitalId)
             || isNurse(userId, hospitalId)
             || isMidwife(userId, hospitalId);
     }
 
+    /**
+     * Surgeon for the same reason as above: {@code POST /lab-orders} admits
+     * {@code ROLE_DOCTOR}, which a surgeon holds by expansion, and the order
+     * was then refused here. Midwife is deliberately NOT added — the endpoint
+     * admits it but nothing has established that a midwife orders lab tests,
+     * and widening that is not this change's call.
+     */
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isPhysician(userId, hospitalId)
+            || isSurgeon(userId, hospitalId)
             || isNurse(userId, hospitalId);
     }
 

@@ -239,6 +239,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        // Resolved BEFORE the workflow-state checks: their messages tell the
+        // caller whether an order requires a co-signature, whether it already
+        // has one and what status it is in, and someone with no prescribing
+        // assignment here has no business reading that back.
+        Staff cosigner = resolveCosignerAtHospital(prescription);
+
         if (!prescription.isRequiresCosign()) {
             throw new BusinessException(
                 "This prescription does not declare a co-signature requirement.");
@@ -254,8 +260,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 "Only a prescription in DRAFT or PENDING_SIGNATURE can be co-signed; this one is "
                     + status + ".");
         }
-
-        Staff cosigner = resolveCosignerAtHospital(prescription);
 
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
@@ -316,13 +320,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (currentUserId == null) {
             throw new AccessDeniedException("Unable to determine the co-signing clinician.");
         }
+        // Prescription.hospital is optional=false on a NOT NULL column, so this
+        // is never null in practice; a null would make every check below false
+        // and refuse, which is the safe direction anyway.
         UUID rxHospitalId = prescription.getHospital() != null
             ? prescription.getHospital().getId()
             : null;
-        if (rxHospitalId == null) {
-            throw new AccessDeniedException(
-                "Only a clinician at the prescribing hospital can co-sign a prescription.");
-        }
         boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
             || roleValidator.isPhysician(currentUserId, rxHospitalId)
             || roleValidator.isSurgeon(currentUserId, rxHospitalId);

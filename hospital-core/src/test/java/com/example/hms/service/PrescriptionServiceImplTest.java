@@ -2541,15 +2541,16 @@ class PrescriptionServiceImplTest {
         rx.setRequiresCosign(true);
 
         UUID cosignerUserId = UUID.randomUUID();
-        Staff soleStaffRowFiledElsewhere = Staff.builder().build();
+        com.example.hms.model.Hospital otherHospital =
+            com.example.hms.model.Hospital.builder().name("CSREF").code("CSREF").build();
+        otherHospital.setId(UUID.randomUUID());
+        Staff soleStaffRowFiledElsewhere = Staff.builder().hospital(otherHospital).build();
         soleStaffRowFiledElsewhere.setId(UUID.randomUUID());
 
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
         when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
         when(roleValidator.isDoctor(cosignerUserId, rx.getHospital().getId())).thenReturn(true);
-        lenient().when(staffRepository.findByUserIdAndHospitalId(cosignerUserId, rx.getHospital().getId()))
-            .thenReturn(Optional.empty());
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
             .thenReturn(Optional.of(soleStaffRowFiledElsewhere));
         when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
@@ -2560,6 +2561,9 @@ class PrescriptionServiceImplTest {
 
         assertThat(rx.getCosignedBy()).isSameAs(soleStaffRowFiledElsewhere);
         assertThat(rx.getCosignedAt()).isNotNull();
+        // The credential is the assignment, never a staff row at this hospital:
+        // there is none, and looking for one is what would refuse this person.
+        verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
     }
 
     @Test
@@ -2651,8 +2655,16 @@ class PrescriptionServiceImplTest {
     void cosignRefusesAPrescriptionThatNeverDeclaredTheRequirement() {
         Prescription rx = signablePrescription(UUID.randomUUID());
 
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff cosigner = Staff.builder().build();
+        cosigner.setId(UUID.randomUUID());
+
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        when(roleValidator.isDoctor(cosignerUserId, rx.getHospital().getId())).thenReturn(true);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+            .thenReturn(Optional.of(cosigner));
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
