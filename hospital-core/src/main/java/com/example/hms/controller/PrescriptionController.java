@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchResponseDTO;
+import com.example.hms.service.PrescriptionReaderRoles;
 import com.example.hms.service.PrescriptionService;
 import com.example.hms.service.PrescriptionSmsDispatchService;
 import org.springframework.security.core.Authentication;
@@ -176,10 +177,6 @@ public class PrescriptionController {
         return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 
-    /** The reader roles of {@link #getById} that see the clarification exchange. */
-    static final java.util.Set<String> CLINICAL_READER_ROLES = java.util.Set.of(
-        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST");
-
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_PATIENT')")
     @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID. A patient "
@@ -199,25 +196,14 @@ public class PrescriptionController {
      * The same patient-copy rule as {@code /me/patient/prescriptions} (gap
      * G7): a principal that holds ROLE_PATIENT and no clinical reader role
      * gets the copy without the clarification exchange.
+     *
+     * <p>The rule itself now lives in {@link PrescriptionReaderRoles} because
+     * {@code PrescriptionServiceImpl.getPrescriptionById} decides the same
+     * question — whether this caller may read anyone's prescription or only
+     * their own — and the two must not drift apart.
      */
     static boolean isPatientOnly(Authentication auth) {
-        // Only the null check: Authentication.getAuthorities() never returns
-        // null by contract, and the handler is behind @PreAuthorize on five
-        // roles, so an unauthenticated call cannot reach it either way.
-        if (auth == null) {
-            return false;
-        }
-        boolean patient = false;
-        for (org.springframework.security.core.GrantedAuthority authority : auth.getAuthorities()) {
-            String name = authority.getAuthority();
-            if (CLINICAL_READER_ROLES.contains(name)) {
-                return false;
-            }
-            if ("ROLE_PATIENT".equals(name)) {
-                patient = true;
-            }
-        }
-        return patient;
+        return PrescriptionReaderRoles.isPatientOnly(auth);
     }
 
     @GetMapping

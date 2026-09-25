@@ -140,7 +140,46 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        requireOwnPrescriptionWhenPatient(prescription);
+
         return prescriptionMapper.toResponseDTO(prescription);
+    }
+
+    /**
+     * A patient may read their own prescription and no one else's.
+     *
+     * <p>The hospital scope above is not this check. It bounded the leak — a
+     * patient could only reach prescriptions at the hospital their own
+     * assignment resolves to — but within that hospital any prescription id
+     * returned somebody else's medication, dose, frequency, duration and
+     * instructions. Stripping the clarification exchange in the controller is
+     * about the pharmacist's notes, not about whose prescription it is.
+     *
+     * <p>404, not 403, and the same message as a prescription that does not
+     * exist: the answer must not tell a patient that an id is real. The
+     * subject is resolved from the authenticated principal
+     * ({@code user id → Patient}), never from anything in the request — the
+     * rule {@code PatientPortalServiceImpl.resolvePatientId} already follows
+     * for every {@code /me/patient/*} read.
+     *
+     * <p>A no-op for every clinical role, including a clinician who is also a
+     * patient at the hospital and a super-admin (who inherits
+     * {@code ROLE_DOCTOR}) — see {@link PrescriptionReaderRoles}.
+     */
+    private void requireOwnPrescriptionWhenPatient(Prescription prescription) {
+        if (!PrescriptionReaderRoles.isPatientOnlyPrincipal()) {
+            return;
+        }
+        UUID userId = authService.getCurrentUserId();
+        UUID callerPatientId = userId == null
+            ? null
+            : patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        UUID subjectPatientId = prescription.getPatient() != null
+            ? prescription.getPatient().getId()
+            : null;
+        if (callerPatientId == null || !callerPatientId.equals(subjectPatientId)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
     }
 
     /**
