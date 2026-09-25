@@ -273,21 +273,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * The co-signer's staff profile, resolved at the PRESCRIPTION's hospital.
+     * The co-signer, credentialed at the PRESCRIPTION's hospital.
      *
-     * <p>A clinician credentialed at two hospitals has two staff profiles, so
-     * "the first profile found" matched them to the older one and refused them
-     * at the newer. The anchor is the prescription's own hospital rather than
-     * the acting scope: the co-signature attests to an order that belongs to
-     * that hospital and will be filled there, so the second clinician must be
-     * credentialed there. When a hospital scope is active the block above has
-     * already proved the two are the same hospital; when the caller is in the
-     * unscoped (global) view the prescription's hospital is the only defined
-     * anchor, and reading the scope there would leave nothing to check.
+     * <p>The method's own contract says the co-signer "must hold a prescribing
+     * role at the prescription's hospital", but nothing checked it: the lookup
+     * was {@code findFirstByUserIdOrderByCreatedAtAsc}, "any staff profile this
+     * user has, anywhere". Holding {@code ROLE_DOCTOR} somewhere plus a staff
+     * row somewhere was enough to put a co-signature on an order at a hospital
+     * the caller has no active assignment at.
      *
-     * <p>Same shape as {@code PrescriptionClarificationService
-     * .resolveDoctorAtHospital} and the encounter-note co-sign; AccessDenied
-     * rather than BusinessException because this is an authorization failure.
+     * <p>Where the credential lives matters here. {@code staff.user_id} is
+     * UNIQUE (entity {@code uq_staff_user}, and V8 de-duplicated and indexed
+     * it), so a clinician has exactly ONE staff row no matter how many
+     * hospitals they work at; multi-hospital membership is modelled by
+     * {@link UserRoleHospitalAssignment}. Anchoring the CREDENTIAL check on a
+     * staff row at the prescription's hospital would therefore refuse the
+     * legitimate cross-hospital co-signer — one staff row filed at hospital A,
+     * an active doctor assignment at hospital B — which is exactly the person
+     * this is meant to admit. So: the assignment answers "are you a prescriber
+     * here", the staff row is only the FK {@code cosignedBy} records.
+     *
+     * <p>The anchor is the prescription's own hospital, not the acting scope.
+     * The co-signature attests to an order that belongs to that hospital and
+     * will be filled there. With a scope active the check at the top of
+     * {@code cosignPrescription} has already proved the two are the same
+     * hospital; in the unscoped (global) view the prescription's hospital is
+     * the only defined anchor, so reading the scope would leave nothing to
+     * check.
+     *
+     * <p>Doctor/physician/surgeon, because {@code RoleExpansion} makes a
+     * physician and a surgeon a doctor before the controller's
+     * {@code hasAuthority('ROLE_DOCTOR')} runs, while the per-hospital
+     * {@code RoleValidator} checks match the stored assignment code and do not
+     * know that. Naming only DOCTOR here would refuse people the annotation
+     * admits.
+     *
+     * <p>AccessDenied rather than BusinessException: this is an authorization
+     * failure, so 403 rather than 400 — the clarification path's stance.
      */
     private Staff resolveCosignerAtHospital(Prescription prescription) {
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -301,10 +323,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new AccessDeniedException(
                 "Only a clinician at the prescribing hospital can co-sign a prescription.");
         }
-        return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
+        boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
+            || roleValidator.isPhysician(currentUserId, rxHospitalId)
+            || roleValidator.isSurgeon(currentUserId, rxHospitalId);
+        if (!prescriberHere) {
+            throw new AccessDeniedException(
+                "Only a clinician with an active prescribing assignment at the prescribing "
+                    + "hospital can co-sign a prescription.");
+        }
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new AccessDeniedException(
-                "Only a clinician with a staff profile at the prescribing hospital can "
-                    + "co-sign a prescription."));
+                "Only a clinician with a staff profile can co-sign a prescription."));
     }
 
     /**

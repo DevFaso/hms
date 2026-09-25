@@ -231,6 +231,7 @@ public class RoleValidator {
 
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
+    public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "SURGEON"); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
