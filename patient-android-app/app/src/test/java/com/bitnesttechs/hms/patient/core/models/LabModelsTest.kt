@@ -209,10 +209,11 @@ class LabModelsTest {
         )
         assertTrue(digitsInUnit.isGradedNormal)
 
-        // A range with no unit token at all is the ordinary single-range case
-        // and keeps its grading.
+        // A range with no unit token where the row HAS one cannot occur —
+        // formatReferenceRange falls back to the result's unit — and is not
+        // given a pass: only an empty range is.
         val noUnitOnRange = ungraded.copy(value = "5.4", unit = "mmol/L", referenceRange = "3.9 - 6.1")
-        assertTrue(noUnitOnRange.isGradedNormal)
+        assertFalse(noUnitOnRange.isGradedNormal)
     }
 
     /**
@@ -221,23 +222,46 @@ class LabModelsTest {
      * badly wrong.
      */
     @Test
-    fun aReferenceRangeInAnotherUnitIsNotShownAtAll() {
+    fun aReferenceRangeInAnotherUnitIsShownWithACaveat() {
         val mismatched = LabResultDto(
             id = "m", testName = "Glucose", value = "5.4", unit = "mmol/L",
             referenceRange = "70 - 110 mg/dL", status = "NORMAL", released = true
         )
-        assertNull(mismatched.displayReferenceRange)
-        assertTrue(mismatched.referenceRangeUnitMismatch)
+        // Shown, not hidden: findMatchingRange falls back to ranges[0], so the
+        // displayed range may well BE the graded one and the app cannot tell.
+        assertEquals("70 - 110 mg/dL", mismatched.displayReferenceRange)
+        assertTrue(mismatched.referenceRangeUnitUncertain)
+        // The tick is still withheld, which is the free half of the guard.
+        assertFalse(mismatched.isGradedNormal)
 
         val matched = mismatched.copy(referenceRange = "3.9 - 6.1 mmol/L")
         assertEquals("3.9 - 6.1 mmol/L", matched.displayReferenceRange)
-        assertFalse(matched.referenceRangeUnitMismatch)
+        assertFalse(matched.referenceRangeUnitUncertain)
+        assertTrue(matched.isGradedNormal)
 
         // A pending row has neither: the backend redacts the range, and there
-        // is nothing to explain away.
+        // is nothing to caveat.
         val pending = mismatched.copy(released = false, status = "PENDING")
         assertNull(pending.displayReferenceRange)
-        assertFalse(pending.referenceRangeUnitMismatch)
+        assertFalse(pending.referenceRangeUnitUncertain)
+    }
+
+    /**
+     * A unit that ends in a digit — `cells/mm3`, `10^9/L`, `mmol/24h` — must
+     * not get an unconditional pass.
+     */
+    @Test
+    fun aUnitEndingInADigitIsStillCompared() {
+        val cd4 = LabResultDto(
+            id = "c", testName = "CD4 count", value = "0.8", unit = "10^9/L",
+            referenceRange = "500 - 1500 cells/mm3", status = "NORMAL", released = true
+        )
+        assertTrue(cd4.referenceRangeUnitUncertain)
+        assertFalse(cd4.isGradedNormal)
+
+        val sameUnit = cd4.copy(referenceRange = "0.5 - 1.5 10^9/L")
+        assertFalse(sameUnit.referenceRangeUnitUncertain)
+        assertTrue(sameUnit.isGradedNormal)
     }
 
     /** A pending row's `resultedAt` is the analyzer's, not the lab's. */

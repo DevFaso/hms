@@ -52,7 +52,10 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
             )
         }
     ) { padding ->
-        if (isLoading) {
+        // Only when there is nothing to show yet. Retrying from the banner
+        // below sets isLoading, and a full-screen spinner here would blank the
+        // stale results the banner exists to keep in front of the patient.
+        if (isLoading && results.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = BrandBlue)
             }
@@ -100,8 +103,18 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { viewModel.load() }) {
-                            Text(stringResource(R.string.retry))
+                        if (isLoading) {
+                            // In the banner, not over the list: the retry must
+                            // not blank the results it is retrying for.
+                            CircularProgressIndicator(
+                                color = BrandBlue,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            TextButton(onClick = { viewModel.load() }) {
+                                Text(stringResource(R.string.retry))
+                            }
                         }
                     }
                 }
@@ -175,8 +188,6 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Medium)
                                 }
-                                // Only when the range is this result's own; the
-                                // dialog explains the omission, a list cell cannot.
                                 lab.displayReferenceRange?.let {
                                     Text(stringResource(R.string.lab_reference_with_value, it),
                                         style = MaterialTheme.typography.bodySmall,
@@ -254,9 +265,8 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                     lab.displayReferenceRange?.let {
                         DetailRow(stringResource(R.string.reference_range), it)
                     }
-                    if (lab.referenceRangeUnitMismatch) {
-                        // Say why it is missing rather than drop it silently.
-                        Text(stringResource(R.string.lab_reference_range_unit_mismatch),
+                    if (lab.referenceRangeUnitUncertain) {
+                        Text(stringResource(R.string.lab_reference_range_unit_uncertain),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

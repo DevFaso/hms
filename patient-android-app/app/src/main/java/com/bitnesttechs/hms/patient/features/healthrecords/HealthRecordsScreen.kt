@@ -249,6 +249,12 @@ private fun LabsTab(labs: List<LabResultDto>) {
                         DetailItem(stringResource(R.string.performed_by), lab.performedBy, Icons.Default.Person),
                         DetailItem(stringResource(R.string.laboratory), lab.hospitalName, Icons.Default.LocalHospital)
                     )
+                    if (lab.referenceRangeUnitUncertain) {
+                        DetailNote(
+                            stringResource(R.string.range),
+                            stringResource(R.string.lab_reference_range_unit_uncertain)
+                        )
+                    }
                     DetailNote(stringResource(R.string.notes), lab.notes)
                 }
             ) {

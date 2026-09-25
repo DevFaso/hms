@@ -687,5 +687,5 @@
     <string name="dosage_and_administration">Posologie et administration</string>
     <string name="start_date">Date de début</string>
     <string name="end_date">Date de fin</string>
-    <string name="lab_reference_range_unit_mismatch">Valeurs de référence non affichées — celles enregistrées ne sont pas dans les unités de ce résultat.</string>
+    <string name="lab_reference_range_unit_uncertain">Ces valeurs ne sont peut-être pas dans les mêmes unités que votre résultat.</string>
 </resources>
