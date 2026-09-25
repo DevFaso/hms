@@ -383,6 +383,16 @@ describe('LabResultsInboxComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="hospital-scope-chip"]'),
     ).not.toBeNull();
+
+    // And it survives the pick: unmounting the chip would leave no way to
+    // switch hospital, or to return to global view, from this page.
+    roleContext.scopeToHospital('h-b');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="hospital-scope-chip"]'),
+    ).not.toBeNull();
   });
 
   it('reads as soon as a hospital is picked, and clears the hint', () => {

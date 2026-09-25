@@ -19,18 +19,36 @@
       -->
       <p class="category-hint">{{ 'inBasket.labResultsScopeHint' | translate }}</p>
     </div>
-    <!-- Nothing to refresh without a scope: the endpoint refuses the read. -->
-    @if (hasHospitalScope()) {
-      <button
-        type="button"
-        class="btn-refresh"
-        (click)="load()"
-        [disabled]="loading()"
-        [attr.aria-label]="'inBasket.labResultsRefresh' | translate"
-      >
-        ↻
-      </button>
-    }
+    <div class="category-actions">
+      <!--
+        The picker sits in the header, UNCONDITIONALLY, not inside the
+        no-scope branch below. This page is not `requiresHospitalScope` — it
+        renders for every clinical role and for a super-admin in global view —
+        so the shell draws no scope bar above it; a chip that unmounted as
+        soon as a hospital was picked would be a one-way door, leaving no way
+        to switch to another hospital or back to global view from here, on a
+        pick that is session-wide. It hides itself for anyone but a
+        super-admin, by design.
+
+        `preserveScope` keeps the session's pick instead of resetting the
+        scope to global view on mount; `disableUrlSync` is the separate input
+        that governs the WRITE path, and it is on because neither this page
+        nor the in-basket route reads `?hospitalId=`.
+      -->
+      <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
+      <!-- Nothing to refresh without a scope: the endpoint refuses the read. -->
+      @if (hasHospitalScope()) {
+        <button
+          type="button"
+          class="btn-refresh"
+          (click)="load()"
+          [disabled]="loading()"
+          [attr.aria-label]="'inBasket.labResultsRefresh' | translate"
+        >
+          ↻
+        </button>
+      }
+    </div>
   </header>
 
   <!--
@@ -48,17 +66,6 @@
     above them.
   -->
   @if (!hasHospitalScope()) {
-    <!--
-      The chip, with the hint. This page is not `requiresHospitalScope` — it
-      renders for every clinical role and for a super-admin in global view —
-      so the shell draws no scope bar above it, and a hint saying "select a
-      hospital" with no picker anywhere on screen names a remedy the reader
-      cannot reach. `preserveScope` is what #731 objected to the chart doing
-      without: it keeps the session's pick instead of resetting the scope on
-      mount and never touches the URL. The chip renders itself away for
-      anyone but a super-admin.
-    -->
-    <app-hospital-scope-chip [preserveScope]="true" />
     <app-hospital-scope-hint />
   } @else if (loading() && results().length === 0) {
     <div class="loading-spinner" aria-live="polite">

@@ -1610,6 +1610,19 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(component.snapshotError()).toBe('NOT_HERE');
   });
 
+  it('treats a 200 with no payload as a failure, never as an empty drawer', () => {
+    // `getPatientSnapshot` maps `res.data` with no null guard, so this lands
+    // in `next`. Open, not loading and with no error renders nothing at all.
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(of(null as unknown as PatientSnapshot));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('FAILED');
+    expect(component.patientSnapshot()).toBeNull();
+  });
+
   it('re-reads the same patient from the drawer Retry', () => {
     build('h-a');
     dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 500 })));

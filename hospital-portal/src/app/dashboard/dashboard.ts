@@ -2079,11 +2079,42 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.inboxItems.set([]);
     this.recentPatients.set([]);
     this.todayAppointments.set([]);
+    // The role-specific summary cards are hospital-scoped too. `hospitalAdminSummary`
+    // matters most: `loadDashboardData` gates its read on
+    // `isHospitalAdmin() && !isSuperAdmin()`, so for a super-admin holding that
+    // role it is never re-read — left alone it would sit on the previous
+    // hospital's numbers indefinitely, which is worse than empty.
+    this.hospitalAdminSummary.set(null);
+    this.labDirectorDashboard.set(null);
+    this.qualityManagerDashboard.set(null);
+    this.labOpsSummary.set(null);
+    this.dispenseQueueCount.set(null);
+    this.refillPendingCount.set(null);
+    this.pharmacyClaimsCount.set(null);
+    this.imagingPendingCount.set(null);
+    this.imagingAwaitingReportCount.set(null);
+    this.billingRecentInvoices.set([]);
+    this.billingOverdueCount.set(0);
+    this.billingOverdueTotal.set(0);
+    this.billingSnapshotLoaded.set(false);
     // The open snapshot is one patient's record at the hospital just left.
     this.closePatientSnapshot();
+    // The tracker socket is subscribed per hospital
+    // (/topic/patient-tracker/{hospitalId}) and was connected once, in
+    // ngOnInit. Left alone it would go on delivering the previous hospital's
+    // encounter transitions — and deliver none of the new one's.
+    this.reconnectTracker();
     // The same read the page's own Refresh button issues, which re-reads the
     // review queue among the rest — so it is NOT also requested separately.
     this.loadDashboardData();
+  }
+
+  /** Re-point the tracker socket at the hospital now in scope (clinicians only). */
+  private reconnectTracker(): void {
+    if (!this.wsEventsSub) return;
+    this.trackerWs.disconnect();
+    const hospitalId = this.auth.getHospitalId();
+    if (hospitalId) this.trackerWs.connect(hospitalId);
   }
 
   ngOnInit(): void {
@@ -2692,8 +2723,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.dashboardService.getPatientSnapshot(patientId).subscribe({
       next: (s) => {
         if (!isCurrent()) return;
-        this.patientSnapshot.set(s);
         this.snapshotLoading.set(false);
+        if (!s) {
+          // `getPatientSnapshot` is `map((res) => res.data)` with no null
+          // guard, so a 200 carrying no payload lands here. Rendered as
+          // "open, not loading, no error" the drawer would draw nothing at
+          // all — the dead button this whole state machine exists to stop.
+          this.snapshotError.set('FAILED');
+          return;
+        }
+        this.patientSnapshot.set(s);
       },
       error: (err: HttpErrorResponse) => {
         if (!isCurrent()) return;
@@ -2790,7 +2829,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.resultQueue.set([]);
       this.resultQueueError.set(false);
       this.resultQueueLoading.set(false);
-      done?.();
+      // Deferred, not called inline: every other contributor to the pending
+      // counter settles asynchronously, and a synchronous `done()` here would
+      // let `loading` flip false before the reads issued after this one are
+      // even counted.
+      queueMicrotask(() => done?.());
       return;
     }
     const request = ++this.resultQueueRequest;

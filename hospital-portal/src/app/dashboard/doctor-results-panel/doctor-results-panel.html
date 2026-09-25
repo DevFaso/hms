@@ -9,6 +9,18 @@
         </span>
       }
     </div>
+    <!--
+      The picker sits in the card head, UNCONDITIONALLY, not inside the
+      no-scope branch below: the dashboard is not `requiresHospitalScope`, so
+      the shell draws no scope bar above it, and a chip that unmounted on the
+      first pick would leave no way to switch hospital or return to global
+      view from this page. It hides itself for anyone but a super-admin.
+
+      `preserveScope` keeps the session's pick rather than resetting to global
+      view on mount; `disableUrlSync` governs the separate WRITE path, and is
+      on because the dashboard does not read `?hospitalId=`.
+    -->
+    <app-hospital-scope-chip [preserveScope]="true" [disableUrlSync]="true" />
     <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
@@ -23,15 +35,6 @@
     false all-clear, and the error card would blame an outage.
   -->
   @if (!scoped()) {
-    <!--
-      The chip belongs beside the hint here: the dashboard is not
-      `requiresHospitalScope` (it renders for every role and for a super-admin
-      in global view), so the shell draws no scope bar above it and the hint
-      would name a remedy with no control on screen. `preserveScope` keeps the
-      session's pick and leaves the URL alone; the chip hides itself for
-      anyone but a super-admin.
-    -->
-    <app-hospital-scope-chip [preserveScope]="true" />
     <app-hospital-scope-hint />
   } @else if (loading() && results().length === 0) {
     <div class="rp-loading" aria-live="polite">

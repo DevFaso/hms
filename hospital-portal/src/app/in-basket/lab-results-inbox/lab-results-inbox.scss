@@ -14,6 +14,14 @@
   margin-bottom: 12px;
 }
 
+/* The scope picker and the refresh control, kept on one line at the right. */
+.category-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .category-title {
   display: flex;
   align-items: center;
