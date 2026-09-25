@@ -131,7 +131,10 @@ class EncounterServiceImplReadAccessControlTest {
         // lenient() only on the shared fixtures a given case may not reach;
         // the suite is otherwise strict, so a dead stub inside a test fails it.
         lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.of(callerPatient));
+        // The ownership question, asked the way the guard asks it: is THIS
+        // patient row linked to THIS user? Every other (row, user) pair is
+        // false by Mockito's default, which is what "not yours" looks like.
+        lenient().when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(true);
         lenient().when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
             .thenReturn(new EncounterResponseDTO());
         lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(), any()))
@@ -264,6 +267,31 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
+        @DisplayName("ownership never goes through the single-result finder that 500s on duplicate rows")
+        void ownershipDoesNotUseTheSingleResultFinder() {
+            // findByUserId throws IncorrectResultSizeDataAccessException on a
+            // tenant V113 left with duplicate user_id rows, and loads (and
+            // decrypts) a whole Patient to compare two UUIDs.
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+
+            assertThat(service.getAfterVisitSummary(mine.getId())).isNotNull();
+            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findByUserId(any());
+        }
+
+        @Test
+        @DisplayName("an account linked to two patient rows reads the encounters on the second one too")
+        void accountLinkedToTwoRowsReadsBoth() {
+            Patient secondRow = new Patient();
+            secondRow.setId(UUID.randomUUID());
+            lenient().when(patientRepository.existsByIdAndUserId(secondRow.getId(), callerUserId)).thenReturn(true);
+            authenticateAs("ROLE_PATIENT");
+            Encounter onTheSecondRow = encounterAt(hospital, secondRow, true);
+
+            assertThat(service.getAfterVisitSummary(onTheSecondRow.getId())).isNotNull();
+        }
+
+        @Test
         @DisplayName("a patient still reads their own AVS over OIDC (appUserId claim)")
         void patientReadsOwnSummaryOverOidc() {
             authenticateViaOidcAs("ROLE_PATIENT");
@@ -275,7 +303,7 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a patient account with no linked patient row is refused, not 500'd")
         void patientWithoutPatientRowIsRefused() {
-            lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
+            lenient().when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(false);
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, true);
 
@@ -479,7 +507,7 @@ class EncounterServiceImplReadAccessControlTest {
         @Test
         @DisplayName("a patient account with no linked patient row is refused, not 500'd")
         void patientWithoutPatientRowIsRefused() {
-            lenient().when(patientRepository.findByUserId(callerUserId)).thenReturn(Optional.empty());
+            lenient().when(patientRepository.existsByIdAndUserId(callerPatientId, callerUserId)).thenReturn(false);
             authenticateAs("ROLE_PATIENT");
             Encounter mine = encounterAt(hospital, callerPatient, false);
 

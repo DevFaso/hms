@@ -27,6 +27,33 @@ import java.util.Set;
  * test arrives automatically if {@code ROLE_PATIENT} is ever added to its
  * annotation.
  *
+ * <p><b>The invariant, for every set below and any set added later: exactly
+ * the endpoint's {@code @PreAuthorize} minus {@code ROLE_PATIENT}.</b>
+ * Nothing added, nothing inferred. A role the annotation does not admit
+ * cannot be a legitimate non-subject reader, and putting it here can only let
+ * it in through the patient door. {@code EncounterReaderRolesMirrorTest} reads
+ * each compiled annotation and fails on drift in either direction.
+ *
+ * <p>That is why {@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are absent,
+ * and the usual reason for naming them is what makes it wrong. On a set that
+ * GRANTS access, naming them matters, because
+ * {@link com.example.hms.security.RoleExpansion} maps them to
+ * {@code ROLE_DOCTOR} on the password path and
+ * {@code KeycloakJwtAuthenticationConverter} does not. These sets REMOVE
+ * subject status, so naming them inverts into an escalation: none of the
+ * three annotations admits a surgeon, so over Keycloak a
+ * {@code ROLE_SURGEON} + {@code ROLE_PATIENT} principal passes
+ * {@code @PreAuthorize} through the patient door alone — and would then be
+ * reclassified here as a clinician and read every record at the hospital.
+ * Over the password path the same principal already holds {@code ROLE_DOCTOR}
+ * by expansion, so nothing legitimate is lost: what is lost is exactly the
+ * escalation.
+ *
+ * <p>{@code ROLE_SUPER_ADMIN} is in all three because all three annotations
+ * admit it, and it must win over the {@code ROLE_PATIENT} that
+ * {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants every super-admin on the
+ * password path.
+ *
  * <p>Not to be confused with {@code RoleValidator.isPatientOnlyFromAuth()},
  * which answers a similar-sounding question against a fixed staff set that
  * knows nothing about either endpoint's annotation: it omits the three
@@ -37,37 +64,6 @@ import java.util.Set;
 public final class EncounterReaderRoles {
 
     /**
-     * The clinical core shared by all three sets.
-     *
-     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are deliberately NOT
-     * here, and the usual reason for naming them is what makes it wrong. On a
-     * set that GRANTS access, naming them matters, because
-     * {@link com.example.hms.security.RoleExpansion} maps them to
-     * {@code ROLE_DOCTOR} on the password path and
-     * {@code KeycloakJwtAuthenticationConverter} does not. This set REMOVES
-     * subject status, so naming them inverts into an escalation: none of the
-     * three annotations admits a surgeon, so over Keycloak a
-     * {@code ROLE_SURGEON} + {@code ROLE_PATIENT} principal passes
-     * {@code @PreAuthorize} through the patient door alone — and would then be
-     * reclassified here as a clinician and read every record at the hospital.
-     * Over the password path the same principal already holds
-     * {@code ROLE_DOCTOR} by expansion, so nothing legitimate is lost: what is
-     * lost is exactly the escalation.
-     *
-     * <p>Hence the invariant for every set below, and for any set added later:
-     * <b>exactly the endpoint's {@code @PreAuthorize} minus
-     * {@code ROLE_PATIENT}</b>. Nothing added, nothing inferred. A role the
-     * annotation does not admit cannot be a legitimate non-subject reader, and
-     * putting it here can only let it in through the patient door.
-     *
-     * <p>{@code ROLE_SUPER_ADMIN} is named because all three annotations DO
-     * admit it, and it must win over the {@code ROLE_PATIENT} that
-     * {@code RoleExpansion.SUPER_ADMIN_INHERITS} grants every super-admin on
-     * the password path.
-     */
-    private static final Set<String> CLINICAL_CORE = Set.of(SecurityConstants.ROLE_DOCTOR);
-
-    /**
      * The roles that read {@code GET /encounters/&#123;id&#125;} as a
      * clinician rather than as its subject — exactly
      * {@code EncounterController.ENCOUNTER_DETAIL_ROLES} minus
@@ -76,14 +72,14 @@ public final class EncounterReaderRoles {
      * <p>{@code ROLE_RECEPTIONIST} is deliberately absent: the detail read
      * does not admit it.
      */
-    public static final Set<String> DETAIL_NON_SUBJECT_ROLES = union(
-        CLINICAL_CORE,
-        Set.of(SecurityConstants.ROLE_NURSE,
-            SecurityConstants.ROLE_MIDWIFE,
-            SecurityConstants.ROLE_RADIOLOGIST,
-            SecurityConstants.ROLE_ANESTHESIOLOGIST,
-            SecurityConstants.ROLE_PHYSIOTHERAPIST,
-            SecurityConstants.ROLE_SUPER_ADMIN));
+    public static final Set<String> DETAIL_NON_SUBJECT_ROLES = Set.of(
+        SecurityConstants.ROLE_DOCTOR,
+        SecurityConstants.ROLE_NURSE,
+        SecurityConstants.ROLE_MIDWIFE,
+        SecurityConstants.ROLE_RADIOLOGIST,
+        SecurityConstants.ROLE_ANESTHESIOLOGIST,
+        SecurityConstants.ROLE_PHYSIOTHERAPIST,
+        SecurityConstants.ROLE_SUPER_ADMIN);
 
     /**
      * The roles that read {@code GET /encounters/&#123;id&#125;/avs} as
@@ -98,12 +94,12 @@ public final class EncounterReaderRoles {
      * summary is theirs to read. The three consulting clinicians are absent:
      * the AVS read does not admit them.
      */
-    public static final Set<String> AVS_NON_SUBJECT_ROLES = union(
-        CLINICAL_CORE,
-        Set.of(SecurityConstants.ROLE_NURSE,
-            SecurityConstants.ROLE_MIDWIFE,
-            SecurityConstants.ROLE_RECEPTIONIST,
-            SecurityConstants.ROLE_SUPER_ADMIN));
+    public static final Set<String> AVS_NON_SUBJECT_ROLES = Set.of(
+        SecurityConstants.ROLE_SUPER_ADMIN,
+        SecurityConstants.ROLE_DOCTOR,
+        SecurityConstants.ROLE_NURSE,
+        SecurityConstants.ROLE_MIDWIFE,
+        SecurityConstants.ROLE_RECEPTIONIST);
 
     /**
      * The roles that read
@@ -119,19 +115,13 @@ public final class EncounterReaderRoles {
      * trail — chief complaint, assessment, plan, author, timestamps — of
      * every encounter at their hospital.
      */
-    public static final Set<String> NOTE_HISTORY_NON_SUBJECT_ROLES = union(
-        CLINICAL_CORE,
-        Set.of(SecurityConstants.ROLE_NURSE,
-            SecurityConstants.ROLE_MIDWIFE,
-            SecurityConstants.ROLE_SUPER_ADMIN));
+    public static final Set<String> NOTE_HISTORY_NON_SUBJECT_ROLES = Set.of(
+        SecurityConstants.ROLE_DOCTOR,
+        SecurityConstants.ROLE_NURSE,
+        SecurityConstants.ROLE_MIDWIFE,
+        SecurityConstants.ROLE_SUPER_ADMIN);
 
     private EncounterReaderRoles() {
-    }
-
-    private static Set<String> union(Set<String> first, Set<String> second) {
-        java.util.HashSet<String> all = new java.util.HashSet<>(first);
-        all.addAll(second);
-        return Set.copyOf(all);
     }
 
     /**

@@ -1319,15 +1319,15 @@ public class EncounterServiceImpl implements EncounterService {
      *
      * @param subject        true when the caller is a patient principal and
      *                       nothing else, so ownership is the whole boundary
-     * @param callerPatientId the subject's own patient row, {@code null} when
-     *                       the account has none (refused, not waved through)
+     * @param callerUserId   the subject's HMS user id, {@code null} when the
+     *                       principal carries none (refused, not waved through)
      * @param hospitalId     the hospital bounding a non-subject caller
      * @param crossTenant    true only for a verified super-admin in global
      *                       view. An explicit decision, never inferred from a
      *                       {@code null} hospital: a null that meant "open"
      *                       is how the earlier draft failed open.
      */
-    private record EncounterReadScope(boolean subject, UUID callerPatientId, UUID hospitalId,
+    private record EncounterReadScope(boolean subject, UUID callerUserId, UUID hospitalId,
                                       boolean crossTenant) {}
 
     /**
@@ -1397,11 +1397,7 @@ public class EncounterServiceImpl implements EncounterService {
             // would refuse the owner their own encounter.
             // ControllerAuthUtils.resolveUserId reads the appUserId claim too,
             // and is what PatientPortalServiceImpl.resolvePatientId uses.
-            UUID callerPatientId = authUtils.resolveUserId(auth)
-                .flatMap(patientRepository::findByUserId)
-                .map(Patient::getId)
-                .orElse(null);
-            return new EncounterReadScope(true, callerPatientId, null, false);
+            return new EncounterReadScope(true, authUtils.resolveUserId(auth).orElse(null), null, false);
         }
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null) {
@@ -1413,8 +1409,7 @@ public class EncounterServiceImpl implements EncounterService {
         // requireActiveHospitalId()'s step-4 null: the authorities say
         // super-admin and the verified flag does not. Refused, before the
         // lookup, with the same answer as any caller who has no hospital.
-        throw new BusinessException(
-            "Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
+        throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
     }
 
     /**
@@ -1436,8 +1431,16 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private void requireEncounterReadable(Encounter encounter, EncounterReadScope scope) {
         if (scope.subject()) {
+            // existsByIdAndUserId, not findByUserId — the reasoning #744 wrote
+            // down on PatientRepository: the single-result finder throws
+            // IncorrectResultSizeDataAccessException on a tenant that V113 left
+            // with duplicate user_id rows (a 500 where this check owes a
+            // decision), would refuse a user linked to two rows the encounters
+            // on the second, and decrypts every PHI column of a Patient just to
+            // compare two UUIDs.
             UUID subjectPatientId = encounter.getPatient() != null ? encounter.getPatient().getId() : null;
-            if (scope.callerPatientId() == null || !scope.callerPatientId().equals(subjectPatientId)) {
+            if (scope.callerUserId() == null || subjectPatientId == null
+                || !patientRepository.existsByIdAndUserId(subjectPatientId, scope.callerUserId())) {
                 throw encounterNotFound(encounter.getId());
             }
             return;
