@@ -55,11 +55,13 @@ import java.util.UUID;
  *
  * <p>The {@link MllpInboundOutcome} returned by the inbound services
  * maps to ACK codes: {@code ACCEPTED → AA},
- * {@code REJECTED_NOT_FOUND/INVALID → AE},
- * {@code REJECTED_CROSS_TENANT → AR}. The ORU^R01 path never returns
- * REJECTED_CROSS_TENANT (B13): an accession owned by another hospital
- * answers exactly like an unknown one, so a sender cannot probe other
- * tenants' accession numbers. The ADT and merge paths still do.
+ * {@code REJECTED_NOT_FOUND/INVALID → AE}. No inbound path answers AR
+ * for a cross-tenant reference: an accession, an MRN or a merge pair
+ * owned by another hospital answers exactly like an unknown one, so an
+ * allowlisted sender cannot probe another tenant's identifier space.
+ * AR is left for the transport-level refusals the dispatcher itself
+ * makes — an unparseable MSH, a sender that is not allowlisted at all,
+ * an unsupported message type — none of which depend on tenant data.
  */
 @Component
 public class Hl7MessageDispatcher {
@@ -190,7 +192,7 @@ public class Hl7MessageDispatcher {
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
-            header.messageControlId());
+            header.messageControlId(), hl7Body);
         return ackForOutcome(header, outcome, header.messageType());
     }
 
@@ -218,7 +220,7 @@ public class Hl7MessageDispatcher {
         }
         MllpInboundOutcome outcome = inboundMerge.processMerge(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
-            header.messageControlId());
+            header.messageControlId(), hl7Body);
         return ackForOutcome(header, outcome, "ADT^A40");
     }
 
@@ -278,12 +280,13 @@ public class Hl7MessageDispatcher {
         return switch (outcome) {
             case ACCEPTED ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AA, null);
+            // One answer for "no such entity" and for "an entity you may
+            // not see": same code, same text. See MllpInboundOutcome —
+            // the AR that used to distinguish them was an enumeration
+            // oracle over every identifier space HL7 reaches.
             case REJECTED_NOT_FOUND ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                     label + " referenced entity not found");
-            case REJECTED_CROSS_TENANT ->
-                Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
-                    label + " sender not authorised for this entity");
             case REJECTED_INVALID ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                     label + " invalid or missing required fields");

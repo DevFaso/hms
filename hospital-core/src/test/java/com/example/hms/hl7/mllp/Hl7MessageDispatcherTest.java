@@ -103,7 +103,7 @@ class Hl7MessageDispatcherTest {
         assertThat(ack).contains("MSA|AA|MSG-42");
         verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"),
             eq("MSG-42"), anyString());
-        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -123,19 +123,28 @@ class Hl7MessageDispatcherTest {
     }
 
     @Test
-    void mapsLabRejectedCrossTenantToAr() {
-        allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
-            .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+    void noDomainOutcomeCanProduceAnAr() {
+        // AR is reserved for the dispatcher's own transport-level refusals
+        // (bad MSH, sender not allowlisted, unsupported type) — none of which
+        // depend on tenant data. Every outcome a domain handler can return
+        // maps to AA or AE, so no handler can reopen the enumeration oracle
+        // by picking a different one.
+        assertThat(MllpInboundOutcome.values())
+            .containsExactlyInAnyOrder(
+                MllpInboundOutcome.ACCEPTED,
+                MllpInboundOutcome.REJECTED_NOT_FOUND,
+                MllpInboundOutcome.REJECTED_INVALID);
 
+        allowSender();
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
                    + "PID|1||p\r"
                    + "OBR|1|ACC-OTHER||GLU^Glucose|||20260428\r"
                    + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N\r";
-
-        assertThat(dispatcher.dispatch(oru, "10.0.0.1:1"))
-            .contains("MSA|AR|MSG-8")
-            .contains("sender not authorised");
+        for (MllpInboundOutcome outcome : MllpInboundOutcome.values()) {
+            when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
+                any(), anyString())).thenReturn(outcome);
+            assertThat(dispatcher.dispatch(oru, "10.0.0.1:1")).doesNotContain("MSA|AR|");
+        }
     }
 
     @Test
@@ -155,7 +164,7 @@ class Hl7MessageDispatcherTest {
         // Dispatcher now passes MSH-10 control id through the 5-arg
         // processAdt overload (roadmap row 24 — visit-sync projection
         // stamps the control id on the reconciled Admission/Encounter).
-        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any(), any()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428073000||ADT^A01|CTRL-9|P|2.5\r"
@@ -164,7 +173,7 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(adt, "10.0.0.50:1024")).contains("MSA|AA|CTRL-9");
         verify(inboundAdt).processAdt(any(), eq(hospital),
-            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-9"));
+            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-9"), anyString());
         verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString(),
             any(), anyString());
     }
@@ -172,7 +181,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void mapsAdtRejectedNotFoundToAe() {
         allowSender();
-        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any(), any()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
         String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-N|P|2.5\r"
@@ -324,26 +333,27 @@ class Hl7MessageDispatcherTest {
         // PID, never looked for MRG, and applied a demographic update instead
         // of a merge — the wrong thing done quietly rather than a reject.
         allowSender();
-        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any(), any()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         assertThat(dispatcher.dispatch(A40, "10.0.0.60:1024")).contains("MSA|AA|CTRL-A40");
 
         verify(inboundMerge).processMerge(any(), eq(hospital),
-            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-A40"));
-        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
+            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-A40"), anyString());
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any(), any());
     }
 
     @Test
     void passesTheSurvivorAndRetireeToTheMergeServiceTheRightWayRound() {
         allowSender();
-        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any(), any()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         dispatcher.dispatch(A40, "10.0.0.60:1024");
 
         ArgumentCaptor<ParsedMergeMessage> parsed = ArgumentCaptor.forClass(ParsedMergeMessage.class);
-        verify(inboundMerge).processMerge(parsed.capture(), any(), anyString(), anyString(), any());
+        verify(inboundMerge).processMerge(
+            parsed.capture(), any(), anyString(), anyString(), any(), any());
         // Backwards here merges away the patient that was meant to survive.
         assertThat(parsed.getValue().survivingMrn()).isEqualTo("MRN-SURVIVOR");
         assertThat(parsed.getValue().priorMrn()).isEqualTo("MRN-RETIRED");
@@ -358,22 +368,30 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(noMrg, "10.0.0.61:1")).contains("MSA|AE|CTRL-BAD");
         verifyNoInteractions(inboundMerge);
-        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any(), any());
     }
 
     @Test
-    void aCrossTenantMergeRejectionBecomesAr() {
+    void theRawMessageReachesTheMergeServiceSoARejectionCanBeRecorded() {
+        // The rejection reason that no longer fits in the ACK has to land on
+        // the integration_message_event row instead, and the service cannot
+        // write one without the body.
         allowSender();
-        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
-            .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
-        assertThat(dispatcher.dispatch(A40, "10.0.0.62:1")).contains("MSA|AR|CTRL-A40");
+        dispatcher.dispatch(A40, "10.0.0.65:1");
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(inboundMerge).processMerge(any(), any(), anyString(), anyString(), any(),
+            body.capture());
+        assertThat(body.getValue()).isEqualTo(A40);
     }
 
     @Test
     void anUnknownIdentifierMergeRejectionBecomesAe() {
         allowSender();
-        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any(), any()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
         assertThat(dispatcher.dispatch(A40, "10.0.0.63:1")).contains("MSA|AE|CTRL-A40");

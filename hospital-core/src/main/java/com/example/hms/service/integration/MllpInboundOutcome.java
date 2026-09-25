@@ -7,18 +7,29 @@ package com.example.hms.service.integration;
  * <ul>
  *   <li>{@link #ACCEPTED}              → AA (application accept)</li>
  *   <li>{@link #REJECTED_NOT_FOUND}    → AE (application error,
- *       cannot resolve referenced entity — e.g. unknown placer order
- *       number, unknown patient MRN)</li>
- *   <li>{@link #REJECTED_CROSS_TENANT} → AR (application reject — the
- *       referenced entity exists but belongs to a different hospital
- *       than the allowlisted receiving hospital; treated as a hard
- *       reject so the analyzer doesn't keep retrying). Returned by the
- *       ADT and merge paths only: the ORU^R01 lab path answers
- *       {@link #REJECTED_NOT_FOUND} for a cross-tenant accession so the
- *       sender cannot tell "exists elsewhere" from "does not exist".</li>
+ *       cannot resolve the referenced entity — an unknown placer order
+ *       number, an unknown patient MRN, <em>or</em> one that exists but
+ *       belongs to another hospital)</li>
  *   <li>{@link #REJECTED_INVALID}      → AE (parse failure, missing
  *       mandatory fields, etc.)</li>
  * </ul>
+ *
+ * <p><b>There is deliberately no cross-tenant outcome.</b> There used to
+ * be one, mapping to AR, and it was a cross-tenant oracle: an
+ * allowlisted sender that got AR for one identifier and AE for another
+ * had learned that the first exists in a hospital it cannot read, and
+ * could walk an identifier space to enumerate them. The ORU^R01 path
+ * closed that (B13, PR #715); the ADT and A40 merge paths closed it
+ * afterwards. Every "you may not touch this entity" answer is now the
+ * same answer as "there is no such entity", byte for byte, and the
+ * constant that used to make the two distinguishable is gone so the
+ * distinction cannot be reintroduced by returning it.
+ *
+ * <p>The reason is not lost: each path records it on the
+ * {@code integration_message_event} row (a "cross-tenant rejection"
+ * error message against the receiving hospital's organization), which
+ * is where an operator looks for a misconfigured sender and where the
+ * sender cannot.
  *
  * <p>Modelled after the same intent as {@code Hl7AckBuilder.AckCode}
  * but kept on the service side so domain code never has to depend on
@@ -27,6 +38,5 @@ package com.example.hms.service.integration;
 public enum MllpInboundOutcome {
     ACCEPTED,
     REJECTED_NOT_FOUND,
-    REJECTED_CROSS_TENANT,
     REJECTED_INVALID
 }

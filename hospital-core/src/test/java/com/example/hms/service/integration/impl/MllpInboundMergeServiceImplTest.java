@@ -2,12 +2,15 @@ package com.example.hms.service.integration.impl;
 
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiMergeType;
+import com.example.hms.enums.integration.IntegrationMessageDirection;
+import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundOutcome;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
 
 import java.util.Optional;
@@ -47,6 +50,7 @@ class MllpInboundMergeServiceImplTest {
 
     @Mock private EmpiService empiService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private IntegrationMessageRecorder messageRecorder;
 
     private MllpInboundMergeServiceImpl service;
 
@@ -60,7 +64,8 @@ class MllpInboundMergeServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new MllpInboundMergeServiceImpl(empiService, registrationRepository);
+        service = new MllpInboundMergeServiceImpl(
+            empiService, registrationRepository, messageRecorder);
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -158,7 +163,10 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, false);
         registeredHere(retiringPatientId, true);
 
-        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        // Owning ONE of the two sides is not a distinguishable answer: a
+        // sender could otherwise pair its own local MRN with any candidate
+        // identifier and read off whether that candidate exists elsewhere.
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
     }
 
@@ -171,8 +179,54 @@ class MllpInboundMergeServiceImplTest {
         registeredHere(survivingPatientId, true);
         registeredHere(retiringPatientId, false);
 
-        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+    }
+
+    @Test
+    void aCrossTenantRefusalStillRecordsItsReasonOnTheIntegrationRow() {
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, retiringPatientId);
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, false);
+
+        service.processMerge(message(), hospital, "LIS", "HOSP1", "MSG-A40-1", "MSH|raw|body");
+
+        // The ACK cannot say this. The DLQ row can, and the operator who owns
+        // the sender is the one who reads it.
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), eq("MSH|raw|body"),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("cross-tenant rejection"));
+    }
+
+    @Test
+    void anUnknownIdentifierRecordsItsOwnDifferentReason() {
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiDoesNotKnow(PRIOR_MRN);
+
+        service.processMerge(message(), hospital, "LIS", "HOSP1", "MSG-A40-1", "MSH|raw|body");
+
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:LIS/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A40"), eq("MSH|raw|body"),
+            eq(IntegrationMessageStatus.FAILED),
+            eq("identifier not found"));
+    }
+
+    @Test
+    void anAppliedMergeRecordsNoRejection() {
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, retiringPatientId);
+        registeredHere(survivingPatientId, true);
+        registeredHere(retiringPatientId, true);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(messageRecorder, never()).recordMessage(
+            any(), any(), any(), any(), any(), any(), any());
     }
 
     /* ── Unknown identifiers ─────────────────────────────────────────── */
@@ -228,8 +282,27 @@ class MllpInboundMergeServiceImplTest {
         // leave a permanent AE in the sender's queue for work that is done.
         empiKnows(SURVIVING_MRN, survivingPatientId);
         empiKnows(PRIOR_MRN, survivingPatientId);
+        // The patient is registered here — without that this is not a resend
+        // of OUR merge, and the accept below would be the oracle in reverse
+        // (see the test that follows).
+        registeredHere(survivingPatientId, true);
 
         assertThat(process()).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
+    }
+
+    @Test
+    void aResendForSomeoneElseSTenantIsNOTAcceptedBecauseTheAcceptWouldLeak() {
+        // The subtle half. Both identifiers resolve to one patient because
+        // some OTHER hospital merged them. Answering AA here told the sender
+        // that two identifiers it does not own belong to one person somewhere
+        // else — the same oracle as the AR, wearing an accept. The tenant gate
+        // runs BEFORE the already-merged check for exactly this reason.
+        empiKnows(SURVIVING_MRN, survivingPatientId);
+        empiKnows(PRIOR_MRN, survivingPatientId);
+        registeredHere(survivingPatientId, false);
+
+        assertThat(process()).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
         verify(empiService, never()).mergePatients(any(), any(), any(), anyString());
     }
 

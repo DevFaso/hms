@@ -56,6 +56,27 @@ public interface MllpInboundAdtService {
         String sendingFacility,
         String messageControlId
     ) {
+        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility,
+            messageControlId, null);
+    }
+
+    /**
+     * Variant that also carries the raw inbound message, so a rejection can
+     * leave an {@code integration_message_event} row an operator can read and
+     * replay.
+     *
+     * <p>That row is the only place a cross-tenant refusal is distinguishable
+     * from an unknown MRN. The ACK deliberately is not: see
+     * {@link MllpInboundOutcome}.
+     */
+    default MllpInboundOutcome processAdt(
+        ParsedAdtMessage parsed,
+        Hospital receivingHospital,
+        String sendingApplication,
+        String sendingFacility,
+        String messageControlId,
+        String rawMessageBody
+    ) {
         return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility);
     }
 }

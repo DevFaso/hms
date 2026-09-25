@@ -2,12 +2,15 @@ package com.example.hms.service.integration.impl;
 
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiMergeType;
+import com.example.hms.enums.integration.IntegrationMessageDirection;
+import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.empi.EmpiIdentityResponseDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
 
 import java.util.Optional;
@@ -30,8 +33,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
+    /** {@code integration_message_event.message_type} for this path. */
+    private static final String MESSAGE_TYPE = "ADT^A40";
+
     private final EmpiService empiService;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    // Last so existing positional constructor calls only append.
+    private final IntegrationMessageRecorder messageRecorder;
 
     @Override
     @Transactional
@@ -39,18 +47,25 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
                                            Hospital receivingHospital,
                                            String sendingApplication,
                                            String sendingFacility,
-                                           String messageControlId) {
+                                           String messageControlId,
+                                           String rawMessageBody) {
+        String integrationId = buildIntegrationId(sendingApplication, sendingFacility);
+        UUID organizationId = organizationIdOf(receivingHospital);
         if (parsed == null
                 || !StringUtils.hasText(parsed.survivingMrn())
                 || !StringUtils.hasText(parsed.priorMrn())) {
             log.warn("MLLP A40 rejected — missing PID-3 or MRG-1 (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility,
                 receivingHospital != null ? receivingHospital.getId() : null);
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "missing PID-3 or MRG-1");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
         if (receivingHospital == null || receivingHospital.getId() == null) {
             log.warn("MLLP A40 rejected — no resolved hospital (sender={}/{})",
                 sendingApplication, sendingFacility);
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "no resolved hospital");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
@@ -59,11 +74,17 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
 
         if (survivingMrn.equalsIgnoreCase(priorMrn)) {
             // Not an error worth alarming about, but not a merge either.
-            log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier ({}) "
-                + "sender={}/{} hospital={}",
-                survivingMrn, sendingApplication, sendingFacility, receivingHospital.getId());
+            // The identifier itself stays out of the log line: PID-3 is an
+            // MRN, and an MRN in a log is PHI wherever that log ends up.
+            log.warn("MLLP A40 rejected — PID-3 and MRG-1 are the same identifier "
+                + "(sender={}/{} hospital={})",
+                sendingApplication, sendingFacility, receivingHospital.getId());
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "PID-3 and MRG-1 are the same identifier");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
+
+        UUID hospitalId = receivingHospital.getId();
 
         Optional<UUID> survivor = resolvePatient(survivingMrn);
         Optional<UUID> retiree = resolvePatient(priorMrn);
@@ -71,42 +92,64 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Deliberately NOT auto-provisioned. An unrecognised identifier in
             // a merge message means the two systems disagree about who exists,
             // and inventing the missing side would bake that disagreement in.
-            log.warn("MLLP A40 rejected — unknown identifier(s): surviving={} known={} "
-                + "prior={} known={} sender={}/{} hospital={}",
-                survivingMrn, survivor.isPresent(), priorMrn, retiree.isPresent(),
-                sendingApplication, sendingFacility, receivingHospital.getId());
+            // Which side was unknown stays out of the log line, and the
+            // identifiers stay out of it altogether: an MRN is PHI.
+            log.warn("MLLP A40 rejected — unknown identifier(s) (sender={}/{} hospital={})",
+                sendingApplication, sendingFacility, hospitalId);
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "identifier not found");
             return MllpInboundOutcome.REJECTED_NOT_FOUND;
         }
 
         UUID survivingPatientId = survivor.get();
         UUID retiringPatientId = retiree.get();
 
+        // THE GATE — and it runs BEFORE any other answer that depends on what
+        // these two identifiers are to each other.
+        //
+        // EmpiServiceImpl's own tenant checks resolve the caller's hospital
+        // from the security context, and there is none on this thread:
+        // isVisibleToCaller reads a null active hospital as "unscoped, allow".
+        // Without this, an allowlisted sender could merge any two patients in
+        // the system. BOTH sides, not just one: merging a stranger's record
+        // INTO a local patient is as damaging as the reverse, and only
+        // checking the survivor would permit it.
+        //
+        // Order matters as much as the check. The already-merged no-op below
+        // answers AA, and answering it before this gate told a sender that two
+        // identifiers it does not own resolve to one patient somewhere else —
+        // the same oracle wearing an accept instead of a reject.
+        //
+        // And a sender that owns ONE of the two gets the answer a sender that
+        // owns neither gets. If "both registered" were distinguishable from
+        // "one registered", an allowlisted sender could pair its own local MRN
+        // with any candidate identifier and read off whether that candidate
+        // exists in another hospital. Partial ownership is not partial
+        // permission, so it is not a partial answer either.
+        if (!isRegisteredHere(survivingPatientId, hospitalId)
+                || !isRegisteredHere(retiringPatientId, hospitalId)) {
+            // Same outcome as the unknown identifier above — same ACK code,
+            // same ACK text. The reason survives on the integration message
+            // row, where the operator who owns the sender can read it and the
+            // sender cannot.
+            log.warn("MLLP A40 cross-tenant reject — the two patients are not both "
+                + "registered at hospital={} (sender={}/{})",
+                hospitalId, sendingApplication, sendingFacility);
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "cross-tenant rejection");
+            return MllpInboundOutcome.REJECTED_NOT_FOUND;
+        }
+
         if (survivingPatientId.equals(retiringPatientId)) {
             // Two different MRNs already resolving to one patient — the merge
             // this message asks for has effectively happened. Accepting keeps
             // a resend idempotent instead of parking a permanent AE in the
             // sender's queue for work that is already done.
-            log.info("MLLP A40 no-op — {} and {} already resolve to patient {} "
-                + "(sender={}/{} msgCtrlId={})",
-                survivingMrn, priorMrn, survivingPatientId,
-                sendingApplication, sendingFacility, messageControlId);
+            log.info("MLLP A40 no-op — both identifiers already resolve to patient {} "
+                + "(sender={}/{} hospital={} msgCtrlId={})",
+                survivingPatientId, sendingApplication, sendingFacility,
+                hospitalId, messageControlId);
             return MllpInboundOutcome.ACCEPTED;
-        }
-
-        // THE GATE. EmpiServiceImpl's own tenant checks resolve the caller's
-        // hospital from the security context, and there is none on this
-        // thread — isVisibleToCaller reads a null active hospital as
-        // "unscoped, allow". Without this, an allowlisted sender could merge
-        // any two patients in the system. BOTH sides, not just one: merging a
-        // stranger's record INTO a local patient is as damaging as the
-        // reverse, and only checking the survivor would permit it.
-        UUID hospitalId = receivingHospital.getId();
-        if (!isRegisteredHere(survivingPatientId, hospitalId)
-                || !isRegisteredHere(retiringPatientId, hospitalId)) {
-            log.warn("MLLP A40 cross-tenant reject — surviving={} prior={} not both registered "
-                + "at hospital={} (sender={}/{})",
-                survivingMrn, priorMrn, hospitalId, sendingApplication, sendingFacility);
-            return MllpInboundOutcome.REJECTED_CROSS_TENANT;
         }
 
         try {
@@ -121,18 +164,56 @@ public class MllpInboundMergeServiceImpl implements MllpInboundMergeService {
             // Already merged, or a domain rule the merge service owns. AE
             // rather than AA: the sender's request was not applied and their
             // queue should say so.
-            log.warn("MLLP A40 refused by the merge service — surviving={} prior={} "
-                + "sender={}/{} hospital={}: {}",
-                survivingMrn, priorMrn, sendingApplication, sendingFacility,
-                hospitalId, ex.getMessage());
+            log.warn("MLLP A40 refused by the merge service — sender={}/{} hospital={}: {}",
+                sendingApplication, sendingFacility, hospitalId, ex.getMessage());
+            recordReject(integrationId, organizationId, rawMessageBody,
+                "refused by the merge service");
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
-        log.info("MLLP A40 applied — {} merged into {} (patients {} <- {}) "
+        log.info("MLLP A40 applied — patients {} <- {} "
             + "sender={}/{} hospital={} msgCtrlId={}",
-            priorMrn, survivingMrn, survivingPatientId, retiringPatientId,
+            survivingPatientId, retiringPatientId,
             sendingApplication, sendingFacility, hospitalId, messageControlId);
         return MllpInboundOutcome.ACCEPTED;
+    }
+
+    /**
+     * Best-effort FAILED record. The recorder runs in REQUIRES_NEW and
+     * swallows its own exceptions, so the row survives this transaction
+     * rolling back; the try-catch is belt-and-braces for a missing bean in a
+     * narrow test context. The reason text never carries an identifier — the
+     * raw body already holds whatever the sender sent, and copying an MRN into
+     * a second column buys nothing.
+     */
+    private void recordReject(String integrationId, UUID organizationId,
+                              String rawMessageBody, String reason) {
+        if (messageRecorder == null) {
+            return;
+        }
+        try {
+            messageRecorder.recordMessage(
+                integrationId, organizationId,
+                IntegrationMessageDirection.INBOUND,
+                MESSAGE_TYPE, rawMessageBody,
+                IntegrationMessageStatus.FAILED, reason);
+        } catch (RuntimeException ex) {
+            log.warn("MLLP A40 message recorder threw for integration={} reason={}",
+                integrationId, reason, ex);
+        }
+    }
+
+    private static String buildIntegrationId(String app, String fac) {
+        String safeApp = StringUtils.hasText(app) ? app.trim() : "?";
+        String safeFac = StringUtils.hasText(fac) ? fac.trim() : "?";
+        return "MLLP:" + safeApp + "/" + safeFac;
+    }
+
+    private static UUID organizationIdOf(Hospital hospital) {
+        if (hospital == null || hospital.getOrganization() == null) {
+            return null;
+        }
+        return hospital.getOrganization().getId();
     }
 
     /** Resolve an MRN to its patient through EMPI, or empty if unknown. */

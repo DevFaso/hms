@@ -40,11 +40,32 @@ public interface MllpInboundMergeService {
      * @param messageControlId   MSH-10, recorded on the merge so an operator
      *                           can trace it back to the inbound message
      */
-    MllpInboundOutcome processMerge(
+    default MllpInboundOutcome processMerge(
         ParsedMergeMessage parsed,
         Hospital receivingHospital,
         String sendingApplication,
         String sendingFacility,
         String messageControlId
+    ) {
+        return processMerge(parsed, receivingHospital, sendingApplication, sendingFacility,
+            messageControlId, null);
+    }
+
+    /**
+     * Variant that also carries the raw inbound message, so a rejection can
+     * leave an {@code integration_message_event} row an operator can read and
+     * replay.
+     *
+     * <p>That row is the only place a cross-tenant refusal is distinguishable
+     * from an unknown identifier. The ACK deliberately is not: see
+     * {@link MllpInboundOutcome}.
+     */
+    MllpInboundOutcome processMerge(
+        ParsedMergeMessage parsed,
+        Hospital receivingHospital,
+        String sendingApplication,
+        String sendingFacility,
+        String messageControlId,
+        String rawMessageBody
     );
 }
