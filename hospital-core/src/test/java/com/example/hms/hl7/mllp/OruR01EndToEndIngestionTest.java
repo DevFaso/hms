@@ -354,9 +354,13 @@ class OruR01EndToEndIngestionTest {
         assertThat(ack).contains("MSA|AE|BAD-1").contains("Unparseable ORU");
         verify(labResultRepository, never()).save(any());
         verify(auditEventLogService, never()).logEvent(any());
+        // This one is the DISPATCHER's reject, not the lab service's, so it
+        // goes through the eight-argument recorder call with a stable
+        // correlation id. The lab service's own rows above still use the
+        // seven-argument form and are unchanged by this PR.
         verify(messageRecorder).recordMessage(
             eq("MLLP:MINDRAY/LAB-A"), any(),
             eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
-            eq(malformed), eq(IntegrationMessageStatus.FAILED), any());
+            eq(malformed), eq(IntegrationMessageStatus.FAILED), any(), any());
     }
 }

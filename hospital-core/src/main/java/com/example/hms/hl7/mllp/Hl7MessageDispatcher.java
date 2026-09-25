@@ -110,7 +110,7 @@ public class Hl7MessageDispatcher {
             // so the DLQ surface still shows the failure. The fallback
             // header is what we send back as the ACK envelope.
             recordReject("MLLP:?/?", null, "UNKNOWN", hl7Body,
-                "Invalid MSH: " + ex.getMessage());
+                "Invalid MSH: " + ex.getMessage(), "invalid MSH");
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
             );
@@ -128,7 +128,8 @@ public class Hl7MessageDispatcher {
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
                 "sender " + header.sendingApplication() + "/" + header.sendingFacility()
-                    + " not allowlisted");
+                    + " not allowlisted",
+                "sender not allowlisted");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
         }
@@ -151,7 +152,8 @@ public class Hl7MessageDispatcher {
             header.sendingApplication(), header.sendingFacility());
         recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
             header.messageType(), hl7Body,
-            "unsupported message type " + header.messageType());
+            "unsupported message type " + header.messageType(),
+            "unsupported message type");
         return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
             "Unsupported message type " + header.messageType());
     }
@@ -168,7 +170,8 @@ public class Hl7MessageDispatcher {
             // domain-level error message.
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ORU^R01", hl7Body,
-                "unparseable ORU^R01 or no OBX segments");
+                "unparseable ORU^R01 or no OBX segments",
+                "unparseable message");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ORU^R01 or no OBX segments");
         }
@@ -187,7 +190,8 @@ public class Hl7MessageDispatcher {
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
-                "unparseable " + header.messageType() + " — missing PID-3 or required segments");
+                "unparseable " + header.messageType() + " — missing PID-3 or required segments",
+                "unparseable message");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }
@@ -215,7 +219,8 @@ public class Hl7MessageDispatcher {
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
-                "unparseable ADT^A40 — missing PID-3 or MRG-1");
+                "unparseable ADT^A40 — missing PID-3 or MRG-1",
+                "unparseable message");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ADT^A40 — missing PID-3 or MRG-1");
         }
@@ -226,21 +231,49 @@ public class Hl7MessageDispatcher {
     }
 
     /**
-     * Best-effort FAILED record for a pre-service reject. The recorder
-     * itself runs in REQUIRES_NEW and swallows its own exceptions; the
-     * extra try-catch here is belt-and-braces so a recorder bean
-     * failure can never poison the ACK we send back.
+     * Best-effort FAILED record for a pre-service reject.
+     *
+     * <p><b>The raw body stays.</b> Unlike the inbound services' refusals,
+     * which know exactly what was wrong and record a reason instead, these
+     * rows are for messages we could not read — an unparseable MSH, an ADT
+     * with no PID-3, an A40 with no MRG. The body <em>is</em> the evidence,
+     * and an operator diagnosing a vendor's framing has nothing else to look
+     * at. Do not "tidy" it away.
+     *
+     * <p>What bounds it instead is {@code reasonKey}. Three of these paths
+     * answer AE, which HL7 senders treat as transient and retry on a timer,
+     * so with a random correlation id per row a vendor shipping a malformed
+     * feed would stack one unresolved dead letter — each holding a full copy
+     * of the message — on every retry.
+     * {@code countUnresolvedDeadLetters} discounts a {@code FAILED} row once
+     * a later row shares its correlation id, so a stable id collapses the
+     * whole retry storm to one row per (sender, message type, problem). That
+     * solves the PHI volume as a side effect of solving the flood, which is
+     * why the body can stay.
+     *
+     * <p>{@code reasonKey} is separate from {@code reason} on purpose: the
+     * human-readable reason embeds the exception message and the concrete
+     * message type, which vary per message and would fragment the id back
+     * into one row per retry. The key is a fixed string per problem.
+     *
+     * <p>The recorder itself runs in REQUIRES_NEW and swallows its own
+     * exceptions; the extra try-catch here is belt-and-braces so a recorder
+     * bean failure can never poison the ACK we send back.
      */
     private void recordReject(String integrationId, UUID organizationId,
-                              String messageType, String rawBody, String reason) {
+                              String messageType, String rawBody, String reason,
+                              String reasonKey) {
+        String resolvedType = messageType == null ? "UNKNOWN" : messageType;
         try {
             messageRecorder.recordMessage(
                 integrationId, organizationId,
                 IntegrationMessageDirection.INBOUND,
-                messageType == null ? "UNKNOWN" : messageType,
+                resolvedType,
                 rawBody,
                 IntegrationMessageStatus.FAILED,
-                reason);
+                reason,
+                MllpRecordingContext.rejectionCorrelationId(
+                    integrationId, resolvedType, reasonKey));
         } catch (RuntimeException ex) {
             log.warn("Dispatcher recorder threw for integration={} type={} reason={}",
                 integrationId, messageType, reason, ex);

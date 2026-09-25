@@ -255,7 +255,8 @@ class Hl7MessageDispatcherTest {
             eq("UNKNOWN"),
             eq(bad),
             eq(IntegrationMessageStatus.FAILED),
-            contains("Invalid MSH"));
+            contains("Invalid MSH"),
+            any());
     }
 
     @Test
@@ -271,7 +272,8 @@ class Hl7MessageDispatcherTest {
             eq("ORU^R01"),
             eq(oru),
             eq(IntegrationMessageStatus.FAILED),
-            contains("not allowlisted"));
+            contains("not allowlisted"),
+            any());
     }
 
     @Test
@@ -286,7 +288,54 @@ class Hl7MessageDispatcherTest {
             eq("ORU^R01"),
             eq(malformedOru),
             eq(IntegrationMessageStatus.FAILED),
-            contains("unparseable"));
+            contains("unparseable"),
+            any());
+    }
+
+    @Test
+    void aRetriedUnparseableMessageSupersedesItsOwnDeadLetterAndKeepsItsBody() {
+        // These paths answer AE, which senders retry on a timer, and each row
+        // keeps the full body because for a message we could not read the
+        // body IS the evidence. A random correlation id per row would
+        // therefore stack one unresolved dead letter - each holding a full
+        // copy of the message - on every retry; a stable one collapses the
+        // storm to a single row, which is what lets the body stay.
+        allowSender();
+        String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
+                            + "PID|1||p\r";
+        String malformedOruAgain = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-10|P|2.5\r"
+                                 + "PID|1||p\r";
+
+        dispatcher.dispatch(malformedOru, "10.0.0.10:1");
+        dispatcher.dispatch(malformedOruAgain, "10.0.0.10:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> bodies = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+            any(), any(), any(), any(), bodies.capture(), any(), any(), ids.capture());
+
+        assertThat(ids.getAllValues().get(0))
+            .isNotNull()
+            .isEqualTo(ids.getAllValues().get(1));
+        // Deliberately still recorded here, unlike on the inbound services'
+        // refusal paths - see Hl7MessageDispatcher.recordReject.
+        assertThat(bodies.getAllValues()).containsExactly(malformedOru, malformedOruAgain);
+    }
+
+    @Test
+    void differentDispatcherProblemsDoNotCollapseOntoOneDeadLetter() {
+        allowSender();
+        String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
+                            + "PID|1||p\r";
+        String unsupported = "MSH|^~\\&|S|F|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
+
+        dispatcher.dispatch(malformedOru, "10.0.0.10:1");
+        dispatcher.dispatch(unsupported, "10.0.0.51:1");
+
+        ArgumentCaptor<String> ids = ArgumentCaptor.forClass(String.class);
+        verify(messageRecorder, org.mockito.Mockito.times(2)).recordMessage(
+            any(), any(), any(), any(), any(), any(), any(), ids.capture());
+        assertThat(ids.getAllValues().get(0)).isNotEqualTo(ids.getAllValues().get(1));
     }
 
     @Test
@@ -300,7 +349,8 @@ class Hl7MessageDispatcherTest {
             eq("ZZZ^Z99"),
             eq(unknown),
             eq(IntegrationMessageStatus.FAILED),
-            contains("unsupported message type"));
+            contains("unsupported message type"),
+            any());
     }
 
     @Test
@@ -314,7 +364,8 @@ class Hl7MessageDispatcherTest {
             eq("ADT^A01"),
             eq(adtNoPid),
             eq(IntegrationMessageStatus.FAILED),
-            contains("unparseable"));
+            contains("unparseable"),
+            any());
     }
 
     @Test
