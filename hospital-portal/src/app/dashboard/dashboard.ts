@@ -185,6 +185,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly langTick = signal(0);
   private langSub?: Subscription;
   private wsEventsSub?: Subscription;
+  /** The hospital this component holds a tracker-socket claim for, if any. */
+  private wsConnectedHospitalId: string | null = null;
   /** Collapse bursts of tracker events into a single panel refetch. */
   private static readonly WS_REFRESH_DEBOUNCE_MS = 2_500;
 
@@ -2103,18 +2105,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // (/topic/patient-tracker/{hospitalId}) and was connected once, in
     // ngOnInit. Left alone it would go on delivering the previous hospital's
     // encounter transitions — and deliver none of the new one's.
-    this.reconnectTracker();
+    this.connectTracker();
     // The same read the page's own Refresh button issues, which re-reads the
     // review queue among the rest — so it is NOT also requested separately.
     this.loadDashboardData();
   }
 
-  /** Re-point the tracker socket at the hospital now in scope (clinicians only). */
-  private reconnectTracker(): void {
-    if (!this.wsEventsSub) return;
-    this.trackerWs.disconnect();
+  /**
+   * Point the tracker socket at the hospital now in scope (clinicians only).
+   *
+   * Called from `ngOnInit` AND from a scope change, and it must create the
+   * subscription lazily rather than assume one: a super-admin holding a
+   * clinical role lands in global view with no hospital, so the first call
+   * connects nothing — and a version that bailed when the subscription was
+   * absent would leave that account, the very one this PR gives a picker to,
+   * without the live worklist refresh for the rest of the session.
+   */
+  private connectTracker(): void {
+    if (!this.isClinician()) return;
     const hospitalId = this.auth.getHospitalId();
-    if (hospitalId) this.trackerWs.connect(hospitalId);
+    if (this.wsConnectedHospitalId === hospitalId) return;
+    if (this.wsConnectedHospitalId) {
+      this.trackerWs.disconnect();
+      this.wsConnectedHospitalId = null;
+    }
+    if (!hospitalId) return;
+    // Task 24: /topic/patient-tracker/{hospitalId} carries exactly the
+    // encounter transitions that invalidate the worklist, patient-flow and
+    // roomed-patients panels (debounced — a discharge emits several at once).
+    this.wsEventsSub ??= this.trackerWs
+      .getEvents()
+      .pipe(debounceTime(DashboardComponent.WS_REFRESH_DEBOUNCE_MS))
+      .subscribe(() => this.refreshFlowPanels());
+    this.trackerWs.connect(hospitalId);
+    this.wsConnectedHospitalId = hospitalId;
   }
 
   ngOnInit(): void {
@@ -2141,24 +2165,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // the encounter transitions that invalidate the worklist, patient-flow,
     // and roomed-patients panels, so refresh those on the live stream
     // (debounced — a discharge can emit several transitions at once).
-    if (this.isClinician()) {
-      const hospitalId = this.auth.getHospitalId();
-      if (hospitalId) {
-        this.wsEventsSub = this.trackerWs
-          .getEvents()
-          .pipe(debounceTime(DashboardComponent.WS_REFRESH_DEBOUNCE_MS))
-          .subscribe(() => this.refreshFlowPanels());
-        this.trackerWs.connect(hospitalId);
-      }
-    }
+    this.connectTracker();
   }
 
   ngOnDestroy(): void {
     if (this.clockInterval) clearInterval(this.clockInterval);
     this.langSub?.unsubscribe();
-    if (this.wsEventsSub) {
-      this.wsEventsSub.unsubscribe();
+    this.wsEventsSub?.unsubscribe();
+    // Only release a claim this component actually took: `disconnect()` is
+    // ref-counted on a shared socket, so an unmatched call takes someone
+    // else's claim away.
+    if (this.wsConnectedHospitalId) {
       this.trackerWs.disconnect();
+      this.wsConnectedHospitalId = null;
     }
   }
 
@@ -2737,7 +2756,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       error: (err: HttpErrorResponse) => {
         if (!isCurrent()) return;
         this.snapshotLoading.set(false);
-        this.snapshotError.set(err?.status === 404 ? 'NOT_HERE' : 'FAILED');
+        // 404 is #742's refusal, 403 is a restricted chart
+        // (`PatientChartAccess.require`, E8 #54) and 401 is a dead session:
+        // all three return the same answer however often they are asked, so
+        // none of them gets a Retry. Only FAILED does.
+        const refused = err?.status === 404 || err?.status === 403 || err?.status === 401;
+        this.snapshotError.set(refused ? 'NOT_HERE' : 'FAILED');
       },
     });
   }
@@ -2792,11 +2816,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // that needs a read-back cannot be identified from `abnormalFlag`;
         // the server's answer is what identifies it, and the message says
         // where the ceremony lives.
-        // 404 is the hospital mismatch, not a missing row: the queue is built
-        // from ONE Staff record (the earliest) while the acknowledge is
-        // checked against the active hospital, so a doctor with records at
-        // two hospitals can be refused every row in the panel. A generic
-        // "could not be acknowledged" sends them looking for the wrong thing.
+        // 404 is the hospital mismatch, not a missing row. The premise this
+        // comment used to give — "the queue is built from ONE Staff record
+        // (the earliest)" — is wrong twice over: #742 verified that
+        // `uq_staff_user_id` gives a user exactly ONE Staff row
+        // platform-wide, and the queue is now read through
+        // `findByOrderingStaff_IdAndHospital_Id`. What remains true is that a
+        // row can be refused: the acknowledge is checked against the active
+        // hospital, and a result released at another hospital the clinician
+        // works at is still reachable from a stale panel. A generic "could
+        // not be acknowledged" sends them looking for the wrong thing.
         this.toast.error(
           this.t(
             err?.status === 400

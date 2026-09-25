@@ -10,11 +10,18 @@
       }
     </div>
     <!--
-      The picker sits in the card head, UNCONDITIONALLY, not inside the
-      no-scope branch below: the dashboard is not `requiresHospitalScope`, so
-      the shell draws no scope bar above it, and a chip that unmounted on the
-      first pick would leave no way to switch hospital or return to global
-      view from this page. It hides itself for anyone but a super-admin.
+      The picker sits in the card head rather than inside the no-scope branch
+      below: the dashboard is not `requiresHospitalScope`, so the shell draws
+      no scope bar above it, and a chip that lived only in that branch would
+      vanish on the first pick, leaving no way to switch hospital or return to
+      global view from here. It hides itself for anyone but a super-admin.
+
+      It is not literally always on screen: the whole panel sits inside the
+      dashboard's `activeView() === 'doctor'` block, which is gated on
+      `!loading()`, and a pick reloads the page's data — so the chip is
+      recreated (and re-fetches its label) on each pick and is absent while
+      the reload is in flight. Hoisting it out of the panel is a dashboard
+      layout change, reported rather than made here.
 
       `preserveScope` keeps the session's pick rather than resetting to global
       view on mount; `disableUrlSync` governs the separate WRITE path, and is

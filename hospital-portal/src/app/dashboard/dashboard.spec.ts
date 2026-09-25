@@ -1407,6 +1407,7 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
   let fixture: ComponentFixture<DashboardComponent>;
   let component: DashboardComponent;
   let dashboardService: jasmine.SpyObj<DashboardService>;
+  let trackerWs: jasmine.SpyObj<PatientTrackerWsService>;
   let roleContext: RoleContextService;
 
   /**
@@ -1446,7 +1447,7 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
       active: true,
     } as never);
 
-    const trackerWs = jasmine.createSpyObj<PatientTrackerWsService>('PatientTrackerWsService', [
+    trackerWs = jasmine.createSpyObj<PatientTrackerWsService>('PatientTrackerWsService', [
       'connect',
       'disconnect',
       'getEvents',
@@ -1488,6 +1489,9 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     // signal effect, and a stub whose pick is a plain variable cannot drive it.
     roleContext = TestBed.inject(RoleContextService);
     roleContext.activeHospitalId = hospitalId;
+    // As the real service does: `AuthService.getHospitalId()` returns
+    // `effectiveHospitalIdForRequest()` verbatim, so it must follow the pick.
+    authStub.getHospitalId.and.callFake(() => roleContext.effectiveHospitalIdForRequest());
 
     fixture = TestBed.createComponent(DashboardComponent);
     component = fixture.componentInstance;
@@ -1552,6 +1556,28 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
     expect(component.criticalStrip()).toBeNull();
     expect(component.worklistItems()).toEqual([]);
     expect(component.recentPatients()).toEqual([]);
+  });
+
+  it('connects the tracker socket to the hospital picked from global view', () => {
+    // The socket is per hospital and was wired once, in ngOnInit. An account
+    // that lands unscoped connected nothing then — and must not be left
+    // without the live worklist refresh for the rest of the session.
+    build(null);
+    expect(trackerWs.connect).not.toHaveBeenCalled();
+
+    pickHospital('h-b');
+
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-b');
+  });
+
+  it('re-points the tracker socket at the new hospital on a switch', () => {
+    build('h-a');
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-a');
+
+    pickHospital('h-b');
+
+    expect(trackerWs.disconnect).toHaveBeenCalled();
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-b');
   });
 
   it('does not read the queue at all with no hospital in scope', () => {
