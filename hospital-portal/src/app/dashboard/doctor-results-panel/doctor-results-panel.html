@@ -44,7 +44,8 @@
     @if (loadError()) {
       <p class="rp-stale" role="status">
         {{ 'DASHBOARD.RESULTS_LOAD_ERROR' | translate }}
-        <button type="button" class="rp-retry" (click)="requestReload()">
+        <!-- Reachable during an in-flight read; see the in-basket twin. -->
+        <button type="button" class="rp-retry" [disabled]="loading()" (click)="requestReload()">
           {{ 'COMMON.RETRY' | translate }}
         </button>
       </p>

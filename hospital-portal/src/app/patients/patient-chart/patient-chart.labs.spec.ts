@@ -469,7 +469,7 @@ describe('PatientChartComponent — labs section', () => {
     expect(component.labsScoped()).toBeFalse();
     expect(patientService.listLabResults).not.toHaveBeenCalled();
     expect(labService.listOrders).not.toHaveBeenCalled();
-    expect(fixture.nativeElement.querySelector('[data-testid="labs-no-hospital"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.data-table')).toBeNull();
   });
 

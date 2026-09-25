@@ -39,6 +39,7 @@ import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
@@ -56,7 +57,14 @@ const UNSCOPED_KEY = 'UNSCOPED';
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    HospitalScopeHintComponent,
+    RestrictedRowsComponent,
+  ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
@@ -336,21 +344,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /**
    * The scope EVERY read and write on this chart works in.
    *
-   * Was `activeHospitalId ?? auth.getHospitalId()`, the primary assignment.
-   * That is not what the auth interceptor sends: it sends
-   * `effectiveHospitalIdForRequest()`, which the scope chip moves — and this
-   * component now mounts a chip on the Labs tab, so a super-admin could pick
-   * hospital B, switch to Allergies, and send `hospitalId=A` as a query
-   * param under an `X-Hospital-Id: B` header. One request naming two
-   * hospitals is the divergence `labHospitalId()` was written against.
+   * The PRIMARY assignment, and deliberately NOT `labHospitalId()`.
    *
-   * The rest of the chart keeps the PRIMARY assignment, deliberately. Pointing
-   * it at the effective id made an unscoped account send no hospital at all on
-   * allergies, problems and updates, and all three of those backends refuse a
-   * null scope outright (`BusinessException("Hospital context is required")`)
-   * — so three sections that used to work started answering 400. Aligning
-   * them is a change to those sections, with their own empty states, not a
-   * one-line substitution made from the labs section.
+   * Pointing it at the effective scope was tried in this PR and backed out:
+   * an account in global view then sent no hospital at all on allergies,
+   * problems and updates, and all three of those backends refuse a null scope
+   * outright (`BusinessException("Hospital context is required")`), so three
+   * sections that used to work started answering 400 — and the write paths
+   * began putting an empty string into `UUID` fields. Aligning them means
+   * giving those sections their own unscoped empty states, which is a change
+   * to them, not a one-line substitution made from the labs section.
    */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
@@ -406,7 +409,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * and points at the scope chip. One click, and both reads are scoped and
    * audited like everything else.
    */
-  readonly labsScoped = computed(() => this.labHospitalId() != null);
+  readonly labsScoped = this.roleContext.hasHospitalScope;
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
